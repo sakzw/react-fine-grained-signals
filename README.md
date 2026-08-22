@@ -188,6 +188,50 @@ export function Field() {
 }
 ```
 
+## JSX control-flow utilities
+
+`react-alien-signals/utils` provides small React components inspired by Solid's
+`Show`, `Switch`/`Match`, and `For`. They are optional and do not need the
+build plugin or the custom JSX runtime. When a signal is passed to their
+condition or list input, the utility itself forms the reactive boundary, so an
+update does not rerender its parent component.
+
+```tsx
+import { signal } from "react-alien-signals";
+import { For, Match, Show, Switch } from "react-alien-signals/utils";
+
+const signedIn = signal(false);
+const showList = signal(true);
+const users = signal([{ id: "ada", name: "Ada" }]);
+
+export function Panel() {
+  return (
+    <>
+      <Show when={signedIn} fallback={<p>Please sign in.</p>}>
+        {(value) => <p>Signed in: {String(value)}</p>}
+      </Show>
+
+      <Switch fallback={<p>Unknown view.</p>}>
+        <Match when={showList}><p>User list</p></Match>
+        <Match when={false}><p>Never rendered</p></Match>
+      </Switch>
+
+      <For each={users} by={(user) => user.id} fallback={<p>No users.</p>}>
+        {(user) => <p>{user.name}</p>}
+      </For>
+    </>
+  );
+}
+```
+
+`Switch` renders the first truthy `Match`; `Match` is meaningful only inside a
+`Switch`. `For` is a local React list boundary, not a new renderer. React owns
+the reconciliation, and `by` supplies its stable row keys. Always provide
+`by` for a list that can be reordered, inserted into, or shortened; the
+fallback index key is only appropriate for a fixed-order list. The initial
+utility intentionally supports arrays (including `deepSignal` arrays), not
+`Map` or `Set`.
+
 ## Experimental constraints
 
 - React 19 or newer is required. The JSX runtime uses callback-ref cleanup, which is unavailable in React 18.

@@ -18,6 +18,10 @@ export default defineConfig({
         replacement: source("./src/runtime.ts"),
       },
       {
+        find: /^react-alien-signals\/utils$/,
+        replacement: source("./src/utils.tsx"),
+      },
+      {
         find: /^react-alien-signals\/jsx-runtime$/,
         replacement: source("./src/jsx-runtime.ts"),
       },

@@ -159,6 +159,40 @@ signals({ mode: "auto", transform: "managed" });
 
 `@noUseSignals` は常に変換を無効にします。自動モードは宣言形式、arrow形式、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。class component、匿名default export、すでに変換済みのJSX、async/generator関数、namespace import、先頭以外または条件付きの `useSignals()` を持つコンポーネントは変更しません。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
 
+## JSX制御フローユーティリティ
+
+`react-alien-signals/utils` は、Solidの `Show`、`Switch` / `Match`、`For` に着想を得た小さなReactコンポーネントを提供します。任意のサブパスであり、build pluginも独自JSXランタイムも必要ありません。条件または配列入力にsignalを渡すと、ユーティリティ自身がリアクティブ境界になるため、更新時に親コンポーネントを再レンダーしません。
+
+```tsx
+import { signal } from "react-alien-signals";
+import { For, Match, Show, Switch } from "react-alien-signals/utils";
+
+const signedIn = signal(false);
+const showList = signal(true);
+const users = signal([{ id: "ada", name: "Ada" }]);
+
+export function Panel() {
+  return (
+    <>
+      <Show when={signedIn} fallback={<p>ログインしてください。</p>}>
+        {(value) => <p>ログイン済み: {String(value)}</p>}
+      </Show>
+
+      <Switch fallback={<p>不明な画面です。</p>}>
+        <Match when={showList}><p>ユーザー一覧</p></Match>
+        <Match when={false}><p>表示されません</p></Match>
+      </Switch>
+
+      <For each={users} by={(user) => user.id} fallback={<p>ユーザーはいません。</p>}>
+        {(user) => <p>{user.name}</p>}
+      </For>
+    </>
+  );
+}
+```
+
+`Switch` はtruthyな最初の `Match` だけを描画します。`Match` は `Switch` の子としてのみ意味を持ちます。`For` は新しいレンダラではなく、局所的なReactのリスト境界です。差分適用はReactが担い、`by` が安定した行keyを渡します。並び替え、途中への挿入、削除を行うリストでは必ず `by` を指定してください。省略時のindex keyは順序が固定のリストだけに適しています。初期実装は配列（`deepSignal` の配列を含む）のみを扱い、`Map` と `Set` はまだ対象外です。
+
 ## 実験的な制約
 
 - React 19以降が必要です。JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
