@@ -92,7 +92,7 @@ function Counter({ step }: { step: number }) {
 
 これは `useSignalValue` を各値に置く方式ではなく、コンポーネントのレンダーで読んだ依存関係をまとめて追跡する、基本のライブライブラリ向けAPIです。`useSignalValue` と `useDeepSignalValue` の詳細な契約は上の「Reactフック」を参照してください。
 
-変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。レンダー中にsignalを読む各コンポーネント自身で `useSignals()` を呼んでください。effect、event handler、非同期callback、または追跡されていないコンポーネントの読み取りは、開いたままの境界に誤って紐付く場合があります。同期的なrender読み取りだけに使えば、追加のビルドpluginなしで利用できます。Suspense中断、レンダー中のネストしたserver rendering、複数rootをまたぐ厳密な境界には、後述のmanaged transformが必要です。未解決の境界問題と将来の契約候補は[境界の設計検討docs](docs/use-signals-boundary-design.ja.md)にまとめています。
+変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、commit段階のlayout effect時、または現在の同期実行後に予約済みmicrotaskで閉じられます。レンダー中にsignalを読む各コンポーネント自身で `useSignals()` を呼んでください。effect、event handler、非同期callback、または追跡されていないコンポーネントの読み取りは、開いたままの境界に誤って紐付く場合があります。同期的なrender読み取りだけに使えば、追加のビルドpluginなしで利用できます。Suspense中断、レンダー中のネストしたserver rendering、複数rootをまたぐ厳密な境界には、後述のmanaged transformが必要です。未解決の境界問題と将来の契約候補は[境界の設計検討docs](docs/use-signals-boundary-design.ja.md)にまとめています。
 
 ### Pluginなし: JSXのsignal子要素とhost bindingによるDOMリーフ更新
 
@@ -223,7 +223,7 @@ export function Panel() {
 ## 実験的な制約
 
 - React 19以降が必要です。JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
-- 変換なしの `useSignals()` とplugin既定の `transform: "inject"` は、管理されない簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `unplugin-react-alien-signals` の `transform: "managed"` を使用してください。
+- 変換なしの `useSignals()` とplugin既定の `transform: "inject"` は、管理されない簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、commit段階のlayout effect時、または現在の同期実行後に予約済みmicrotaskで閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `unplugin-react-alien-signals` の `transform: "managed"` を使用してください。
 - 直接バインディングは `value`、`checked`、`style`、イベントハンドラ、SVG props、および許可リスト外のホストpropsをサポートしません。
 - 直接バインディングによる書き込みはReactスケジューラの外側で行われる、実験的な最適化です。
 - Reactコンポーネントのpropsや子要素へ渡したsignalはアンラップされません。直接バインディングはネイティブHTML要素にのみ適用されます。ただし、JSXランタイムが処理するsignal子要素は例外です。
