@@ -82,8 +82,12 @@ export class RenderSubscription implements RenderDependency {
     return trackRenderDependency(this);
   }
 
-  notify(): void {
+  bumpVersion(): void {
     this.#version = (this.#version + 1) | 0;
+  }
+
+  notify(): void {
+    this.bumpVersion();
     const listeners = this.#listeners;
     if (listeners === undefined) return;
     for (const listener of [...listeners]) listener();

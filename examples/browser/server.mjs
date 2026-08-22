@@ -2,9 +2,10 @@ import { createServer as createHttpServer } from "node:http";
 import { readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { transformAsync } from "@babel/core";
 import { renderToString } from "react-dom/server";
 import { createServer as createViteServer } from "vite";
-import { createApp } from "./src/entry-server.tsx";
+import signalsTransform from "../../packages/babel-plugin-react-alien-signals/src/index.ts";
 
 const browserRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(browserRoot, "../..");
@@ -12,6 +13,22 @@ const host = "127.0.0.1";
 const port = 4173;
 
 const source = (path) => resolve(repositoryRoot, path);
+const managedSignalsTransform = {
+  name: "react-alien-signals-managed-render",
+  enforce: "pre",
+  async transform(code, id) {
+    if (!/\.[cm]?[jt]sx$/.test(id) || id.includes("node_modules")) return null;
+    const result = await transformAsync(code, {
+      babelrc: false,
+      configFile: false,
+      filename: id,
+      parserOpts: { plugins: ["jsx", "typescript"] },
+      plugins: [signalsTransform],
+      sourceMaps: true,
+    });
+    return result?.code == null ? null : { code: result.code, map: result.map };
+  },
+};
 
 const vite = await createViteServer({
   root: repositoryRoot,
@@ -22,9 +39,14 @@ const vite = await createViteServer({
     jsx: "automatic",
     jsxImportSource: "react-alien-signals",
   },
+  plugins: [managedSignalsTransform],
   resolve: {
     dedupe: ["alien-signals", "react", "react-dom"],
     alias: [
+      {
+        find: /^react-alien-signals\/runtime$/,
+        replacement: source("src/runtime.ts"),
+      },
       {
         find: /^react-alien-signals\/jsx-runtime$/,
         replacement: source("src/jsx-runtime.ts"),
@@ -40,6 +62,8 @@ const vite = await createViteServer({
     ],
   },
 });
+
+const { createApp } = await vite.ssrLoadModule("/examples/browser/src/entry-server.tsx");
 
 const templatePath = resolve(browserRoot, "index.html");
 

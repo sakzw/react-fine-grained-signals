@@ -8,7 +8,11 @@ import {
   startBatch,
   trigger,
 } from "alien-signals";
-import { RenderSubscription, untrackedRender } from "./render-tracking.js";
+import {
+  hasActiveRenderCollector,
+  RenderSubscription,
+  untrackedRender,
+} from "./render-tracking.js";
 
 /** A readable reactive value. */
 export interface ReadonlySignal<T> {
@@ -85,14 +89,19 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
   });
   let disposeRenderBridge: (() => void) | undefined;
   let isInitialBridgeRun = true;
+  let lastRenderValue: { value: T } | undefined;
   const renderSubscription = new RenderSubscription(
     () => {
       isInitialBridgeRun = true;
       disposeRenderBridge = createEffect(() => {
-        untrackedRender(() => source().value);
+        const nextValue = untrackedRender(source);
+        const changedSinceRender =
+          lastRenderValue !== undefined && nextValue !== lastRenderValue;
+        lastRenderValue = nextValue;
         if (isInitialBridgeRun) {
           isInitialBridgeRun = false;
-        } else {
+          if (changedSinceRender) renderSubscription.bumpVersion();
+        } else if (changedSinceRender) {
           renderSubscription.notify();
         }
       });
@@ -105,8 +114,16 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
 
   const result: ReadonlySignal<T> = {
     get value(): T {
-      if (renderSubscription.track()) {
-        return untracked(() => untrackedRender(() => source().value));
+      if (hasActiveRenderCollector()) {
+        const nextValue = untracked(() => untrackedRender(source));
+        if (lastRenderValue !== undefined && nextValue !== lastRenderValue) {
+          renderSubscription.bumpVersion();
+        }
+        lastRenderValue = nextValue;
+        // Track after evaluating so this render records the post-evaluation
+        // version without masking an older concurrent render.
+        renderSubscription.track();
+        return nextValue.value;
       }
       return source().value;
     },

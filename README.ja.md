@@ -73,6 +73,46 @@ function Counter({ step }: { step: number }) {
 - 依存配列を省略する場合、getterはsignalだけを読む必要があります。最初のクロージャがコンポーネントの生存期間中保持されるため、props、React state、その他のsignalではない値を捕捉しないでください。
 - getterがsignalではない値を捕捉する場合、その値をすべて依存配列に列挙します: `useComputed(() => count.value * step, [step])`。コンポーネントの生存期間中は、どちらか一方のモードを使い続けてください。
 
+### 管理されたレンダー変換
+
+任意で導入できるBabel pluginは、先頭文として明示した `useSignals()` 呼び出しを、同期的に管理されるレンダースコープへ変換します。コンポーネント側のAPIはそのままに、生成コードがreturn、エラー、Suspenseによるthrowのすべてで `try` / `finally` を使って追跡を閉じます。
+
+```sh
+pnpm add -D @babel/core babel-plugin-react-alien-signals
+```
+
+```js
+// babel.config.cjs
+module.exports = {
+  plugins: ["babel-plugin-react-alien-signals"],
+};
+```
+
+変換対象は、importした `useSignals()` が先頭文にある同期的な非generator関数だけです。明示的な呼び出しがない関数は変更しません。別名importはサポートしますが、namespace importはサポートしません。
+
+Vite 8では、公式のRolldown Babel bridgeを通してpluginを実行できます。
+
+```sh
+pnpm add -D @rolldown/plugin-babel @vitejs/plugin-react
+```
+
+```ts
+// vite.config.ts
+import babel from "@rolldown/plugin-babel";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [
+    react(),
+    babel({
+      include: [/\.[cm]?[jt]sx?$/],
+      plugins: ["babel-plugin-react-alien-signals"],
+    }),
+  ],
+});
+```
+
 ## JSXのsignal子要素とホストバインディング
 
 提供される自動JSXランタイムを使うようにTypeScriptを設定します。
@@ -103,7 +143,7 @@ export function Field() {
 ## 実験的な制約
 
 - React 19以降が必要です。JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
-- 変換なしの `useSignals()` は管理されない簡易APIです。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。このモードでは、Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。将来ソース変換を追加することで、`try` / `finally` を使った厳密なレンダー終了境界を提供できます。
+- managed transformを使わない場合、変換なしの `useSignals()` は管理されない簡易APIです。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。変換なしのモードでは、Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `babel-plugin-react-alien-signals` を使用してください。
 - 直接バインディングは `value`、`checked`、`style`、イベントハンドラ、SVG props、および許可リスト外のホストpropsをサポートしません。
 - 直接バインディングによる書き込みはReactスケジューラの外側で行われる、実験的な最適化です。
 - Reactコンポーネントのpropsや子要素へ渡したsignalはアンラップされません。直接バインディングはネイティブHTML要素にのみ適用されます。ただし、JSXランタイムが処理するsignal子要素は例外です。

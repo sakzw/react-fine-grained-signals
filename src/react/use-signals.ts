@@ -29,12 +29,17 @@ function ensureFinalCleanup(): void {
 }
 
 class RenderStore implements RenderCollector {
+  readonly managed: boolean;
   readonly #reactListeners = new Set<() => void>();
   #dependencyUnsubscribers: Array<() => void> = [];
   #pendingDependencies?: Map<RenderDependency, number>;
   #finishCollection?: () => void;
   #disposeGeneration = 0;
   #version = 0;
+
+  constructor(managed: boolean) {
+    this.managed = managed;
+  }
 
   readonly subscribe = (listener: () => void): (() => void) => {
     this.#disposeGeneration += 1;
@@ -67,13 +72,16 @@ class RenderStore implements RenderCollector {
   }
 
   start(): void {
-    currentStore?.finish();
+    if (currentStore !== undefined && (!this.managed || !currentStore.managed)) {
+      currentStore.finish();
+    }
+    const previousStore = currentStore;
     this.#pendingDependencies = new Map();
     const previousCollector = setActiveRenderCollector(this);
     currentStore = this;
     this.#finishCollection = () => {
       setActiveRenderCollector(previousCollector);
-      if (currentStore === this) currentStore = undefined;
+      if (currentStore === this) currentStore = previousStore;
     };
   }
 
@@ -81,6 +89,10 @@ class RenderStore implements RenderCollector {
     const finishCollection = this.#finishCollection;
     this.#finishCollection = undefined;
     finishCollection?.();
+  }
+
+  f(): void {
+    this.finish();
   }
 
   commit(): void {
@@ -91,12 +103,12 @@ class RenderStore implements RenderCollector {
     this.#disposeDependencies();
     let changedDuringRender = false;
     for (const [dependency, renderVersion] of dependencies) {
-      if (dependency.getRenderVersion() !== renderVersion) {
-        changedDuringRender = true;
-      }
       this.#dependencyUnsubscribers.push(
         dependency.subscribeRender(this.#notifyReact),
       );
+      if (dependency.getRenderVersion() !== renderVersion) {
+        changedDuringRender = true;
+      }
     }
 
     if (changedDuringRender) this.#notifyReact();
@@ -118,10 +130,10 @@ class RenderStore implements RenderCollector {
  * Makes the component reactive to signals whose `.value` is read during render.
  * Call this as the component's first hook and before those reads.
  */
-export function useSignals(): void {
-  ensureFinalCleanup();
+function useSignalsImplementation(managed: boolean): RenderStore {
+  if (!managed) ensureFinalCleanup();
   const storeRef = useRef<RenderStore | undefined>(undefined);
-  if (storeRef.current === undefined) storeRef.current = new RenderStore();
+  if (storeRef.current === undefined) storeRef.current = new RenderStore(managed);
   const store = storeRef.current;
 
   useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
@@ -130,4 +142,24 @@ export function useSignals(): void {
     cleanupTrailingStore();
     store.commit();
   });
+  return store;
+}
+
+/**
+ * Makes the component reactive to signals whose `.value` is read during render.
+ * Call this as the component's first hook and before those reads.
+ */
+export function useSignals(): void {
+  useSignalsImplementation(false);
+}
+
+/** The render-scope handle consumed by the source transform runtime. */
+export interface ManagedSignalsStore {
+  finish(): void;
+  f(): void;
+}
+
+/** Starts a managed render scope that must be closed synchronously with `f()`. */
+export function useManagedSignals(): ManagedSignalsStore {
+  return useSignalsImplementation(true);
 }

@@ -73,6 +73,46 @@ Call `useSignals()` once and unconditionally as the first hook in every componen
 - Without a dependency array, the getter must read only signals. Its initial closure is retained for the component lifetime, so it must not capture props, React state, or other non-signal values.
 - When the getter captures non-signal values, list every such value in the dependency array: `useComputed(() => count.value * step, [step])`. Choose one mode for a component's lifetime.
 
+### Managed render transform
+
+The optional Babel plugin turns an explicit first-statement `useSignals()` call into a synchronous managed render scope. Your component source keeps the same API, while the generated code closes tracking with `try` / `finally` on returns, errors, and Suspense throws.
+
+```sh
+pnpm add -D @babel/core babel-plugin-react-alien-signals
+```
+
+```js
+// babel.config.cjs
+module.exports = {
+  plugins: ["babel-plugin-react-alien-signals"],
+};
+```
+
+Only synchronous, non-generator functions whose first statement is an imported `useSignals()` call are transformed. Functions without that explicit call are left unchanged. An aliased import is supported; namespace imports are not.
+
+Vite 8 projects can run the plugin through the official Rolldown Babel bridge:
+
+```sh
+pnpm add -D @rolldown/plugin-babel @vitejs/plugin-react
+```
+
+```ts
+// vite.config.ts
+import babel from "@rolldown/plugin-babel";
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  plugins: [
+    react(),
+    babel({
+      include: [/\.[cm]?[jt]sx?$/],
+      plugins: ["babel-plugin-react-alien-signals"],
+    }),
+  ],
+});
+```
+
 ## JSX signal children and host bindings
 
 Configure TypeScript to use the supplied automatic JSX runtime:
@@ -103,7 +143,7 @@ export function Field() {
 ## Experimental constraints
 
 - React 19 or newer is required. The JSX runtime uses callback-ref cleanup, which is unavailable in React 18.
-- Bare `useSignals()` is an unmanaged convenience API: tracking closes at the next `useSignals()` call or after the current microtask. Call it once, unconditionally, as the component's first hook and only rely on synchronous signal reads made during that render. Reads in effects, event handlers, asynchronous callbacks, or render props whose owning component does not call `useSignals()` are not supported as component dependencies. Exact separation across Suspense-aborted renders, nested `renderToString` / `renderToStaticMarkup` calls made during render, and multiple concurrent roots is best-effort in this mode. A future source transform can provide an exact `try`/`finally` render boundary.
+- Without the managed transform, bare `useSignals()` is an unmanaged convenience API: tracking closes at the next `useSignals()` call or after the current microtask. Call it once, unconditionally, as the component's first hook and only rely on synchronous signal reads made during that render. Reads in effects, event handlers, asynchronous callbacks, or render props whose owning component does not call `useSignals()` are not supported as component dependencies. Exact separation across Suspense-aborted renders, nested `renderToString` / `renderToStaticMarkup` calls made during render, and multiple concurrent roots is best-effort in bare mode. Use `babel-plugin-react-alien-signals` for an exact `try` / `finally` render boundary.
 - Direct binding does not support `value`, `checked`, `style`, event handlers, SVG props, or other host props outside the allowlist.
 - Direct binding writes outside the React scheduler and remains an experimental optimization.
 - Signals passed to React component props or component children are not unwrapped. The direct-binding behavior applies only to native HTML elements (and signal children handled by the JSX runtime).

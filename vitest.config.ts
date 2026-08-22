@@ -14,6 +14,10 @@ export default defineConfig({
   resolve: {
     alias: [
       {
+        find: /^react-alien-signals\/runtime$/,
+        replacement: source("./src/runtime.ts"),
+      },
+      {
         find: /^react-alien-signals\/jsx-runtime$/,
         replacement: source("./src/jsx-runtime.ts"),
       },

@@ -17,18 +17,28 @@
     "./jsx-dev-runtime": {
       "types": "./dist/jsx-dev-runtime.d.ts",
       "import": "./dist/jsx-dev-runtime.js"
+    },
+    "./runtime": {
+      "types": "./dist/runtime.d.ts",
+      "import": "./dist/runtime.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "bench": "pnpm build && node --expose-gc benchmarks/core.mjs",
-    "bench:deep": "pnpm build && node --expose-gc benchmarks/deep-signal.mjs",
-    "build": "tsc -p tsconfig.build.json",
+    "bench": "pnpm build:runtime && node --expose-gc benchmarks/core.mjs",
+    "bench:deep": "pnpm build:runtime && node --expose-gc benchmarks/deep-signal.mjs",
+    "build": "pnpm build:runtime && pnpm build:transform",
+    "build:runtime": "tsc -p tsconfig.build.json",
+    "build:transform": "pnpm --filter babel-plugin-react-alien-signals build",
     "dev:browser": "node --import tsx examples/browser/server.mjs",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests",
+    "typecheck": "pnpm typecheck:runtime && pnpm typecheck:transform",
+    "typecheck:runtime": "tsc --noEmit",
+    "typecheck:transform": "pnpm --filter babel-plugin-react-alien-signals typecheck",
+    "test": "pnpm test:runtime && pnpm test:transform",
+    "test:runtime": "vitest run --passWithNoTests",
+    "test:transform": "pnpm --filter babel-plugin-react-alien-signals test",
     "test:browser": "playwright test"
   },
   "peerDependencies": {
@@ -38,6 +48,7 @@
     "alien-signals": "^3.2.1"
   },
   "devDependencies": {
+    "@babel/core": "7.29.7",
     "@playwright/test": "^1.62.1",
     "@preact/signals-core": "1.14.4",
     "@testing-library/react": "^16.3.2",

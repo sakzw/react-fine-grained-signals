@@ -5,6 +5,7 @@
     "moduleResolution": "NodeNext",
     "paths": {
       "react-alien-signals": ["./src/index.ts"],
+      "react-alien-signals/runtime": ["./src/runtime.ts"],
       "react-alien-signals/jsx-runtime": ["./src/jsx-runtime.ts"],
       "react-alien-signals/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
     },
