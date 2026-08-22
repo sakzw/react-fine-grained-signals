@@ -211,6 +211,104 @@ describe("deepSignal", () => {
     expect(() => structuredClone(state.peek())).not.toThrow();
   });
 
+  it("rejects deep proxies in every opaque value without changing state", () => {
+    class Box {
+      ref: unknown;
+
+      constructor(ref: unknown) {
+        this.ref = ref;
+      }
+    }
+    const state = deepSignal({
+      source: { count: 1 },
+      box: undefined as Box | undefined,
+      date: undefined as Date | undefined,
+      callback: undefined as ((() => void) & { ref?: unknown }) | undefined,
+      carrier: undefined as { opaque: Box } | undefined,
+    });
+    const source = state.value.source;
+    const date = Object.assign(new Date(), { ref: source });
+    const callback = Object.assign(() => undefined, { ref: source });
+
+    expect(() => {
+      state.value.box = new Box(source);
+    }).toThrow(TypeError);
+    expect(() => {
+      state.value.date = date;
+    }).toThrow(TypeError);
+    expect(() => {
+      state.value.callback = callback;
+    }).toThrow(TypeError);
+    expect(() => {
+      state.value.carrier = { opaque: new Box(source) };
+    }).toThrow(TypeError);
+
+    expect(state.peek().box).toBeUndefined();
+    expect(state.peek().date).toBeUndefined();
+    expect(state.peek().callback).toBeUndefined();
+    expect(state.peek().carrier).toBeUndefined();
+    expect(() => structuredClone(state.peek())).not.toThrow();
+  });
+
+  it("exposes Map and Set values through stable read-only views", () => {
+    const state = deepSignal({
+      source: { count: 1 },
+      map: new Map<string, number>([["first", 1]]),
+      set: new Set(["first"]),
+    });
+    const map = state.value.map;
+    const set = state.value.set;
+
+    expect(map).toBe(state.value.map);
+    expect(set).toBe(state.value.set);
+    expect(map).not.toBe(state.peek().map);
+    expect(set).not.toBe(state.peek().set);
+    expect(map.size).toBe(1);
+    expect(map.get("first")).toBe(1);
+    expect([...map.keys()]).toEqual(["first"]);
+    expect([...map.values()]).toEqual([1]);
+    expect([...map.entries()]).toEqual([["first", 1]]);
+    expect(new Map(map)).toEqual(new Map([["first", 1]]));
+    let mapThirdArgument: ReadonlyMap<string, number> | undefined;
+    map.forEach((_value, _key, collection) => {
+      mapThirdArgument = collection;
+    });
+    expect(mapThirdArgument).toBe(map);
+
+    expect(set.size).toBe(1);
+    expect(set.has("first")).toBe(true);
+    expect([...set.keys()]).toEqual(["first"]);
+    expect([...set.values()]).toEqual(["first"]);
+    expect([...set.entries()]).toEqual([["first", "first"]]);
+    expect(new Set(set)).toEqual(new Set(["first"]));
+    let setThirdArgument: ReadonlySet<string> | undefined;
+    set.forEach((_value, _key, collection) => {
+      setThirdArgument = collection;
+    });
+    expect(setThirdArgument).toBe(set);
+
+    expect(() => (map as unknown as Map<string, unknown>).set("source", state.value.source)).toThrow(TypeError);
+    expect(() => (map as unknown as Map<string, unknown>).delete("first")).toThrow(TypeError);
+    expect(() => (map as unknown as Map<string, unknown>).clear()).toThrow(TypeError);
+    expect(() => (set as unknown as Set<unknown>).add(state.value.source)).toThrow(TypeError);
+    expect(() => (set as unknown as Set<unknown>).delete("first")).toThrow(TypeError);
+    expect(() => (set as unknown as Set<unknown>).clear()).toThrow(TypeError);
+
+    expect(state.peek().map).toEqual(new Map([["first", 1]]));
+    expect(state.peek().set).toEqual(new Set(["first"]));
+    expect(() => structuredClone(state.peek())).not.toThrow();
+
+    state.value = {
+      source: { count: 2 },
+      map: map as unknown as Map<string, number>,
+      set: set as unknown as Set<string>,
+    };
+    expect(state.peek().map).not.toBe(map);
+    expect(state.peek().set).not.toBe(set);
+    expect(new Map(state.value.map)).toEqual(new Map([["first", 1]]));
+    expect(new Set(state.value.set)).toEqual(new Set(["first"]));
+  });
+
   it("does not rescan a direct deep proxy assignment", () => {
     let ownKeyReads = 0;
     const nested = new Proxy(
@@ -229,6 +327,27 @@ describe("deepSignal", () => {
     state.value.nested = direct;
 
     expect(ownKeyReads).toBe(0);
+  });
+
+  it("does not rescan a known deep subtree inside a new carrier", () => {
+    let ownKeyReads = 0;
+    const nested = new Proxy(
+      { items: Array.from({ length: 4_000 }, (_, index) => ({ index })) },
+      {
+        ownKeys(target) {
+          ownKeyReads++;
+          return Reflect.ownKeys(target);
+        },
+      },
+    );
+    const state = deepSignal({ nested, carrier: undefined as { inner: typeof nested } | undefined });
+    const direct = state.value.nested;
+    ownKeyReads = 0;
+
+    state.value.carrier = { inner: direct };
+
+    expect(ownKeyReads).toBe(0);
+    expect(state.peek().carrier?.inner).toBe(state.peek().nested);
   });
 
   it("does not rescan a deep graph when reading value", () => {
@@ -334,7 +453,9 @@ describe("deepSignal", () => {
     const state = deepSignal({ box, map, nestedSignal });
 
     expect(state.value.box).toBe(box);
-    expect(state.value.map).toBe(map);
+    expect(state.value.map).not.toBe(map);
+    expect(new Map(state.value.map)).toEqual(map);
+    expect(state.peek().map).toBe(map);
     expect(state.value.nestedSignal).toBe(nestedSignal);
   });
 

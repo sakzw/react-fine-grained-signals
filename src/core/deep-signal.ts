@@ -10,7 +10,26 @@ import type { Signal } from "./base.js";
 import { hasActiveRenderCollector } from "./render-tracking.js";
 
 /** A signal whose plain-object and array values are reactive by property. */
-export interface DeepSignal<T extends object> extends Signal<T> {}
+export interface DeepSignal<T extends object> extends Omit<Signal<T>, "value"> {
+  /**
+   * The reactive value. Map and Set values are exposed as read-only views so
+   * their opaque contents cannot be mutated around deepSignal's write checks.
+   */
+  get value(): DeepSignalValue<T>;
+  set value(nextValue: T);
+}
+
+export type DeepSignalValue<T> = T extends (...args: never[]) => unknown
+  ? T
+  : T extends Map<infer Key, infer Value>
+    ? ReadonlyMap<Key, DeepSignalValue<Value>>
+    : T extends Set<infer Value>
+      ? ReadonlySet<DeepSignalValue<Value>>
+      : T extends readonly unknown[]
+        ? { [Key in keyof T]: DeepSignalValue<T[Key]> }
+        : T extends object
+          ? { [Key in keyof T]: DeepSignalValue<T[Key]> }
+          : T;
 
 interface PropertyMetadata {
   properties: Map<PropertyKey, Signal<number>>;
@@ -38,6 +57,9 @@ const ARRAY_MUTATORS = new Set<PropertyKey>([
 ]);
 const proxyToRaw = new WeakMap<object, object>();
 const rawToMetadata = new WeakMap<object, PropertyMetadata>();
+const readonlyMapViews = new WeakMap<Map<unknown, unknown>, ReadonlyMap<unknown, unknown>>();
+const readonlySetViews = new WeakMap<Set<unknown>, ReadonlySet<unknown>>();
+const readonlyCollectionViewToRaw = new WeakMap<object, Map<unknown, unknown> | Set<unknown>>();
 // A carrier that contains one of our proxies has to be copied before it can be
 // stored. Remember that copy so assigning the same carrier again preserves the
 // same identity and aliases, just like assigning an ordinary raw object does.
@@ -48,6 +70,105 @@ function isPlainObjectOrArray(value: unknown): value is object {
   if (Array.isArray(value)) return true;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
+}
+
+function isObjectLike(value: unknown): value is object {
+  return (typeof value === "object" && value !== null) || typeof value === "function";
+}
+
+function readonlyMapView<Key, Value>(raw: Map<Key, Value>): ReadonlyMap<Key, Value> {
+  const cached = readonlyMapViews.get(raw as Map<unknown, unknown>);
+  if (cached !== undefined) return cached as ReadonlyMap<Key, Value>;
+
+  const view = Object.create(Map.prototype) as ReadonlyMap<Key, Value>;
+  const rejectMutation = () => {
+    throw new TypeError("deepSignal() Map values are read-only; replace the Map immutably");
+  };
+  Object.defineProperties(view, {
+    size: { enumerable: false, configurable: false, get: () => raw.size },
+    get: { enumerable: false, configurable: false, value: (key: Key) => raw.get(key) },
+    has: { enumerable: false, configurable: false, value: (key: Key) => raw.has(key) },
+    entries: {
+      enumerable: false,
+      configurable: false,
+      value: () => Map.prototype.entries.call(raw),
+    },
+    keys: {
+      enumerable: false,
+      configurable: false,
+      value: () => Map.prototype.keys.call(raw),
+    },
+    values: {
+      enumerable: false,
+      configurable: false,
+      value: () => Map.prototype.values.call(raw),
+    },
+    forEach: {
+      enumerable: false,
+      configurable: false,
+      value: (callback: (value: Value, key: Key, map: ReadonlyMap<Key, Value>) => void, thisArg?: unknown) => {
+        Map.prototype.forEach.call(raw, (value, key) => callback.call(thisArg, value, key, view));
+      },
+    },
+    [Symbol.iterator]: {
+      enumerable: false,
+      configurable: false,
+      value: () => Map.prototype.entries.call(raw),
+    },
+    set: { enumerable: false, configurable: false, value: rejectMutation },
+    delete: { enumerable: false, configurable: false, value: rejectMutation },
+    clear: { enumerable: false, configurable: false, value: rejectMutation },
+  });
+  readonlyMapViews.set(raw as Map<unknown, unknown>, view as ReadonlyMap<unknown, unknown>);
+  readonlyCollectionViewToRaw.set(view, raw as Map<unknown, unknown>);
+  return view;
+}
+
+function readonlySetView<Value>(raw: Set<Value>): ReadonlySet<Value> {
+  const cached = readonlySetViews.get(raw as Set<unknown>);
+  if (cached !== undefined) return cached as ReadonlySet<Value>;
+
+  const view = Object.create(Set.prototype) as ReadonlySet<Value>;
+  const rejectMutation = () => {
+    throw new TypeError("deepSignal() Set values are read-only; replace the Set immutably");
+  };
+  Object.defineProperties(view, {
+    size: { enumerable: false, configurable: false, get: () => raw.size },
+    has: { enumerable: false, configurable: false, value: (value: Value) => raw.has(value) },
+    entries: {
+      enumerable: false,
+      configurable: false,
+      value: () => Set.prototype.entries.call(raw),
+    },
+    keys: {
+      enumerable: false,
+      configurable: false,
+      value: () => Set.prototype.keys.call(raw),
+    },
+    values: {
+      enumerable: false,
+      configurable: false,
+      value: () => Set.prototype.values.call(raw),
+    },
+    forEach: {
+      enumerable: false,
+      configurable: false,
+      value: (callback: (value: Value, key: Value, set: ReadonlySet<Value>) => void, thisArg?: unknown) => {
+        Set.prototype.forEach.call(raw, (value) => callback.call(thisArg, value, value, view));
+      },
+    },
+    [Symbol.iterator]: {
+      enumerable: false,
+      configurable: false,
+      value: () => Set.prototype.values.call(raw),
+    },
+    add: { enumerable: false, configurable: false, value: rejectMutation },
+    delete: { enumerable: false, configurable: false, value: rejectMutation },
+    clear: { enumerable: false, configurable: false, value: rejectMutation },
+  });
+  readonlySetViews.set(raw as Set<unknown>, view as ReadonlySet<unknown>);
+  readonlyCollectionViewToRaw.set(view, raw as Set<unknown>);
+  return view;
 }
 
 function assertRootValue(value: unknown): asserts value is object {
@@ -72,58 +193,84 @@ function assertDataProperties(value: object): void {
 }
 
 function assertDeepDataGraph(value: unknown): boolean {
-  if (typeof value !== "object" || value === null) return false;
+  if (!isObjectLike(value)) return false;
   // A value can be reachable both as reactive plain data and through an opaque
-  // collection. Keep those traversals distinct: a proxy under Map/Set cannot be
-  // unwrapped without changing the collection, so it must be rejected instead.
+  // value. A proxy beneath an opaque value cannot be unwrapped without changing
+  // that value's observable identity, so reject it instead of leaking a proxy
+  // into the raw tree.
   const seen = new WeakMap<object, number>();
-  const pending: Array<{ value: object; insideCollection: boolean }> = [
-    { value, insideCollection: false },
+  const pending: Array<{ value: object; insideOpaque: boolean }> = [
+    { value, insideOpaque: false },
   ];
-  let containsProxy = false;
+  let needsNormalization = false;
 
   while (pending.length > 0) {
-    const { value: current, insideCollection } = pending.pop() as {
+    const { value: current, insideOpaque } = pending.pop() as {
       value: object;
-      insideCollection: boolean;
+      insideOpaque: boolean;
     };
     const directRaw = proxyToRaw.get(current);
     if (directRaw !== undefined) {
-      if (insideCollection) {
+      if (insideOpaque) {
         throw new TypeError(
-          "deepSignal() cannot store a deep proxy inside a Map or Set",
+          "deepSignal() cannot store a deep proxy inside an opaque value",
         );
       }
-      containsProxy = true;
+      // The raw graph was validated when this proxy was created. Do not walk it
+      // again: this makes `{ inner: state.value.large }` proportional to the
+      // new carrier rather than the already-known subtree.
+      needsNormalization = true;
+      continue;
     }
-    const raw = directRaw ?? current;
+    const readonlyRaw = readonlyCollectionViewToRaw.get(current);
+    if (readonlyRaw !== undefined) {
+      if (insideOpaque) {
+        throw new TypeError(
+          "deepSignal() cannot store a deep collection view inside an opaque value",
+        );
+      }
+      needsNormalization = true;
+      continue;
+    }
+    const raw = current;
     const visitedAs = seen.get(raw) ?? 0;
-    const visitFlag = insideCollection ? 2 : 1;
+    const visitFlag = insideOpaque ? 2 : 1;
     if ((visitedAs & visitFlag) !== 0) continue;
     seen.set(raw, visitedAs | visitFlag);
 
     if (raw instanceof Map) {
       for (const [key, entry] of raw) {
-        if (typeof key === "object" && key !== null) {
-          pending.push({ value: key, insideCollection: true });
+        if (isObjectLike(key)) {
+          pending.push({ value: key, insideOpaque: true });
         }
-        if (typeof entry === "object" && entry !== null) {
-          pending.push({ value: entry, insideCollection: true });
+        if (isObjectLike(entry)) {
+          pending.push({ value: entry, insideOpaque: true });
         }
       }
       continue;
     }
     if (raw instanceof Set) {
       for (const entry of raw) {
-        if (typeof entry === "object" && entry !== null) {
-          pending.push({ value: entry, insideCollection: true });
+        if (isObjectLike(entry)) {
+          pending.push({ value: entry, insideOpaque: true });
         }
       }
       continue;
     }
-    if (!isPlainObjectOrArray(raw)) continue;
+    if (!isPlainObjectOrArray(raw)) {
+      // Class instances, Date, functions, and other opaque values retain their
+      // identity. Inspect their own data descriptors without invoking getters
+      // so a contained deep proxy cannot enter the raw graph.
+      for (const key of Reflect.ownKeys(raw)) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(raw, key);
+        if (descriptor !== undefined && "value" in descriptor && isObjectLike(descriptor.value)) {
+          pending.push({ value: descriptor.value, insideOpaque: true });
+        }
+      }
+      continue;
+    }
 
-    if (!insideCollection) {
+    if (!insideOpaque) {
       assertExtensible(raw);
       assertDataProperties(raw);
     }
@@ -131,14 +278,14 @@ function assertDeepDataGraph(value: unknown): boolean {
       const descriptor = Reflect.getOwnPropertyDescriptor(raw, key);
       if (descriptor !== undefined && "value" in descriptor) {
         const child = descriptor.value;
-        if (typeof child === "object" && child !== null) {
-          pending.push({ value: child, insideCollection });
+        if (isObjectLike(child)) {
+          pending.push({ value: child, insideOpaque });
         }
       }
     }
   }
 
-  return containsProxy;
+  return needsNormalization;
 }
 
 function matchesNormalizedGraph(source: object, normalized: object): boolean {
@@ -156,6 +303,11 @@ function matchesNormalizedGraph(source: object, normalized: object): boolean {
     const directRaw = proxyToRaw.get(currentSource);
     if (directRaw !== undefined) {
       if (directRaw !== currentTarget) return false;
+      continue;
+    }
+    const readonlyRaw = readonlyCollectionViewToRaw.get(currentSource);
+    if (readonlyRaw !== undefined) {
+      if (readonlyRaw !== currentTarget) return false;
       continue;
     }
     if (!isPlainObjectOrArray(currentSource)) {
@@ -213,9 +365,11 @@ function matchesNormalizedGraph(source: object, normalized: object): boolean {
 }
 
 function cloneWithoutProxies<T>(value: T): T {
-  if (typeof value !== "object" || value === null) return value;
+  if (!isObjectLike(value)) return value;
   const directRaw = proxyToRaw.get(value);
   if (directRaw !== undefined) return directRaw as T;
+  const readonlyRaw = readonlyCollectionViewToRaw.get(value);
+  if (readonlyRaw !== undefined) return readonlyRaw as T;
 
   const cachedRoot = normalizedProxyCarriers.get(value);
   if (
@@ -230,9 +384,11 @@ function cloneWithoutProxies<T>(value: T): T {
   const pending: object[] = [];
 
   const resolve = (current: unknown): unknown => {
-    if (typeof current !== "object" || current === null) return current;
+    if (!isObjectLike(current)) return current;
     const raw = proxyToRaw.get(current);
     if (raw !== undefined) return raw;
+    const readonlyRaw = readonlyCollectionViewToRaw.get(current);
+    if (readonlyRaw !== undefined) return readonlyRaw;
     if (!isPlainObjectOrArray(current)) return current;
 
     const local = clones.get(current);
@@ -271,11 +427,13 @@ function cloneWithoutProxies<T>(value: T): T {
 }
 
 function prepareDeepValue<T>(value: T): T {
-  if (typeof value === "object" && value !== null) {
+  if (isObjectLike(value)) {
     const directRaw = proxyToRaw.get(value);
     // Reassigning a value obtained from this deep signal is already known-good.
     // Avoid validating its entire graph again on this common O(1) path.
     if (directRaw !== undefined) return directRaw as T;
+    const readonlyRaw = readonlyCollectionViewToRaw.get(value);
+    if (readonlyRaw !== undefined) return readonlyRaw as T;
   }
   const containsProxy = assertDeepDataGraph(value);
   return containsProxy ? cloneWithoutProxies(value) : value;
@@ -380,6 +538,8 @@ function createDeepContext() {
       typeof value === "object" && value !== null
         ? (proxyToRaw.get(value) as T | undefined) ?? value
         : value;
+    if (rawValue instanceof Map) return readonlyMapView(rawValue) as T;
+    if (rawValue instanceof Set) return readonlySetView(rawValue) as T;
     if (!isPlainObjectOrArray(rawValue)) return rawValue;
     assertExtensible(rawValue);
 
@@ -526,25 +686,27 @@ function createDeepContext() {
 
 type DeepContext = ReturnType<typeof createDeepContext>;
 
-class DeepSignalImpl<T extends object>
-  extends SignalImpl<T>
-  implements DeepSignal<T>
-{
+class DeepSignalImpl<T extends object> implements DeepSignal<T> {
+  readonly #source: SignalImpl<T>;
   readonly #context: DeepContext;
 
   constructor(initialValue: T, context: DeepContext) {
-    super(initialValue);
+    this.#source = new SignalImpl(initialValue);
     this.#context = context;
   }
 
-  override get value(): T {
-    return this.#context.wrap(super.value);
+  get value(): DeepSignalValue<T> {
+    return this.#context.wrap(this.#source.value) as DeepSignalValue<T>;
   }
 
-  override set value(nextValue: T) {
+  set value(nextValue: T) {
     const rawValue = this.#context.unwrap(nextValue);
     assertRootValue(rawValue);
-    super.value = rawValue as T;
+    this.#source.value = rawValue as T;
+  }
+
+  peek(): T {
+    return this.#source.peek();
   }
 }
 
@@ -559,5 +721,5 @@ export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
 
   const context = createDeepContext();
   context.wrap(rawInitialValue);
-  return registerSignal(new DeepSignalImpl(rawInitialValue as T, context));
+  return registerSignal(new DeepSignalImpl(rawInitialValue as T, context)) as DeepSignal<T>;
 }

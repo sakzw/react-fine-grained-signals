@@ -6,7 +6,12 @@ import {
   useSyncExternalStore,
 } from "react";
 import { computed, deepSignal, effect, signal } from "../core/index.js";
-import type { DeepSignal, ReadonlySignal, Signal } from "../core/index.js";
+import type {
+  DeepSignal,
+  DeepSignalValue,
+  ReadonlySignal,
+  Signal,
+} from "../core/index.js";
 import { untrackedRender } from "../core/render-tracking.js";
 import type { DependencyList } from "react";
 export { useSignals } from "./use-signals.js";
@@ -43,7 +48,7 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
  */
 function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   source: DeepSignal<T>,
-  selector: (value: T) => S,
+  selector: (value: DeepSignalValue<T>) => S,
 ) {
   const evaluate = (): SelectorResult<S> => {
     try {
@@ -132,7 +137,7 @@ export function useDeepSignalValue<
   S extends SignalSnapshot,
 >(
   source: DeepSignal<T>,
-  selector: (value: T) => S,
+  selector: (value: DeepSignalValue<T>) => S,
   dependencies: DependencyList,
 ): S {
   const store = useMemo(
