@@ -57,6 +57,9 @@ state.value.map.set("permitted-by-static-type", { count: 1 });
 state.value.set.add("permitted-by-static-type");
 
 class NominalBox {
+  // Nominal-typing brand: never read, only makes this class structurally
+  // distinct so the type-level assertions below actually prove something.
+  // oxlint-disable-next-line no-unused-private-class-members
   #brand = true;
   constructor(readonly count: number) {}
 }

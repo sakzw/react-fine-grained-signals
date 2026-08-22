@@ -9,10 +9,8 @@ import {
   signal,
   computed,
   deepSignal,
-  useComputed,
   useDeepSignal,
   useDeepSignalValue,
-  useSignalValue,
   useSignals,
   type DeepSignal,
 } from "../src/index.js";

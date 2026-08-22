@@ -209,10 +209,10 @@ function inspectFunction(
       // map/render-prop still cause the owner component to be transformed.
       if (isNestedTrackingBoundary(path)) path.skip();
     },
-    JSXElement(path) {
+    JSXElement(_path) {
       inspection.containsJSX = true;
     },
-    JSXFragment(path) {
+    JSXFragment(_path) {
       inspection.containsJSX = true;
     },
     MemberExpression(path) {

@@ -420,7 +420,7 @@ function cloneWithoutProxies<T>(value: T): T {
     if (local !== undefined) return local;
 
     const result: object = Array.isArray(current)
-      ? new Array(current.length)
+      ? Array.from({ length: current.length })
       : Object.create(Object.getPrototypeOf(current));
     clones.set(current, result);
     created.push([current, result]);

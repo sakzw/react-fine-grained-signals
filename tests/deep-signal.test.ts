@@ -166,6 +166,8 @@ describe("deepSignal", () => {
       state.value.source;
       runs++;
     }));
+    // Intentional self-assignment: verifies an equal value doesn't re-notify.
+    // oxlint-disable-next-line no-self-assign
     state.value.source = state.value.source;
     expect(runs).toBe(1);
   });

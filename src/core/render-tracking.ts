@@ -90,6 +90,8 @@ export class RenderSubscription implements RenderDependency {
     this.bumpVersion();
     const listeners = this.#listeners;
     if (listeners === undefined) return;
+    // Snapshot before iterating: a listener may (un)subscribe synchronously.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     for (const listener of [...listeners]) listener();
   }
 }

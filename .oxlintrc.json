@@ -1,0 +1,59 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "typescript",
+    "unicorn",
+    "oxc",
+    "react",
+    "vitest"
+  ],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn"
+  },
+  "rules": {
+    // Reading `.value` as a bare statement is how this codebase registers a
+    // reactive dependency (the getter has the tracking side effect); it isn't
+    // dead code.
+    "no-unused-expressions": "off",
+    // React 19's automatic JSX runtime doesn't require `React` in scope.
+    "react/react-in-jsx-scope": "off",
+    // This library's whole API surface is signals/deep-signals mutated via
+    // `.value` (and deep-signal proxies mutated in place); the rule assumes
+    // classic immutable props/state and false-positives on every consumer.
+    "react/immutability": "off",
+    // `useSignals()`/deep-signal hooks intentionally read `ref.current` during
+    // render to drive dependency tracking.
+    "react/refs": "off",
+    // vitest's own mock/assertion strictness rules are noisy relative to the
+    // payoff for this codebase; revisit if useful.
+    "vitest/require-mock-type-parameters": "off",
+    "vitest/require-to-throw-message": "off"
+  },
+  "overrides": [
+    {
+      // Tests routinely capture a hook/component's internal state into an
+      // outer `let` during render purely so assertions can inspect it
+      // afterwards; that's a test-only pattern, not a render side effect bug.
+      "files": ["tests/**", "**/tests/**"],
+      "rules": {
+        "react/globals": "off"
+      }
+    },
+    {
+      // These hooks forward caller-supplied dependency arrays through to
+      // useMemo/useEffect, so the arrays are never literals and "exhaustive
+      // deps" can't be statically verified here by design.
+      "files": ["src/react/hooks.ts"],
+      "rules": {
+        "react/use-memo": "off",
+        "react/memo-dependencies": "off",
+        "react/exhaustive-effect-dependencies": "off",
+        "react/exhaustive-deps": "off"
+      }
+    }
+  ],
+  "env": {
+    "builtin": true
+  }
+}

@@ -78,6 +78,8 @@ class RenderStore implements RenderCollector {
     const previousStore = currentStore;
     this.#pendingDependencies = new Map();
     const previousCollector = setActiveRenderCollector(this);
+    // Tracks the active collector across the module, not a scoping mistake.
+    // oxlint-disable-next-line typescript/no-this-alias
     currentStore = this;
     this.#finishCollection = () => {
       setActiveRenderCollector(previousCollector);
@@ -116,6 +118,8 @@ class RenderStore implements RenderCollector {
 
   readonly #notifyReact = (): void => {
     this.#version = (this.#version + 1) | 0;
+    // Snapshot before iterating: a listener may (un)subscribe synchronously.
+    // oxlint-disable-next-line unicorn/no-useless-spread
     for (const listener of [...this.#reactListeners]) listener();
   };
 
