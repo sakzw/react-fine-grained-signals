@@ -39,7 +39,7 @@
   ],
   "scripts": {
     "build": "tsdown && node tests/build-smoke.mjs",
-    "bench": "node --expose-gc --import tsx benchmarks/transform.mjs",
+    "bench": "node --expose-gc benchmarks/transform.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

@@ -1,5 +1,5 @@
 import os from "node:os";
-import { transformReactAlienSignals } from "../src/internal/transform.ts";
+import signals from "../dist/vite.js";
 
 const argumentIterations = process.argv.slice(2).find((argument) => argument !== "--");
 const iterations = Number.parseInt(argumentIterations ?? process.env.BENCH_ITERATIONS ?? "400", 10);
@@ -43,15 +43,16 @@ const largeReactive = reactiveSource(120);
 const smallNoCandidate = smallReactive.replaceAll(".value", ".current");
 const largeNoCandidate = largeReactive.replaceAll(".value", ".current");
 
-function transform(source, transformMode) {
-  return transformReactAlienSignals(source, "benchmark.tsx", {
-    importSource: "react-alien-signals",
-    mode: "auto",
-    transform: transformMode,
-  });
+function createTransform(transformMode) {
+  const plugin = signals({ mode: "auto", transform: transformMode });
+  if (typeof plugin.transform !== "function") {
+    throw new Error("The built Vite adapter did not expose a transform hook");
+  }
+  return (source) => plugin.transform(source, "benchmark.tsx");
 }
 
 function transformedCase(name, source, transformMode, expected) {
+  const runTransform = createTransform(transformMode);
   return {
     name,
     source,
@@ -59,7 +60,7 @@ function transformedCase(name, source, transformMode, expected) {
       ? Math.max(1, Math.floor(iterations / 20))
       : iterations,
     run() {
-      return transform(source, transformMode);
+      return runTransform(source);
     },
     check(result) {
       if (!expected) {

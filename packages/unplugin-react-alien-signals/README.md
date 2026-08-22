@@ -77,7 +77,7 @@ plugin transforms and skips dependencies and non-JavaScript/TypeScript modules.
 
 ## Development benchmark
 
-Run `pnpm bench:transform` from the workspace root to measure the transform on
-fixed small and large TSX inputs. The benchmark reports pass-through,
-no-candidate, lightweight injection, and managed-boundary cases; it is a local
-diagnostic, not a CI performance gate.
+Run `pnpm bench:transform` from the workspace root to build and measure the
+distributed Vite adapter on fixed small and large TSX inputs. The benchmark
+reports pass-through, no-candidate, lightweight injection, and managed-boundary
+cases; it is a local diagnostic, not a CI performance gate.

@@ -299,8 +299,8 @@ pnpm bench:transform
 
 Core results compare raw `alien-signals`, this package, and `@preact/signals-core`. Compare numbers only on the same machine and Node.js version; hosted CI timing is too variable for a reliable regression threshold.
 
-`bench:transform` measures the private build-plugin transform's parse, scope,
-rewrite, source-map, and code-generation path for small and large TSX modules.
-It includes a pass-through lower bound and a no-candidate Babel case, so it can
-be used later to compare a compatible SWC or Oxc implementation against the
-same corpus.
+`bench:transform` builds first, then measures the distributed Vite adapter's
+parse, scope, rewrite, source-map, and code-generation path for small and
+large TSX modules. It includes a pass-through lower bound and a no-candidate
+Babel case, so it can be used later to compare a compatible SWC or Oxc
+implementation against the same corpus.
