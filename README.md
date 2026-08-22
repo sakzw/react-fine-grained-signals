@@ -47,7 +47,7 @@ Only assignment, deletion, and standard array mutations made through `state.valu
 ## React hooks
 
 ```tsx
-import { useComputed, useSignal, useSignalEffect, useSignalValue } from "react-alien-signals";
+import { useComputed, useDeepSignal, useSignal, useSignalEffect, useSignalValue } from "react-alien-signals";
 
 function Counter({ step }: { step: number }) {
   const count = useSignal(0);
@@ -62,7 +62,7 @@ function Counter({ step }: { step: number }) {
 }
 ```
 
-`useSignal` keeps one signal for the component lifetime. `useSignalValue` subscribes a component to a signal. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay).
+`useSignal` and `useDeepSignal` keep one signal for the component lifetime. For expensive deep initial values, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`. The hook creates state only; reading `state.value` during render does not implicitly subscribe React. Use `useComputed` plus `useSignalValue` to expose a selected primitive value. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay).
 
 `useComputed` has two modes:
 

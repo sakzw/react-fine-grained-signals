@@ -5,8 +5,8 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { computed, effect, signal } from "../core/index.js";
-import type { ReadonlySignal, Signal } from "../core/index.js";
+import { computed, deepSignal, effect, signal } from "../core/index.js";
+import type { DeepSignal, ReadonlySignal, Signal } from "../core/index.js";
 import type { DependencyList } from "react";
 
 const EMPTY_DEPENDENCIES: DependencyList = [];
@@ -17,6 +17,25 @@ export function useSignal<T>(initialValue: T): Signal<T> {
 
   if (signalRef.current === undefined) {
     signalRef.current = signal(initialValue);
+  }
+
+  return signalRef.current;
+}
+
+/**
+ * Creates a deep signal whose identity is stable for the component lifetime.
+ * A factory is evaluated only while initializing a mounted component instance;
+ * it must remain pure because React Strict Mode may replay initial rendering.
+ */
+export function useDeepSignal<T extends object>(
+  initialValue: T | (() => T),
+): DeepSignal<T> {
+  const signalRef = useRef<DeepSignal<T> | undefined>(undefined);
+
+  if (signalRef.current === undefined) {
+    signalRef.current = deepSignal(
+      typeof initialValue === "function" ? initialValue() : initialValue,
+    );
   }
 
   return signalRef.current;

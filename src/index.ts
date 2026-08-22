@@ -12,6 +12,7 @@ export {
 } from "./core/index.js";
 export {
   useComputed,
+  useDeepSignal,
   useSignal,
   useSignalEffect,
   useSignalValue,

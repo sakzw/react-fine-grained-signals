@@ -9,6 +9,7 @@ import { jsxDEV } from "../src/jsx-dev-runtime.js";
 import {
   signal,
   useComputed,
+  useDeepSignal,
   useSignal,
   useSignalValue,
   useSignalEffect,
@@ -52,6 +53,98 @@ describe("React bindings", () => {
     expect(screen.getByText("after")).toBeTruthy();
     expect(parentRenders).toHaveBeenCalledTimes(1);
     expect(leafRenders).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a useDeepSignal identity stable while nested state updates", () => {
+    let source: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
+    const renders = vi.fn();
+
+    function Profile() {
+      const state = useDeepSignal({ user: { name: "Ada" } });
+      const name = useSignalValue(useComputed(() => state.value.user.name));
+      source = state;
+      renders();
+      return <output aria-label="deep name">{name}</output>;
+    }
+
+    render(<Profile />);
+    const initialSource = source;
+    expect(screen.getByLabelText("deep name").textContent).toBe("Ada");
+
+    act(() => {
+      source!.value.user.name = "Grace";
+    });
+    expect(screen.getByLabelText("deep name").textContent).toBe("Grace");
+    expect(source).toBe(initialSource);
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not recreate useDeepSignal or adopt a new initial value on parent rerender", () => {
+    let source: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
+    const renders = vi.fn();
+
+    function Profile({ initial, parentVersion }: {
+      initial: { user: { name: string } };
+      parentVersion: number;
+    }) {
+      const state = useDeepSignal(initial);
+      source = state;
+      renders();
+      return <output aria-label="deep parent rerender">{`${parentVersion}:${state.value.user.name}`}</output>;
+    }
+
+    const view = render(<Profile initial={{ user: { name: "Ada" } }} parentVersion={1} />);
+    const initialSource = source;
+    view.rerender(<Profile initial={{ user: { name: "Grace" } }} parentVersion={2} />);
+
+    expect(source).toBe(initialSource);
+    expect(screen.getByLabelText("deep parent rerender").textContent).toBe("2:Ada");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("evaluates a useDeepSignal factory only during initialization", () => {
+    const initialize = vi.fn(() => ({ items: [] as string[] }));
+
+    function List({ parentVersion }: { parentVersion: number }) {
+      const state = useDeepSignal(initialize);
+      return <output aria-label="deep factory">{`${parentVersion}:${state.value.items.length}`}</output>;
+    }
+
+    const view = render(<List parentVersion={1} />);
+    view.rerender(<List parentVersion={2} />);
+
+    expect(initialize).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("deep factory").textContent).toBe("2:0");
+  });
+
+  it("keeps a useDeepSignal subscription live through StrictMode replay", () => {
+    let source: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
+
+    function Profile({ parentVersion }: { parentVersion: number }) {
+      const state = useDeepSignal({ user: { name: "Ada" } });
+      const name = useSignalValue(useComputed(() => state.value.user.name));
+      source = state;
+      return <output aria-label="strict deep name">{`${parentVersion}:${name}`}</output>;
+    }
+
+    const view = render(
+      <StrictMode>
+        <Profile parentVersion={1} />
+      </StrictMode>,
+    );
+    const committedSource = source;
+    act(() => {
+      source!.value.user.name = "Grace";
+    });
+    expect(screen.getByLabelText("strict deep name").textContent).toBe("1:Grace");
+
+    view.rerender(
+      <StrictMode>
+        <Profile parentVersion={2} />
+      </StrictMode>,
+    );
+    expect(source).toBe(committedSource);
+    expect(screen.getByLabelText("strict deep name").textContent).toBe("2:Grace");
   });
 
   it("exposes useComputed to an explicit leaf hook", () => {

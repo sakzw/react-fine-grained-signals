@@ -1,6 +1,12 @@
 import { getActiveSub } from "alien-signals";
-import { batch, isSignal, signal } from "./index.js";
-import type { Signal } from "./index.js";
+import {
+  batch,
+  isSignal,
+  registerSignal,
+  SignalImpl,
+  signal,
+} from "./base.js";
+import type { Signal } from "./base.js";
 
 /** A signal whose plain-object and array values are reactive by property. */
 export interface DeepSignal<T extends object> extends Signal<T> {}
@@ -262,6 +268,31 @@ function createDeepContext() {
   return { unwrap, wrap };
 }
 
+type DeepContext = ReturnType<typeof createDeepContext>;
+
+class DeepSignalImpl<T extends object>
+  extends SignalImpl<T>
+  implements DeepSignal<T>
+{
+  readonly #context: DeepContext;
+
+  constructor(initialValue: T, context: DeepContext) {
+    super(initialValue);
+    this.#context = context;
+  }
+
+  override get value(): T {
+    return this.#context.wrap(super.value);
+  }
+
+  override set value(nextValue: T) {
+    const rawValue = this.#context.unwrap(nextValue);
+    assertRootValue(rawValue);
+    assertExtensible(rawValue);
+    super.value = rawValue as T;
+  }
+}
+
 /**
  * Creates a signal that lazily tracks nested plain-object and array properties.
  * Mutations must go through `.value`; changes made through the original raw
@@ -273,36 +304,5 @@ export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
 
   const context = createDeepContext();
   context.wrap(rawInitialValue);
-  const root = signal(rawInitialValue as T);
-  const valueDescriptor = Object.getOwnPropertyDescriptor(root, "value");
-  if (valueDescriptor?.get === undefined || valueDescriptor.set === undefined) {
-    throw new TypeError("Unexpected signal value descriptor");
-  }
-  const getRawValue = valueDescriptor.get.bind(root) as () => T;
-  const setRawValue = valueDescriptor.set.bind(root) as (value: T) => void;
-  const peekRawValue = root.peek.bind(root);
-
-  Object.defineProperty(root, "value", {
-    configurable: true,
-    enumerable: true,
-    get(): T {
-      return context.wrap(getRawValue());
-    },
-    set(nextValue: T) {
-      const rawValue = context.unwrap(nextValue);
-      assertRootValue(rawValue);
-      assertExtensible(rawValue);
-      setRawValue(rawValue as T);
-    },
-  });
-  Object.defineProperty(root, "peek", {
-    configurable: true,
-    enumerable: true,
-    writable: true,
-    value(): T {
-      return peekRawValue();
-    },
-  });
-
-  return root as DeepSignal<T>;
+  return registerSignal(new DeepSignalImpl(rawInitialValue as T, context));
 }
