@@ -8,6 +8,7 @@ import {
 import { computed, deepSignal, effect, signal } from "../core/index.js";
 import type { DeepSignal, ReadonlySignal, Signal } from "../core/index.js";
 import type { DependencyList } from "react";
+export { useSignals } from "./use-signals.js";
 
 const EMPTY_DEPENDENCIES: DependencyList = [];
 

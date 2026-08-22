@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx, jsxs } from "../src/jsx-runtime.js";
 import { jsxDEV } from "../src/jsx-dev-runtime.js";
 import {
+  computed,
   deepSignal,
   signal,
   useComputed,
@@ -15,6 +16,8 @@ import {
   useSignal,
   useSignalValue,
   useSignalEffect,
+  useSignals,
+  untracked,
 } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -25,10 +28,201 @@ afterEach(() => {
 });
 
 describe("React bindings", () => {
-  // The render-read subscription is intentionally kept as an explicit
-  // acceptance contract. Implementations that only expose leaf subscriptions
-  // can enable this once useSignals has a supported no-argument mode.
-  it.todo("rerenders a component that reads a useSignal through useSignals");
+  it("tracks shallow and multiple deep reads made after useSignals", () => {
+    const title = signal("one");
+    const state = deepSignal({ profile: { name: "Ada", role: "admin", unread: 0 } });
+    const renders = vi.fn();
+
+    function Profile() {
+      useSignals();
+      renders();
+      return <output aria-label="tracked profile">{
+        `${title.value}:${state.value.profile.name}:${state.value.profile.role}`
+      }</output>;
+    }
+
+    render(<Profile />);
+    expect(screen.getByLabelText("tracked profile").textContent).toBe("one:Ada:admin");
+
+    act(() => {
+      title.value = "two";
+    });
+    expect(screen.getByLabelText("tracked profile").textContent).toBe("two:Ada:admin");
+    act(() => {
+      state.value.profile.name = "Grace";
+      state.value.profile.role = "owner";
+    });
+    expect(screen.getByLabelText("tracked profile").textContent).toBe("two:Grace:owner");
+    const rendersAfterTrackedWrites = renders.mock.calls.length;
+
+    act(() => {
+      state.value.profile.unread = 1;
+    });
+    expect(renders).toHaveBeenCalledTimes(rendersAfterTrackedWrites);
+  });
+
+  it("releases an old dynamic branch collected after useSignals", () => {
+    const state = deepSignal({ useFirst: true, first: "A", second: "B" });
+    const renders = vi.fn();
+
+    function Selection() {
+      useSignals();
+      renders();
+      const selected = state.value.useFirst ? state.value.first : state.value.second;
+      return <output aria-label="tracked branch">{selected}</output>;
+    }
+
+    render(<Selection />);
+    act(() => {
+      state.value.first = "A2";
+    });
+    expect(screen.getByLabelText("tracked branch").textContent).toBe("A2");
+    act(() => {
+      state.value.useFirst = false;
+    });
+    expect(screen.getByLabelText("tracked branch").textContent).toBe("B");
+    const rendersAfterSwitch = renders.mock.calls.length;
+
+    act(() => {
+      state.value.first = "ignored";
+    });
+    expect(renders).toHaveBeenCalledTimes(rendersAfterSwitch);
+    act(() => {
+      state.value.second = "B2";
+    });
+    expect(screen.getByLabelText("tracked branch").textContent).toBe("B2");
+  });
+
+  it("keeps StrictMode useSignals subscriptions live through update and disposes them on unmount", () => {
+    const source = signal(0);
+    const state = deepSignal({ value: 0 });
+    const renders = vi.fn();
+
+    function Reader() {
+      useSignals();
+      renders();
+      return <output aria-label="strict tracked values">{`${source.value}:${state.value.value}`}</output>;
+    }
+
+    const view = render(
+      <StrictMode>
+        <Reader />
+      </StrictMode>,
+    );
+    act(() => {
+      source.value = 1;
+      state.value.value = 2;
+    });
+    expect(screen.getByLabelText("strict tracked values").textContent).toBe("1:2");
+
+    view.unmount();
+    const rendersAtUnmount = renders.mock.calls.length;
+    act(() => {
+      source.value = 3;
+      state.value.value = 4;
+    });
+    expect(renders).toHaveBeenCalledTimes(rendersAtUnmount);
+  });
+
+  it("does not mix tracked dependencies between sibling components", () => {
+    const state = deepSignal({ left: "L", right: "R" });
+    const leftRenders = vi.fn();
+    const rightRenders = vi.fn();
+
+    function Left() {
+      useSignals();
+      leftRenders();
+      return <output aria-label="tracked left">{state.value.left}</output>;
+    }
+    function Right() {
+      useSignals();
+      rightRenders();
+      return <output aria-label="tracked right">{state.value.right}</output>;
+    }
+
+    render(<><Left /><Right /></>);
+    act(() => {
+      state.value.left = "L2";
+    });
+    expect(screen.getByLabelText("tracked left").textContent).toBe("L2");
+    expect(leftRenders).toHaveBeenCalledTimes(2);
+    expect(rightRenders).toHaveBeenCalledTimes(1);
+    act(() => {
+      state.value.right = "R2";
+    });
+    expect(screen.getByLabelText("tracked right").textContent).toBe("R2");
+    expect(leftRenders).toHaveBeenCalledTimes(2);
+    expect(rightRenders).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps a cached computed live across unrelated parent rerenders", () => {
+    const source = signal(2);
+    const doubled = computed(() => source.value * 2);
+
+    function Value({ label }: { label: string }) {
+      useSignals();
+      return <output aria-label="tracked computed">{`${label}:${doubled.value}`}</output>;
+    }
+
+    const view = render(<Value label="first" />);
+    view.rerender(<Value label="second" />);
+    act(() => {
+      source.value = 3;
+    });
+    expect(screen.getByLabelText("tracked computed").textContent).toBe("second:6");
+  });
+
+  it("does not collect reads made through untracked or computed peek", () => {
+    const tracked = signal(0);
+    const ignored = signal(0);
+    const source = signal(1);
+    const derived = computed(() => source.value * 2);
+    const renders = vi.fn();
+
+    function Value() {
+      useSignals();
+      renders();
+      return <output aria-label="untracked render reads">{
+        `${tracked.value}:${untracked(() => ignored.value)}:${derived.peek()}`
+      }</output>;
+    }
+
+    render(<Value />);
+    act(() => {
+      ignored.value = 1;
+      source.value = 2;
+    });
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => {
+      tracked.value = 1;
+    });
+    expect(screen.getByLabelText("untracked render reads").textContent).toBe("1:1:4");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps direct host effects isolated from a trailing render collector", () => {
+    const value = signal("component");
+    const title = signal("before");
+    const readerRenders = vi.fn();
+
+    function Reader() {
+      useSignals();
+      readerRenders();
+      return <output aria-label="isolated reader">{value.value}</output>;
+    }
+
+    render(
+      <>
+        <span aria-label="isolated binding" title={title}>host</span>
+        <Reader />
+      </>,
+    );
+    act(() => {
+      title.value = "after";
+    });
+    expect((screen.getByLabelText("isolated binding") as HTMLSpanElement).title).toBe("after");
+    expect(readerRenders).toHaveBeenCalledTimes(1);
+  });
 
   it("renders a useSignal through an explicit leaf hook", () => {
     const source = signal("before");

@@ -3,7 +3,7 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import {
   isSignal,
-  useSignalValue,
+  useSignals,
   type ReadonlySignal,
   type Signal,
 } from "react-alien-signals";
@@ -24,13 +24,13 @@ function CustomSignalConsumer({
 }: {
   source: ReadonlySignal<string>;
 }) {
-  const value = useSignalValue(source);
+  useSignals();
   return (
     <output
       id="custom-value"
       data-received-signal={String(isSignal(source))}
     >
-      {value}
+      {source.value}
     </output>
   );
 }

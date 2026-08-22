@@ -49,22 +49,24 @@ state.value.items.push("second");
 ## Reactフック
 
 ```tsx
-import { useComputed, useDeepSignal, useDeepSignalValue, useSignal, useSignalEffect, useSignalValue } from "react-alien-signals";
+import { useComputed, useSignal, useSignalEffect, useSignals } from "react-alien-signals";
 
 function Counter({ step }: { step: number }) {
+  useSignals();
   const count = useSignal(0);
   const scaled = useComputed(() => count.value * step, [step]);
-  const value = useSignalValue(scaled);
 
   useSignalEffect(() => {
     console.log("count:", count.value);
   });
 
-  return <button onClick={() => (count.value += step)}>{value}</button>;
+  return <button onClick={() => (count.value += step)}>{scaled.value}</button>;
 }
 ```
 
-`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。このフックは状態を作成するだけであり、レンダー中に `state.value` を読んでもReactによる購読は自動で開始されません。プロパティ単位のReact購読には、`useDeepSignalValue(state, value => value.user.name, [])` を使用します。依存配列は必須です。各レンダーで長さと順序を固定し、selectorがクロージャから参照するsignal以外の値をすべて列挙してください。selectorが返せるのはプリミティブなスナップショット（`string`、`number`、`boolean`、`bigint`、`symbol`、`null`、`undefined`）だけです。変更可能なオブジェクトやProxyのスナップショットは意図的に拒否します。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
+レンダー中にsignalの `.value` を読むすべてのコンポーネントで、最初のフックとして `useSignals()` を1回、無条件に呼び出してください。引数はなく、値も返しません。このフック以降の同期的なsignal読み取りは自動収集され、そのいずれかが変わるとコンポーネントが再レンダーされます。
+
+`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。`useSignals()` 以降に読んだディーププロパティは個別に追跡されるため、読んでいない隣接プロパティの変更ではコンポーネントを再レンダーしません。`useSignalValue` は低レベルな明示的リーフ購読として引き続き利用できます。プリミティブなselectorを明示したい場合は、`useDeepSignalValue(state, value => value.user.name, [])` を使用します。依存配列は必須です。各レンダーで長さと順序を固定し、selectorがクロージャから参照するsignal以外の値をすべて列挙してください。変更可能なオブジェクトやProxyをselectorが返すことは意図的に拒否します。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
 
 `useComputed` には2つのモードがあります。
 
@@ -101,7 +103,7 @@ export function Field() {
 ## 実験的な制約
 
 - React 19以降が必要です。JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
-- 引数なしの `useSignals()` は実装していません。変換処理やReact内部APIを使わずに自動依存追跡を安全に終了できる「レンダー終了境界」が、Reactの公開APIには存在しないためです。明示的な購読には `useSignalValue` または `useDeepSignalValue` を使用してください。
+- 変換なしの `useSignals()` は管理されない簡易APIです。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。このモードでは、Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。将来ソース変換を追加することで、`try` / `finally` を使った厳密なレンダー終了境界を提供できます。
 - 直接バインディングは `value`、`checked`、`style`、イベントハンドラ、SVG props、および許可リスト外のホストpropsをサポートしません。
 - 直接バインディングによる書き込みはReactスケジューラの外側で行われる、実験的な最適化です。
 - Reactコンポーネントのpropsや子要素へ渡したsignalはアンラップされません。直接バインディングはネイティブHTML要素にのみ適用されます。ただし、JSXランタイムが処理するsignal子要素は例外です。

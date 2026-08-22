@@ -7,16 +7,69 @@ import { renderToString } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import {
   signal,
+  computed,
+  deepSignal,
   useComputed,
   useDeepSignal,
   useDeepSignalValue,
   useSignalValue,
+  useSignals,
   type DeepSignal,
 } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("SSR and hydration", () => {
+  it("keeps useSignals render tracking server-inert, deterministic, and live after hydration", async () => {
+    const source = signal("server");
+    const state = deepSignal({ profile: { name: "Ada", unread: 0 } });
+    const derivedRuns = vi.fn(() => source.value.toUpperCase());
+    const derived = computed(derivedRuns);
+
+    function App() {
+      useSignals();
+      return <span data-testid="tracked-ssr-value">{
+        `${derived.value}:${state.value.profile.name}`
+      }</span>;
+    }
+
+    const firstHtml = renderToString(<App />);
+    const secondHtml = renderToString(<App />);
+    expect(firstHtml).toBe(secondHtml);
+    expect(firstHtml).toContain("SERVER:Ada");
+
+    // A server render must not leave an effect/subscription that evaluates this
+    // computed after the request has completed.
+    expect(derivedRuns).toHaveBeenCalledTimes(1);
+    source.value = "changed without a client";
+    expect(derivedRuns).toHaveBeenCalledTimes(1);
+    source.value = "server";
+    expect(derivedRuns).toHaveBeenCalledTimes(1);
+
+    const container = document.createElement("div");
+    container.innerHTML = firstHtml;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(container.querySelector("[data-testid=tracked-ssr-value]")?.textContent).toBe("SERVER:Ada");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      source.value = "client";
+      state.value.profile.name = "Grace";
+    });
+    expect(container.querySelector("[data-testid=tracked-ssr-value]")?.textContent).toBe("CLIENT:Grace");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("hydrates renderToString output and follows updates without warnings", async () => {
     const source = signal("server value");
     const title = signal("server title");

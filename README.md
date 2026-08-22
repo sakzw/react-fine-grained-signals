@@ -49,22 +49,24 @@ Only assignment, deletion, and standard array mutations made through `state.valu
 ## React hooks
 
 ```tsx
-import { useComputed, useDeepSignal, useDeepSignalValue, useSignal, useSignalEffect, useSignalValue } from "react-alien-signals";
+import { useComputed, useSignal, useSignalEffect, useSignals } from "react-alien-signals";
 
 function Counter({ step }: { step: number }) {
+  useSignals();
   const count = useSignal(0);
   const scaled = useComputed(() => count.value * step, [step]);
-  const value = useSignalValue(scaled);
 
   useSignalEffect(() => {
     console.log("count:", count.value);
   });
 
-  return <button onClick={() => (count.value += step)}>{value}</button>;
+  return <button onClick={() => (count.value += step)}>{scaled.value}</button>;
 }
 ```
 
-`useSignal` and `useDeepSignal` keep one signal for the component lifetime. For expensive deep initial values, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`. The hook creates state only; reading `state.value` during render does not implicitly subscribe React. Use `useDeepSignalValue(state, value => value.user.name, [])` for a property-level React subscription. Its dependency array is required, must keep a constant length and order, and must list every non-signal value captured by the selector. Selectors return primitive snapshots only; mutable object or Proxy snapshots are intentionally rejected. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay).
+Call `useSignals()` once and unconditionally as the first hook in every component that reads signal `.value` during render. It takes no arguments and returns no value. Synchronous signal reads after the hook are collected automatically, and the component rerenders when one of those values changes.
+
+`useSignal` and `useDeepSignal` keep one signal for the component lifetime. For expensive deep initial values, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`. Deep properties read after `useSignals()` are tracked individually, so changing an unread sibling does not rerender the component. `useSignalValue` remains available as a low-level explicit leaf subscription. Use `useDeepSignalValue(state, value => value.user.name, [])` when an explicit primitive selector is preferable; its dependency array is required, must keep a constant length and order, and must list every non-signal value captured by the selector. Mutable object or Proxy selector results are intentionally rejected. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay).
 
 `useComputed` has two modes:
 
@@ -101,7 +103,7 @@ export function Field() {
 ## Experimental constraints
 
 - React 19 or newer is required. The JSX runtime uses callback-ref cleanup, which is unavailable in React 18.
-- `useSignals()` with no arguments is not implemented because React's public APIs provide no safe render-end boundary for closing automatic dependency tracking without a transform or React internals. Use `useSignalValue` or `useDeepSignalValue` for explicit subscriptions.
+- Bare `useSignals()` is an unmanaged convenience API: tracking closes at the next `useSignals()` call or after the current microtask. Call it once, unconditionally, as the component's first hook and only rely on synchronous signal reads made during that render. Reads in effects, event handlers, asynchronous callbacks, or render props whose owning component does not call `useSignals()` are not supported as component dependencies. Exact separation across Suspense-aborted renders, nested `renderToString` / `renderToStaticMarkup` calls made during render, and multiple concurrent roots is best-effort in this mode. A future source transform can provide an exact `try`/`finally` render boundary.
 - Direct binding does not support `value`, `checked`, `style`, event handlers, SVG props, or other host props outside the allowlist.
 - Direct binding writes outside the React scheduler and remains an experimental optimization.
 - Signals passed to React component props or component children are not unwrapped. The direct-binding behavior applies only to native HTML elements (and signal children handled by the JSX runtime).

@@ -8,6 +8,7 @@ import {
   startBatch,
   trigger,
 } from "alien-signals";
+import { RenderSubscription, untrackedRender } from "./render-tracking.js";
 
 /** A readable reactive value. */
 export interface ReadonlySignal<T> {
@@ -36,6 +37,7 @@ export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
 /** Internal writable signal implementation shared with deep signals. */
 export class SignalImpl<T> implements Signal<T> {
   readonly #source: ReturnType<typeof createSignal<T>>;
+  readonly #renderSubscription = new RenderSubscription();
   #currentValue: T;
 
   constructor(initialValue: T) {
@@ -44,6 +46,7 @@ export class SignalImpl<T> implements Signal<T> {
   }
 
   get value(): T {
+    if (this.#renderSubscription.track()) return this.#currentValue;
     // The call records the dependency; `#currentValue` preserves Object.is
     // semantics where the underlying callable API treats 0 and -0 alike.
     this.#source();
@@ -59,6 +62,7 @@ export class SignalImpl<T> implements Signal<T> {
     } else {
       this.#source(nextValue);
     }
+    this.#renderSubscription.notify();
   }
 
   peek(): T {
@@ -79,9 +83,31 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
       ? previous
       : { value };
   });
+  let disposeRenderBridge: (() => void) | undefined;
+  let isInitialBridgeRun = true;
+  const renderSubscription = new RenderSubscription(
+    () => {
+      isInitialBridgeRun = true;
+      disposeRenderBridge = createEffect(() => {
+        untrackedRender(() => source().value);
+        if (isInitialBridgeRun) {
+          isInitialBridgeRun = false;
+        } else {
+          renderSubscription.notify();
+        }
+      });
+    },
+    () => {
+      disposeRenderBridge?.();
+      disposeRenderBridge = undefined;
+    },
+  );
 
   const result: ReadonlySignal<T> = {
     get value(): T {
+      if (renderSubscription.track()) {
+        return untracked(() => untrackedRender(() => source().value));
+      }
       return source().value;
     },
     peek(): T {
@@ -93,7 +119,7 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
 
 /** Runs a reactive side effect and returns a disposer. */
 export function effect(fn: () => void | (() => void)): () => void {
-  return createEffect(fn);
+  return createEffect(() => untrackedRender(fn));
 }
 
 /** Groups writes, deferring effect notifications until the callback completes. */
@@ -108,11 +134,13 @@ export function batch<T>(fn: () => T): T {
 
 /** Runs a callback without collecting reactive dependencies. */
 export function untracked<T>(fn: () => T): T {
-  const activeSub = getActiveSub();
-  setActiveSub();
-  try {
-    return fn();
-  } finally {
-    setActiveSub(activeSub);
-  }
+  return untrackedRender(() => {
+    const activeSub = getActiveSub();
+    setActiveSub();
+    try {
+      return fn();
+    } finally {
+      setActiveSub(activeSub);
+    }
+  });
 }

@@ -7,6 +7,7 @@ import {
   signal,
 } from "./base.js";
 import type { Signal } from "./base.js";
+import { hasActiveRenderCollector } from "./render-tracking.js";
 
 /** A signal whose plain-object and array values are reactive by property. */
 export interface DeepSignal<T extends object> extends Signal<T> {}
@@ -98,7 +99,7 @@ function createDeepContext() {
     versions: Map<PropertyKey, Signal<number>>,
     key: PropertyKey,
   ): void => {
-    if (getActiveSub() === undefined) return;
+    if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
     getVersion(versions, key).value;
   };
 
@@ -111,7 +112,7 @@ function createDeepContext() {
   };
 
   const trackIteration = (metadata: PropertyMetadata): void => {
-    if (getActiveSub() === undefined) return;
+    if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
     metadata.iteration ??= signal(0);
     metadata.iteration.value;
   };

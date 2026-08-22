@@ -24,7 +24,7 @@ test("serves deterministic React SSR markup", async ({ request }) => {
   expect(html).not.toContain("data-hydrated");
 });
 
-test("hydrates without warnings and updates leaf subscribers", async ({ page }) => {
+test("hydrates without warnings and updates automatic component subscribers", async ({ page }) => {
   const errors = await openHydrated(page);
 
   await expect(page.locator("#signal-child")).toHaveText("0");
