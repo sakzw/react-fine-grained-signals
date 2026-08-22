@@ -421,6 +421,25 @@ describe("React bindings", () => {
     expect(renders).toHaveBeenCalledTimes(2);
   });
 
+  it.each([
+    ["mutable object", () => ({ name: "Ada" })],
+    ["deep proxy", (value: { user: { name: string } }) => value.user],
+    ["function", () => () => "Ada"],
+  ])("rejects a %s returned by a deep selector at runtime", (_label, selector) => {
+    const state = deepSignal({ user: { name: "Ada" } });
+
+    function InvalidSelection() {
+      useDeepSignalValue(state, selector as never, []);
+      return null;
+    }
+
+    expect(() => render(<InvalidSelection />)).toThrowError(
+      new TypeError(
+        "useDeepSignalValue selector must return a primitive snapshot; objects, Proxies, and functions are not supported",
+      ),
+    );
+  });
+
   it("reconnects a selected deep leaf after its parent object is replaced", () => {
     let state: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
 

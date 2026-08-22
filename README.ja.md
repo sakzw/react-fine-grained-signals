@@ -64,7 +64,9 @@ function Counter({ step }: { step: number }) {
 }
 ```
 
-`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。依存配列を省略する場合、callbackはsignalだけを読む必要があり、最初のクロージャがコンポーネントの生存期間中保持されます。props、state、その他のsignalではない値を捕捉する場合は、`useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])` のように任意の依存配列へ列挙してください。
+レンダー中にsignalの `.value` を読む各コンポーネントでは、`useSignals()` を最初のフックとして1回、無条件に呼び出してください。引数も戻り値もありません。フック以降の同期的なsignal読み取りが自動収集され、そのいずれかが変わるとコンポーネントが再レンダーされます。
+
+`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。`useSignals()` 後に読んだdeep propertyは個別に追跡されるため、読んでいない隣接propertyの変更では再レンダーしません。`useSignalValue` は小さなリーフを明示的に購読する低レベルAPIとして利用できます。プリミティブなselectorを明示したい場合は `useDeepSignalValue(state, value => value.user.name, [])` を使用します。依存配列は必須で、長さと順序を一定に保ち、selectorが捕捉するsignal以外の値をすべて列挙してください。object、Proxy、functionをselectorが返すと、runtimeで `TypeError` を投げます。selectorはプリミティブなsnapshotを返す必要があります。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。依存配列を省略する場合、callbackはsignalだけを読む必要があり、最初のクロージャがコンポーネントの生存期間中保持されます。props、state、その他のsignalではない値を捕捉する場合は、`useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])` のように任意の依存配列へ列挙してください。
 
 `useComputed` には2つのモードがあります。
 
@@ -73,21 +75,20 @@ function Counter({ step }: { step: number }) {
 
 ## 描画最適化
 
-このライブラリには、目的の異なる二つの最適化経路があります。通常は**pluginなし**で始められます。`unplugin` は `useSignals()` の書き方を保ったまま自動挿入したい場合に追加し、厳密な追跡境界は必要なときだけ上級オプションで有効にします。
+このライブラリには、独立して使える二つの最適化レイヤーがあります。
 
-| 選択肢 | 更新時に起こること | 向いている場面 |
-| --- | --- | --- |
-| `useSignals()`（pluginなし） | 読んだsignalが変わったコンポーネントだけをReactが再レンダーする | 明示的でVueに近い書き味を保ちたい通常のコンポーネント |
-| JSX signal子要素／許可済みhost prop（pluginなし） | 親を再レンダーせず、該当DOMリーフだけを書き換える | テキスト、`title`、`data-*` など頻繁に変わる小さな表示 |
-| `unplugin-react-alien-signals` | 既定では `useSignals()` を自動挿入し、必要なら厳密なレンダー境界も使える | 大規模コードベースで手動呼び出しを減らす、Suspense境界を厳密にする場合 |
+1. runtime hooksとJSX runtimeはbuild pluginなしで動作します。
+2. 任意の `unplugin-react-alien-signals` packageは、選択したcomponentとcustom hookへ `useSignals()` を挿入し、必要に応じて厳密なmanaged boundaryも生成します。
+
+どちらのレイヤーも、すべてのReact componentをsignal駆動へ変えるものではありません。component treeとschedulingの所有者は引き続きReactです。この最適化は、signal変更による作業を、そのsignalを実際に読んだcomponentまたはnative DOM leafへ絞ります。
 
 ### Pluginなし: `useSignals()` によるコンポーネント単位の追跡
 
 レンダー中にsignalの `.value` を読むコンポーネントで、最初のフックとして `useSignals()` を1回、無条件に呼び出してください。引数はなく、値も返しません。このフック以降の同期的なsignal読み取りが収集され、そのいずれかが変わったときだけ、そのコンポーネントをReactが再レンダーします。読まなかったsignalや、`deepSignal` の読まなかった隣接プロパティの変更では再レンダーしません。
 
-これは `useSignalValue` を各値に置く方式ではなく、コンポーネントのレンダーで読んだ依存関係をまとめて追跡する、基本のライブライブラリ向けAPIです。`useSignalValue` は既存の小さなリーフを明示的に分離したい場合の低レベルAPIとして利用できます。プリミティブなselectorを明示したい場合は `useDeepSignalValue(state, value => value.user.name, [])` を使用します。依存配列は必須です。各レンダーで長さと順序を固定し、selectorがクロージャから参照するsignal以外の値をすべて列挙してください。変更可能なオブジェクトやProxyをselectorが返すことは意図的に拒否します。
+これは `useSignalValue` を各値に置く方式ではなく、コンポーネントのレンダーで読んだ依存関係をまとめて追跡する、基本のライブライブラリ向けAPIです。`useSignalValue` と `useDeepSignalValue` の詳細な契約は上の「Reactフック」を参照してください。
 
-変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。レンダー中にsignalを読む各コンポーネント自身で `useSignals()` を呼んでください。effect、event handler、非同期callback、または追跡されていないコンポーネントの読み取りは、開いたままの境界に誤って紐付く場合があります。同期的なrender読み取りだけに使えば、追加のビルドpluginなしで利用できます。Suspense中断や複数rootをまたぐ厳密な境界が必要な場合は、後述のpluginを使ってください。
+変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。レンダー中にsignalを読む各コンポーネント自身で `useSignals()` を呼んでください。effect、event handler、非同期callback、または追跡されていないコンポーネントの読み取りは、開いたままの境界に誤って紐付く場合があります。同期的なrender読み取りだけに使えば、追加のビルドpluginなしで利用できます。Suspense中断、レンダー中のネストしたserver rendering、複数rootをまたぐ厳密な境界には、後述のmanaged transformが必要です。未解決の境界問題と将来の契約候補は[境界の設計検討docs](docs/use-signals-boundary-design.ja.md)にまとめています。
 
 ### Pluginなし: JSXのsignal子要素とhost bindingによるDOMリーフ更新
 
@@ -159,6 +160,17 @@ signals({ mode: "auto", transform: "managed" });
 
 `@useSignals` と `@noUseSignals` は、それぞれを所有する関数だけに適用され、ネストした関数へは継承されません。自動モードはトップレベルの宣言形式・arrow形式と、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。任意のネストしたcallback、class component、匿名default export、async/generator関数、すでに `useSignals()` を呼んでいるコンポーネントは変更しません。どちらの変換モードも再適用するとno-opになります。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
 
+build時の自動化範囲に応じて、次のように選択します。
+
+| 目的 | 推奨する方法 |
+| --- | --- |
+| pluginやbundler integrationを使わない | `useSignals()` を明示的に呼び、native signal childと許可済みpropにはJSX runtimeを使う |
+| 通常の `useSignals()` 動作を自動挿入する | pluginを `mode: "auto"`（既定）で使う |
+| 厳密なrender boundaryへ明示的にopt-inする | `mode: "manual"` と `transform: "managed"` を使う |
+| 広範なmigration、またはheuristicから読み取りが見えないcomponent | `mode: "all"` を使い、必要な関数を `@noUseSignals` で除外する |
+
+pluginはcore primitive、hooks、JSX signal bindingに必須ではありません。開発・build時に `useSignals()` またはmanaged render boundaryを挿入するための便宜機能であり、`useSignals()` のsemanticsを置き換えたり、native host propの許可リストを拡張したりはしません。
+
 ## JSX制御フローユーティリティ
 
 `react-alien-signals/utils` は、Solidの `Show`、`Switch` / `Match`、`For` に着想を得た小さなReactコンポーネントを提供します。任意のサブパスであり、build pluginも独自JSXランタイムも必要ありません。条件または配列入力にsignalを渡すと、ユーティリティ自身がリアクティブ境界になるため、更新時に親コンポーネントを再レンダーしません。
@@ -216,7 +228,7 @@ export function Panel() {
 
 ## 開発
 
-開発にはNode.js 22.18以降、pnpm 11、React 19以降が必要です。Node.jsの下限はビルドツールの `tsdown` によるもので、ビルド済みライブラリの実行環境要件を引き上げるものではありません。
+workspaceの開発にはNode.js 22.22.2、pnpm 11、React 19以降を使用します。privateなroot manifestは、現在の開発依存である `jsdom` に合わせてNode.js `^22.22.2`、`^24.15.0`、または `>=26.0.0` を許可し、`.node-version` とCIは許可範囲の最小versionを使います。これはpackageがprivateな間のrepository tooling向けguardであり、公開runtimeの互換性を示すものではありません。公開前には配布packageのNode.js下限を別途検証し、test/build toolの厳しい要件を誤って引き継がないようにします。
 
 ```sh
 pnpm install --frozen-lockfile

@@ -23,6 +23,14 @@ export type SignalSnapshot =
   | null
   | undefined;
 
+function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
+  if ((typeof value === "object" && value !== null) || typeof value === "function") {
+    throw new TypeError(
+      "useDeepSignalValue selector must return a primitive snapshot; objects, Proxies, and functions are not supported",
+    );
+  }
+}
+
 /** Creates a signal whose identity is stable for the lifetime of this component. */
 export function useSignal<T>(initialValue: T): Signal<T> {
   const signalRef = useRef<Signal<T> | undefined>(undefined);
@@ -69,7 +77,11 @@ export function useDeepSignalValue<
   dependencies: DependencyList,
 ): S {
   const selected = useComputed(
-    () => selector(source.value),
+    () => {
+      const snapshot = selector(source.value);
+      assertSignalSnapshot(snapshot);
+      return snapshot;
+    },
     [source, ...dependencies],
   );
   return useSignalValue(selected);
