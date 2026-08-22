@@ -64,18 +64,65 @@ function Counter({ step }: { step: number }) {
 }
 ```
 
-レンダー中にsignalの `.value` を読むすべてのコンポーネントで、最初のフックとして `useSignals()` を1回、無条件に呼び出してください。引数はなく、値も返しません。このフック以降の同期的なsignal読み取りは自動収集され、そのいずれかが変わるとコンポーネントが再レンダーされます。
-
-`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。`useSignals()` 以降に読んだディーププロパティは個別に追跡されるため、読んでいない隣接プロパティの変更ではコンポーネントを再レンダーしません。`useSignalValue` は低レベルな明示的リーフ購読として引き続き利用できます。プリミティブなselectorを明示したい場合は、`useDeepSignalValue(state, value => value.user.name, [])` を使用します。依存配列は必須です。各レンダーで長さと順序を固定し、selectorがクロージャから参照するsignal以外の値をすべて列挙してください。変更可能なオブジェクトやProxyをselectorが返すことは意図的に拒否します。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
+`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
 
 `useComputed` には2つのモードがあります。
 
 - 依存配列を省略する場合、getterはsignalだけを読む必要があります。最初のクロージャがコンポーネントの生存期間中保持されるため、props、React state、その他のsignalではない値を捕捉しないでください。
 - getterがsignalではない値を捕捉する場合、その値をすべて依存配列に列挙します: `useComputed(() => count.value * step, [step])`。コンポーネントの生存期間中は、どちらか一方のモードを使い続けてください。
 
-### 管理されたレンダー変換
+## 描画最適化
+
+このライブラリには、目的の異なる二つの最適化経路があります。通常は**pluginなし**で始められます。`unplugin` は `useSignals()` の書き方を保ったまま、追跡境界を厳密にし、自動適用を選びたい場合だけ追加してください。
+
+| 選択肢 | 更新時に起こること | 向いている場面 |
+| --- | --- | --- |
+| `useSignals()`（pluginなし） | 読んだsignalが変わったコンポーネントだけをReactが再レンダーする | 明示的でVueに近い書き味を保ちたい通常のコンポーネント |
+| JSX signal子要素／許可済みhost prop（pluginなし） | 親を再レンダーせず、該当DOMリーフだけを書き換える | テキスト、`title`、`data-*` など頻繁に変わる小さな表示 |
+| `unplugin-react-alien-signals` | 上記の追跡を正確なレンダー境界で管理し、必要なら自動挿入する | 大規模コードベースで手動呼び出しを減らす、Suspense境界を厳密にする場合 |
+
+### Pluginなし: `useSignals()` によるコンポーネント単位の追跡
+
+レンダー中にsignalの `.value` を読むコンポーネントで、最初のフックとして `useSignals()` を1回、無条件に呼び出してください。引数はなく、値も返しません。このフック以降の同期的なsignal読み取りが収集され、そのいずれかが変わったときだけ、そのコンポーネントをReactが再レンダーします。読まなかったsignalや、`deepSignal` の読まなかった隣接プロパティの変更では再レンダーしません。
+
+これは `useSignalValue` を各値に置く方式ではなく、コンポーネントのレンダーで読んだ依存関係をまとめて追跡する、基本のライブライブラリ向けAPIです。`useSignalValue` は既存の小さなリーフを明示的に分離したい場合の低レベルAPIとして利用できます。プリミティブなselectorを明示したい場合は `useDeepSignalValue(state, value => value.user.name, [])` を使用します。依存配列は必須です。各レンダーで長さと順序を固定し、selectorがクロージャから参照するsignal以外の値をすべて列挙してください。変更可能なオブジェクトやProxyをselectorが返すことは意図的に拒否します。
+
+変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。同期的なrender読み取りだけに使えば、追加のビルドpluginなしで利用できます。Suspense中断や複数rootをまたぐ厳密な境界が必要な場合は、後述のpluginを使ってください。
+
+### Pluginなし: JSXのsignal子要素とhost bindingによるDOMリーフ更新
+
+提供される自動JSXランタイムを使うようにTypeScriptを設定します。これはbundler pluginを必要としません。
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react-alien-signals"
+  }
+}
+```
+
+SVGのテキスト内容を含め、ネイティブホスト要素の子としてsignalを使うと、その箇所が局所的なリアクティブリーフになります。signalが変わっても親コンポーネントは再レンダーされず、ランタイムがそのDOMノードだけを更新します。同じランタイムがDOMへ直接バインドできるネイティブHTML propsは次のものだけです。
+
+- `title`、`id`、`className`、`hidden`、`disabled`
+- `data-*` 属性と `aria-*` 属性
+
+```tsx
+const title = signal("Initial title");
+const disabled = signal(false);
+
+export function Field() {
+  return <button title={title} disabled={disabled}>{title}</button>;
+}
+```
+
+これは最も細かい描画最適化ですが、対応するのはネイティブ要素のsignal子要素と上記の許可済みpropsだけです。Reactコンポーネントのpropsや子要素にsignalを渡してもアンラップされません。
+
+### Pluginあり: 管理されたレンダー変換
 
 任意で導入できる汎用ビルドpluginは、同期的に管理されるレンダースコープを作ります。Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。生成コードがreturn、エラー、Suspenseによるthrowのすべてで `try` / `finally` を使って追跡を閉じます。
+
+pluginは、signalの変化をReactの再レンダーなしにするものではありません。`useSignals()` で読んだ値の変化は引き続きコンポーネントの再レンダーを起こします。親の再レンダーまで避けたい小さな表示は、上のJSX signal子要素／host bindingを使います。pluginの役割は、`useSignals()` の追跡範囲を正確に保ち、モードに応じてその呼び出しを挿入することです。
 
 ```sh
 # 将来のパッケージ名です。まだnpmには公開していません。
@@ -100,34 +147,7 @@ export default defineConfig({
 - `"auto"`（既定）: さらに `.value` を読む名前付きJSXコンポーネントと、`.value` を読む名前付き `useX` custom hookを変換します。
 - `"all"`: さらにすべての名前付きJSXコンポーネントを変換します。静的検出から隠れるrender propやgetterがある場合に使います。
 
-`@noUseSignals` は常に変換を無効にします。自動モードは宣言形式とarrow形式のコンポーネントを対象にし、class component、匿名default export、すでに変換済みのJSX、async/generator関数、namespace import、先頭以外または条件付きの `useSignals()` を持つコンポーネントは変更しません。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
-
-## JSXのsignal子要素とホストバインディング
-
-提供される自動JSXランタイムを使うようにTypeScriptを設定します。
-
-```json
-{
-  "compilerOptions": {
-    "jsx": "react-jsx",
-    "jsxImportSource": "react-alien-signals"
-  }
-}
-```
-
-SVGのテキスト内容を含め、ネイティブホスト要素の子としてsignalを使うと、その箇所が局所的なリアクティブリーフになります。これにより親を再レンダーせずに更新できます。同じランタイムがDOMへ直接バインドできるネイティブHTML propsは次のものだけです。
-
-- `title`、`id`、`className`、`hidden`、`disabled`
-- `data-*` 属性と `aria-*` 属性
-
-```tsx
-const title = signal("Initial title");
-const disabled = signal(false);
-
-export function Field() {
-  return <button title={title} disabled={disabled}>{title}</button>;
-}
-```
+`@noUseSignals` は常に変換を無効にします。自動モードは宣言形式、arrow形式、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。class component、匿名default export、すでに変換済みのJSX、async/generator関数、namespace import、先頭以外または条件付きの `useSignals()` を持つコンポーネントは変更しません。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
 
 ## 実験的な制約
 

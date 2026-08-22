@@ -73,9 +73,47 @@ Call `useSignals()` once and unconditionally as the first hook in every componen
 - Without a dependency array, the getter must read only signals. Its initial closure is retained for the component lifetime, so it must not capture props, React state, or other non-signal values.
 - When the getter captures non-signal values, list every such value in the dependency array: `useComputed(() => count.value * step, [step])`. Choose one mode for a component's lifetime.
 
-### Managed render transform
+## Rendering optimization
 
-The optional universal build plugin creates a synchronous managed render scope. It keeps Babel private: configure the integration for your bundler instead of adding a Babel config. Generated code closes tracking with `try` / `finally` on returns, errors, and Suspense throws.
+There are two separate optimization layers. They can be used independently:
+
+1. The runtime hooks and JSX runtime work without a build plugin.
+2. The optional `unplugin-react-alien-signals` package automates the render boundary around components and custom hooks.
+
+Neither layer makes every React component signal-driven. React still owns the component tree and scheduling; the optimization narrows the work caused by signal changes to the component or native DOM leaf that actually read the signal.
+
+### Without a plugin: explicit live tracking
+
+Use `useSignals()` when you want the live-library style without changing the build. It must be the first hook and must be called unconditionally:
+
+```tsx
+function Counter() {
+  useSignals();
+  const count = useSignal(0);
+
+  return <button onClick={() => count.value++}>{count.value}</button>;
+}
+```
+
+Synchronous signal reads made during the render after `useSignals()` are collected, and a change to one of those values schedules a rerender of that component. With `deepSignal`, property reads are tracked individually, so an unread sibling does not cause a rerender. This is the simplest option when you want explicit control and no build configuration.
+
+The bare runtime boundary is best-effort: tracking closes at the next `useSignals()` call or after the current microtask. It is intended for synchronous component renders. Reads from effects, event handlers, asynchronous callbacks, or render props whose owning component does not call `useSignals()` are not component dependencies. Exact separation across Suspense-aborted renders, nested server rendering during a render, and multiple concurrent roots requires the managed transform below.
+
+The JSX runtime provides a second, independent optimization. A signal used as a native host child or an allowlisted host prop is updated as a local DOM leaf, without rerendering the parent component:
+
+```tsx
+const title = signal("Initial title");
+
+function Field() {
+  return <button title={title}>{title}</button>;
+}
+```
+
+This direct binding is limited to native HTML `title`, `id`, `className`, `hidden`, `disabled`, `data-*`, and `aria-*` props, plus native host children. It does not unwrap signals passed to React components. See [JSX signal children and host bindings](#jsx-signal-children-and-host-bindings) for the complete list and caveats.
+
+### With a plugin: managed render tracking
+
+The optional universal build plugin creates a synchronous managed render scope around selected functions. It keeps Babel private: configure the integration for your bundler instead of adding a Babel config. Generated code closes tracking with `try` / `finally` on returns, errors, and Suspense throws. In other words, the plugin improves the accuracy of the `useSignals()` boundary; the JSX runtime's native leaf bindings work independently of it.
 
 ```sh
 # Planned package name — it is not published to npm yet.
@@ -100,7 +138,18 @@ The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry
 - `"auto"` (default): additionally transform named JSX components that read `.value`, and named `useX` custom hooks that read `.value`.
 - `"all"`: additionally transform every named JSX component. Use it for render props or getters that hide signal reads from the static check.
 
-`@noUseSignals` always opts a function out. Automatic modes support declaration and arrow components; class components, anonymous default exports, already-transformed JSX, async/generator functions, namespace imports, and components with a late/conditional `useSignals()` call are left unchanged. The `.value` check is intentionally heuristic, so `mode: "auto"` may add a harmless subscription to an object that is not a signal.
+`@noUseSignals` always opts a function out. Automatic modes support declaration and arrow components, including named components wrapped with `memo` or `forwardRef`; class components, anonymous default exports, already-transformed JSX, async/generator functions, namespace imports, and components with a late/conditional `useSignals()` call are left unchanged. The `.value` check is intentionally heuristic, so `mode: "auto"` may add a harmless subscription to an object that is not a signal.
+
+Choose the approach based on how much build-time automation you want:
+
+| Goal | Recommended approach |
+| --- | --- |
+| No plugin or bundler integration | Call `useSignals()` explicitly; use the JSX runtime for native signal children and allowlisted props. |
+| Explicit opt-in with an exact render boundary | Use the plugin with `mode: "manual"` and an explicit `useSignals()` call or `@useSignals`. |
+| Automatic detection for ordinary named components and custom hooks | Use the plugin with `mode: "auto"` (the default). |
+| Broad migration or components whose reads are hidden from the heuristic | Use `mode: "all"`, then opt out individual functions with `@noUseSignals` where needed. |
+
+The plugin is not required for the core primitives, hooks, or JSX signal bindings. It is a development/build-time convenience for inserting the managed render boundary, and it does not replace `useSignals()` semantics or expand the native host-prop allowlist.
 
 ## JSX signal children and host bindings
 
