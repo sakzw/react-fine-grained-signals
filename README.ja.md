@@ -64,7 +64,7 @@ function Counter({ step }: { step: number }) {
 }
 ```
 
-`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
+`useSignal` と `useDeepSignal` は、コンポーネントの生存期間中に同じsignalを保持します。生成コストが高いディープ初期値には、`useDeepSignal(() => ({ items: [] }))` のように純粋なファクトリを渡してください。`useSignalEffect` はコミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。依存配列を省略する場合、callbackはsignalだけを読む必要があり、最初のクロージャがコンポーネントの生存期間中保持されます。props、state、その他のsignalではない値を捕捉する場合は、`useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])` のように任意の依存配列へ列挙してください。
 
 `useComputed` には2つのモードがあります。
 
@@ -87,7 +87,7 @@ function Counter({ step }: { step: number }) {
 
 これは `useSignalValue` を各値に置く方式ではなく、コンポーネントのレンダーで読んだ依存関係をまとめて追跡する、基本のライブライブラリ向けAPIです。`useSignalValue` は既存の小さなリーフを明示的に分離したい場合の低レベルAPIとして利用できます。プリミティブなselectorを明示したい場合は `useDeepSignalValue(state, value => value.user.name, [])` を使用します。依存配列は必須です。各レンダーで長さと順序を固定し、selectorがクロージャから参照するsignal以外の値をすべて列挙してください。変更可能なオブジェクトやProxyをselectorが返すことは意図的に拒否します。
 
-変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。同期的なrender読み取りだけに使えば、追加のビルドpluginなしで利用できます。Suspense中断や複数rootをまたぐ厳密な境界が必要な場合は、後述のpluginを使ってください。
+変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。レンダー中にsignalを読む各コンポーネント自身で `useSignals()` を呼んでください。effect、event handler、非同期callback、または追跡されていないコンポーネントの読み取りは、開いたままの境界に誤って紐付く場合があります。同期的なrender読み取りだけに使えば、追加のビルドpluginなしで利用できます。Suspense中断や複数rootをまたぐ厳密な境界が必要な場合は、後述のpluginを使ってください。
 
 ### Pluginなし: JSXのsignal子要素とhost bindingによるDOMリーフ更新
 
@@ -145,7 +145,7 @@ export default defineConfig({
 
 - `"manual"`: 先頭文にあるimport済みの `useSignals()`、または `@useSignals` を付けた名前付きコンポーネント／custom hookだけを変換します。明示的なライブライブラリの書き味を維持します。
 - `"auto"`（既定）: さらに `.value` を読む名前付きJSXコンポーネントと、`.value` を読む名前付き `useX` custom hookを変換します。
-- `"all"`: さらにすべての名前付きJSXコンポーネントを変換します。静的検出から隠れるrender propやgetterがある場合に使います。
+- `"all"`: さらにすべての名前付きJSXコンポーネントを変換します。直接の `.value` 読み取りを静的検出できない場合でも、コンポーネントを明示的に対象にしたいときに使います。任意のネストしたcallback自体は変換対象ではありません。
 
 `transform` で、対象にした関数の生成方法を選びます。
 
@@ -157,7 +157,7 @@ export default defineConfig({
 signals({ mode: "auto", transform: "managed" });
 ```
 
-`@noUseSignals` は常に変換を無効にします。自動モードは宣言形式、arrow形式、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。class component、匿名default export、すでに変換済みのJSX、async/generator関数、namespace import、先頭以外または条件付きの `useSignals()` を持つコンポーネントは変更しません。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
+`@useSignals` と `@noUseSignals` は、それぞれを所有する関数だけに適用され、ネストした関数へは継承されません。自動モードはトップレベルの宣言形式・arrow形式と、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。任意のネストしたcallback、class component、匿名default export、async/generator関数、すでに `useSignals()` を呼んでいるコンポーネントは変更しません。どちらの変換モードも再適用するとno-opになります。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
 
 ## JSX制御フローユーティリティ
 

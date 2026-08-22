@@ -1,5 +1,7 @@
 # unplugin-react-alien-signals
 
+[English](README.md) | [日本語](README.ja.md)
+
 Universal bundler integration for automatic `useSignals()` insertion and the
 optional managed render-scope transform in
 [`react-alien-signals`](https://www.npmjs.com/package/react-alien-signals).
@@ -62,7 +64,9 @@ export default {
     or a `@useSignals` comment on a named component/custom hook opts it in.
   - `"auto"` (default): additionally transforms named JSX components and
     named `useX` custom hooks that read `.value`.
-  - `"all"`: additionally transforms every named JSX component.
+  - `"all"`: additionally transforms every named JSX component. Nested
+    callbacks are collected by their owning component but are never transform
+    targets themselves.
 - `transform`:
   - `"inject"` (default): inserts a normal `useSignals()` call without
     rewriting control flow. It has the same best-effort tracking boundary as a
@@ -72,8 +76,13 @@ export default {
 - `importSource`: overrides `react-alien-signals` for a compatible wrapper.
 - `include` / `exclude`: functions that filter source module IDs.
 
-`@noUseSignals` always excludes a function. The transform runs before other
+`@useSignals` and `@noUseSignals` apply only to their owning function; they do
+not affect nested functions. Existing direct, namespace, or barrel-imported
+`useSignals()` calls are left alone, so the plugin never adds a second call.
+Reapplying either transform mode is a no-op. The transform runs before other
 plugin transforms and skips dependencies and non-JavaScript/TypeScript modules.
+Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`, `.jsx`,
+and JavaScript files may use JSX.
 
 ## Development benchmark
 

@@ -17,11 +17,12 @@ jobs:
           version: 11
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 22.18.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+      - run: pnpm test:consumer
       - run: pnpm exec playwright install --with-deps --only-shell chromium
       - run: pnpm test:browser

@@ -66,7 +66,7 @@ function Counter({ step }: { step: number }) {
 
 Call `useSignals()` once and unconditionally as the first hook in every component that reads signal `.value` during render. It takes no arguments and returns no value. Synchronous signal reads after the hook are collected automatically, and the component rerenders when one of those values changes.
 
-`useSignal` and `useDeepSignal` keep one signal for the component lifetime. For expensive deep initial values, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`. Deep properties read after `useSignals()` are tracked individually, so changing an unread sibling does not rerender the component. `useSignalValue` remains available as a low-level explicit leaf subscription. Use `useDeepSignalValue(state, value => value.user.name, [])` when an explicit primitive selector is preferable; its dependency array is required, must keep a constant length and order, and must list every non-signal value captured by the selector. Mutable object or Proxy selector results are intentionally rejected. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay).
+`useSignal` and `useDeepSignal` keep one signal for the component lifetime. For expensive deep initial values, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`. Deep properties read after `useSignals()` are tracked individually, so changing an unread sibling does not rerender the component. `useSignalValue` remains available as a low-level explicit leaf subscription. Use `useDeepSignalValue(state, value => value.user.name, [])` when an explicit primitive selector is preferable; its dependency array is required, must keep a constant length and order, and must list every non-signal value captured by the selector. Mutable object or Proxy selector results are intentionally rejected. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay). Without a dependency array, its callback must read only signals and its initial closure is retained for the component lifetime. When it captures props, state, or another non-signal value, list those values in the optional dependency array: `useSignalEffect(() => { /* read signals and props */ }, [prop])`.
 
 `useComputed` has two modes:
 
@@ -97,7 +97,7 @@ function Counter() {
 
 Synchronous signal reads made during the render after `useSignals()` are collected, and a change to one of those values schedules a rerender of that component. With `deepSignal`, property reads are tracked individually, so an unread sibling does not cause a rerender. This is the simplest option when you want explicit control and no build configuration.
 
-The bare runtime boundary is best-effort: tracking closes at the next `useSignals()` call or after the current microtask. It is intended for synchronous component renders. Reads from effects, event handlers, asynchronous callbacks, or render props whose owning component does not call `useSignals()` are not component dependencies. Exact separation across Suspense-aborted renders, nested server rendering during a render, and multiple concurrent roots requires the managed transform below.
+The bare runtime boundary is best-effort: tracking closes at the next `useSignals()` call or after the current microtask. It is intended for synchronous component renders. Every component that reads a signal during render must call `useSignals()` itself; reads from effects, event handlers, asynchronous callbacks, or an untracked component can otherwise be attributed to the currently open boundary. Exact separation across Suspense-aborted renders, nested server rendering during a render, and multiple concurrent roots requires the managed transform below.
 
 The JSX runtime provides a second, independent optimization. A signal used as a native host child or an allowlisted host prop is updated as a local DOM leaf, without rerendering the parent component:
 
@@ -136,7 +136,7 @@ The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry
 
 - `"manual"`: transform an explicit first-statement imported `useSignals()` call, or a named component/custom hook marked with `@useSignals`. This preserves the explicit live-library style.
 - `"auto"` (default): additionally transform named JSX components that read `.value`, and named `useX` custom hooks that read `.value`.
-- `"all"`: additionally transform every named JSX component. Use it for render props or getters that hide signal reads from the static check.
+- `"all"`: additionally transform every named JSX component. Use it when a component should opt in even though the static `.value` check cannot see a direct read; arbitrary nested callbacks are not transform targets.
 
 `transform` chooses how an opted-in function is generated:
 
@@ -148,7 +148,7 @@ The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry
 signals({ mode: "auto", transform: "managed" });
 ```
 
-`@noUseSignals` always opts a function out. Automatic modes support declaration and arrow components, including named components wrapped with `memo` or `forwardRef`; class components, anonymous default exports, already-transformed JSX, async/generator functions, namespace imports, and components with a late/conditional `useSignals()` call are left unchanged. The `.value` check is intentionally heuristic, so `mode: "auto"` may add a harmless subscription to an object that is not a signal.
+`@useSignals` and `@noUseSignals` apply only to their owning function, not nested functions. Automatic modes support top-level declaration and arrow components, including named components wrapped with `memo` or `forwardRef`; arbitrary nested callbacks, class components, anonymous default exports, async/generator functions, and components with an existing `useSignals()` call are not changed. Reapplying either transform mode is a no-op. The `.value` check is intentionally heuristic, so `mode: "auto"` may add a harmless subscription to an object that is not a signal.
 
 Choose the approach based on how much build-time automation you want:
 
