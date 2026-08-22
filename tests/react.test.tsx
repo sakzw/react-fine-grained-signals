@@ -1,7 +1,8 @@
 /** @jsxImportSource react-alien-signals */
 // @vitest-environment jsdom
 
-import { createRef, StrictMode, act } from "react";
+import { Component, createRef, StrictMode, act } from "react";
+import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx, jsxs } from "../src/jsx-runtime.js";
@@ -439,6 +440,65 @@ describe("React bindings", () => {
       ),
     );
   });
+
+  it.each([
+    [
+      "an invalid selector result",
+      (value: { fail: boolean }) => value.fail ? value : "ready",
+      (state: ReturnType<typeof deepSignal<{ fail: boolean }>>) => {
+        state.value.fail = true;
+      },
+    ],
+    [
+      "a selector exception",
+      (value: { fail: boolean }) => {
+        if (value.fail) throw new Error("selector failed");
+        return "ready";
+      },
+      (state: ReturnType<typeof deepSignal<{ fail: boolean }>>) => {
+        state.value.fail = true;
+      },
+    ],
+  ])(
+    "delivers %s from an update to an Error Boundary instead of the writer",
+    (_label, selector, write) => {
+      const state = deepSignal({ fail: false });
+      const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+      class ErrorBoundary extends Component<
+        { children: ReactNode },
+        { error: unknown }
+      > {
+        state: { error: unknown } = { error: undefined };
+
+        static getDerivedStateFromError(error: unknown) {
+          return { error };
+        }
+
+        render() {
+          return this.state.error === undefined
+            ? this.props.children
+            : <output aria-label="selector error">caught</output>;
+        }
+      }
+
+      function Selection() {
+        const value = useDeepSignalValue(state, selector as never, []);
+        return <output aria-label="selector value">{String(value)}</output>;
+      }
+
+      render(<ErrorBoundary><Selection /></ErrorBoundary>);
+      expect(screen.getByLabelText("selector value").textContent).toBe("ready");
+
+      expect(() => {
+        act(() => {
+          write(state);
+        });
+      }).not.toThrow();
+      expect(screen.getByLabelText("selector error").textContent).toBe("caught");
+      expect(reactError).toHaveBeenCalled();
+    },
+  );
 
   it("reconnects a selected deep leaf after its parent object is replaced", () => {
     let state: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;

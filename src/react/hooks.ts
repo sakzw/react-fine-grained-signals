@@ -23,12 +23,71 @@ export type SignalSnapshot =
   | null
   | undefined;
 
+type SelectorResult<S extends SignalSnapshot> =
+  | { readonly kind: "value"; readonly value: S }
+  | { readonly kind: "error"; readonly error: unknown };
+
 function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
   if ((typeof value === "object" && value !== null) || typeof value === "function") {
     throw new TypeError(
       "useDeepSignalValue selector must return a primitive snapshot; objects, Proxies, and functions are not supported",
     );
   }
+}
+
+/**
+ * Holds a selector result outside the reactive graph. In particular, a
+ * selector error must not escape from the signal write that caused a reactive
+ * re-evaluation: React needs to observe it during its next render so an Error
+ * Boundary can handle it.
+ */
+function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
+  source: DeepSignal<T>,
+  selector: (value: T) => S,
+) {
+  const evaluate = (): SelectorResult<S> => {
+    try {
+      const value = untrackedRender(() => selector(source.value));
+      assertSignalSnapshot(value);
+      return { kind: "value", value };
+    } catch (error) {
+      return { kind: "error", error };
+    }
+  };
+
+  let result = evaluate();
+  let dispose: (() => void) | undefined;
+  let listener: (() => void) | undefined;
+
+  const hasChanged = (next: SelectorResult<S>): boolean => {
+    if (result.kind !== next.kind) return true;
+    return result.kind === "value" && next.kind === "value"
+      ? !Object.is(result.value, next.value)
+      : result.kind === "error" && next.kind === "error"
+        ? !Object.is(result.error, next.error)
+        : false;
+  };
+
+  return {
+    subscribe(notify: () => void): () => void {
+      listener = notify;
+      dispose = effect(() => {
+        const next = evaluate();
+        if (!hasChanged(next)) return;
+        result = next;
+        listener?.();
+      });
+      return () => {
+        listener = undefined;
+        dispose?.();
+        dispose = undefined;
+      };
+    },
+    getSnapshot(): S {
+      if (result.kind === "error") throw result.error;
+      return result.value;
+    },
+  };
 }
 
 /** Creates a signal whose identity is stable for the lifetime of this component. */
@@ -76,15 +135,11 @@ export function useDeepSignalValue<
   selector: (value: T) => S,
   dependencies: DependencyList,
 ): S {
-  const selected = useComputed(
-    () => {
-      const snapshot = selector(source.value);
-      assertSignalSnapshot(snapshot);
-      return snapshot;
-    },
+  const store = useMemo(
+    () => createDeepSelectorStore(source, selector),
     [source, ...dependencies],
   );
-  return useSignalValue(selected);
+  return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
 /**
