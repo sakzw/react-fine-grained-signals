@@ -15,6 +15,8 @@ export interface DeepSignal<T extends object> extends Signal<T> {}
 interface PropertyMetadata {
   properties: Map<PropertyKey, Signal<number>>;
   existence: Map<PropertyKey, Signal<number>>;
+  propertyIndices: Set<number>;
+  existenceIndices: Set<number>;
   iteration?: Signal<number>;
   arrayMethods: Map<
     PropertyKey,
@@ -35,6 +37,7 @@ const ARRAY_MUTATORS = new Set<PropertyKey>([
   "unshift",
 ]);
 const proxyToRaw = new WeakMap<object, object>();
+const rawToAllMetadata = new WeakMap<object, Set<PropertyMetadata>>();
 
 function isPlainObjectOrArray(value: unknown): value is object {
   if (typeof value !== "object" || value === null || isSignal(value)) return false;
@@ -64,6 +67,83 @@ function assertDataProperties(value: object): void {
   }
 }
 
+function normalizeProxies<T>(value: T): T {
+  if (typeof value !== "object" || value === null) return value;
+  const directRaw = proxyToRaw.get(value);
+  if (directRaw !== undefined) return directRaw as T;
+  if (!isPlainObjectOrArray(value)) return value;
+
+  const seen = new WeakSet<object>();
+  const proxyTargets = new WeakSet<object>();
+  let foundProxy = false;
+  const collectProxyTargets = (current: object): void => {
+    const raw = proxyToRaw.get(current);
+    if (raw !== undefined) {
+      foundProxy = true;
+      proxyTargets.add(raw);
+      return;
+    }
+    if (!isPlainObjectOrArray(current) || seen.has(current)) return;
+    seen.add(current);
+    for (const key of Reflect.ownKeys(current)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(current, key);
+      if (descriptor !== undefined && "value" in descriptor) {
+        const child = descriptor.value;
+        if (typeof child === "object" && child !== null) {
+          collectProxyTargets(child);
+        }
+      }
+    }
+  };
+  collectProxyTargets(value);
+  if (!foundProxy) return value;
+
+  const clones = new WeakMap<object, object>();
+  const clone = (current: unknown): unknown => {
+    if (typeof current !== "object" || current === null) return current;
+    const raw = proxyToRaw.get(current);
+    if (raw !== undefined) return raw;
+    if (!isPlainObjectOrArray(current) || proxyTargets.has(current)) return current;
+
+    const cached = clones.get(current);
+    if (cached !== undefined) return cached;
+    const result: object = Array.isArray(current)
+      ? new Array(current.length)
+      : Object.create(Object.getPrototypeOf(current));
+    clones.set(current, result);
+    for (const key of Reflect.ownKeys(current)) {
+      if (Array.isArray(current) && key === "length") continue;
+      const descriptor = Reflect.getOwnPropertyDescriptor(current, key);
+      if (descriptor === undefined) continue;
+      if ("value" in descriptor) descriptor.value = clone(descriptor.value);
+      Reflect.defineProperty(result, key, descriptor);
+    }
+    return result;
+  };
+
+  return clone(value) as T;
+}
+
+function assertDeepDataGraph(value: unknown): void {
+  if (typeof value !== "object" || value === null) return;
+  const seen = new WeakSet<object>();
+  const visit = (current: object): void => {
+    const raw = proxyToRaw.get(current) ?? current;
+    if (!isPlainObjectOrArray(raw) || seen.has(raw)) return;
+    seen.add(raw);
+    assertExtensible(raw);
+    assertDataProperties(raw);
+    for (const key of Reflect.ownKeys(raw)) {
+      const descriptor = Reflect.getOwnPropertyDescriptor(raw, key);
+      if (descriptor !== undefined && "value" in descriptor) {
+        const child = descriptor.value;
+        if (typeof child === "object" && child !== null) visit(child);
+      }
+    }
+  };
+  visit(value);
+}
+
 function isArrayIndex(key: PropertyKey): key is string {
   if (typeof key !== "string" || key === "") return false;
   const index = Number(key);
@@ -79,8 +159,7 @@ function createDeepContext() {
   const rawToMetadata = new WeakMap<object, PropertyMetadata>();
 
   const unwrap = <T>(value: T): T => {
-    if (typeof value !== "object" || value === null) return value;
-    return (proxyToRaw.get(value) ?? value) as T;
+    return normalizeProxies(value);
   };
 
   const getVersion = (
@@ -97,9 +176,11 @@ function createDeepContext() {
 
   const track = (
     versions: Map<PropertyKey, Signal<number>>,
+    indices: Set<number>,
     key: PropertyKey,
   ): void => {
     if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
+    if (isArrayIndex(key)) indices.add(Number(key));
     getVersion(versions, key).value;
   };
 
@@ -121,6 +202,45 @@ function createDeepContext() {
     if (metadata.iteration !== undefined) metadata.iteration.value += 1;
   };
 
+  const notifyEveryMetadata = (
+    target: object,
+    callback: (metadata: PropertyMetadata) => void,
+  ): void => {
+    const metadatas = rawToAllMetadata.get(target);
+    if (metadatas === undefined) return;
+    for (const metadata of [...metadatas]) callback(metadata);
+  };
+
+  const notifyTruncatedIndices = (
+    metadata: PropertyMetadata,
+    currentLength: number,
+    oldLength: number,
+  ): void => {
+    const truncatedCount = oldLength - currentLength;
+    const trackedCount =
+      metadata.propertyIndices.size + metadata.existenceIndices.size;
+    if (trackedCount === 0) return;
+
+    if (truncatedCount <= trackedCount) {
+      for (let index = currentLength; index < oldLength; index++) {
+        const key = String(index);
+        notify(metadata.properties, key);
+        notify(metadata.existence, key);
+      }
+      return;
+    }
+    for (const index of metadata.propertyIndices) {
+      if (index >= currentLength && index < oldLength) {
+        notify(metadata.properties, String(index));
+      }
+    }
+    for (const index of metadata.existenceIndices) {
+      if (index >= currentLength && index < oldLength) {
+        notify(metadata.existence, String(index));
+      }
+    }
+  };
+
   const wrap = <T>(value: T): T => {
     const rawValue = unwrap(value);
     if (!isPlainObjectOrArray(rawValue)) return rawValue;
@@ -133,13 +253,15 @@ function createDeepContext() {
     const metadata: PropertyMetadata = {
       properties: new Map(),
       existence: new Map(),
+      propertyIndices: new Set(),
+      existenceIndices: new Set(),
       arrayMethods: new Map(),
       proxy: undefined as unknown as object,
     };
 
     const proxy = new Proxy(rawValue, {
       get(target, key, receiver) {
-        track(metadata.properties, key);
+        track(metadata.properties, metadata.propertyIndices, key);
         const result = Reflect.get(target, key, receiver);
 
         if (
@@ -184,7 +306,7 @@ function createDeepContext() {
         const owned = Object.prototype.hasOwnProperty.call(target, key);
         const oldLength = Array.isArray(target) ? target.length : undefined;
         const rawNextValue = unwrap(nextValue);
-        if (isPlainObjectOrArray(rawNextValue)) assertExtensible(rawNextValue);
+        assertDeepDataGraph(rawNextValue);
         const succeeded = Reflect.set(target, key, rawNextValue, target);
         if (!succeeded) return false;
 
@@ -193,31 +315,24 @@ function createDeepContext() {
         const ownedNow = Object.prototype.hasOwnProperty.call(target, key);
 
         batch(() => {
-          if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
-            notify(metadata.properties, key);
-          }
-          if (existed !== existsNow) notify(metadata.existence, key);
-          if (owned !== ownedNow) notifyIteration(metadata);
+          notifyEveryMetadata(target, (targetMetadata) => {
+            if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
+              notify(targetMetadata.properties, key);
+            }
+            if (existed !== existsNow) notify(targetMetadata.existence, key);
+            if (owned !== ownedNow) notifyIteration(targetMetadata);
 
-          if (Array.isArray(target) && oldLength !== undefined) {
-            const currentLength = target.length;
-            if (key !== "length" && oldLength !== currentLength) {
-              notify(metadata.properties, "length");
-            }
-            if (key === "length" && currentLength < oldLength) {
-              for (const trackedKey of metadata.properties.keys()) {
-                if (isArrayIndex(trackedKey) && Number(trackedKey) >= currentLength) {
-                  notify(metadata.properties, trackedKey);
-                }
+            if (Array.isArray(target) && oldLength !== undefined) {
+              const currentLength = target.length;
+              if (key !== "length" && oldLength !== currentLength) {
+                notify(targetMetadata.properties, "length");
               }
-              for (const trackedKey of metadata.existence.keys()) {
-                if (isArrayIndex(trackedKey) && Number(trackedKey) >= currentLength) {
-                  notify(metadata.existence, trackedKey);
-                }
+              if (key === "length" && currentLength < oldLength) {
+                notifyTruncatedIndices(targetMetadata, currentLength, oldLength);
+                notifyIteration(targetMetadata);
               }
-              notifyIteration(metadata);
             }
-          }
+          });
         });
 
         return true;
@@ -230,15 +345,19 @@ function createDeepContext() {
         if (!succeeded || !owned) return succeeded;
 
         batch(() => {
-          notify(metadata.properties, key);
-          if (existed !== Reflect.has(target, key)) notify(metadata.existence, key);
-          notifyIteration(metadata);
+          notifyEveryMetadata(target, (targetMetadata) => {
+            notify(targetMetadata.properties, key);
+            if (existed !== Reflect.has(target, key)) {
+              notify(targetMetadata.existence, key);
+            }
+            notifyIteration(targetMetadata);
+          });
         });
         return true;
       },
 
       has(target, key) {
-        track(metadata.existence, key);
+        track(metadata.existence, metadata.existenceIndices, key);
         return Reflect.has(target, key);
       },
 
@@ -262,6 +381,12 @@ function createDeepContext() {
 
     metadata.proxy = proxy;
     rawToMetadata.set(rawValue, metadata);
+    let allMetadata = rawToAllMetadata.get(rawValue);
+    if (allMetadata === undefined) {
+      allMetadata = new Set();
+      rawToAllMetadata.set(rawValue, allMetadata);
+    }
+    allMetadata.add(metadata);
     proxyToRaw.set(proxy, rawValue);
     return proxy as T;
   };
@@ -289,7 +414,7 @@ class DeepSignalImpl<T extends object>
   override set value(nextValue: T) {
     const rawValue = this.#context.unwrap(nextValue);
     assertRootValue(rawValue);
-    assertExtensible(rawValue);
+    assertDeepDataGraph(rawValue);
     super.value = rawValue as T;
   }
 }
@@ -300,7 +425,7 @@ class DeepSignalImpl<T extends object>
  * object are intentionally not observable.
  */
 export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
-  const rawInitialValue = proxyToRaw.get(initialValue) ?? initialValue;
+  const rawInitialValue = normalizeProxies(initialValue);
   assertRootValue(rawInitialValue);
 
   const context = createDeepContext();

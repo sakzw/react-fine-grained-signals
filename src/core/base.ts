@@ -136,7 +136,22 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
 
 /** Runs a reactive side effect and returns a disposer. */
 export function effect(fn: () => void | (() => void)): () => void {
-  return createEffect(() => untrackedRender(fn));
+  let disposed = false;
+  let disposeEffect: (() => void) | undefined;
+  disposeEffect = createEffect(() => {
+    if (disposed) return;
+    const cleanup = untrackedRender(fn);
+    if (disposed && cleanup !== undefined) {
+      untracked(cleanup);
+      return;
+    }
+    return cleanup;
+  });
+  return () => {
+    if (disposed) return;
+    disposed = true;
+    disposeEffect?.();
+  };
 }
 
 /** Groups writes, deferring effect notifications until the callback completes. */

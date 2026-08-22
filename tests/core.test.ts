@@ -110,4 +110,23 @@ describe("core signal primitives", () => {
     trigger.value++;
     expect(listener).toHaveBeenCalledTimes(2);
   });
+
+  it("runs the current cleanup when an effect disposes itself", () => {
+    const source = signal(0);
+    const cleanups: number[] = [];
+    let dispose: (() => void) | undefined;
+
+    dispose = effect(() => {
+      const value = source.value;
+      if (value === 1) dispose?.();
+      return () => {
+        cleanups.push(value);
+      };
+    });
+
+    source.value = 1;
+    source.value = 2;
+
+    expect(cleanups).toEqual([0, 1]);
+  });
 });

@@ -143,6 +143,53 @@ describe("deepSignal", () => {
     expect(counts).toEqual([1, 2]);
   });
 
+  it("never stores deep proxies in the raw tree", () => {
+    const state = deepSignal({
+      source: { count: 1 },
+      wrapped: undefined as
+        | { source: { count: number }; self?: unknown }
+        | undefined,
+    });
+    const wrapped: { source: { count: number }; self?: unknown } = {
+      source: state.value.source,
+    };
+    wrapped.self = wrapped;
+
+    state.value.wrapped = wrapped;
+
+    expect(state.peek().wrapped?.source).toBe(state.peek().source);
+    expect(state.peek().wrapped?.self).toBe(state.peek().wrapped);
+    expect(() => structuredClone(state.peek())).not.toThrow();
+
+    let runs = 0;
+    disposers.push(effect(() => {
+      state.value.source;
+      runs++;
+    }));
+    state.value.source = state.value.source;
+    expect(runs).toBe(1);
+  });
+
+  it("notifies every deep signal that shares a raw object", () => {
+    const shared = { count: 1 };
+    const left = deepSignal({ shared });
+    const right = deepSignal({ shared });
+    const leftValues: number[] = [];
+    const rightValues: number[] = [];
+
+    disposers.push(effect(() => {
+      leftValues.push(left.value.shared.count);
+    }));
+    disposers.push(effect(() => {
+      rightValues.push(right.value.shared.count);
+    }));
+
+    left.value.shared.count = 2;
+
+    expect(leftValues).toEqual([1, 2]);
+    expect(rightValues).toEqual([1, 2]);
+  });
+
   it("is a signal and keeps deep reactivity after root replacement", () => {
     const state = deepSignal({ user: { name: "Ada" } });
     const values: string[] = [];
@@ -213,5 +260,36 @@ describe("deepSignal", () => {
     expect(state.value.value).toBe(1);
     state.value.value = 2;
     expect(state.value.value).toBe(2);
+  });
+
+  it("rejects accessor-bearing assignments without changing state", () => {
+    const state = deepSignal<{
+      nested: { value: number };
+    }>({ nested: { value: 1 } });
+    const accessor = Object.defineProperty({}, "value", {
+      configurable: true,
+      enumerable: true,
+      get: () => 2,
+    }) as { value: number };
+
+    expect(() => {
+      state.value.nested = accessor;
+    }).toThrow(TypeError);
+    expect(state.peek().nested.value).toBe(1);
+
+    expect(() => {
+      state.value = { nested: accessor };
+    }).toThrow(TypeError);
+    expect(state.peek().nested.value).toBe(1);
+
+    const accessorRoot = Object.defineProperty({}, "nested", {
+      configurable: true,
+      enumerable: true,
+      get: () => ({ value: 2 }),
+    }) as { nested: { value: number } };
+    expect(() => {
+      state.value = accessorRoot;
+    }).toThrow(TypeError);
+    expect(state.peek().nested.value).toBe(1);
   });
 });
