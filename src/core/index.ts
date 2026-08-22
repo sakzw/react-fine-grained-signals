@@ -103,3 +103,8 @@ export function untracked<T>(fn: () => T): T {
     setActiveSub(activeSub);
   }
 }
+
+export {
+  deepSignal,
+  type DeepSignal,
+} from "./deep-signal.js";

@@ -23,6 +23,8 @@
     "dist"
   ],
   "scripts": {
+    "bench": "pnpm build && node --expose-gc benchmarks/core.mjs",
+    "bench:deep": "pnpm build && node --expose-gc benchmarks/deep-signal.mjs",
     "build": "tsc -p tsconfig.build.json",
     "dev:browser": "node --import tsx examples/browser/server.mjs",
     "typecheck": "tsc --noEmit",
@@ -37,6 +39,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
+    "@preact/signals-core": "1.14.4",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.4",

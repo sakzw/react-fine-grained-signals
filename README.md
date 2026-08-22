@@ -25,6 +25,25 @@ dispose();
 
 `signal` creates a writable `Signal<T>`; `computed` creates a read-only `ReadonlySignal<T>`. Both expose `.value` and `.peek()`. Writes use `Object.is` equality, and effects return a disposer; an effect's returned cleanup is run before its next execution and when disposed.
 
+### Deep signals
+
+`deepSignal` adds property-level tracking for plain objects and arrays. Proxies are created lazily and cached, so aliases and cycles retain stable identity.
+
+```ts
+import { computed, deepSignal } from "react-alien-signals";
+
+const state = deepSignal({
+  user: { profile: { name: "Alice" } },
+  items: ["first"],
+});
+const name = computed(() => state.value.user.profile.name);
+
+state.value.user.profile.name = "Bob";
+state.value.items.push("second");
+```
+
+Only assignment, deletion, and standard array mutations made through `state.value` are observable. `state.peek()` returns the untracked raw root and should be used for reads only. The root must be a mutable plain object or array containing data properties; accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1. Nested plain objects and arrays are reactive; class instances, functions, `Date`, `Map`, `Set`, promises, and existing signals are treated as opaque values. Non-extensible objects are rejected rather than made partially reactive.
+
 ## React hooks
 
 ```tsx
@@ -106,3 +125,14 @@ pnpm test:browser
 ```
 
 Run `pnpm dev:browser` to inspect the same example at `http://127.0.0.1:4173`.
+
+## Benchmarks
+
+Benchmarks are manual diagnostics and are not CI performance gates. They measure built output, run correctness checks outside the timed region, and report the median and interquartile timings after warmup.
+
+```sh
+pnpm bench
+pnpm bench:deep
+```
+
+Core results compare raw `alien-signals`, this package, and `@preact/signals-core`. Compare numbers only on the same machine and Node.js version; hosted CI timing is too variable for a reliable regression threshold.
