@@ -24,5 +24,8 @@
     "e2e/**/*.ts",
     "examples/browser/src/**/*.ts",
     "examples/browser/src/**/*.tsx"
+  ],
+  "exclude": [
+    "tests/fixtures/**"
   ]
 }

@@ -1,0 +1,17 @@
+{
+  "name": "react-alien-signals-consumer-smoke",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "react-alien-signals": "file:__ROOT_TARBALL__",
+    "unplugin-react-alien-signals": "file:__PLUGIN_TARBALL__"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.8",
+    "@types/react-dom": "19.2.4",
+    "typescript": "7.0.2",
+    "vite": "8.2.2"
+  }
+}

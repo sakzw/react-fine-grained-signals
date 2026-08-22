@@ -225,6 +225,12 @@ pnpm test
 pnpm build
 ```
 
+workspace aliasを使わないクリーンなVite consumerから、pack済みESM packageを検証するには次を実行します。
+
+```sh
+pnpm test:consumer
+```
+
 ブラウザ向けの概念実証では、サーバーでアプリをレンダーし、React 19でハイドレーションを行い、Chromium上でsignalの直接バインディングを検証します。
 
 ```sh

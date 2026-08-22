@@ -271,6 +271,13 @@ pnpm test
 pnpm build
 ```
 
+To verify the packed ESM packages from a clean Vite consumer (without workspace
+aliases), run:
+
+```sh
+pnpm test:consumer
+```
+
 The browser proof of concept renders the app on the server, hydrates it with React 19, and exercises direct signal bindings in Chromium:
 
 ```sh
