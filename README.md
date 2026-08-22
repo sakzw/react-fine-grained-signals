@@ -46,7 +46,9 @@ state.value.items.push("second");
 
 Only assignment, deletion, and standard array mutations made through `state.value` are observable. `state.peek()` returns the untracked raw root and should be used for reads only. The root must be a mutable plain object or array containing data properties; accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1. Nested plain objects and arrays are reactive; class instances, functions, `Date`, `Map`, `Set`, promises, and existing signals are treated as opaque values. Non-extensible objects are rejected rather than made partially reactive.
 
-An opaque `Map` or `Set` reached through `state.value` is a read-only view: `set`, `add`, `delete`, and `clear` are not allowed. Create a new `Map` or `Set`, change that copy, and assign it back instead. Opaque values are not tracked after assignment and must not be mutated in place. Assignments are rejected when own observable data properties contain library proxies; invisible internal state such as `WeakMap` entries, private fields, and promise internals is outside this guarantee.
+Only an opaque `Map` or `Set` reached directly from a reactive plain-object or array proxy is exposed through `state.value` as a read-only view. Its TypeScript type remains the mutable native `Map` or `Set` type for `Signal<T>` compatibility, but mutation methods throw at runtime: `set`, `add`, `delete`, and `clear` are not allowed. Create a new `Map` or `Set`, change that copy, and assign it back instead.
+
+This view guarantee does not cross an opaque boundary. Class instances, `Date`, functions, collection entries, accessor results, prototype state, private fields, closure state, `WeakMap` entries, and Promise internals are raw, non-reactive regions; values obtained through those regions, and opaque values mutated after they are stored, are not protected from direct mutation. To avoid invoking user code, write validation inspects only own data descriptors and `Map` / `Set` entries; it never calls getters or setters and cannot inspect the other internal regions above. Such writes are rejected when those inspected values contain library proxies.
 
 ## React hooks
 
@@ -244,9 +246,11 @@ position-keyed array, use `Index`: its child receives a render-time accessor
 `() => item` and a numeric index.
 
 `deepSignal` supports arrays, so array mutations and deep item reads can be
-reactive. `Map` and `Set` are intentionally opaque to `deepSignal`; its
-`.value` exposes them as read-only views. Use immutable replacement: copy,
-change, then assign the new collection to the signal. For example:
+reactive. `Map` and `Set` are intentionally opaque to `deepSignal`. A `Map`
+or `Set` reached directly from a reactive plain object or array is exposed by
+`.value` as a read-only runtime view (although its TypeScript type remains
+mutable); use immutable replacement: copy, change, then assign the new
+collection to the signal. For example:
 
 ```ts
 const next = new Map(labels.value);

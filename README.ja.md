@@ -46,7 +46,9 @@ state.value.items.push("second");
 
 監視できるのは、`state.value` を経由した代入、削除、標準的な配列操作だけです。`state.peek()` は依存関係を収集せず、生のルート値を返すため、読み取り専用として扱ってください。ルートにはデータプロパティを持つ変更可能なプレーンオブジェクトまたは配列が必要です。v1では、アクセサプロパティ、プロパティ記述子やプロトタイプの変更、`freeze` / `seal` を拒否します。ネストしたプレーンオブジェクトと配列はリアクティブになりますが、クラスインスタンス、関数、`Date`、`Map`、`Set`、Promise、既存のsignalは不透明な値として扱い、`deepSignal` によるProxy化や追跡は行いません。拡張不可のオブジェクトは部分的にリアクティブにせず、拒否します。
 
-`state.value` 経由で取得した不透明な `Map` / `Set` は読み取り専用viewです。`set`、`add`、`delete`、`clear` は使えません。コピーとして新しい `Map` / `Set` を作成して変更し、代わりにその新しいcollectionを代入してください。不透明な値は代入後に追跡されないため、直接変更してはいけません。代入対象のown observable data propertyにlibrary Proxyが含まれる場合は拒否されます。一方、`WeakMap` のentry、private field、Promiseの内部状態のように外から見えない内部状態は、この保証の対象外です。
+`state.value` の reactive plain object / array のProxyから**直接**取得した不透明な `Map` / `Set` だけは、読み取り専用viewとして公開されます。`Signal<T>` との型互換性を保つためTypeScript上の型は通常の可変 `Map` / `Set` のままですが、`set`、`add`、`delete`、`clear` はruntimeで `TypeError` になります。コピーとして新しい `Map` / `Set` を作成して変更し、代わりにその新しいcollectionを代入してください。
+
+このviewの保証は不透明な境界をまたぎません。クラスインスタンス、`Date`、関数、collection entry、アクセサの戻り値、prototypeの状態、private field、closureの状態、`WeakMap` のentry、Promiseの内部状態は、rawかつ非リアクティブな領域です。これらの領域から得た値や、保存後に直接変更された不透明な値は、直接変更に対して保護されません。ユーザーコードを呼ばないため、書き込み時の検証はown data descriptorと `Map` / `Set` のentryだけを調べ、getter / setterは呼び出しません。検査できる値にlibrary Proxyが含まれる書き込みは拒否されますが、それ以外の内部領域は検査できません。
 
 ## Reactフック
 
@@ -216,7 +218,7 @@ export function Panel() {
 
 `Switch` はtruthyな最初の `Match` だけを描画します。`Match` は `Switch` の子としてのみ意味を持ちます。`For` は新しいレンダラではなく、局所的なReactのリスト境界です。配列、`Set`、`Map`（子には `[key, value]` エントリが渡ります）を扱い、安定したReact keyのために必ず `by` を指定します。`by` は純粋で、render中に生成するのではなくitem由来の値を返してください。意図的に位置をidentityにする配列では `Index` を使います。子にはレンダー中に読む `() => item` accessorと数値indexが渡ります。
 
-`deepSignal` は配列を扱うため、配列操作とitem内部の読み取りをリアクティブにできます。一方で `Map` と `Set` は `deepSignal` にとって意図的に不透明であり、`.value` 経由では読み取り専用viewとして公開されます。`For` を更新するにはimmutable replacementを使います。つまりコピーを作り、変更してから新しいcollectionをsignalへ代入します（例: `const next = new Map(labels.value); next.set("bea", "Bea"); labels.value = next`）。render中にcollectionを変更しないでください。行コンポーネント内でsignalやdeep item propertyを読む場合は、その行で `useSignals()` を呼ぶかpluginを使い、行自身に購読を持たせてください。
+`deepSignal` は配列を扱うため、配列操作とitem内部の読み取りをリアクティブにできます。一方で `Map` と `Set` は `deepSignal` にとって意図的に不透明です。reactive plain object / arrayから直接得た `Map` / `Set` だけは、`.value` 経由で読み取り専用のruntime viewとして公開されます（TypeScript上の型は可変のままです）。`For` を更新するにはimmutable replacementを使います。つまりコピーを作り、変更してから新しいcollectionをsignalへ代入します（例: `const next = new Map(labels.value); next.set("bea", "Bea"); labels.value = next`）。render中にcollectionを変更しないでください。行コンポーネント内でsignalやdeep item propertyを読む場合は、その行で `useSignals()` を呼ぶかpluginを使い、行自身に購読を持たせてください。
 
 ## 実験的な制約
 
