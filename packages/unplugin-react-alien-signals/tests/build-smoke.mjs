@@ -21,7 +21,7 @@ for (const entry of ["webpack", "rspack"]) {
   const declaration = await import("node:fs/promises").then(({ readFile }) =>
     readFile(new URL(`../dist/${entry}.d.ts`, import.meta.url), "utf8"),
   );
-  if (/=> (Webpack|Rspack)PluginInstance\b/.test(declaration)) {
+  if (/\b(?:Webpack|Rspack)PluginInstance\b/.test(declaration)) {
     throw new TypeError(`${entry} declaration leaks an unresolved compiler-plugin type`);
   }
 }
