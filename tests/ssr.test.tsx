@@ -16,10 +16,61 @@ import {
   useSignals,
   type DeepSignal,
 } from "../src/index.js";
+import { For, Show } from "react-alien-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("SSR and hydration", () => {
+  it("hydrates control-flow utilities and follows signal updates without warnings", async () => {
+    const visible = signal(true);
+    const items = deepSignal([{ id: "ada", name: "Ada" }]);
+
+    function App() {
+      return (
+        <section>
+          <Show when={visible} fallback={<p data-testid="visibility">hidden</p>}>
+            <p data-testid="visibility">visible</p>
+          </Show>
+          <ul>
+            <For each={items} by={(item) => item.id} fallback={<li>empty</li>}>
+              {(item) => <li>{item.name}</li>}
+            </For>
+          </ul>
+        </section>
+      );
+    }
+
+    const html = renderToString(<App />);
+    expect(html).toContain("visible");
+    expect(html).toContain("Ada");
+
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(container.querySelector("[data-testid=visibility]")?.textContent).toBe("visible");
+    expect(container.querySelector("li")?.textContent).toBe("Ada");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      visible.value = false;
+      items.value.push({ id: "bea", name: "Bea" });
+    });
+    expect(container.querySelector("[data-testid=visibility]")?.textContent).toBe("hidden");
+    expect([...container.querySelectorAll("li")].map((item) => item.textContent))
+      .toEqual(["Ada", "Bea"]);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("keeps useSignals render tracking server-inert, deterministic, and live after hydration", async () => {
     const source = signal("server");
     const state = deepSignal({ profile: { name: "Ada", unread: 0 } });

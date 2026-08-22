@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, Fragment, useState } from "react";
+import { act, Fragment, StrictMode, useState } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { deepSignal, signal } from "../src/index.js";
@@ -38,6 +38,37 @@ describe("JSX control flow utilities", () => {
       visible.value = false;
     });
     expect(screen.getByText("hidden")).toBeTruthy();
+  });
+
+  it("keeps utility subscriptions live through Strict Mode replay", () => {
+    const visible = signal(false);
+    const items = signal(["Ada"]);
+
+    const view = render(
+      <StrictMode>
+        <Show when={visible} fallback={<p data-testid="strict-visible">hidden</p>}>
+          <p data-testid="strict-visible">visible</p>
+        </Show>
+        <ul>
+          <For each={items} fallback={<li>empty</li>}>
+            {(item) => <li>{item}</li>}
+          </For>
+        </ul>
+      </StrictMode>,
+    );
+
+    act(() => {
+      visible.value = true;
+      items.value = ["Ada", "Bea"];
+    });
+    expect(screen.getByTestId("strict-visible").textContent).toBe("visible");
+    expect(view.container.querySelectorAll("li")).toHaveLength(2);
+
+    view.unmount();
+    act(() => {
+      visible.value = false;
+      items.value = [];
+    });
   });
 
   it("uses the first truthy Match and supports fragments", () => {
