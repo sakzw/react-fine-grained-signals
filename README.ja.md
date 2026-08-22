@@ -165,11 +165,12 @@ signals({ mode: "auto", transform: "managed" });
 
 ```tsx
 import { signal } from "react-alien-signals";
-import { For, Match, Show, Switch } from "react-alien-signals/utils";
+import { For, Index, Match, Show, Switch } from "react-alien-signals/utils";
 
 const signedIn = signal(false);
 const showList = signal(true);
 const users = signal([{ id: "ada", name: "Ada" }]);
+const labels = signal(new Map([["ada", "Ada"]]));
 
 export function Panel() {
   return (
@@ -186,12 +187,22 @@ export function Panel() {
       <For each={users} by={(user) => user.id} fallback={<p>ユーザーはいません。</p>}>
         {(user) => <p>{user.name}</p>}
       </For>
+
+      <For each={labels} by={([id]) => id}>
+        {([id, label]) => <p>{`${id}: ${label}`}</p>}
+      </For>
+
+      <Index each={users}>
+        {(user, index) => <p>{`${index}: ${user().name}`}</p>}
+      </Index>
     </>
   );
 }
 ```
 
-`Switch` はtruthyな最初の `Match` だけを描画します。`Match` は `Switch` の子としてのみ意味を持ちます。`For` は新しいレンダラではなく、局所的なReactのリスト境界です。差分適用はReactが担い、`by` が安定した行keyを渡します。並び替え、途中への挿入、削除を行うリストでは必ず `by` を指定してください。省略時のindex keyは順序が固定のリストだけに適しています。初期実装は配列（`deepSignal` の配列を含む）のみを扱い、`Map` と `Set` はまだ対象外です。
+`Switch` はtruthyな最初の `Match` だけを描画します。`Match` は `Switch` の子としてのみ意味を持ちます。`For` は新しいレンダラではなく、局所的なReactのリスト境界です。配列、`Set`、`Map`（子には `[key, value]` エントリが渡ります）を扱い、安定したReact keyのために必ず `by` を指定します。`by` は純粋で、render中に生成するのではなくitem由来の値を返してください。意図的に位置をidentityにする配列では `Index` を使います。子にはレンダー中に読む `() => item` accessorと数値indexが渡ります。
+
+`deepSignal` は配列を扱うため、配列操作とitem内部の読み取りをリアクティブにできます。一方で `Map` と `Set` は `deepSignal` にとって意図的に不透明です。`For` を更新するにはimmutable replacementを使います。つまりコピーを作り、変更してから新しいcollectionをsignalへ代入します（例: `const next = new Map(labels.value); next.set("bea", "Bea"); labels.value = next`）。render中にcollectionを変更しないでください。行コンポーネント内でsignalやdeep item propertyを読む場合は、その行で `useSignals()` を呼ぶかpluginを使い、行自身に購読を持たせてください。
 
 ## 実験的な制約
 

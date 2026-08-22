@@ -3,8 +3,8 @@
 import { act, Fragment, StrictMode, useState } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deepSignal, signal } from "../src/index.js";
-import { For, Match, Show, Switch } from "react-alien-signals/utils";
+import { deepSignal, signal, useSignals } from "../src/index.js";
+import { For, Index, Match, Show, Switch } from "react-alien-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,7 +50,7 @@ describe("JSX control flow utilities", () => {
           <p data-testid="strict-visible">visible</p>
         </Show>
         <ul>
-          <For each={items} fallback={<li>empty</li>}>
+          <For each={items} by={(item) => item} fallback={<li>empty</li>}>
             {(item) => <li>{item}</li>}
           </For>
         </ul>
@@ -113,14 +113,17 @@ describe("JSX control flow utilities", () => {
       { id: "c", label: "Cy" },
     ]);
 
+    const keyCalls = vi.fn((item: { id: string }) => item.id);
+
     function Row({ item }: { item: { id: string; label: string } }) {
+      useSignals();
       const [mountedFor] = useState(item.id);
       return <li data-testid={item.id}>{`${mountedFor}:${item.label}`}</li>;
     }
 
     const view = render(
       <ul>
-        <For each={items} by={(item) => item.id} fallback={<li>empty</li>}>
+        <For each={items} by={keyCalls} fallback={<li>empty</li>}>
           {(item) => <Row item={item} />}
         </For>
       </ul>,
@@ -134,12 +137,91 @@ describe("JSX control flow utilities", () => {
     });
     expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
       .toEqual(["c:Cy", "a:Ada", "b:Bea"]);
+    const callsBeforeLeafUpdate = keyCalls.mock.calls.length;
 
     act(() => {
       items.value[0]!.label = "Cyra";
     });
     expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
       .toEqual(["c:Cyra", "a:Ada", "b:Bea"]);
+    expect(keyCalls).toHaveBeenCalledTimes(callsBeforeLeafUpdate);
+
+    act(() => {
+      items.value = [];
+    });
+    expect(within(list).getByText("empty")).toBeTruthy();
+  });
+
+  it("renders Map and Set inputs after immutable collection replacement", () => {
+    const tags = signal(new Set(["react"]));
+    const users = signal(new Map([["ada", { name: "Ada" }]]));
+
+    render(
+      <>
+        <ul data-testid="tags">
+          <For each={tags} by={(tag) => tag}>{(tag) => <li>{tag}</li>}</For>
+        </ul>
+        <ul data-testid="users">
+          <For each={users} by={([id]) => id}>
+            {([id, user]) => <li>{`${id}:${user.name}`}</li>}
+          </For>
+        </ul>
+      </>,
+    );
+
+    expect(within(screen.getByTestId("tags")).getAllByRole("listitem").map((item) => item.textContent))
+      .toEqual(["react"]);
+    expect(within(screen.getByTestId("users")).getAllByRole("listitem").map((item) => item.textContent))
+      .toEqual(["ada:Ada"]);
+
+    act(() => {
+      tags.value = new Set(["signals", "react"]);
+      users.value = new Map([
+        ["bea", { name: "Bea" }],
+        ["ada", { name: "Ada Lovelace" }],
+      ]);
+    });
+    expect(within(screen.getByTestId("tags")).getAllByRole("listitem").map((item) => item.textContent))
+      .toEqual(["signals", "react"]);
+    expect(within(screen.getByTestId("users")).getAllByRole("listitem").map((item) => item.textContent))
+      .toEqual(["bea:Bea", "ada:Ada Lovelace"]);
+  });
+
+  it("keeps Index row state at a position while its item changes", () => {
+    const items = deepSignal([
+      { id: "ada", name: "Ada" },
+      { id: "bea", name: "Bea" },
+    ]);
+
+    function Row({ item }: { item: () => { id: string; name: string } }) {
+      useSignals();
+      const current = item();
+      const [positionOwner] = useState(current.id);
+      return <li>{`${positionOwner}:${current.name}`}</li>;
+    }
+
+    const view = render(
+      <ul>
+        <Index each={items} fallback={<li>empty</li>}>
+          {(item) => <Row item={item} />}
+        </Index>
+      </ul>,
+    );
+    const list = view.container.querySelector("ul")!;
+    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
+      .toEqual(["ada:Ada", "bea:Bea"]);
+
+    act(() => {
+      items.value = [items.value[1]!, items.value[0]!];
+    });
+    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
+      .toEqual(["ada:Bea", "bea:Ada"]);
+
+    act(() => {
+      items.value[0]!.name = "Beatrice";
+    });
+    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
+      .toEqual(["ada:Beatrice", "bea:Ada"]);
 
     act(() => {
       items.value = [];

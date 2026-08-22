@@ -73,22 +73,68 @@ export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
   return fallback;
 }
 
-/** Renders the items from a signal-backed array in a local reactive boundary. */
+/** A collection supported by `For` when each item has its own identity. */
+export type ForCollection<T> = readonly T[] | ReadonlySet<T>;
+
+/** Renders an array or set whose items have stable identities. */
 export interface ForProps<T> {
-  each: SignalInput<readonly T[] | null | undefined>;
+  each: SignalInput<ForCollection<T> | null | undefined>;
   fallback?: ReactNode;
-  /** Use `by` whenever rows can be reordered, inserted, or removed. */
-  by?: (item: T, index: number) => Key;
+  /** Returns the stable React key for an item. It must be pure and data-derived. */
+  by: (item: T, index: number) => Key;
   children: (item: T, index: number) => ReactNode;
+}
+
+/** Renders a map whose entries have stable identities. */
+export interface ForMapProps<K, V> {
+  each: SignalInput<ReadonlyMap<K, V> | null | undefined>;
+  fallback?: ReactNode;
+  /** Returns the stable React key for an entry. It must be pure and data-derived. */
+  by: (entry: readonly [K, V], index: number) => Key;
+  children: (entry: readonly [K, V], index: number) => ReactNode;
 }
 
 /**
  * A React list boundary inspired by Solid's `For`.
  *
- * React still owns reconciliation. `by` supplies stable keys; without it the
- * positional index is used, which is appropriate only for static-order lists.
+ * React still owns reconciliation. `by` supplies stable keys, so use `Index`
+ * instead when a list's identity is intentionally positional.
  */
-export function For<T>({ each, fallback = null, by, children }: ForProps<T>): ReactNode {
+export function For<T>(props: ForProps<T>): ReactNode;
+export function For<K, V>(props: ForMapProps<K, V>): ReactNode;
+export function For(
+  { each, fallback = null, by, children }: ForProps<unknown> | ForMapProps<unknown, unknown>,
+): ReactNode {
+  useSignals();
+  const collection = readSignalInput(each);
+
+  if (collection === null || collection === undefined) {
+    return fallback;
+  }
+
+  const items = Array.isArray(collection) ? collection : Array.from(collection);
+  if (items.length === 0) return fallback;
+
+  return items.map((item, index) => (
+    <Fragment key={by(item, index)}>{children(item, index)}</Fragment>
+  ));
+}
+
+/** Renders an array whose row identity is intentionally its position. */
+export interface IndexProps<T> {
+  each: SignalInput<readonly T[] | null | undefined>;
+  fallback?: ReactNode;
+  /** Receives a render-time accessor for the current value at this position. */
+  children: (item: () => T, index: number) => ReactNode;
+}
+
+/**
+ * A position-keyed React list boundary inspired by Solid's `Index`.
+ *
+ * The accessor should be read during render. For identity-keyed lists, use
+ * `For` instead and provide `by`.
+ */
+export function Index<T>({ each, fallback = null, children }: IndexProps<T>): ReactNode {
   useSignals();
   const items = readSignalInput(each);
 
@@ -96,8 +142,8 @@ export function For<T>({ each, fallback = null, by, children }: ForProps<T>): Re
     return fallback;
   }
 
-  return items.map((item, index) => (
-    <Fragment key={by?.(item, index) ?? index}>{children(item, index)}</Fragment>
+  return items.map((_item, index) => (
+    <Fragment key={index}>{children(() => items[index]!, index)}</Fragment>
   ));
 }
 

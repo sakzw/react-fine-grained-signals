@@ -16,7 +16,7 @@ import {
   useSignals,
   type DeepSignal,
 } from "../src/index.js";
-import { For, Show } from "react-alien-signals/utils";
+import { For, Index, Show } from "react-alien-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -24,6 +24,8 @@ describe("SSR and hydration", () => {
   it("hydrates control-flow utilities and follows signal updates without warnings", async () => {
     const visible = signal(true);
     const items = deepSignal([{ id: "ada", name: "Ada" }]);
+    const slots = signal(["first"]);
+    const labels = signal(new Map([["ada", "Ada"]]));
 
     function App() {
       return (
@@ -34,6 +36,14 @@ describe("SSR and hydration", () => {
           <ul>
             <For each={items} by={(item) => item.id} fallback={<li>empty</li>}>
               {(item) => <li>{item.name}</li>}
+            </For>
+          </ul>
+          <ul data-testid="slots">
+            <Index each={slots}>{(item) => <li>{item()}</li>}</Index>
+          </ul>
+          <ul data-testid="labels">
+            <For each={labels} by={([id]) => id}>
+              {([id, label]) => <li>{`${id}:${label}`}</li>}
             </For>
           </ul>
         </section>
@@ -55,15 +65,19 @@ describe("SSR and hydration", () => {
     });
     expect(container.querySelector("[data-testid=visibility]")?.textContent).toBe("visible");
     expect(container.querySelector("li")?.textContent).toBe("Ada");
+    expect(container.querySelector("[data-testid=slots]")?.textContent).toBe("first");
+    expect(container.querySelector("[data-testid=labels]")?.textContent).toBe("ada:Ada");
     expect(consoleError).not.toHaveBeenCalled();
 
     await act(async () => {
       visible.value = false;
       items.value.push({ id: "bea", name: "Bea" });
+      slots.value = ["second"];
+      labels.value = new Map([["bea", "Bea"]]);
     });
     expect(container.querySelector("[data-testid=visibility]")?.textContent).toBe("hidden");
     expect([...container.querySelectorAll("li")].map((item) => item.textContent))
-      .toEqual(["Ada", "Bea"]);
+      .toEqual(["Ada", "Bea", "second", "bea:Bea"]);
     expect(consoleError).not.toHaveBeenCalled();
 
     root.unmount();

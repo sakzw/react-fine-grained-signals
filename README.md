@@ -198,11 +198,12 @@ update does not rerender its parent component.
 
 ```tsx
 import { signal } from "react-alien-signals";
-import { For, Match, Show, Switch } from "react-alien-signals/utils";
+import { For, Index, Match, Show, Switch } from "react-alien-signals/utils";
 
 const signedIn = signal(false);
 const showList = signal(true);
 const users = signal([{ id: "ada", name: "Ada" }]);
+const labels = signal(new Map([["ada", "Ada"]]));
 
 export function Panel() {
   return (
@@ -219,18 +220,35 @@ export function Panel() {
       <For each={users} by={(user) => user.id} fallback={<p>No users.</p>}>
         {(user) => <p>{user.name}</p>}
       </For>
+
+      <For each={labels} by={([id]) => id}>
+        {([id, label]) => <p>{`${id}: ${label}`}</p>}
+      </For>
+
+      <Index each={users}>
+        {(user, index) => <p>{`${index}: ${user().name}`}</p>}
+      </Index>
     </>
   );
 }
 ```
 
 `Switch` renders the first truthy `Match`; `Match` is meaningful only inside a
-`Switch`. `For` is a local React list boundary, not a new renderer. React owns
-the reconciliation, and `by` supplies its stable row keys. Always provide
-`by` for a list that can be reordered, inserted into, or shortened; the
-fallback index key is only appropriate for a fixed-order list. The initial
-utility intentionally supports arrays (including `deepSignal` arrays), not
-`Map` or `Set`.
+`Switch`. `For` is a local React list boundary, not a new renderer. It accepts
+arrays, `Set`, and `Map` (whose child receives a `[key, value]` entry), and
+always requires `by` for stable React keys. `by` must be pure and derived from
+the item rather than generated during render. For an intentionally
+position-keyed array, use `Index`: its child receives a render-time accessor
+`() => item` and a numeric index.
+
+`deepSignal` supports arrays, so array mutations and deep item reads can be
+reactive. `Map` and `Set` are intentionally opaque to `deepSignal`; use
+immutable replacement: copy, change, then assign the new collection to the
+signal (for example, `const next = new Map(labels.value); next.set("bea",
+"Bea"); labels.value = next`). Do not mutate collections while rendering. For
+rows that read signals or deep item properties inside a child component, call
+`useSignals()` in that row (or use the plugin) so the row owns that
+subscription.
 
 ## Experimental constraints
 
