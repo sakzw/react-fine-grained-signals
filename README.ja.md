@@ -247,6 +247,9 @@ pnpm test:browser
 ```sh
 pnpm bench
 pnpm bench:deep
+pnpm bench:transform
 ```
 
 コアの結果では、生の `alien-signals`、このパッケージ、`@preact/signals-core` を比較します。数値は同じマシンとNode.jsバージョンでのみ比較してください。ホステッドCIの実行時間は変動が大きいため、信頼できる回帰しきい値には適しません。
+
+`bench:transform` は、privateなbuild pluginの小・大規模TSX moduleに対するparse、scope、書き換え、source map、code generationの経路を測定します。pass-throughの下限と、変換候補がないBabelケースを含むため、将来互換性のあるSWC/Oxc実装を同じcorpusで比較できます。
