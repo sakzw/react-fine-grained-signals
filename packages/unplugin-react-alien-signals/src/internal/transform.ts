@@ -118,7 +118,7 @@ function isNamedUseSignalsImport(
 function isNamespaceUseSignalsImport(
   functionPath: NodePath<t.Function>,
   name: string,
-  importSource: string,
+  importSource?: string,
 ): boolean {
   const binding = functionPath.scope.getBinding(name);
   if (binding === undefined || !binding.path.isImportNamespaceSpecifier()) return false;
@@ -126,7 +126,7 @@ function isNamespaceUseSignalsImport(
   return (
     declaration.isImportDeclaration() &&
     declaration.node.importKind !== "type" &&
-    declaration.node.source.value === importSource
+    (importSource === undefined || declaration.node.source.value === importSource)
   );
 }
 
@@ -154,28 +154,39 @@ function isUseSignalsCallee(
     (callee.node.computed && property.isStringLiteral({ value: "useSignals" }));
   return (
     isUseSignalsProperty &&
-    isNamespaceUseSignalsImport(functionPath, object.node.name, importSource)
+    isNamespaceUseSignalsImport(
+      functionPath,
+      object.node.name,
+      allowBarrel ? undefined : importSource,
+    )
   );
 }
 
-function hasFunctionAncestor(path: NodePath<t.Function>): boolean {
-  let parent: NodePath | null = path.parentPath;
-  while (parent !== null) {
-    if (parent.isFunction()) return true;
-    parent = parent.parentPath;
-  }
-  return false;
+function isRenderCallback(path: NodePath<t.Function>): boolean {
+  const parent = path.parentPath;
+  if (!parent.isCallExpression() || isKnownComponentWrapper(parent)) return false;
+  return parent.get("arguments").some((argument) => argument.node === path.node);
 }
 
 function isAutomaticTransformCandidate(path: NodePath<t.Function>): boolean {
-  if (hasFunctionAncestor(path)) return false;
+  // Render callbacks are tracked by the component that invokes them. Injecting
+  // a hook into the callback would violate the Rules of Hooks because callbacks
+  // such as Array#map can execute a variable number of times.
+  if (isRenderCallback(path)) return false;
   if (path.isFunctionDeclaration()) return true;
 
   let parent = path.parentPath;
   while (parent.isCallExpression() && isKnownComponentWrapper(parent)) {
     parent = parent.parentPath;
   }
-  return parent.isVariableDeclarator();
+  return parent.isVariableDeclarator() || parent.isReturnStatement();
+}
+
+function isNestedTrackingBoundary(path: NodePath<t.Function>): boolean {
+  return (
+    !isRenderCallback(path) &&
+    (isComponent(path) || isCustomHook(path))
+  );
 }
 
 function inspectFunction(
@@ -188,11 +199,17 @@ function inspectFunction(
     hasUseSignalsCall: false,
   };
   functionPath.traverse({
+    Function(path) {
+      // Components and hooks own their subscriptions. Other nested callbacks
+      // remain part of the current render owner so hidden JSX/.value reads in a
+      // map/render-prop still cause the owner component to be transformed.
+      if (isNestedTrackingBoundary(path)) path.skip();
+    },
     JSXElement(path) {
-      if (path.getFunctionParent() === functionPath) inspection.containsJSX = true;
+      inspection.containsJSX = true;
     },
     JSXFragment(path) {
-      if (path.getFunctionParent() === functionPath) inspection.containsJSX = true;
+      inspection.containsJSX = true;
     },
     MemberExpression(path) {
       const property = path.node.property;

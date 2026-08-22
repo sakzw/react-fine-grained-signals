@@ -190,6 +190,60 @@ describe("managed render transform", () => {
     },
   );
 
+  it.each(["auto", "all"] as const)(
+    "%s mode tracks directly returned map callbacks through the outer component",
+    (mode) => {
+      const output = compile(`
+        const items = [{ value: "one" }];
+        export function ArrowList() {
+          return items.map((item) => <li>{item.value}</li>);
+        }
+        export function NamedList() {
+          return items.map(function Row(item) { return <li>{item.value}</li>; });
+        }
+      `, mode);
+
+      expect(output.match(/finally/g)).toHaveLength(2);
+      expect(output).toMatch(/function ArrowList\(\) \{\s+const _signals/);
+      expect(output).toMatch(/function NamedList\(\) \{\s+const _signals\d*/);
+      expect(output).toMatch(/function Row\(item\) \{\s+return/);
+    },
+  );
+
+  it("transforms a named component returned from a HOC", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function withCount(Base) {
+        return function Wrapped(props) {
+          return <Base {...props} count={count.value} />;
+        };
+      }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/function withCount\(Base\) \{\s+return function Wrapped/);
+    expect(output).toMatch(/function Wrapped\(props\) \{\s+const _signals/);
+  });
+
+  it("gives nested named components their own automatic tracking boundary", () => {
+    const source = `
+      const count = { value: 1 };
+      export function Parent() {
+        const Child = () => <p>{count.value}</p>;
+        return <Child />;
+      }
+    `;
+    const auto = compile(source, "auto");
+    const all = compile(source, "all");
+
+    expect(auto.match(/finally/g)).toHaveLength(1);
+    expect(auto).toMatch(/function Parent\(\) \{\s+const Child/);
+    expect(auto).toMatch(/const Child = \(\) => \{\s+const _signals/);
+    expect(all.match(/finally/g)).toHaveLength(2);
+    expect(all).toMatch(/function Parent\(\) \{\s+const _signals/);
+    expect(all).toMatch(/const Child = \(\) => \{\s+const _signals\d*/);
+  });
+
   it("skips automatic async and generator candidates", () => {
     const auto = compile(`
       const count = { value: 1 };
@@ -239,9 +293,16 @@ describe("managed render transform", () => {
       const count = { value: 1 };
       export function App() { const prefix = "v"; track(); return <p>{prefix}{count.value}</p>; }
     `;
+    const namespaceBarrelSource = `
+      import * as signals from "./signals.js";
+      const count = { value: 1 };
+      export function App() { const prefix = "v"; signals.useSignals(); return <p>{prefix}{count.value}</p>; }
+    `;
 
     expect(compile(namespaceSource, "auto", "inject")).toBe(namespaceSource);
     expect(compile(barrelSource, "auto", "managed")).toBe(barrelSource);
+    expect(compile(namespaceBarrelSource, "auto", "inject")).toBe(namespaceBarrelSource);
+    expect(compile(namespaceBarrelSource, "auto", "managed")).toBe(namespaceBarrelSource);
   });
 
   it.each(["inject", "managed"] as const)("keeps the %s transform idempotent", (transform) => {
