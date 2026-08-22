@@ -825,6 +825,24 @@ describe("React bindings", () => {
     expect(parentRenders).toHaveBeenCalledTimes(1);
   });
 
+  it("updates className safely on a tag shared by the HTML and SVG namespaces", () => {
+    const className = signal("before");
+
+    render(
+      <svg aria-label="shared namespace host">
+        <a aria-label="svg link" className={className} />
+      </svg>,
+    );
+    const link = screen.getByLabelText("svg link");
+    expect(link.namespaceURI).toBe("http://www.w3.org/2000/svg");
+    expect(link.getAttribute("class")).toBe("before");
+
+    act(() => {
+      className.value = "after";
+    });
+    expect(link.getAttribute("class")).toBe("after");
+  });
+
   it("does not unwrap a signal passed as a React component prop", () => {
     const source = signal("value");
     const childRenders = vi.fn();

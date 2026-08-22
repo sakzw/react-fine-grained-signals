@@ -174,6 +174,22 @@ describe("managed render transform", () => {
     expect(output).toContain("function App");
   });
 
+  it.each(["auto", "all"] as const)(
+    "%s mode tracks render callbacks through their owner without injecting a hook into the callback",
+    (mode) => {
+      const output = compile(`
+        const items = [{ value: "one" }];
+        export function List() {
+          return <ul>{items.map(function Row(item) { return <li>{item.value}</li>; })}</ul>;
+        }
+      `, mode);
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/function List\(\) \{\s+const _signals/);
+      expect(output).toMatch(/function Row\(item\) \{\s+return/);
+    },
+  );
+
   it("skips automatic async and generator candidates", () => {
     const auto = compile(`
       const count = { value: 1 };
@@ -210,6 +226,64 @@ describe("managed render transform", () => {
 
     expect(output).not.toContain("react-alien-signals/runtime");
     expect(output).toContain("useSignals();");
+  });
+
+  it("recognizes existing namespace and barrel-imported useSignals calls", () => {
+    const namespaceSource = `
+      import * as signals from "react-alien-signals";
+      const count = { value: 1 };
+      export function App() { const prefix = "v"; signals.useSignals(); return <p>{prefix}{count.value}</p>; }
+    `;
+    const barrelSource = `
+      import { useSignals as track } from "./signals.js";
+      const count = { value: 1 };
+      export function App() { const prefix = "v"; track(); return <p>{prefix}{count.value}</p>; }
+    `;
+
+    expect(compile(namespaceSource, "auto", "inject")).toBe(namespaceSource);
+    expect(compile(barrelSource, "auto", "managed")).toBe(barrelSource);
+  });
+
+  it.each(["inject", "managed"] as const)("keeps the %s transform idempotent", (transform) => {
+    const source = `
+      const count = { value: 1 };
+      export function App() { return <p>{count.value}</p>; }
+    `;
+    const once = compile(source, "auto", transform);
+
+    expect(compile(once, "auto", transform)).toBe(once);
+  });
+
+  it("does not inherit an annotation into descendant component declarations", () => {
+    const output = compile(`
+      /** @useSignals */
+      export function Parent() {
+        function Child() { return <span>child</span>; }
+        return <Child />;
+      }
+    `);
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+  });
+
+  it("parses non-JSX TypeScript syntax according to the module extension", () => {
+    const options = {
+      importSource: "react-alien-signals",
+      mode: "auto" as const,
+      transform: "inject" as const,
+    };
+
+    expect(
+      transformReactAlienSignals("const value = <string>input;", "fixture.ts", options),
+    ).toBeNull();
+    expect(transformReactAlienSignals("@sealed class Store {}", "fixture.ts", options)).toBeNull();
+    expect(
+      transformReactAlienSignals(
+        "const count = { value: 1 }; export const App = () => <p>{count.value}</p>;",
+        "fixture.js",
+        options,
+      )?.code,
+    ).toContain("_useSignals();");
   });
 
   it("does not reuse a type-only runtime import or a shadowed runtime alias", () => {

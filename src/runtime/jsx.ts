@@ -48,6 +48,7 @@ const NON_HTML_HOST_ELEMENTS = new Set<string>([...SVG_ELEMENTS, ...MATHML_ELEME
 type SignalChild = React.ReactNode | ReadonlySignal<SignalChild> | readonly SignalChild[];
 type HostProps = Record<string, unknown>;
 type Binding = readonly [name: string, source: ReadonlySignal<unknown>];
+const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
  * A leaf that lets React own reconciliation while its signal dependency stays
@@ -88,6 +89,14 @@ function setAttribute(node: Element, name: string, value: unknown): void {
 }
 
 function setDomProp(node: Element, name: string, value: unknown): void {
+  // Tags such as `a`, `script`, `style`, and `title` exist in both HTML and
+  // SVG. The JSX factory only sees the tag name, so defer the final namespace
+  // decision until React gives us the actual DOM node.
+  if (node.namespaceURI !== HTML_NAMESPACE) {
+    setAttribute(node, name === "className" ? "class" : name, value);
+    return;
+  }
+
   switch (name) {
     case "title":
       (node as HTMLElement).title = value == null ? "" : String(value);

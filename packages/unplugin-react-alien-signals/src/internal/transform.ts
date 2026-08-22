@@ -1,5 +1,10 @@
 import { declare } from "@babel/helper-plugin-utils";
-import { transformSync, type NodePath, type PluginObj } from "@babel/core";
+import {
+  transformSync,
+  type NodePath,
+  type ParserOptions,
+  type PluginObj,
+} from "@babel/core";
 import * as t from "@babel/types";
 import type { TransformResult } from "unplugin";
 
@@ -33,10 +38,18 @@ function hasLeadingComment(path: NodePath, pattern: RegExp): boolean {
   return path.node.leadingComments?.some((comment) => pattern.test(comment.value)) ?? false;
 }
 
-function hasCommentInAncestors(path: NodePath, pattern: RegExp): boolean {
+function hasOwnedLeadingComment(path: NodePath, pattern: RegExp): boolean {
   let current: NodePath | null = path;
   while (current !== null && !current.isProgram()) {
     if (hasLeadingComment(current, pattern)) return true;
+    if (current.isStatement()) {
+      const parent = current.parentPath;
+      return (
+        parent !== null &&
+        (parent.isExportNamedDeclaration() || parent.isExportDefaultDeclaration()) &&
+        hasLeadingComment(parent, pattern)
+      );
+    }
     current = current.parentPath;
   }
   return false;
@@ -85,10 +98,10 @@ function isCustomHook(path: NodePath<t.Function>): boolean {
   return name !== undefined && /^use[A-Z]/.test(name);
 }
 
-function isImportedUseSignals(
+function isNamedUseSignalsImport(
   functionPath: NodePath<t.Function>,
   name: string,
-  importSource: string,
+  importSource?: string,
 ): boolean {
   const binding = functionPath.scope.getBinding(name);
   if (binding === undefined || !binding.path.isImportSpecifier()) return false;
@@ -98,8 +111,71 @@ function isImportedUseSignals(
   return (
     declaration.isImportDeclaration() &&
     declaration.node.importKind !== "type" &&
+    (importSource === undefined || declaration.node.source.value === importSource)
+  );
+}
+
+function isNamespaceUseSignalsImport(
+  functionPath: NodePath<t.Function>,
+  name: string,
+  importSource: string,
+): boolean {
+  const binding = functionPath.scope.getBinding(name);
+  if (binding === undefined || !binding.path.isImportNamespaceSpecifier()) return false;
+  const declaration = binding.path.parentPath;
+  return (
+    declaration.isImportDeclaration() &&
+    declaration.node.importKind !== "type" &&
     declaration.node.source.value === importSource
   );
+}
+
+function isUseSignalsCallee(
+  functionPath: NodePath<t.Function>,
+  callee: NodePath<t.Expression | t.V8IntrinsicIdentifier | t.Super>,
+  importSource: string,
+  allowBarrel = true,
+): boolean {
+  if (callee.isIdentifier()) {
+    // A named re-export keeps the imported name, so this also recognizes
+    // `useSignals` aliases imported through application barrel modules.
+    return isNamedUseSignalsImport(
+      functionPath,
+      callee.node.name,
+      allowBarrel ? undefined : importSource,
+    );
+  }
+  if (!callee.isMemberExpression()) return false;
+  const object = callee.get("object");
+  const property = callee.get("property");
+  if (!object.isIdentifier()) return false;
+  const isUseSignalsProperty =
+    (!callee.node.computed && property.isIdentifier({ name: "useSignals" })) ||
+    (callee.node.computed && property.isStringLiteral({ value: "useSignals" }));
+  return (
+    isUseSignalsProperty &&
+    isNamespaceUseSignalsImport(functionPath, object.node.name, importSource)
+  );
+}
+
+function hasFunctionAncestor(path: NodePath<t.Function>): boolean {
+  let parent: NodePath | null = path.parentPath;
+  while (parent !== null) {
+    if (parent.isFunction()) return true;
+    parent = parent.parentPath;
+  }
+  return false;
+}
+
+function isAutomaticTransformCandidate(path: NodePath<t.Function>): boolean {
+  if (hasFunctionAncestor(path)) return false;
+  if (path.isFunctionDeclaration()) return true;
+
+  let parent = path.parentPath;
+  while (parent.isCallExpression() && isKnownComponentWrapper(parent)) {
+    parent = parent.parentPath;
+  }
+  return parent.isVariableDeclarator();
 }
 
 function inspectFunction(
@@ -112,14 +188,11 @@ function inspectFunction(
     hasUseSignalsCall: false,
   };
   functionPath.traverse({
-    Function(path) {
-      path.skip();
+    JSXElement(path) {
+      if (path.getFunctionParent() === functionPath) inspection.containsJSX = true;
     },
-    JSXElement() {
-      inspection.containsJSX = true;
-    },
-    JSXFragment() {
-      inspection.containsJSX = true;
+    JSXFragment(path) {
+      if (path.getFunctionParent() === functionPath) inspection.containsJSX = true;
     },
     MemberExpression(path) {
       const property = path.node.property;
@@ -140,11 +213,9 @@ function inspectFunction(
       }
     },
     CallExpression(path) {
+      if (path.getFunctionParent() !== functionPath) return;
       const callee = path.get("callee");
-      if (
-        callee.isIdentifier() &&
-        isImportedUseSignals(functionPath, callee.node.name, importSource)
-      ) {
+      if (isUseSignalsCallee(functionPath, callee, importSource)) {
         inspection.hasUseSignalsCall = true;
       }
     },
@@ -217,10 +288,7 @@ function isExplicitUseSignals(
   const expression = first.get("expression");
   if (!expression.isCallExpression() || expression.node.arguments.length !== 0) return false;
   const callee = expression.get("callee");
-  return (
-    callee.isIdentifier() &&
-    isImportedUseSignals(functionPath, callee.node.name, importSource)
-  );
+  return isUseSignalsCallee(functionPath, callee, importSource, false);
 }
 
 function shouldAutomaticallyTransform(
@@ -252,16 +320,18 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
         },
       },
       Function(path, state) {
-        if (hasCommentInAncestors(path, noUseSignalsComment)) return;
+        if (hasOwnedLeadingComment(path, noUseSignalsComment)) return;
 
         const body = path.get("body");
         const statements = body.isBlockStatement() ? body.get("body") : [];
         const explicit = isExplicitUseSignals(path, statements, options.importSource);
         const inspection = inspectFunction(path, options.importSource);
         const annotated =
-          hasCommentInAncestors(path, useSignalsComment) &&
+          hasOwnedLeadingComment(path, useSignalsComment) &&
           (isComponent(path) || isCustomHook(path));
-        const automatic = shouldAutomaticallyTransform(options.mode, path, inspection);
+        const automatic =
+          isAutomaticTransformCandidate(path) &&
+          shouldAutomaticallyTransform(options.mode, path, inspection);
         if (!explicit && !annotated && !automatic) return;
         if (!explicit && inspection.hasUseSignalsCall) return;
         if (options.transform === "inject" && explicit) return;
@@ -346,11 +416,20 @@ export function transformReactAlienSignals(
   id: string,
   options: InternalTransformOptions,
 ): InternalTransformResult | null {
+  const cleanId = id.replace(/[?#].*$/, "");
+  const isTypeScript = /\.[cm]?tsx?$/i.test(cleanId);
+  // JavaScript commonly carries JSX without using a .jsx suffix, while
+  // TypeScript's angle-bracket assertions make JSX parsing unsafe for .ts.
+  const supportsJsx = /\.[cm]?(?:jsx?|tsx)$/i.test(cleanId);
+  const parserPlugins: NonNullable<ParserOptions["plugins"]> = [];
+  if (supportsJsx) parserPlugins.push("jsx");
+  if (isTypeScript) parserPlugins.push("typescript");
+  parserPlugins.push("decorators-legacy");
   const result = transformSync(code, {
     babelrc: false,
     configFile: false,
     filename: id,
-    parserOpts: { plugins: ["jsx", "typescript"] },
+    parserOpts: { plugins: parserPlugins },
     plugins: [[babelTransform, options]],
     sourceMaps: true,
   });
