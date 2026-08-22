@@ -2,13 +2,20 @@ import { describe, expect, it } from "vitest";
 import {
   transformReactAlienSignals,
   type ReactAlienSignalsMode,
+  type ReactAlienSignalsTransform,
 } from "../src/internal/transform.js";
 
-function compile(source: string, mode: ReactAlienSignalsMode = "manual"): string {
+function compile(
+  source: string,
+  mode: ReactAlienSignalsMode = "manual",
+  transform: ReactAlienSignalsTransform = "managed",
+  importSource = "react-alien-signals",
+): string {
   return (
     transformReactAlienSignals(source, "fixture.tsx", {
-      importSource: "react-alien-signals",
+      importSource,
       mode,
+      transform,
     })?.code ?? source
   );
 }
@@ -56,6 +63,48 @@ describe("managed render transform", () => {
 
     expect(output).toContain("const Counter = () => {");
     expect(output).toContain("finally {");
+  });
+
+  it("injects a bare useSignals call without a managed render rewrite", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export const Counter = () => <p>{count.value}</p>;
+    `, "auto", "inject");
+
+    expect(output).toContain('from "react-alien-signals"');
+    expect(output).not.toContain('from "react-alien-signals/runtime"');
+    expect(output).toContain("const Counter = () => {");
+    expect(output).toContain("_useSignals();");
+    expect(output).not.toContain("try {");
+    expect(output).not.toContain("finally {");
+    expect(output).not.toContain(".f();");
+  });
+
+  it("reuses a direct import and leaves an explicit bare useSignals call untouched", () => {
+    const annotated = compile(`
+      import { useSignals as track } from "react-alien-signals";
+      /** @useSignals */
+      export function Counter() { return <p>tracked</p>; }
+    `, "manual", "inject");
+    const explicit = `
+      import { useSignals } from "react-alien-signals";
+      export function Counter() { useSignals(); return <p />; }
+    `;
+
+    expect(annotated).toContain("track();");
+    expect(annotated).not.toContain("_useSignals");
+    expect(compile(explicit, "manual", "inject")).toBe(explicit);
+  });
+
+  it("supports custom import sources for the lightweight injection", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function Counter() { return <p>{count.value}</p>; }
+    `, "auto", "inject", "custom-signals");
+
+    expect(output).toContain('from "custom-signals"');
+    expect(output).toContain("_useSignals();");
+    expect(output).not.toContain('from "custom-signals/runtime"');
   });
 
   it("infers component names through memo and forwardRef wrappers", () => {

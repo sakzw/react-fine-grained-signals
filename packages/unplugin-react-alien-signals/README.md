@@ -1,6 +1,7 @@
 # unplugin-react-alien-signals
 
-Universal bundler integration for the managed render-scope transform in
+Universal bundler integration for automatic `useSignals()` insertion and the
+optional managed render-scope transform in
 [`react-alien-signals`](https://www.npmjs.com/package/react-alien-signals).
 
 This package is deliberately the only build-time integration. It keeps the
@@ -62,6 +63,12 @@ export default {
   - `"auto"` (default): additionally transforms named JSX components and
     named `useX` custom hooks that read `.value`.
   - `"all"`: additionally transforms every named JSX component.
+- `transform`:
+  - `"inject"` (default): inserts a normal `useSignals()` call without
+    rewriting control flow. It has the same best-effort tracking boundary as a
+    handwritten call.
+  - `"managed"`: emits an exact `try` / `finally` render boundary using the
+    package's `/runtime` entry.
 - `importSource`: overrides `react-alien-signals` for a compatible wrapper.
 - `include` / `exclude`: functions that filter source module IDs.
 

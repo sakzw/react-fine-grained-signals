@@ -17,4 +17,18 @@ describe("unplugin-react-alien-signals", () => {
   it("accepts the public auto mode option", () => {
     expect(reactAlienSignals).toBeDefined();
   });
+
+  it("uses the lightweight injection transform by default", () => {
+    const plugin = reactAlienSignals.vite({ mode: "auto" }) as unknown as {
+      transform(code: string, id: string): { code: string } | null;
+    };
+    const output = plugin.transform(
+      "const count = { value: 1 }; export const App = () => <p>{count.value}</p>;",
+      "/project/src/App.tsx",
+    );
+
+    expect(output?.code).toContain('from "react-alien-signals"');
+    expect(output?.code).not.toContain('from "react-alien-signals/runtime"');
+    expect(output?.code).not.toContain("try {");
+  });
 });

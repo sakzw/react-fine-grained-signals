@@ -1,7 +1,12 @@
 import reactAlienSignals from "./unplugin.js";
 import type { ReactAlienSignalsOptions } from "./unplugin.js";
 
-export { canTransform, type ReactAlienSignalsMode, type ReactAlienSignalsOptions } from "./unplugin.js";
+export {
+  canTransform,
+  type ReactAlienSignalsMode,
+  type ReactAlienSignalsTransform,
+  type ReactAlienSignalsOptions,
+} from "./unplugin.js";
 
 /** The plugin contract consumed by esbuild. */
 export interface EsbuildPlugin {

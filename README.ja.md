@@ -73,13 +73,13 @@ function Counter({ step }: { step: number }) {
 
 ## 描画最適化
 
-このライブラリには、目的の異なる二つの最適化経路があります。通常は**pluginなし**で始められます。`unplugin` は `useSignals()` の書き方を保ったまま、追跡境界を厳密にし、自動適用を選びたい場合だけ追加してください。
+このライブラリには、目的の異なる二つの最適化経路があります。通常は**pluginなし**で始められます。`unplugin` は `useSignals()` の書き方を保ったまま自動挿入したい場合に追加し、厳密な追跡境界は必要なときだけ上級オプションで有効にします。
 
 | 選択肢 | 更新時に起こること | 向いている場面 |
 | --- | --- | --- |
 | `useSignals()`（pluginなし） | 読んだsignalが変わったコンポーネントだけをReactが再レンダーする | 明示的でVueに近い書き味を保ちたい通常のコンポーネント |
 | JSX signal子要素／許可済みhost prop（pluginなし） | 親を再レンダーせず、該当DOMリーフだけを書き換える | テキスト、`title`、`data-*` など頻繁に変わる小さな表示 |
-| `unplugin-react-alien-signals` | 上記の追跡を正確なレンダー境界で管理し、必要なら自動挿入する | 大規模コードベースで手動呼び出しを減らす、Suspense境界を厳密にする場合 |
+| `unplugin-react-alien-signals` | 既定では `useSignals()` を自動挿入し、必要なら厳密なレンダー境界も使える | 大規模コードベースで手動呼び出しを減らす、Suspense境界を厳密にする場合 |
 
 ### Pluginなし: `useSignals()` によるコンポーネント単位の追跡
 
@@ -118,11 +118,11 @@ export function Field() {
 
 これは最も細かい描画最適化ですが、対応するのはネイティブ要素のsignal子要素と上記の許可済みpropsだけです。Reactコンポーネントのpropsや子要素にsignalを渡してもアンラップされません。
 
-### Pluginあり: 管理されたレンダー変換
+### Pluginあり: `useSignals()` の自動挿入
 
-任意で導入できる汎用ビルドpluginは、同期的に管理されるレンダースコープを作ります。Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。生成コードがreturn、エラー、Suspenseによるthrowのすべてで `try` / `finally` を使って追跡を閉じます。
+任意で導入できる汎用ビルドpluginは、Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。既定では対象の関数を検出し、最初のフックとして通常の `useSignals()` を挿入するだけです。制御フローを書き換えず、手書きの `useSignals()` と同じbest-effortな追跡境界を使えます。JSXランタイムのネイティブリーフ更新はpluginと独立して動作します。
 
-pluginは、signalの変化をReactの再レンダーなしにするものではありません。`useSignals()` で読んだ値の変化は引き続きコンポーネントの再レンダーを起こします。親の再レンダーまで避けたい小さな表示は、上のJSX signal子要素／host bindingを使います。pluginの役割は、`useSignals()` の追跡範囲を正確に保ち、モードに応じてその呼び出しを挿入することです。
+pluginは、signalの変化をReactの再レンダーなしにするものではありません。`useSignals()` で読んだ値の変化は引き続きコンポーネントの再レンダーを起こします。親の再レンダーまで避けたい小さな表示は、上のJSX signal子要素／host bindingを使います。pluginの既定の役割はモードに応じて `useSignals()` 呼び出しを挿入することで、厳密な追跡範囲は `transform: "managed"` を選んだときだけ使います。
 
 ```sh
 # 将来のパッケージ名です。まだnpmには公開していません。
@@ -147,12 +147,22 @@ export default defineConfig({
 - `"auto"`（既定）: さらに `.value` を読む名前付きJSXコンポーネントと、`.value` を読む名前付き `useX` custom hookを変換します。
 - `"all"`: さらにすべての名前付きJSXコンポーネントを変換します。静的検出から隠れるrender propやgetterがある場合に使います。
 
+`transform` で、対象にした関数の生成方法を選びます。
+
+- `"inject"`（既定）: `react-alien-signals` から通常の `useSignals` をimportし、最初のフックとして呼び出しを挿入します。`try` / `finally` を出力せず、既存の制御フローも書き換えません。
+- `"managed"`: `react-alien-signals/runtime` からimportし、厳密な `try` / `finally` スコープを出力します。Suspenseで中断されたレンダー、レンダー中のネストしたSSR、複数の並行rootをまたぐ正確な分離が必要な場合だけ選んでください。
+
+```ts
+// 厳密な管理境界が必要な箇所だけ、明示的に選びます。
+signals({ mode: "auto", transform: "managed" });
+```
+
 `@noUseSignals` は常に変換を無効にします。自動モードは宣言形式、arrow形式、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。class component、匿名default export、すでに変換済みのJSX、async/generator関数、namespace import、先頭以外または条件付きの `useSignals()` を持つコンポーネントは変更しません。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
 
 ## 実験的な制約
 
 - React 19以降が必要です。JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
-- managed transformを使わない場合、変換なしの `useSignals()` は管理されない簡易APIです。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。変換なしのモードでは、Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `unplugin-react-alien-signals` を使用してください。
+- 変換なしの `useSignals()` とplugin既定の `transform: "inject"` は、管理されない簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `unplugin-react-alien-signals` の `transform: "managed"` を使用してください。
 - 直接バインディングは `value`、`checked`、`style`、イベントハンドラ、SVG props、および許可リスト外のホストpropsをサポートしません。
 - 直接バインディングによる書き込みはReactスケジューラの外側で行われる、実験的な最適化です。
 - Reactコンポーネントのpropsや子要素へ渡したsignalはアンラップされません。直接バインディングはネイティブHTML要素にのみ適用されます。ただし、JSXランタイムが処理するsignal子要素は例外です。

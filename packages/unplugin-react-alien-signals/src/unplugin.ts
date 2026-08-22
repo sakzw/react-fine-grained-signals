@@ -2,10 +2,14 @@ import { createUnplugin } from "unplugin";
 import {
   transformReactAlienSignals,
   type ReactAlienSignalsMode,
+  type ReactAlienSignalsTransform,
   type InternalTransformResult,
 } from "./internal/transform.js";
 
-export type { ReactAlienSignalsMode } from "./internal/transform.js";
+export type {
+  ReactAlienSignalsMode,
+  ReactAlienSignalsTransform,
+} from "./internal/transform.js";
 
 export interface ReactAlienSignalsOptions {
   /**
@@ -14,6 +18,8 @@ export interface ReactAlienSignalsOptions {
    * do not statically expose a .value read.
    */
   mode?: ReactAlienSignalsMode;
+  /** `inject` (default) adds bare useSignals(); `managed` adds an exact try/finally boundary. */
+  transform?: ReactAlienSignalsTransform;
   /** Package that exports `useSignals` and its `/runtime` entry. */
   importSource?: string;
   /** Restrict transformation to matching source module identifiers. */
@@ -44,6 +50,7 @@ export const reactAlienSignals = createUnplugin<ReactAlienSignalsOptions>(
       return transformReactAlienSignals(code, id, {
         importSource: options.importSource ?? "react-alien-signals",
         mode: options.mode ?? "auto",
+        transform: options.transform ?? "inject",
       });
     },
   }),

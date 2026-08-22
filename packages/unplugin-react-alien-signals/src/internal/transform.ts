@@ -4,10 +4,12 @@ import * as t from "@babel/types";
 import type { TransformResult } from "unplugin";
 
 export type ReactAlienSignalsMode = "manual" | "auto" | "all";
+export type ReactAlienSignalsTransform = "inject" | "managed";
 
 export interface InternalTransformOptions {
   importSource: string;
   mode: ReactAlienSignalsMode;
+  transform: ReactAlienSignalsTransform;
 }
 
 export type InternalTransformResult = Exclude<TransformResult, string>;
@@ -195,12 +197,12 @@ function addRuntimeImport(
     : imports.at(-1)!.insertAfter(declaration);
   const inserted = insertedPaths[0];
   if (inserted === undefined || !inserted.isImportDeclaration()) {
-    throw new Error("Failed to insert the managed useSignals runtime import");
+    throw new Error("Failed to insert the useSignals import");
   }
   programPath.scope.registerDeclaration(inserted);
   const specifier = inserted.get("specifiers")[0];
   if (specifier === undefined || !specifier.isImportSpecifier()) {
-    throw new Error("Failed to register the managed useSignals runtime import");
+    throw new Error("Failed to register the useSignals import");
   }
   return { identifier: local, bindingPath: specifier };
 }
@@ -233,9 +235,10 @@ function shouldAutomaticallyTransform(
 
 const babelTransform = declare<InternalTransformOptions>((api, options) => {
   api.assertVersion(7);
-  const runtimeSource = `${options.importSource}/runtime`;
+  const managedRuntimeSource = `${options.importSource}/runtime`;
   let programPath: NodePath<t.Program>;
-  let runtimeImports: RuntimeImport[];
+  let managedRuntimeImports: RuntimeImport[];
+  let directImports: RuntimeImport[];
 
   const plugin: PluginObj = {
     name: "unplugin-react-alien-signals",
@@ -243,7 +246,8 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
       Program: {
         enter(path, state) {
           programPath = path;
-          runtimeImports = findRuntimeImports(path, runtimeSource);
+          managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource);
+          directImports = findRuntimeImports(path, options.importSource);
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
       },
@@ -260,6 +264,7 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
         const automatic = shouldAutomaticallyTransform(options.mode, path, inspection);
         if (!explicit && !annotated && !automatic) return;
         if (!explicit && inspection.hasUseSignalsCall) return;
+        if (options.transform === "inject" && explicit) return;
         if (path.node.async || path.node.generator) {
           if (!explicit && !annotated) return;
           throw path.buildCodeFrameError(
@@ -267,13 +272,37 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
           );
         }
 
-        let runtimeImport = runtimeImports.find(({ identifier, bindingPath }) =>
+        const importSource = options.transform === "managed"
+          ? managedRuntimeSource
+          : options.importSource;
+        const imports = options.transform === "managed" ? managedRuntimeImports : directImports;
+        let runtimeImport = imports.find(({ identifier, bindingPath }) =>
           path.scope.getBinding(identifier.name)?.path === bindingPath
         );
         if (runtimeImport === undefined) {
-          runtimeImport = addRuntimeImport(programPath, runtimeSource, path);
-          runtimeImports.push(runtimeImport);
+          runtimeImport = addRuntimeImport(programPath, importSource, path);
+          imports.push(runtimeImport);
         }
+
+        if (options.transform === "inject") {
+          const call = t.expressionStatement(
+            t.callExpression(t.cloneNode(runtimeImport.identifier), []),
+          );
+          if (body.isBlockStatement()) {
+            body.unshiftContainer("body", call);
+          } else {
+            body.replaceWith(
+              t.blockStatement([
+                call,
+                t.returnStatement(body.node as t.Expression),
+              ]),
+            );
+          }
+          path.scope.crawl();
+          (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
+          return;
+        }
+
         const store = path.scope.generateUidIdentifier("signals");
         const declaration = t.variableDeclaration("const", [
           t.variableDeclarator(
