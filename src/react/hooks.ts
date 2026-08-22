@@ -7,6 +7,7 @@ import {
 } from "react";
 import { computed, deepSignal, effect, signal } from "../core/index.js";
 import type { DeepSignal, ReadonlySignal, Signal } from "../core/index.js";
+import { untrackedRender } from "../core/render-tracking.js";
 import type { DependencyList } from "react";
 export { useSignals } from "./use-signals.js";
 
@@ -115,11 +116,20 @@ export function useComputed<T>(
 /**
  * Runs a reactive effect after this component has committed, disposing it when
  * the component unmounts (and during React Strict Mode's development replay).
+ *
+ * When `dependencies` is omitted, the callback must only capture signals. Its
+ * initial closure is retained for the component lifetime, so unrelated React
+ * renders do not restart the effect.
+ *
+ * When the callback captures props, state, or any other non-signal value, list
+ * all of those values in `dependencies`. The effect is then reconnected after
+ * those dependencies change. Choose one mode for a component's lifetime.
  */
 export function useSignalEffect(
   callback: () => void | (() => void),
+  dependencies?: DependencyList,
 ): void {
-  useReactEffect(() => effect(callback), [callback]);
+  useReactEffect(() => effect(callback), dependencies ?? EMPTY_DEPENDENCIES);
 }
 
 /**
@@ -146,7 +156,13 @@ export function useSignalValue<T>(source: ReadonlySignal<T>): T {
     [source],
   );
 
-  const getSnapshot = useCallback(() => source.value, [source]);
+  // A leaf subscription owns this read. An unmanaged useSignals() scope may
+  // still be open for an ancestor or earlier sibling until React commits, so
+  // do not also register the source with that component's render collector.
+  const getSnapshot = useCallback(
+    () => untrackedRender(() => source.value),
+    [source],
+  );
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

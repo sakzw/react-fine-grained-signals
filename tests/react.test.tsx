@@ -251,6 +251,60 @@ describe("React bindings", () => {
     expect(leafRenders).toHaveBeenCalledTimes(2);
   });
 
+  it("does not add an explicit leaf subscription to an ancestor useSignals scope", () => {
+    const parentSource = signal("parent");
+    const leafSource = signal("before");
+    const parentRenders = vi.fn();
+    const leafRenders = vi.fn();
+
+    function Leaf() {
+      leafRenders();
+      return <span>{useSignalValue(leafSource)}</span>;
+    }
+
+    function Parent() {
+      useSignals();
+      parentRenders();
+      return <section data-parent={parentSource.value}><Leaf /></section>;
+    }
+
+    render(<Parent />);
+    act(() => {
+      leafSource.value = "after";
+    });
+
+    expect(screen.getByText("after")).toBeTruthy();
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+    expect(leafRenders).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not add a selected deep leaf to an ancestor useSignals scope", () => {
+    const parentSource = signal("parent");
+    const state = deepSignal({ user: { name: "Ada" } });
+    const parentRenders = vi.fn();
+    const leafRenders = vi.fn();
+
+    function Leaf() {
+      leafRenders();
+      return <span>{useDeepSignalValue(state, (value) => value.user.name, [])}</span>;
+    }
+
+    function Parent() {
+      useSignals();
+      parentRenders();
+      return <section data-parent={parentSource.value}><Leaf /></section>;
+    }
+
+    render(<Parent />);
+    act(() => {
+      state.value.user.name = "Grace";
+    });
+
+    expect(screen.getByText("Grace")).toBeTruthy();
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+    expect(leafRenders).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps a useDeepSignal identity stable while nested state updates", () => {
     let source: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
     const renders = vi.fn();
@@ -613,6 +667,62 @@ describe("React bindings", () => {
       source.value = 2;
     });
     expect(seen).toHaveLength(runsAfterUnmount);
+  });
+
+  it("does not restart an inline useSignalEffect after an unrelated render", () => {
+    const source = signal(0);
+    const setups = vi.fn();
+    const cleanups = vi.fn();
+
+    function Observer({ label }: { label: string }) {
+      useSignalEffect(() => {
+        source.value;
+        setups(label);
+        return cleanups;
+      });
+      return <span>{label}</span>;
+    }
+
+    const view = render(<Observer label="first" />);
+    view.rerender(<Observer label="second" />);
+
+    expect(setups).toHaveBeenCalledTimes(1);
+    expect(setups).toHaveBeenLastCalledWith("first");
+    expect(cleanups).not.toHaveBeenCalled();
+
+    act(() => {
+      source.value = 1;
+    });
+    expect(setups).toHaveBeenCalledTimes(2);
+    expect(setups).toHaveBeenLastCalledWith("first");
+  });
+
+  it("reconnects useSignalEffect when an explicit React dependency changes", () => {
+    const source = signal(0);
+    const setups = vi.fn();
+    const cleanups = vi.fn();
+
+    function Observer({ label }: { label: string }) {
+      useSignalEffect(() => {
+        source.value;
+        setups(label);
+        return () => cleanups(label);
+      }, [label]);
+      return null;
+    }
+
+    const view = render(<Observer label="first" />);
+    view.rerender(<Observer label="second" />);
+
+    expect(setups).toHaveBeenCalledTimes(2);
+    expect(setups).toHaveBeenLastCalledWith("second");
+    expect(cleanups).toHaveBeenCalledWith("first");
+
+    act(() => {
+      source.value = 1;
+    });
+    expect(setups).toHaveBeenCalledTimes(3);
+    expect(setups).toHaveBeenLastCalledWith("second");
   });
 
   it("binds a signal directly to host DOM props", () => {
