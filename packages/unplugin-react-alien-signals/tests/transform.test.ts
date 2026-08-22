@@ -120,6 +120,50 @@ describe("managed render transform", () => {
     expect(output).toContain("const RefCounter = forwardRef((props, ref) => {");
   });
 
+  it.each(["auto", "all"] as const)(
+    "transforms named default-export memo and forwardRef components in %s mode",
+    (mode) => {
+      const memoOutput = compile(`
+          import { memo } from "react";
+          const count = { value: 1 };
+          export default memo(function Inner() { return <p>{count.value}</p>; });
+        `, mode);
+      const forwardRefOutput = compile(`
+          import { forwardRef } from "react";
+          const count = { value: 1 };
+          export default forwardRef(function Inner(props, ref) {
+            return <p ref={ref}>{count.value}</p>;
+          });
+        `, mode);
+
+      expect(memoOutput).toContain("memo(function Inner() {");
+      expect(memoOutput).toContain("finally {");
+      expect(forwardRefOutput).toContain("forwardRef(function Inner(props, ref) {");
+      expect(forwardRefOutput).toContain("finally {");
+    },
+  );
+
+  it.each(["auto", "all"] as const)(
+    "does not transform anonymous default-export wrappers in %s mode",
+    (mode) => {
+      const memoOutput = compile(`
+          import { memo } from "react";
+          const count = { value: 1 };
+          export default memo(() => <p>{count.value}</p>);
+        `, mode);
+      const forwardRefOutput = compile(`
+          import { forwardRef } from "react";
+          const count = { value: 1 };
+          export default forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
+        `, mode);
+
+      expect(memoOutput).not.toContain("finally {");
+      expect(memoOutput).not.toContain('from "react-alien-signals/runtime"');
+      expect(forwardRefOutput).not.toContain("finally {");
+      expect(forwardRefOutput).not.toContain('from "react-alien-signals/runtime"');
+    },
+  );
+
   it("supports comment opt-in on a wrapped named component", () => {
     const output = compile(`
       import { memo } from "react";

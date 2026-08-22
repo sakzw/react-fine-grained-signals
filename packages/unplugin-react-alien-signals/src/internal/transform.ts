@@ -179,7 +179,11 @@ function isAutomaticTransformCandidate(path: NodePath<t.Function>): boolean {
   while (parent.isCallExpression() && isKnownComponentWrapper(parent)) {
     parent = parent.parentPath;
   }
-  return parent.isVariableDeclarator() || parent.isReturnStatement();
+  return (
+    parent.isVariableDeclarator() ||
+    parent.isReturnStatement() ||
+    parent.isExportDefaultDeclaration()
+  );
 }
 
 function isNestedTrackingBoundary(path: NodePath<t.Function>): boolean {

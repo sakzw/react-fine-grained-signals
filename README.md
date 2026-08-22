@@ -262,7 +262,7 @@ subscription.
 
 ## Development
 
-Workspace development uses Node.js 22.22.2, pnpm 11, and React 19 or newer. The private root manifest accepts Node.js `^22.22.2`, `^24.15.0`, or `>=26.0.0`, matching the current `jsdom` development dependency; `.node-version` and CI use the lowest accepted release. This is a repository-tooling guard while the package is private, not a public runtime compatibility claim. Before publication, the distributed package's Node.js runtime floor must be tested separately and must not inherit the stricter test/build-tool requirement by accident.
+Workspace development uses Node.js 24.19.0, pnpm 11, and React 19 or newer. The private root manifest accepts Node.js `^24.19.0`; `.node-version` is the current Node 24 LTS patch and CI reads that file directly. This is a repository-tooling guard while the package is private, not a public runtime compatibility claim. Before publication, the distributed package's Node.js runtime floor must be tested separately and must not inherit the stricter test/build-tool requirement by accident.
 
 ```sh
 pnpm install --frozen-lockfile

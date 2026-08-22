@@ -228,7 +228,7 @@ export function Panel() {
 
 ## 開発
 
-workspaceの開発にはNode.js 22.22.2、pnpm 11、React 19以降を使用します。privateなroot manifestは、現在の開発依存である `jsdom` に合わせてNode.js `^22.22.2`、`^24.15.0`、または `>=26.0.0` を許可し、`.node-version` とCIは許可範囲の最小versionを使います。これはpackageがprivateな間のrepository tooling向けguardであり、公開runtimeの互換性を示すものではありません。公開前には配布packageのNode.js下限を別途検証し、test/build toolの厳しい要件を誤って引き継がないようにします。
+workspaceの開発にはNode.js 24.19.0、pnpm 11、React 19以降を使用します。privateなroot manifestはNode.js `^24.19.0` を許可し、`.node-version` にはNode 24 LTSの最新patchを記載しています。CIもこのファイルを直接読みます。これはpackageがprivateな間のrepository tooling向けguardであり、公開runtimeの互換性を示すものではありません。公開前には配布packageのNode.js下限を別途検証し、test/build toolの厳しい要件を誤って引き継がないようにします。
 
 ```sh
 pnpm install --frozen-lockfile
