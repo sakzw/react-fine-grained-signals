@@ -73,23 +73,67 @@ function assertDataProperties(value: object): void {
 
 function assertDeepDataGraph(value: unknown): boolean {
   if (typeof value !== "object" || value === null) return false;
-  const seen = new WeakSet<object>();
-  const pending: object[] = [value];
+  // A value can be reachable both as reactive plain data and through an opaque
+  // collection. Keep those traversals distinct: a proxy under Map/Set cannot be
+  // unwrapped without changing the collection, so it must be rejected instead.
+  const seen = new WeakMap<object, number>();
+  const pending: Array<{ value: object; insideCollection: boolean }> = [
+    { value, insideCollection: false },
+  ];
   let containsProxy = false;
 
   while (pending.length > 0) {
-    const current = pending.pop() as object;
-    const raw = proxyToRaw.get(current) ?? current;
-    if (raw !== current) containsProxy = true;
-    if (!isPlainObjectOrArray(raw) || seen.has(raw)) continue;
-    seen.add(raw);
-    assertExtensible(raw);
-    assertDataProperties(raw);
+    const { value: current, insideCollection } = pending.pop() as {
+      value: object;
+      insideCollection: boolean;
+    };
+    const directRaw = proxyToRaw.get(current);
+    if (directRaw !== undefined) {
+      if (insideCollection) {
+        throw new TypeError(
+          "deepSignal() cannot store a deep proxy inside a Map or Set",
+        );
+      }
+      containsProxy = true;
+    }
+    const raw = directRaw ?? current;
+    const visitedAs = seen.get(raw) ?? 0;
+    const visitFlag = insideCollection ? 2 : 1;
+    if ((visitedAs & visitFlag) !== 0) continue;
+    seen.set(raw, visitedAs | visitFlag);
+
+    if (raw instanceof Map) {
+      for (const [key, entry] of raw) {
+        if (typeof key === "object" && key !== null) {
+          pending.push({ value: key, insideCollection: true });
+        }
+        if (typeof entry === "object" && entry !== null) {
+          pending.push({ value: entry, insideCollection: true });
+        }
+      }
+      continue;
+    }
+    if (raw instanceof Set) {
+      for (const entry of raw) {
+        if (typeof entry === "object" && entry !== null) {
+          pending.push({ value: entry, insideCollection: true });
+        }
+      }
+      continue;
+    }
+    if (!isPlainObjectOrArray(raw)) continue;
+
+    if (!insideCollection) {
+      assertExtensible(raw);
+      assertDataProperties(raw);
+    }
     for (const key of Reflect.ownKeys(raw)) {
       const descriptor = Reflect.getOwnPropertyDescriptor(raw, key);
       if (descriptor !== undefined && "value" in descriptor) {
         const child = descriptor.value;
-        if (typeof child === "object" && child !== null) pending.push(child);
+        if (typeof child === "object" && child !== null) {
+          pending.push({ value: child, insideCollection });
+        }
       }
     }
   }
@@ -227,6 +271,12 @@ function cloneWithoutProxies<T>(value: T): T {
 }
 
 function prepareDeepValue<T>(value: T): T {
+  if (typeof value === "object" && value !== null) {
+    const directRaw = proxyToRaw.get(value);
+    // Reassigning a value obtained from this deep signal is already known-good.
+    // Avoid validating its entire graph again on this common O(1) path.
+    if (directRaw !== undefined) return directRaw as T;
+  }
   const containsProxy = assertDeepDataGraph(value);
   return containsProxy ? cloneWithoutProxies(value) : value;
 }

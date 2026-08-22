@@ -170,6 +170,67 @@ describe("deepSignal", () => {
     expect(runs).toBe(1);
   });
 
+  it("rejects deep proxies inside Map and Set assignments atomically", () => {
+    const state = deepSignal({
+      source: { count: 1 },
+      map: new Map<string | object, unknown>(),
+      set: new Set<unknown>(),
+      carrier: undefined as { collection: Map<unknown, unknown> } | undefined,
+    });
+    const source = state.value.source;
+    const mapWithProxyKey = new Map([[source, "value"]]);
+    const mapWithProxyValue = new Map([["source", source]]);
+    const setWithProxy = new Set([source]);
+    const nestedCarrier = { collection: new Map([["source", source]]) };
+
+    expect(() => {
+      state.value.map = mapWithProxyKey;
+    }).toThrow(TypeError);
+    expect(() => {
+      state.value.map = mapWithProxyValue;
+    }).toThrow(TypeError);
+    expect(() => {
+      state.value.set = setWithProxy;
+    }).toThrow(TypeError);
+    expect(() => {
+      state.value.carrier = nestedCarrier;
+    }).toThrow(TypeError);
+    expect(() => {
+      state.value = {
+        source: { count: 2 },
+        map: mapWithProxyValue,
+        set: new Set(),
+        carrier: undefined,
+      };
+    }).toThrow(TypeError);
+    expect(() => deepSignal({ map: mapWithProxyValue })).toThrow(TypeError);
+
+    expect(state.peek().map.size).toBe(0);
+    expect(state.peek().set.size).toBe(0);
+    expect(state.peek().carrier).toBeUndefined();
+    expect(() => structuredClone(state.peek())).not.toThrow();
+  });
+
+  it("does not rescan a direct deep proxy assignment", () => {
+    let ownKeyReads = 0;
+    const nested = new Proxy(
+      { items: Array.from({ length: 4_000 }, (_, index) => ({ index })) },
+      {
+        ownKeys(target) {
+          ownKeyReads++;
+          return Reflect.ownKeys(target);
+        },
+      },
+    );
+    const state = deepSignal({ nested });
+    const direct = state.value.nested;
+    ownKeyReads = 0;
+
+    state.value.nested = direct;
+
+    expect(ownKeyReads).toBe(0);
+  });
+
   it("does not rescan a deep graph when reading value", () => {
     let ownKeyReads = 0;
     const raw = new Proxy(
