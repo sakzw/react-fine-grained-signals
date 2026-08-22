@@ -7,9 +7,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx, jsxs } from "../src/jsx-runtime.js";
 import { jsxDEV } from "../src/jsx-dev-runtime.js";
 import {
+  deepSignal,
   signal,
   useComputed,
   useDeepSignal,
+  useDeepSignalValue,
   useSignal,
   useSignalValue,
   useSignalEffect,
@@ -145,6 +147,220 @@ describe("React bindings", () => {
     );
     expect(source).toBe(committedSource);
     expect(screen.getByLabelText("strict deep name").textContent).toBe("2:Grace");
+  });
+
+  it("rerenders a selected deep leaf while isolating sibling writes", () => {
+    let state: ReturnType<typeof useDeepSignal<{ user: { name: string; age: number } }>> | undefined;
+    const renders = vi.fn();
+
+    function Name() {
+      state = useDeepSignal({ user: { name: "Ada", age: 36 } });
+      const name = useDeepSignalValue(state, (value) => value.user.name, []);
+      renders();
+      return <output aria-label="selected name">{name}</output>;
+    }
+
+    render(<Name />);
+    act(() => {
+      state!.value.user.age = 37;
+    });
+    expect(renders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      state!.value.user.name = "Grace";
+    });
+    expect(screen.getByLabelText("selected name").textContent).toBe("Grace");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("reconnects a selected deep leaf after its parent object is replaced", () => {
+    let state: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
+
+    function Name() {
+      state = useDeepSignal({ user: { name: "Ada" } });
+      return <output aria-label="replacement name">{
+        useDeepSignalValue(state, (value) => value.user.name, [])
+      }</output>;
+    }
+
+    render(<Name />);
+    act(() => {
+      state!.value.user = { name: "Grace" };
+      state!.value.user.name = "Lin";
+    });
+    expect(screen.getByLabelText("replacement name").textContent).toBe("Lin");
+  });
+
+  it("reconnects a selected deep leaf after the root is replaced", () => {
+    const state = deepSignal({ user: { name: "Ada" } });
+
+    function Name() {
+      const name = useDeepSignalValue(state, (value) => value.user.name, []);
+      return <output aria-label="root replacement name">{name}</output>;
+    }
+
+    render(<Name />);
+    act(() => {
+      state.value = { user: { name: "Grace" } };
+      state.value.user.name = "Lin";
+    });
+    expect(screen.getByLabelText("root replacement name").textContent).toBe("Lin");
+  });
+
+  it("switches subscriptions when its deep state prop changes", () => {
+    const first = deepSignal({ user: { name: "Ada" } });
+    const second = deepSignal({ user: { name: "Grace" } });
+
+    function Name({ state }: { state: typeof first }) {
+      return <output aria-label="state prop name">{
+        useDeepSignalValue(state, (value) => value.user.name, [])
+      }</output>;
+    }
+
+    const view = render(<Name state={first} />);
+    view.rerender(<Name state={second} />);
+    expect(screen.getByLabelText("state prop name").textContent).toBe("Grace");
+
+    act(() => {
+      first.value.user.name = "ignored";
+    });
+    expect(screen.getByLabelText("state prop name").textContent).toBe("Grace");
+    act(() => {
+      second.value.user.name = "Lin";
+    });
+    expect(screen.getByLabelText("state prop name").textContent).toBe("Lin");
+  });
+
+  it("updates a selector that captures a prop when dependencies change", () => {
+    function Label({ prefix }: { prefix: string }) {
+      const state = useDeepSignal({ user: { name: "Ada" } });
+      const label = useDeepSignalValue(state, (value) => `${prefix}: ${value.user.name}`, [prefix]);
+      return <output aria-label="captured prop label">{label}</output>;
+    }
+
+    const view = render(<Label prefix="User" />);
+    view.rerender(<Label prefix="Member" />);
+    expect(screen.getByLabelText("captured prop label").textContent).toBe("Member: Ada");
+  });
+
+  it("switches dynamic selector dependencies without retaining the old branch", () => {
+    const state = deepSignal({ useFirst: true, first: "A", second: "B" });
+    const renders = vi.fn();
+
+    function Selected() {
+      const value = useDeepSignalValue(
+        state,
+        (current) => current.useFirst ? current.first : current.second,
+        [],
+      );
+      renders();
+      return <output aria-label="dynamic selection">{value}</output>;
+    }
+
+    render(<Selected />);
+    act(() => {
+      state.value.first = "A2";
+    });
+    expect(screen.getByLabelText("dynamic selection").textContent).toBe("A2");
+
+    act(() => {
+      state.value.useFirst = false;
+    });
+    expect(screen.getByLabelText("dynamic selection").textContent).toBe("B");
+    const rendersAfterSwitch = renders.mock.calls.length;
+
+    act(() => {
+      state.value.first = "ignored";
+    });
+    expect(renders).toHaveBeenCalledTimes(rendersAfterSwitch);
+    act(() => {
+      state.value.second = "B2";
+    });
+    expect(screen.getByLabelText("dynamic selection").textContent).toBe("B2");
+    expect(renders).toHaveBeenCalledTimes(rendersAfterSwitch + 1);
+  });
+
+  it("compares selected snapshots with Object.is semantics", () => {
+    const state = deepSignal({ value: 0 });
+    const renders = vi.fn();
+
+    function Selected() {
+      const value = useDeepSignalValue(state, (current) => current.value, []);
+      renders(value);
+      const label = Number.isNaN(value) ? "NaN" : Object.is(value, -0) ? "-0" : String(value);
+      return <output aria-label="object is selection">{label}</output>;
+    }
+
+    render(<Selected />);
+    act(() => {
+      state.value.value = 0;
+    });
+    expect(renders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      state.value.value = -0;
+    });
+    expect(screen.getByLabelText("object is selection").textContent).toBe("-0");
+    expect(renders).toHaveBeenCalledTimes(2);
+
+    act(() => {
+      state.value.value = Number.NaN;
+    });
+    expect(screen.getByLabelText("object is selection").textContent).toBe("NaN");
+    expect(renders).toHaveBeenCalledTimes(3);
+    act(() => {
+      state.value.value = Number.NaN;
+    });
+    expect(renders).toHaveBeenCalledTimes(3);
+  });
+
+  it("keeps subscribing after selector dependencies change", () => {
+    const state = deepSignal({ count: 1 });
+
+    function Product({ multiplier }: { multiplier: number }) {
+      const product = useDeepSignalValue(
+        state,
+        (current) => current.count * multiplier,
+        [multiplier],
+      );
+      return <output aria-label="selected product">{product}</output>;
+    }
+
+    const view = render(<Product multiplier={1} />);
+    view.rerender(<Product multiplier={2} />);
+    expect(screen.getByLabelText("selected product").textContent).toBe("2");
+    act(() => {
+      state.value.count = 2;
+    });
+    expect(screen.getByLabelText("selected product").textContent).toBe("4");
+  });
+
+  it("cleans a selected deep subscription during StrictMode unmount", () => {
+    const state = deepSignal({ user: { name: "Ada" } });
+    const renders = vi.fn();
+
+    function Name() {
+      const name = useDeepSignalValue(state, (value) => value.user.name, []);
+      renders();
+      return <output aria-label="strict selected name">{name}</output>;
+    }
+
+    const view = render(
+      <StrictMode>
+        <Name />
+      </StrictMode>,
+    );
+    act(() => {
+      state.value.user.name = "Grace";
+    });
+    expect(screen.getByLabelText("strict selected name").textContent).toBe("Grace");
+
+    view.unmount();
+    const rendersAtUnmount = renders.mock.calls.length;
+    act(() => {
+      state.value.user.name = "Grace";
+    });
+    expect(renders).toHaveBeenCalledTimes(rendersAtUnmount);
   });
 
   it("exposes useComputed to an explicit leaf hook", () => {

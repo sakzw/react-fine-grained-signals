@@ -11,6 +11,16 @@ import type { DependencyList } from "react";
 
 const EMPTY_DEPENDENCIES: DependencyList = [];
 
+/** An immutable value that React can safely compare as an external-store snapshot. */
+export type SignalSnapshot =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined;
+
 /** Creates a signal whose identity is stable for the lifetime of this component. */
 export function useSignal<T>(initialValue: T): Signal<T> {
   const signalRef = useRef<Signal<T> | undefined>(undefined);
@@ -39,6 +49,28 @@ export function useDeepSignal<T extends object>(
   }
 
   return signalRef.current;
+}
+
+/**
+ * Selects a property-level primitive snapshot from a deep signal.
+ *
+ * Every non-signal value captured by `selector` must be listed in
+ * `dependencies`. Object and proxy results are intentionally rejected because
+ * mutable snapshots cannot satisfy `useSyncExternalStore` identity semantics.
+ */
+export function useDeepSignalValue<
+  T extends object,
+  S extends SignalSnapshot,
+>(
+  source: DeepSignal<T>,
+  selector: (value: T) => S,
+  dependencies: DependencyList,
+): S {
+  const selected = useComputed(
+    () => selector(source.value),
+    [source, ...dependencies],
+  );
+  return useSignalValue(selected);
 }
 
 /**

@@ -47,7 +47,7 @@ Only assignment, deletion, and standard array mutations made through `state.valu
 ## React hooks
 
 ```tsx
-import { useComputed, useDeepSignal, useSignal, useSignalEffect, useSignalValue } from "react-alien-signals";
+import { useComputed, useDeepSignal, useDeepSignalValue, useSignal, useSignalEffect, useSignalValue } from "react-alien-signals";
 
 function Counter({ step }: { step: number }) {
   const count = useSignal(0);
@@ -62,7 +62,7 @@ function Counter({ step }: { step: number }) {
 }
 ```
 
-`useSignal` and `useDeepSignal` keep one signal for the component lifetime. For expensive deep initial values, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`. The hook creates state only; reading `state.value` during render does not implicitly subscribe React. Use `useComputed` plus `useSignalValue` to expose a selected primitive value. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay).
+`useSignal` and `useDeepSignal` keep one signal for the component lifetime. For expensive deep initial values, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`. The hook creates state only; reading `state.value` during render does not implicitly subscribe React. Use `useDeepSignalValue(state, value => value.user.name, [])` for a property-level React subscription. Its dependency array is required, must keep a constant length and order, and must list every non-signal value captured by the selector. Selectors return primitive snapshots only; mutable object or Proxy snapshots are intentionally rejected. `useSignalEffect` starts its effect after commit and disposes it during unmount (including Strict Mode replay).
 
 `useComputed` has two modes:
 
@@ -99,7 +99,7 @@ export function Field() {
 ## Experimental constraints
 
 - React 19 or newer is required. The JSX runtime uses callback-ref cleanup, which is unavailable in React 18.
-- `useSignals()` with no arguments is not implemented.
+- `useSignals()` with no arguments is not implemented because React's public APIs provide no safe render-end boundary for closing automatic dependency tracking without a transform or React internals. Use `useSignalValue` or `useDeepSignalValue` for explicit subscriptions.
 - Direct binding does not support `value`, `checked`, `style`, event handlers, SVG props, or other host props outside the allowlist.
 - Direct binding writes outside the React scheduler and remains an experimental optimization.
 - Signals passed to React component props or component children are not unwrapped. The direct-binding behavior applies only to native HTML elements (and signal children handled by the JSX runtime).

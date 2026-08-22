@@ -9,6 +9,7 @@ import {
   signal,
   useComputed,
   useDeepSignal,
+  useDeepSignalValue,
   useSignalValue,
   type DeepSignal,
 } from "../src/index.js";
@@ -57,7 +58,7 @@ describe("SSR and hydration", () => {
 
     function App() {
       const state = useDeepSignal(() => ({ user: { name: "Ada" } }));
-      const name = useSignalValue(useComputed(() => state.value.user.name));
+      const name = useDeepSignalValue(state, (value) => value.user.name, []);
       clientState = state;
       return <span data-testid="deep-value">{name}</span>;
     }
