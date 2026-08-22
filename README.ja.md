@@ -161,7 +161,7 @@ export default defineConfig({
 
 ## 開発
 
-Node.js 22.12以降、pnpm 11、React 19以降が必要です。
+開発にはNode.js 22.18以降、pnpm 11、React 19以降が必要です。Node.jsの下限はビルドツールの `tsdown` によるもので、ビルド済みライブラリの実行環境要件を引き上げるものではありません。
 
 ```sh
 pnpm install --frozen-lockfile

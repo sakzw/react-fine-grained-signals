@@ -190,7 +190,7 @@ export function Field() {
 
 ## Development
 
-Requires Node.js 22.12 or newer, pnpm 11, and React 19 or newer.
+Development requires Node.js 22.18 or newer, pnpm 11, and React 19 or newer. The higher Node.js baseline comes from the `tsdown` build tool; it does not change the runtime requirements of the bundled library.
 
 ```sh
 pnpm install --frozen-lockfile
