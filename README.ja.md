@@ -75,43 +75,32 @@ function Counter({ step }: { step: number }) {
 
 ### 管理されたレンダー変換
 
-任意で導入できるBabel pluginは、先頭文として明示した `useSignals()` 呼び出しを、同期的に管理されるレンダースコープへ変換します。コンポーネント側のAPIはそのままに、生成コードがreturn、エラー、Suspenseによるthrowのすべてで `try` / `finally` を使って追跡を閉じます。
+任意で導入できる汎用ビルドpluginは、同期的に管理されるレンダースコープを作ります。Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。生成コードがreturn、エラー、Suspenseによるthrowのすべてで `try` / `finally` を使って追跡を閉じます。
 
 ```sh
-pnpm add -D @babel/core babel-plugin-react-alien-signals
-```
-
-```js
-// babel.config.cjs
-module.exports = {
-  plugins: ["babel-plugin-react-alien-signals"],
-};
-```
-
-変換対象は、importした `useSignals()` が先頭文にある同期的な非generator関数だけです。明示的な呼び出しがない関数は変更しません。別名importはサポートしますが、namespace importはサポートしません。
-
-Vite 8では、公式のRolldown Babel bridgeを通してpluginを実行できます。
-
-```sh
-pnpm add -D @rolldown/plugin-babel @vitejs/plugin-react
+# 将来のパッケージ名です。まだnpmには公開していません。
+pnpm add -D unplugin-react-alien-signals
 ```
 
 ```ts
 // vite.config.ts
-import babel from "@rolldown/plugin-babel";
-import react from "@vitejs/plugin-react";
 import { defineConfig } from "vite";
+import signals from "unplugin-react-alien-signals/vite";
 
 export default defineConfig({
-  plugins: [
-    react(),
-    babel({
-      include: [/\.[cm]?[jt]sx?$/],
-      plugins: ["babel-plugin-react-alien-signals"],
-    }),
-  ],
+  plugins: [signals({ mode: "auto" })],
 });
 ```
+
+同じパッケージは `/rollup`、`/webpack`、`/rspack`、`/esbuild` のentry pointも提供します。現在はprivateなworkspace packageであり、npmには公開していません。導入・設定例は将来の公開APIを示すものです。
+
+`mode` でコンポーネントを追跡対象にする方法を選びます。
+
+- `"manual"`: 先頭文にあるimport済みの `useSignals()`、または `@useSignals` を付けた名前付きコンポーネント／custom hookだけを変換します。明示的なライブライブラリの書き味を維持します。
+- `"auto"`（既定）: さらに `.value` を読む名前付きJSXコンポーネントと、`.value` を読む名前付き `useX` custom hookを変換します。
+- `"all"`: さらにすべての名前付きJSXコンポーネントを変換します。静的検出から隠れるrender propやgetterがある場合に使います。
+
+`@noUseSignals` は常に変換を無効にします。自動モードは宣言形式とarrow形式のコンポーネントを対象にし、class component、匿名default export、すでに変換済みのJSX、async/generator関数、namespace import、先頭以外または条件付きの `useSignals()` を持つコンポーネントは変更しません。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
 
 ## JSXのsignal子要素とホストバインディング
 
@@ -143,7 +132,7 @@ export function Field() {
 ## 実験的な制約
 
 - React 19以降が必要です。JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
-- managed transformを使わない場合、変換なしの `useSignals()` は管理されない簡易APIです。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。変換なしのモードでは、Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `babel-plugin-react-alien-signals` を使用してください。
+- managed transformを使わない場合、変換なしの `useSignals()` は管理されない簡易APIです。追跡は次の `useSignals()` 呼び出し時、または現在のmicrotask終了後に閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。変換なしのモードでは、Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `unplugin-react-alien-signals` を使用してください。
 - 直接バインディングは `value`、`checked`、`style`、イベントハンドラ、SVG props、および許可リスト外のホストpropsをサポートしません。
 - 直接バインディングによる書き込みはReactスケジューラの外側で行われる、実験的な最適化です。
 - Reactコンポーネントのpropsや子要素へ渡したsignalはアンラップされません。直接バインディングはネイティブHTML要素にのみ適用されます。ただし、JSXランタイムが処理するsignal子要素は例外です。

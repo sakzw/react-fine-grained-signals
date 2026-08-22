@@ -220,4 +220,25 @@ describe("managed useSignals render scope", () => {
     expect(screen.getByLabelText("managed computed race").textContent).toBe("4");
     expect(renders).toHaveBeenCalledTimes(2);
   });
+
+  it("tracks signal reads made by a managed custom hook in its parent JSX", () => {
+    const source = signal("before");
+
+    function useManagedValue() {
+      return managed(() => source.value);
+    }
+
+    function Parent() {
+      return <output aria-label="managed custom hook">{useManagedValue()}</output>;
+    }
+
+    render(<Parent />);
+    expect(screen.getByLabelText("managed custom hook").textContent).toBe("before");
+
+    act(() => {
+      source.value = "after";
+    });
+
+    expect(screen.getByLabelText("managed custom hook").textContent).toBe("after");
+  });
 });

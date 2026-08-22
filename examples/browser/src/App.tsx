@@ -3,7 +3,6 @@
 import { StrictMode, useEffect, useRef, useState } from "react";
 import {
   isSignal,
-  useSignals,
   type ReadonlySignal,
   type Signal,
 } from "react-alien-signals";
@@ -24,7 +23,6 @@ function CustomSignalConsumer({
 }: {
   source: ReadonlySignal<string>;
 }) {
-  useSignals();
   return (
     <output
       id="custom-value"
