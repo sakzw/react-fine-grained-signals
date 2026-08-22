@@ -37,7 +37,7 @@
     "build": "pnpm build:runtime && pnpm build:transform",
     "build:runtime": "tsdown",
     "build:transform": "pnpm --filter unplugin-react-alien-signals build",
-    "dev:browser": "node --import tsx examples/browser/server.mjs",
+    "dev:browser": "pnpm build:transform && node examples/browser/server.mjs",
     "typecheck": "pnpm typecheck:runtime && pnpm typecheck:transform",
     "typecheck:runtime": "tsc --noEmit",
     "typecheck:transform": "pnpm --filter unplugin-react-alien-signals typecheck",
@@ -63,7 +63,6 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "tsdown": "0.22.14",
-    "tsx": "^4.23.12",
     "typescript": "^7.0.2",
     "vite": "^8.2.2",
     "vitest": "^4.1.11"

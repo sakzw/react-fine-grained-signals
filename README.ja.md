@@ -238,7 +238,7 @@ pnpm exec playwright install --only-shell chromium
 pnpm test:browser
 ```
 
-同じサンプルを `http://127.0.0.1:4173` で確認するには、`pnpm dev:browser` を実行してください。
+同じサンプルを `http://127.0.0.1:4173` で確認するには、`pnpm dev:browser` を実行してください。このコマンドは最初に変換パッケージをビルドします。
 
 ## ベンチマーク
 

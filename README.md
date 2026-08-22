@@ -285,7 +285,7 @@ pnpm exec playwright install --only-shell chromium
 pnpm test:browser
 ```
 
-Run `pnpm dev:browser` to inspect the same example at `http://127.0.0.1:4173`.
+Run `pnpm dev:browser` to build the transform package and inspect the same example at `http://127.0.0.1:4173`.
 
 ## Benchmarks
 

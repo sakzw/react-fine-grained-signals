@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToString } from "react-dom/server";
 import { createServer as createViteServer } from "vite";
-import signals from "../../packages/unplugin-react-alien-signals/src/vite.ts";
+import signals from "../../packages/unplugin-react-alien-signals/dist/vite.js";
 
 const browserRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(browserRoot, "../..");
