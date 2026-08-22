@@ -287,12 +287,33 @@ describe("deepSignal", () => {
     });
     expect(setThirdArgument).toBe(set);
 
-    expect(() => (map as unknown as Map<string, unknown>).set("source", state.value.source)).toThrow(TypeError);
-    expect(() => (map as unknown as Map<string, unknown>).delete("first")).toThrow(TypeError);
-    expect(() => (map as unknown as Map<string, unknown>).clear()).toThrow(TypeError);
-    expect(() => (set as unknown as Set<unknown>).add(state.value.source)).toThrow(TypeError);
-    expect(() => (set as unknown as Set<unknown>).delete("first")).toThrow(TypeError);
-    expect(() => (set as unknown as Set<unknown>).clear()).toThrow(TypeError);
+    // The public type remains `Map` / `Set` so DeepSignal<T> continues to be
+    // assignable to Signal<T>; immutable replacement is enforced at runtime.
+    expect(() => map.set("source", 2)).toThrow("Map#set()");
+    expect(() => map.delete("first")).toThrow("Map#delete()");
+    expect(() => map.clear()).toThrow("Map#clear()");
+    expect(() => set.add("second")).toThrow("Set#add()");
+    expect(() => set.delete("first")).toThrow("Set#delete()");
+    expect(() => set.clear()).toThrow("Set#clear()");
+
+    type SetOperations<T> = Set<T> & {
+      union(other: ReadonlySet<T>): Set<T>;
+      intersection(other: ReadonlySet<T>): Set<T>;
+      difference(other: ReadonlySet<T>): Set<T>;
+      symmetricDifference(other: ReadonlySet<T>): Set<T>;
+      isSubsetOf(other: ReadonlySet<T>): boolean;
+      isSupersetOf(other: ReadonlySet<T>): boolean;
+      isDisjointFrom(other: ReadonlySet<T>): boolean;
+    };
+    const setOperations = set as SetOperations<string>;
+    const other = deepSignal({ set: new Set(["first", "second"]) }).value.set;
+    expect(setOperations.union(other)).toEqual(new Set(["first", "second"]));
+    expect(setOperations.intersection(other)).toEqual(new Set(["first"]));
+    expect(setOperations.difference(other)).toEqual(new Set());
+    expect(setOperations.symmetricDifference(other)).toEqual(new Set(["second"]));
+    expect(setOperations.isSubsetOf(other)).toBe(true);
+    expect(setOperations.isSupersetOf(other)).toBe(false);
+    expect(setOperations.isDisjointFrom(other)).toBe(false);
 
     expect(state.peek().map).toEqual(new Map([["first", 1]]));
     expect(state.peek().set).toEqual(new Set(["first"]));

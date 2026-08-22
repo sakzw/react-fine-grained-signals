@@ -8,7 +8,6 @@ import {
 import { computed, deepSignal, effect, signal } from "../core/index.js";
 import type {
   DeepSignal,
-  DeepSignalValue,
   ReadonlySignal,
   Signal,
 } from "../core/index.js";
@@ -48,7 +47,7 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
  */
 function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   source: DeepSignal<T>,
-  selector: (value: DeepSignalValue<T>) => S,
+  selector: (value: T) => S,
 ) {
   const evaluate = (): SelectorResult<S> => {
     try {
@@ -137,7 +136,7 @@ export function useDeepSignalValue<
   S extends SignalSnapshot,
 >(
   source: DeepSignal<T>,
-  selector: (value: DeepSignalValue<T>) => S,
+  selector: (value: T) => S,
   dependencies: DependencyList,
 ): S {
   const store = useMemo(

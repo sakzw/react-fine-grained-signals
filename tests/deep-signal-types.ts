@@ -40,8 +40,8 @@ state.value = {
   set: new Set(),
 };
 
-const readonlyMap: ReadonlyMap<string, { count: number }> = state.value.map;
-const readonlySet: ReadonlySet<string> = state.value.set;
+const mutableMap: Map<string, { count: number }> = state.value.map;
+const mutableSet: Set<string> = state.value.set;
 
 // @ts-expect-error nested values retain their declared type.
 state.value.user.name = 1;
@@ -53,9 +53,16 @@ state.value.tuple[0] = 1;
 state.value.user.optional?.missing;
 // @ts-expect-error root replacements must match the root state shape.
 state.value = { user: { name: "incomplete" } };
-// @ts-expect-error Map values are read-only through .value.
-state.value.map.set("blocked", { count: 1 });
-// @ts-expect-error Set values are read-only through .value.
-state.value.set.add("blocked");
+state.value.map.set("permitted-by-static-type", { count: 1 });
+state.value.set.add("permitted-by-static-type");
 
-void [signalCompatible, deepSignalCompatible, name, firstTupleValue, readonlyMap, readonlySet];
+class NominalBox {
+  #brand = true;
+  constructor(readonly count: number) {}
+}
+type NominalState = { box: NominalBox };
+const nominal = deepSignal<NominalState>({ box: new NominalBox(1) });
+const nominalBox: NominalBox = nominal.value.box;
+const nominalSignal: Signal<NominalState> = nominal;
+
+void [signalCompatible, deepSignalCompatible, name, firstTupleValue, mutableMap, mutableSet, nominalBox, nominalSignal];

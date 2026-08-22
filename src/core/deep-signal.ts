@@ -10,26 +10,7 @@ import type { Signal } from "./base.js";
 import { hasActiveRenderCollector } from "./render-tracking.js";
 
 /** A signal whose plain-object and array values are reactive by property. */
-export interface DeepSignal<T extends object> extends Omit<Signal<T>, "value"> {
-  /**
-   * The reactive value. Map and Set values are exposed as read-only views so
-   * their opaque contents cannot be mutated around deepSignal's write checks.
-   */
-  get value(): DeepSignalValue<T>;
-  set value(nextValue: T);
-}
-
-export type DeepSignalValue<T> = T extends (...args: never[]) => unknown
-  ? T
-  : T extends Map<infer Key, infer Value>
-    ? ReadonlyMap<Key, DeepSignalValue<Value>>
-    : T extends Set<infer Value>
-      ? ReadonlySet<DeepSignalValue<Value>>
-      : T extends readonly unknown[]
-        ? { [Key in keyof T]: DeepSignalValue<T[Key]> }
-        : T extends object
-          ? { [Key in keyof T]: DeepSignalValue<T[Key]> }
-          : T;
+export interface DeepSignal<T extends object> extends Signal<T> {}
 
 interface PropertyMetadata {
   properties: Map<PropertyKey, Signal<number>>;
@@ -81,8 +62,10 @@ function readonlyMapView<Key, Value>(raw: Map<Key, Value>): ReadonlyMap<Key, Val
   if (cached !== undefined) return cached as ReadonlyMap<Key, Value>;
 
   const view = Object.create(Map.prototype) as ReadonlyMap<Key, Value>;
-  const rejectMutation = () => {
-    throw new TypeError("deepSignal() Map values are read-only; replace the Map immutably");
+  const rejectMutation = (operation: string) => () => {
+    throw new TypeError(
+      `deepSignal() Map#${operation}() is not allowed through .value; replace the Map immutably`,
+    );
   };
   Object.defineProperties(view, {
     size: { enumerable: false, configurable: false, get: () => raw.size },
@@ -115,10 +98,21 @@ function readonlyMapView<Key, Value>(raw: Map<Key, Value>): ReadonlyMap<Key, Val
       configurable: false,
       value: () => Map.prototype.entries.call(raw),
     },
-    set: { enumerable: false, configurable: false, value: rejectMutation },
-    delete: { enumerable: false, configurable: false, value: rejectMutation },
-    clear: { enumerable: false, configurable: false, value: rejectMutation },
+    set: { enumerable: false, configurable: false, value: rejectMutation("set") },
+    delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
+    clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
   });
+  // Keep future mutating Map proposals from becoming an integrity bypass when
+  // they are present in the running JavaScript engine.
+  for (const operation of ["getOrInsert", "getOrInsertComputed", "emplace"]) {
+    if (typeof (Map.prototype as unknown as Record<string, unknown>)[operation] === "function") {
+      Object.defineProperty(view, operation, {
+        enumerable: false,
+        configurable: false,
+        value: rejectMutation(operation),
+      });
+    }
+  }
   readonlyMapViews.set(raw as Map<unknown, unknown>, view as ReadonlyMap<unknown, unknown>);
   readonlyCollectionViewToRaw.set(view, raw as Map<unknown, unknown>);
   return view;
@@ -129,8 +123,19 @@ function readonlySetView<Value>(raw: Set<Value>): ReadonlySet<Value> {
   if (cached !== undefined) return cached as ReadonlySet<Value>;
 
   const view = Object.create(Set.prototype) as ReadonlySet<Value>;
-  const rejectMutation = () => {
-    throw new TypeError("deepSignal() Set values are read-only; replace the Set immutably");
+  const rejectMutation = (operation: string) => () => {
+    throw new TypeError(
+      `deepSignal() Set#${operation}() is not allowed through .value; replace the Set immutably`,
+    );
+  };
+  const forwardSetOperation = (operation: string) => (other: unknown) => {
+    const method = (Set.prototype as unknown as Record<string, unknown>)[operation];
+    if (typeof method !== "function") {
+      throw new TypeError(`Set#${operation}() is unavailable in this JavaScript engine`);
+    }
+    const collection =
+      isObjectLike(other) ? readonlyCollectionViewToRaw.get(other) ?? other : other;
+    return Reflect.apply(method, raw, [collection]);
   };
   Object.defineProperties(view, {
     size: { enumerable: false, configurable: false, get: () => raw.size },
@@ -162,10 +167,30 @@ function readonlySetView<Value>(raw: Set<Value>): ReadonlySet<Value> {
       configurable: false,
       value: () => Set.prototype.values.call(raw),
     },
-    add: { enumerable: false, configurable: false, value: rejectMutation },
-    delete: { enumerable: false, configurable: false, value: rejectMutation },
-    clear: { enumerable: false, configurable: false, value: rejectMutation },
+    add: { enumerable: false, configurable: false, value: rejectMutation("add") },
+    delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
+    clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
   });
+  // ES2025's Set operations are non-mutating. Forward them to the raw Set so
+  // native methods receive their required internal-slot receiver. A second
+  // deepSignal read-only view is unwrapped first because it is also set-like.
+  for (const operation of [
+    "union",
+    "intersection",
+    "difference",
+    "symmetricDifference",
+    "isSubsetOf",
+    "isSupersetOf",
+    "isDisjointFrom",
+  ]) {
+    if (typeof (Set.prototype as unknown as Record<string, unknown>)[operation] === "function") {
+      Object.defineProperty(view, operation, {
+        enumerable: false,
+        configurable: false,
+        value: forwardSetOperation(operation),
+      });
+    }
+  }
   readonlySetViews.set(raw as Set<unknown>, view as ReadonlySet<unknown>);
   readonlyCollectionViewToRaw.set(view, raw as Set<unknown>);
   return view;
@@ -695,8 +720,10 @@ class DeepSignalImpl<T extends object> implements DeepSignal<T> {
     this.#context = context;
   }
 
-  get value(): DeepSignalValue<T> {
-    return this.#context.wrap(this.#source.value) as DeepSignalValue<T>;
+  get value(): T {
+    // Runtime collection views intentionally keep the established `.value: T`
+    // public type. `DeepSignal<T>` must remain assignable to `Signal<T>`.
+    return this.#context.wrap(this.#source.value) as T;
   }
 
   set value(nextValue: T) {
