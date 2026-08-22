@@ -10,7 +10,8 @@ supported bundlers.
 ## Status
 
 This workspace package is private while the integration is being completed. It
-is not published to npm.
+is not published to npm. The planned package is ESM-only: use an ESM build
+configuration and `import`, not CommonJS `require()`.
 
 ## Planned installation
 

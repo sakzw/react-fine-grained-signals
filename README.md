@@ -130,7 +130,7 @@ export default defineConfig({
 });
 ```
 
-The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry points. It is currently a private workspace package and is not published to npm; the install and configuration snippets document the intended release API.
+The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry points. It is ESM-only, so use `import` in the bundler configuration. It is currently a private workspace package and is not published to npm; the install and configuration snippets document the intended release API.
 
 `mode` chooses how components opt in:
 

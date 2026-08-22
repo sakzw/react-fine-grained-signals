@@ -9,12 +9,6 @@ export default defineConfig({
     rspack: "src/rspack.ts",
     esbuild: "src/esbuild.ts",
   },
-  format: ["esm", "cjs"],
+  format: "esm",
   platform: "neutral",
-  outExtensions: ({ format }) => ({
-    js: format === "cjs" ? ".cjs" : ".js",
-  }),
-  outputOptions: {
-    exports: "named",
-  },
 });
