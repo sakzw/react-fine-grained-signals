@@ -37,7 +37,11 @@ const ARRAY_MUTATORS = new Set<PropertyKey>([
   "unshift",
 ]);
 const proxyToRaw = new WeakMap<object, object>();
-const rawToAllMetadata = new WeakMap<object, Set<PropertyMetadata>>();
+const rawToMetadata = new WeakMap<object, PropertyMetadata>();
+// A carrier that contains one of our proxies has to be copied before it can be
+// stored. Remember that copy so assigning the same carrier again preserves the
+// same identity and aliases, just like assigning an ordinary raw object does.
+const normalizedProxyCarriers = new WeakMap<object, object>();
 
 function isPlainObjectOrArray(value: unknown): value is object {
   if (typeof value !== "object" || value === null || isSignal(value)) return false;
@@ -67,69 +71,17 @@ function assertDataProperties(value: object): void {
   }
 }
 
-function normalizeProxies<T>(value: T): T {
-  if (typeof value !== "object" || value === null) return value;
-  const directRaw = proxyToRaw.get(value);
-  if (directRaw !== undefined) return directRaw as T;
-  if (!isPlainObjectOrArray(value)) return value;
-
+function assertDeepDataGraph(value: unknown): boolean {
+  if (typeof value !== "object" || value === null) return false;
   const seen = new WeakSet<object>();
-  const proxyTargets = new WeakSet<object>();
-  let foundProxy = false;
-  const collectProxyTargets = (current: object): void => {
-    const raw = proxyToRaw.get(current);
-    if (raw !== undefined) {
-      foundProxy = true;
-      proxyTargets.add(raw);
-      return;
-    }
-    if (!isPlainObjectOrArray(current) || seen.has(current)) return;
-    seen.add(current);
-    for (const key of Reflect.ownKeys(current)) {
-      const descriptor = Reflect.getOwnPropertyDescriptor(current, key);
-      if (descriptor !== undefined && "value" in descriptor) {
-        const child = descriptor.value;
-        if (typeof child === "object" && child !== null) {
-          collectProxyTargets(child);
-        }
-      }
-    }
-  };
-  collectProxyTargets(value);
-  if (!foundProxy) return value;
+  const pending: object[] = [value];
+  let containsProxy = false;
 
-  const clones = new WeakMap<object, object>();
-  const clone = (current: unknown): unknown => {
-    if (typeof current !== "object" || current === null) return current;
-    const raw = proxyToRaw.get(current);
-    if (raw !== undefined) return raw;
-    if (!isPlainObjectOrArray(current) || proxyTargets.has(current)) return current;
-
-    const cached = clones.get(current);
-    if (cached !== undefined) return cached;
-    const result: object = Array.isArray(current)
-      ? new Array(current.length)
-      : Object.create(Object.getPrototypeOf(current));
-    clones.set(current, result);
-    for (const key of Reflect.ownKeys(current)) {
-      if (Array.isArray(current) && key === "length") continue;
-      const descriptor = Reflect.getOwnPropertyDescriptor(current, key);
-      if (descriptor === undefined) continue;
-      if ("value" in descriptor) descriptor.value = clone(descriptor.value);
-      Reflect.defineProperty(result, key, descriptor);
-    }
-    return result;
-  };
-
-  return clone(value) as T;
-}
-
-function assertDeepDataGraph(value: unknown): void {
-  if (typeof value !== "object" || value === null) return;
-  const seen = new WeakSet<object>();
-  const visit = (current: object): void => {
+  while (pending.length > 0) {
+    const current = pending.pop() as object;
     const raw = proxyToRaw.get(current) ?? current;
-    if (!isPlainObjectOrArray(raw) || seen.has(raw)) return;
+    if (raw !== current) containsProxy = true;
+    if (!isPlainObjectOrArray(raw) || seen.has(raw)) continue;
     seen.add(raw);
     assertExtensible(raw);
     assertDataProperties(raw);
@@ -137,11 +89,146 @@ function assertDeepDataGraph(value: unknown): void {
       const descriptor = Reflect.getOwnPropertyDescriptor(raw, key);
       if (descriptor !== undefined && "value" in descriptor) {
         const child = descriptor.value;
-        if (typeof child === "object" && child !== null) visit(child);
+        if (typeof child === "object" && child !== null) pending.push(child);
       }
     }
+  }
+
+  return containsProxy;
+}
+
+function matchesNormalizedGraph(source: object, normalized: object): boolean {
+  const sources = new WeakMap<object, object>();
+  const targets = new WeakMap<object, object>();
+  const pending: Array<[unknown, unknown]> = [[source, normalized]];
+
+  while (pending.length > 0) {
+    const [currentSource, currentTarget] = pending.pop() as [unknown, unknown];
+    if (typeof currentSource !== "object" || currentSource === null) {
+      if (!Object.is(currentSource, currentTarget)) return false;
+      continue;
+    }
+
+    const directRaw = proxyToRaw.get(currentSource);
+    if (directRaw !== undefined) {
+      if (directRaw !== currentTarget) return false;
+      continue;
+    }
+    if (!isPlainObjectOrArray(currentSource)) {
+      if (currentSource !== currentTarget) return false;
+      continue;
+    }
+    if (
+      typeof currentTarget !== "object" ||
+      currentTarget === null ||
+      !isPlainObjectOrArray(currentTarget)
+    ) {
+      return false;
+    }
+
+    const knownTarget = sources.get(currentSource);
+    if (knownTarget !== undefined) {
+      if (knownTarget !== currentTarget) return false;
+      continue;
+    }
+    const knownSource = targets.get(currentTarget);
+    if (knownSource !== undefined && knownSource !== currentSource) return false;
+    sources.set(currentSource, currentTarget);
+    targets.set(currentTarget, currentSource);
+
+    if (
+      Array.isArray(currentSource) !== Array.isArray(currentTarget) ||
+      Object.getPrototypeOf(currentSource) !== Object.getPrototypeOf(currentTarget)
+    ) {
+      return false;
+    }
+    const sourceKeys = Reflect.ownKeys(currentSource);
+    const targetKeys = Reflect.ownKeys(currentTarget);
+    if (sourceKeys.length !== targetKeys.length) return false;
+    for (let index = 0; index < sourceKeys.length; index++) {
+      const key = sourceKeys[index];
+      if (key !== targetKeys[index]) return false;
+      const sourceDescriptor = Reflect.getOwnPropertyDescriptor(currentSource, key);
+      const targetDescriptor = Reflect.getOwnPropertyDescriptor(currentTarget, key);
+      if (
+        sourceDescriptor === undefined ||
+        targetDescriptor === undefined ||
+        !("value" in sourceDescriptor) ||
+        !("value" in targetDescriptor) ||
+        sourceDescriptor.configurable !== targetDescriptor.configurable ||
+        sourceDescriptor.enumerable !== targetDescriptor.enumerable ||
+        sourceDescriptor.writable !== targetDescriptor.writable
+      ) {
+        return false;
+      }
+      pending.push([sourceDescriptor.value, targetDescriptor.value]);
+    }
+  }
+
+  return true;
+}
+
+function cloneWithoutProxies<T>(value: T): T {
+  if (typeof value !== "object" || value === null) return value;
+  const directRaw = proxyToRaw.get(value);
+  if (directRaw !== undefined) return directRaw as T;
+
+  const cachedRoot = normalizedProxyCarriers.get(value);
+  if (
+    cachedRoot !== undefined &&
+    matchesNormalizedGraph(value, cachedRoot)
+  ) {
+    return cachedRoot as T;
+  }
+
+  const clones = new WeakMap<object, object>();
+  const created: Array<[object, object]> = [];
+  const pending: object[] = [];
+
+  const resolve = (current: unknown): unknown => {
+    if (typeof current !== "object" || current === null) return current;
+    const raw = proxyToRaw.get(current);
+    if (raw !== undefined) return raw;
+    if (!isPlainObjectOrArray(current)) return current;
+
+    const local = clones.get(current);
+    if (local !== undefined) return local;
+
+    const result: object = Array.isArray(current)
+      ? new Array(current.length)
+      : Object.create(Object.getPrototypeOf(current));
+    clones.set(current, result);
+    created.push([current, result]);
+    pending.push(current);
+    return result;
   };
-  visit(value);
+
+  const root = resolve(value) as T;
+  while (pending.length > 0) {
+    const source = pending.pop() as object;
+    const target = clones.get(source) as object;
+    for (const key of Reflect.ownKeys(source)) {
+      if (Array.isArray(source) && key === "length") continue;
+      const descriptor = Reflect.getOwnPropertyDescriptor(source, key);
+      if (descriptor === undefined) continue;
+      // Validation has already rejected accessors, before any clone is exposed.
+      if (!("value" in descriptor)) {
+        throw new TypeError("deepSignal() does not support accessor properties");
+      }
+      descriptor.value = resolve(descriptor.value);
+      Reflect.defineProperty(target, key, descriptor);
+    }
+  }
+
+  for (const [source, target] of created) {
+    normalizedProxyCarriers.set(source, target);
+  }
+  return root;
+}
+
+function prepareDeepValue<T>(value: T): T {
+  const containsProxy = assertDeepDataGraph(value);
+  return containsProxy ? cloneWithoutProxies(value) : value;
 }
 
 function isArrayIndex(key: PropertyKey): key is string {
@@ -156,10 +243,8 @@ function isArrayIndex(key: PropertyKey): key is string {
 }
 
 function createDeepContext() {
-  const rawToMetadata = new WeakMap<object, PropertyMetadata>();
-
   const unwrap = <T>(value: T): T => {
-    return normalizeProxies(value);
+    return prepareDeepValue(value);
   };
 
   const getVersion = (
@@ -206,9 +291,8 @@ function createDeepContext() {
     target: object,
     callback: (metadata: PropertyMetadata) => void,
   ): void => {
-    const metadatas = rawToAllMetadata.get(target);
-    if (metadatas === undefined) return;
-    for (const metadata of [...metadatas]) callback(metadata);
+    const metadata = rawToMetadata.get(target);
+    if (metadata !== undefined) callback(metadata);
   };
 
   const notifyTruncatedIndices = (
@@ -242,7 +326,10 @@ function createDeepContext() {
   };
 
   const wrap = <T>(value: T): T => {
-    const rawValue = unwrap(value);
+    const rawValue =
+      typeof value === "object" && value !== null
+        ? (proxyToRaw.get(value) as T | undefined) ?? value
+        : value;
     if (!isPlainObjectOrArray(rawValue)) return rawValue;
     assertExtensible(rawValue);
 
@@ -306,7 +393,6 @@ function createDeepContext() {
         const owned = Object.prototype.hasOwnProperty.call(target, key);
         const oldLength = Array.isArray(target) ? target.length : undefined;
         const rawNextValue = unwrap(nextValue);
-        assertDeepDataGraph(rawNextValue);
         const succeeded = Reflect.set(target, key, rawNextValue, target);
         if (!succeeded) return false;
 
@@ -381,12 +467,6 @@ function createDeepContext() {
 
     metadata.proxy = proxy;
     rawToMetadata.set(rawValue, metadata);
-    let allMetadata = rawToAllMetadata.get(rawValue);
-    if (allMetadata === undefined) {
-      allMetadata = new Set();
-      rawToAllMetadata.set(rawValue, allMetadata);
-    }
-    allMetadata.add(metadata);
     proxyToRaw.set(proxy, rawValue);
     return proxy as T;
   };
@@ -414,7 +494,6 @@ class DeepSignalImpl<T extends object>
   override set value(nextValue: T) {
     const rawValue = this.#context.unwrap(nextValue);
     assertRootValue(rawValue);
-    assertDeepDataGraph(rawValue);
     super.value = rawValue as T;
   }
 }
@@ -425,7 +504,7 @@ class DeepSignalImpl<T extends object>
  * object are intentionally not observable.
  */
 export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
-  const rawInitialValue = normalizeProxies(initialValue);
+  const rawInitialValue = prepareDeepValue(initialValue);
   assertRootValue(rawInitialValue);
 
   const context = createDeepContext();

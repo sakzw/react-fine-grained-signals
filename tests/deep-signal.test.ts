@@ -170,6 +170,64 @@ describe("deepSignal", () => {
     expect(runs).toBe(1);
   });
 
+  it("does not rescan a deep graph when reading value", () => {
+    let ownKeyReads = 0;
+    const raw = new Proxy(
+      { items: Array.from({ length: 4_000 }, (_, index) => ({ index })) },
+      {
+        ownKeys(target) {
+          ownKeyReads++;
+          return Reflect.ownKeys(target);
+        },
+      },
+    );
+    const state = deepSignal(raw);
+    ownKeyReads = 0;
+
+    for (let index = 0; index < 2_000; index++) state.value;
+
+    expect(ownKeyReads).toBe(0);
+  });
+
+  it("accepts very deep graphs without recursive traversal", () => {
+    type Node = { child?: Node; value?: number };
+    const root: Node = {};
+    let current = root;
+    for (let depth = 0; depth < 20_000; depth++) {
+      current.child = {};
+      current = current.child;
+    }
+    current.value = 1;
+
+    const state = deepSignal(root);
+    let nested = state.value;
+    for (let depth = 0; depth < 20_000; depth++) nested = nested.child as Node;
+
+    expect(nested.value).toBe(1);
+  });
+
+  it("preserves carrier aliases while removing contained proxies", () => {
+    const state = deepSignal({
+      source: { count: 1 },
+      left: undefined as { source: { count: number } } | undefined,
+      right: undefined as { source: { count: number } } | undefined,
+    });
+    const carrier = { source: state.value.source };
+
+    state.value.left = carrier;
+    state.value.right = carrier;
+
+    expect(state.peek().left).toBe(state.peek().right);
+    expect(state.peek().left?.source).toBe(state.peek().source);
+    expect(() => structuredClone(state.peek())).not.toThrow();
+
+    carrier.source = { count: 2 };
+    state.value.right = carrier;
+    expect(state.peek().right).not.toBe(state.peek().left);
+    expect(state.peek().left?.source).toBe(state.peek().source);
+    expect(state.peek().right?.source.count).toBe(2);
+  });
+
   it("notifies every deep signal that shares a raw object", () => {
     const shared = { count: 1 };
     const left = deepSignal({ shared });
@@ -186,6 +244,7 @@ describe("deepSignal", () => {
 
     left.value.shared.count = 2;
 
+    expect(left.value.shared).toBe(right.value.shared);
     expect(leftValues).toEqual([1, 2]);
     expect(rightValues).toEqual([1, 2]);
   });
@@ -238,11 +297,13 @@ describe("deepSignal", () => {
     expect(() => deepSignal((() => undefined) as never)).toThrow();
     expect(() => deepSignal(Object.freeze({ value: 1 }))).toThrow();
 
-    const nestedFrozen = deepSignal({ nested: Object.freeze({ value: 1 }) });
-    expect(() => nestedFrozen.value.nested).toThrow();
+    expect(() => deepSignal({ nested: Object.freeze({ value: 1 }) })).toThrow();
+
+    const nestedFrozen = deepSignal({ nested: { value: 1 } });
     expect(() => {
       nestedFrozen.value.nested = Object.freeze({ value: 2 }) as never;
     }).toThrow();
+    expect(nestedFrozen.peek().nested.value).toBe(1);
   });
 
   it("rejects descriptor, accessor, and extensibility mutations", () => {
@@ -289,6 +350,17 @@ describe("deepSignal", () => {
     }) as { nested: { value: number } };
     expect(() => {
       state.value = accessorRoot;
+    }).toThrow(TypeError);
+    expect(state.peek().nested.value).toBe(1);
+
+    const deeplyInvalid = {
+      nested: {
+        valid: { value: 2 },
+        invalid: Object.preventExtensions({ value: 3 }),
+      },
+    };
+    expect(() => {
+      state.value = deeplyInvalid as never;
     }).toThrow(TypeError);
     expect(state.peek().nested.value).toBe(1);
   });
