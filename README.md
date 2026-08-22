@@ -89,7 +89,7 @@ export function Field() {
 
 ## Development
 
-Requires Node.js 20.19 or newer, pnpm 11, and React 19 or newer.
+Requires Node.js 22.12 or newer, pnpm 11, and React 19 or newer.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -97,3 +97,12 @@ pnpm typecheck
 pnpm test
 pnpm build
 ```
+
+The browser proof of concept renders the app on the server, hydrates it with React 19, and exercises direct signal bindings in Chromium:
+
+```sh
+pnpm exec playwright install --only-shell chromium
+pnpm test:browser
+```
+
+Run `pnpm dev:browser` to inspect the same example at `http://127.0.0.1:4173`.

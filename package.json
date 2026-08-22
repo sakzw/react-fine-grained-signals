@@ -24,8 +24,10 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "dev:browser": "node --import tsx examples/browser/server.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "test:browser": "playwright test"
   },
   "peerDependencies": {
     "react": ">=19.0.0"
@@ -34,13 +36,16 @@
     "alien-signals": "^3.2.1"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.4",
     "jsdom": "^30.0.1",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "tsx": "^4.23.12",
     "typescript": "^7.0.2",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   }
 }

@@ -1,0 +1,30 @@
+:root {
+  color: #1d2433;
+  background: #f5f7fb;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  display: grid;
+  gap: 1rem;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+section {
+  display: grid;
+  gap: 0.75rem;
+  padding: 1rem;
+  border: 1px solid #d7ddea;
+  border-radius: 0.75rem;
+  background: white;
+}
+
+button {
+  width: fit-content;
+}
