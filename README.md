@@ -1,5 +1,7 @@
 # react-alien-signals
 
+[English](README.md) | [日本語](README.ja.md)
+
 An experimental React binding for [alien-signals](https://www.npmjs.com/package/alien-signals). It provides small reactive primitives, React hooks, and an opt-in JSX runtime for a deliberately narrow set of direct DOM bindings.
 
 ## Core primitives
