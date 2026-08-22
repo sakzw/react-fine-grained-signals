@@ -46,6 +46,8 @@ state.value.items.push("second");
 
 Only assignment, deletion, and standard array mutations made through `state.value` are observable. `state.peek()` returns the untracked raw root and should be used for reads only. The root must be a mutable plain object or array containing data properties; accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1. Nested plain objects and arrays are reactive; class instances, functions, `Date`, `Map`, `Set`, promises, and existing signals are treated as opaque values. Non-extensible objects are rejected rather than made partially reactive.
 
+An opaque `Map` or `Set` reached through `state.value` is a read-only view: `set`, `add`, `delete`, and `clear` are not allowed. Create a new `Map` or `Set`, change that copy, and assign it back instead. Opaque values are not tracked after assignment and must not be mutated in place. Assignments are rejected when own observable data properties contain library proxies; invisible internal state such as `WeakMap` entries, private fields, and promise internals is outside this guarantee.
+
 ## React hooks
 
 ```tsx
@@ -242,11 +244,18 @@ position-keyed array, use `Index`: its child receives a render-time accessor
 `() => item` and a numeric index.
 
 `deepSignal` supports arrays, so array mutations and deep item reads can be
-reactive. `Map` and `Set` are intentionally opaque to `deepSignal`; use
-immutable replacement: copy, change, then assign the new collection to the
-signal (for example, `const next = new Map(labels.value); next.set("bea",
-"Bea"); labels.value = next`). Do not mutate collections while rendering. For
-rows that read signals or deep item properties inside a child component, call
+reactive. `Map` and `Set` are intentionally opaque to `deepSignal`; its
+`.value` exposes them as read-only views. Use immutable replacement: copy,
+change, then assign the new collection to the signal. For example:
+
+```ts
+const next = new Map(labels.value);
+next.set("bea", "Bea");
+labels.value = next;
+```
+
+Do not mutate collections while rendering. For rows that read signals or deep item
+properties inside a child component, call
 `useSignals()` in that row (or use the plugin) so the row owns that
 subscription.
 
