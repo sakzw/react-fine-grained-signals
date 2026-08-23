@@ -197,6 +197,77 @@ function setMultiSelectValue(select: HTMLSelectElement, value: unknown): void {
   }
 }
 
+/**
+ * A `<select>` whose matching `<option>` does not exist yet (for example when
+ * the options themselves are rendered from a signal or other state, mounted
+ * after this one) silently ends up with nothing selected: the DOM neither
+ * errors nor retroactively applies `.value`/`.selected` once a matching
+ * `<option>` is later added. The per-value effect below only reruns when the
+ * bound signal itself changes, so it cannot see that the option list changed
+ * out from under it. A MutationObserver on the select's subtree re-applies
+ * the signal's current value whenever its `<option>` list changes, closing
+ * that gap without requiring the signal to change too.
+ */
+function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unknown>): () => void {
+  const stopEffect = effect(() => {
+    setControlledProp(select, "value", source.value);
+  });
+  const observer = new MutationObserver(() => {
+    setControlledProp(select, "value", source.peek());
+  });
+  observer.observe(select, { childList: true, subtree: true });
+  return () => {
+    stopEffect();
+    observer.disconnect();
+  };
+}
+
+/**
+ * Forcing a `value` write while an IME composition is in progress can abort
+ * the composition outright, independent of whether the string being written
+ * happens to match what was typed — the write-skip guard in
+ * `setControlledProp` only protects the same-value echo case, not this one.
+ * `compositionstart`/`compositionend` listeners on the node itself track
+ * composition state directly, regardless of whether the component declares
+ * its own composition handlers, and a write requested while composing is
+ * deferred until composition ends instead of applied immediately.
+ */
+function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: ReadonlySignal<unknown>): () => void {
+  let composing = false;
+  let hasPending = false;
+  let pending: unknown;
+
+  const onCompositionStart = () => {
+    composing = true;
+  };
+  const onCompositionEnd = () => {
+    composing = false;
+    if (hasPending) {
+      hasPending = false;
+      setControlledProp(node, "value", pending);
+    }
+  };
+
+  node.addEventListener("compositionstart", onCompositionStart);
+  node.addEventListener("compositionend", onCompositionEnd);
+
+  const stopEffect = effect(() => {
+    const next = source.value;
+    if (composing) {
+      hasPending = true;
+      pending = next;
+      return;
+    }
+    setControlledProp(node, "value", next);
+  });
+
+  return () => {
+    stopEffect();
+    node.removeEventListener("compositionstart", onCompositionStart);
+    node.removeEventListener("compositionend", onCompositionEnd);
+  };
+}
+
 function clearStyleProperty(style: CSSStyleDeclaration, key: string): void {
   if (key.startsWith("--")) style.removeProperty(key);
   else (style as unknown as Record<string, string>)[key] = "";
@@ -282,6 +353,12 @@ function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) 
         });
       }
       if (isControlledTwoWayProp(node.tagName.toLowerCase(), name)) {
+        if (name === "value") {
+          if (node.tagName === "SELECT") {
+            return bindSelectValue(node as HTMLSelectElement, source);
+          }
+          return bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source);
+        }
         return effect(() => {
           setControlledProp(node, name, source.value);
         });

@@ -9,15 +9,10 @@
 JSX runtimeは、allowlistに含まれるnative host propに渡されたsignalをdirect bindingします。mount時に `.peek()` からDOMを初期化し、その後の変更はrefが設置する `effect()` を通じて書き込み、そのpropについてはReactの再レンダーを経由しません(`src/runtime/jsx.ts` の `transformProps` / `ReactiveHost`。allowlist全体はREADMEの「JSX signal children and host bindings」を参照してください)。
 
 - **`value`/`checked`。** `isControlledTwoWayProp` と `setControlledProp` が、Reactが実際にcontrolledとして扱うtag ―― `value` は `input`/`textarea`/`select`、`checked` は `input` ―― に双方向の扱いを限定します。controlled propは `.peek()` から得た値で `defaultValue`/`defaultChecked` に置き換えられるためReactは再diffせず、DOMが既に同じ値を持っている場合は書き込みを省略します。`<select multiple>` は `setMultiSelectValue`(`String(value)` ではなく各 `<option>.selected` を切り替え)を通ります。それ以外の `value`/`checked` を持つ要素(`<li value>`、`<option value>`、`<meter value>` など)は、通常のpeek-and-substitute経路のままです。
+- **`<select>` の再同期。** `bindSelectValue` が通常のper-value effectに加えて、selectのsubtreeへ `MutationObserver` を設置します。これにより、mount後に追加された(例えばoption自体がsignalから描画される場合の)マッチする `<option>` も正しく選択されます。以前はbindingされたsignalだけを監視し、DOMの `<option>` listの変化には反応しなかったため、選択状態が空のまま固まっていました。
+- **IME compositionの安全性。** `bindTextValue` が、componentが独自のcomposition handlerを宣言しているかどうかに関係なく、`compositionstart`/`compositionend` をnode自身で直接追跡します。composition中に要求された `value` の書き込み ―― inputの `onChange` からではなく、同じsignalの別の購読者から発生したものも含む ―― は、即座に適用されず composition終了まで遅延されるため、進行中のcompositionを中断できなくなりました。
 - **`style`(粗い、object全体の形)。** `applyStyle` が解決済みのobjectを代入し、unit必須の数値propertyには `px` を付け、`--custom-property` entryは `setProperty` で書き込み、前回にはあり今回にはないkeyをclearします。scopeはHTML hostのみです。
-- `tests/react.test.tsx`、`tests/ssr.test.tsx`、`tests/jsx-types.tsx` でtest済みです。
-
-**実装済みコードに残る既知のgap**(動作はするがtestでカバーされていない、あるいは1点目は既知のbugです):
-
-- マッチする `<option>` がmount時の静的な子要素ではなく、signalから後で描画される `<select>` は、選択状態が表示されないまま固まることがあります。`value` のeffectはbindingされたsignalが変わったときにしか再実行されず、DOMの `<option>` listの変化には反応しないためです。未修正です。
-- IME compositionの一連(`compositionstart` → `compositionupdate` → `compositionend`)が、composition中に同じsignalの別の購読者が書き戻しても壊れずに完了すること。jsdomにはnativeなIME simulationがないため、実ブラウザでのtest(`pnpm test:browser`)か、手作りのcomposition event列のどちらかが必要です。
-- per-optionの独立した `computed` signalに支えられた `type="radio"` groupで、`checked` のdirect bindingが兄弟を正しくuncheckすること。理屈は成り立っています(各 `computed` が正しく `false` へ導出されればよいだけです)が、明示的なtestはありません。
-- React 19 Strict Modeのdev-mode double-invokeで、refのeffectがfocus・caret・進行中のIME compositionを失わないこと。`value`/`checked` のtestをStrict Modeで包んだ明示的な版はまだありません。
+- `tests/react.test.tsx`(`<select>` の再同期、IME composition、独立した `computed` に支えられたradio groupの兄弟unchecking、`value` bindingをStrict Modeで包んだdouble-invoke testを含む)、`tests/ssr.test.tsx`、`tests/jsx-types.tsx` でtest済みです。
 
 ## 未実装 ―― 未決定の設計課題
 

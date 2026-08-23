@@ -9,15 +9,10 @@
 The JSX runtime direct-binds a signal passed to an allowlisted native host prop: seed the DOM from `.peek()` at mount, then write later changes through a ref-installed `effect()` that bypasses React's re-render for that prop (`transformProps` / `ReactiveHost` in `src/runtime/jsx.ts`; see README's "JSX signal children and host bindings" for the full allowlist).
 
 - **`value`/`checked`.** `isControlledTwoWayProp` + `setControlledProp` restrict two-way handling to the tags React itself treats as controlled — `value` on `input`/`textarea`/`select`, `checked` on `input`. The controlled prop is replaced with `defaultValue`/`defaultChecked` seeded from `.peek()`, so React never re-diffs it, and the DOM write is skipped when it already matches. `<select multiple>` goes through `setMultiSelectValue` (toggles each `<option>.selected`, not `String(value)`). Every other `value`/`checked` host (`<li value>`, `<option value>`, `<meter value>`, ...) keeps the ordinary peek-and-substitute path.
+- **`<select>` resync.** `bindSelectValue` adds a `MutationObserver` on the select's subtree alongside the ordinary per-value effect, so a matching `<option>` added after mount (for example when the options are themselves rendered from a signal) still gets selected, instead of the selection getting stuck empty because only the bound signal, not the DOM's `<option>` list, was being watched.
+- **IME composition safety.** `bindTextValue` tracks `compositionstart`/`compositionend` directly on the node, independent of whether the component declares its own composition handlers. A `value` write requested while composing — including one triggered by another subscriber of the same signal, not the input's own `onChange` — is deferred until composition ends instead of applied immediately, so it can no longer abort an in-progress composition.
 - **`style`, coarse whole-object form.** `applyStyle` assigns the resolved object, adds `px` to non-unitless numeric properties, writes `--custom-property` entries via `setProperty`, and clears keys dropped between renders. HTML hosts only.
-- Tested in `tests/react.test.tsx`, `tests/ssr.test.tsx`, `tests/jsx-types.tsx`.
-
-**Known gaps in the shipped code** (working, but not covered by a test — or in the first case, a known bug):
-
-- A `<select>` whose matching `<option>` is rendered later from a signal, rather than present as a static child at mount, can get stuck showing no selection: the `value` effect only reruns when the bound signal changes, not when the DOM's `<option>` list changes. Not fixed.
-- An IME composition sequence (`compositionstart` → `compositionupdate` → `compositionend`) surviving another subscriber of the same signal writing back mid-composition. jsdom has no native IME simulation, so this needs a real-browser test (`pnpm test:browser`) or a hand-rolled composition-event sequence.
-- A `checked` direct binding on a `type="radio"` group backed by independent per-option `computed` signals correctly unchecking siblings. The reasoning holds (each `computed` just needs to derive to `false`), but no explicit test exists.
-- React 19 Strict Mode's dev-mode double-invoke of the ref effect not losing focus, caret, or in-progress IME composition. No Strict-Mode-wrapped version of the `value`/`checked` tests exists yet.
+- Tested in `tests/react.test.tsx` (including the `<select>` resync, IME composition, an independent-`computed` radio group unchecking its siblings, and a StrictMode-wrapped double-invoke of the `value` binding), `tests/ssr.test.tsx`, `tests/jsx-types.tsx`.
 
 ## Not implemented — open design work
 

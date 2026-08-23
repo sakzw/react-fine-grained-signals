@@ -3,7 +3,7 @@
 
 import { Component, createRef, StrictMode, act } from "react";
 import type { ReactNode } from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx, jsxs } from "../src/jsx-runtime.js";
 import { jsxDEV } from "../src/jsx-dev-runtime.js";
@@ -976,6 +976,33 @@ describe("React bindings", () => {
     expect(input.selectionStart).toBe(1);
   });
 
+  it("defers a forced value write until an in-progress IME composition ends", () => {
+    const text = signal("abc");
+
+    function Field() {
+      return <input aria-label="ime field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("ime field") as HTMLInputElement;
+    input.focus();
+
+    fireEvent.compositionStart(input);
+    // The browser renders composing IME candidates directly into `.value`
+    // without necessarily running them through `onChange` on every keystroke.
+    input.value = "こんに";
+
+    // Another subscriber of the same signal writing back mid-composition —
+    // not the input's own onChange — must not stomp the composing text.
+    act(() => {
+      text.value = "external update";
+    });
+    expect(input.value).toBe("こんに");
+
+    fireEvent.compositionEnd(input);
+    expect(input.value).toBe("external update");
+  });
+
   it("binds a signal directly to a checkbox's checked state without React controlling it", () => {
     const checked = signal(false);
     const bump = signal(0);
@@ -1060,6 +1087,104 @@ describe("React bindings", () => {
       choices.value = ["b"];
     });
     expect(optionStates()).toEqual([false, true, false]);
+  });
+
+  it("resyncs a bound select's value once a matching <option> is added later", async () => {
+    const choice = signal("c");
+    const showOptionC = signal(false);
+
+    function Field() {
+      useSignals();
+      return (
+        <select aria-label="late choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          {showOptionC.value ? <option value="c">C</option> : null}
+        </select>
+      );
+    }
+
+    render(<Field />);
+    const select = screen.getByLabelText("late choice") as HTMLSelectElement;
+    // No matching <option> exists yet, so nothing is selected — the bound
+    // signal did not change, only the DOM's option list will.
+    expect(select.value).toBe("");
+
+    act(() => {
+      showOptionC.value = true;
+    });
+    // The MutationObserver delivers its callback as a microtask, so the
+    // resync lands a tick after the option is actually in the DOM.
+    await waitFor(() => expect(select.value).toBe("c"));
+  });
+
+  it("unchecks radio siblings backed by independent computed signals when another is selected", () => {
+    const selected = signal("a");
+    const isA = computed(() => selected.value === "a");
+    const isB = computed(() => selected.value === "b");
+
+    function Field() {
+      return (
+        <fieldset>
+          <input
+            type="radio"
+            name="choice"
+            aria-label="option a"
+            checked={isA}
+            onChange={() => { selected.value = "a"; }}
+          />
+          <input
+            type="radio"
+            name="choice"
+            aria-label="option b"
+            checked={isB}
+            onChange={() => { selected.value = "b"; }}
+          />
+        </fieldset>
+      );
+    }
+
+    render(<Field />);
+    const optionA = screen.getByLabelText("option a") as HTMLInputElement;
+    const optionB = screen.getByLabelText("option b") as HTMLInputElement;
+    expect(optionA.checked).toBe(true);
+    expect(optionB.checked).toBe(false);
+
+    fireEvent.click(optionB);
+    expect(selected.value).toBe("b");
+    expect(optionA.checked).toBe(false);
+    expect(optionB.checked).toBe(true);
+  });
+
+  it("preserves focus and caret across StrictMode's double-invoked ref setup for a bound value", () => {
+    const text = signal("abc");
+    const bump = signal(0);
+
+    function Field() {
+      useSignals();
+      void bump.value;
+      return (
+        <StrictMode>
+          <input aria-label="strict field" value={text} onChange={(event) => { text.value = event.target.value; }} />
+        </StrictMode>
+      );
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("strict field") as HTMLInputElement;
+    input.focus();
+    input.setSelectionRange(1, 1);
+
+    // StrictMode double-invokes the ref (setup, cleanup, setup) once at mount.
+    // If that double-invoke left two live subscriptions instead of one, an
+    // unrelated re-render would write `value` twice and could still move the
+    // caret even though the first write leaves it untouched.
+    act(() => {
+      bump.value++;
+    });
+    expect(document.activeElement).toBe(input);
+    expect(input.value).toBe("abc");
+    expect(input.selectionStart).toBe(1);
   });
 
   it("updates a signal child without rerendering its parent", () => {
