@@ -1,0 +1,28 @@
+{
+  "include": [
+    "**/*",
+    ".react-router/types/**/*"
+  ],
+  "compilerOptions": {
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": ["node", "vite/client"],
+    "target": "ES2022",
+    "module": "ES2022",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "rootDirs": [".", "./.react-router/types"],
+    "paths": {
+      "react-alien-signals": ["../../src/index.ts"],
+      "react-alien-signals/utils": ["../../src/utils.tsx"],
+      "react-alien-signals/runtime": ["../../src/runtime.ts"],
+      "react-alien-signals/jsx-runtime": ["../../src/jsx-runtime.ts"],
+      "react-alien-signals/jsx-dev-runtime": ["../../src/jsx-dev-runtime.ts"]
+    },
+    "esModuleInterop": true,
+    "verbatimModuleSyntax": true,
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true
+  }
+}
