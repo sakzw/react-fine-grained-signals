@@ -307,10 +307,13 @@ Benchmarks are manual diagnostics and are not CI performance gates. They measure
 ```sh
 pnpm bench
 pnpm bench:deep
+pnpm bench:react
 pnpm bench:transform
 ```
 
 Core results compare raw `alien-signals`, this package, and `@preact/signals-core`. Compare numbers only on the same machine and Node.js version; hosted CI timing is too variable for a reliable regression threshold.
+
+`bench:react` mounts a small React tree in jsdom and compares three variants for a counter shared above N unrelated sibling rows: unmemoized hooks (every sibling re-renders on every update), `React.memo`-wrapped hooks (siblings render once, but the update still walks their fibers to bail out), and signals (the owning component never re-renders, so siblings are never revisited). It reports sibling render counts and wall-clock update throughput for each.
 
 `bench:transform` builds first, then measures the distributed Vite adapter's
 parse, scope, rewrite, source-map, and code-generation path for small and

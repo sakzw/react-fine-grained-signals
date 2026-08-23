@@ -36,6 +36,7 @@
   "scripts": {
     "bench": "pnpm build:runtime && node --expose-gc benchmarks/core.mjs",
     "bench:deep": "pnpm build:runtime && node --expose-gc benchmarks/deep-signal.mjs",
+    "bench:react": "pnpm build:runtime && node --expose-gc benchmarks/react-render.mjs",
     "bench:transform": "pnpm build:transform && pnpm --filter unplugin-react-alien-signals bench",
     "build": "pnpm build:runtime && pnpm build:transform",
     "build:runtime": "tsdown",
