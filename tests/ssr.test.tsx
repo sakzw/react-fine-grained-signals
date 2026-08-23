@@ -169,6 +169,39 @@ describe("SSR and hydration", () => {
     consoleError.mockRestore();
   });
 
+  it("hydrates a direct-bound style prop and follows updates without warnings", async () => {
+    const style = signal<Record<string, string | number>>({ color: "red" });
+
+    function App() {
+      return <span data-testid="styled" style={style}>content</span>;
+    }
+
+    const html = renderToString(<App />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const styledNode = container.querySelector("[data-testid=styled]") as HTMLSpanElement;
+    expect(styledNode.style.color).toBe("red");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      style.value = { background: "blue" };
+    });
+    expect(styledNode.style.color).toBe("");
+    expect(styledNode.style.background).toBe("blue");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("creates request-local deep state and hydrates a selected value", async () => {
     let clientState: DeepSignal<{ user: { name: string } }> | undefined;
 

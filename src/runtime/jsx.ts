@@ -11,6 +11,20 @@ const REACTIVE_PROP_NAMES = new Set([
   "className",
   "hidden",
   "disabled",
+  "style",
+]);
+
+// CSS properties React also treats as unitless: a bound number is written as-is
+// instead of getting a "px" suffix. Not exhaustive (SVG-only properties are
+// omitted since style binding is HTML-host-only), but covers the common cases.
+const UNITLESS_CSS_PROPERTIES = new Set([
+  "animationIterationCount", "aspectRatio", "borderImageOutset", "borderImageSlice",
+  "borderImageWidth", "boxFlex", "boxFlexGroup", "boxOrdinalGroup", "columnCount",
+  "columns", "flex", "flexGrow", "flexPositive", "flexShrink", "flexNegative",
+  "flexOrder", "gridArea", "gridColumn", "gridColumnEnd", "gridColumnSpan",
+  "gridColumnStart", "gridRow", "gridRowEnd", "gridRowSpan", "gridRowStart",
+  "fontWeight", "lineClamp", "lineHeight", "opacity", "order", "orphans",
+  "tabSize", "widows", "zIndex", "zoom",
 ]);
 
 // SVG has a different property model (for example, className is an SVGAnimatedString).
@@ -122,6 +136,46 @@ function setDomProp(node: Element, name: string, value: unknown): void {
   }
 }
 
+function clearStyleProperty(style: CSSStyleDeclaration, key: string): void {
+  if (key.startsWith("--")) style.removeProperty(key);
+  else (style as unknown as Record<string, string>)[key] = "";
+}
+
+function setStyleProperty(style: CSSStyleDeclaration, key: string, value: unknown): void {
+  if (value == null) {
+    clearStyleProperty(style, key);
+    return;
+  }
+  if (key.startsWith("--")) {
+    style.setProperty(key, String(value));
+    return;
+  }
+  const cssValue = typeof value === "number" && !UNITLESS_CSS_PROPERTIES.has(key)
+    ? `${value}px`
+    : String(value);
+  (style as unknown as Record<string, string>)[key] = cssValue;
+}
+
+/**
+ * Applies a whole style object to an element, clearing keys that were present
+ * in a previous call but are absent from this one. Only the coarse
+ * `style={signal}` form is bound this way — an object whose individual entries
+ * are themselves signals is out of scope (see docs/direct-binding-value-checked-style.md).
+ */
+function applyStyle(node: HTMLElement, value: unknown, previousKeys: readonly string[]): string[] {
+  const nextStyle = (value ?? {}) as Record<string, unknown>;
+  const nextKeys = Object.keys(nextStyle);
+  const nextKeySet = new Set(nextKeys);
+
+  for (const key of previousKeys) {
+    if (!nextKeySet.has(key)) clearStyleProperty(node.style, key);
+  }
+  for (const key of nextKeys) {
+    setStyleProperty(node.style, key, nextStyle[key]);
+  }
+  return nextKeys;
+}
+
 type RefCleanup = void | (() => void);
 type SupportedRef = React.Ref<Element> | undefined;
 
@@ -155,9 +209,17 @@ function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) 
     }
 
     const userCleanup = applyRef(userRef, node);
-    const stop = bindings.map(([name, source]) => effect(() => {
-      setDomProp(node, name, source.value);
-    }));
+    const stop = bindings.map(([name, source]) => {
+      if (name === "style") {
+        let previousKeys: readonly string[] = [];
+        return effect(() => {
+          previousKeys = applyStyle(node as HTMLElement, source.value, previousKeys);
+        });
+      }
+      return effect(() => {
+        setDomProp(node, name, source.value);
+      });
+    });
 
     let isDisposed = false;
     const cleanup = () => {
@@ -229,7 +291,7 @@ export function createJsxWrapper(factory: CreateElement): CreateElement {
 }
 
 type Signalable<T> = T | ReadonlySignal<T>;
-type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled";
+type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style";
 type AriaPropName = `aria-${string}`;
 type AddSignalChildren<P> = Omit<P, "children"> & {
   children?: SignalChild;

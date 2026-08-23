@@ -2,13 +2,13 @@
 
 [English](direct-binding-value-checked-style.md) | [日本語](direct-binding-value-checked-style.ja.md)
 
-Status: design investigation; no API or implementation decision has been made.
+Status: design investigation for `value` and `checked`; no API or implementation decision has been made for either. Option 4 (coarse `style={signal}` binding) has shipped — see the note on that option below — which leaves fine-grained per-property `style` tracking (option 5) as the remaining open part of the `style` question.
 
 ## Context
 
-The JSX runtime currently direct-binds a signal passed to `title`, `id`, `className`, `hidden`, `disabled`, `data-*`, or `aria-*` on a native host element: `transformProps` pulls the signal out of the JSX props, seeds the initial DOM state from `.peek()`, and wraps the element in `ReactiveHost`, whose ref installs an `effect()` per bound prop that writes the DOM directly through `setDomProp`. React never re-renders the owning component when the signal changes; only the ref's effect runs.
+The JSX runtime currently direct-binds a signal passed to `title`, `id`, `className`, `hidden`, `disabled`, `style`, `data-*`, or `aria-*` on a native host element: `transformProps` pulls the signal out of the JSX props, seeds the initial DOM state from `.peek()`, and wraps the element in `ReactiveHost`, whose ref installs an `effect()` per bound prop that writes the DOM directly through `setDomProp` (or, for `style`, through the dedicated `applyStyle` helper described in option 4). React never re-renders the owning component when the signal changes; only the ref's effect runs.
 
-`value`, `checked`, and `style` are explicitly excluded from that allowlist today. `value` is the concrete motivation for this investigation: before the `NewTaskForm` extraction, `examples/react-router/app/routes/home.tsx` read `newTitle.value` directly for a controlled `<input>`'s `value` prop, with no direct-binding escape hatch, so every keystroke re-rendered the whole owning component. `checked` has the same shape of read one file over, in `TaskRow`'s `checked={task.done}`. `style` is not used anywhere in this codebase today; it is in scope here because it shares the "excluded from the allowlist" line in README.md, not because of a concrete instance. The only currently supported answer for the `value` and `checked` cases is the pattern already used by `TaskRow` and `NewTaskForm`: extract the reactive prop into its own leaf component that owns a `useSignals()` scope, so only that leaf re-renders.
+`value`, `checked`, and `style` are explicitly excluded from that allowlist today. `value` is the concrete motivation for this investigation: `examples/react-router/app/routes/home.tsx` reads `newTitle.value` directly for a controlled `<input>`'s `value` prop, with no direct-binding escape hatch, so every keystroke re-renders the whole owning component. (A leaf-component extraction that fixes this was tried during this investigation and then deliberately reverted, so the original re-render stays reproducible for later confirmation once a decision is made here — it is not currently in the repository.) `checked` gets a two-way-bound read in the same example too, in `TaskRow`'s `checked={task.done}` — though `TaskRow` is already its own `useSignals()` leaf inside the task list, so that particular read was never actually re-rendering more than its own row; `checked` is in scope here because of the reconciliation risk described below, not because of an observed bug. `style` is not used anywhere in this codebase today; it is in scope here because it shares the "excluded from the allowlist" line in README.md, not because of a concrete instance. The general answer for a case like `value`'s — extracting the reactive prop into its own leaf component that owns a `useSignals()` scope, so only that leaf re-renders — is the same pattern `TaskRow` already demonstrates for the task list.
 
 This document scopes what direct-binding support for `value`, `checked`, and `style` would require, so that "extract a leaf component" can be compared against "extend the allowlist" on equal footing.
 
@@ -40,7 +40,7 @@ Solid's compiled JSX distinguishes `prop:` (direct property assignment) from att
 - Solving caret preservation for a *derived* value bound to `value` (for example a signal that trims or upper-cases what the user typed). Every reactive UI library that direct-binds `value` faces this; this document treats it as a documented limitation to describe precisely, not a bug to eliminate.
 - Reproducing every React controlled-input behavior (for example `defaultValue` fallback semantics) for a direct-bound element.
 - Deciding the final shape of nested `style` object signal tracking (`style={{ color: signal }}`) in this pass; see the `style` options below for why it is scoped separately.
-- Changing the recommended leaf-component pattern (`TaskRow`, `NewTaskForm`) as the answer for anything not covered by whatever ships from this investigation.
+- Changing the recommended leaf-component pattern (demonstrated by `TaskRow`) as the answer for anything not covered by whatever ships from this investigation.
 
 ## Options to evaluate
 
@@ -68,6 +68,8 @@ Treat `style={signal}` as one binding whose effect assigns the resolved object t
 
 Advantages: no new tracking model, no caret problem, ships independently of the `value`/`checked` decisions above. Needs its own coercion pass (numeric values need a unit for non-unitless CSS properties, `--custom-property` entries need `setProperty` rather than direct assignment, and stale properties from a previous object need to be cleared, not just overwritten) but that is self-contained. Disadvantages: does not give the more ergonomic `style={{ color: signal }}` per-property form; a consumer who wants only one CSS property to be reactive still has to route the whole style object through a `computed`.
 
+**Implemented.** `style` is now in `REACTIVE_PROP_NAMES`; `createReactiveRef` special-cases it to call `applyStyle` (in `src/runtime/jsx.ts`) instead of `setDomProp`, since it needs the previous render's key set to clear properties the new object dropped, which the stateless `setDomProp` path does not carry. `applyStyle` appends `px` to a bound number unless the CSS property is in a small unitless allowlist (matching the common subset of React's own list), writes `--custom-property` entries through `setProperty`, and clears any key present in the previous style object but absent from the next one. Scope stayed HTML-host-only, matching the rest of the allowlist, even though `.style` exists uniformly on SVG and MathML elements too (see Context) — extending direct `style` binding to non-HTML hosts was left out as a separate, later decision rather than bundled into this change. Covered by `tests/react.test.tsx`, `tests/ssr.test.tsx`, and the type-level check in `tests/jsx-types.tsx`.
+
 ### 5. `style`, fine-grained form: track signals nested inside the style object
 
 Detect signals as values inside the `style` object at the JSX-transform boundary (`transformProps` or a sibling helper) and bind each such entry as its own effect, leaving plain (non-signal) entries as ordinary object properties untouched by any effect.
@@ -80,9 +82,11 @@ Land options 3 and 4 as their own change, since neither has the caret/compositio
 
 Advantages: delivers the lower-risk half of the exclusion list without gating it on the harder half, and gives real usage of the `checked` and `style` bindings before committing to a caret-preservation strategy for `value`. Disadvantages: leaves the motivating case from this investigation — a text `<input>`'s `value` — still requiring the leaf-component pattern until a later decision.
 
+**Partially actioned, and revised.** Coarse `style` (option 4) shipped, but `checked` did not: an earlier draft of this document grouped option 3 with option 4 as the "lower-risk half," on the assumption that `checked` avoids the two-way-binding problem entirely because it has no caret to protect. A review caught that this was wrong — `checked` is controlled by the same React reconciliation mechanism as `value` (see "Why these three are harder than the current allowlist"), so it inherits the peek-and-substitute conflict that section describes, just without the caret/IME complication on top of it. `checked` therefore stays open alongside `value`, gated on the same prop-handling-strategy decision (see Goals), not on a caret-preservation strategy. Only `style`, which is not two-way bound at all, was actually in the lower-risk half.
+
 ### 7. Keep `value`, `checked`, and `style` excluded; document the leaf-component pattern as the answer
 
-Make no runtime change. Document extracting the reactive prop into its own component (as `TaskRow` and `NewTaskForm` already do) as the supported way to keep a fast-changing signal from re-rendering its parent.
+Make no runtime change. Document extracting the reactive prop into its own component (the pattern `TaskRow` already demonstrates for the task list) as the supported way to keep a fast-changing signal from re-rendering its parent.
 
 Advantages: no new caret, composition, or controlled/uncontrolled edge cases to test; the pattern is already proven in this repository's own example. Disadvantages: leaves an ergonomic gap the rest of the direct-binding surface does not have — a consumer has to know to reach for component extraction specifically for `value`/`checked`/`style`, with no runtime signal toward that from the JSX types.
 
@@ -102,4 +106,4 @@ Any selected option must have executable tests for:
 
 ## Current recommendation
 
-Until a decision is made, `value`, `checked`, and `style` remain outside direct binding, and the supported way to isolate a fast-changing signal from its parent's render is the leaf-component pattern already used by `TaskRow` and `NewTaskForm`. This document records what each prop would require; it does not select an option or set an implementation timeline.
+Coarse `style={signal}` binding has shipped (option 4). `value` and `checked` remain outside direct binding until the prop-handling-strategy question in Goals is decided, and the supported way to isolate either of them from its parent's render is still the leaf-component extraction pattern `TaskRow` demonstrates — applying that same shape to a `value` case like `home.tsx`'s new-task input is how the motivating case from this investigation gets fixed today. Fine-grained per-property `style` tracking (option 5) also remains undecided. This document records what each remaining prop would require; it does not select an option or set an implementation timeline for `value`, `checked`, or fine-grained `style`.

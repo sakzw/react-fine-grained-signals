@@ -2,13 +2,13 @@
 
 [English](direct-binding-value-checked-style.md) | [日本語](direct-binding-value-checked-style.ja.md)
 
-状態: 設計検討中。APIや実装方針はまだ決定していません。
+状態: `value` と `checked` については設計検討中で、どちらもAPIや実装方針はまだ決定していません。選択肢4(粗い `style={signal}` binding)は出荷済みです — 下記の該当選択肢の注記を参照してください。これにより、`style` に関して残る未決事項はper-property単位のfine-grained追跡(選択肢5)だけになりました。
 
 ## 背景
 
-現在のJSX runtimeは、native host elementの `title`、`id`、`className`、`hidden`、`disabled`、`data-*`、`aria-*` に渡されたsignalをdirect bindingします。`transformProps` がJSX propsからsignalを取り出し、`.peek()` で初期DOM状態を決め、要素を `ReactiveHost` で包みます。そのrefは、bindingされたpropごとに `effect()` を1つ設置し、`setDomProp` を通じてDOMへ直接書き込みます。signalが変わってもReactは所有componentを再レンダーせず、refのeffectだけが実行されます。
+現在のJSX runtimeは、native host elementの `title`、`id`、`className`、`hidden`、`disabled`、`style`、`data-*`、`aria-*` に渡されたsignalをdirect bindingします。`transformProps` がJSX propsからsignalを取り出し、`.peek()` で初期DOM状態を決め、要素を `ReactiveHost` で包みます。そのrefは、bindingされたpropごとに `effect()` を1つ設置し、`setDomProp`(`style` の場合は選択肢4で説明する専用の `applyStyle` helper)を通じてDOMへ直接書き込みます。signalが変わってもReactは所有componentを再レンダーせず、refのeffectだけが実行されます。
 
-`value`、`checked`、`style` は現在このallowlistから明示的に除外されています。この検討の直接の動機は `value` です。`NewTaskForm` へ切り出す前の `examples/react-router/app/routes/home.tsx` は、controlled `<input>` の `value` propに `newTitle.value` を直接読んでおり、direct bindingの逃げ道がないため、1keystrokeごとに所有component全体が再レンダーされていました。`checked` にも同じ形の読み取りが別のfile、`TaskRow` の `checked={task.done}` にあります。`style` はこのcodebaseのどこでも現在使われていません。README.mdの「allowlistから除外」という同じ行に載っているためこのdocsの対象に含めているだけで、具体的な使用例があるわけではありません。`value` と `checked` のcaseで現時点でサポートされている唯一の答えは、`TaskRow` と `NewTaskForm` が既に使っているpattern、つまりreactiveなpropを専用のleaf componentへ切り出し、そのleafだけが `useSignals()` scopeを持って再レンダーされるようにすることです。
+`value`、`checked`、`style` は現在このallowlistから明示的に除外されています。この検討の直接の動機は `value` です。`examples/react-router/app/routes/home.tsx` は、controlled `<input>` の `value` propに `newTitle.value` を直接読んでおり、direct bindingの逃げ道がないため、1keystrokeごとに所有component全体が再レンダーされます。(これを解消するleaf component切り出しは、この検討の過程で一度試し、後から意図的に元に戻しました。ここでの判断が下るまで、元の再レンダーを将来の確認用に再現可能なまま残すためです — 現時点でrepositoryには含まれていません。)`checked` にも同じ例の中に双方向bindingされた読み取りがあります。`TaskRow` の `checked={task.done}` です。ただし `TaskRow` はtask list内で既に独立した `useSignals()` leafであるため、この読み取りが自身の行を超えて再レンダーを引き起こしたことは実際にはありません。`checked` をこのdocsの対象に含めているのは、下記で説明するreconciliationのriskを共有しているためであり、観測されたbugがあるからではありません。`style` はこのcodebaseのどこでも現在使われていません。README.mdの「allowlistから除外」という同じ行に載っているためこのdocsの対象に含めているだけで、具体的な使用例があるわけではありません。`value` のようなcaseに対する一般的な答え ―― reactiveなpropを専用のleaf componentへ切り出し、そのleafだけが `useSignals()` scopeを持って再レンダーされるようにすること ―― は、`TaskRow` がtask listで既に示しているpatternと同じです。
 
 このdocsは、「leaf componentへ切り出す」と「allowlistを拡張する」を対等に比較できるよう、`value`・`checked`・`style` へのdirect binding対応が何を必要とするかを整理します。
 
@@ -40,7 +40,7 @@ Solidのcompiled JSXは、direct property assignmentである `prop:` とattribu
 - `value` にbindingされた*派生*値(例えばユーザーの入力をtrimしたりupper-caseしたりするsignal)のcaret維持を解決すること。`value` をdirect bindingするreactive UIライブラリはどれもこの問題に直面します。このdocsはこれを、排除すべきbugではなく、正確に説明すべき既知の制約として扱います。
 - direct-bound要素に対して、React controlled inputのあらゆる挙動(例えば `defaultValue` のfallback semantics)を再現すること。
 - nested `style` object内のsignal追跡(`style={{ color: signal }}`)の最終形を、この検討で決定すること。別途scopeする理由は下記の `style` の選択肢を参照。
-- この検討から何が出荷されるにせよ、それでカバーされない範囲について、推奨されるleaf component pattern(`TaskRow`、`NewTaskForm`)を変更すること。
+- この検討から何が出荷されるにせよ、それでカバーされない範囲について、推奨されるleaf component pattern(`TaskRow` が示すもの)を変更すること。
 
 ## 評価する選択肢
 
@@ -68,6 +68,8 @@ caret用のguardなしで、既存のper-prop-name allowlistに `checked` を追
 
 利点は、新しい追跡モデルが不要で、caretの問題もなく、上記の `value`/`checked` の判断とは独立に出荷できることです。専用のcoercion処理(unit必須のCSS propertyに対する数値、`setProperty` を要する `--custom-property` entry、前回のobjectにあり今回のobjectにはないpropertyを、上書きではなくきちんとclearすること)は必要ですが、それ自体で閉じています。欠点は、より書き味の良い `style={{ color: signal }}` というper-property形を提供しないことです。1つのCSS propertyだけをreactiveにしたい利用者も、style object全体を `computed` 経由にする必要があります。
 
+**実装済みです。** `style` は `REACTIVE_PROP_NAMES` に加えられ、`createReactiveRef` はこれを特別扱いして `setDomProp` の代わりに(`src/runtime/jsx.ts` の)`applyStyle` を呼びます。前回renderのkey集合を保持して、新しいobjectから消えたpropertyをclearする必要があり、状態を持たない `setDomProp` の経路ではそれができないためです。`applyStyle` は、CSS propertyが小さなunitless allowlist(Reactの一覧のうち共通する部分に合わせています)に含まれない限り、bindingされた数値に `px` を付け、`--custom-property` entryは `setProperty` を通じて書き込み、前回のstyle objectにはあり今回にはないkeyをclearします。背景sectionで述べた通り `.style` はSVGやMathML要素にも一様に存在しますが、scopeは他のallowlistと同じくHTML hostのみに留めました。非HTML hostへのdirect `style` bindingの拡張は、この変更に含めず、別途後で判断することとして残しています。`tests/react.test.tsx`、`tests/ssr.test.tsx`、`tests/jsx-types.tsx` の型levelのtestでカバーしています。
+
 ### 5. `style`(fine-grainedな形): style object内部にnestされたsignalを追跡する
 
 JSX transformの境界(`transformProps` または隣接するhelper)で、`style` object内のvalueとしてsignalを検出し、それぞれのentryを個別のeffectとしてbindingします。signalではない通常のentryは、どのeffectにも触れられずobject propertyのまま残ります。
@@ -80,9 +82,11 @@ JSX transformの境界(`transformProps` または隣接するhelper)で、`style
 
 利点は、除外listのうち難しくない半分を、難しい半分に足を引っ張られず届けられることと、`value` のcaret維持戦略を確定させる前に、`checked` と `style` のbindingを実際に使ってもらえることです。欠点は、この検討のそもそもの動機であるcase、つまりtext `<input>` の `value` が、後の判断が下るまでleaf component patternを必要とし続けることです。
 
+**部分的に実行し、内容を修正しました。** 粗い `style`(選択肢4)は出荷しましたが、`checked` はしていません。このdocsの以前の版は、選択肢3を選択肢4と一緒に「難しくない半分」としてまとめていました。`checked` には守るべきcaretがそもそもないため、双方向bindingの問題を丸ごと回避できるという前提でした。これはレビューで誤りだと判明しました。`checked` は `value` と同じReact reconciliationの仕組みに制御されており(「この3つが既存のallowlistより難しい理由」参照)、そのsectionが説明するpeek-and-substituteの競合をそのまま引き継ぎます。ただしcaret/IMEの複雑さが上乗せされないだけです。したがって `checked` は `value` と並んで保留のままとし、caret維持戦略ではなく、目標のsectionで述べた同じprop処理戦略の判断待ちとします。実際に「難しくない半分」だったのは、そもそも双方向bindingではない `style` だけでした。
+
 ### 7. `value`・`checked`・`style` を除外したまま、leaf component patternを答えとして文書化する
 
-runtimeへの変更は行いません。reactiveなpropを専用のcomponentへ切り出す(`TaskRow` と `NewTaskForm` が既に行っているように)ことを、親を再レンダーさせずに変化の速いsignalを扱う、サポートされた方法として文書化します。
+runtimeへの変更は行いません。reactiveなpropを専用のcomponentへ切り出す(`TaskRow` がtask listで既に示しているpattern)ことを、親を再レンダーさせずに変化の速いsignalを扱う、サポートされた方法として文書化します。
 
 利点は、新しいcaret・composition・controlled/uncontrolledのedge caseをtestする必要がなく、このpatternは既にこのrepository自身の例で実証済みであることです。欠点は、direct bindingの他の部分にはないergonomicsの隙間が残ることです。利用者は、`value`/`checked`/`style` に限ってはcomponent切り出しに頼る必要があることを、JSXの型からの手がかりなしに、自分で知っていなければなりません。
 
@@ -102,4 +106,4 @@ runtimeへの変更は行いません。reactiveなpropを専用のcomponentへ�
 
 ## 現在の推奨
 
-方針を決定するまでは、`value`・`checked`・`style` はdirect bindingの対象外のままとし、変化の速いsignalを親のrenderから切り離す方法としては、`TaskRow` と `NewTaskForm` が既に使っているleaf component patternをサポートされた方法とします。このdocsは各propが何を必要とするかを記録するものであり、選択肢を決定したり実装の時期を定めたりするものではありません。
+粗い `style={signal}` bindingは出荷済みです(選択肢4)。`value` と `checked` は、目標sectionのprop処理戦略の判断が下るまでdirect bindingの対象外のままとし、どちらを親のrenderから切り離す方法としても、引き続き `TaskRow` が示すleaf component切り出しpatternをサポートされた方法とします。この検討のそもそもの動機であるcaseを今すぐ直すには、`home.tsx` の新規task入力のような `value` のcaseに同じ形を適用します。per-property単位のfine-grainedな `style` 追跡(選択肢5)も未決定のままです。このdocsは残る各propが何を必要とするかを記録するものであり、`value`・`checked`・fine-grainedな `style` について選択肢を決定したり実装の時期を定めたりするものではありません。

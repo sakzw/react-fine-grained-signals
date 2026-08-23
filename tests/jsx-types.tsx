@@ -4,6 +4,7 @@ import { signal } from "../src/index.js";
 
 const text = signal("value");
 const enabled = signal(false);
+const boxStyle = signal({ color: "red" });
 
 function Custom({ value, children }: { value: typeof text; children: typeof text }) {
   return <output>{value === children ? "same" : "different"}</output>;
@@ -16,6 +17,9 @@ const html = (
   </button>
 );
 
+// `style` accepts the coarse whole-object form.
+const styled = <div style={boxStyle} />;
+
 // Signal children work for every native host, including non-HTML hosts.
 const svgChild = <svg>{text}</svg>;
 
@@ -24,8 +28,10 @@ const svgChild = <svg>{text}</svg>;
 const unsupportedHtmlBinding = <div disabled={enabled} />;
 // @ts-expect-error SVG properties do not support direct signal bindings.
 const unsupportedSvgBinding = <svg title={text} />;
+// @ts-expect-error SVG does not support the `style` direct binding either.
+const unsupportedSvgStyle = <svg style={boxStyle} />;
 
 // Component props and children remain fully transparent.
 const component = <Custom value={text}>{text}</Custom>;
 
-void [html, svgChild, unsupportedHtmlBinding, unsupportedSvgBinding, component];
+void [html, styled, svgChild, unsupportedHtmlBinding, unsupportedSvgBinding, unsupportedSvgStyle, component];

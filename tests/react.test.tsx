@@ -880,6 +880,45 @@ describe("React bindings", () => {
     expect(host.getAttribute("disabled")).toBeNull();
   });
 
+  it("binds a signal directly to the style prop, clearing keys dropped from a later value", () => {
+    const style = signal<Record<string, string | number>>({ color: "red", width: 10 });
+    const parentRenders = vi.fn();
+
+    function Box() {
+      parentRenders();
+      return <div aria-label="styled box" style={style} />;
+    }
+
+    render(<Box />);
+    const box = screen.getByLabelText("styled box");
+    expect(box.style.color).toBe("red");
+    expect(box.style.width).toBe("10px");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      style.value = { background: "blue" };
+    });
+    expect(box.style.color).toBe("");
+    expect(box.style.width).toBe("");
+    expect(box.style.background).toBe("blue");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+  });
+
+  it("treats known-unitless CSS properties and CSS custom properties correctly", () => {
+    const style = signal<Record<string, string | number>>({ opacity: 0.5, "--gap": 4 });
+
+    render(<div aria-label="unitless box" style={style} />);
+    const box = screen.getByLabelText("unitless box");
+    expect(box.style.opacity).toBe("0.5");
+    expect(box.style.getPropertyValue("--gap")).toBe("4");
+
+    act(() => {
+      style.value = { opacity: 1 };
+    });
+    expect(box.style.opacity).toBe("1");
+    expect(box.style.getPropertyValue("--gap")).toBe("");
+  });
+
   it("updates a signal child without rerendering its parent", () => {
     const source = signal("before");
     const parentRenders = vi.fn();

@@ -113,7 +113,7 @@ function Field() {
 }
 ```
 
-This direct binding is limited to native HTML `title`, `id`, `className`, `hidden`, `disabled`, `data-*`, and `aria-*` props, plus native host children. It does not unwrap signals passed to React components. See [JSX signal children and host bindings](#jsx-signal-children-and-host-bindings) for the complete list and caveats.
+This direct binding is limited to native HTML `title`, `id`, `className`, `hidden`, `disabled`, `style`, `data-*`, and `aria-*` props, plus native host children. It does not unwrap signals passed to React components. See [JSX signal children and host bindings](#jsx-signal-children-and-host-bindings) for the complete list and caveats.
 
 ### With a plugin: automatic `useSignals()` insertion
 
@@ -181,16 +181,24 @@ Configure TypeScript to use the supplied automatic JSX runtime:
 A signal used as a native host child, including SVG text content, becomes a local reactive leaf, so it can update without rerendering its parent. The same runtime supports direct bindings only for these native HTML props:
 
 - `title`, `id`, `className`, `hidden`, and `disabled`
+- `style`, bound as a whole object (`style={signal}`); a style object with per-property signals inside it, e.g. `style={{ color: signal }}`, is not supported
 - `data-*` and `aria-*` attributes
 
 ```tsx
 const title = signal("Initial title");
 const disabled = signal(false);
+const boxStyle = signal({ color: "crimson" });
 
 export function Field() {
-  return <button title={title} disabled={disabled}>{title}</button>;
+  return (
+    <button title={title} disabled={disabled} style={boxStyle}>
+      {title}
+    </button>
+  );
 }
 ```
+
+A number bound to a CSS property is written with a `px` suffix unless the property is one of the small set (`opacity`, `zIndex`, `flexGrow`, and similar) that React also treats as unitless. A key starting with `--` is written as a CSS custom property via `setProperty`. A key present in a previous style object but absent from the next one is cleared, not left stale.
 
 ## JSX control-flow utilities
 
@@ -267,7 +275,7 @@ subscription.
 
 - React 19 or newer is required. The JSX runtime uses callback-ref cleanup, which is unavailable in React 18.
 - Bare `useSignals()` and the plugin's default `transform: "inject"` use an unmanaged convenience boundary: tracking closes at the next `useSignals()` call, at the commit-phase layout effect, or in a microtask scheduled after the current synchronous execution. Call it once, unconditionally, as the component's first hook and only rely on synchronous signal reads made during that render. Reads in effects, event handlers, asynchronous callbacks, or render props whose owning component does not call `useSignals()` are not supported as component dependencies. Exact separation across Suspense-aborted renders, nested `renderToString` / `renderToStaticMarkup` calls made during render, and multiple concurrent roots is best-effort. Use `unplugin-react-alien-signals` with `transform: "managed"` for an exact `try` / `finally` render boundary.
-- Direct binding does not support `value`, `checked`, `style`, event handlers, SVG props, or other host props outside the allowlist. What supporting `value`, `checked`, and `style` would require is tracked in [the direct-binding design note](docs/direct-binding-value-checked-style.md).
+- Direct binding does not support `value`, `checked`, event handlers, SVG props, or other host props outside the allowlist. `style` is supported only as a whole-object binding (`style={signal}`); per-property signals inside a style object are not. What supporting `value`, `checked`, and per-property `style` would require is tracked in [the direct-binding design note](docs/direct-binding-value-checked-style.md).
 - Direct binding writes outside the React scheduler and remains an experimental optimization.
 - Signals passed to React component props or component children are not unwrapped. The direct-binding behavior applies only to native HTML elements (and signal children handled by the JSX runtime).
 - Keep whether a host prop is bound fixed for the element lifetime. Switching between a plain value and a signal can change the wrapper type and remount the DOM subtree.
