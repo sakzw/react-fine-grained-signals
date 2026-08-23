@@ -173,6 +173,26 @@ describe("React bindings", () => {
     expect(screen.getByLabelText("tracked computed").textContent).toBe("second:6");
   });
 
+  it("does not loop forever reading a computed that returns a fresh array each evaluation", () => {
+    const source = signal([1, 2, 3]);
+    const doubled = computed(() => source.value.map((n) => n * 2));
+    const renders = vi.fn();
+
+    function Value() {
+      useSignals();
+      renders();
+      return <output aria-label="array computed">{doubled.value.join(",")}</output>;
+    }
+
+    render(<Value />);
+    expect(screen.getByLabelText("array computed").textContent).toBe("2,4,6");
+    act(() => {
+      source.value = [4, 5];
+    });
+    expect(screen.getByLabelText("array computed").textContent).toBe("8,10");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
   it("does not collect reads made through untracked or computed peek", () => {
     const tracked = signal(0);
     const ignored = signal(0);

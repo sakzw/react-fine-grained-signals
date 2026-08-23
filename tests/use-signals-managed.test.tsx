@@ -221,6 +221,27 @@ describe("managed useSignals render scope", () => {
     expect(renders).toHaveBeenCalledTimes(2);
   });
 
+  it("does not loop forever reading a computed that returns a fresh array each evaluation", () => {
+    const source = signal([1, 2, 3]);
+    const doubled = computed(() => source.value.map((n) => n * 2));
+    const renders = vi.fn();
+
+    function Reader() {
+      return managed(() => {
+        renders();
+        return <output aria-label="managed array computed">{doubled.value.join(",")}</output>;
+      });
+    }
+
+    render(<Reader />);
+    expect(screen.getByLabelText("managed array computed").textContent).toBe("2,4,6");
+    act(() => {
+      source.value = [4, 5];
+    });
+    expect(screen.getByLabelText("managed array computed").textContent).toBe("8,10");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
   it("tracks signal reads made by a managed custom hook in its parent JSX", () => {
     const source = signal("before");
 

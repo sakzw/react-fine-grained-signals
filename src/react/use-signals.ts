@@ -31,7 +31,7 @@ function ensureFinalCleanup(): void {
 class RenderStore implements RenderCollector {
   readonly managed: boolean;
   readonly #reactListeners = new Set<() => void>();
-  #dependencyUnsubscribers: Array<() => void> = [];
+  #dependencySubscriptions = new Map<RenderDependency, () => void>();
   #pendingDependencies?: Map<RenderDependency, number>;
   #finishCollection?: () => void;
   #disposeGeneration = 0;
@@ -102,12 +102,31 @@ class RenderStore implements RenderCollector {
     this.#pendingDependencies = undefined;
     if (dependencies === undefined) return;
 
-    this.#disposeDependencies();
+    // Diff against the previous commit's subscriptions instead of
+    // unconditionally tearing everything down and resubscribing: a
+    // dependency still read on this render keeps its existing subscription
+    // alive. Unsubscribing a computed's render bridge only to immediately
+    // resubscribe forces it through a cold first evaluation every commit,
+    // which loses its Object.is memoization for any getter that returns a
+    // new object/array identity each call (e.g. `.slice()`/`.filter()`) —
+    // that cold read always looks "changed", which forced another commit,
+    // forever. Keeping a continuously-read dependency's subscription intact
+    // avoids that churn entirely.
+    for (const [dependency, unsubscribe] of this.#dependencySubscriptions) {
+      if (!dependencies.has(dependency)) {
+        unsubscribe();
+        this.#dependencySubscriptions.delete(dependency);
+      }
+    }
+
     let changedDuringRender = false;
     for (const [dependency, renderVersion] of dependencies) {
-      this.#dependencyUnsubscribers.push(
-        dependency.subscribeRender(this.#notifyReact),
-      );
+      if (!this.#dependencySubscriptions.has(dependency)) {
+        this.#dependencySubscriptions.set(
+          dependency,
+          dependency.subscribeRender(this.#notifyReact),
+        );
+      }
       if (dependency.getRenderVersion() !== renderVersion) {
         changedDuringRender = true;
       }
@@ -124,9 +143,10 @@ class RenderStore implements RenderCollector {
   };
 
   #disposeDependencies(): void {
-    for (const unsubscribe of this.#dependencyUnsubscribers.splice(0)) {
+    for (const unsubscribe of this.#dependencySubscriptions.values()) {
       unsubscribe();
     }
+    this.#dependencySubscriptions.clear();
   }
 }
 
