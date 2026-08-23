@@ -963,11 +963,12 @@ describe("React bindings", () => {
 
     // A re-render for an unrelated reason must not touch `value` at all: it
     // was substituted with `defaultValue`, which React only applies at mount.
-    // If `value` had stayed a controlled prop, React's own controlled-input
-    // reconciliation would force an unconditional native write here (React's
-    // value tracker sees the DOM diverged from what React itself last set,
-    // since our own effect wrote to it directly in the line above) and reset
-    // the caret to the end even though the string content does not change.
+    // (React 19's own controlled-`value` commit path already guards against
+    // a same-value native write, so this specific assertion does not by
+    // itself distinguish the two prop-handling strategies — see the caveat
+    // recorded in docs/direct-binding-value-checked-style.md. The substitution
+    // is still correct to keep: it avoids relying on that internal guard and
+    // the per-render reconciliation work React would otherwise do here.)
     act(() => {
       bump.value++;
     });
@@ -1028,6 +1029,37 @@ describe("React bindings", () => {
     fireEvent.change(select, { target: { value: "c" } });
     expect(choice.value).toBe("c");
     expect(select.value).toBe("c");
+  });
+
+  it("binds a signal directly to a multi-select's value via per-option selection", () => {
+    const choices = signal<string[]>(["a", "c"]);
+
+    function Field() {
+      return (
+        <select
+          multiple
+          aria-label="choices"
+          value={choices}
+          onChange={(event) => {
+            choices.value = Array.from(event.target.selectedOptions).map((option) => option.value);
+          }}
+        >
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+      );
+    }
+
+    render(<Field />);
+    const select = screen.getByLabelText("choices") as HTMLSelectElement;
+    const optionStates = () => Array.from(select.options).map((option) => option.selected);
+    expect(optionStates()).toEqual([true, false, true]);
+
+    act(() => {
+      choices.value = ["b"];
+    });
+    expect(optionStates()).toEqual([false, true, false]);
   });
 
   it("updates a signal child without rerendering its parent", () => {

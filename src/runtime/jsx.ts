@@ -165,6 +165,11 @@ function setDomProp(node: Element, name: string, value: unknown): void {
  */
 function setControlledProp(node: Element, name: string, value: unknown): void {
   if (name === "value") {
+    const select = node as HTMLSelectElement;
+    if (select.tagName === "SELECT" && select.multiple) {
+      setMultiSelectValue(select, value);
+      return;
+    }
     const next = value == null ? "" : String(value);
     const input = node as HTMLInputElement | HTMLTextAreaElement;
     if (input.value !== next) input.value = next;
@@ -173,6 +178,23 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
   const next = Boolean(value);
   const input = node as HTMLInputElement;
   if (input.checked !== next) input.checked = next;
+}
+
+/**
+ * `<select multiple>` does not support assigning `.value` directly — the DOM
+ * setter only ever selects a single option, silently corrupting the
+ * selection instead of erroring. Its documented API for a multi-value select
+ * is per-`<option>` `.selected`, so an array-valued signal (React's own
+ * typing for a multi-select) is applied that way instead.
+ */
+function setMultiSelectValue(select: HTMLSelectElement, value: unknown): void {
+  const values = new Set(
+    Array.isArray(value) ? value.map(String) : value == null ? [] : [String(value)],
+  );
+  for (const option of select.options) {
+    const selected = values.has(option.value);
+    if (option.selected !== selected) option.selected = selected;
+  }
 }
 
 function clearStyleProperty(style: CSSStyleDeclaration, key: string): void {
@@ -202,7 +224,11 @@ function setStyleProperty(style: CSSStyleDeclaration, key: string, value: unknow
  * are themselves signals is out of scope (see docs/direct-binding-value-checked-style.md).
  */
 function applyStyle(node: HTMLElement, value: unknown, previousKeys: readonly string[]): string[] {
-  const nextStyle = (value ?? {}) as Record<string, unknown>;
+  // A non-object value (an `any`-typed or otherwise unchecked caller passing
+  // a string, for instance) would make `Object.keys` walk string indices
+  // instead of CSS property names; treat anything that is not a plain object
+  // as empty rather than writing garbage keys to the node's style.
+  const nextStyle = (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}) as Record<string, unknown>;
   const nextKeys = Object.keys(nextStyle);
   const nextKeySet = new Set(nextKeys);
 
