@@ -80,3 +80,52 @@ test("cleans a StrictMode host binding after unmount", async ({ page }) => {
   expect(detachedTitle).toBe("lifecycle updated");
   expect(errors).toEqual([]);
 });
+
+test("paints a signal-bound style prop with real computed layout", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const styledBox = page.locator("#styled-box");
+
+  await expect(styledBox).toHaveCSS("width", "80px");
+  await expect(styledBox).toHaveCSS("height", "40px");
+  await expect(styledBox).toHaveCSS("background-color", "rgb(70, 130, 180)");
+
+  const initialBox = await styledBox.boundingBox();
+  expect(initialBox?.width).toBeCloseTo(80, 0);
+  expect(initialBox?.height).toBeCloseTo(40, 0);
+
+  await page.locator("#toggle-style").click();
+
+  await expect(styledBox).toHaveCSS("width", "160px");
+  await expect(styledBox).toHaveCSS("background-color", "rgb(46, 139, 87)");
+
+  const updatedBox = await styledBox.boundingBox();
+  expect(updatedBox?.width).toBeCloseTo(160, 0);
+  expect(errors).toEqual([]);
+});
+
+test("keeps real-browser IME composition text intact across an external signal write", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const input = page.locator("#ime-field");
+
+  await expect(input).toHaveValue("initial");
+  await input.focus();
+
+  await input.evaluate((el: HTMLInputElement, text) => {
+    el.dispatchEvent(new CompositionEvent("compositionstart"));
+    // The browser renders composing IME candidates directly into `.value`
+    // without necessarily running them through `onChange` on every keystroke.
+    el.value = text;
+  }, "こんに");
+  await expect(input).toHaveValue("こんに");
+
+  // Another subscriber of the same signal writing back mid-composition —
+  // not the input's own onChange — must not stomp the composing text.
+  await page.locator("#external-ime-write").click();
+  await expect(input).toHaveValue("こんに");
+
+  await input.evaluate((el: HTMLInputElement) => {
+    el.dispatchEvent(new CompositionEvent("compositionend"));
+  });
+  await expect(input).toHaveValue("external update");
+  expect(errors).toEqual([]);
+});

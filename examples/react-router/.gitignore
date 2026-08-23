@@ -1,0 +1,3 @@
+# `react-router build` output (client + server bundles), scoped to this
+# example so it doesn't need a repo-wide "build/" ignore pattern.
+build/

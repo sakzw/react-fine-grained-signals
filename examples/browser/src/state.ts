@@ -9,6 +9,12 @@ export function createDemoState() {
     status: signal("idle"),
     customLabel: signal("custom initial"),
     lifecycleTitle: signal("lifecycle initial"),
+    boxStyle: signal<Record<string, string>>({
+      width: "80px",
+      height: "40px",
+      background: "steelblue",
+    }),
+    imeText: signal("initial"),
   };
 }
 

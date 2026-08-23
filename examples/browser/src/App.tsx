@@ -121,6 +121,43 @@ export function App({ state }: { state: DemoState }) {
         </button>
       </section>
 
+      <section aria-labelledby="style-heading">
+        <h2 id="style-heading">Style binding</h2>
+        <div id="styled-box" style={state.boxStyle} />
+        <button
+          id="toggle-style"
+          onClick={() => {
+            state.boxStyle.value = {
+              width: "160px",
+              height: "40px",
+              background: "seagreen",
+            };
+          }}
+        >
+          Toggle style
+        </button>
+      </section>
+
+      <section aria-labelledby="ime-heading">
+        <h2 id="ime-heading">IME composition</h2>
+        <input
+          id="ime-field"
+          aria-label="ime field"
+          value={state.imeText}
+          onChange={(event) => {
+            state.imeText.value = event.target.value;
+          }}
+        />
+        <button
+          id="external-ime-write"
+          onClick={() => {
+            state.imeText.value = "external update";
+          }}
+        >
+          External IME write
+        </button>
+      </section>
+
       <StrictMode>
         <BindingLifecycle source={state.lifecycleTitle} />
       </StrictMode>
