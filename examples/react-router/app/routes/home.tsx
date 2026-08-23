@@ -62,7 +62,7 @@ export default function Home() {
         <input
           type="text"
           placeholder="新しいタスク"
-          value={newTitle.value}
+          value={newTitle}
           onChange={(event) => {
             newTitle.value = event.target.value;
           }}
