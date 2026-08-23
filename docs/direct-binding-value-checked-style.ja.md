@@ -2,13 +2,13 @@
 
 [English](direct-binding-value-checked-style.md) | [日本語](direct-binding-value-checked-style.ja.md)
 
-状態: `value` と `checked` については設計検討中で、どちらもAPIや実装方針はまだ決定していません。選択肢4(粗い `style={signal}` binding)は出荷済みです — 下記の該当選択肢の注記を参照してください。これにより、`style` に関して残る未決事項はper-property単位のfine-grained追跡(選択肢5)だけになりました。
+状態: ほぼ実装済みです。`style`(粗い形、選択肢4)と `value`/`checked`(選択肢1・3、および目標sectionのprop処理戦略の変更)は出荷済みです — 下記の該当選択肢の注記を参照してください。未決定のまま残っているのは、派生 `value` のcaret維持(選択肢2)とper-property単位のfine-grainedな `style` 追跡(選択肢5)です。
 
 ## 背景
 
 現在のJSX runtimeは、native host elementの `title`、`id`、`className`、`hidden`、`disabled`、`style`、`data-*`、`aria-*` に渡されたsignalをdirect bindingします。`transformProps` がJSX propsからsignalを取り出し、`.peek()` で初期DOM状態を決め、要素を `ReactiveHost` で包みます。そのrefは、bindingされたpropごとに `effect()` を1つ設置し、`setDomProp`(`style` の場合は選択肢4で説明する専用の `applyStyle` helper)を通じてDOMへ直接書き込みます。signalが変わってもReactは所有componentを再レンダーせず、refのeffectだけが実行されます。
 
-`value`、`checked`、`style` は現在このallowlistから明示的に除外されています。この検討の直接の動機は `value` です。`examples/react-router/app/routes/home.tsx` は、controlled `<input>` の `value` propに `newTitle.value` を直接読んでおり、direct bindingの逃げ道がないため、1keystrokeごとに所有component全体が再レンダーされます。(これを解消するleaf component切り出しは、この検討の過程で一度試し、後から意図的に元に戻しました。ここでの判断が下るまで、元の再レンダーを将来の確認用に再現可能なまま残すためです — 現時点でrepositoryには含まれていません。)`checked` にも同じ例の中に双方向bindingされた読み取りがあります。`TaskRow` の `checked={task.done}` です。ただし `TaskRow` はtask list内で既に独立した `useSignals()` leafであるため、この読み取りが自身の行を超えて再レンダーを引き起こしたことは実際にはありません。`checked` をこのdocsの対象に含めているのは、下記で説明するreconciliationのriskを共有しているためであり、観測されたbugがあるからではありません。`style` はこのcodebaseのどこでも現在使われていません。README.mdの「allowlistから除外」という同じ行に載っているためこのdocsの対象に含めているだけで、具体的な使用例があるわけではありません。`value` のようなcaseに対する一般的な答え ―― reactiveなpropを専用のleaf componentへ切り出し、そのleafだけが `useSignals()` scopeを持って再レンダーされるようにすること ―― は、`TaskRow` がtask listで既に示しているpatternと同じです。
+`value`、`checked`、`style` は、この検討を始めた時点ではこのallowlistから明示的に除外されていました。`value` はこの検討の直接の動機でした。`examples/react-router/app/routes/home.tsx` は、controlled `<input>` の `value` propに `newTitle.value` を直接読んでおり、direct bindingの逃げ道がないため、1keystrokeごとに所有component全体が再レンダーされていました。(これを解消するleaf component切り出しは、この検討の過程で一度試し、後から意図的に元に戻しました。元の再レンダーを再現可能なまま残すためです — このdocsが今回出荷する `value` bindingを使うようには、example自体をまだ更新していません。それはbindingを実装することとは別の判断です。)`checked` にも同じ例の中に双方向bindingされた読み取りがありました。`TaskRow` の `checked={task.done}` です。ただし `TaskRow` はtask list内で既に独立した `useSignals()` leafであるため、この読み取りが自身の行を超えて再レンダーを引き起こしたことは実際にはありません。`checked` をこのdocsの対象に含めていたのは、`value` と同じreconciliationのriskの理屈からであり、そのfileで観測されたbugがあったからではありません。`style` はこのcodebaseのどこでも使われていません。README.mdの「allowlistから除外」という同じ行に載っているためこのdocsの対象に含めていただけで、具体的な使用例があったわけではありません。このdocsがbindingを出荷する前は、`value` のようなcaseに対する一般的な答えは、reactiveなpropを専用のleaf componentへ切り出し、そのleafだけが `useSignals()` scopeを持って再レンダーされるようにすることでした ―― `TaskRow` が今もtask listで示しているpatternであり、このdocsが出荷した選択肢でカバーされない範囲については今も変わらぬ答えです。
 
 このdocsは、「leaf componentへ切り出す」と「allowlistを拡張する」を対等に比較できるよう、`value`・`checked`・`style` へのdirect binding対応が何を必要とするかを整理します。
 
@@ -19,7 +19,7 @@ runtimeが既にdirect bindingしているpropは、Reactの視点から見る�
 `value` と `checked` は、この前提を2つの点で崩します。
 
 - 双方向bindingであることです。`onChange`(signalではないため既に `hostProps` にそのまま残されています)はDOMから読んでsignalへ反映し、direct bindingのeffectはsignalからDOMへ書き戻します。effectが実行されるたびに、DOMが既にその値を保持していても無条件に `node.value`/`node.checked` を書き込むのは、fine-grainedなreactive UIライブラリがcontrolled inputの周りでどこも文書化している急所です。ブラウザとinput `type` によっては `selectionStart`/`selectionEnd` を乱したり、文字列を再整形したり(`<input type="number">` などで)します。文字列が結果的に変わっていなくても起こり得る失敗モードが1つあります — 進行中のIME compositionを中断させることです。
-- `transformProps` はdirect-bound propを要素から取り除いているわけではありません。`title`/`disabled` などに対して既にそうしているのと同じように、`.peek()` に置き換えているだけです(`props[name] = readInitialValue(value)`)。これを `value`/`checked` にそのまま適用すると、inputはReact-controlledのまま残り、`value` は所有componentが実際に前回再レンダーしたときに `.peek()` が返した値に固定され、その間にrefのeffectが新しい値を直接DOMへ書き込みます。所有componentが無関係な理由で後から再レンダーされると、Reactには同じ古いpropが再び渡され、Reactのcontrolled input reconciliation ―― 前回自分が設定した値からDOMの実際の値が乖離していないかを追跡し、それをもとにDOMを強制的に同期し直す仕組み ―― が、direct bindingのeffectが書き込んだものを上書きしてしまいます。つまり `value`/`checked` を安全にサポートするには、「DOMへ書き込むeffectを追加する」だけでは足りません。要素がそもそもReactからcontrolledとして再主張されないようにする方法(例えば、propを本当に取り除き、初回paintには `defaultValue`/`defaultChecked` を代わりに使うなど)を決める必要があり、それは `transformProps` が今日allowlistの他のpropに使っているpeek-and-substitute方式とは異なるprop処理戦略です。
+- `transformProps` は、既定では direct-bound propを要素から取り除きません。`title`/`disabled` などに対して既にそうしているのと同じように、`.peek()` に置き換えているだけです(`props[name] = readInitialValue(value)`)。これを `value`/`checked` にそのまま適用すると、inputはReact-controlledのままになり、`value` は所有componentが実際に再レンダーするたびに `.peek()` から新しく供給されます(すべてのrenderで再計算されるため、内容がstaleになることはありません)。一方でrefのeffectは、renderとrenderの間に新しい値を直接DOMへ書き込みます。これを直接test(prop置き換えの部分だけを一時的にpeek-and-substitute方式へ戻し、選択肢1のwrite-skip guardは残したまま)してみたところ、ここで試したcaseでは目に見えるbugを再現できませんでした。React 19自身のcontrolled inputのcommit処理は、これから適用しようとする値をDOMが既に保持している場合、native writeを省略しているようです。これはPreactとVueが自ら追加していると先行事例で述べたguardと同じものです。つまり失敗モードは、ここで当初想定していたよりも狭く、おそらくtiming/stalenessが絡むedge case(time-slicingされるrenderやSuspenseで中断されるrenderなど、判断基準で既に挙げている類のもの)に限られ、簡単に再現できるものではなさそうです。それでも変わらず成り立つことがあります。将来のReactのversionでもこの内部guardがこのcaseをカバえ続けるかどうかに関係なく、`value`/`checked` をそのままcontrolled propとして残すことは、Reactが所有componentの無関係な再レンダーのたびにこのpropを再diffし、場合によっては再書き込みすることを意味します。これはallowlistの他のpropがmount後には一切行わない仕事です。そしてその正しさは、`defaultValue`/`defaultChecked`(mount時に一度だけ適用され、その後は一切触れられないという、公開されておりversionに依存しない意味を持つ)ではなく、文書化されていないReact内部の実装詳細に依存することになります。uncontrolledなpropへ置き換える ―― `value`/`checked` を本当に取り除き、初回paintには代わりに `defaultValue`/`defaultChecked` を使う ―― ことで、このpropのreconciliationからReactを完全に外すことができます。これは `transformProps` が今日allowlistの他のpropに使っているpeek-and-substitute方式とは異なるprop処理戦略であり、このdocsが出荷するのはこちらです(選択肢1の実装済み注記を参照)。
 
 `style` は双方向bindingではないためcaretの問題はありませんが、別の形で現行モデルを崩します。runtimeが今日bindingしているpropはすべて、scalarなDOM propertyか単一の `setAttribute` 呼び出しです。`style` は単一のobject(`className` と同じ粗さでbindingできます)であるか、より有用には、個々のentry自体がsignalであるobject(`style={{ color: theme }}`)であり、後者には現行の `isReactiveHostProp` チェックには存在しないsub-property単位の追跡が必要です。`style` はnamespaceの挙動でも `className`・`hidden`・`disabled` と異なります。SVG要素は `className`(`SVGAnimatedString`)とは違い、`.style` を通じて標準的な `CSSStyleDeclaration` を公開するため、`style` には `setDomProp` の他の部分が抱えるSVG/MathML除外が不要かもしれません。
 
@@ -33,7 +33,7 @@ Solidのcompiled JSXは、direct property assignmentである `prop:` とattribu
 - `checked` には、既存の `disabled` binding程度の単純さを、少なくとも一般的なcheckboxのcaseでは与える。caretを守る問題がそもそも存在しないためです。
 - `style={signalOfStyleObject}` という粗い形は、今日と同じper-prop modelで少なくともサポートする。style object内のper-property signal(`style={{ color: signal }}`)は、同じ変更の必須要件ではなく、別途scopeする拡張として扱う。
 - SSR/hydrationの契約を既存のallowlistと同一に保つ。初回renderは `.peek()` を使い、refがmountした後にdirect writeが引き継ぐ。
-- `value`/`checked` の要素で2つの書き手が競合することを起こり得なくする。上のsectionで述べた通り、既存のpeek-and-substitute方式のprop処理(allowlistの他のpropに使われているもの)をそのまま使うと、要素は所有componentが前回実際に再レンダーしたときの値に固定されたままReact-controlledであり続け、direct bindingのeffectがそれを追い越して書き込む形になります。そのためこの目標には、両方を同時にbindingしないという運用上の注意だけでなく、この2つのpropに特有の異なるprop処理戦略がおそらく必要です。
+- `value`/`checked` の要素に2つの書き手ができることを避ける。Reactのcontrolled input reconciliationとdirect bindingのeffectの両方が、同じDOM propertyに触れる状態です。上のsectionで述べた通り、allowlistの他のpropに使っているpeek-and-substitute方式のprop処理をそのまま使うと、要素はReact-controlledのままになり、Reactが所有componentの無関係な再レンダーのたびにこのpropを再diffし、場合によっては再書き込みすることになります。その正しさは文書化された保証ではなく、React内部の実装詳細に依存することになります。この目標には、この2つのprop向けに、別の明示的なprop処理戦略が必要です。両方を同時にbindingしないという運用上の注意だけでは足りません。
 
 ## 非目標
 
@@ -48,7 +48,9 @@ Solidのcompiled JSXは、direct property assignmentである `prop:` とattribu
 
 書き込む前に、DOM要素の現在の値(`node.value` / `node.checked`)とsignalの値を比較し、一致しない場合だけsetterを呼びます。先行事例で述べたPreact/Vueのguardと同じ発想です。
 
-利点は、一般的なcase(keystrokeでsignalが更新され、effectが再実行されるが、DOMが既に保持している文字列とまったく同じ値であるため書き込みが省略され、caretが動かない)を解決でき、新しい公開APIも不要なことです。欠点は、`value` にbindingされた*派生*値(前述の非目標のcase)には効かないこと、IME compositionのtestが別途必要なこと(composition中は、DOM上の一時的な合成中テキストとsignalが確定した値が、書き戻す価値のないsignalの差として正当に食い違うことがあります)、そしてこれ単体では「この3つが難しい理由」で述べた別の問題を解決しないことです。所有componentが無関係な理由で再レンダーされると、Reactには依然として古いpeek済みのpropが渡され、それをDOMへ強制的に書き戻すのはこのeffectではなくReact自身のcontrolled input reconciliationです。これには(目標のsectionで述べた通り)`transformProps` がprop自体をどう扱うかの変更が必要で、このwrite-skip guardとは別の話です。
+利点は、一般的なcase(keystrokeでsignalが更新され、effectが再実行されるが、DOMが既に保持している文字列とまったく同じ値であるため書き込みが省略され、caretが動かない)を解決でき、新しい公開APIも不要なことです。欠点は、`value` にbindingされた*派生*値(前述の非目標のcase)には効かないこと、IME compositionのtestが別途必要なこと(composition中は、DOM上の一時的な合成中テキストとsignalが確定した値が、書き戻す価値のないsignalの差として正当に食い違うことがあります)、そしてこれ単体では、無関係な再レンダーを引き続きカバーし続けるかどうかをReact自身のcontrolled inputのwrite-skip挙動に依存したままにしてしまうことです(「この3つが難しい理由」参照)。目標sectionのprop処理戦略の変更と組み合わせることで、この依存を完全に取り除けます。
+
+**目標sectionのprop処理戦略の変更と合わせて実装済みです。** `value` と `checked` は現在 `REACTIVE_PROP_NAMES` に含まれています。`isControlledTwoWayProp`(`src/runtime/jsx.ts`)は、Reactが実際にcontrolled/uncontrolledとして扱うtagに双方向の扱いを限定します。`value` は `input`、`textarea`、`select`、`checked` は `input` です。これらの要素では、`transformProps` がcontrolled propを削除し、`.peek()` から得た値で `defaultValue`/`defaultChecked` を代入します。そして `createReactiveRef` は新しい `setControlledProp` helperを通じて書き込み、これがこの選択肢のwrite-skip guardを実装しています(`if (input.value !== next) input.value = next` と、`checked` 版の同等処理)。それ以外の要素(`<li value>`、`<option value>`、`<meter value>` など)の `value`/`checked` は、通常のpeek-and-substitute経路のままです。避けるべきreconciliationがそもそもない、単なるwrite-only属性だからです。`tests/react.test.tsx`、`tests/ssr.test.tsx`、`tests/jsx-types.tsx` の型levelのcheckでカバーしています。記録しておく価値のある留保が1つあります。prop置き換えの半分だけを一時的に元に戻すdifferential run(`value` を文字通りのcontrolled propのままにし、`setControlledProp` のwrite-skip guardは残す)を行っても、`tests/react.test.tsx` のcaret維持testは失敗しませんでした。つまりそのtestが確認しているシナリオだけでは、このrepositoryが現在使っているReactのversionにおいて、prop置き換えの半分が必要であることを単体では証明できていません。それでもこの変更を残しているのは、「この3つが難しい理由」で述べた理由からです。React内部の挙動への依存ではなく文書化された挙動への依存にできること、そしてこのpropについてrenderごとのreconciliationの仕事を避けられることです。この2つの戦略を実際に区別できる将来のtest(通常の同期的な再レンダーではなく、判断基準にあるtiming/stalenessの条件がおそらく必要です)があれば、この論拠はさらに強くなります。
 
 ### 2. `value`: 強制的な書き込みでもselectionを維持する
 
@@ -61,6 +63,8 @@ Solidのcompiled JSXは、direct property assignmentである `prop:` とattribu
 caret用のguardなしで、既存のper-prop-name allowlistに `checked` を追加します。checkboxとradioには失うべきselection状態がそもそもありません。
 
 利点は、既存の `disabled` bindingと機構的に同一であることです。興味深い失敗モードである、per-optionの独立した `computed` signalに支えられたradio groupで、1つを選択すると他がuncheckされる必要がある、というcaseも、各 `computed` が正しく `false` へ導出される限り既に正しく解決します。これはruntimeの新しい仕事ではなく、appのmodeling上の関心事です。欠点は、`value` と同様に双方向bindingであることに変わりはなく、`checked` propが同じ要素上でReact-controlledとdirect-bound双方に決してならないという同じ保証が必要で、`value` のtestをそのまま継承するのではなく専用のtestが必要なことです。
+
+**選択肢1と同じ変更の一部として実装済みです** — その選択肢の注記を参照してください。`value` と `checked` はどちらも `isControlledTwoWayProp`/`setControlledProp` を一緒に通ります。根底にある双方向binding問題とその修正は2つのpropで同一であり、`checked` には守るべきcaretがないというだけです。`tests/react.test.tsx`(checkboxのtest。無関係な再レンダーを乗り越えることを含む)と `tests/ssr.test.tsx` でカバーしています。
 
 ### 4. `style`(粗い形): `className` と同様にobject全体をbindingする
 
@@ -82,7 +86,7 @@ JSX transformの境界(`transformProps` または隣接するhelper)で、`style
 
 利点は、除外listのうち難しくない半分を、難しい半分に足を引っ張られず届けられることと、`value` のcaret維持戦略を確定させる前に、`checked` と `style` のbindingを実際に使ってもらえることです。欠点は、この検討のそもそもの動機であるcase、つまりtext `<input>` の `value` が、後の判断が下るまでleaf component patternを必要とし続けることです。
 
-**部分的に実行し、内容を修正しました。** 粗い `style`(選択肢4)は出荷しましたが、`checked` はしていません。このdocsの以前の版は、選択肢3を選択肢4と一緒に「難しくない半分」としてまとめていました。`checked` には守るべきcaretがそもそもないため、双方向bindingの問題を丸ごと回避できるという前提でした。これはレビューで誤りだと判明しました。`checked` は `value` と同じReact reconciliationの仕組みに制御されており(「この3つが既存のallowlistより難しい理由」参照)、そのsectionが説明するpeek-and-substituteの競合をそのまま引き継ぎます。ただしcaret/IMEの複雑さが上乗せされないだけです。したがって `checked` は `value` と並んで保留のままとし、caret維持戦略ではなく、目標のsectionで述べた同じprop処理戦略の判断待ちとします。実際に「難しくない半分」だったのは、そもそも双方向bindingではない `style` だけでした。
+**この選択肢は上書きされました。** このdocsの以前の版は、選択肢3を選択肢4と一緒に先に出荷する「難しくない半分」としてまとめ、`value` は後回しにしていました。`checked` には守るべきcaretがそもそもないため、双方向bindingの問題を丸ごと回避できるという前提でした。レビューでこの理屈が不完全だと判明しました。`checked` は `value` と同じReact reconciliationの仕組みに制御されているため(「この3つが既存のallowlistより難しい理由」参照)、目標sectionのprop処理戦略の変更なしに `checked` だけを出荷していたら、caret/IMEの複雑さが上乗せされないだけで同じ競合を引き継いでいたはずです。そのことが明らかになると、prop処理戦略の変更(controlled propを本当に取り除き、代わりに `defaultValue`/`defaultChecked` を使う)は、`checked` に適用するのと `value` に適用するのとで難易度が変わらないことが分かりました ―― 本当に難しいまま残るのは選択肢2のcaret固有の作業であって、reconciliationの修正そのものではありません。そのため `style`(選択肢4)、`value`/`checked` のwrite-skip guard(選択肢1)、`checked` 自体のbinding(選択肢3)、そして目標sectionのprop処理戦略の変更は、すべて一緒に出荷されました。未決定のまま残っているのは、派生 `value` のcaret維持(選択肢2)とfine-grainedな `style`(選択肢5)だけです。
 
 ### 7. `value`・`checked`・`style` を除外したまま、leaf component patternを答えとして文書化する
 
@@ -90,20 +94,22 @@ runtimeへの変更は行いません。reactiveなpropを専用のcomponentへ�
 
 利点は、新しいcaret・composition・controlled/uncontrolledのedge caseをtestする必要がなく、このpatternは既にこのrepository自身の例で実証済みであることです。欠点は、direct bindingの他の部分にはないergonomicsの隙間が残ることです。利用者は、`value`/`checked`/`style` に限ってはcomponent切り出しに頼る必要があることを、JSXの型からの手がかりなしに、自分で知っていなければなりません。
 
+**採用しませんでした**。未出荷のまま残っている部分(派生 `value` のcaretとfine-grainedな `style`)、およびallowlistに完全に含まれないホストpropに対する、変わらぬ答えとしてのみ残ります。
+
 ## 判断基準
 
-採用する選択肢には、少なくとも次の実行可能なtestが必要です。
+採用する選択肢には、少なくとも次の実行可能なtestが必要です。出荷済みのものには印を付けています。それ以外は、未決定の作業(派生 `value` のcaretとfine-grainedな `style`)に引き続き当てはまります。
 
-- direct-bindingされた `<input value={signal} onChange={...} />` へ入力してもcaretが動かないこと。同じ値のechoの場合と、(選択肢2を採用する場合は)派生・正規化された値の場合の両方。
-- IME compositionの一連(`compositionstart` → `compositionupdate` → `compositionend`)が、composition中に同じsignalの別の購読者が書き戻しても壊れずに完了すること。
-- `value`/`checked` へのdirect writeそれ自体が、native `input`/`change` eventを発火しないこと(`onChange` を通じたfeedback loopがないこと)。
-- 所有componentの無関係な再レンダー(`ReactiveHost` のref callbackを作り直し、bindingされたeffectを解体・再構築します。このcallbackはrenderのたびに新しいclosureになるためです)が、focusされたdirect-bound `value`/`checked` 要素を、その再レンダー時に固定された古い値へReactのcontrolled input reconciliationが引き戻すことを許さず、進行中の編集やIME compositionをそれ自体で目に見える形で乱さないこと。
-- per-optionの独立した `computed` signalに支えられた `type="radio"` groupで、`checked` のdirect bindingが兄弟を正しくuncheckすること。
-- SSRでrenderされた `value`/`checked`/`style`(`.peek()` から)が、clientの初回paintのDOM状態と完全に一致すること。これはconsole警告の不在ではなく、hydration後に実際のDOM propertyを読んで確認します。Reactはcontrolledな `value`/`checked` の不一致に対して仕様上hydration mismatch警告を出さないため、警告の不在を確認するtestは空虚に通ってしまいます。
-- React 19 Strict Modeのdev-mode double-invokeで、refのeffectがfocus・caret・進行中のIME compositionを失わないこと。これは上の通常の再レンダーのcaseが既にカバーする範囲を超えた部分についてです。
-- `style` のcoercion。unit不要と必須が混在する数値CSS property、`--custom-property` entry、前回のstyle objectにはあり今回にはないproperty(上書きではなくclearされる必要がある)。
-- fine-grainedな `style` 追跡を出荷する場合: signalとsignalでないentryが混在するstyle objectで、値が変わったsignalのentryだけが更新され、兄弟propertyは触れられないこと。
+- ✅ direct-bindingされた `<input value={signal} onChange={...} />` へ入力してもcaretが動かないこと。同じ値のechoについて(`tests/react.test.tsx`)。派生・正規化された値(選択肢2)は、その選択肢を出荷していないためカバーしていません。
+- IME compositionの一連(`compositionstart` → `compositionupdate` → `compositionend`)が、composition中に同じsignalの別の購読者が書き戻しても壊れずに完了すること ―― カバーしていません。jsdomにはnativeなIME composition simulationがないため、実ブラウザでのtest(`pnpm test:browser` を参照)か、手作りのcomposition event列のどちらかが必要です。
+- ✅ `value`/`checked` へのdirect writeそれ自体が、native `input`/`change` eventを発火しないこと(`tests/react.test.tsx` の各caseに暗黙的に含まれています。どのtestもeffect自身の書き込みによる余分な `onChange` 呼び出しを観測していません)。
+- ✅(留保付き)所有componentの無関係な再レンダーが、direct-bindingされた `value`/`checked` 要素をReactに戻させず、caretも乱さないこと(`tests/react.test.tsx` の「does not let an unrelated re-render move the caret...」)。留保: そのtestをpeek-and-substitute方式(目標sectionのprop処理戦略の変更なし)に対して差分実行しても、同様に失敗しませんでした ―― 選択肢1の実装済み注記を参照。prop処理戦略の変更は、「この3つが難しい理由」で述べた構造的な理由から残しており、このtestが必要性を証明しているからではありません。
+- per-optionの独立した `computed` signalに支えられた `type="radio"` groupで、`checked` のdirect bindingが兄弟を正しくuncheckすること ―― 明示的なtestではまだカバーしていませんが、選択肢3の理屈は変わらず当てはまります。
+- ✅ SSRでrenderされた `value`/`checked`/`style`(`.peek()` から)が、clientの初回paintのDOM状態と完全に一致すること。hydration後に実際のDOM propertyを読んで確認します(`tests/ssr.test.tsx`)。
+- React 19 Strict Modeのdev-mode double-invokeで、refのeffectがfocus・caret・進行中のIME compositionを失わないこと ―— `value`/`checked` のtestをStrict Modeで包んだ明示的な版ではまだカバーしていません。
+- ✅ `style` のcoercion。unit不要と必須が混在する数値CSS property、`--custom-property` entry、前回のstyle objectにはあり今回にはないproperty(`tests/react.test.tsx`)。
+- fine-grainedな `style` 追跡を出荷する場合: signalとsignalでないentryが混在するstyle objectで、値が変わったsignalのentryだけが更新され、兄弟propertyは触れられないこと ―― 該当なし。選択肢5は出荷していません。
 
 ## 現在の推奨
 
-粗い `style={signal}` bindingは出荷済みです(選択肢4)。`value` と `checked` は、目標sectionのprop処理戦略の判断が下るまでdirect bindingの対象外のままとし、どちらを親のrenderから切り離す方法としても、引き続き `TaskRow` が示すleaf component切り出しpatternをサポートされた方法とします。この検討のそもそもの動機であるcaseを今すぐ直すには、`home.tsx` の新規task入力のような `value` のcaseに同じ形を適用します。per-property単位のfine-grainedな `style` 追跡(選択肢5)も未決定のままです。このdocsは残る各propが何を必要とするかを記録するものであり、`value`・`checked`・fine-grainedな `style` について選択肢を決定したり実装の時期を定めたりするものではありません。
+`style`(粗い形、選択肢4)、そして目標sectionのprop処理戦略の変更と合わせた `value`/`checked`(選択肢1・3)は出荷済みです。direct bindingの対象外として残っているのは、派生 `value` のcaret維持(選択肢2)とper-property単位のfine-grainedな `style` 追跡(選択肢5)で、どちらも未決定であり、`TaskRow` が示すleaf component切り出しpatternが、どちらのcaseに対しても、またallowlistに完全に含まれないホストpropに対しても、引き続き答えです。この検討のそもそもの動機であるcase ―― `home.tsx` の新規task入力のようなtext `<input>` の `value` ―― は、今では普通の `value={signal}` bindingで直せます。example自体はまだそれを使うように更新していません。それはbindingを出荷することとは別の判断だからです。このdocsは、`value`/`checked` の一般的なcaseについては「leaf componentへ切り出す」と「allowlistを拡張する」を天秤にかける必要がもうありません。残る2つの未決事項については、引き続き必要です。

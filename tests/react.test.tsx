@@ -919,6 +919,117 @@ describe("React bindings", () => {
     expect(box.style.getPropertyValue("--gap")).toBe("");
   });
 
+  it("binds a signal directly to a text input's value without React controlling it", () => {
+    const text = signal("initial");
+
+    function Field() {
+      return <input aria-label="field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("field") as HTMLInputElement;
+    expect(input.value).toBe("initial");
+
+    fireEvent.change(input, { target: { value: "typed" } });
+    expect(text.value).toBe("typed");
+    expect(input.value).toBe("typed");
+
+    act(() => {
+      text.value = "external update";
+    });
+    expect(input.value).toBe("external update");
+  });
+
+  it("does not let an unrelated re-render move the caret on a direct-bound value", () => {
+    const text = signal("abc");
+    const bump = signal(0);
+
+    function Field() {
+      useSignals();
+      void bump.value;
+      return <input aria-label="field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("field") as HTMLInputElement;
+
+    // Write from outside a React commit, the way another part of the app
+    // (or this same effect on a prior keystroke) would.
+    act(() => {
+      text.value = "xyz";
+    });
+    input.focus();
+    input.setSelectionRange(1, 1);
+
+    // A re-render for an unrelated reason must not touch `value` at all: it
+    // was substituted with `defaultValue`, which React only applies at mount.
+    // If `value` had stayed a controlled prop, React's own controlled-input
+    // reconciliation would force an unconditional native write here (React's
+    // value tracker sees the DOM diverged from what React itself last set,
+    // since our own effect wrote to it directly in the line above) and reset
+    // the caret to the end even though the string content does not change.
+    act(() => {
+      bump.value++;
+    });
+    expect(input.value).toBe("xyz");
+    expect(input.selectionStart).toBe(1);
+  });
+
+  it("binds a signal directly to a checkbox's checked state without React controlling it", () => {
+    const checked = signal(false);
+    const bump = signal(0);
+
+    function Field() {
+      useSignals();
+      void bump.value;
+      return (
+        <input
+          type="checkbox"
+          aria-label="agree"
+          checked={checked}
+          onChange={(event) => { checked.value = event.target.checked; }}
+        />
+      );
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("agree") as HTMLInputElement;
+    expect(input.checked).toBe(false);
+
+    fireEvent.click(input);
+    expect(checked.value).toBe(true);
+    expect(input.checked).toBe(true);
+
+    // An unrelated re-render must not revert the DOM to the value React
+    // controlled at mount time.
+    act(() => {
+      bump.value++;
+    });
+    expect(input.checked).toBe(true);
+  });
+
+  it("binds a signal directly to a select element's value", () => {
+    const choice = signal("b");
+
+    function Field() {
+      return (
+        <select aria-label="choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+      );
+    }
+
+    render(<Field />);
+    const select = screen.getByLabelText("choice") as HTMLSelectElement;
+    expect(select.value).toBe("b");
+
+    fireEvent.change(select, { target: { value: "c" } });
+    expect(choice.value).toBe("c");
+    expect(select.value).toBe("c");
+  });
+
   it("updates a signal child without rerendering its parent", () => {
     const source = signal("before");
     const parentRenders = vi.fn();

@@ -12,7 +12,27 @@ const REACTIVE_PROP_NAMES = new Set([
   "hidden",
   "disabled",
   "style",
+  "value",
+  "checked",
 ]);
+
+// `value`/`checked` are two-way bound only on these tags — the ones where React
+// itself treats them as a controlled/uncontrolled input. Elsewhere (`<li value>`,
+// `<option value>`, `<meter value>`, ...) they are plain, write-only attributes,
+// so those keep the same peek-and-substitute treatment as `title`/`disabled`/etc.
+function isControlledTwoWayProp(tagName: string, name: string): boolean {
+  if (name === "value") return tagName === "input" || tagName === "textarea" || tagName === "select";
+  if (name === "checked") return tagName === "input";
+  return false;
+}
+
+// The uncontrolled counterpart React reads only at mount, used in place of the
+// controlled prop so React's own input reconciliation never re-asserts a stale
+// signal snapshot over what the direct-binding effect just wrote.
+const UNCONTROLLED_PROP_NAMES: Record<string, string> = {
+  value: "defaultValue",
+  checked: "defaultChecked",
+};
 
 // CSS properties React also treats as unitless: a bound number is written as-is
 // instead of getting a "px" suffix. Not exhaustive (SVG-only properties are
@@ -136,6 +156,25 @@ function setDomProp(node: Element, name: string, value: unknown): void {
   }
 }
 
+/**
+ * Writes `value`/`checked` on a controlled-two-way element, skipping the DOM
+ * write when it already holds the value being written. Effects re-run on
+ * every keystroke (the signal changed because `onChange` just wrote it), so
+ * without this guard every keystroke would re-set a property the DOM already
+ * has, moving the caret and disrupting IME composition for no reason.
+ */
+function setControlledProp(node: Element, name: string, value: unknown): void {
+  if (name === "value") {
+    const next = value == null ? "" : String(value);
+    const input = node as HTMLInputElement | HTMLTextAreaElement;
+    if (input.value !== next) input.value = next;
+    return;
+  }
+  const next = Boolean(value);
+  const input = node as HTMLInputElement;
+  if (input.checked !== next) input.checked = next;
+}
+
 function clearStyleProperty(style: CSSStyleDeclaration, key: string): void {
   if (key.startsWith("--")) style.removeProperty(key);
   else (style as unknown as Record<string, string>)[key] = "";
@@ -216,6 +255,11 @@ function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) 
           previousKeys = applyStyle(node as HTMLElement, source.value, previousKeys);
         });
       }
+      if (isControlledTwoWayProp(node.tagName.toLowerCase(), name)) {
+        return effect(() => {
+          setControlledProp(node, name, source.value);
+        });
+      }
       return effect(() => {
         setDomProp(node, name, source.value);
       });
@@ -271,7 +315,19 @@ function transformProps(type: React.ElementType, input: unknown): { props: HostP
     for (const [name, value] of Object.entries(props)) {
       if (isReactiveHostProp(name, value)) {
         bindings.push([name, value]);
-        props[name] = readInitialValue(value);
+        if (isControlledTwoWayProp(type as string, name)) {
+          // Leaving the controlled prop in place would keep the element
+          // React-controlled, so an unrelated re-render of the owner would
+          // re-diff and potentially re-write this prop — work relying on an
+          // internal React guard (skipping a same-value write) rather than a
+          // documented one. Substituting the uncontrolled prop instead means
+          // React only ever reads it once, at mount, and never touches this
+          // property again — see docs/direct-binding-value-checked-style.md.
+          delete props[name];
+          props[UNCONTROLLED_PROP_NAMES[name]] = readInitialValue(value);
+        } else {
+          props[name] = readInitialValue(value);
+        }
       }
     }
   }
@@ -291,7 +347,7 @@ export function createJsxWrapper(factory: CreateElement): CreateElement {
 }
 
 type Signalable<T> = T | ReadonlySignal<T>;
-type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style";
+type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style" | "value" | "checked";
 type AriaPropName = `aria-${string}`;
 type AddSignalChildren<P> = Omit<P, "children"> & {
   children?: SignalChild;

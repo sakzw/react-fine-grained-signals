@@ -169,6 +169,93 @@ describe("SSR and hydration", () => {
     consoleError.mockRestore();
   });
 
+  it("hydrates a direct-bound input value without warnings and survives an unrelated update", async () => {
+    const text = signal("server value");
+    const bump = signal(0);
+
+    function App() {
+      useSignals();
+      void bump.value;
+      return (
+        <input
+          data-testid="field"
+          value={text}
+          onChange={(event) => { text.value = event.target.value; }}
+        />
+      );
+    }
+
+    const html = renderToString(<App />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const fieldNode = container.querySelector("[data-testid=field]") as HTMLInputElement;
+    expect(fieldNode.value).toBe("server value");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      text.value = "client value";
+    });
+    expect(fieldNode.value).toBe("client value");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    // An unrelated re-render must not touch the DOM-owned value at all.
+    await act(async () => {
+      bump.value++;
+    });
+    expect(fieldNode.value).toBe("client value");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
+  it("hydrates a direct-bound checkbox checked state without warnings", async () => {
+    const checked = signal(true);
+
+    function App() {
+      return (
+        <input
+          type="checkbox"
+          data-testid="agree"
+          checked={checked}
+          onChange={(event) => { checked.value = event.target.checked; }}
+        />
+      );
+    }
+
+    const html = renderToString(<App />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    const checkboxNode = container.querySelector("[data-testid=agree]") as HTMLInputElement;
+    expect(checkboxNode.checked).toBe(true);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => {
+      checked.value = false;
+    });
+    expect(checkboxNode.checked).toBe(false);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("hydrates a direct-bound style prop and follows updates without warnings", async () => {
     const style = signal<Record<string, string | number>>({ color: "red" });
 

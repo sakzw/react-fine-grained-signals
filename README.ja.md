@@ -111,23 +111,30 @@ SVGのテキスト内容を含め、ネイティブホスト要素の子とし�
 
 - `title`、`id`、`className`、`hidden`、`disabled`
 - `style`。object全体をbindingします(`style={signal}`)。style object内のper-property signal(例: `style={{ color: signal }}`)はサポートしません
+- `input`、`textarea`、`select` の `value`、および `input` の `checked`
 - `data-*` 属性と `aria-*` 属性
 
 ```tsx
 const title = signal("Initial title");
 const disabled = signal(false);
 const boxStyle = signal({ color: "crimson" });
+const newTitle = signal("");
 
 export function Field() {
   return (
-    <button title={title} disabled={disabled} style={boxStyle}>
-      {title}
-    </button>
+    <>
+      <button title={title} disabled={disabled} style={boxStyle}>
+        {title}
+      </button>
+      <input value={newTitle} onChange={(e) => { newTitle.value = e.target.value; }} />
+    </>
   );
 }
 ```
 
 CSS propertyへbindingした数値は、Reactもunitless扱いする一部のproperty(`opacity`、`zIndex`、`flexGrow` など)を除き、`px` suffixを付けて書き込まれます。`--` で始まるkeyは `setProperty` を通じてCSS custom propertyとして書き込まれます。前回のstyle objectにはあり今回にはないkeyは、値を残さずclearされます。
+
+`value` と `checked` は双方向bindingのため、他のallowlistとは異なる戦略を取ります。JSX runtimeはcontrolled propの代わりに `.peek()` から得た値で `defaultValue`/`defaultChecked` を代入します。Reactはmount時に一度だけそれを適用し、以降の再レンダーでは再適用しません。それ以降はdirect bindingのeffectがDOM propertyを保持し、`onChange` はそのまま残ります。DOMが既にその値を保持している場合は書き込みを省略するため、無関係な再レンダーや `onChange` からの同じ値のechoが編集中の状態を乱すことはありません。`value` にbindingされた*派生*値(例えばユーザーの入力をtrimしたりupper-caseしたりするsignal)は、派生後の文字列が入力と異なる場合、caretが動くことがあります。この部分はここでは解決していません。他の要素の `value`/`checked`(`<li value>`、`<option value>`、`<meter value>` など)は双方向bindingではない単なるwrite-only属性なので、`title`/`disabled` と同じdirect attribute bindingを使います。
 
 これは最も細かい描画最適化ですが、対応するのはネイティブ要素のsignal子要素と上記の許可済みpropsだけです。Reactコンポーネントのpropsや子要素にsignalを渡してもアンラップされません。
 
@@ -232,7 +239,7 @@ export function Panel() {
 
 - React 19以降が必要です。JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
 - 変換なしの `useSignals()` とplugin既定の `transform: "inject"` は、管理されない簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、commit段階のlayout effect時、または現在の同期実行後に予約済みmicrotaskで閉じられます。コンポーネントの最初のフックとして1回、無条件に呼び出し、そのレンダー中に同期的に行われるsignal読み取りだけを依存関係として利用してください。effect、イベントハンドラ、非同期callback、または所有コンポーネント自身が `useSignals()` を呼ばないrender props内の読み取りは、コンポーネントの依存関係としてサポートしません。Suspenseによって中断されたレンダー、レンダー中にネストして呼ぶ `renderToString` / `renderToStaticMarkup`、複数の並行rootをまたぐ厳密な分離はbest-effortです。厳密な `try` / `finally` レンダー境界には `unplugin-react-alien-signals` の `transform: "managed"` を使用してください。
-- 直接バインディングは `value`、`checked`、イベントハンドラ、SVG props、および許可リスト外のホストpropsをサポートしません。`style` はobject全体のbinding(`style={signal}`)のみサポートし、style object内のper-property signalはサポートしません。`value`、`checked`、per-property `style` のサポートに何が必要かは[直接バインディングの設計検討docs](docs/direct-binding-value-checked-style.ja.md)にまとめています。
+- 直接バインディングはイベントハンドラ、SVG props、および許可リスト外のホストpropsをサポートしません。`style` はobject全体のbinding(`style={signal}`)のみサポートし、style object内のper-property signalはサポートしません。`input`/`textarea`/`select` の `value` と `input` の `checked` はサポートしていますが、`onChange` からの同じ値のechoに対するguardのみで、派生値(trimやupper-caseしたsignalなど)が入力と異なる場合のcaret移動までは守りません。per-property `style` と派生値のcaret維持に何が必要かは[直接バインディングの設計検討docs](docs/direct-binding-value-checked-style.ja.md)にまとめています。
 - 直接バインディングによる書き込みはReactスケジューラの外側で行われる、実験的な最適化です。
 - Reactコンポーネントのpropsや子要素へ渡したsignalはアンラップされません。直接バインディングはネイティブHTML要素にのみ適用されます。ただし、JSXランタイムが処理するsignal子要素は例外です。
 - ホストpropをバインドするかどうかは、その要素の生存期間中変えないでください。通常の値とsignalを切り替えるとラッパー要素の種類が変わり、DOMサブツリーが再マウントされる可能性があります。
