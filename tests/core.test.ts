@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { batch, computed, effect, signal, untracked } from "../src/index.js";
+import { batch, computed, effect, isSignal, signal, untracked } from "../src/index.js";
 
 describe("core signal primitives", () => {
   const disposers: Array<() => void> = [];
@@ -128,5 +128,66 @@ describe("core signal primitives", () => {
     source.value = 2;
 
     expect(cleanups).toEqual([0, 1]);
+  });
+
+  it("runs the last cleanup and stops the effect when disposed from outside", () => {
+    const source = signal(0);
+    const listener = vi.fn();
+    const cleanups: number[] = [];
+
+    const dispose = effect(() => {
+      const value = source.value;
+      listener();
+      return () => {
+        cleanups.push(value);
+      };
+    });
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(cleanups).toEqual([]);
+
+    dispose();
+    expect(cleanups).toEqual([0]);
+
+    source.value = 1;
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(cleanups).toEqual([0]);
+
+    expect(() => dispose()).not.toThrow();
+    expect(cleanups).toEqual([0]);
+  });
+
+  it("reads the current value via peek without establishing a dependency", () => {
+    const source = signal(0);
+    const listener = vi.fn();
+    disposers.push(effect(() => {
+      source.peek();
+      listener();
+    }));
+    expect(listener).toHaveBeenCalledTimes(1);
+    source.value = 1;
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(source.peek()).toBe(1);
+
+    const base = signal(1);
+    const doubled = computed(() => base.value * 2);
+    const computedListener = vi.fn();
+    disposers.push(effect(() => {
+      doubled.peek();
+      computedListener();
+    }));
+    expect(computedListener).toHaveBeenCalledTimes(1);
+    base.value = 2;
+    expect(computedListener).toHaveBeenCalledTimes(1);
+    expect(doubled.peek()).toBe(4);
+  });
+
+  it("identifies values created by signal or computed and rejects everything else", () => {
+    expect(isSignal(signal(1))).toBe(true);
+    expect(isSignal(computed(() => 1))).toBe(true);
+    expect(isSignal({ value: 1 })).toBe(false);
+    expect(isSignal(null)).toBe(false);
+    expect(isSignal(undefined)).toBe(false);
+    expect(isSignal(42)).toBe(false);
+    expect(isSignal("string")).toBe(false);
   });
 });

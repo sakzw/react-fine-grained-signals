@@ -867,6 +867,31 @@ describe("React bindings", () => {
     expect(input.dataset.state).toBe("updated-state");
   });
 
+  it("binds an aria-* prop directly to a signal without rerendering its owner", () => {
+    const expanded = signal(false);
+    const parentRenders = vi.fn();
+
+    function Disclosure() {
+      parentRenders();
+      return (
+        <button aria-label="disclosure" aria-expanded={expanded}>
+          toggle
+        </button>
+      );
+    }
+
+    render(<Disclosure />);
+    const button = screen.getByLabelText("disclosure");
+    expect(button.getAttribute("aria-expanded")).toBe("false");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      expanded.value = true;
+    });
+    expect(button.getAttribute("aria-expanded")).toBe("true");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+  });
+
   it("removes a false disabled attribute from an unsupported host binding", () => {
     const disabled = signal(true);
 
@@ -1228,6 +1253,47 @@ describe("React bindings", () => {
       source.value = "after";
     });
     expect(text?.textContent).toBe("after");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates an array-valued signal child without rerendering its parent", () => {
+    const items = signal(["a", "b"]);
+    const parentRenders = vi.fn();
+
+    function Parent() {
+      parentRenders();
+      return <ul aria-label="signal list">{items}</ul>;
+    }
+
+    render(<Parent />);
+    expect(screen.getByLabelText("signal list").textContent).toBe("ab");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      items.value = ["c", "d", "e"];
+    });
+    expect(screen.getByLabelText("signal list").textContent).toBe("cde");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+  });
+
+  it("updates a signal child nested inside another signal without rerendering its parent", () => {
+    const inner = signal("leaf");
+    const outer = signal<string | typeof inner>(inner);
+    const parentRenders = vi.fn();
+
+    function Parent() {
+      parentRenders();
+      return <span aria-label="nested signal child">{outer}</span>;
+    }
+
+    render(<Parent />);
+    expect(screen.getByLabelText("nested signal child").textContent).toBe("leaf");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      inner.value = "changed";
+    });
+    expect(screen.getByLabelText("nested signal child").textContent).toBe("changed");
     expect(parentRenders).toHaveBeenCalledTimes(1);
   });
 
