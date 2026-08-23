@@ -1,0 +1,81 @@
+# Rendering optimization
+
+[English](rendering-optimization.md) | [日本語](rendering-optimization.ja.md)
+
+There are two separate optimization layers. They can be used independently:
+
+1. The runtime hooks and JSX runtime work without a build plugin.
+2. The optional `unplugin-react-alien-signals` package inserts `useSignals()` around selected components and custom hooks, with an optional exact managed boundary.
+
+Neither layer makes every React component signal-driven. React still owns the component tree and scheduling; the optimization narrows the work caused by signal changes to the component or native DOM leaf that actually read the signal.
+
+## Without a plugin: explicit live tracking
+
+Use `useSignals()` when you want the live-library style without changing the build. It must be the first hook and must be called unconditionally:
+
+```tsx
+function Counter() {
+  useSignals();
+  const count = useSignal(0);
+
+  return <button onClick={() => count.value++}>{count.value}</button>;
+}
+```
+
+Synchronous signal reads made during the render after `useSignals()` are collected, and a change to one of those values schedules a rerender of that component. With `deepSignal`, property reads are tracked individually, so an unread sibling does not cause a rerender. This is the simplest option when you want explicit control and no build configuration.
+
+The bare runtime boundary is best-effort: tracking closes at the next `useSignals()` call, at the commit-phase layout effect, or in a microtask scheduled after the current synchronous execution. It is intended for synchronous component renders. Every component that reads a signal during render must call `useSignals()` itself; reads from effects, event handlers, asynchronous callbacks, or an untracked component can otherwise be attributed to the currently open boundary. Exact separation across Suspense-aborted renders, nested server rendering during a render, and multiple concurrent roots requires the managed transform below. The unresolved boundary problem and the options for a future contract are tracked in [the boundary design note](design/use-signals-boundary-design.md).
+
+The custom JSX runtime provides a second, independent optimization: a signal used as a native host child or an allowlisted host prop updates as a local DOM leaf, without rerendering the parent component at all. See [JSX signal children and host bindings](jsx-bindings.md) for the full allowlist, coercion rules, and caveats.
+
+## With a plugin: automatic `useSignals()` insertion
+
+The optional universal build plugin keeps Babel private: configure the integration for your bundler instead of adding a Babel config. By default it detects selected functions and only inserts a normal `useSignals()` call as their first hook. That gives the same best-effort boundary as writing the hook yourself, without a control-flow rewrite. The JSX runtime's native leaf bindings work independently of the plugin.
+
+```sh
+# Planned package name — it is not published to npm yet.
+pnpm add -D unplugin-react-alien-signals
+```
+
+```ts
+// vite.config.ts
+import { defineConfig } from "vite";
+import signals from "unplugin-react-alien-signals/vite";
+
+export default defineConfig({
+  plugins: [signals({ mode: "auto" })],
+});
+```
+
+The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry points. It is ESM-only, so use `import` in the bundler configuration. It is currently a private workspace package and is not published to npm; the install and configuration snippets document the intended release API.
+
+`mode` chooses how components opt in:
+
+- `"manual"`: transform an explicit first-statement imported `useSignals()` call, or a named component/custom hook marked with `@useSignals`. This preserves the explicit live-library style.
+- `"auto"` (default): additionally transform named JSX components that read `.value`, and named `useX` custom hooks that read `.value`.
+- `"all"`: additionally transform every named JSX component. Use it when a component should opt in even though the static `.value` check cannot see a direct read; arbitrary nested callbacks are not transform targets.
+
+`transform` chooses how an opted-in function is generated:
+
+- `"inject"` (default): import normal `useSignals` from `react-alien-signals` and insert its call as the first hook. It does not emit `try` / `finally` or rewrite existing control flow.
+- `"managed"`: import from `react-alien-signals/runtime` and emit the advanced `try` / `finally` scope. Choose this only when exact separation across Suspense-aborted renders, nested server rendering during render, or concurrent roots matters.
+
+```ts
+// Opt into the exact managed boundary only where that trade-off is wanted.
+signals({ mode: "auto", transform: "managed" });
+```
+
+`@useSignals` and `@noUseSignals` apply only to their owning function, not nested functions. Automatic modes support top-level declaration and arrow components, including named components wrapped with `memo` or `forwardRef`; arbitrary nested callbacks, class components, anonymous default exports, async/generator functions, and components with an existing `useSignals()` call are not changed. Reapplying either transform mode is a no-op. The `.value` check is intentionally heuristic, so `mode: "auto"` may add a harmless subscription to an object that is not a signal.
+
+Choose the approach based on how much build-time automation you want:
+
+| Goal | Recommended approach |
+| --- | --- |
+| No plugin or bundler integration | Call `useSignals()` explicitly; use the JSX runtime for native signal children and allowlisted props. |
+| Automatic insertion with the normal `useSignals()` behavior | Use the plugin with `mode: "auto"` (the default). |
+| Explicit opt-in with an exact render boundary | Use `mode: "manual"` and `transform: "managed"`. |
+| Broad migration or components whose reads are hidden from the heuristic | Use `mode: "all"`, then opt out individual functions with `@noUseSignals` where needed. |
+
+The plugin is not required for the core primitives, hooks, or JSX signal bindings. It is a development/build-time convenience for inserting `useSignals()` or, when selected, the managed render boundary; it does not replace `useSignals()` semantics or expand the native host-prop allowlist.
+
+See also: [React hooks](hooks.md), [JSX signal children and host bindings](jsx-bindings.md).

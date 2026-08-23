@@ -6,7 +6,7 @@
 
 ## 実装済み(出荷済み)
 
-JSX runtimeは、allowlistに含まれるnative host propに渡されたsignalをdirect bindingします。mount時に `.peek()` からDOMを初期化し、その後の変更はrefが設置する `effect()` を通じて書き込み、そのpropについてはReactの再レンダーを経由しません(`src/runtime/jsx.ts` の `transformProps` / `ReactiveHost`。allowlist全体はREADMEの「JSX signal children and host bindings」を参照してください)。
+JSX runtimeは、allowlistに含まれるnative host propに渡されたsignalをdirect bindingします。mount時に `.peek()` からDOMを初期化し、その後の変更はrefが設置する `effect()` を通じて書き込み、そのpropについてはReactの再レンダーを経由しません(`src/runtime/jsx.ts` の `transformProps` / `ReactiveHost`。allowlist全体は[JSXのsignal子要素とhost binding](../jsx-bindings.ja.md)を参照してください)。
 
 - **`value`/`checked`。** `isControlledTwoWayProp` と `setControlledProp` が、Reactが実際にcontrolledとして扱うtag ―― `value` は `input`/`textarea`/`select`、`checked` は `input` ―― に双方向の扱いを限定します。controlled propは `.peek()` から得た値で `defaultValue`/`defaultChecked` に置き換えられるためReactは再diffせず、DOMが既に同じ値を持っている場合は書き込みを省略します。`<select multiple>` は `setMultiSelectValue`(`String(value)` ではなく各 `<option>.selected` を切り替え)を通ります。それ以外の `value`/`checked` を持つ要素(`<li value>`、`<option value>`、`<meter value>` など)は、通常のpeek-and-substitute経路のままです。
 - **`<select>` の再同期。** `bindSelectValue` が通常のper-value effectに加えて、selectのsubtreeへ `MutationObserver` を設置します。これにより、mount後に追加された(例えばoption自体がsignalから描画される場合の)マッチする `<option>` も正しく選択されます。以前はbindingされたsignalだけを監視し、DOMの `<option>` listの変化には反応しなかったため、選択状態が空のまま固まっていました。
