@@ -117,17 +117,44 @@ export function signal<T>(initialValue: T): Signal<T> {
   return registerSignal(new SignalImpl(initialValue));
 }
 
+/** A computed's cached result, boxed so a thrown error can be cached too. */
+type ComputedBox<T> = { value: T } | { error: unknown };
+
+/** Unwraps a computed's box, rethrowing a cached getter error on read. */
+function unbox<T>(box: ComputedBox<T>): T {
+  if ("error" in box) throw box.error;
+  return box.value;
+}
+
 /** Creates a lazily evaluated reactive value. */
 export function computed<T>(getter: () => T): ReadonlySignal<T> {
-  const source = createComputed<{ value: T }>((previous) => {
-    const value = getter();
-    return previous !== undefined && Object.is(previous.value, value)
-      ? previous
-      : { value };
+  // alien-signals' `updateComputed` resets its dirty/pending flags in a
+  // `finally` no matter how the callback exits, so a thrown getter leaves the
+  // node looking clean with its stale cached value, and can permanently
+  // unwatch an effect whose run was interrupted mid-flush (verified against
+  // alien-signals@3.2.1: neither the computed nor the effect ever recovers on
+  // a later write). Catching here keeps the callback always returning
+  // normally, so alien-signals' own bookkeeping stays on the success path;
+  // the error is boxed and only rethrown when something reads `.value` or
+  // `.peek()`, which for React happens during render where an Error Boundary
+  // can catch it (mirrors `createDeepSelectorStore` in `src/react/hooks.ts`).
+  const source = createComputed<ComputedBox<T>>((previous) => {
+    try {
+      const value = getter();
+      // Guard `"value" in previous`: if `previous` is an error box, its
+      // `.value` is `undefined`, so without this a legitimate recovery to
+      // `value === undefined` would `Object.is` that against `undefined` and
+      // wrongly keep returning the stale error box.
+      return previous !== undefined && "value" in previous && Object.is(previous.value, value)
+        ? previous
+        : { value };
+    } catch (error) {
+      return { error };
+    }
   });
   let disposeRenderBridge: (() => void) | undefined;
   let isInitialBridgeRun = true;
-  let lastRenderValue: { value: T } | undefined;
+  let lastRenderValue: ComputedBox<T> | undefined;
   const renderSubscription = new RenderSubscription(
     () => {
       isInitialBridgeRun = true;
@@ -161,12 +188,15 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
         // Track after evaluating so this render records the post-evaluation
         // version without masking an older concurrent render.
         renderSubscription.track();
-        return nextValue.value;
+        return unbox(nextValue);
       }
-      return source().value;
+      return unbox(source());
     },
+    // `peek()` is documented as an untracked read, not an error-suppressing
+    // one, so it rethrows the same as `.value` — consistent with
+    // `useDeepSignalValue`, whose selector errors always surface on read.
     peek(): T {
-      return untracked(() => source().value);
+      return unbox(untracked(() => source()));
     },
   };
   return registerSignal(result);

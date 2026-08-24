@@ -256,3 +256,137 @@ describe("core signal primitives", () => {
     expect(isSignal(count)).toBe(true);
   });
 });
+
+describe("computed error propagation", () => {
+  const disposers: Array<() => void> = [];
+
+  afterEach(() => {
+    while (disposers.length > 0) disposers.pop()?.();
+  });
+
+  it("surfaces the getter's own error, unchanged, from both .value and .peek()", () => {
+    const failure = new Error("getter failed");
+    const broken = computed(() => {
+      throw failure;
+    });
+
+    expect(() => broken.value).toThrow(failure);
+    expect(() => broken.peek()).toThrow(failure);
+
+    // `.toThrow(error)` only compares messages; capture the thrown value
+    // outside the catch so the identity check isn't a conditional `expect`.
+    let thrownFromValue: unknown;
+    try {
+      broken.value;
+    } catch (error) {
+      thrownFromValue = error;
+    }
+    expect(thrownFromValue).toBe(failure);
+  });
+
+  it("recovers once the dependency changes to a value the getter accepts, instead of staying wedged", () => {
+    // alien-signals@3.2.1's updateComputed resets a computed's dirty/pending
+    // flags in a `finally` regardless of outcome, so an escaping getter
+    // exception used to leave the node looking clean on its stale value, and
+    // could permanently unwatch an effect whose run was interrupted mid-flush
+    // (confirmed directly against alien-signals: neither ever recovered on a
+    // later write). The watcher below guards its own read so this test
+    // exercises exactly that internal re-evaluation path.
+    const source = signal(1);
+    const flaky = computed(() => {
+      if (source.value === 2) throw new Error("boom");
+      return source.value * 10;
+    });
+    const results: Array<number | "error"> = [];
+    disposers.push(effect(() => {
+      try {
+        results.push(flaky.value);
+      } catch {
+        results.push("error");
+      }
+    }));
+    expect(results).toEqual([10]);
+
+    source.value = 2;
+    expect(results).toEqual([10, "error"]);
+
+    // The regression: a later write to a value the getter accepts must still
+    // reach the getter, not return the stale pre-throw value forever.
+    source.value = 3;
+    expect(results).toEqual([10, "error", 30]);
+
+    source.value = 4;
+    expect(results).toEqual([10, "error", 30, 40]);
+  });
+
+  it("does not throw synchronously at the write site; the error only surfaces on a subsequent read", () => {
+    const source = signal(1);
+    const flaky = computed(() => {
+      if (source.value === 2) throw new Error("boom");
+      return source.value;
+    });
+    // Guarding the read inside the watcher isolates the write-site behavior:
+    // any throw that still escapes here would have to come from alien-signals'
+    // own dirty-checking (run before the effect body executes), not from this
+    // unguarded call, because this call IS guarded.
+    disposers.push(effect(() => {
+      try {
+        flaky.value;
+      } catch {
+        // Ignored on purpose: this test only cares whether the write throws.
+      }
+    }));
+
+    expect(() => {
+      source.value = 2;
+    }).not.toThrow();
+    expect(() => flaky.value).toThrow("boom");
+
+    expect(() => {
+      batch(() => {
+        source.value = 3;
+      });
+    }).not.toThrow();
+    expect(flaky.value).toBe(3);
+  });
+
+  it("does not stall an unrelated effect queued in the same batch/flush", () => {
+    // Pre-fix, alien-signals' flush() has a `finally` but no `catch`: once one
+    // queued effect's dirty-check throws, every effect still queued behind it
+    // in that flush is skipped, not merely deferred — and empirically (verified
+    // directly against alien-signals) it never runs again on its own, even from
+    // later, unrelated writes. Reproduced here through the public API: `a` is
+    // written before `b`, so the erroring watcher is queued ahead of the
+    // healthy one in the shared flush.
+    const a = signal(1);
+    const b = signal(100);
+    const erroring = computed(() => {
+      if (a.value === 2) throw new Error("boom");
+      return a.value;
+    });
+    const healthySeen: number[] = [];
+    disposers.push(effect(() => {
+      try {
+        erroring.value;
+      } catch {
+        // Ignored on purpose: only `healthySeen` is under test here.
+      }
+    }));
+    disposers.push(effect(() => {
+      healthySeen.push(b.value * 2);
+    }));
+    expect(healthySeen).toEqual([200]);
+
+    expect(() => {
+      batch(() => {
+        a.value = 2;
+        b.value = 200;
+      });
+    }).not.toThrow();
+    expect(healthySeen).toEqual([200, 400]);
+
+    // Confirm it keeps reacting afterward too, not just this one time.
+    b.value = 300;
+    expect(healthySeen).toEqual([200, 400, 600]);
+  });
+});

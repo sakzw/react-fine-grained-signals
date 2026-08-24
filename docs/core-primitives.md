@@ -23,6 +23,8 @@ dispose();
 
 `signal` creates a writable `Signal<T>`; `computed` creates a read-only `ReadonlySignal<T>`. Both expose `.value` and `.peek()`. Writes use `Object.is` equality, and effects return a disposer; an effect's returned cleanup is run before its next execution and when disposed.
 
+If a `computed` getter throws, the write that triggered re-evaluation still completes normally; the error is cached and rethrown from `.value` and `.peek()` on the next read of that computed instead, so a `useSignalValue`/`useSignals()` read of it during React's render reaches an Error Boundary. A later write to a dependency the getter did read before failing correctly triggers re-evaluation on the next read, so the computed recovers once its inputs make the getter succeed again; a dependency the getter never reached because it threw first is not tracked, so a write to only that dependency does not by itself trigger re-evaluation.
+
 ## Deep signals
 
 `deepSignal` adds property-level tracking for plain objects and arrays. Proxies are created lazily and cached, so aliases and cycles retain stable identity.
