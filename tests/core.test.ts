@@ -1,6 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { batch, computed, effect, isSignal, signal, untracked } from "../src/index.js";
 
+// Spelled out rather than imported: the literal string is the cross-instance
+// wire format, so a second copy of the package can only agree by matching it.
+const SIGNAL_BRAND = Symbol.for("react-alien-signals.signal");
+
+/** Produces what a signal from a second copy of this package looks like here. */
+function brandForeign<T extends object>(value: T, version: unknown = 1): T {
+  Object.defineProperty(value, SIGNAL_BRAND, {
+    value: version,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  return value;
+}
+
 describe("core signal primitives", () => {
   const disposers: Array<() => void> = [];
 
@@ -189,5 +204,55 @@ describe("core signal primitives", () => {
     expect(isSignal(undefined)).toBe(false);
     expect(isSignal(42)).toBe(false);
     expect(isSignal("string")).toBe(false);
+    expect(isSignal(() => 1)).toBe(false);
+    expect(isSignal([signal(1)])).toBe(false);
+    expect(isSignal(new Proxy({ value: 1, peek: () => 1 }, {}))).toBe(false);
+  });
+
+  it("identifies a signal branded by a second package instance", () => {
+    expect(isSignal(brandForeign({ value: 1, peek: () => 1 }))).toBe(true);
+    // A later protocol version only widens the `{ value, peek() }` contract,
+    // so an older instance keeps trusting it.
+    expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, 2))).toBe(true);
+  });
+
+  it("rejects a brand that claims no supported protocol version", () => {
+    expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, true))).toBe(false);
+    expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, "1"))).toBe(false);
+    expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, 0))).toBe(false);
+    // A brand is a claim: without the contract behind it the value is rejected
+    // here instead of crashing later inside a render.
+    expect(isSignal(brandForeign({ value: 1 }))).toBe(false);
+  });
+
+  it("keeps the brand off every enumerable surface", () => {
+    const count = signal(1);
+    const doubled = computed(() => count.value * 2);
+
+    expect(Object.keys(count)).toEqual([]);
+    expect(Object.keys(doubled)).toEqual(["value", "peek"]);
+    expect(JSON.stringify({ count, doubled })).toBe('{"count":{},"doubled":{"value":2}}');
+    expect(Object.getOwnPropertySymbols({ ...count })).toEqual([]);
+    expect(Object.getOwnPropertySymbols({ ...doubled })).toEqual([]);
+    expect(isSignal({ ...doubled })).toBe(false);
+  });
+
+  it("keeps the brand fixed once a signal is public", () => {
+    const count = signal(1);
+    const brandHolder = count as unknown as Record<symbol, unknown>;
+
+    expect(Object.getOwnPropertyDescriptor(count, SIGNAL_BRAND)).toEqual({
+      value: 1,
+      enumerable: false,
+      writable: false,
+      configurable: false,
+    });
+    expect(() => {
+      brandHolder[SIGNAL_BRAND] = 99;
+    }).toThrow(TypeError);
+    expect(() => {
+      delete brandHolder[SIGNAL_BRAND];
+    }).toThrow(TypeError);
+    expect(isSignal(count)).toBe(true);
   });
 });

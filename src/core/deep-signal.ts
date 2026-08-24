@@ -3,6 +3,7 @@ import {
   batch,
   isSignal,
   registerSignal,
+  SIGNAL_BRAND,
   SignalImpl,
   signal,
 } from "./base.js";
@@ -583,6 +584,14 @@ function createDeepContext() {
 
     const proxy = new Proxy(rawValue, {
       get(target, key, receiver) {
+        // Deep state is raw data, never a signal. Answering the identity probe
+        // up front keeps `isSignal()` on a nested proxy from allocating a
+        // version signal for a key that can never change. An own brand only
+        // exists if a raw reference bypassed this proxy, and it is reported so
+        // the proxy invariants hold.
+        if (key === SIGNAL_BRAND && !Object.prototype.hasOwnProperty.call(target, key)) {
+          return undefined;
+        }
         track(metadata.properties, metadata.propertyIndices, key);
         const result = Reflect.get(target, key, receiver);
 
@@ -622,6 +631,11 @@ function createDeepContext() {
       set(target, key, nextValue) {
         if (key === "__proto__") {
           throw new TypeError("deepSignal() does not support prototype mutation");
+        }
+        // Storing the brand would make this subtree answer `isSignal()`, which
+        // silently stops it from being wrapped and kills its reactivity.
+        if (key === SIGNAL_BRAND) {
+          throw new TypeError("deepSignal() does not support branding state as a signal");
         }
         const oldValue = Reflect.get(target, key, target);
         const existed = Reflect.has(target, key);

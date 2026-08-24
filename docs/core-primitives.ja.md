@@ -46,4 +46,14 @@ state.value.items.push("second");
 
 このviewの保証は不透明な境界をまたぎません。クラスインスタンス、`Date`、関数、collection entry、アクセサの戻り値、prototypeの状態、private field、closureの状態、`WeakMap` のentry、Promiseの内部状態は、rawかつ非リアクティブな領域です。これらの領域から得た値や、保存後に直接変更された不透明な値は、直接変更に対して保護されません。ユーザーコードを呼ばないため、書き込み時の検証はown data descriptorと `Map` / `Set` のentryだけを調べ、getter / setterは呼び出しません。検査できる値にlibrary Proxyが含まれる書き込みは拒否されますが、それ以外の内部領域は検査できません。
 
+## signalの判定
+
+`isSignal(value)` は、値が `signal`、`computed`、`deepSignal` のいずれかに由来するかを返します。カスタムJSXランタイムと制御フローコンポーネントはこの判定で分岐するため、偽陰性はエラーにならず、リアクティブなバインディングが通常のpropに劣化するという形で現れます。
+
+そのため判定はpackage instanceをまたいで機能する必要があります。すべてのsignalは `Symbol.for("react-alien-signals.signal")` をキーとする列挙不可のbrandを持ち、その値はプロトコルバージョン（現在は `1`）です。`isSignal` は、サポートされたバージョンのbrandを持ち、かつ `peek()` を公開している値を受け入れます。これにより、packageが二重に解決された場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）や、realmの境界をまたいだsignalも認識されます。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
+
+これが解決するのは判定だけです。リアクティビティにはさらに `alien-signals` のinstanceが共有されていることが必要で、依存追跡がそのmoduleのglobalな状態に置かれているためです。peer dependencyにしている理由は[パッケージング](../README.ja.md#パッケージング)を参照してください。認識された外部のsignalは値を正しく読み取れますが、更新が伝播するのは下層のリアクティブコアが共有されている間だけです。
+
+`deepSignal` の状態にbrandを代入すると例外になります。brandが付いた部分木はsignalとして判定され、リアクティブ化されなくなるためです。
+
 関連: [Reactフック](hooks.ja.md)、[描画最適化](rendering-optimization.ja.md)。

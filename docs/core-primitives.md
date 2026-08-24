@@ -46,4 +46,14 @@ Only an opaque `Map` or `Set` reached directly from a reactive plain-object or a
 
 This view guarantee does not cross an opaque boundary. Class instances, `Date`, functions, collection entries, accessor results, prototype state, private fields, closure state, `WeakMap` entries, and Promise internals are raw, non-reactive regions; values obtained through those regions, and opaque values mutated after they are stored, are not protected from direct mutation. To avoid invoking user code, write validation inspects only own data descriptors and `Map` / `Set` entries; it never calls getters or setters and cannot inspect the other internal regions above. Such writes are rejected when those inspected values contain library proxies.
 
+## Identifying signals
+
+`isSignal(value)` reports whether a value came from `signal`, `computed`, or `deepSignal`. The custom JSX runtime and the control-flow components route on it, so a false negative degrades a reactive binding into a plain prop instead of raising an error.
+
+Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-alien-signals.signal")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
+
+This fixes identification only. Reactivity additionally requires a shared `alien-signals` instance, because dependency tracking lives in that module's global state; see [Packaging](../README.md#packaging) for why it is a peer dependency. A recognized foreign signal reads correctly, but it propagates updates only while the reactive core underneath is shared.
+
+Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
+
 See also: [React hooks](hooks.md), [rendering optimization](rendering-optimization.md).

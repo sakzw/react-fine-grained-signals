@@ -1,6 +1,21 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { batch, deepSignal, effect, isSignal } from "../src/index.js";
 
+// Spelled out rather than imported: the literal string is the cross-instance
+// wire format, so a second copy of the package can only agree by matching it.
+const SIGNAL_BRAND = Symbol.for("react-alien-signals.signal");
+
+/** Produces what a signal from a second copy of this package looks like here. */
+function brandForeign<T extends object>(value: T): T {
+  Object.defineProperty(value, SIGNAL_BRAND, {
+    value: 1,
+    enumerable: false,
+    writable: false,
+    configurable: false,
+  });
+  return value;
+}
+
 describe("deepSignal", () => {
   const disposers: Array<() => void> = [];
 
@@ -473,13 +488,54 @@ describe("deepSignal", () => {
     const box = new Box(1);
     const map = new Map([["value", 1]]);
     const nestedSignal = deepSignal({ value: 1 });
-    const state = deepSignal({ box, map, nestedSignal });
+    const foreignSignal = brandForeign({ value: 1, peek: () => 1 });
+    const state = deepSignal({ box, map, nestedSignal, foreignSignal });
 
     expect(state.value.box).toBe(box);
     expect(state.value.map).not.toBe(map);
     expect(new Map(state.value.map)).toEqual(map);
     expect(state.peek().map).toBe(map);
     expect(state.value.nestedSignal).toBe(nestedSignal);
+    expect(state.value.foreignSignal).toBe(foreignSignal);
+  });
+
+  it("does not let deep state answer the signal identity probe", () => {
+    const state = deepSignal({ user: { name: "Ada" }, tags: ["a"] });
+
+    expect(isSignal(state)).toBe(true);
+    expect(isSignal(state.value)).toBe(false);
+    expect(isSignal(state.value.user)).toBe(false);
+    expect(isSignal(state.value.tags)).toBe(false);
+    expect(Object.getOwnPropertySymbols(state.value)).toEqual([]);
+    expect(
+      (state.value.user as unknown as Record<symbol, unknown>)[SIGNAL_BRAND],
+    ).toBeUndefined();
+  });
+
+  it("rejects branding deep state as a signal", () => {
+    const state = deepSignal({ user: { name: "Ada" } });
+    const user = state.value.user as unknown as Record<symbol, unknown>;
+
+    expect(() => {
+      user[SIGNAL_BRAND] = 1;
+    }).toThrow(TypeError);
+    expect(isSignal(state.value.user)).toBe(false);
+    expect(Object.getOwnPropertySymbols(state.peek().user)).toEqual([]);
+  });
+
+  it("keeps proxy invariants when a raw reference brands state behind its back", () => {
+    const raw = { name: "Ada", peek: () => "Ada" };
+    const state = deepSignal({ user: raw });
+    const userProxy = state.value.user;
+
+    brandForeign(raw);
+
+    // The brand is now a non-configurable own value of the proxy target, so the
+    // proxy has to report it rather than hide it and trip an invariant.
+    expect((userProxy as unknown as Record<symbol, unknown>)[SIGNAL_BRAND]).toBe(1);
+    expect(isSignal(userProxy)).toBe(true);
+    // And the raw object now reads as a foreign signal, so it stays opaque.
+    expect(state.value.user).toBe(raw);
   });
 
   it("does not collect nested dependencies through peek", () => {
@@ -501,6 +557,7 @@ describe("deepSignal", () => {
     expect(() => deepSignal(1 as never)).toThrow();
     expect(() => deepSignal((() => undefined) as never)).toThrow();
     expect(() => deepSignal(Object.freeze({ value: 1 }))).toThrow();
+    expect(() => deepSignal(brandForeign({ value: 1, peek: () => 1 }))).toThrow();
 
     expect(() => deepSignal({ nested: Object.freeze({ value: 1 }) })).toThrow();
 
