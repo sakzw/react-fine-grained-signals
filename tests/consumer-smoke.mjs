@@ -52,6 +52,27 @@ try {
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   await run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], consumerRoot);
+
+  // Packaging guarantees that nothing else in the suite can observe. alien-signals
+  // keeps its dependency tracking in module-global state (getActiveSub /
+  // setActiveSub), so a second copy in a consumer's graph silently stops tracking
+  // reads instead of failing loudly; only the peer declaration forces one copy.
+  const installedManifest = JSON.parse(
+    await readFile(
+      join(consumerRoot, "node_modules", "react-alien-signals", "package.json"),
+      "utf8",
+    ),
+  );
+  if (installedManifest.dependencies?.["alien-signals"] !== undefined) {
+    throw new Error("alien-signals must not be published as a hard dependency");
+  }
+  if (installedManifest.peerDependencies?.["alien-signals"] === undefined) {
+    throw new Error("alien-signals must be published as a peer dependency");
+  }
+  if (installedManifest.sideEffects !== false) {
+    throw new Error('The published manifest must keep "sideEffects": false for tree-shaking');
+  }
+
   await run("pnpm", ["exec", "tsc", "--noEmit"], consumerRoot);
   await run("pnpm", ["exec", "vite", "build"], consumerRoot);
 

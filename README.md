@@ -16,6 +16,18 @@ An experimental React binding for [alien-signals](https://www.npmjs.com/package/
 
 Design investigation memos for still-open or historical implementation decisions live under [`docs/design/`](docs/design/); see [`docs/README.md`](docs/README.md) for the full index.
 
+## Packaging
+
+`alien-signals` is a **peer dependency**, not a direct dependency. Its dependency tracking lives in module-global state (`getActiveSub` / `setActiveSub`), so two copies in one application do not merely waste bytes: reads tracked by one copy are invisible to the other, and nothing throws. Declaring it as a peer makes the package manager resolve a single instance, and `pnpm test:consumer` asserts the published manifest keeps it that way.
+
+The package sets `"sideEffects": false`. Bundlers that infer side effects from the module graph already shake this package correctly without it — importing only `signal` costs 2.96 kB gzip against 7.13 kB for the whole entry, and under Vite/Rolldown the flag moves the first number by about 40 bytes and the second not at all. It is kept for bundlers that trust the declaration instead of proving it (webpack's `sideEffects` optimization), and because it pins the guarantee: adding a top-level side effect later fails a check rather than silently costing every consumer.
+
+```sh
+pnpm size
+```
+
+`scripts/check-size.mjs` bundles representative consumer import graphs, reports gzip and brotli sizes against `scripts/size-budget.json`, and asserts that code which must be shaken out really is absent. The absence checks are paired with positive controls, so a renamed marker string fails the check instead of quietly making it vacuous. Run `pnpm size:update` when growth is intentional.
+
 ## Development
 
 Workspace development uses Node.js 24.19.0, pnpm 11, and React 19 or newer. The private root manifest accepts Node.js `^24.19.0`; `.node-version` is the current Node 24 LTS patch and CI reads that file directly. This is a repository-tooling guard while the package is private, not a public runtime compatibility claim. Before publication, the distributed package's Node.js runtime floor must be tested separately and must not inherit the stricter test/build-tool requirement by accident.

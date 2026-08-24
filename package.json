@@ -4,6 +4,7 @@
   "description": "React bindings for alien-signals.",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "packageManager": "pnpm@11.22.0",
   "engines": {
     "node": "^24.19.0"
@@ -53,13 +54,13 @@
     "test:runtime": "vitest run --passWithNoTests",
     "test:transform": "pnpm --filter unplugin-react-alien-signals test",
     "test:consumer": "pnpm build && node tests/consumer-smoke.mjs",
-    "test:browser": "playwright test"
+    "test:browser": "playwright test",
+    "size": "pnpm build:runtime && node scripts/check-size.mjs",
+    "size:update": "pnpm build:runtime && node scripts/check-size.mjs --update"
   },
   "peerDependencies": {
+    "alien-signals": "^3.2.1",
     "react": ">=19.0.0"
-  },
-  "dependencies": {
-    "alien-signals": "^3.2.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",
@@ -67,6 +68,8 @@
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.4",
+    "alien-signals": "^3.2.1",
+    "babel-plugin-react-compiler": "^1.0.0",
     "jsdom": "^30.0.1",
     "oxlint": "^1.79.0",
     "react": "^19.2.8",

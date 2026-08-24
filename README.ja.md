@@ -16,6 +16,18 @@
 
 未決定、または過去の実装判断に関する設計検討メモは[`docs/design/`](docs/design/)にあります。索引全体は[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
 
+## パッケージング
+
+`alien-signals` は直接のdependencyではなく **peer dependency** です。alien-signalsの依存追跡はmodule globalな状態（`getActiveSub` / `setActiveSub`）に置かれているため、1つのアプリケーションに2つのcopyが入るとbytesを無駄にするだけでは済みません。片方のcopyが追跡した読み取りはもう片方から見えず、しかも例外は投げられません。peerとして宣言することでpackage managerが単一instanceに解決し、`pnpm test:consumer` が公開manifestのその状態を検証します。
+
+packageは `"sideEffects": false` を設定しています。module graphからside effectを推論するbundlerは、この宣言がなくても既に正しくtree shakingできます。`signal` だけをimportした場合は2.96 kB gzipで、entry全体では7.13 kBです。Vite/Rolldownでは、このflagの有無で前者が約40 bytes動くだけで、後者は変わりません。それでも設定しているのは、証明する代わりに宣言を信頼するbundler（webpackの `sideEffects` 最適化）のためと、保証を固定するためです。後からtop levelのside effectを追加した場合、すべてのconsumerに黙ってcostを課す代わりにcheckが失敗します。
+
+```sh
+pnpm size
+```
+
+`scripts/check-size.mjs` は代表的なconsumerのimport graphをbundleし、gzipとbrotliのサイズを `scripts/size-budget.json` と比較したうえで、tree shakingで落ちるべきcodeが実際に存在しないことを検証します。この不在checkには陽性対照を組み合わせてあるため、marker文字列がrenameされた場合はcheckが無意味化する代わりに失敗します。サイズの増加が意図的な場合は `pnpm size:update` を実行してください。
+
 ## 開発
 
 workspaceの開発にはNode.js 24.19.0、pnpm 11、React 19以降を使用します。privateなroot manifestはNode.js `^24.19.0` を許可し、`.node-version` にはNode 24 LTSの最新patchを記載しています。CIもこのファイルを直接読みます。これはpackageがprivateな間のrepository tooling向けguardであり、公開runtimeの互換性を示すものではありません。公開前には配布packageのNode.js下限を別途検証し、test/build toolの厳しい要件を誤って引き継がないようにします。

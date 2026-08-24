@@ -1,0 +1,20 @@
+{
+  "core": {
+    "gzip": 3392
+  },
+  "core+hooks": {
+    "gzip": 4160
+  },
+  "deep": {
+    "gzip": 6848
+  },
+  "index-full": {
+    "gzip": 8064
+  },
+  "jsx-runtime": {
+    "gzip": 4864
+  },
+  "utils": {
+    "gzip": 3264
+  }
+}
