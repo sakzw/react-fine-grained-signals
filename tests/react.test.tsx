@@ -1,12 +1,13 @@
 /** @jsxImportSource react-alien-signals */
 // @vitest-environment jsdom
 
-import { Component, createRef, StrictMode, act } from "react";
+import { Component, createRef, StrictMode, Suspense, act } from "react";
 import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx, jsxs } from "../src/jsx-runtime.js";
 import { jsxDEV } from "../src/jsx-dev-runtime.js";
+import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
 import {
   batch,
   computed,
@@ -124,6 +125,103 @@ describe("React bindings", () => {
       state.value.value = 4;
     });
     expect(renders).toHaveBeenCalledTimes(rendersAtUnmount);
+  });
+
+  // Bare useSignals() only closes its collector deterministically from the
+  // commit-phase layout effect; a render that never commits (throws, or is
+  // discarded by Suspense) instead relies on a microtask fallback scheduled
+  // by ensureFinalCleanup() (see docs/rendering-optimization.md's "best-effort"
+  // section). These two tests pin that documented fallback path itself, not
+  // just its externally visible effect: start() also self-heals a dangling
+  // collector the moment any *later* useSignals() call runs, which would
+  // mask a broken fallback microtask if these tests only asserted behavior
+  // after mounting something else. hasActiveRenderCollector() lets each test
+  // observe the collector closing while nothing else has run start() yet.
+  it("closes a thrown render's collector via the fallback microtask, without leaking into a later root", async () => {
+    const abandoned = signal(0);
+    const healthy = signal("healthy");
+    const healthyRenders = vi.fn();
+
+    function Throwing(): never {
+      useSignals();
+      abandoned.value;
+      throw new Error("render failed");
+    }
+    function Healthy() {
+      useSignals();
+      healthyRenders();
+      return <output aria-label="healthy root">{healthy.value}</output>;
+    }
+
+    expect(() => render(<Throwing />)).toThrow("render failed");
+    // The layout effect that normally closes the collector never ran, so it
+    // is still the active collector right after the throw.
+    expect(hasActiveRenderCollector()).toBe(true);
+    // Nothing else calls useSignals() here, so only the microtask fallback
+    // (not start()'s self-heal on a later call) can close it at this point.
+    await Promise.resolve();
+    expect(hasActiveRenderCollector()).toBe(false);
+
+    render(<Healthy />);
+    act(() => {
+      abandoned.value = 1;
+    });
+    expect(healthyRenders).toHaveBeenCalledTimes(1);
+    act(() => {
+      healthy.value = "updated";
+    });
+    expect(screen.getByLabelText("healthy root").textContent).toBe("updated");
+  });
+
+  it("discards dependencies read by a suspended render attempt, closing via the fallback microtask while idle", async () => {
+    const source = signal("before");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let suspended = true;
+    const renders = vi.fn();
+
+    function Reader() {
+      useSignals();
+      const value = source.value;
+      renders(value);
+      if (suspended) throw gate;
+      return <output aria-label="suspense value">{value}</output>;
+    }
+
+    render(
+      <Suspense fallback={<output aria-label="suspense fallback">loading</output>}>
+        <Reader />
+      </Suspense>,
+    );
+    expect(screen.getByLabelText("suspense fallback").textContent).toBe("loading");
+    // The fallback tree doesn't call useSignals(), and the gate is still
+    // pending so no retry (and thus no self-heal) can have happened yet;
+    // only the microtask fallback can close the abandoned attempt from here.
+    expect(hasActiveRenderCollector()).toBe(true);
+    await Promise.resolve();
+    expect(hasActiveRenderCollector()).toBe(false);
+
+    const rendersWhileSuspended = renders.mock.calls.length;
+    // This write targets a dependency only the abandoned attempt read. Since
+    // that attempt's commit() never ran, it must hold no live subscription,
+    // so the write must not cause a stray render while still suspended.
+    act(() => {
+      source.value = "during suspension";
+    });
+    expect(renders).toHaveBeenCalledTimes(rendersWhileSuspended);
+
+    suspended = false;
+    await act(async () => {
+      release();
+      await gate;
+    });
+    expect(screen.getByLabelText("suspense value").textContent).toBe("during suspension");
+
+    // The retry's successful commit must subscribe for real.
+    act(() => {
+      source.value = "after resolution";
+    });
+    expect(screen.getByLabelText("suspense value").textContent).toBe("after resolution");
   });
 
   it("does not mix tracked dependencies between sibling components", () => {
