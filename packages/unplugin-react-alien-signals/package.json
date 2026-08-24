@@ -42,6 +42,7 @@
     "build": "tsdown && node tests/build-smoke.mjs",
     "bench": "node --expose-gc benchmarks/transform.mjs",
     "test": "vitest run",
+    "test:react-compiler": "vitest run tests/react-compiler.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {

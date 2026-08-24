@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   transformReactAlienSignals,
   type ReactAlienSignalsMode,
+  type ReactAlienSignalsReactCompiler,
   type ReactAlienSignalsTransform,
 } from "../src/internal/transform.js";
 
@@ -10,12 +11,14 @@ function compile(
   mode: ReactAlienSignalsMode = "manual",
   transform: ReactAlienSignalsTransform = "managed",
   importSource = "react-alien-signals",
+  reactCompiler: ReactAlienSignalsReactCompiler = "auto",
 ): string {
   return (
     transformReactAlienSignals(source, "fixture.tsx", {
       importSource,
       mode,
       transform,
+      reactCompiler,
     })?.code ?? source
   );
 }
@@ -93,7 +96,7 @@ describe("managed render transform", () => {
 
     expect(annotated).toContain("track();");
     expect(annotated).not.toContain("_useSignals");
-    expect(compile(explicit, "manual", "inject")).toBe(explicit);
+    expect(compile(explicit, "manual", "inject", "react-alien-signals", "off")).toBe(explicit);
   });
 
   it("supports custom import sources for the lightweight injection", () => {
@@ -229,7 +232,7 @@ describe("managed render transform", () => {
       `, mode);
 
       expect(output.match(/finally/g)).toHaveLength(1);
-      expect(output).toMatch(/function List\(\) \{\s+const _signals/);
+      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toMatch(/function Row\(item\) \{\s+return/);
     },
   );
@@ -248,8 +251,8 @@ describe("managed render transform", () => {
       `, mode);
 
       expect(output.match(/finally/g)).toHaveLength(2);
-      expect(output).toMatch(/function ArrowList\(\) \{\s+const _signals/);
-      expect(output).toMatch(/function NamedList\(\) \{\s+const _signals\d*/);
+      expect(output).toMatch(/function ArrowList\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+      expect(output).toMatch(/function NamedList\(\) \{\s+(?:"use no memo";\s+)?const _signals\d*/);
       expect(output).toMatch(/function Row\(item\) \{\s+return/);
     },
   );
@@ -266,7 +269,7 @@ describe("managed render transform", () => {
 
     expect(output.match(/finally/g)).toHaveLength(1);
     expect(output).toMatch(/function withCount\(Base\) \{\s+return function Wrapped/);
-    expect(output).toMatch(/function Wrapped\(props\) \{\s+const _signals/);
+    expect(output).toMatch(/function Wrapped\(props\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
   it("gives nested named components their own automatic tracking boundary", () => {
@@ -282,10 +285,10 @@ describe("managed render transform", () => {
 
     expect(auto.match(/finally/g)).toHaveLength(1);
     expect(auto).toMatch(/function Parent\(\) \{\s+const Child/);
-    expect(auto).toMatch(/const Child = \(\) => \{\s+const _signals/);
+    expect(auto).toMatch(/const Child = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(all.match(/finally/g)).toHaveLength(2);
-    expect(all).toMatch(/function Parent\(\) \{\s+const _signals/);
-    expect(all).toMatch(/const Child = \(\) => \{\s+const _signals\d*/);
+    expect(all).toMatch(/function Parent\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(all).toMatch(/const Child = \(\) => \{\s+(?:"use no memo";\s+)?const _signals\d*/);
   });
 
   it("skips automatic async and generator candidates", () => {
@@ -376,6 +379,7 @@ describe("managed render transform", () => {
       importSource: "react-alien-signals",
       mode: "auto" as const,
       transform: "inject" as const,
+      reactCompiler: "auto" as const,
     };
 
     expect(
@@ -408,4 +412,76 @@ describe("managed render transform", () => {
     expect(shadowed).toContain("const _signals = _useSignals();");
     expect(shadowed).not.toContain("const _signals = managed();");
   });
+});
+
+describe("React Compiler opt-out directive", () => {
+  const autoSource = `
+    const count = { value: 1 };
+    export function Counter() { return <p>{count.value}</p>; }
+  `;
+
+  it.each(["inject", "managed"] as const)(
+    "marks a %s-transformed function with the memoization opt-out",
+    (transform) => {
+      const output = compile(autoSource, "auto", transform);
+
+      expect(output).toContain('"use no memo";');
+      expect(compile(autoSource, "auto", transform, "react-alien-signals", "off"))
+        .not.toContain("use no memo");
+    },
+  );
+
+  it("marks a custom hook it transforms", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function useTotal() { return count.value + 1; }
+    `, "auto", "inject");
+
+    expect(output).toContain('"use no memo";');
+  });
+
+  it("marks an explicit useSignals component the inject transform leaves alone", () => {
+    const explicit = `
+      import { useSignals } from "react-alien-signals";
+      export function Counter({ count }) { useSignals(); return <p>{count.value}</p>; }
+    `;
+    const output = compile(explicit, "manual", "inject");
+
+    expect(output).toContain('"use no memo";');
+    expect(output).toContain("useSignals();");
+    expect(output).not.toContain("_useSignals");
+  });
+
+  it("does not mark functions it leaves untransformed", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function Untouched() { return <p>{count.value}</p>; }
+      /** @noUseSignals */
+      export function OptOut() { return <p>{count.value}</p>; }
+      export function helper() { return count.value; }
+    `, "manual", "inject");
+
+    expect(output).not.toContain("use no memo");
+  });
+
+  it("respects an author's own memoization directive", () => {
+    const optIn = compile(`
+      const count = { value: 1 };
+      export function Counter() { "use memo"; return <p>{count.value}</p>; }
+    `, "auto", "inject");
+
+    expect(optIn).toContain('"use memo";');
+    expect(optIn).not.toContain("use no memo");
+    expect(optIn).toContain("_useSignals();");
+  });
+
+  it.each(["inject", "managed"] as const)(
+    "stays idempotent with the %s transform",
+    (transform) => {
+      const once = compile(autoSource, "auto", transform);
+
+      expect(once.match(/use no memo/g)).toHaveLength(1);
+      expect(compile(once, "auto", transform)).toBe(once);
+    },
+  );
 });

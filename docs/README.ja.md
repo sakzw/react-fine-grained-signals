@@ -16,4 +16,4 @@
 
 未決定、または過去の実装判断に関する検討メモです。使い方のdocsではありません。
 
-- [`design/`](design/) — [直接バインディングの設計検討docs](design/direct-binding-value-checked-style.ja.md)、[`useSignals()` 境界の設計検討docs](design/use-signals-boundary-design.ja.md)、[transform toolchainの代替候補の検討docs](design/transform-toolchain-alternatives.ja.md)を参照してください。
+- [`design/`](design/) — [直接バインディングの設計検討docs](design/direct-binding-value-checked-style.ja.md)、[`useSignals()` 境界の設計検討docs](design/use-signals-boundary-design.ja.md)、[transform toolchainの代替候補の検討docs](design/transform-toolchain-alternatives.ja.md)、[React Compilerとの互換性の検討docs](design/react-compiler-compatibility.ja.md)を参照してください。

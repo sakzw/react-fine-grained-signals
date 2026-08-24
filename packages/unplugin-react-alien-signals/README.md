@@ -73,6 +73,14 @@ export default {
     handwritten call.
   - `"managed"`: emits an exact `try` / `finally` render boundary using the
     package's `/runtime` entry.
+- `reactCompiler`:
+  - `"auto"` (default): marks every transformed function with `"use no memo"`,
+    so React Compiler does not memoize away the signal reads render tracking
+    depends on. Without it, a compiled component caches its JSX and silently
+    stops updating after the first signal write.
+  - `"off"`: omits the directive. Choose it only when React Compiler is not in
+    the build, or when the affected components were verified against
+    [the compatibility note](../../docs/design/react-compiler-compatibility.md).
 - `importSource`: overrides `react-alien-signals` for a compatible wrapper.
 - `include` / `exclude`: functions that filter source module IDs.
 

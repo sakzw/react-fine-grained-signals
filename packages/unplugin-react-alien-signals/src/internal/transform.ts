@@ -10,11 +10,13 @@ import type { TransformResult } from "unplugin";
 
 export type ReactAlienSignalsMode = "manual" | "auto" | "all";
 export type ReactAlienSignalsTransform = "inject" | "managed";
+export type ReactAlienSignalsReactCompiler = "auto" | "off";
 
 export interface InternalTransformOptions {
   importSource: string;
   mode: ReactAlienSignalsMode;
   transform: ReactAlienSignalsTransform;
+  reactCompiler: ReactAlienSignalsReactCompiler;
 }
 
 export type InternalTransformResult = Exclude<TransformResult, string>;
@@ -33,6 +35,29 @@ interface FunctionInspection {
 const useSignalsComment = /(^|\s)@useSignals(\s|$)/;
 const noUseSignalsComment = /(^|\s)@noUseSignals(\s|$)/;
 const transformedMetadataKey = "reactAlienSignalsTransformed";
+
+// React Compiler caches a component's JSX in its memo cache, and a signal read
+// it classifies as non-reactive (a module-scope binding) is then evaluated once
+// and never again: the render collector sees no dependencies on every later
+// render and drops the component's subscriptions. Opting the functions this
+// transform made reactive out of memoization keeps those reads happening.
+// See docs/design/react-compiler-compatibility.md for the measurements.
+const noMemoDirective = "use no memo";
+const memoizationDirectives = new Set([
+  "use memo",
+  "use forget",
+  "use no memo",
+  "use no forget",
+]);
+
+/** Adds the opt-out unless the author already stated a memoization choice. */
+function addNoMemoDirective(body: t.BlockStatement): boolean {
+  if (body.directives.some(({ value }) => memoizationDirectives.has(value.value))) {
+    return false;
+  }
+  body.directives.unshift(t.directive(t.directiveLiteral(noMemoDirective)));
+  return true;
+}
 
 function hasLeadingComment(path: NodePath, pattern: RegExp): boolean {
   return path.node.leadingComments?.some((comment) => pattern.test(comment.value)) ?? false;
@@ -355,7 +380,18 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
           shouldAutomaticallyTransform(options.mode, path, inspection);
         if (!explicit && !annotated && !automatic) return;
         if (!explicit && inspection.hasUseSignalsCall) return;
-        if (options.transform === "inject" && explicit) return;
+        if (options.transform === "inject" && explicit) {
+          // Nothing to inject, but the author's own call still makes this
+          // function render-tracking, so it needs the memoization opt-out.
+          if (
+            options.reactCompiler === "auto" &&
+            body.isBlockStatement() &&
+            addNoMemoDirective(body.node)
+          ) {
+            (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
+          }
+          return;
+        }
         if (path.node.async || path.node.generator) {
           if (!explicit && !annotated) return;
           throw path.buildCodeFrameError(
@@ -388,6 +424,10 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
                 t.returnStatement(body.node as t.Expression),
               ]),
             );
+          }
+          const injectedBody = path.node.body;
+          if (options.reactCompiler === "auto" && t.isBlockStatement(injectedBody)) {
+            addNoMemoDirective(injectedBody);
           }
           path.scope.crawl();
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
@@ -422,6 +462,7 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
           ),
         ]);
         if (body.isBlockStatement()) transformedBody.directives = body.node.directives;
+        if (options.reactCompiler === "auto") addNoMemoDirective(transformedBody);
         body.replaceWith(transformedBody);
         path.scope.crawl();
         (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;

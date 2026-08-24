@@ -25,6 +25,7 @@ jobs:
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
+      - run: pnpm --filter unplugin-react-alien-signals test:react-compiler
       - run: pnpm build
       # Runs against the build above rather than `pnpm size`, which would rebuild.
       - run: node scripts/check-size.mjs

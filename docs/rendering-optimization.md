@@ -22,6 +22,8 @@ function Counter() {
 }
 ```
 
+If your build runs React Compiler, add `"use no memo"` to every component that calls `useSignals()` by hand: the compiler otherwise caches the component's JSX and never re-reads `signal.value`, so the component stops updating without any error. The build plugin below inserts that directive for you. See [the React Compiler compatibility note](design/react-compiler-compatibility.md).
+
 Synchronous signal reads made during the render after `useSignals()` are collected, and a change to one of those values schedules a rerender of that component. With `deepSignal`, property reads are tracked individually, so an unread sibling does not cause a rerender. This is the simplest option when you want explicit control and no build configuration.
 
 The bare runtime boundary is best-effort: tracking closes at the next `useSignals()` call, at the commit-phase layout effect, or in a microtask scheduled after the current synchronous execution. It is intended for synchronous component renders. Every component that reads a signal during render must call `useSignals()` itself; reads from effects, event handlers, asynchronous callbacks, or an untracked component can otherwise be attributed to the currently open boundary. Exact separation across Suspense-aborted renders, nested server rendering during a render, and multiple concurrent roots requires the managed transform below. The unresolved boundary problem and the options for a future contract are tracked in [the boundary design note](design/use-signals-boundary-design.md).
@@ -64,6 +66,13 @@ The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry
 // Opt into the exact managed boundary only where that trade-off is wanted.
 signals({ mode: "auto", transform: "managed" });
 ```
+
+`reactCompiler` chooses whether the plugin protects what it transformed from React Compiler:
+
+- `"auto"` (default): mark every transformed function with the `"use no memo"` directive. Without it, the compiler caches the component's JSX and stops re-reading `signal.value`, so the component silently freezes after its first update. The directive is inert when the compiler is not used.
+- `"off"`: omit the directive. Choose it only when React Compiler is not in the build, or when the affected components were checked against [the React Compiler compatibility note](design/react-compiler-compatibility.md).
+
+The cost of `"auto"` is that a transformed component is no longer memoized by the compiler. The leaf hooks (`useSignalValue`, `useDeepSignalValue`) and the JSX runtime's direct host bindings are compiler-safe and are never transformed, so components written that way keep the compiler's optimization.
 
 `@useSignals` and `@noUseSignals` apply only to their owning function, not nested functions. Automatic modes support top-level declaration and arrow components, including named components wrapped with `memo` or `forwardRef`; arbitrary nested callbacks, class components, anonymous default exports, async/generator functions, and components with an existing `useSignals()` call are not changed. Reapplying either transform mode is a no-op. The `.value` check is intentionally heuristic, so `mode: "auto"` may add a harmless subscription to an object that is not a signal.
 

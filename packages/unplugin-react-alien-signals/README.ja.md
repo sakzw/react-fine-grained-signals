@@ -40,6 +40,14 @@ Rollup、webpack、Rspack、esbuildにはそれぞれ `/rollup`、`/webpack`、
     手書きと同じbest-effort境界であり、制御フローは書き換えません。
   - `"managed"`: `/runtime` からimportし、厳密な `try` / `finally` の
     render scopeを生成します。
+- `reactCompiler`
+  - `"auto"`（既定）: 変換したすべての関数に `"use no memo"` を付け、render
+    trackingが必要とするsignal読み取りをReact Compilerがmemoizationで
+    消さないようにします。付けない場合、compile済みcomponentはJSXをcacheし、
+    最初のsignal書き込み以降、無言で更新が止まります。
+  - `"off"`: directiveを付けません。React Compilerをbuildで使っていない場合か、
+    対象componentを[互換性の検討docs](../../docs/design/react-compiler-compatibility.ja.md)
+    に照らして確認済みの場合だけ選んでください。
 - `importSource`: `react-alien-signals` 互換wrapperへの置き換えです。
 - `include` / `exclude`: source module IDを絞る関数です。
 

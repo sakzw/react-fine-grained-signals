@@ -2,12 +2,14 @@ import { createUnplugin } from "unplugin";
 import {
   transformReactAlienSignals,
   type ReactAlienSignalsMode,
+  type ReactAlienSignalsReactCompiler,
   type ReactAlienSignalsTransform,
   type InternalTransformResult,
 } from "./internal/transform.js";
 
 export type {
   ReactAlienSignalsMode,
+  ReactAlienSignalsReactCompiler,
   ReactAlienSignalsTransform,
 } from "./internal/transform.js";
 
@@ -20,6 +22,13 @@ export interface ReactAlienSignalsOptions {
   mode?: ReactAlienSignalsMode;
   /** `inject` (default) adds bare useSignals(); `managed` adds an exact try/finally boundary. */
   transform?: ReactAlienSignalsTransform;
+  /**
+   * `auto` (default) marks every transformed function with `"use no memo"`, so
+   * React Compiler cannot memoize away the signal reads render tracking needs.
+   * `off` omits the directive; only choose it when the compiler is not used, or
+   * when its memoization has been verified against this library's tracking.
+   */
+  reactCompiler?: ReactAlienSignalsReactCompiler;
   /** Package that exports `useSignals` and its `/runtime` entry. */
   importSource?: string;
   /** Restrict transformation to matching source module identifiers. */
@@ -51,6 +60,7 @@ export const reactAlienSignals = createUnplugin<ReactAlienSignalsOptions>(
         importSource: options.importSource ?? "react-alien-signals",
         mode: options.mode ?? "auto",
         transform: options.transform ?? "inject",
+        reactCompiler: options.reactCompiler ?? "auto",
       });
     },
   }),

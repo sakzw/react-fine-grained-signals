@@ -11,4 +11,8 @@ export default defineConfig({
   },
   format: "esm",
   platform: "neutral",
+  // Keep the declaration program to this package's own sources: the tests
+  // import the library's TypeScript sources directly, and including them would
+  // emit stray .d.ts files next to those sources.
+  dts: { tsconfig: "tsconfig.build.json" },
 });
