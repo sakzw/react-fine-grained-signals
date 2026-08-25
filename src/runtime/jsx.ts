@@ -463,19 +463,45 @@ function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) 
   };
 }
 
-/** A host element with DOM-only signal subscriptions attached via its ref. */
+/**
+ * A host element with DOM-only signal subscriptions attached via its ref.
+ *
+ * `children` arrives as ReactiveHost's own top-level prop (see
+ * `createJsxWrapper` below) rather than folded into `props`/`hostProps`,
+ * purely so the *outer* `factory(ReactiveHost, { ..., children }, key)` call
+ * that constructs this element — the very same real `jsx`/`jsxs`/`jsxDEV`
+ * that would have validated the original host element's children had this
+ * wrapper not intercepted it — runs React's dev-mode key validation on it.
+ * That validation is a flag React stamps onto each child element itself
+ * (`element._store.validated`), not onto the array or onto whichever
+ * component currently holds it, so it survives being read back out of props
+ * here and re-embedded via `createElement` below. Skip this indirection —
+ * i.e. leave `children` folded into `hostProps` before any real jsx/jsxs call
+ * ever sees it — and a signal-bound host element with 2+ static, unkeyed JSX
+ * children spuriously trips React's "missing key" warning: `createElement`'s
+ * children-as-prop path never validates children (only its children-as-rest-
+ * args path does), and neither did the `factory(ReactiveHost, ...)` call
+ * itself, since `children` wasn't its own prop at that call site.
+ */
 export function ReactiveHost({
   elementType,
   props,
   bindings,
+  children,
 }: {
   elementType: string;
   props: HostProps;
   bindings: readonly Binding[];
+  children?: React.ReactNode;
 }): React.ReactElement {
   const { ref: userRef, ...hostProps } = props;
   return createElement(elementType, {
     ...hostProps,
+    // `elementType` is a runtime string, so this can't be written as JSX; the
+    // lint rule assumes a literal `<Foo children={x}/>` authoring mistake,
+    // which doesn't apply to a dynamic-host-element createElement call.
+    // oxlint-disable-next-line react/no-children-prop
+    children,
     ref: createReactiveRef(bindings, userRef as SupportedRef),
   });
 }
@@ -523,7 +549,14 @@ export function createJsxWrapper(factory: CreateElement): CreateElement {
   return (type, input, key) => {
     const { props, bindings } = transformProps(type, input);
     if (typeof type === "string" && bindings.length > 0) {
-      return factory(ReactiveHost, { elementType: type, props, bindings }, key);
+      // `children` is lifted out to be `factory`'s own top-level prop (see
+      // the comment on ReactiveHost) instead of staying nested inside
+      // `props`, so `factory` — the real jsx/jsxs/jsxDEV already correctly
+      // wired to know whether this call site's children are a static JSX
+      // list — validates them exactly as it would have for the
+      // un-intercepted host element.
+      const { children, ...hostProps } = props;
+      return factory(ReactiveHost, { elementType: type, props: hostProps, bindings, children }, key);
     }
     return factory(type, props, key);
   };
