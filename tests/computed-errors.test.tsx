@@ -38,14 +38,8 @@ describe("computed error propagation (React)", () => {
     // Mount already in the error state: useSignalValue's getSnapshot (called
     // during render, inside useSyncExternalStore) is what surfaces the boxed
     // error here, which is exactly where an Error Boundary can intercept it.
-    //
-    // Note: a computed that only *transitions* into erroring from a background
-    // write, while a useSignalValue subscription is already mounted, is a
-    // separate case this fix does not cover -- useSignalValue's own subscribe
-    // effect reads `source.value` unguarded, so that read (not this fix's
-    // internal machinery) throws synchronously out of the write. That is a
-    // pre-existing property of `src/react/hooks.ts`, outside this task's scope
-    // (src/core/base.ts only), and is reported separately rather than fixed here.
+    // The companion case -- a computed transitioning into erroring from a
+    // background write while already mounted -- is covered separately below.
     const source = signal(2);
     const broken = computed(() => {
       if (source.value === 2) throw new Error("computed failed");
@@ -60,6 +54,37 @@ describe("computed error propagation (React)", () => {
 
     expect(() => {
       render(<ErrorBoundary><Reader /></ErrorBoundary>);
+    }).not.toThrow();
+    expect(screen.getByLabelText("boundary caught").textContent).toBe("caught");
+    expect(reactError).toHaveBeenCalled();
+  });
+
+  it("does not throw synchronously out of a write that makes an already-mounted useSignalValue leaf's computed start erroring", () => {
+    // useSignalValue's own subscribe effect reads `source.value` in the
+    // background, outside any React render -- a separate read from the one
+    // `computed()`'s box/unbox fix protects internally. Before that read was
+    // also guarded, a background write transitioning a mounted leaf's
+    // computed into erroring threw synchronously here, at the write, instead
+    // of surfacing through the next render's getSnapshot call.
+    const source = signal(1);
+    const broken = computed(() => {
+      if (source.value === 2) throw new Error("background transition failed");
+      return source.value;
+    });
+    const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    function Reader() {
+      const value = useSignalValue(broken);
+      return <output aria-label="value">{value}</output>;
+    }
+
+    render(<ErrorBoundary><Reader /></ErrorBoundary>);
+    expect(screen.getByLabelText("value").textContent).toBe("1");
+
+    expect(() => {
+      act(() => {
+        source.value = 2;
+      });
     }).not.toThrow();
     expect(screen.getByLabelText("boundary caught").textContent).toBe("caught");
     expect(reactError).toHaveBeenCalled();

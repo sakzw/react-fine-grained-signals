@@ -216,7 +216,18 @@ export function useSignalValue<T>(source: ReadonlySignal<T>): T {
       let isInitialRun = true;
 
       return effect(() => {
-        source.value;
+        try {
+          // The read (not this catch) is what registers the alien-signals
+          // dependency link, so it still happens even when `source` is a
+          // computed whose cached error `.value` rethrows. Swallowing it here
+          // keeps this background effect alive and its throw from escaping
+          // into whatever write triggered the re-run; `getSnapshot` performs
+          // the same read again during React's render, where the rethrow
+          // reaches an Error Boundary instead.
+          source.value;
+        } catch {
+          // Handled by getSnapshot on the next render; see above.
+        }
         if (isInitialRun) {
           isInitialRun = false;
         } else {
