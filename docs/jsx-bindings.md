@@ -50,6 +50,7 @@ This is the most fine-grained render optimization the runtime offers, but it cov
 - Direct-binding writes happen outside the React scheduler and remain an experimental optimization.
 - Keep whether a host prop is bound fixed for the element lifetime. Switching between a plain value and a signal changes the wrapper type and remounts the DOM subtree.
 - For SSR and hydration, ensure the initial signal values are identical on server and client. Do not place request-specific signals in shared module scope; create them per request.
+- A computed signal whose getter throws after binding will skip DOM writes for that cycle and log the error via `console.error` — once per contiguous failure episode, not per write. The error message is `"react-alien-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` Direct bindings bypass React's render cycle, so there is no Error Boundary to catch thrown errors; use [`useSignalValue`](hooks.md) if you need Error Boundary semantics for a failing computed.
 - Two things about `value`/`checked`/`style` are still open — see [the direct-binding design note](design/direct-binding-value-checked-style.md) for the current state: caret preservation for a *derived* `value`, and fine-grained per-property `style` tracking (`style={{ color: signal }}`).
 
 See also: [rendering optimization](rendering-optimization.md), [JSX control-flow utilities](control-flow.md).

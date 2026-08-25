@@ -50,6 +50,7 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 - direct bindingによる書き込みはReactスケジューラの外側で行われる、実験的な最適化です。
 - ホストpropをbindingするかどうかは、その要素の生存期間中変えないでください。通常の値とsignalを切り替えるとラッパーの種類が変わり、DOMサブツリーが再マウントされます。
 - SSR（サーバーサイドレンダリング）とハイドレーションでは、サーバーとクライアントのsignal初期値を同一にしてください。リクエスト固有のsignalを共有モジュールスコープへ置かず、リクエストごとに作成してください。
+- getterが実行時に例外を投げるようになったcomputedをbindingしている場合、そのcycleのDOM書き込みをスキップし、エラーを `console.error` で記録します（書き込みごとではなく、連続する失敗エピソードごとに1回）。エラーメッセージは `"react-alien-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` で、`{ cause: error }` 付きで記録されます。direct bindingはReactのrender cycleをバイパスするため、Error Boundaryはありません。Error Boundaryのセマンティクスが必要な場合は、[`useSignalValue`](hooks.ja.md)を使用してください。
 - `value`/`checked`/`style` にはまだ未解決の点が2つあります。現在の状態は[直接バインディングの設計検討docs](design/direct-binding-value-checked-style.ja.md)を参照してください: 派生 `value` のcaret維持と、per-property単位のfine-grainedな `style` 追跡(`style={{ color: signal }}`)です。
 
 関連: [描画最適化](rendering-optimization.ja.md)、[JSX制御フローユーティリティ](control-flow.ja.md)。

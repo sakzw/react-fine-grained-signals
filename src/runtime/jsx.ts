@@ -114,6 +114,64 @@ function readInitialValue(source: ReadonlySignal<unknown>): unknown {
   return source.peek();
 }
 
+/**
+ * Per-binding "already reported this episode" latch for `readBoundSignal`.
+ * Owned by the same closure that already holds a binding's other local state
+ * (`previousKeys`, `composing`, ...) — never module-level — so two bindings
+ * failing independently each still get their own first-failure log instead of
+ * one silencing the other.
+ */
+type FailureEpisode = { hasReported: boolean };
+
+/**
+ * Reads a signal on behalf of one of this module's direct DOM bindings (see
+ * the module doc: these write straight to the DOM from a callback ref's
+ * `effect()`, bypassing React's render, so the owning component never
+ * re-renders). A `computed()` whose getter throws caches and rethrows that
+ * error on every read (see `computed()` in src/core/base.ts) — if `source` is
+ * such a computed and it starts failing after the binding is already mounted,
+ * an unguarded read here would throw synchronously out of `effect()`'s
+ * callback body. Nothing catches that: not `effect()`, not alien-signals'
+ * `run()`, not its `flush()`. It would propagate out of whatever write
+ * triggered it (an event handler, anywhere), and `flush()`'s own `finally`
+ * would mark any other effect still queued in that same flush as skipped for
+ * this cycle — an unrelated binding, or a `useSignals()`-tracked component's
+ * commit, silently missing one update.
+ *
+ * Catching here keeps a failure local to this one binding: the DOM write for
+ * this cycle is skipped (the DOM is left at its last successful value) and
+ * the failure is reported with `console.error(message, { cause: error })` —
+ * assert against `mock.calls[i][1].cause` in tests. This is the first
+ * `console.*` call in this codebase, and intentionally so: a direct binding
+ * has no Error Boundary or other surface to fall back on, and silence would
+ * mean a binding that mysteriously stops updating with zero trace.
+ *
+ * Reported at most once per contiguous run of failures ("episode"): `episode`
+ * latches after the first report and is cleared the moment a read next
+ * succeeds, so a later, distinct failure episode logs again. This keeps a
+ * `computed()` that fails on every keystroke from spamming one `console.error`
+ * per keystroke.
+ */
+function readBoundSignal<T>(
+  read: () => T,
+  episode: FailureEpisode,
+): { ok: true; value: T } | { ok: false } {
+  try {
+    const value = read();
+    episode.hasReported = false;
+    return { ok: true, value };
+  } catch (error) {
+    if (!episode.hasReported) {
+      episode.hasReported = true;
+      console.error(
+        "react-alien-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value.",
+        { cause: error },
+      );
+    }
+    return { ok: false };
+  }
+}
+
 function setAttribute(node: Element, name: string, value: unknown): void {
   if (value == null) {
     node.removeAttribute(name);
@@ -209,11 +267,19 @@ function setMultiSelectValue(select: HTMLSelectElement, value: unknown): void {
  * that gap without requiring the signal to change too.
  */
 function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unknown>): () => void {
+  // Shared by both read sites below: an effect-triggered failure and a
+  // MutationObserver-triggered failure are the same underlying computed
+  // erroring, so they report as one episode, not two.
+  const episode: FailureEpisode = { hasReported: false };
   const stopEffect = effect(() => {
-    setControlledProp(select, "value", source.value);
+    const read = readBoundSignal(() => source.value, episode);
+    if (!read.ok) return;
+    setControlledProp(select, "value", read.value);
   });
   const observer = new MutationObserver(() => {
-    setControlledProp(select, "value", source.peek());
+    const read = readBoundSignal(() => source.peek(), episode);
+    if (!read.ok) return;
+    setControlledProp(select, "value", read.value);
   });
   observer.observe(select, { childList: true, subtree: true });
   return () => {
@@ -236,6 +302,7 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
   let composing = false;
   let hasPending = false;
   let pending: unknown;
+  const episode: FailureEpisode = { hasReported: false };
 
   const onCompositionStart = () => {
     composing = true;
@@ -252,7 +319,11 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
   node.addEventListener("compositionend", onCompositionEnd);
 
   const stopEffect = effect(() => {
-    const next = source.value;
+    // A failed read must bail out here, before anything below touches
+    // `pending`/`hasPending` — a stale or garbage value must never latch in.
+    const read = readBoundSignal(() => source.value, episode);
+    if (!read.ok) return;
+    const next = read.value;
     if (composing) {
       hasPending = true;
       pending = next;
@@ -348,8 +419,11 @@ function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) 
     const stop = bindings.map(([name, source]) => {
       if (name === "style") {
         let previousKeys: readonly string[] = [];
+        const episode: FailureEpisode = { hasReported: false };
         return effect(() => {
-          previousKeys = applyStyle(node as HTMLElement, source.value, previousKeys);
+          const read = readBoundSignal(() => source.value, episode);
+          if (!read.ok) return;
+          previousKeys = applyStyle(node as HTMLElement, read.value, previousKeys);
         });
       }
       if (isControlledTwoWayProp(node.tagName.toLowerCase(), name)) {
@@ -359,12 +433,18 @@ function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) 
           }
           return bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source);
         }
+        const episode: FailureEpisode = { hasReported: false };
         return effect(() => {
-          setControlledProp(node, name, source.value);
+          const read = readBoundSignal(() => source.value, episode);
+          if (!read.ok) return;
+          setControlledProp(node, name, read.value);
         });
       }
+      const episode: FailureEpisode = { hasReported: false };
       return effect(() => {
-        setDomProp(node, name, source.value);
+        const read = readBoundSignal(() => source.value, episode);
+        if (!read.ok) return;
+        setDomProp(node, name, read.value);
       });
     });
 
