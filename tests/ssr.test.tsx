@@ -1,9 +1,14 @@
 /** @jsxImportSource react-alien-signals */
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, Suspense } from "react";
 import { hydrateRoot } from "react-dom/client";
-import { renderToString } from "react-dom/server";
+import { renderToPipeableStream, renderToString } from "react-dom/server";
+// This workspace has no @types/node dependency, so "node:stream" has no
+// resolvable module declaration for the type checker even though Node
+// itself provides it at runtime -- only the type-level import is affected.
+// @ts-expect-error -- "node:stream" has no type declarations without @types/node
+import { Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import {
   signal,
@@ -322,6 +327,72 @@ describe("SSR and hydration", () => {
 
     root.unmount();
     container.remove();
+    consoleError.mockRestore();
+  });
+
+  it("streams a suspended signal read via renderToPipeableStream without tearing or a stale value", async () => {
+    const value = signal("initial");
+    const reads: string[] = [];
+    let releaseSuspense: () => void;
+    const suspensePromise = new Promise<void>((resolve) => { releaseSuspense = resolve; });
+    let attempts = 0;
+
+    function Slow() {
+      useSignals();
+      attempts += 1;
+      // The first render pass suspends before reading the signal at all, so
+      // the fallback below is the only thing the shell can legitimately emit.
+      if (attempts === 1) throw suspensePromise;
+      const current = value.value;
+      reads.push(current);
+      return <span data-testid="slow">{current}</span>;
+    }
+
+    function App() {
+      return (
+        <section>
+          <Suspense fallback={<span data-testid="slow">loading</span>}>
+            <Slow />
+          </Suspense>
+        </section>
+      );
+    }
+
+    const chunks: string[] = [];
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const html = await new Promise<string>((resolvePromise, reject) => {
+      const writable = new Writable({
+        write(chunk: { toString(): string }, _encoding: unknown, callback: (error?: unknown) => void) {
+          chunks.push(chunk.toString());
+          callback();
+        },
+      });
+      writable.on("finish", () => resolvePromise(chunks.join("")));
+      writable.on("error", reject);
+
+      const { pipe } = renderToPipeableStream(<App />, {
+        onShellReady() {
+          // Streams the shell (with the Suspense fallback) immediately, then
+          // -- only after that's committed to the pipe -- resolves the
+          // suspended boundary with a value that did not exist yet when the
+          // component first rendered. The deferred segment must reflect this
+          // value, not whatever `value` held at the moment `Slow` suspended.
+          pipe(writable);
+          value.value = "streamed";
+          releaseSuspense();
+        },
+        onError: reject,
+      });
+    });
+
+    expect(attempts).toBe(2);
+    expect(reads).toEqual(["streamed"]);
+    expect(html).toContain("loading");
+    expect(html).toContain("streamed");
+    expect(html).not.toContain("initial");
+    expect(consoleError).not.toHaveBeenCalled();
+
     consoleError.mockRestore();
   });
 });

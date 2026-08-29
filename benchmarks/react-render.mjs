@@ -23,6 +23,11 @@ const React = ReactModule;
 const { useState, act } = ReactModule;
 const { createRoot } = await import("react-dom/client");
 const { signal, useSignals } = await import("../dist/index.js");
+// The bundler plugin's shipped default (`transform: "managed"`, since commit
+// 57f824e) never calls the bare `useSignals()` above -- it rewrites call
+// sites to this runtime entry point's managed boundary instead. Imported
+// under an alias so both variants can be benchmarked side by side.
+const { useSignals: useManagedSignals } = await import("../dist/runtime.js");
 
 const rows = Number.parseInt(process.argv[2] ?? process.env.BENCH_ROWS ?? "500", 10);
 const updates = Number.parseInt(process.argv[3] ?? process.env.BENCH_UPDATES ?? "300", 10);
@@ -52,6 +57,7 @@ const renderCounts = {
   hooksNaive: { counter: 0, siblings: 0 },
   hooksMemo: { counter: 0, siblings: 0 },
   signals: { counter: 0, siblings: 0 },
+  signalsManaged: { counter: 0, siblings: 0 },
 };
 
 /**
@@ -127,11 +133,53 @@ function createSignalsVariant(counts) {
   return { App: SignalsApp, count };
 }
 
+/**
+ * Builds the managed-boundary signals variant: same shape as
+ * `createSignalsVariant` above, but `ManagedSignalsCounter` opens and closes
+ * its render scope the way the plugin's shipped `transform: "managed"`
+ * output does -- `const store = useSignals(); try { ... } finally {
+ * store.f(); }` against `react-alien-signals/runtime` -- instead of calling
+ * the bare `useSignals()` hook. This is the boundary real apps built with
+ * the default toolchain actually run, so it's benchmarked alongside the bare
+ * variant rather than in its place.
+ */
+function createManagedSignalsVariant(counts) {
+  const count = signal(0);
+
+  function ManagedSignalsCounter() {
+    const store = useManagedSignals();
+    try {
+      counts.counter += 1;
+      return React.createElement("li", null, "count:", count.value);
+    } finally {
+      store.f();
+    }
+  }
+
+  function ManagedSignalsSibling(props) {
+    counts.siblings += 1;
+    return React.createElement("li", null, "row ", props.index);
+  }
+
+  function ManagedSignalsApp() {
+    return React.createElement(
+      "ul",
+      null,
+      React.createElement(ManagedSignalsCounter),
+      ...buildSiblingElements(ManagedSignalsSibling, rows),
+    );
+  }
+
+  return { App: ManagedSignalsApp, count };
+}
+
 const { App: HooksNaiveApp, handle: hooksNaiveHandle } = createHooksVariant(renderCounts.hooksNaive, false);
 const { App: HooksMemoApp, handle: hooksMemoHandle } = createHooksVariant(renderCounts.hooksMemo, true);
 // `count` is created once, above, and outlives every individual mount --
 // exactly the decoupling from component lifetime that useState can't offer.
 const { App: SignalsApp, count: signalsCount } = createSignalsVariant(renderCounts.signals);
+const { App: ManagedSignalsApp, count: managedSignalsCount } =
+  createManagedSignalsVariant(renderCounts.signalsManaged);
 
 /**
  * Wraps one variant's App/increment/render-counts into the create/run/check/
@@ -217,6 +265,16 @@ const variants = [
       signalsCount.value += 1;
     },
     getStart: () => signalsCount.value,
+  }),
+  makeVariant({
+    name: "signals-managed",
+    counts: renderCounts.signalsManaged,
+    expectedSiblingRenders: () => rows,
+    App: ManagedSignalsApp,
+    increment: () => {
+      managedSignalsCount.value += 1;
+    },
+    getStart: () => managedSignalsCount.value,
   }),
 ];
 

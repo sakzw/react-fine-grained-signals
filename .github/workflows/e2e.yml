@@ -13,7 +13,11 @@ permissions:
 jobs:
   test-browser:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # examples/react-router's own install + typecheck now run ahead of the
+    # e2e suite (see below), on top of that suite's own react-router
+    # install/build/start (up to 300s alone per playwright.config.ts) --
+    # widened from 5 to account for the added, otherwise-redundant install.
+    timeout-minutes: 8
     container:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --user 1001
@@ -25,4 +29,12 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # examples/react-router is its own isolated pnpm workspace (own
+      # lockfile -- see its pnpm-workspace.yaml), so the root install above
+      # doesn't cover it and it isn't typechecked by the root `pnpm
+      # typecheck` either. Install and typecheck it here, before the e2e run
+      # below (whose webServer also installs/builds it) so a type error in
+      # the example fails fast instead of only surfacing as a build failure.
+      - run: pnpm --dir examples/react-router install --frozen-lockfile
+      - run: pnpm --dir examples/react-router run typecheck
       - run: pnpm test:browser

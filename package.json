@@ -51,7 +51,7 @@
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
     "test": "pnpm test:runtime && pnpm test:transform",
-    "test:runtime": "vitest run --passWithNoTests",
+    "test:runtime": "vitest run",
     "test:transform": "pnpm --filter unplugin-react-alien-signals test",
     "test:consumer": "pnpm build && node tests/consumer-smoke.mjs",
     "test:browser": "playwright test",
