@@ -221,8 +221,16 @@ function isKnownComponentWrapper(
 function getComponentIdentityName(
   path: NodePath<t.Function>,
   reactImportSource: string,
+  // `climbComponentWrappers(path, reactImportSource).parentPath`, when a
+  // caller already walked it for this same `path` and wants to hand it in
+  // rather than have this function re-walk from scratch. `decideTransform`
+  // and `isNestedTrackingBoundary` each evaluate a single function against
+  // several of these predicates, so they compute the climb once and thread it
+  // through; every other caller omits it and gets the walk done here as
+  // before.
+  climbedParent: NodePath | null = climbComponentWrappers(path, reactImportSource).parentPath,
 ): string | undefined {
-  const parent = climbComponentWrappers(path, reactImportSource).parentPath;
+  const parent = climbedParent;
   // The enclosing binding -- reached through zero or more memo()/forwardRef()
   // wrappers -- is the function's real identity and always wins. A function
   // expression's own name is conventionally only a stack-trace/devtools label
@@ -242,13 +250,21 @@ function getComponentIdentityName(
   return undefined;
 }
 
-function isComponent(path: NodePath<t.Function>, reactImportSource: string): boolean {
-  const name = getComponentIdentityName(path, reactImportSource);
+function isComponent(
+  path: NodePath<t.Function>,
+  reactImportSource: string,
+  climbedParent?: NodePath | null,
+): boolean {
+  const name = getComponentIdentityName(path, reactImportSource, climbedParent);
   return name !== undefined && /^[A-Z]/.test(name);
 }
 
-function isCustomHook(path: NodePath<t.Function>, reactImportSource: string): boolean {
-  const name = getComponentIdentityName(path, reactImportSource);
+function isCustomHook(
+  path: NodePath<t.Function>,
+  reactImportSource: string,
+  climbedParent?: NodePath | null,
+): boolean {
+  const name = getComponentIdentityName(path, reactImportSource, climbedParent);
   return name !== undefined && /^use[A-Z]/.test(name);
 }
 
@@ -569,6 +585,13 @@ function resolveReferencedFunction(
 function isAutomaticTransformCandidate(
   path: NodePath<t.Function>,
   reactImportSource: string,
+  // See `getComponentIdentityName`'s matching parameter: an already-walked
+  // `climbComponentWrappers(path, reactImportSource).parentPath` a caller can
+  // hand in instead of having this function redo the walk. Read lazily, not
+  // as a default parameter, so the common `isRenderCallback`/
+  // `isFunctionDeclaration` early-outs below still cost nothing when the
+  // caller didn't already have a climbed parent to give.
+  climbedParent?: NodePath | null,
 ): boolean {
   // Render callbacks are tracked by the component that invokes them. Injecting
   // a hook into the callback would violate the Rules of Hooks because callbacks
@@ -576,7 +599,9 @@ function isAutomaticTransformCandidate(
   if (isRenderCallback(path)) return false;
   if (path.isFunctionDeclaration()) return true;
 
-  const parent = climbComponentWrappers(path, reactImportSource).parentPath;
+  const parent = climbedParent === undefined
+    ? climbComponentWrappers(path, reactImportSource).parentPath
+    : climbedParent;
   return (
     parent !== null &&
     (parent.isVariableDeclarator() ||
@@ -595,9 +620,18 @@ function isNestedTrackingBoundary(
   path: NodePath<t.Function>,
   reactImportSource: string,
 ): boolean {
+  // Every nested `Function` node `inspectFunction` walks past is checked
+  // against this predicate, and `isAutomaticTransformCandidate` plus
+  // `isComponent`/`isCustomHook` each independently climb through
+  // memo()/forwardRef() wrappers to answer it -- so without sharing the walk,
+  // one nested node could trigger it three times. Climbing once here and
+  // handing the result to all three keeps the eligibility logic itself
+  // (and its short-circuiting) untouched.
+  const climbedParent = climbComponentWrappers(path, reactImportSource).parentPath;
   return (
-    isAutomaticTransformCandidate(path, reactImportSource) &&
-    (isComponent(path, reactImportSource) || isCustomHook(path, reactImportSource))
+    isAutomaticTransformCandidate(path, reactImportSource, climbedParent) &&
+    (isComponent(path, reactImportSource, climbedParent) ||
+      isCustomHook(path, reactImportSource, climbedParent))
   );
 }
 
@@ -815,11 +849,20 @@ function shouldAutomaticallyTransform(
   functionPath: NodePath<t.Function>,
   inspection: FunctionInspection,
   reactImportSource: string,
+  // Forwarded straight through to `isCustomHook`/`isComponent` -- see
+  // `getComponentIdentityName`'s matching parameter. `decideTransform` calls
+  // this right alongside its own `isComponent`/`isCustomHook`/
+  // `isAutomaticTransformCandidate` checks on the same `functionPath`, so it
+  // passes its already-climbed parent in rather than have this trigger a
+  // fourth walk.
+  climbedParent?: NodePath | null,
 ): boolean {
-  if (isCustomHook(functionPath, reactImportSource)) {
+  if (isCustomHook(functionPath, reactImportSource, climbedParent)) {
     return mode !== "manual" && inspection.readsValue;
   }
-  if (!isComponent(functionPath, reactImportSource) || !inspection.containsJSX) return false;
+  if (!isComponent(functionPath, reactImportSource, climbedParent) || !inspection.containsJSX) {
+    return false;
+  }
   return mode === "all" || (mode === "auto" && inspection.readsValue);
 }
 
@@ -892,12 +935,17 @@ function decideTransform(
     warnUnverifiableBarrelUseSignals(path, options.importSource);
   }
   const inspection = inspectFunction(path, options.importSource, reactImportSource);
+  // Computed once and given to every check below that would otherwise climb
+  // through this same function's memo()/forwardRef() wrappers on its own --
+  // see `getComponentIdentityName`'s matching parameter.
+  const climbedParent = climbComponentWrappers(path, reactImportSource).parentPath;
   const annotated =
     hasOwnedLeadingComment(path, useSignalsComment) &&
-    (isComponent(path, reactImportSource) || isCustomHook(path, reactImportSource));
+    (isComponent(path, reactImportSource, climbedParent) ||
+      isCustomHook(path, reactImportSource, climbedParent));
   const automatic =
-    isAutomaticTransformCandidate(path, reactImportSource) &&
-    shouldAutomaticallyTransform(options.mode, path, inspection, reactImportSource);
+    isAutomaticTransformCandidate(path, reactImportSource, climbedParent) &&
+    shouldAutomaticallyTransform(options.mode, path, inspection, reactImportSource, climbedParent);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
   if (!explicit && inspection.hasUseSignalsCall) return { kind: "skip" };
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
