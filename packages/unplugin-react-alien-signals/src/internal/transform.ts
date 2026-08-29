@@ -80,19 +80,66 @@ function hasOwnedLeadingComment(path: NodePath, pattern: RegExp): boolean {
   return false;
 }
 
+const reactPackageSource = "react";
+
+/** Is `name` bound by `import { memo } from "react"` (or `forwardRef`, possibly aliased)? */
+function isReactNamedImport(
+  path: NodePath,
+  name: string,
+  importedName: "memo" | "forwardRef",
+): boolean {
+  const binding = path.scope.getBinding(name);
+  if (binding === undefined || !binding.path.isImportSpecifier()) return false;
+  if (binding.path.node.importKind === "type") return false;
+  if (!t.isIdentifier(binding.path.node.imported, { name: importedName })) return false;
+  const declaration = binding.path.parentPath;
+  return (
+    declaration.isImportDeclaration() &&
+    declaration.node.importKind !== "type" &&
+    declaration.node.source.value === reactPackageSource
+  );
+}
+
+/** Is `name` bound by `import * as React from "react"` or `import React from "react"`? */
+function isReactDefaultOrNamespaceImport(path: NodePath, name: string): boolean {
+  const binding = path.scope.getBinding(name);
+  if (binding === undefined) return false;
+  if (
+    !binding.path.isImportNamespaceSpecifier() &&
+    !binding.path.isImportDefaultSpecifier()
+  ) {
+    return false;
+  }
+  const declaration = binding.path.parentPath;
+  return (
+    declaration.isImportDeclaration() &&
+    declaration.node.importKind !== "type" &&
+    declaration.node.source.value === reactPackageSource
+  );
+}
+
+// A bare `memo`/`forwardRef` name (or `X.memo`/`X.forwardRef`) only counts as
+// React's wrapper when it actually resolves back to an import from "react".
+// Otherwise a same-named local helper (e.g. a homemade memoization cache)
+// could be mistaken for it and have a `useSignals()` hook injected into a
+// function that is never actually rendered by React, which throws at runtime.
 function isKnownComponentWrapper(path: NodePath<t.CallExpression>): boolean {
   const callee = path.get("callee");
   if (callee.isIdentifier()) {
-    return callee.node.name === "memo" || callee.node.name === "forwardRef";
+    const name = callee.node.name;
+    if (name !== "memo" && name !== "forwardRef") return false;
+    return isReactNamedImport(path, name, name);
   }
   if (!callee.isMemberExpression()) return false;
   const property = callee.get("property");
-  return (
+  const isMemoOrForwardRefProperty =
     (!callee.node.computed && property.isIdentifier() &&
       (property.node.name === "memo" || property.node.name === "forwardRef")) ||
     (callee.node.computed && property.isStringLiteral() &&
-      (property.node.value === "memo" || property.node.value === "forwardRef"))
-  );
+      (property.node.value === "memo" || property.node.value === "forwardRef"));
+  if (!isMemoOrForwardRefProperty) return false;
+  const object = callee.get("object");
+  return object.isIdentifier() && isReactDefaultOrNamespaceImport(path, object.node.name);
 }
 
 function getFunctionName(path: NodePath<t.Function>): string | undefined {

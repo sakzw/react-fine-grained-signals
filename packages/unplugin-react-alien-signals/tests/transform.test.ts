@@ -123,6 +123,56 @@ describe("managed render transform", () => {
     expect(output).toContain("const RefCounter = forwardRef((props, ref) => {");
   });
 
+  it("infers component names through memo and forwardRef reached via a React namespace or default import", () => {
+    const namespaceOutput = compile(`
+      import * as React from "react";
+      const count = { value: 1 };
+      export const MemoCounter = React.memo(() => <p>{count.value}</p>);
+      export const RefCounter = React.forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
+    `, "auto");
+    const defaultOutput = compile(`
+      import React from "react";
+      const count = { value: 1 };
+      export const MemoCounter = React.memo(() => <p>{count.value}</p>);
+    `, "auto");
+
+    expect(namespaceOutput.match(/finally/g)).toHaveLength(2);
+    expect(namespaceOutput).toContain("const MemoCounter = React.memo(() => {");
+    expect(namespaceOutput).toContain("const RefCounter = React.forwardRef((props, ref) => {");
+    expect(defaultOutput.match(/finally/g)).toHaveLength(1);
+    expect(defaultOutput).toContain("const MemoCounter = React.memo(() => {");
+  });
+
+  it("does not mistake a local memo helper or a memo from another package for React's wrapper", () => {
+    const localHelper = compile(`
+      const state = { value: 1 };
+      function memo(fn) {
+        const cache = new Map();
+        return (...args) => {
+          const key = JSON.stringify(args);
+          if (!cache.has(key)) cache.set(key, fn(...args));
+          return cache.get(key);
+        };
+      }
+      export const useCachedValue = memo(() => state.value);
+    `, "auto");
+    const otherPackage = compile(`
+      import { memo } from "state-lib";
+      const state = { value: 1 };
+      export const useCachedValue = memo(() => state.value);
+    `, "auto");
+    const memberExpressionHelper = compile(`
+      import * as Utils from "state-lib";
+      const state = { value: 1 };
+      export const useCachedValue = Utils.memo(() => state.value);
+    `, "auto");
+
+    for (const output of [localHelper, otherPackage, memberExpressionHelper]) {
+      expect(output).not.toContain("finally");
+      expect(output).not.toContain("react-alien-signals/runtime");
+    }
+  });
+
   it.each(["auto", "all"] as const)(
     "transforms named default-export memo and forwardRef components in %s mode",
     (mode) => {
