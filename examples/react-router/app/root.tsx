@@ -31,10 +31,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
 }
 
 /**
- * The only component in this app that reads `.value` as a bare expression,
- * so it's the one the plugin's default `mode: "auto"` picks up on its own
- * (no explicit useSignals() call) — which is also what exercises
- * react-alien-signals/runtime's managed boundary under `transform: "managed"`.
+ * Not the only component here that reads `.value` bare -- DevPanel and
+ * LogSettingsForm do too -- but the simplest one: a single top-level read,
+ * presentational only, and (unlike LogSettingsForm) no explicit useSignals()
+ * call nearby to make a reader wonder which mechanism is actually doing the
+ * work. The plugin's default `mode: "auto"` picks this up on its own, which
+ * is also what exercises react-alien-signals/runtime's managed boundary
+ * under `transform: "managed"`.
  */
 function RemainingBadge({ remaining }: { remaining: { value: number } }) {
   return <span className="badge">残り {remaining.value}</span>;

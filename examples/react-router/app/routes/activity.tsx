@@ -2,6 +2,7 @@ import { useOutletContext } from "react-router";
 import { useComputed, useDeepSignal } from "react-alien-signals";
 import { Index } from "react-alien-signals/utils";
 import { ActivityRow } from "../components/ActivityRow.js";
+import { InsightPanel } from "../components/InsightPanel.js";
 import { LogSettingsForm } from "../components/LogSettingsForm.js";
 import type { TaskStore } from "../lib/task-store.js";
 
@@ -35,6 +36,7 @@ export default function Activity() {
         ではなく <code>Index</code> で描画しています。
       </p>
 
+      <InsightPanel store={store} />
       <LogSettingsForm settings={settings} />
 
       <ol className="activity-list">

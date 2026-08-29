@@ -13,11 +13,23 @@ const source = (path: string) => resolve(repositoryRoot, path);
 
 export default defineConfig({
   plugins: [
-    // "managed" gives an exact try/finally render boundary, which matters more
-    // here than in the examples/browser PoC: this app goes through real
-    // streaming SSR (renderToPipeableStream) instead of a single synchronous
+    // "managed" is the plugin's own default (examples/browser gets the same
+    // thing through this same unset `transform` option) -- spelled out here
+    // not because this app configures anything differently, but because an
+    // exact try/finally boundary matters most exactly where an inexact one
+    // would be hardest to notice: this app's SSR streams via
+    // renderToPipeableStream, where a component can suspend and resume
+    // mid-render, unlike examples/browser's single synchronous
     // renderToString call.
-    signals({ mode: "auto", transform: "managed" }),
+    //
+    // ActivityRow.tsx is excluded: it opts into the manual
+    // react-alien-signals/runtime boundary directly (see that file) instead
+    // of the plugin-managed one, so the plugin must not also wrap it.
+    signals({
+      mode: "auto",
+      transform: "managed",
+      exclude: (id) => id.includes("/components/ActivityRow.tsx"),
+    }),
     reactRouter(),
   ],
   resolve: {

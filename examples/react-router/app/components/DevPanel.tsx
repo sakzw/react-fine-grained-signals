@@ -1,3 +1,4 @@
+/** @jsxImportSource react-alien-signals */
 import { useEffect } from "react";
 import {
   effect,
@@ -75,10 +76,14 @@ export function DevPanel({
       <p>現在のフィルタ: {FILTER_LABEL[currentFilter]}</p>
       <p>総タスク数: {totalTasks}</p>
       <RawSignalProbe label="store.remaining" source={store.remaining} />
+      {/* checked={verbose} direct-binds the write direction (signal -> DOM),
+          same as home.tsx's newTitle input value={}; reading the user's
+          toggle back into the signal is still the ordinary onChange, which
+          direct binding does not automate away — see docs/jsx-bindings.md. */}
       <label>
         <input
           type="checkbox"
-          checked={verbose.value}
+          checked={verbose}
           onChange={(event) => {
             verbose.value = event.target.checked;
           }}
