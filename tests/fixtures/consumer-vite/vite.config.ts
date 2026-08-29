@@ -1,5 +1,5 @@
 import { defineConfig } from "vite";
-import signals from "unplugin-react-alien-signals/vite";
+import signals from "unplugin-react-fine-grained-signals/vite";
 
 export default defineConfig({
   plugins: [signals({ mode: "auto" })],
@@ -14,8 +14,8 @@ export default defineConfig({
       external: (id) =>
         id === "react" ||
         id.startsWith("react/") ||
-        id === "react-alien-signals" ||
-        id.startsWith("react-alien-signals/"),
+        id === "react-fine-grained-signals" ||
+        id.startsWith("react-fine-grained-signals/"),
     },
   },
 });

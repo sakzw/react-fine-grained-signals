@@ -7,9 +7,9 @@ import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
-const pluginRoot = join(repositoryRoot, "packages", "unplugin-react-alien-signals");
+const pluginRoot = join(repositoryRoot, "packages", "unplugin-react-fine-grained-signals");
 const fixtureRoot = join(repositoryRoot, "tests", "fixtures", "consumer-vite");
-const temporaryRoot = await mkdtemp(join(tmpdir(), "react-alien-signals-consumer-"));
+const temporaryRoot = await mkdtemp(join(tmpdir(), "react-fine-grained-signals-consumer-"));
 
 async function run(command, arguments_, cwd) {
   try {
@@ -47,8 +47,8 @@ try {
   await cp(fixtureRoot, consumerRoot, { recursive: true });
   const packageJsonPath = join(consumerRoot, "package.json");
   const packageJson = JSON.parse(await readFile(packageJsonPath, "utf8"));
-  packageJson.dependencies["react-alien-signals"] = pathToFileURL(rootTarball).href;
-  packageJson.dependencies["unplugin-react-alien-signals"] = pathToFileURL(pluginTarball).href;
+  packageJson.dependencies["react-fine-grained-signals"] = pathToFileURL(rootTarball).href;
+  packageJson.dependencies["unplugin-react-fine-grained-signals"] = pathToFileURL(pluginTarball).href;
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
   await run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], consumerRoot);
@@ -59,7 +59,7 @@ try {
   // reads instead of failing loudly; only the peer declaration forces one copy.
   const installedManifest = JSON.parse(
     await readFile(
-      join(consumerRoot, "node_modules", "react-alien-signals", "package.json"),
+      join(consumerRoot, "node_modules", "react-fine-grained-signals", "package.json"),
       "utf8",
     ),
   );
@@ -78,9 +78,9 @@ try {
 
   const output = await readFile(join(consumerRoot, "dist", "consumer.js"), "utf8");
   for (const entry of [
-    "react-alien-signals",
-    "react-alien-signals/utils",
-    "react-alien-signals/runtime",
+    "react-fine-grained-signals",
+    "react-fine-grained-signals/utils",
+    "react-fine-grained-signals/runtime",
   ]) {
     if (!output.includes(entry)) throw new Error(`Consumer output did not retain ${entry}`);
   }

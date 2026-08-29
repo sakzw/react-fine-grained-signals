@@ -1,4 +1,4 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 
 import { signal } from "../src/index.js";
 

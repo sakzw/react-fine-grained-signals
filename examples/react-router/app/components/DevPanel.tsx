@@ -1,4 +1,4 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 import { useEffect } from "react";
 import {
   effect,
@@ -9,7 +9,7 @@ import {
   useSignalValue,
   type ReadonlySignal,
   type Signal,
-} from "react-alien-signals";
+} from "react-fine-grained-signals";
 import type { Filter, TaskStore } from "../lib/task-store.js";
 
 const FILTER_LABEL: Record<Filter, string> = {
@@ -65,7 +65,7 @@ export function DevPanel({
       // the checkbox alone must not re-run this effect, only new activity
       // entries should.
       if (untracked(() => verbose.value)) {
-        console.log("[react-alien-signals] activity:", latest.message);
+        console.log("[react-fine-grained-signals] activity:", latest.message);
       }
     });
   }, [store, verbose]);

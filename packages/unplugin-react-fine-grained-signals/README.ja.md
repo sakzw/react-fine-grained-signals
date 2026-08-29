@@ -1,8 +1,8 @@
-# unplugin-react-alien-signals
+# unplugin-react-fine-grained-signals
 
 [English](README.md) | [日本語](README.ja.md)
 
-`react-alien-signals` 向けの、`useSignals()` 自動挿入と任意のmanaged
+`react-fine-grained-signals` 向けの、`useSignals()` 自動挿入と任意のmanaged
 render scope変換を提供する汎用bundler integrationです。Babel実装は内部に
 閉じ込め、利用側はbundlerごとのentry pointだけを設定します。
 
@@ -16,7 +16,7 @@ render scope変換を提供する汎用bundler integrationです。Babel実装�
 
 ```ts
 import { defineConfig } from "vite";
-import signals from "unplugin-react-alien-signals/vite";
+import signals from "unplugin-react-fine-grained-signals/vite";
 
 export default defineConfig({
   plugins: [signals({ mode: "auto" })],
@@ -53,7 +53,7 @@ Rollup、webpack、Rspack、esbuildにはそれぞれ `/rollup`、`/webpack`、
   - `"off"`: directiveを付けません。React Compilerをbuildで使っていない場合か、
     対象componentを[互換性の検討docs](../../docs/design/react-compiler-compatibility.ja.md)
     に照らして確認済みの場合だけ選んでください。
-- `importSource`: `react-alien-signals` 互換wrapperへの置き換えです。
+- `importSource`: `react-fine-grained-signals` 互換wrapperへの置き換えです。
 - `reactImportSource`: wrapされた関数をcomponentと判定する際に、`memo` /
   `forwardRef` をReact由来とみなすmodule specifierを追加します。置き換えでは
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり

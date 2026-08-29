@@ -17,7 +17,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        <title>react-alien-signals React Router PoC</title>
+        <title>react-fine-grained-signals React Router PoC</title>
         <Meta />
         <Links />
       </head>
@@ -36,7 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
  * presentational only, and (unlike LogSettingsForm) no explicit useSignals()
  * call nearby to make a reader wonder which mechanism is actually doing the
  * work. The plugin's default `mode: "auto"` picks this up on its own, which
- * is also what exercises react-alien-signals/runtime's managed boundary
+ * is also what exercises react-fine-grained-signals/runtime's managed boundary
  * under `transform: "managed"`.
  */
 function RemainingBadge({ remaining }: { remaining: { value: number } }) {

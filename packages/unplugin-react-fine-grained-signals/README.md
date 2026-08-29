@@ -1,10 +1,10 @@
-# unplugin-react-alien-signals
+# unplugin-react-fine-grained-signals
 
 [English](README.md) | [日本語](README.ja.md)
 
 Universal bundler integration for automatic `useSignals()` insertion and the
 optional managed render-scope transform in
-[`react-alien-signals`](https://www.npmjs.com/package/react-alien-signals).
+[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals).
 
 This package is deliberately the only build-time integration. It keeps the
 Babel implementation private, so application configuration is the same across
@@ -22,16 +22,16 @@ This package is not published yet; the following command documents the
 intended release API.
 
 ```sh
-pnpm add -D unplugin-react-alien-signals
+pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-`react-alien-signals` is a peer dependency.
+`react-fine-grained-signals` is a peer dependency.
 
 ## Vite
 
 ```ts
 import { defineConfig } from "vite";
-import signals from "unplugin-react-alien-signals/vite";
+import signals from "unplugin-react-fine-grained-signals/vite";
 
 export default defineConfig({
   plugins: [signals({ mode: "auto" })],
@@ -44,13 +44,13 @@ Use the matching entry point in the same way:
 
 | Bundler | Entry point |
 | --- | --- |
-| Rollup | `unplugin-react-alien-signals/rollup` |
-| Webpack | `unplugin-react-alien-signals/webpack` |
-| Rspack | `unplugin-react-alien-signals/rspack` |
-| esbuild | `unplugin-react-alien-signals/esbuild` |
+| Rollup | `unplugin-react-fine-grained-signals/rollup` |
+| Webpack | `unplugin-react-fine-grained-signals/webpack` |
+| Rspack | `unplugin-react-fine-grained-signals/rspack` |
+| esbuild | `unplugin-react-fine-grained-signals/esbuild` |
 
 ```ts
-import signals from "unplugin-react-alien-signals/webpack";
+import signals from "unplugin-react-fine-grained-signals/webpack";
 
 export default {
   plugins: [signals({ mode: "auto" })],
@@ -84,7 +84,7 @@ export default {
   - `"off"`: omits the directive. Choose it only when React Compiler is not in
     the build, or when the affected components were verified against
     [the compatibility note](../../docs/design/react-compiler-compatibility.md).
-- `importSource`: overrides `react-alien-signals` for a compatible wrapper.
+- `importSource`: overrides `react-fine-grained-signals` for a compatible wrapper.
 - `reactImportSource`: an additional module specifier whose `memo` and
   `forwardRef` exports count as React's own when the plugin decides whether a
   wrapped function is a component. Recognition is additive, not a replacement:

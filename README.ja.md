@@ -1,8 +1,8 @@
-# react-alien-signals
+# react-fine-grained-signals
 
 [English](README.md) | [日本語](README.ja.md)
 
-[alien-signals](https://www.npmjs.com/package/alien-signals) の実験的なReactバインディングです。小さなリアクティブプリミティブ、Reactフック、そして対象を意図的に絞ったDOMプロパティへの直接バインディング用JSXランタイムを提供します。このJSXランタイムは明示的に有効化した場合のみ使用されます。
+[alien-signals](https://www.npmjs.com/package/alien-signals) を基盤とした、React 19向けの実験的なfine-grainedレンダリングレイヤーです。小さなリアクティブプリミティブ、Reactフック、そして対象を意図的に絞ったDOMプロパティへの直接バインディング用JSXランタイムを提供します。このJSXランタイムは明示的に有効化した場合のみ使用されます。
 
 **React 19以降が必要です。** JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
 
@@ -73,6 +73,6 @@ pnpm bench:transform
 
 ## 謝辞
 
-- [alien-signals](https://www.npmjs.com/package/alien-signals) — 本パッケージが直接bindingを提供する基盤ライブラリ。
+- [alien-signals](https://www.npmjs.com/package/alien-signals) — 本パッケージが基盤とするシグナルエンジン。
 - [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — ベンチマークの比較対象。
 - [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](docs/design/use-signals-boundary-design.ja.md#prior-art)を参照。

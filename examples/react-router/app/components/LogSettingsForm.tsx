@@ -1,5 +1,5 @@
-import { useSignals } from "react-alien-signals";
-import type { DeepSignal } from "react-alien-signals";
+import { useSignals } from "react-fine-grained-signals";
+import type { DeepSignal } from "react-fine-grained-signals";
 
 export interface LogSettings {
   maxVisible: number;

@@ -14,19 +14,19 @@ React Compilerはこの契約を設計上破ります。componentのJSXをinstan
 
 ## 計測方法
 
-`packages/unplugin-react-alien-signals/tests/react-compiler.test.ts` は、実アプリケーションと同じ順序でpipelineを実行します。
+`packages/unplugin-react-fine-grained-signals/tests/react-compiler.test.ts` は、実アプリケーションと同じ順序でpipelineを実行します。
 
-1. このpackageのBabel transform(`transformReactAlienSignals`)を対象モードで実行する。ただし[手書きのruntime境界](#手書きの-react-alien-signalsruntime-境界はmanagedの出力と同じ挙動になる)では、transformが一切走らないcaseを計測するため、このstepを意図的にskipします。
+1. このpackageのBabel transform(`transformReactFineGrainedSignals`)を対象モードで実行する。ただし[手書きのruntime境界](#手書きの-react-fine-grained-signalsruntime-境界はmanagedの出力と同じ挙動になる)では、transformが一切走らないcaseを計測するため、このstepを意図的にskipします。
 2. `babel-plugin-react-compiler` 1.0.0 をdefault設定で実行し、`logger` eventを収集する。
 3. automatic runtimeのJSX transformを実行する。
 4. moduleをメモリ上でlinkし(importは実際のライブラリへ解決されるため、module scopeは本物です)、jsdomで評価する。
 
-各caseはcompile後のcodeと実際の挙動の両方で検証します。挙動側はmountし、`act()` 内でsignalへ書き込み、DOMを読みます。実行は `pnpm --filter unplugin-react-alien-signals test:react-compiler`。CIでは `.github/workflows/test.yml` の独立したstepとして実行します。
+各caseはcompile後のcodeと実際の挙動の両方で検証します。挙動側はmountし、`act()` 内でsignalへ書き込み、DOMを読みます。実行は `pnpm --filter unplugin-react-fine-grained-signals test:react-compiler`。CIでは `.github/workflows/test.yml` の独立したstepとして実行します。
 
 fixtureは、今回の仮説そのものの形です。
 
 ```jsx
-import { signal } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
 
 export const count = signal(0);
 
@@ -43,8 +43,8 @@ export function Counter() {
 
 ```jsx
 import { c as _c } from "react/compiler-runtime";
-import { signal } from "react-alien-signals";
-import { useSignals as _useSignals } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
+import { useSignals as _useSignals } from "react-fine-grained-signals";
 export const count = signal(0);
 export function Counter() {
   const $ = _c(1);
@@ -76,11 +76,11 @@ CompileError: (BuildHIR::lowerStatement) Handle TryStatement without a catch cla
 
 ### 手動ランタイムインポート境界はmanagedの出力と同じ挙動になる
 
-[hooksのdocs](../hooks.ja.md)に載せている手動ランタイムインポート境界、つまり `react-alien-signals/runtime` からimportした `useSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
+[hooksのdocs](../hooks.ja.md)に載せている手動ランタイムインポート境界、つまり `react-fine-grained-signals/runtime` からimportした `useSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
 
 ```jsx
-import { signal } from "react-alien-signals";
-import { useSignals } from "react-alien-signals/runtime";
+import { signal } from "react-fine-grained-signals";
+import { useSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
@@ -104,7 +104,7 @@ jsdomでmountすると、componentは書き込みのたびに更新されます(
 
 それでもdirectiveには意味が1つだけ残ります。`panicThreshold: "all_errors"` の場合です。directiveがなければ `transformSync` がthrowしてbuildは失敗し、あればerror eventは記録されるもののpanicは発生しません。これは上のmanagedの出力で計測した分岐とまったく同じであり、両者が同じ形だと理解すれば当然の結果です。
 
-自動化の欠落は実在しますが、「directiveが付かない」よりは狭い話です。transformは `mode: "auto"` かつ `transform: "managed"` であってもこのfileに手を加えません。functionが既に `useSignals()` を呼んでいるため、directiveを付ける地点に到達する前にskipされ、`transformReactAlienSignals` は `null` を返してfileをtransformされなかったものとして報告します。つまり `"use no memo"` の手書きは、全errorでpanicするbuildに必要なものであり、compilerが将来 `try` / `finally` をlowerできるようになったときにopt-outを有効なまま保つためのものです。
+自動化の欠落は実在しますが、「directiveが付かない」よりは狭い話です。transformは `mode: "auto"` かつ `transform: "managed"` であってもこのfileに手を加えません。functionが既に `useSignals()` を呼んでいるため、directiveを付ける地点に到達する前にskipされ、`transformReactFineGrainedSignals` は `null` を返してfileをtransformされなかったものとして報告します。つまり `"use no memo"` の手書きは、全errorでpanicするbuildに必要なものであり、compilerが将来 `try` / `finally` をlowerできるようになったときにopt-outを有効なまま保つためのものです。
 
 ### leaf hookはcompiler-safe
 
@@ -158,12 +158,12 @@ transformの既存の契約から導かれる詳細は次のとおりです。
 
 ## 推奨する `transform` のdefaultは変わるか
 
-React Compilerを理由とするなら、変わりません。managedの出力がcompilerを生き延びるのは、compilerが `catch` なしの `try` をlowerできないという実装上の詳細のためであり、それは `panicThreshold: "all_errors"` ではbuildを壊すerrorにもなります。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignals()` 境界の設計検討docs](use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。なお別件として、`unplugin-react-alien-signals` は現在 `transform: "managed"` を既定にしています。これはこの境界の厳密さを理由とする変更であり、根拠はそちらのdocsにあります。このdocsの計測結果が根拠になっているわけではありません。
+React Compilerを理由とするなら、変わりません。managedの出力がcompilerを生き延びるのは、compilerが `catch` なしの `try` をlowerできないという実装上の詳細のためであり、それは `panicThreshold: "all_errors"` ではbuildを壊すerrorにもなります。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignals()` 境界の設計検討docs](use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。なお別件として、`unplugin-react-fine-grained-signals` は現在 `transform: "managed"` を既定にしています。これはこの境界の厳密さを理由とする変更であり、根拠はそちらのdocsにあります。このdocsの計測結果が根拠になっているわけではありません。
 
 ## 未解決の論点
 
 - **bundler間での実行順序。** directiveが効くのは、このpackageのtransformがcompilerのBabel passより先に走る場合だけです。Viteでは構造的に成立します。pluginは `enforce: "pre"` を宣言しており、`@vitejs/plugin-react` は通常順のpluginとしてBabelを実行するためです。その間に走るVite自身のTypeScript passは、oxcとesbuildのどちらのtransformerでもdirectiveを保持します(JSXを保持したまま `.tsx` を入力にして直接確認しました)。Webpack、Rspack、Next.jsのpipelineは未計測です。
 - **実際のbundlerでの `panicThreshold: "all_errors"`。** transformが生成した形と手書きの `try` / `finally` の形の両方について、Babelのレイヤーで計測しました。directiveがあっても `TryStatement` のerror eventは記録され続けますが、panicは止まります。`transformSync` がthrowするのはdirectiveがない場合だけです。記録され続けるeventを、bundlerのReact Compiler統合が別経路でbuildの失敗に変えるかどうかは、end-to-endでは再現していません。
-- **build pluginなしで手書きしたbare `useSignals()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。これはbare hookに限った話です。手書きの `react-alien-signals/runtime` 境界は構造的に別のcaseであり、[上記](#手書きの-react-alien-signalsruntime-境界はmanagedの出力と同じ挙動になる)で計測しています。
+- **build pluginなしで手書きしたbare `useSignals()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。これはbare hookに限った話です。手書きの `react-fine-grained-signals/runtime` 境界は構造的に別のcaseであり、[上記](#手書きの-react-fine-grained-signalsruntime-境界はmanagedの出力と同じ挙動になる)で計測しています。
 - **`transform: "inject"` でapplication barrel経由でimportした `useSignals()`。** transformは呼び出しを認識してfunctionをskipし、skipしたままにするため、directiveは付きません。設定した `importSource` からの直接importか、`@useSignals` 注釈であれば対象になります。
 - **compilerのversion。** 以上はすべて1.0.0のdefault設定での挙動です。`try` / `finally` に対応したversion、module scopeの読み取りの分類を変えたversion、`"use no memo"` の扱いを変えたversionが出た場合は、このdocsの計測をやり直す必要があります。testはその計測の実行可能な形です。

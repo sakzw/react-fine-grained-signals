@@ -2,15 +2,15 @@
 
 [English](control-flow.md) | [日本語](control-flow.ja.md)
 
-`react-alien-signals/utils` provides small React components inspired by Solid's
+`react-fine-grained-signals/utils` provides small React components inspired by Solid's
 `Show`, `Switch`/`Match`, and `For`. They are optional and do not need the
 build plugin or the custom JSX runtime. When a signal is passed to their
 condition or list input, the utility itself forms the reactive boundary, so an
 update does not rerender its parent component.
 
 ```tsx
-import { signal } from "react-alien-signals";
-import { For, Index, Match, Show, Switch } from "react-alien-signals/utils";
+import { signal } from "react-fine-grained-signals";
+import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 const signedIn = signal(false);
 const showList = signal(true);

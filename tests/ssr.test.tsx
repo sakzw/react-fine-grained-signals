@@ -1,4 +1,4 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
 import { act, Suspense } from "react";
@@ -15,7 +15,7 @@ import {
   useSignals,
   type DeepSignal,
 } from "../src/index.js";
-import { For, Index, Show } from "react-alien-signals/utils";
+import { For, Index, Show } from "react-fine-grained-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -3,7 +3,7 @@
 [English](core-primitives.md) | [日本語](core-primitives.ja.md)
 
 ```ts
-import { batch, computed, effect, signal, untracked } from "react-alien-signals";
+import { batch, computed, effect, signal, untracked } from "react-fine-grained-signals";
 
 const count = signal(0);
 const doubled = computed(() => count.value * 2);
@@ -30,7 +30,7 @@ If a `computed` getter throws, the write that triggered re-evaluation still comp
 `deepSignal` adds property-level tracking for plain objects and arrays. Proxies are created lazily and cached, so aliases and cycles retain stable identity.
 
 ```ts
-import { computed, deepSignal } from "react-alien-signals";
+import { computed, deepSignal } from "react-fine-grained-signals";
 
 const state = deepSignal({
   user: { profile: { name: "Alice" } },
@@ -52,7 +52,7 @@ This view guarantee does not cross an opaque boundary. Class instances, `Date`, 
 
 `isSignal(value)` reports whether a value came from `signal`, `computed`, or `deepSignal`. The custom JSX runtime and the control-flow components route on it, so a false negative degrades a reactive binding into a plain prop instead of raising an error.
 
-Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-alien-signals.signal")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
+Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
 
 This fixes identification only. Reactivity additionally requires a shared `alien-signals` instance, because dependency tracking lives in that module's global state; see [Packaging](../README.md#packaging) for why it is a peer dependency. A recognized foreign signal reads correctly, but it propagates updates only while the reactive core underneath is shared.
 

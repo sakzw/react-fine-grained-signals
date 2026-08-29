@@ -28,10 +28,10 @@ import type { Signal } from "../../../src/index.js";
 import * as libraryJsxRuntime from "../../../src/jsx-runtime.js";
 import * as libraryRuntime from "../../../src/runtime.js";
 import {
-  transformReactAlienSignals,
-  type ReactAlienSignalsMode,
-  type ReactAlienSignalsReactCompiler,
-  type ReactAlienSignalsTransform,
+  transformReactFineGrainedSignals,
+  type ReactFineGrainedSignalsMode,
+  type ReactFineGrainedSignalsReactCompiler,
+  type ReactFineGrainedSignalsTransform,
 } from "../src/internal/transform.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
@@ -43,9 +43,9 @@ const EXPORTS = "__exports";
 const moduleRegistry: Record<string, unknown> = {
   "react/jsx-runtime": reactJsxRuntime,
   "react/compiler-runtime": reactCompilerRuntime,
-  "react-alien-signals": library,
-  "react-alien-signals/runtime": libraryRuntime,
-  "react-alien-signals/jsx-runtime": libraryJsxRuntime,
+  "react-fine-grained-signals": library,
+  "react-fine-grained-signals/runtime": libraryRuntime,
+  "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
 };
 
 // Rewrites the compiled ES module into something `new Function` can run, so a
@@ -111,9 +111,9 @@ const moduleLinker: PluginObj = {
 };
 
 interface PipelineOptions {
-  mode?: ReactAlienSignalsMode;
-  transform?: ReactAlienSignalsTransform;
-  reactCompiler?: ReactAlienSignalsReactCompiler;
+  mode?: ReactFineGrainedSignalsMode;
+  transform?: ReactFineGrainedSignalsTransform;
+  reactCompiler?: ReactFineGrainedSignalsReactCompiler;
   /** Whether babel-plugin-react-compiler runs on this package's output. */
   compile?: boolean;
   /**
@@ -127,8 +127,8 @@ interface PipelineOptions {
 
 function applySignalsTransform(source: string, options: PipelineOptions): string {
   return (
-    transformReactAlienSignals(source, "Fixture.jsx", {
-      importSource: "react-alien-signals",
+    transformReactFineGrainedSignals(source, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
       mode: options.mode ?? "auto",
       transform: options.transform ?? "managed",
       reactCompiler: options.reactCompiler ?? "auto",
@@ -226,7 +226,7 @@ afterEach(() => {
 });
 
 const moduleScopeCounter = `
-import { signal } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
 
 export const count = signal(0);
 
@@ -236,7 +236,7 @@ export function Counter() {
 `;
 
 const customHookCounter = `
-import { signal } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
 
 export const count = signal(0);
 
@@ -250,7 +250,7 @@ export function Counter() {
 `;
 
 const leafHookCounter = `
-import { signal, useSignalValue } from "react-alien-signals";
+import { signal, useSignalValue } from "react-fine-grained-signals";
 
 export const count = signal(0);
 
@@ -261,7 +261,7 @@ export function Counter() {
 `;
 
 const directBindingCounter = `
-import { signal } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
 
 export const count = signal(0);
 
@@ -275,8 +275,8 @@ export function Counter() {
 // nothing inserts an opt-out directive for it -- which is exactly the case
 // under measurement.
 const handWrittenRuntimeCounter = `
-import { signal } from "react-alien-signals";
-import { useSignals } from "react-alien-signals/runtime";
+import { signal } from "react-fine-grained-signals";
+import { useSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
@@ -292,8 +292,8 @@ export function Counter() {
 
 // The control: the same hand-authored shape with the directive written by hand.
 const handWrittenRuntimeCounterWithDirective = `
-import { signal } from "react-alien-signals";
-import { useSignals } from "react-alien-signals/runtime";
+import { signal } from "react-fine-grained-signals";
+import { useSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
@@ -363,7 +363,7 @@ describe("React Compiler compiled output", () => {
   });
 
   it("leaves a hand-written runtime-import component uncompiled, directive or not", () => {
-    // The manual `react-alien-signals/runtime` boundary is the transform's own
+    // The manual `react-fine-grained-signals/runtime` boundary is the transform's own
     // managed shape, hand-authored. The compiler cannot lower `try` without
     // `catch` whoever wrote it, so it bails on the syntax alone -- the same
     // `CompileError` the transform-generated managed output produces, and the
@@ -386,8 +386,8 @@ describe("React Compiler compiled output", () => {
     // build: the function already calls `useSignals()`, so the transform skips
     // it and never reaches the point where it would add the directive.
     expect(
-      transformReactAlienSignals(handWrittenRuntimeCounter, "Fixture.jsx", {
-        importSource: "react-alien-signals",
+      transformReactFineGrainedSignals(handWrittenRuntimeCounter, "Fixture.jsx", {
+        importSource: "react-fine-grained-signals",
         mode: "auto",
         transform: "managed",
         reactCompiler: "auto",
@@ -535,7 +535,7 @@ describe("React Compiler runtime behavior", () => {
 
   it("updates a direct JSX signal binding compiled by the compiler", async () => {
     const module = await loadModule(directBindingCounter, {
-      jsxImportSource: "react-alien-signals",
+      jsxImportSource: "react-fine-grained-signals",
     });
     const container = mount(module.Counter);
 

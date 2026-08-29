@@ -1,34 +1,34 @@
 import { createUnplugin, type TransformResult } from "unplugin";
 import {
-  transformReactAlienSignals,
-  type ReactAlienSignalsMode,
-  type ReactAlienSignalsReactCompiler,
-  type ReactAlienSignalsTransform,
+  transformReactFineGrainedSignals,
+  type ReactFineGrainedSignalsMode,
+  type ReactFineGrainedSignalsReactCompiler,
+  type ReactFineGrainedSignalsTransform,
   type InternalTransformResult,
 } from "./internal/transform.js";
 
 export type {
-  ReactAlienSignalsMode,
-  ReactAlienSignalsReactCompiler,
-  ReactAlienSignalsTransform,
+  ReactFineGrainedSignalsMode,
+  ReactFineGrainedSignalsReactCompiler,
+  ReactFineGrainedSignalsTransform,
 } from "./internal/transform.js";
 
-export interface ReactAlienSignalsOptions {
+export interface ReactFineGrainedSignalsOptions {
   /**
    * `manual` preserves explicit useSignals() opt-in. `auto` detects signal
    * reads in components and custom hooks; `all` also wraps JSX components that
    * do not statically expose a .value read.
    */
-  mode?: ReactAlienSignalsMode;
+  mode?: ReactFineGrainedSignalsMode;
   /** `managed` (default) adds an exact try/finally boundary; `inject` adds bare useSignals() for best-effort opt-in. */
-  transform?: ReactAlienSignalsTransform;
+  transform?: ReactFineGrainedSignalsTransform;
   /**
    * `auto` (default) marks every transformed function with `"use no memo"`, so
    * React Compiler cannot memoize away the signal reads render tracking needs.
    * `off` omits the directive; only choose it when the compiler is not used, or
    * when its memoization has been verified against this library's tracking.
    */
-  reactCompiler?: ReactAlienSignalsReactCompiler;
+  reactCompiler?: ReactFineGrainedSignalsReactCompiler;
   /** Package that exports `useSignals` and its `/runtime` entry. */
   importSource?: string;
   /**
@@ -48,7 +48,7 @@ export interface ReactAlienSignalsOptions {
 
 const SCRIPT_MODULE = /\.[cm]?[jt]sx?(?:\?.*)?$/;
 
-export function canTransform(id: string, options: ReactAlienSignalsOptions): boolean {
+export function canTransform(id: string, options: ReactFineGrainedSignalsOptions): boolean {
   if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
     return false;
   }
@@ -57,16 +57,16 @@ export function canTransform(id: string, options: ReactAlienSignalsOptions): boo
   return options.include?.(id) ?? true;
 }
 
-export const reactAlienSignals = createUnplugin<ReactAlienSignalsOptions>(
+export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOptions>(
   (options = {}) => ({
-    name: "unplugin-react-alien-signals",
+    name: "unplugin-react-fine-grained-signals",
     enforce: "pre",
     transformInclude(id) {
       return canTransform(id, options);
     },
     transform(code, id): InternalTransformResult | null {
-      return transformReactAlienSignals(code, id, {
-        importSource: options.importSource ?? "react-alien-signals",
+      return transformReactFineGrainedSignals(code, id, {
+        importSource: options.importSource ?? "react-fine-grained-signals",
         reactImportSource: options.reactImportSource ?? "react",
         mode: options.mode ?? "auto",
         transform: options.transform ?? "managed",
@@ -76,7 +76,7 @@ export const reactAlienSignals = createUnplugin<ReactAlienSignalsOptions>(
   }),
 );
 
-export default reactAlienSignals;
+export default reactFineGrainedSignals;
 
 /**
  * The `{ code, map }` shape a bundler's `transform` hook returns on a real
@@ -90,13 +90,13 @@ export type BundlerTransformOutput = Extract<TransformResult, { code: string }> 
 
 /**
  * The one piece every per-bundler entry file (`vite.ts`, `webpack.ts`,
- * `rollup.ts`, `esbuild.ts`, `rspack.ts`) repeated: casting `reactAlienSignals`'s
+ * `rollup.ts`, `esbuild.ts`, `rspack.ts`) repeated: casting `reactFineGrainedSignals`'s
  * `bundler` property to a callable factory of its own bundler-specific plugin
  * type. Each entry file supplies only the two things that actually differ
  * between bundlers -- which property to read and what shape it returns.
  */
 export function createBundlerPlugin<Plugin>(
   bundler: "vite" | "webpack" | "rollup" | "esbuild" | "rspack",
-): (options?: ReactAlienSignalsOptions) => Plugin {
-  return reactAlienSignals[bundler] as (options?: ReactAlienSignalsOptions) => Plugin;
+): (options?: ReactFineGrainedSignalsOptions) => Plugin {
+  return reactFineGrainedSignals[bundler] as (options?: ReactFineGrainedSignalsOptions) => Plugin;
 }

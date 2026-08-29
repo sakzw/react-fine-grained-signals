@@ -138,7 +138,7 @@ function createSignalsVariant(counts) {
  * `createSignalsVariant` above, but `ManagedSignalsCounter` opens and closes
  * its render scope the way the plugin's shipped `transform: "managed"`
  * output does -- `const store = useSignals(); try { ... } finally {
- * store.f(); }` against `react-alien-signals/runtime` -- instead of calling
+ * store.f(); }` against `react-fine-grained-signals/runtime` -- instead of calling
  * the bare `useSignals()` hook. This is the boundary real apps built with
  * the default toolchain actually run, so it's benchmarked alongside the bare
  * variant rather than in its place.

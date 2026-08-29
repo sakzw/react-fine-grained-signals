@@ -1,7 +1,7 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 import { useOutletContext } from "react-router";
-import { useComputed, useSignal, useSignalEffect } from "react-alien-signals";
-import { For, Show, Switch, Match } from "react-alien-signals/utils";
+import { useComputed, useSignal, useSignalEffect } from "react-fine-grained-signals";
+import { For, Show, Switch, Match } from "react-fine-grained-signals/utils";
 import { DevPanel } from "../components/DevPanel.js";
 import { TaskRow } from "../components/TaskRow.js";
 import {
@@ -14,7 +14,7 @@ import {
 } from "../lib/task-store.js";
 
 export function meta() {
-  return [{ title: "タスクボード — react-alien-signals React Router PoC" }];
+  return [{ title: "タスクボード — react-fine-grained-signals React Router PoC" }];
 }
 
 export default function Home() {
@@ -45,7 +45,7 @@ export default function Home() {
   const isClearDisabled = useComputed(() => !hasCompleted.value);
 
   useSignalEffect(() => {
-    document.title = `タスク(残り${store.remaining.value}) — react-alien-signals`;
+    document.title = `タスク(残り${store.remaining.value}) — react-fine-grained-signals`;
   }, [store]);
 
   return (

@@ -1,7 +1,20 @@
 {
-  "name": "unplugin-react-alien-signals",
+  "name": "unplugin-react-fine-grained-signals",
   "version": "0.0.0",
-  "description": "Universal useSignals transform for react-alien-signals.",
+  "description": "Universal useSignals transform for react-fine-grained-signals.",
+  "keywords": [
+    "unplugin",
+    "vite",
+    "rollup",
+    "webpack",
+    "rspack",
+    "esbuild",
+    "react",
+    "signals",
+    "fine-grained",
+    "react-fine-grained-signals",
+    "alien-signals"
+  ],
   "private": true,
   "type": "module",
   "types": "./dist/index.d.ts",
@@ -47,7 +60,7 @@
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
-    "react-alien-signals": "workspace:*"
+    "react-fine-grained-signals": "workspace:*"
   },
   "dependencies": {
     "@babel/core": "^7.29.7",
@@ -59,7 +72,7 @@
     "@types/babel__core": "^7.20.5",
     "@types/babel__helper-plugin-utils": "^7.10.3",
     "@vitest/coverage-v8": "4.1.11",
-    "react-alien-signals": "workspace:*",
+    "react-fine-grained-signals": "workspace:*",
     "tsdown": "0.22.14",
     "typescript": "^7.0.2",
     "vitest": "^4.1.11"

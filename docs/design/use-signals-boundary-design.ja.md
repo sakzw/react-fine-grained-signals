@@ -46,7 +46,7 @@
 
 ### 2. managed transformを推奨する厳密な経路にする
 
-**状態: plugin経路では採用済みです。** `unplugin-react-alien-signals` build pluginはこの選択肢をdefaultにしており、`transform: "managed"` 設定で厳密な `try` / `finally` 境界を実装しています。
+**状態: plugin経路では採用済みです。** `unplugin-react-fine-grained-signals` build pluginはこの選択肢をdefaultにしており、`transform: "managed"` 設定で厳密な `try` / `finally` 境界を実装しています。
 
 source上の `useSignals()` 呼び出しは維持しながら、opt-inしたcomponentを厳密な `try` / `finally` scopeへ変換します。危険性を理解した利用者向けに、best-effort動作を任意で残すこともできます。
 
@@ -56,9 +56,9 @@ source上の `useSignals()` 呼び出しは維持しながら、opt-inしたcomp
 
 **状態: この範囲の狭い用途については採用済みです。** build pluginを利用できる場合は `transform: "managed"` が引き続き主要な推奨経路であり、手動ランタイムインポート境界はbuild変換なしに厳密な境界を得るための文書化された選択肢です。
 
-managed runtimeは、compilerなしでも厳密な境界を既に備えています。`react-alien-signals/runtime` はtransformの対象である `useManagedSignals` を(同moduleでは `useSignals` として)exportしており、これは `finish()` / `f()` で閉じるscope handleを返します。`const store = useSignals(); try { … } finally { store.f(); }` は、公開patternとして[hooksのdocs](../hooks.ja.md)(「追跡境界について」)に既に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](react-compiler-compatibility.ja.md#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、この手動ランタイムインポート境界の `babel-plugin-react-compiler` 下での挙動を別途計測しています。
+managed runtimeは、compilerなしでも厳密な境界を既に備えています。`react-fine-grained-signals/runtime` はtransformの対象である `useManagedSignals` を(同moduleでは `useSignals` として)exportしており、これは `finish()` / `f()` で閉じるscope handleを返します。`const store = useSignals(); try { … } finally { store.f(); }` は、公開patternとして[hooksのdocs](../hooks.ja.md)(「追跡境界について」)に既に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](react-compiler-compatibility.ja.md#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、この手動ランタイムインポート境界の `babel-plugin-react-compiler` 下での挙動を別途計測しています。
 
-利点は、既存の仕組みだけで字句的に厳密な所有権を得られ、compilerが不要でcomponent identityにも影響しないことです。以下の欠点は、文書化された今も変わらない、pattern自体が持つ性質です。opt-inするすべてのcomponentにboilerplateが必要になること、`finally` の書き忘れは厳密さを掲げるAPIからscopeを漏らすためhookの呼び忘れより深刻であること、そして文書化によって `react-alien-signals/runtime` の形をtransform専用の内部実装詳細ではなく公開APIとして固定したことです。
+利点は、既存の仕組みだけで字句的に厳密な所有権を得られ、compilerが不要でcomponent identityにも影響しないことです。以下の欠点は、文書化された今も変わらない、pattern自体が持つ性質です。opt-inするすべてのcomponentにboilerplateが必要になること、`finally` の書き忘れは厳密さを掲げるAPIからscopeを漏らすためhookの呼び忘れより深刻であること、そして文書化によって `react-fine-grained-signals/runtime` の形をtransform専用の内部実装詳細ではなく公開APIとして固定したことです。
 
 ### 4. 明示的なcomponent wrapperを導入する
 
@@ -107,6 +107,6 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 ## 現在の推奨
 
-変換なしの `useSignals()` に関するより広い境界の問いについて方針を決定するまでは、変換なしの `useSignals()` と `transform: "inject"` を、signalを読むすべてのcomponentがopt-inする同期render向けの、plugin不要なbest-effort機能として扱います。build pluginを利用できて厳密なrender境界が必要な場合は `transform: "managed"` を使います。pluginを使わない場合は、選択肢3の手動 `react-alien-signals/runtime` scope handle ── `const store = useSignals(); try { … } finally { store.f(); }` ── が、[hooksのdocs](../hooks.ja.md)に厳密な境界の代替として既に文書化されています。この説明は現在の制約を記録するものであり、設計課題を終了させたり、兄弟componentの誤帰属を正しい動作として再定義したりするものではありません。
+変換なしの `useSignals()` に関するより広い境界の問いについて方針を決定するまでは、変換なしの `useSignals()` と `transform: "inject"` を、signalを読むすべてのcomponentがopt-inする同期render向けの、plugin不要なbest-effort機能として扱います。build pluginを利用できて厳密なrender境界が必要な場合は `transform: "managed"` を使います。pluginを使わない場合は、選択肢3の手動 `react-fine-grained-signals/runtime` scope handle ── `const store = useSignals(); try { … } finally { store.f(); }` ── が、[hooksのdocs](../hooks.ja.md)に厳密な境界の代替として既に文書化されています。この説明は現在の制約を記録するものであり、設計課題を終了させたり、兄弟componentの誤帰属を正しい動作として再定義したりするものではありません。
 
-`unplugin-react-alien-signals` は現在、bundler pluginの経路について上記の選択肢2を実装する形で `transform: "managed"` をdefaultにしています。`managed`(default)は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignals()` を追加します。pluginでbuildし `transform` を上書きしない利用者は、source側の変更なしにこの厳密な境界を得られます。pluginを使わない利用者も、文書化された選択肢3を手動で使うことで同等の厳密な境界を得られます。この変更はこの設計検討の範囲を狭めますが、終了させるものではありません。build変換を一切使わない変換なしの `useSignals()` と、明示的に選択した `transform: "inject"` は、上記の説明どおりbest-effortのままであり、本文書が扱う中心的な問い(変換なしのhookに既定でどのような厳密な境界契約を与えるか)を含め、本文書のその他の選択肢と判断基準は依然として未解決のままです。
+`unplugin-react-fine-grained-signals` は現在、bundler pluginの経路について上記の選択肢2を実装する形で `transform: "managed"` をdefaultにしています。`managed`(default)は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignals()` を追加します。pluginでbuildし `transform` を上書きしない利用者は、source側の変更なしにこの厳密な境界を得られます。pluginを使わない利用者も、文書化された選択肢3を手動で使うことで同等の厳密な境界を得られます。この変更はこの設計検討の範囲を狭めますが、終了させるものではありません。build変換を一切使わない変換なしの `useSignals()` と、明示的に選択した `transform: "inject"` は、上記の説明どおりbest-effortのままであり、本文書が扱う中心的な問い(変換なしのhookに既定でどのような厳密な境界契約を与えるか)を含め、本文書のその他の選択肢と判断基準は依然として未解決のままです。

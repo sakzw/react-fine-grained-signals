@@ -2,11 +2,11 @@
 
 [English](control-flow.md) | [日本語](control-flow.ja.md)
 
-`react-alien-signals/utils` は、Solidの `Show`、`Switch` / `Match`、`For` に着想を得た小さなReactコンポーネントを提供します。任意のサブパスであり、build pluginも独自JSXランタイムも必要ありません。条件または配列入力にsignalを渡すと、ユーティリティ自身がリアクティブ境界になるため、更新時に親コンポーネントを再レンダーしません。
+`react-fine-grained-signals/utils` は、Solidの `Show`、`Switch` / `Match`、`For` に着想を得た小さなReactコンポーネントを提供します。任意のサブパスであり、build pluginも独自JSXランタイムも必要ありません。条件または配列入力にsignalを渡すと、ユーティリティ自身がリアクティブ境界になるため、更新時に親コンポーネントを再レンダーしません。
 
 ```tsx
-import { signal } from "react-alien-signals";
-import { For, Index, Match, Show, Switch } from "react-alien-signals/utils";
+import { signal } from "react-fine-grained-signals";
+import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 const signedIn = signal(false);
 const showList = signal(true);

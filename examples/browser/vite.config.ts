@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 // @ts-expect-error -- prebuilt JS output, no local type project reference.
-import signals from "../../packages/unplugin-react-alien-signals/dist/vite.js";
+import signals from "../../packages/unplugin-react-fine-grained-signals/dist/vite.js";
 
 const here = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
@@ -24,26 +24,26 @@ export default defineConfig({
   oxc: false,
   esbuild: {
     jsx: "automatic",
-    jsxImportSource: "react-alien-signals",
+    jsxImportSource: "react-fine-grained-signals",
   },
   plugins: [signals({ mode: "auto" })],
   resolve: {
     dedupe: ["alien-signals", "react", "react-dom"],
     alias: [
       {
-        find: /^react-alien-signals\/runtime$/,
+        find: /^react-fine-grained-signals\/runtime$/,
         replacement: here("../../src/runtime.ts"),
       },
       {
-        find: /^react-alien-signals\/jsx-runtime$/,
+        find: /^react-fine-grained-signals\/jsx-runtime$/,
         replacement: here("../../src/jsx-runtime.ts"),
       },
       {
-        find: /^react-alien-signals\/jsx-dev-runtime$/,
+        find: /^react-fine-grained-signals\/jsx-dev-runtime$/,
         replacement: here("../../src/jsx-dev-runtime.ts"),
       },
       {
-        find: /^react-alien-signals$/,
+        find: /^react-fine-grained-signals$/,
         replacement: here("../../src/index.ts"),
       },
     ],

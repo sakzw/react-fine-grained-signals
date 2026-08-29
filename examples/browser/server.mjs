@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { renderToString } from "react-dom/server";
 import { createServer as createViteServer } from "vite";
-import signals from "../../packages/unplugin-react-alien-signals/dist/vite.js";
+import signals from "../../packages/unplugin-react-fine-grained-signals/dist/vite.js";
 
 const browserRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(browserRoot, "../..");
@@ -19,26 +19,26 @@ const vite = await createViteServer({
   oxc: false,
   esbuild: {
     jsx: "automatic",
-    jsxImportSource: "react-alien-signals",
+    jsxImportSource: "react-fine-grained-signals",
   },
   plugins: [signals({ mode: "auto" })],
   resolve: {
     dedupe: ["alien-signals", "react", "react-dom"],
     alias: [
       {
-        find: /^react-alien-signals\/runtime$/,
+        find: /^react-fine-grained-signals\/runtime$/,
         replacement: source("src/runtime.ts"),
       },
       {
-        find: /^react-alien-signals\/jsx-runtime$/,
+        find: /^react-fine-grained-signals\/jsx-runtime$/,
         replacement: source("src/jsx-runtime.ts"),
       },
       {
-        find: /^react-alien-signals\/jsx-dev-runtime$/,
+        find: /^react-fine-grained-signals\/jsx-dev-runtime$/,
         replacement: source("src/jsx-dev-runtime.ts"),
       },
       {
-        find: /^react-alien-signals$/,
+        find: /^react-fine-grained-signals$/,
         replacement: source("src/index.ts"),
       },
     ],

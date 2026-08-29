@@ -1,21 +1,21 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
-  transformReactAlienSignals,
-  type ReactAlienSignalsMode,
-  type ReactAlienSignalsReactCompiler,
-  type ReactAlienSignalsTransform,
+  transformReactFineGrainedSignals,
+  type ReactFineGrainedSignalsMode,
+  type ReactFineGrainedSignalsReactCompiler,
+  type ReactFineGrainedSignalsTransform,
 } from "../src/internal/transform.js";
 
 function compile(
   source: string,
-  mode: ReactAlienSignalsMode = "manual",
-  transform: ReactAlienSignalsTransform = "managed",
-  importSource = "react-alien-signals",
-  reactCompiler: ReactAlienSignalsReactCompiler = "auto",
+  mode: ReactFineGrainedSignalsMode = "manual",
+  transform: ReactFineGrainedSignalsTransform = "managed",
+  importSource = "react-fine-grained-signals",
+  reactCompiler: ReactFineGrainedSignalsReactCompiler = "auto",
   reactImportSource = "react",
 ): string {
   return (
-    transformReactAlienSignals(source, "fixture.tsx", {
+    transformReactFineGrainedSignals(source, "fixture.tsx", {
       importSource,
       mode,
       transform,
@@ -28,14 +28,14 @@ function compile(
 describe("managed render transform", () => {
   it("turns an explicit useSignals call into a managed try/finally scope", () => {
     const output = compile(`
-      import { useSignals } from "react-alien-signals";
+      import { useSignals } from "react-fine-grained-signals";
       export function Counter({ count }) {
         useSignals();
         return <button>{count.value}</button>;
       }
     `);
 
-    expect(output).toContain('from "react-alien-signals/runtime"');
+    expect(output).toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("try {");
     expect(output).toContain("finally {");
     expect(output).toContain("_signals.f();");
@@ -76,8 +76,8 @@ describe("managed render transform", () => {
       export const Counter = () => <p>{count.value}</p>;
     `, "auto", "inject");
 
-    expect(output).toContain('from "react-alien-signals"');
-    expect(output).not.toContain('from "react-alien-signals/runtime"');
+    expect(output).toContain('from "react-fine-grained-signals"');
+    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("const Counter = () => {");
     expect(output).toContain("_useSignals();");
     expect(output).not.toContain("try {");
@@ -87,18 +87,18 @@ describe("managed render transform", () => {
 
   it("reuses a direct import and leaves an explicit bare useSignals call untouched", () => {
     const annotated = compile(`
-      import { useSignals as track } from "react-alien-signals";
+      import { useSignals as track } from "react-fine-grained-signals";
       /** @useSignals */
       export function Counter() { return <p>tracked</p>; }
     `, "manual", "inject");
     const explicit = `
-      import { useSignals } from "react-alien-signals";
+      import { useSignals } from "react-fine-grained-signals";
       export function Counter() { useSignals(); return <p />; }
     `;
 
     expect(annotated).toContain("track();");
     expect(annotated).not.toContain("_useSignals");
-    expect(compile(explicit, "manual", "inject", "react-alien-signals", "off")).toBe(explicit);
+    expect(compile(explicit, "manual", "inject", "react-fine-grained-signals", "off")).toBe(explicit);
   });
 
   it("supports custom import sources for the lightweight injection", () => {
@@ -163,7 +163,7 @@ describe("managed render transform", () => {
     expect(component.match(/finally/g)).toHaveLength(1);
     expect(component).toContain("_signals.f();");
     expect(helper).not.toContain("finally");
-    expect(helper).not.toContain("react-alien-signals/runtime");
+    expect(helper).not.toContain("react-fine-grained-signals/runtime");
   });
 
   it("recognizes memo imported from a configured react re-export module", () => {
@@ -177,9 +177,9 @@ describe("managed render transform", () => {
       const count = { value: 1 };
       export const Counter = React.memo(() => <p>{count.value}</p>);
     `;
-    const named = compile(namedSource, "auto", "managed", "react-alien-signals", "auto", "./react-compat");
+    const named = compile(namedSource, "auto", "managed", "react-fine-grained-signals", "auto", "./react-compat");
     const namespaced = compile(
-      namespaceSource, "auto", "managed", "react-alien-signals", "auto", "./react-compat",
+      namespaceSource, "auto", "managed", "react-fine-grained-signals", "auto", "./react-compat",
     );
 
     expect(named).toContain("const Counter = memo(() => {");
@@ -189,7 +189,7 @@ describe("managed render transform", () => {
     // Documented limitation: the default only matches a direct "react" import,
     // because a single-file transform cannot follow the re-export chain.
     expect(compile(namedSource, "auto")).not.toContain("finally");
-    expect(compile(namedSource, "auto")).not.toContain("react-alien-signals/runtime");
+    expect(compile(namedSource, "auto")).not.toContain("react-fine-grained-signals/runtime");
     expect(compile(namespaceSource, "auto")).not.toContain("finally");
   });
 
@@ -199,7 +199,7 @@ describe("managed render transform", () => {
       const count = { value: 1 };
       export const MemoCounter = memo(() => <p>{count.value}</p>);
       export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
-    `, "auto", "managed", "react-alien-signals", "auto", "./react-compat");
+    `, "auto", "managed", "react-fine-grained-signals", "auto", "./react-compat");
 
     expect(output.match(/finally/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = memo(() => {");
@@ -252,7 +252,7 @@ describe("managed render transform", () => {
 
     for (const output of [localHelper, otherPackage, memberExpressionHelper]) {
       expect(output).not.toContain("finally");
-      expect(output).not.toContain("react-alien-signals/runtime");
+      expect(output).not.toContain("react-fine-grained-signals/runtime");
     }
   });
 
@@ -277,7 +277,7 @@ describe("managed render transform", () => {
     `, "auto");
 
     expect(output).not.toContain("finally");
-    expect(output).not.toContain("react-alien-signals/runtime");
+    expect(output).not.toContain("react-fine-grained-signals/runtime");
   });
 
   it.each(["auto", "all"] as const)(
@@ -318,9 +318,9 @@ describe("managed render transform", () => {
         `, mode);
 
       expect(memoOutput).not.toContain("finally {");
-      expect(memoOutput).not.toContain('from "react-alien-signals/runtime"');
+      expect(memoOutput).not.toContain('from "react-fine-grained-signals/runtime"');
       expect(forwardRefOutput).not.toContain("finally {");
-      expect(forwardRefOutput).not.toContain('from "react-alien-signals/runtime"');
+      expect(forwardRefOutput).not.toContain('from "react-fine-grained-signals/runtime"');
     },
   );
 
@@ -343,7 +343,7 @@ describe("managed render transform", () => {
       export function Value() { return count.value; }
     `, "auto");
 
-    expect(output).not.toContain("react-alien-signals/runtime");
+    expect(output).not.toContain("react-fine-grained-signals/runtime");
     expect(output).not.toContain("finally");
   });
 
@@ -555,12 +555,12 @@ describe("managed render transform", () => {
   it("looks through an angle-bracket type assertion in a non-JSX TypeScript module", () => {
     // `<Fn>Row` only parses where angle brackets are not JSX, so this case
     // needs a `.ts` fixture and a hook rather than a component.
-    const output = transformReactAlienSignals(`
+    const output = transformReactFineGrainedSignals(`
       const items = [{ value: 1 }];
       const useRow = (item) => item.value;
       export function useTotal() { return items.map(<typeof useRow>useRow); }
     `, "fixture.ts", {
-      importSource: "react-alien-signals",
+      importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
       reactCompiler: "auto",
@@ -814,15 +814,15 @@ describe("managed render transform", () => {
       export function* GeneratorPage() { yield <p>value</p>; }
     `, "all");
 
-    expect(auto).not.toContain("react-alien-signals/runtime");
+    expect(auto).not.toContain("react-fine-grained-signals/runtime");
     expect(auto).not.toContain("finally");
-    expect(all).not.toContain("react-alien-signals/runtime");
+    expect(all).not.toContain("react-fine-grained-signals/runtime");
     expect(all).not.toContain("finally");
   });
 
   it("rejects explicit or annotated async opt-in", () => {
     expect(() => compile(`
-      import { useSignals } from "react-alien-signals";
+      import { useSignals } from "react-fine-grained-signals";
       export async function Explicit() { useSignals(); return <p />; }
     `)).toThrow("only supports synchronous, non-generator functions");
 
@@ -834,18 +834,18 @@ describe("managed render transform", () => {
 
   it("does not turn a late explicit useSignals call into a second hook", () => {
     const output = compile(`
-      import { useSignals } from "react-alien-signals";
+      import { useSignals } from "react-fine-grained-signals";
       const count = { value: 1 };
       export function App() { const prefix = "v"; useSignals(); return <p>{prefix}{count.value}</p>; }
     `, "auto");
 
-    expect(output).not.toContain("react-alien-signals/runtime");
+    expect(output).not.toContain("react-fine-grained-signals/runtime");
     expect(output).toContain("useSignals();");
   });
 
   it("recognizes existing namespace and barrel-imported useSignals calls", () => {
     const namespaceSource = `
-      import * as signals from "react-alien-signals";
+      import * as signals from "react-fine-grained-signals";
       const count = { value: 1 };
       export function App() { const prefix = "v"; signals.useSignals(); return <p>{prefix}{count.value}</p>; }
     `;
@@ -894,7 +894,7 @@ describe("managed render transform", () => {
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]?.[0]).toContain("cannot be verified");
       expect(warn.mock.calls[0]?.[0]).toContain("barrel");
-      expect(warn.mock.calls[0]?.[0]).toContain("react-alien-signals");
+      expect(warn.mock.calls[0]?.[0]).toContain("react-fine-grained-signals");
 
       warn.mockClear();
       const injectOutput = compile(barrelFirstStatementSource, "manual", "inject");
@@ -905,7 +905,7 @@ describe("managed render transform", () => {
     it("does not warn for a directly imported explicit useSignals call", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       compile(`
-        import { useSignals } from "react-alien-signals";
+        import { useSignals } from "react-fine-grained-signals";
         export function Counter({ count }) {
           useSignals();
           return <button>{count.value}</button>;
@@ -951,7 +951,7 @@ describe("managed render transform", () => {
 
   it("parses non-JSX TypeScript syntax according to the module extension", () => {
     const options = {
-      importSource: "react-alien-signals",
+      importSource: "react-fine-grained-signals",
       mode: "auto" as const,
       transform: "inject" as const,
       reactCompiler: "auto" as const,
@@ -959,11 +959,11 @@ describe("managed render transform", () => {
     };
 
     expect(
-      transformReactAlienSignals("const value = <string>input;", "fixture.ts", options),
+      transformReactFineGrainedSignals("const value = <string>input;", "fixture.ts", options),
     ).toBeNull();
-    expect(transformReactAlienSignals("@sealed class Store {}", "fixture.ts", options)).toBeNull();
+    expect(transformReactFineGrainedSignals("@sealed class Store {}", "fixture.ts", options)).toBeNull();
     expect(
-      transformReactAlienSignals(
+      transformReactFineGrainedSignals(
         "const count = { value: 1 }; export const App = () => <p>{count.value}</p>;",
         "fixture.js",
         options,
@@ -973,13 +973,13 @@ describe("managed render transform", () => {
 
   it("does not reuse a type-only runtime import or a shadowed runtime alias", () => {
     const typeOnly = compile(`
-      import { useSignals } from "react-alien-signals";
-      import type { useSignals as managed } from "react-alien-signals/runtime";
+      import { useSignals } from "react-fine-grained-signals";
+      import type { useSignals as managed } from "react-fine-grained-signals/runtime";
       export function App() { useSignals(); return <main />; }
     `);
     const shadowed = compile(`
-      import { useSignals } from "react-alien-signals";
-      import { useSignals as managed } from "react-alien-signals/runtime";
+      import { useSignals } from "react-fine-grained-signals";
+      import { useSignals as managed } from "react-fine-grained-signals/runtime";
       export function App(managed) { useSignals(); return <main />; }
     `);
 
@@ -1002,7 +1002,7 @@ describe("React Compiler opt-out directive", () => {
       const output = compile(autoSource, "auto", transform);
 
       expect(output).toContain('"use no memo";');
-      expect(compile(autoSource, "auto", transform, "react-alien-signals", "off"))
+      expect(compile(autoSource, "auto", transform, "react-fine-grained-signals", "off"))
         .not.toContain("use no memo");
     },
   );
@@ -1018,7 +1018,7 @@ describe("React Compiler opt-out directive", () => {
 
   it("marks an explicit useSignals component the inject transform leaves alone", () => {
     const explicit = `
-      import { useSignals } from "react-alien-signals";
+      import { useSignals } from "react-fine-grained-signals";
       export function Counter({ count }) { useSignals(); return <p>{count.value}</p>; }
     `;
     const output = compile(explicit, "manual", "inject");

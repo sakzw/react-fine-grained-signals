@@ -1,5 +1,5 @@
 import { signal } from "../src/index.js";
-import { For, Index } from "react-alien-signals/utils";
+import { For, Index } from "react-fine-grained-signals/utils";
 
 const users = signal([{ id: "ada", name: "Ada" }]);
 const tags = signal(new Set(["react"]));

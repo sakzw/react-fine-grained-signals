@@ -1,11 +1,11 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 
 import { StrictMode, useEffect, useRef, useState } from "react";
 import {
   isSignal,
   type ReadonlySignal,
   type Signal,
-} from "react-alien-signals";
+} from "react-fine-grained-signals";
 import type { DemoState } from "./state.js";
 
 function HydrationMarker() {
@@ -68,7 +68,7 @@ export function App({ state }: { state: DemoState }) {
   return (
     <main>
       <HydrationMarker />
-      <h1>react-alien-signals browser PoC</h1>
+      <h1>react-fine-grained-signals browser PoC</h1>
 
       <section aria-labelledby="child-heading">
         <h2 id="child-heading">Signal child</h2>

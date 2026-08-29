@@ -11,7 +11,7 @@ for (const entry of entries) {
   const isCompilerPlugin = entry === "webpack" || entry === "rspack";
   const hasExpectedShape = isCompilerPlugin
     ? typeof esmPlugin?.apply === "function"
-    : esmPlugin?.name === "unplugin-react-alien-signals";
+    : esmPlugin?.name === "unplugin-react-fine-grained-signals";
   if (!hasExpectedShape) {
     throw new TypeError(`${entry} did not create the expected plugin`);
   }

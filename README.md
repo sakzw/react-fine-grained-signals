@@ -1,8 +1,8 @@
-# react-alien-signals
+# react-fine-grained-signals
 
 [English](README.md) | [日本語](README.ja.md)
 
-An experimental React binding for [alien-signals](https://www.npmjs.com/package/alien-signals). It provides small reactive primitives, React hooks, and an opt-in JSX runtime for a deliberately narrow set of direct DOM bindings.
+An experimental fine-grained rendering layer for React 19, built on [alien-signals](https://www.npmjs.com/package/alien-signals). It provides small reactive primitives, React hooks, and an opt-in JSX runtime for a deliberately narrow set of direct DOM bindings.
 
 **Requires React 19 or newer.** The JSX runtime uses callback-ref cleanup, which is unavailable in React 18.
 
@@ -72,6 +72,6 @@ implementation against the same corpus.
 
 ## Acknowledgments
 
-- [alien-signals](https://www.npmjs.com/package/alien-signals) — the underlying library this package binds to.
+- [alien-signals](https://www.npmjs.com/package/alien-signals) — the signal engine this package builds on.
 - [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — benchmark comparison target.
 - [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — prior art for the `useSignals()` boundary's store protocol; see [Prior art](docs/design/use-signals-boundary-design.md#prior-art).

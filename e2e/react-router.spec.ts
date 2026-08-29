@@ -32,7 +32,7 @@ test("serves deterministic React SSR markup for the task board", async ({ reques
   expect(response.ok()).toBe(true);
   const html = await response.text();
 
-  expect(html).toContain("<title>タスクボード — react-alien-signals React Router PoC</title>");
+  expect(html).toContain("<title>タスクボード — react-fine-grained-signals React Router PoC</title>");
   expect(html).toContain("<h1>タスクボード</h1>");
   expect(html).toContain('<a aria-current="page" class="active" href="/"');
   expect(html).toContain('<a class="" href="/activity"');

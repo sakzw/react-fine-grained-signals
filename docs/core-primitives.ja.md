@@ -3,7 +3,7 @@
 [English](core-primitives.md) | [日本語](core-primitives.ja.md)
 
 ```ts
-import { batch, computed, effect, signal, untracked } from "react-alien-signals";
+import { batch, computed, effect, signal, untracked } from "react-fine-grained-signals";
 
 const count = signal(0);
 const doubled = computed(() => count.value * 2);
@@ -30,7 +30,7 @@ dispose();
 `deepSignal` はプレーンオブジェクトと配列にプロパティ単位の追跡を追加します。Proxyはアクセス時に遅延生成されてキャッシュされるため、別名参照や循環参照でも同一性が安定して維持されます。
 
 ```ts
-import { computed, deepSignal } from "react-alien-signals";
+import { computed, deepSignal } from "react-fine-grained-signals";
 
 const state = deepSignal({
   user: { profile: { name: "Alice" } },
@@ -52,7 +52,7 @@ state.value.items.push("second");
 
 `isSignal(value)` は、値が `signal`、`computed`、`deepSignal` のいずれかに由来するかを返します。カスタムJSXランタイムと制御フローコンポーネントはこの判定で分岐するため、偽陰性はエラーにならず、リアクティブなバインディングが通常のpropに劣化するという形で現れます。
 
-そのため判定はpackage instanceをまたいで機能する必要があります。すべてのsignalは `Symbol.for("react-alien-signals.signal")` をキーとする列挙不可のbrandを持ち、その値はプロトコルバージョン（現在は `1`）です。`isSignal` は、サポートされたバージョンのbrandを持ち、かつ `peek()` を公開している値を受け入れます。これにより、packageが二重に解決された場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）や、realmの境界をまたいだsignalも認識されます。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
+そのため判定はpackage instanceをまたいで機能する必要があります。すべてのsignalは `Symbol.for("react-fine-grained-signals.signal")` をキーとする列挙不可のbrandを持ち、その値はプロトコルバージョン（現在は `1`）です。`isSignal` は、サポートされたバージョンのbrandを持ち、かつ `peek()` を公開している値を受け入れます。これにより、packageが二重に解決された場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）や、realmの境界をまたいだsignalも認識されます。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
 
 これが解決するのは判定だけです。リアクティビティにはさらに `alien-signals` のinstanceが共有されていることが必要で、依存追跡がそのmoduleのglobalな状態に置かれているためです。peer dependencyにしている理由は[パッケージング](../README.ja.md#パッケージング)を参照してください。認識された外部のsignalは値を正しく読み取れますが、更新が伝播するのは下層のリアクティブコアが共有されている間だけです。
 

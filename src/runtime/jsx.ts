@@ -188,7 +188,7 @@ function readBoundSignal<T>(
     if (!episode.hasReported) {
       episode.hasReported = true;
       console.error(
-        "react-alien-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value.",
+        "react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value.",
         { cause: error },
       );
     }
@@ -617,7 +617,7 @@ type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "chil
   [name: `data-${string}`]: Signalable<string | number | boolean | undefined>;
 } & AddSignalChildren<{}>;
 
-/** Types exposed by `jsxImportSource: "react-alien-signals"`. */
+/** Types exposed by `jsxImportSource: "react-fine-grained-signals"`. */
 export namespace JSX {
   export type ElementType = React.JSX.ElementType;
   export interface Element extends React.JSX.Element {}

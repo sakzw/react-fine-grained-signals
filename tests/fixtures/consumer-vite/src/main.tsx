@@ -1,6 +1,6 @@
-import { signal } from "react-alien-signals";
-import { useSignals as useManagedSignals } from "react-alien-signals/runtime";
-import { For, Index, Match, Show, Switch } from "react-alien-signals/utils";
+import { signal } from "react-fine-grained-signals";
+import { useSignals as useManagedSignals } from "react-fine-grained-signals/runtime";
+import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 const count = signal(0);
 const users = signal([{ id: "ada", name: "Ada" }]);

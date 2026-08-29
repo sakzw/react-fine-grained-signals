@@ -1,45 +1,45 @@
 import { describe, expect, it } from "vitest";
 import {
   canTransform,
-  reactAlienSignals,
-  type ReactAlienSignalsOptions,
+  reactFineGrainedSignals,
+  type ReactFineGrainedSignalsOptions,
 } from "../src/unplugin.js";
 
 const counterSource = "const count = { value: 1 }; export const App = () => <p>{count.value}</p>;";
 
 function transformSource(
   source: string,
-  options: ReactAlienSignalsOptions,
+  options: ReactFineGrainedSignalsOptions,
 ): string | undefined {
-  const plugin = reactAlienSignals.vite(options) as unknown as {
+  const plugin = reactFineGrainedSignals.vite(options) as unknown as {
     transform(code: string, id: string): { code: string } | null;
   };
   return plugin.transform(source, "/project/src/App.tsx")?.code;
 }
 
-function transformCounter(options: ReactAlienSignalsOptions): string | undefined {
+function transformCounter(options: ReactFineGrainedSignalsOptions): string | undefined {
   return transformSource(counterSource, options);
 }
 
 const explicitSource = [
-  'import { useSignals } from "react-alien-signals";',
+  'import { useSignals } from "react-fine-grained-signals";',
   "const count = { value: 1 };",
   "export function App() { useSignals(); return <p>{count.value}</p>; }",
 ].join("\n");
 
 const explicitAsyncSource = [
-  'import { useSignals } from "react-alien-signals";',
+  'import { useSignals } from "react-fine-grained-signals";',
   "const count = { value: 1 };",
   "export async function App() { useSignals(); return <p>{count.value}</p>; }",
 ].join("\n");
 
 const explicitGeneratorSource = [
-  'import { useSignals } from "react-alien-signals";',
+  'import { useSignals } from "react-fine-grained-signals";',
   "const count = { value: 1 };",
   "export function* App() { useSignals(); yield <p>{count.value}</p>; }",
 ].join("\n");
 
-describe("unplugin-react-alien-signals", () => {
+describe("unplugin-react-fine-grained-signals", () => {
   it("only includes application JavaScript and TypeScript modules", () => {
     const options = {
       include: (id: string) => id.includes("/src/"),
@@ -53,13 +53,13 @@ describe("unplugin-react-alien-signals", () => {
   });
 
   it("accepts the public auto mode option", () => {
-    expect(reactAlienSignals).toBeDefined();
+    expect(reactFineGrainedSignals).toBeDefined();
   });
 
   it("uses the managed try/finally transform by default", () => {
     const output = transformCounter({ mode: "auto" });
 
-    expect(output).toContain('from "react-alien-signals/runtime"');
+    expect(output).toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("const _signals = _useSignals();");
     expect(output).toContain("try {");
     expect(output).toContain("_signals.f();");
@@ -68,8 +68,8 @@ describe("unplugin-react-alien-signals", () => {
   it("uses the lightweight injection transform when it is opted into", () => {
     const output = transformCounter({ mode: "auto", transform: "inject" });
 
-    expect(output).toContain('from "react-alien-signals"');
-    expect(output).not.toContain('from "react-alien-signals/runtime"');
+    expect(output).toContain('from "react-fine-grained-signals"');
+    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("_useSignals();");
     expect(output).not.toContain("try {");
   });
@@ -80,7 +80,7 @@ describe("unplugin-react-alien-signals", () => {
     // The author's own call is replaced by the managed store declaration, so
     // the body is rewritten rather than left untouched — but no second
     // `useSignals()` call is ever added.
-    expect(output).toContain('from "react-alien-signals/runtime"');
+    expect(output).toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("const _signals = _useSignals();");
     expect(output).toContain("try {");
     expect(output).toContain("_signals.f();");
@@ -90,7 +90,7 @@ describe("unplugin-react-alien-signals", () => {
   it("keeps an explicit useSignals call in place under the injection transform", () => {
     const output = transformSource(explicitSource, { mode: "auto", transform: "inject" });
 
-    expect(output).not.toContain('from "react-alien-signals/runtime"');
+    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
     expect(output).not.toContain("try {");
     expect(output).toMatch(/^\s*useSignals\(\);$/m);
   });
@@ -113,8 +113,8 @@ describe("unplugin-react-alien-signals", () => {
     });
 
     expect(asyncOutput).toContain("async function App()");
-    expect(asyncOutput).not.toContain('from "react-alien-signals/runtime"');
+    expect(asyncOutput).not.toContain('from "react-fine-grained-signals/runtime"');
     expect(generatorOutput).toContain("function* App()");
-    expect(generatorOutput).not.toContain('from "react-alien-signals/runtime"');
+    expect(generatorOutput).not.toContain('from "react-fine-grained-signals/runtime"');
   });
 });

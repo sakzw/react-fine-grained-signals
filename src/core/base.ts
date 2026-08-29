@@ -34,7 +34,7 @@ const signalInstances = new WeakSet<object>();
  * realm (iframe, worker) still answers `isSignal`. Shared with the deep-signal
  * proxy only; the package's public API stays `isSignal`.
  */
-export const SIGNAL_BRAND: unique symbol = Symbol.for("react-alien-signals.signal");
+export const SIGNAL_BRAND: unique symbol = Symbol.for("react-fine-grained-signals.signal");
 // The brand carries a protocol version instead of `true` so a future instance
 // can tell which contract a foreign signal claims. A version only ever widens
 // the `{ value, peek() }` contract; a breaking change must take a new symbol

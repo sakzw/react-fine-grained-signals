@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { batch, computed, deepSignal } from "react-alien-signals";
+import { batch, computed, deepSignal } from "react-fine-grained-signals";
 
 export interface Task {
   id: string;

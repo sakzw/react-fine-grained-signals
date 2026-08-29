@@ -9,28 +9,28 @@ export default defineConfig({
   oxc: false,
   esbuild: {
     jsx: "automatic",
-    jsxImportSource: "react-alien-signals",
+    jsxImportSource: "react-fine-grained-signals",
   },
   resolve: {
     alias: [
       {
-        find: /^react-alien-signals\/runtime$/,
+        find: /^react-fine-grained-signals\/runtime$/,
         replacement: source("./src/runtime.ts"),
       },
       {
-        find: /^react-alien-signals\/utils$/,
+        find: /^react-fine-grained-signals\/utils$/,
         replacement: source("./src/utils.tsx"),
       },
       {
-        find: /^react-alien-signals\/jsx-runtime$/,
+        find: /^react-fine-grained-signals\/jsx-runtime$/,
         replacement: source("./src/jsx-runtime.ts"),
       },
       {
-        find: /^react-alien-signals\/jsx-dev-runtime$/,
+        find: /^react-fine-grained-signals\/jsx-dev-runtime$/,
         replacement: source("./src/jsx-dev-runtime.ts"),
       },
       {
-        find: /^react-alien-signals$/,
+        find: /^react-fine-grained-signals$/,
         replacement: source("./src/index.ts"),
       },
     ],

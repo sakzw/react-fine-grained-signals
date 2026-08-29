@@ -4,7 +4,7 @@ import { createJsxWrapper } from "./runtime/jsx.js";
 export { Fragment };
 export type { JSX } from "./runtime/jsx.js";
 
-/** Development JSX factory for `jsxImportSource: "react-alien-signals"`. */
+/** Development JSX factory for `jsxImportSource: "react-fine-grained-signals"`. */
 export function jsxDEV(
   type: Parameters<typeof reactJsxDEV>[0],
   props: Parameters<typeof reactJsxDEV>[1],

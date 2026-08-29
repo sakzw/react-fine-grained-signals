@@ -4,11 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "paths": {
-      "react-alien-signals": ["./src/index.ts"],
-      "react-alien-signals/runtime": ["./src/runtime.ts"],
-      "react-alien-signals/utils": ["./src/utils.tsx"],
-      "react-alien-signals/jsx-runtime": ["./src/jsx-runtime.ts"],
-      "react-alien-signals/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
+      "react-fine-grained-signals": ["./src/index.ts"],
+      "react-fine-grained-signals/runtime": ["./src/runtime.ts"],
+      "react-fine-grained-signals/utils": ["./src/utils.tsx"],
+      "react-fine-grained-signals/jsx-runtime": ["./src/jsx-runtime.ts"],
+      "react-fine-grained-signals/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
     },
     "types": ["node"],
     "strict": true,

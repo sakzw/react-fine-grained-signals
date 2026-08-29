@@ -4,8 +4,8 @@ import { createJsxWrapper } from "./runtime/jsx.js";
 export { Fragment };
 export type { JSX } from "./runtime/jsx.js";
 
-/** JSX factory for `jsxImportSource: "react-alien-signals"`. */
+/** JSX factory for `jsxImportSource: "react-fine-grained-signals"`. */
 export const jsx = createJsxWrapper(reactJsx);
 
-/** Static-children JSX factory for `jsxImportSource: "react-alien-signals"`. */
+/** Static-children JSX factory for `jsxImportSource: "react-fine-grained-signals"`. */
 export const jsxs = createJsxWrapper(reactJsxs);

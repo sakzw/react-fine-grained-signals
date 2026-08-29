@@ -4,7 +4,7 @@ import { act, Fragment, StrictMode, useState } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { deepSignal, signal, useSignals } from "../src/index.js";
-import { For, Index, Match, Show, Switch } from "react-alien-signals/utils";
+import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

@@ -14,19 +14,19 @@ The two models are in direct conflict, so the interaction was measured rather th
 
 ## What was measured
 
-`packages/unplugin-react-alien-signals/tests/react-compiler.test.ts` runs the pipeline a real application would run, in order:
+`packages/unplugin-react-fine-grained-signals/tests/react-compiler.test.ts` runs the pipeline a real application would run, in order:
 
-1. this package's Babel transform (`transformReactAlienSignals`), in the mode under test — deliberately skipped for [the hand-written runtime boundary](#the-hand-written-react-alien-signalsruntime-boundary-behaves-like-managed-output), which is the case where no transform runs;
+1. this package's Babel transform (`transformReactFineGrainedSignals`), in the mode under test — deliberately skipped for [the hand-written runtime boundary](#the-hand-written-react-fine-grained-signalsruntime-boundary-behaves-like-managed-output), which is the case where no transform runs;
 2. `babel-plugin-react-compiler` 1.0.0 with default options, capturing its `logger` events;
 3. an automatic-runtime JSX transform;
 4. an in-memory module link (imports are resolved against the live library, so module scope is real) and evaluation in jsdom.
 
-Each case is asserted twice: on the compiled output text, and on behavior — mount, write the signal inside `act()`, read the DOM. `pnpm --filter unplugin-react-alien-signals test:react-compiler` runs it; CI runs it as its own step in `.github/workflows/test.yml`.
+Each case is asserted twice: on the compiled output text, and on behavior — mount, write the signal inside `act()`, read the DOM. `pnpm --filter unplugin-react-fine-grained-signals test:react-compiler` runs it; CI runs it as its own step in `.github/workflows/test.yml`.
 
 The fixture is the shape the hypothesis is about:
 
 ```jsx
-import { signal } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
 
 export const count = signal(0);
 
@@ -43,8 +43,8 @@ Confirmed. With `reactCompiler: "off"` (the behavior before this change), the co
 
 ```jsx
 import { c as _c } from "react/compiler-runtime";
-import { signal } from "react-alien-signals";
-import { useSignals as _useSignals } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
+import { useSignals as _useSignals } from "react-fine-grained-signals";
 export const count = signal(0);
 export function Counter() {
   const $ = _c(1);
@@ -76,11 +76,11 @@ The emitted code is byte-for-byte the transform's own output, and the runtime te
 
 ### The manual runtime-import boundary behaves like managed output
 
-The manual runtime-import boundary published in [the hooks guide](../hooks.md) — `useSignals()` imported from `react-alien-signals/runtime`, closed by the author's own `try` / `finally` — was measured on its own, with step 1 of the pipeline skipped entirely. That skip is the point: this is the shape a developer writes when the build plugin is not in the build, so nothing inserts a directive for it.
+The manual runtime-import boundary published in [the hooks guide](../hooks.md) — `useSignals()` imported from `react-fine-grained-signals/runtime`, closed by the author's own `try` / `finally` — was measured on its own, with step 1 of the pipeline skipped entirely. That skip is the point: this is the shape a developer writes when the build plugin is not in the build, so nothing inserts a directive for it.
 
 ```jsx
-import { signal } from "react-alien-signals";
-import { useSignals } from "react-alien-signals/runtime";
+import { signal } from "react-fine-grained-signals";
+import { useSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
@@ -104,7 +104,7 @@ Mounted in jsdom, the component updates on every write: `0`, then `1`, then `2`.
 
 The directive still buys one thing, and only under `panicThreshold: "all_errors"`: without it `transformSync` throws and the build fails; with it the error event is still logged, but no panic fires. That is the same split measured on the transform's own managed output above, which is what one would expect once the two shapes are recognized as the same shape.
 
-The automation gap is real, but narrower than a missing directive. The transform leaves such a file untouched even in `mode: "auto"` with `transform: "managed"`: the function already calls `useSignals()`, so it is skipped before the point where the directive would be added, and `transformReactAlienSignals` reports the file as untransformed by returning `null`. Writing `"use no memo"` by hand is therefore what a panic-on-all-errors build needs, and what keeps the opt-out meaningful if a compiler version learns to lower `try` / `finally`.
+The automation gap is real, but narrower than a missing directive. The transform leaves such a file untouched even in `mode: "auto"` with `transform: "managed"`: the function already calls `useSignals()`, so it is skipped before the point where the directive would be added, and `transformReactFineGrainedSignals` reports the file as untransformed by returning `null`. Writing `"use no memo"` by hand is therefore what a panic-on-all-errors build needs, and what keeps the opt-out meaningful if a compiler version learns to lower `try` / `finally`.
 
 ### Leaf hooks are compiler-safe
 
@@ -158,12 +158,12 @@ The cost is real: a component that opts out of memoization is a component the co
 
 ## Does this change the recommended `transform` default?
 
-No — not on React Compiler grounds. Managed output survives the compiler only because the compiler cannot lower `try` without `catch`, which is an implementation detail that also produces a build-breaking error under `panicThreshold: "all_errors"`. With the directive emitted in both modes, `"inject"` and `"managed"` are equally compiler-safe, so the choice between them rests entirely on the boundary-exactness argument in [the `useSignals()` boundary design note](use-signals-boundary-design.md), not on this document. Separately, `unplugin-react-alien-signals` now defaults to `transform: "managed"` for that boundary-exactness reason — a change made on the grounds in that note, not on any finding in this document.
+No — not on React Compiler grounds. Managed output survives the compiler only because the compiler cannot lower `try` without `catch`, which is an implementation detail that also produces a build-breaking error under `panicThreshold: "all_errors"`. With the directive emitted in both modes, `"inject"` and `"managed"` are equally compiler-safe, so the choice between them rests entirely on the boundary-exactness argument in [the `useSignals()` boundary design note](use-signals-boundary-design.md), not on this document. Separately, `unplugin-react-fine-grained-signals` now defaults to `transform: "managed"` for that boundary-exactness reason — a change made on the grounds in that note, not on any finding in this document.
 
 ## Open questions
 
 - **Ordering across bundlers.** The directive only helps if this package's transform runs before the compiler's Babel pass. In Vite this holds structurally: the plugin declares `enforce: "pre"`, and `@vitejs/plugin-react` runs Babel as a normal-order plugin. Vite's own TypeScript pass runs between the two and preserves the directive under both its oxc and esbuild transformers, checked directly on `.tsx` input with JSX preserved. The Webpack, Rspack, and Next.js pipelines were not measured.
 - **`panicThreshold: "all_errors"` in a real bundler.** Measured at the Babel level, on both transform-generated and hand-written `try` / `finally` shapes: the directive does not suppress the `TryStatement` error event, which is still logged with the directive present, but it does stop the panic — `transformSync` throws only when the directive is absent. Whether a bundler's React Compiler integration turns the still-logged event into a build failure by some other route was not reproduced end-to-end.
-- **Hand-written bare `useSignals()` without the build plugin.** Nothing inserts the directive there, and the failure is silent. Such components need `"use no memo"` written by hand, or the plugin in `mode: "manual"`, which now adds it for them. This applies to the bare hook only — the hand-written `react-alien-signals/runtime` boundary is a structurally different case and is measured [above](#the-hand-written-react-alien-signalsruntime-boundary-behaves-like-managed-output).
+- **Hand-written bare `useSignals()` without the build plugin.** Nothing inserts the directive there, and the failure is silent. Such components need `"use no memo"` written by hand, or the plugin in `mode: "manual"`, which now adds it for them. This applies to the bare hook only — the hand-written `react-fine-grained-signals/runtime` boundary is a structurally different case and is measured [above](#the-hand-written-react-fine-grained-signalsruntime-boundary-behaves-like-managed-output).
 - **`useSignals()` imported through an application barrel in `transform: "inject"`.** The transform recognizes the call and skips the function, and it stays skipped, so no directive is added. A direct import from the configured `importSource`, or a `@useSignals` annotation, is covered.
 - **Compiler version.** Everything above is 1.0.0 behavior with default options. A future version that supports `try` / `finally`, changes its classification of module-scope reads, or changes how `"use no memo"` is honored would need this file's measurements re-run; the test suite is the executable form of them.

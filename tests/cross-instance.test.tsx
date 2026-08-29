@@ -1,4 +1,4 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
 import { act } from "react";
@@ -10,7 +10,7 @@ import { isSignal, signal, type ReadonlySignal } from "../src/index.js";
 
 // Spelled out rather than imported: the literal string is the cross-instance
 // wire format, so a second copy of the package can only agree by matching it.
-const SIGNAL_BRAND = Symbol.for("react-alien-signals.signal");
+const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal");
 
 /**
  * Stands in for a signal owned by a second copy of this package: the brand and

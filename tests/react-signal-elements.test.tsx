@@ -1,4 +1,4 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
 import { StrictMode, createRef, act } from "react";

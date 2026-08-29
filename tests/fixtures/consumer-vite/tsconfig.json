@@ -7,7 +7,7 @@
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,
     "jsx": "react-jsx",
-    "jsxImportSource": "react-alien-signals",
+    "jsxImportSource": "react-fine-grained-signals",
     "noEmit": true
   },
   "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts"]

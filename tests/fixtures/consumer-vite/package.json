@@ -1,13 +1,13 @@
 {
-  "name": "react-alien-signals-consumer-smoke",
+  "name": "react-fine-grained-signals-consumer-smoke",
   "private": true,
   "type": "module",
   "dependencies": {
     "alien-signals": "3.2.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-alien-signals": "file:__ROOT_TARBALL__",
-    "unplugin-react-alien-signals": "file:__PLUGIN_TARBALL__"
+    "react-fine-grained-signals": "file:__ROOT_TARBALL__",
+    "unplugin-react-fine-grained-signals": "file:__PLUGIN_TARBALL__"
   },
   "devDependencies": {
     "@types/react": "19.2.8",

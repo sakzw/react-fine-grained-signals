@@ -9,15 +9,15 @@ import {
 import * as t from "@babel/types";
 import type { TransformResult } from "unplugin";
 
-export type ReactAlienSignalsMode = "manual" | "auto" | "all";
-export type ReactAlienSignalsTransform = "inject" | "managed";
-export type ReactAlienSignalsReactCompiler = "auto" | "off";
+export type ReactFineGrainedSignalsMode = "manual" | "auto" | "all";
+export type ReactFineGrainedSignalsTransform = "inject" | "managed";
+export type ReactFineGrainedSignalsReactCompiler = "auto" | "off";
 
 export interface InternalTransformOptions {
   importSource: string;
-  mode: ReactAlienSignalsMode;
-  transform: ReactAlienSignalsTransform;
-  reactCompiler: ReactAlienSignalsReactCompiler;
+  mode: ReactFineGrainedSignalsMode;
+  transform: ReactFineGrainedSignalsTransform;
+  reactCompiler: ReactFineGrainedSignalsReactCompiler;
   /**
    * Additional module specifier whose `memo`/`forwardRef` exports count as
    * React's own, for codebases that import them through one internal
@@ -54,7 +54,7 @@ interface FunctionInspection {
 
 const useSignalsComment = /(^|\s)@useSignals(\s|$)/;
 const noUseSignalsComment = /(^|\s)@noUseSignals(\s|$)/;
-const transformedMetadataKey = "reactAlienSignalsTransformed";
+const transformedMetadataKey = "reactFineGrainedSignalsTransformed";
 
 // React Compiler caches a component's JSX in its memo cache, and a signal read
 // it classifies as non-reactive (a module-scope binding) is then evaluated once
@@ -845,7 +845,7 @@ function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSour
 }
 
 function shouldAutomaticallyTransform(
-  mode: ReactAlienSignalsMode,
+  mode: ReactFineGrainedSignalsMode,
   functionPath: NodePath<t.Function>,
   inspection: FunctionInspection,
   reactImportSource: string,
@@ -1049,7 +1049,7 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
   const reactImportSource = options.reactImportSource;
 
   const plugin: PluginObj = {
-    name: "unplugin-react-alien-signals",
+    name: "unplugin-react-fine-grained-signals",
     visitor: {
       Program: {
         // `declare()`'s own typing pins the visitor state to the base
@@ -1095,7 +1095,7 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
 });
 
 /** Runs the private Babel transform for the universal bundler adapter. */
-export function transformReactAlienSignals(
+export function transformReactFineGrainedSignals(
   code: string,
   id: string,
   options: InternalTransformOptions,

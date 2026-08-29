@@ -27,7 +27,7 @@ function rawAdapter() {
 
 function currentAdapter() {
   return {
-    name: "react-alien-signals",
+    name: "react-fine-grained-signals",
     signal(value) { const source = current.signal(value); return { get: () => source.value, set: (next) => { source.value = next; } }; },
     computed(read) { const source = current.computed(read); return { get: () => source.value }; },
     effect: current.effect,

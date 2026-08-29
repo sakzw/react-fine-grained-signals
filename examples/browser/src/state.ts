@@ -1,4 +1,4 @@
-import { signal } from "react-alien-signals";
+import { signal } from "react-fine-grained-signals";
 
 export function createDemoState() {
   return {

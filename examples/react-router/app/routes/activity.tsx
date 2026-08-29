@@ -1,13 +1,13 @@
 import { useOutletContext } from "react-router";
-import { useComputed, useDeepSignal } from "react-alien-signals";
-import { Index } from "react-alien-signals/utils";
+import { useComputed, useDeepSignal } from "react-fine-grained-signals";
+import { Index } from "react-fine-grained-signals/utils";
 import { ActivityRow } from "../components/ActivityRow.js";
 import { InsightPanel } from "../components/InsightPanel.js";
 import { LogSettingsForm } from "../components/LogSettingsForm.js";
 import type { TaskStore } from "../lib/task-store.js";
 
 export function meta() {
-  return [{ title: "アクティビティ — react-alien-signals React Router PoC" }];
+  return [{ title: "アクティビティ — react-fine-grained-signals React Router PoC" }];
 }
 
 export default function Activity() {

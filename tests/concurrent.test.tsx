@@ -1,4 +1,4 @@
-/** @jsxImportSource react-alien-signals */
+/** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
 // These fill a gap flagged in docs/design/use-signals-boundary-design.md's

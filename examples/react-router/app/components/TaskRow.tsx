@@ -1,4 +1,4 @@
-import { useSignals } from "react-alien-signals";
+import { useSignals } from "react-fine-grained-signals";
 import type { Task } from "../lib/task-store.js";
 
 /**
