@@ -1,7 +1,7 @@
 import { Suspense, use, useRef } from "react";
 import type { TaskStore } from "../lib/task-store.js";
 
-const INSIGHT_DELAY_MS = 2500; // TEMP for manual verification screenshot
+const INSIGHT_DELAY_MS = 150;
 
 /**
  * Simulates a brief async computation (e.g. an aggregation call) before
