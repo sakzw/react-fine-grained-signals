@@ -245,6 +245,50 @@ describe("useSignals render tracking", () => {
     expect(rightRenders).toHaveBeenCalledTimes(2);
   });
 
+  // Pins the documented boundary hazard (docs/hooks.md's "Tracking boundary"
+  // section): a sibling that reads a signal without calling useSignals()
+  // itself gets that read attributed to whichever collector is still open,
+  // not its own (nonexistent) one. This is a regression pin on the current
+  // best-effort behavior, not an assertion that it's correct.
+  it("misattributes an unguarded sibling's read to the still-open preceding collector", () => {
+    const guarded = signal("X");
+    const unguarded = signal("Y");
+    const guardedRenders = vi.fn();
+    const unguardedRenders = vi.fn();
+
+    function Guarded() {
+      useSignals();
+      guardedRenders();
+      return <output aria-label="guarded sibling">{guarded.value}</output>;
+    }
+    function Unguarded() {
+      // Deliberately omits useSignals().
+      unguardedRenders();
+      return <output aria-label="unguarded sibling">{unguarded.value}</output>;
+    }
+
+    render(<><Guarded /><Unguarded /></>);
+    expect(screen.getByLabelText("guarded sibling").textContent).toBe("X");
+    expect(screen.getByLabelText("unguarded sibling").textContent).toBe("Y");
+
+    act(() => {
+      unguarded.value = "Y2";
+    });
+    // Misattributed: Unguarded's read landed in Guarded's still-open
+    // collector, so this update reruns Guarded (whose own displayed value is
+    // unaffected) instead of Unguarded, whose DOM is left stale.
+    expect(guardedRenders).toHaveBeenCalledTimes(2);
+    expect(unguardedRenders).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("unguarded sibling").textContent).toBe("Y");
+
+    act(() => {
+      guarded.value = "X2";
+    });
+    expect(screen.getByLabelText("guarded sibling").textContent).toBe("X2");
+    expect(guardedRenders).toHaveBeenCalledTimes(3);
+    expect(unguardedRenders).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps a cached computed live across unrelated parent rerenders", () => {
     const source = signal(2);
     const doubled = computed(() => source.value * 2);
