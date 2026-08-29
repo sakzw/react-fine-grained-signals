@@ -17,6 +17,13 @@ export interface InternalTransformOptions {
   mode: ReactAlienSignalsMode;
   transform: ReactAlienSignalsTransform;
   reactCompiler: ReactAlienSignalsReactCompiler;
+  /**
+   * Additional module specifier whose `memo`/`forwardRef` exports count as
+   * React's own, for codebases that import them through one internal
+   * re-export module. Detection is additive: `"react"` itself always counts
+   * regardless of this value.
+   */
+  reactImportSource: string;
 }
 
 export type InternalTransformResult = Exclude<TransformResult, string>;
@@ -82,11 +89,21 @@ function hasOwnedLeadingComment(path: NodePath, pattern: RegExp): boolean {
 
 const reactPackageSource = "react";
 
+// A single-file transform cannot follow a re-export chain, so a codebase that
+// imports React's wrappers through an internal barrel names that module with
+// `reactImportSource`. The check stays additive: a direct `"react"` import is
+// unambiguously React's wrapper, so configuring a barrel widens detection
+// rather than moving it, and never silently drops a direct import.
+function isReactSource(source: string, reactImportSource: string): boolean {
+  return source === reactPackageSource || source === reactImportSource;
+}
+
 /** Is `name` bound by `import { memo } from "react"` (or `forwardRef`, possibly aliased)? */
 function isReactNamedImport(
   path: NodePath,
   name: string,
   importedName: "memo" | "forwardRef",
+  reactImportSource: string,
 ): boolean {
   const binding = path.scope.getBinding(name);
   if (binding === undefined || !binding.path.isImportSpecifier()) return false;
@@ -96,12 +113,16 @@ function isReactNamedImport(
   return (
     declaration.isImportDeclaration() &&
     declaration.node.importKind !== "type" &&
-    declaration.node.source.value === reactPackageSource
+    isReactSource(declaration.node.source.value, reactImportSource)
   );
 }
 
 /** Is `name` bound by `import * as React from "react"` or `import React from "react"`? */
-function isReactDefaultOrNamespaceImport(path: NodePath, name: string): boolean {
+function isReactDefaultOrNamespaceImport(
+  path: NodePath,
+  name: string,
+  reactImportSource: string,
+): boolean {
   const binding = path.scope.getBinding(name);
   if (binding === undefined) return false;
   if (
@@ -114,7 +135,7 @@ function isReactDefaultOrNamespaceImport(path: NodePath, name: string): boolean 
   return (
     declaration.isImportDeclaration() &&
     declaration.node.importKind !== "type" &&
-    declaration.node.source.value === reactPackageSource
+    isReactSource(declaration.node.source.value, reactImportSource)
   );
 }
 
@@ -123,11 +144,17 @@ function isReactDefaultOrNamespaceImport(path: NodePath, name: string): boolean 
 // Otherwise a same-named local helper (e.g. a homemade memoization cache)
 // could be mistaken for it and have a `useSignals()` hook injected into a
 // function that is never actually rendered by React, which throws at runtime.
-function isKnownComponentWrapper(path: NodePath<t.CallExpression>): boolean {
+function isKnownComponentWrapper(
+  path: NodePath<t.CallExpression>,
+  reactImportSource: string,
+): boolean {
   const callee = path.get("callee");
   if (callee.isIdentifier()) {
     const name = callee.node.name;
-    return isReactNamedImport(path, name, "memo") || isReactNamedImport(path, name, "forwardRef");
+    return (
+      isReactNamedImport(path, name, "memo", reactImportSource) ||
+      isReactNamedImport(path, name, "forwardRef", reactImportSource)
+    );
   }
   if (!callee.isMemberExpression()) return false;
   const property = callee.get("property");
@@ -138,10 +165,27 @@ function isKnownComponentWrapper(path: NodePath<t.CallExpression>): boolean {
       (property.node.value === "memo" || property.node.value === "forwardRef"));
   if (!isMemoOrForwardRefProperty) return false;
   const object = callee.get("object");
-  return object.isIdentifier() && isReactDefaultOrNamespaceImport(path, object.node.name);
+  return (
+    object.isIdentifier() &&
+    isReactDefaultOrNamespaceImport(path, object.node.name, reactImportSource)
+  );
 }
 
-function getFunctionName(path: NodePath<t.Function>): string | undefined {
+function getFunctionName(
+  path: NodePath<t.Function>,
+  reactImportSource: string,
+): string | undefined {
+  const wrapped = path.parentPath;
+  let parent = wrapped;
+  while (parent.isCallExpression() && isKnownComponentWrapper(parent, reactImportSource)) {
+    parent = parent.parentPath;
+  }
+  if (parent !== wrapped && parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
+    // Wrapped by memo()/forwardRef(): the variable the wrapper call is assigned
+    // to is the component's real identity, which can differ from the wrapped
+    // function's own name (a devtools-only or leftover inner name).
+    return parent.node.id.name;
+  }
   if (
     (path.isFunctionDeclaration() || path.isFunctionExpression()) &&
     path.node.id !== null &&
@@ -149,23 +193,19 @@ function getFunctionName(path: NodePath<t.Function>): string | undefined {
   ) {
     return path.node.id.name;
   }
-  let parent = path.parentPath;
-  while (parent.isCallExpression() && isKnownComponentWrapper(parent)) {
-    parent = parent.parentPath;
-  }
   if (parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
     return parent.node.id.name;
   }
   return undefined;
 }
 
-function isComponent(path: NodePath<t.Function>): boolean {
-  const name = getFunctionName(path);
+function isComponent(path: NodePath<t.Function>, reactImportSource: string): boolean {
+  const name = getFunctionName(path, reactImportSource);
   return name !== undefined && /^[A-Z]/.test(name);
 }
 
-function isCustomHook(path: NodePath<t.Function>): boolean {
-  const name = getFunctionName(path);
+function isCustomHook(path: NodePath<t.Function>, reactImportSource: string): boolean {
+  const name = getFunctionName(path, reactImportSource);
   return name !== undefined && /^use[A-Z]/.test(name);
 }
 
@@ -233,21 +273,26 @@ function isUseSignalsCallee(
   );
 }
 
-function isRenderCallback(path: NodePath<t.Function>): boolean {
+function isRenderCallback(path: NodePath<t.Function>, reactImportSource: string): boolean {
   const parent = path.parentPath;
-  if (!parent.isCallExpression() || isKnownComponentWrapper(parent)) return false;
+  if (!parent.isCallExpression() || isKnownComponentWrapper(parent, reactImportSource)) {
+    return false;
+  }
   return parent.get("arguments").some((argument) => argument.node === path.node);
 }
 
-function isAutomaticTransformCandidate(path: NodePath<t.Function>): boolean {
+function isAutomaticTransformCandidate(
+  path: NodePath<t.Function>,
+  reactImportSource: string,
+): boolean {
   // Render callbacks are tracked by the component that invokes them. Injecting
   // a hook into the callback would violate the Rules of Hooks because callbacks
   // such as Array#map can execute a variable number of times.
-  if (isRenderCallback(path)) return false;
+  if (isRenderCallback(path, reactImportSource)) return false;
   if (path.isFunctionDeclaration()) return true;
 
   let parent = path.parentPath;
-  while (parent.isCallExpression() && isKnownComponentWrapper(parent)) {
+  while (parent.isCallExpression() && isKnownComponentWrapper(parent, reactImportSource)) {
     parent = parent.parentPath;
   }
   return (
@@ -257,16 +302,20 @@ function isAutomaticTransformCandidate(path: NodePath<t.Function>): boolean {
   );
 }
 
-function isNestedTrackingBoundary(path: NodePath<t.Function>): boolean {
+function isNestedTrackingBoundary(
+  path: NodePath<t.Function>,
+  reactImportSource: string,
+): boolean {
   return (
-    !isRenderCallback(path) &&
-    (isComponent(path) || isCustomHook(path))
+    !isRenderCallback(path, reactImportSource) &&
+    (isComponent(path, reactImportSource) || isCustomHook(path, reactImportSource))
   );
 }
 
 function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
+  reactImportSource: string,
 ): FunctionInspection {
   const inspection: FunctionInspection = {
     containsJSX: false,
@@ -278,7 +327,7 @@ function inspectFunction(
       // Components and hooks own their subscriptions. Other nested callbacks
       // remain part of the current render owner so hidden JSX/.value reads in a
       // map/render-prop still cause the owner component to be transformed.
-      if (isNestedTrackingBoundary(path)) path.skip();
+      if (isNestedTrackingBoundary(path, reactImportSource)) path.skip();
     },
     JSXElement(_path) {
       inspection.containsJSX = true;
@@ -387,15 +436,19 @@ function shouldAutomaticallyTransform(
   mode: ReactAlienSignalsMode,
   functionPath: NodePath<t.Function>,
   inspection: FunctionInspection,
+  reactImportSource: string,
 ): boolean {
-  if (isCustomHook(functionPath)) return mode !== "manual" && inspection.readsValue;
-  if (!isComponent(functionPath) || !inspection.containsJSX) return false;
+  if (isCustomHook(functionPath, reactImportSource)) {
+    return mode !== "manual" && inspection.readsValue;
+  }
+  if (!isComponent(functionPath, reactImportSource) || !inspection.containsJSX) return false;
   return mode === "all" || (mode === "auto" && inspection.readsValue);
 }
 
 const babelTransform = declare<InternalTransformOptions>((api, options) => {
   api.assertVersion(7);
   const managedRuntimeSource = `${options.importSource}/runtime`;
+  const reactImportSource = options.reactImportSource;
   let programPath: NodePath<t.Program>;
   let managedRuntimeImports: RuntimeImport[];
   let directImports: RuntimeImport[];
@@ -417,13 +470,13 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
         const body = path.get("body");
         const statements = body.isBlockStatement() ? body.get("body") : [];
         const explicit = isExplicitUseSignals(path, statements, options.importSource);
-        const inspection = inspectFunction(path, options.importSource);
+        const inspection = inspectFunction(path, options.importSource, reactImportSource);
         const annotated =
           hasOwnedLeadingComment(path, useSignalsComment) &&
-          (isComponent(path) || isCustomHook(path));
+          (isComponent(path, reactImportSource) || isCustomHook(path, reactImportSource));
         const automatic =
-          isAutomaticTransformCandidate(path) &&
-          shouldAutomaticallyTransform(options.mode, path, inspection);
+          isAutomaticTransformCandidate(path, reactImportSource) &&
+          shouldAutomaticallyTransform(options.mode, path, inspection, reactImportSource);
         if (!explicit && !annotated && !automatic) return;
         if (!explicit && inspection.hasUseSignalsCall) return;
         if (options.transform === "inject" && explicit) {

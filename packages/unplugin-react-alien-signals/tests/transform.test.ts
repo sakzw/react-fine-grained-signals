@@ -12,6 +12,7 @@ function compile(
   transform: ReactAlienSignalsTransform = "managed",
   importSource = "react-alien-signals",
   reactCompiler: ReactAlienSignalsReactCompiler = "auto",
+  reactImportSource = "react",
 ): string {
   return (
     transformReactAlienSignals(source, "fixture.tsx", {
@@ -19,6 +20,7 @@ function compile(
       mode,
       transform,
       reactCompiler,
+      reactImportSource,
     })?.code ?? source
   );
 }
@@ -117,6 +119,68 @@ describe("managed render transform", () => {
       export const MemoCounter = memo(() => <p>{count.value}</p>);
       export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
     `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toContain("const MemoCounter = memo(() => {");
+    expect(output).toContain("const RefCounter = forwardRef((props, ref) => {");
+  });
+
+  it("prefers the wrapper's assigned name over a wrapped function's own inner name", () => {
+    const memoOutput = compile(`
+      import { memo } from "react";
+      const count = { value: 1 };
+      export const Counter = memo(function inner() { return <p>{count.value}</p>; });
+    `, "auto");
+    const forwardRefOutput = compile(`
+      import { forwardRef } from "react";
+      const count = { value: 1 };
+      export const Counter = forwardRef(function render(props, ref) {
+        return <p ref={ref}>{count.value}</p>;
+      });
+    `, "auto");
+
+    expect(memoOutput).toContain("memo(function inner() {");
+    expect(memoOutput.match(/finally/g)).toHaveLength(1);
+    expect(memoOutput).toContain("_signals.f();");
+    expect(forwardRefOutput).toContain("forwardRef(function render(props, ref) {");
+    expect(forwardRefOutput.match(/finally/g)).toHaveLength(1);
+    expect(forwardRefOutput).toContain("_signals.f();");
+  });
+
+  it("recognizes memo imported from a configured react re-export module", () => {
+    const namedSource = `
+      import { memo } from "./react-compat";
+      const count = { value: 1 };
+      export const Counter = memo(() => <p>{count.value}</p>);
+    `;
+    const namespaceSource = `
+      import * as React from "./react-compat";
+      const count = { value: 1 };
+      export const Counter = React.memo(() => <p>{count.value}</p>);
+    `;
+    const named = compile(namedSource, "auto", "managed", "react-alien-signals", "auto", "./react-compat");
+    const namespaced = compile(
+      namespaceSource, "auto", "managed", "react-alien-signals", "auto", "./react-compat",
+    );
+
+    expect(named).toContain("const Counter = memo(() => {");
+    expect(named).toContain("finally {");
+    expect(namespaced).toContain("const Counter = React.memo(() => {");
+    expect(namespaced).toContain("finally {");
+    // Documented limitation: the default only matches a direct "react" import,
+    // because a single-file transform cannot follow the re-export chain.
+    expect(compile(namedSource, "auto")).not.toContain("finally");
+    expect(compile(namedSource, "auto")).not.toContain("react-alien-signals/runtime");
+    expect(compile(namespaceSource, "auto")).not.toContain("finally");
+  });
+
+  it("keeps recognizing direct react imports when reactImportSource is configured", () => {
+    const output = compile(`
+      import { forwardRef, memo } from "react";
+      const count = { value: 1 };
+      export const MemoCounter = memo(() => <p>{count.value}</p>);
+      export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
+    `, "auto", "managed", "react-alien-signals", "auto", "./react-compat");
 
     expect(output.match(/finally/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = memo(() => {");
@@ -454,6 +518,7 @@ describe("managed render transform", () => {
       mode: "auto" as const,
       transform: "inject" as const,
       reactCompiler: "auto" as const,
+      reactImportSource: "react",
     };
 
     expect(

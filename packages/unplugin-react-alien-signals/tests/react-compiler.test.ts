@@ -126,6 +126,7 @@ function applySignalsTransform(source: string, options: PipelineOptions): string
       mode: options.mode ?? "auto",
       transform: options.transform ?? "managed",
       reactCompiler: options.reactCompiler ?? "auto",
+      reactImportSource: "react",
     })?.code ?? source
   );
 }

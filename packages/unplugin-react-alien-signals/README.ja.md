@@ -54,7 +54,25 @@ Rollup、webpack、Rspack、esbuildにはそれぞれ `/rollup`、`/webpack`、
     対象componentを[互換性の検討docs](../../docs/design/react-compiler-compatibility.ja.md)
     に照らして確認済みの場合だけ選んでください。
 - `importSource`: `react-alien-signals` 互換wrapperへの置き換えです。
+- `reactImportSource`: wrapされた関数をcomponentと判定する際に、`memo` /
+  `forwardRef` をReact由来とみなすmodule specifierを追加します。置き換えでは
+  なく追加であり、`"react"` からのdirect importは常に認識されます。つまり
+  設定しても既存のdirect importの認識が外れることはありません。
 - `include` / `exclude`: source module IDを絞る関数です。
+
+`memo` / `forwardRef` の自動認識は、`"react"` または `reactImportSource` から
+のdirect importだけに一致します。ローカルのbarrelやre-export module経由の
+import（`import { memo } from "./some-local-module"`）は、その moduleが最終的に
+`"react"` をre-exportしていても解決しません。変換は1ファイルずつ処理し、
+re-exportの連鎖をたどらないためです。認識できなかった場合もエラーにはならず、
+そのcomponentは無言でスキップされるため、signalを書き換えても再renderされなく
+なります。回避策は次の3つです。
+
+- 単一の安定したmodule pathでimportしているなら、`reactImportSource` にその
+  specifierを設定する（`"@app/react"` のようなbare specifierはどのファイルでも
+  一致します。相対pathは同じ綴りのファイルにしか一致しません）。
+- 該当箇所で `memo` / `forwardRef` を `"react"` から直接importする。
+- `@useSignals` コメントか手書きの `useSignals()` 呼び出しで明示的にopt-inする。
 
 `@useSignals` と `@noUseSignals` は、その関数だけに適用されます。pluginが
 二重の `useSignals()` 呼び出しを挿入することはありません。既存のdirect

@@ -31,6 +31,15 @@ export interface ReactAlienSignalsOptions {
   reactCompiler?: ReactAlienSignalsReactCompiler;
   /** Package that exports `useSignals` and its `/runtime` entry. */
   importSource?: string;
+  /**
+   * Extra module specifier whose `memo`/`forwardRef` exports are treated as
+   * React's own, for a codebase that imports them through one stable internal
+   * module instead of directly from `"react"`. Recognition is additive: a
+   * direct `"react"` import always counts, so this only widens detection.
+   * It does not resolve arbitrary re-export chains, and it cannot cover
+   * relative barrel paths that differ per importing file.
+   */
+  reactImportSource?: string;
   /** Restrict transformation to matching source module identifiers. */
   include?: (id: string) => boolean;
   /** Exclude matching source module identifiers from transformation. */
@@ -58,6 +67,7 @@ export const reactAlienSignals = createUnplugin<ReactAlienSignalsOptions>(
     transform(code, id): InternalTransformResult | null {
       return transformReactAlienSignals(code, id, {
         importSource: options.importSource ?? "react-alien-signals",
+        reactImportSource: options.reactImportSource ?? "react",
         mode: options.mode ?? "auto",
         transform: options.transform ?? "managed",
         reactCompiler: options.reactCompiler ?? "auto",

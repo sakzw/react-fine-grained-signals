@@ -85,7 +85,29 @@ export default {
     the build, or when the affected components were verified against
     [the compatibility note](../../docs/design/react-compiler-compatibility.md).
 - `importSource`: overrides `react-alien-signals` for a compatible wrapper.
+- `reactImportSource`: an additional module specifier whose `memo` and
+  `forwardRef` exports count as React's own when the plugin decides whether a
+  wrapped function is a component. Recognition is additive, not a replacement:
+  a direct import from `"react"` is always recognized, so setting this only
+  widens detection and never turns off an existing direct import.
 - `include` / `exclude`: functions that filter source module IDs.
+
+Automatic `memo` / `forwardRef` recognition matches only a direct import from
+`"react"` or from `reactImportSource`. Importing them through a local
+barrel or re-export module (`import { memo } from "./some-local-module"`) is
+not resolved automatically, even when that module ultimately re-exports from
+`"react"`: the transform sees one file at a time and does not follow re-export
+chains. An unrecognized wrapper is not an error — the component is silently
+skipped, so signal writes stop re-rendering it. Three workarounds:
+
+- set `reactImportSource` to that module's specifier, if the codebase imports
+  through one stable module path (a bare specifier such as `"@app/react"`
+  works everywhere; a relative path only matches files that spell it the same
+  way);
+- import `memo` / `forwardRef` directly from `"react"` at the affected call
+  sites;
+- opt the component in explicitly with a `@useSignals` comment or a manual
+  `useSignals()` call.
 
 `@useSignals` and `@noUseSignals` apply only to their owning function; they do
 not affect nested functions. The plugin never adds a second `useSignals()`
