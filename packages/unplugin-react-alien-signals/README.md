@@ -88,8 +88,24 @@ export default {
 - `include` / `exclude`: functions that filter source module IDs.
 
 `@useSignals` and `@noUseSignals` apply only to their owning function; they do
-not affect nested functions. Existing direct, namespace, or barrel-imported
-`useSignals()` calls are left alone, so the plugin never adds a second call.
+not affect nested functions. The plugin never adds a second `useSignals()`
+call: a direct, namespace, or barrel-imported call it finds is treated as the
+function's existing opt-in. A call that is not the function's first statement,
+and any barrel-imported call, is left alone in both transform modes. A
+first-statement call imported directly or as a namespace from `importSource` is
+left in place under `"inject"`, but under `"managed"` (the default) it is
+absorbed into the generated boundary: the statement is removed and replaced by
+the managed store declaration plus the `try` / `finally` scope, so the function
+body is rewritten rather than left byte-for-byte untouched.
+
+Because the default now rewrites those functions, such a call as the first
+statement of an `async` or generator function fails the build with
+`useSignals transform only supports synchronous, non-generator functions`,
+where the previous `"inject"` default compiled it silently. That combination is
+already invalid React — hooks require a synchronous function component — so
+prefer fixing the function; `transform: "inject"` restores the old behavior if
+the file must keep building unchanged.
+
 Reapplying either transform mode is a no-op. The transform runs before other
 plugin transforms and skips dependencies and non-JavaScript/TypeScript modules.
 Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`, `.jsx`,

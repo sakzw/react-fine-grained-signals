@@ -75,7 +75,7 @@ signals({ mode: "auto", transform: "inject" });
 
 `"auto"` のコストは、変換したコンポーネントがcompilerのmemoization対象から外れることです。leaf hook（`useSignalValue`、`useDeepSignalValue`）とJSX runtimeのhost直接bindingはcompiler-safeで、変換対象にもならないため、その書き方のコンポーネントはcompilerの最適化を保てます。
 
-`@useSignals` と `@noUseSignals` は、それぞれを所有する関数だけに適用され、ネストした関数へは継承されません。自動モードはトップレベルの宣言形式・arrow形式と、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。任意のネストしたcallback、class component、匿名default export、async/generator関数、すでに `useSignals()` を呼んでいるコンポーネントは変更しません。どちらの変換モードも再適用するとno-opになります。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
+`@useSignals` と `@noUseSignals` は、それぞれを所有する関数だけに適用され、ネストした関数へは継承されません。自動モードはトップレベルの宣言形式・arrow形式と、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。任意のネストしたcallback、class component、匿名default export、async/generator関数は自動変換の対象にしません。すでに `useSignals()` を呼んでいるコンポーネントへ二重に呼び出しを追加することはありません。`transform: "inject"` は既存の呼び出しをそのまま残し、`transform: "managed"`（既定）は先頭文の呼び出しを生成する境界に吸収し、その関数本体を書き換えます。この書き換えのため、`async` 関数やgenerator関数の先頭文にある明示的な `useSignals()` 呼び出しは既定ではbuild errorになります（`"inject"` ではそのまま残っていました）。どちらの変換モードも再適用するとno-opになります。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
 
 build時の自動化範囲に応じて、次のように選択します。
 

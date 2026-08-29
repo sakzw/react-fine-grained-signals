@@ -56,11 +56,26 @@ Rollup、webpack、Rspack、esbuildにはそれぞれ `/rollup`、`/webpack`、
 - `importSource`: `react-alien-signals` 互換wrapperへの置き換えです。
 - `include` / `exclude`: source module IDを絞る関数です。
 
-`@useSignals` と `@noUseSignals` は、その関数だけに適用されます。既存の
-direct import、namespace import、barrel import経由の `useSignals()` はそのまま
-残し、pluginが二重の呼び出しを挿入することはありません。いずれの変換モードも
-再適用するとno-opです。`.ts` はJSXなしのTypeScriptとして、`.tsx`、`.jsx`、
-JavaScriptはJSXを含めて解析します。
+`@useSignals` と `@noUseSignals` は、その関数だけに適用されます。pluginが
+二重の `useSignals()` 呼び出しを挿入することはありません。既存のdirect
+import、namespace import、barrel import経由の呼び出しは、その関数のopt-inと
+みなします。先頭文でない呼び出しと、barrel import経由の呼び出しは、いずれの
+変換モードでもそのまま残ります。`importSource` からdirect importまたは
+namespace importした先頭文の呼び出しは、`"inject"` ではそのまま残りますが、
+`"managed"`（既定）では生成する境界に吸収されます。つまりその文は削除され、
+managed storeの宣言と `try` / `finally` scopeに置き換わるため、関数本体は
+そのまま残るのではなく書き換えられます。
+
+既定が関数を書き換えるようになったため、この呼び出しが `async` 関数や
+generator関数の先頭文にあると、
+`useSignals transform only supports synchronous, non-generator functions`
+でbuildが失敗します。以前の `"inject"` 既定では無言でbuildが通っていました。
+この組み合わせはそもそもReactとして不正です（hookは同期のfunction componentを
+必要とします）。関数側を直すのが望ましく、どうしても現状のままbuildを通す
+必要がある場合は `transform: "inject"` で以前の挙動に戻せます。
+
+いずれの変換モードも再適用するとno-opです。`.ts` はJSXなしのTypeScriptとして、
+`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析します。
 
 ## 開発用ベンチマーク
 
