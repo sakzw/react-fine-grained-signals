@@ -1,12 +1,6 @@
-import reactAlienSignals from "./unplugin.js";
-import type { ReactAlienSignalsOptions } from "./unplugin.js";
+import { createBundlerPlugin } from "./unplugin.js";
 
-export {
-  canTransform,
-  type ReactAlienSignalsMode,
-  type ReactAlienSignalsTransform,
-  type ReactAlienSignalsOptions,
-} from "./unplugin.js";
+export * from "./unplugin.js";
 
 /** The plugin contract consumed by esbuild. */
 export interface EsbuildPlugin {
@@ -14,6 +8,4 @@ export interface EsbuildPlugin {
   setup(build: unknown): void | Promise<void>;
 }
 
-const esbuildPlugin = reactAlienSignals.esbuild as (options?: ReactAlienSignalsOptions) => EsbuildPlugin;
-
-export default esbuildPlugin;
+export default createBundlerPlugin<EsbuildPlugin>("esbuild");

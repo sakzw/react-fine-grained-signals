@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   transformReactAlienSignals,
   type ReactAlienSignalsMode,
@@ -864,6 +864,67 @@ describe("managed render transform", () => {
     expect(compile(barrelSource, "auto", "managed")).toBe(barrelSource);
     expect(compile(namespaceBarrelSource, "auto", "inject")).toBe(namespaceBarrelSource);
     expect(compile(namespaceBarrelSource, "auto", "managed")).toBe(namespaceBarrelSource);
+  });
+
+  describe("first-statement barrel useSignals() call", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("warns and leaves the component on the bare best-effort boundary", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      // useSignals is re-exported through a local barrel module rather than
+      // imported directly from the package, so a single-file transform cannot
+      // verify it is this library's own useSignals -- but it is called as the
+      // very first statement, exactly the shape of a deliberate explicit
+      // opt-in, so a developer relying on it would otherwise never learn they
+      // did not get the verified/managed boundary.
+      const barrelFirstStatementSource = `
+        import { useSignals } from "./signals.js";
+        export function Counter({ count }) {
+          useSignals();
+          return <button>{count.value}</button>;
+        }
+      `;
+
+      const managedOutput = compile(barrelFirstStatementSource, "manual", "managed");
+      expect(managedOutput).toBe(barrelFirstStatementSource);
+      expect(managedOutput).not.toContain("try {");
+      expect(managedOutput).not.toContain("finally {");
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain("cannot be verified");
+      expect(warn.mock.calls[0]?.[0]).toContain("barrel");
+      expect(warn.mock.calls[0]?.[0]).toContain("react-alien-signals");
+
+      warn.mockClear();
+      const injectOutput = compile(barrelFirstStatementSource, "manual", "inject");
+      expect(injectOutput).toBe(barrelFirstStatementSource);
+      expect(warn).toHaveBeenCalledTimes(1);
+    });
+
+    it("does not warn for a directly imported explicit useSignals call", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      compile(`
+        import { useSignals } from "react-alien-signals";
+        export function Counter({ count }) {
+          useSignals();
+          return <button>{count.value}</button>;
+        }
+      `);
+
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("does not warn when the barrel call is not the function's first statement", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      compile(`
+        import { useSignals as track } from "./signals.js";
+        const count = { value: 1 };
+        export function App() { const prefix = "v"; track(); return <p>{prefix}{count.value}</p>; }
+      `, "auto", "managed");
+
+      expect(warn).not.toHaveBeenCalled();
+    });
   });
 
   it.each(["inject", "managed"] as const)("keeps the %s transform idempotent", (transform) => {

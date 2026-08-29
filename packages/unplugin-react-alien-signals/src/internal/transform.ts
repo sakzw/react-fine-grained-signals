@@ -4,6 +4,7 @@ import {
   type NodePath,
   type ParserOptions,
   type PluginObj,
+  type PluginPass,
 } from "@babel/core";
 import * as t from "@babel/types";
 import type { TransformResult } from "unplugin";
@@ -31,6 +32,18 @@ export type InternalTransformResult = Exclude<TransformResult, string>;
 interface RuntimeImport {
   identifier: t.Identifier;
   bindingPath: NodePath<t.ImportSpecifier>;
+}
+
+// The per-file working state the transform builds up in `Program.enter` and
+// reads in every `Function` visit. This lives on Babel's own `PluginPass`
+// (one fresh instance per file) rather than in a closure over the plugin
+// factory, so two files processed through the same plugin instance -- Babel
+// may reuse one instantiation across `transformSync` calls -- never share
+// mutable state through it.
+interface PluginState extends PluginPass {
+  programPath: NodePath<t.Program>;
+  managedRuntimeImports: RuntimeImport[];
+  directImports: RuntimeImport[];
 }
 
 interface FunctionInspection {
@@ -98,6 +111,46 @@ function isReactSource(source: string, reactImportSource: string): boolean {
   return source === reactPackageSource || source === reactImportSource;
 }
 
+interface ResolvedImportBinding {
+  /** The specifier node the name binds to -- named, default, or namespace. */
+  specifier: NodePath<t.ImportSpecifier | t.ImportDefaultSpecifier | t.ImportNamespaceSpecifier>;
+  /** The `from "..."` string of the declaration that specifier belongs to. */
+  source: string;
+}
+
+/**
+ * Resolves `name` back to the import specifier and source module it is bound
+ * to, or `undefined` if `name` isn't bound by a value-level import at all
+ * (not imported, a type-only specifier, or a type-only declaration).
+ *
+ * Every import-recognition predicate in this file -- React's `memo`/
+ * `forwardRef` wrappers, a default-or-namespace React import, a named or
+ * namespace `useSignals` import -- reduces to "does this resolved binding
+ * have the right specifier kind and source", so they all build on this one
+ * binding walk instead of each repeating
+ * `getBinding` -> specifier-kind -> `importKind` -> parent-declaration.
+ */
+function resolveImportedBinding(path: NodePath, name: string): ResolvedImportBinding | undefined {
+  const binding = path.scope.getBinding(name);
+  if (binding === undefined) return undefined;
+  const specifier = binding.path;
+  if (
+    !specifier.isImportSpecifier() &&
+    !specifier.isImportDefaultSpecifier() &&
+    !specifier.isImportNamespaceSpecifier()
+  ) {
+    return undefined;
+  }
+  // Only a named specifier can itself be marked `type` (`import { type X }`);
+  // a default or namespace specifier has no `importKind` field of its own.
+  if (specifier.isImportSpecifier() && specifier.node.importKind === "type") return undefined;
+  const declaration = specifier.parentPath;
+  if (!declaration.isImportDeclaration() || declaration.node.importKind === "type") {
+    return undefined;
+  }
+  return { specifier, source: declaration.node.source.value };
+}
+
 /** Is `name` bound by `import { memo } from "react"` (or `forwardRef`, possibly aliased)? */
 function isReactNamedImport(
   path: NodePath,
@@ -105,15 +158,11 @@ function isReactNamedImport(
   importedName: "memo" | "forwardRef",
   reactImportSource: string,
 ): boolean {
-  const binding = path.scope.getBinding(name);
-  if (binding === undefined || !binding.path.isImportSpecifier()) return false;
-  if (binding.path.node.importKind === "type") return false;
-  if (!t.isIdentifier(binding.path.node.imported, { name: importedName })) return false;
-  const declaration = binding.path.parentPath;
+  const resolved = resolveImportedBinding(path, name);
+  if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return false;
   return (
-    declaration.isImportDeclaration() &&
-    declaration.node.importKind !== "type" &&
-    isReactSource(declaration.node.source.value, reactImportSource)
+    t.isIdentifier(resolved.specifier.node.imported, { name: importedName }) &&
+    isReactSource(resolved.source, reactImportSource)
   );
 }
 
@@ -123,19 +172,11 @@ function isReactDefaultOrNamespaceImport(
   name: string,
   reactImportSource: string,
 ): boolean {
-  const binding = path.scope.getBinding(name);
-  if (binding === undefined) return false;
-  if (
-    !binding.path.isImportNamespaceSpecifier() &&
-    !binding.path.isImportDefaultSpecifier()
-  ) {
-    return false;
-  }
-  const declaration = binding.path.parentPath;
+  const resolved = resolveImportedBinding(path, name);
   return (
-    declaration.isImportDeclaration() &&
-    declaration.node.importKind !== "type" &&
-    isReactSource(declaration.node.source.value, reactImportSource)
+    resolved !== undefined &&
+    (resolved.specifier.isImportNamespaceSpecifier() || resolved.specifier.isImportDefaultSpecifier()) &&
+    isReactSource(resolved.source, reactImportSource)
   );
 }
 
@@ -171,7 +212,13 @@ function isKnownComponentWrapper(
   );
 }
 
-function getFunctionName(
+// Named `getComponentIdentityName` -- not `getBindingName` -- to keep it
+// visually distinct from its twin below, `getOwnBindingName`: the two answer
+// different questions (what is this function's public component/hook
+// identity, vs. what name can other code in this module reach this exact
+// function by) and were each the subject of a separate past regression, so a
+// future edit must not casually merge their logic back together.
+function getComponentIdentityName(
   path: NodePath<t.Function>,
   reactImportSource: string,
 ): string | undefined {
@@ -196,12 +243,12 @@ function getFunctionName(
 }
 
 function isComponent(path: NodePath<t.Function>, reactImportSource: string): boolean {
-  const name = getFunctionName(path, reactImportSource);
+  const name = getComponentIdentityName(path, reactImportSource);
   return name !== undefined && /^[A-Z]/.test(name);
 }
 
 function isCustomHook(path: NodePath<t.Function>, reactImportSource: string): boolean {
-  const name = getFunctionName(path, reactImportSource);
+  const name = getComponentIdentityName(path, reactImportSource);
   return name !== undefined && /^use[A-Z]/.test(name);
 }
 
@@ -210,15 +257,11 @@ function isNamedUseSignalsImport(
   name: string,
   importSource?: string,
 ): boolean {
-  const binding = functionPath.scope.getBinding(name);
-  if (binding === undefined || !binding.path.isImportSpecifier()) return false;
-  if (binding.path.node.importKind === "type") return false;
-  if (!t.isIdentifier(binding.path.node.imported, { name: "useSignals" })) return false;
-  const declaration = binding.path.parentPath;
+  const resolved = resolveImportedBinding(functionPath, name);
+  if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return false;
   return (
-    declaration.isImportDeclaration() &&
-    declaration.node.importKind !== "type" &&
-    (importSource === undefined || declaration.node.source.value === importSource)
+    t.isIdentifier(resolved.specifier.node.imported, { name: "useSignals" }) &&
+    (importSource === undefined || resolved.source === importSource)
   );
 }
 
@@ -227,13 +270,11 @@ function isNamespaceUseSignalsImport(
   name: string,
   importSource?: string,
 ): boolean {
-  const binding = functionPath.scope.getBinding(name);
-  if (binding === undefined || !binding.path.isImportNamespaceSpecifier()) return false;
-  const declaration = binding.path.parentPath;
+  const resolved = resolveImportedBinding(functionPath, name);
   return (
-    declaration.isImportDeclaration() &&
-    declaration.node.importKind !== "type" &&
-    (importSource === undefined || declaration.node.source.value === importSource)
+    resolved !== undefined &&
+    resolved.specifier.isImportNamespaceSpecifier() &&
+    (importSource === undefined || resolved.source === importSource)
   );
 }
 
@@ -443,8 +484,20 @@ function isRenderCallbackInvocation(call: t.Node, callback: t.Node): boolean {
  * declarator is reached from the climbed position rather than the immediate
  * parent, because a wrapper on the initializer -- `const Row = ((item) =>
  * <li />) as Fn` -- stands between the function and the binding it names.
+ *
+ * This is `getComponentIdentityName`'s twin, deliberately not shared with it:
+ * that function asks what a function *is* (its public component/hook
+ * identity, where the enclosing binding always outranks the function's own
+ * name and a `memo()`/`forwardRef()` wrapper is climbed through to reach it);
+ * this one asks what other code in the module can *call it by* (a function
+ * declaration's own name is authoritative the instant it exists, and only a
+ * transparent TypeScript wrapper -- never a component wrapper -- sits between
+ * a reference and the binding, since `items.map(memo(Row))` does not hand
+ * `map` the plain `Row` reference). Each direction was its own past
+ * regression, so keep them separate rather than reconciling the priority or
+ * the climb depth.
  */
-function getBindingName(path: NodePath<t.Function>): string | undefined {
+function getOwnBindingName(path: NodePath<t.Function>): string | undefined {
   if (path.isFunctionDeclaration() && path.node.id !== null && path.node.id !== undefined) {
     return path.node.id.name;
   }
@@ -472,15 +525,15 @@ function isRenderCallback(path: NodePath<t.Function>): boolean {
   const enclosing = argument.parentPath;
   if (enclosing !== null && isRenderCallbackInvocation(enclosing.node, argument.node)) return true;
 
-  const name = getBindingName(path);
+  const name = getOwnBindingName(path);
   if (name === undefined || enclosing === null) return false;
   const binding = enclosing.scope.getBinding(name);
   if (binding === undefined) return false;
   // Only this function's own binding may speak for it, so a same-named binding
   // from an outer scope cannot disqualify an unrelated function. The declarator
   // is compared against the climbed position for the same reason
-  // `getBindingName` reads the name from there: a wrapped initializer puts the
-  // wrapper, not the function, directly under the declarator.
+  // `getOwnBindingName` reads the name from there: a wrapped initializer puts
+  // the wrapper, not the function, directly under the declarator.
   if (binding.path.node !== path.node && binding.path.node !== enclosing.node) return false;
   return binding.referencePaths.some((reference) => {
     const slot = climbTransparentWrappers(reference);
@@ -690,17 +743,71 @@ function addRuntimeImport(
   return { identifier: local, bindingPath: specifier };
 }
 
-function isExplicitUseSignals(
+/**
+ * Is `statements`' first entry a bare zero-argument call whose callee resolves
+ * to `useSignals`, with `allowBarrel` controlling whether a barrel/re-export
+ * chain counts (see `isUseSignalsCallee`)? Shared by `isExplicitUseSignals`
+ * (`allowBarrel: false`, the verified boundary) and
+ * `isUnverifiableBarrelUseSignals` (`allowBarrel: true`, to detect the exact
+ * call the former rejects).
+ */
+function isFirstStatementUseSignalsCall(
   functionPath: NodePath<t.Function>,
   statements: NodePath<t.Statement>[],
   importSource: string,
+  allowBarrel: boolean,
 ): boolean {
   const first = statements[0];
   if (first === undefined || !first.isExpressionStatement()) return false;
   const expression = first.get("expression");
   if (!expression.isCallExpression() || expression.node.arguments.length !== 0) return false;
   const callee = expression.get("callee");
-  return isUseSignalsCallee(functionPath, callee, importSource, false);
+  return isUseSignalsCallee(functionPath, callee, importSource, allowBarrel);
+}
+
+function isExplicitUseSignals(
+  functionPath: NodePath<t.Function>,
+  statements: NodePath<t.Statement>[],
+  importSource: string,
+): boolean {
+  return isFirstStatementUseSignalsCall(functionPath, statements, importSource, false);
+}
+
+// A call the transform cannot verify as this library's own `useSignals` --
+// because a single-file transform cannot follow the re-export chain to
+// confirm the barrel target -- can still be written in exactly the shape of a
+// deliberate opt-in: the first statement, zero arguments, no different from
+// `isExplicitUseSignals`'s own shape. Left unflagged, that call makes
+// `hasUseSignalsCall` true (`isUseSignalsCallee` is barrel-permissive there,
+// see `inspectFunction`) while `explicit` stays false, so the component is
+// silently kept on the bare/best-effort boundary: no transform, no directive,
+// and -- without this check -- no warning telling the author why. `explicit`
+// is passed in rather than recomputed so this only does the extra
+// barrel-permissive walk when the direct-import check already failed.
+function isUnverifiableBarrelUseSignals(
+  functionPath: NodePath<t.Function>,
+  statements: NodePath<t.Statement>[],
+  importSource: string,
+  explicit: boolean,
+): boolean {
+  if (explicit) return false;
+  return isFirstStatementUseSignalsCall(functionPath, statements, importSource, true);
+}
+
+// Barrel resolution can't be verified, so this is valid-but-unconfirmable
+// code, not invalid code: warn, matching the `console.warn` convention Babel
+// plugins use for non-fatal diagnostics, rather than `path.buildCodeFrameError`
+// thrown outright (reserved for the genuinely invalid async/generator case
+// below).
+function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSource: string): void {
+  const warning = path.buildCodeFrameError(
+    `This useSignals() call cannot be verified as "${importSource}"'s own export: it resolves ` +
+      "only through a barrel/re-export module, and a single-file transform cannot follow that " +
+      "chain to confirm the target. The component stays on the bare, best-effort useSignals() " +
+      `boundary. Import useSignals directly from "${importSource}" or "${importSource}/runtime" ` +
+      "instead to get the verified boundary.",
+  );
+  console.warn(warning.message);
 }
 
 function shouldAutomaticallyTransform(
@@ -716,126 +823,223 @@ function shouldAutomaticallyTransform(
   return mode === "all" || (mode === "auto" && inspection.readsValue);
 }
 
+/** Marks the current file as having produced at least one real change. */
+function markTransformed(state: PluginState): void {
+  (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
+}
+
+// A standalone function purely to pin down, once, the exact NodePath union
+// Babel infers for a function's body (`BlockStatement` for every `t.Function`
+// variant except an arrow function's concise body, which may also be a bare
+// `Expression`). `decideTransform`'s result carries this same path forward to
+// `applyInject`/`applyManaged`, so its type is captured here via `ReturnType`
+// rather than restated by hand.
+function getFunctionBody(path: NodePath<t.Function>) {
+  return path.get("body");
+}
+type FunctionBody = ReturnType<typeof getFunctionBody>;
+
+// The shared fields `applyInject` and `applyManaged` both need once
+// `decideTransform` has settled on a codegen strategy: the body slot to
+// rewrite, the original statement list it came from (empty for a concise
+// arrow body), whether the author's own call is being absorbed, and the
+// runtime `useSignals` binding to call.
+interface TransformCodegenInput {
+  body: FunctionBody;
+  statements: NodePath<t.Statement>[];
+  explicit: boolean;
+  runtimeImport: RuntimeImport;
+}
+
+/**
+ * What the `Function` visitor should do with one visited function, decided up
+ * front by `decideTransform` so the two codegen strategies below never have to
+ * re-derive eligibility themselves:
+ * - `"skip"`: opted out, ineligible, or already covered by an unverifiable or
+ *   late `useSignals()` call the component keeps on its own.
+ * - `"directive-only"`: `transform: "inject"` with the author's own explicit
+ *   call already in place -- nothing to inject, but the memoization opt-out
+ *   directive may still need adding.
+ * - `"inject"` / `"managed"`: apply the corresponding codegen strategy.
+ */
+type TransformDecision =
+  | { kind: "skip" }
+  | { kind: "directive-only"; body: FunctionBody }
+  | ({ kind: "inject" } & TransformCodegenInput)
+  | ({ kind: "managed" } & TransformCodegenInput);
+
+/**
+ * Resolves what, if anything, `path` needs done to it: the opt-out check,
+ * explicit/annotated/automatic eligibility (plus the barrel-useSignals
+ * warning that eligibility check surfaces along the way), the
+ * async/generator guard, and -- once a function is confirmed eligible for
+ * real codegen -- acquiring the runtime `useSignals` import it will call.
+ * Pure decision-making: no AST mutation happens here, so every early return is
+ * just a `return`, not a `return` guarding mutations already made.
+ */
+function decideTransform(
+  path: NodePath<t.Function>,
+  state: PluginState,
+  options: InternalTransformOptions,
+  reactImportSource: string,
+): TransformDecision {
+  if (hasOwnedLeadingComment(path, noUseSignalsComment)) return { kind: "skip" };
+
+  const body = path.get("body");
+  const statements = body.isBlockStatement() ? body.get("body") : [];
+  const explicit = isExplicitUseSignals(path, statements, options.importSource);
+  if (isUnverifiableBarrelUseSignals(path, statements, options.importSource, explicit)) {
+    warnUnverifiableBarrelUseSignals(path, options.importSource);
+  }
+  const inspection = inspectFunction(path, options.importSource, reactImportSource);
+  const annotated =
+    hasOwnedLeadingComment(path, useSignalsComment) &&
+    (isComponent(path, reactImportSource) || isCustomHook(path, reactImportSource));
+  const automatic =
+    isAutomaticTransformCandidate(path, reactImportSource) &&
+    shouldAutomaticallyTransform(options.mode, path, inspection, reactImportSource);
+  if (!explicit && !annotated && !automatic) return { kind: "skip" };
+  if (!explicit && inspection.hasUseSignalsCall) return { kind: "skip" };
+  if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
+  if (path.node.async || path.node.generator) {
+    if (!explicit && !annotated) return { kind: "skip" };
+    throw path.buildCodeFrameError(
+      "useSignals transform only supports synchronous, non-generator functions",
+    );
+  }
+
+  const managedRuntimeSource = `${options.importSource}/runtime`;
+  const importSource = options.transform === "managed"
+    ? managedRuntimeSource
+    : options.importSource;
+  const imports = options.transform === "managed"
+    ? state.managedRuntimeImports
+    : state.directImports;
+  let runtimeImport = imports.find(({ identifier, bindingPath }) =>
+    path.scope.getBinding(identifier.name)?.path === bindingPath
+  );
+  if (runtimeImport === undefined) {
+    runtimeImport = addRuntimeImport(state.programPath, importSource, path);
+    imports.push(runtimeImport);
+  }
+
+  return { kind: options.transform, body, statements, explicit, runtimeImport };
+}
+
+/** Codegen: inject a bare `useSignals()` call at the top of the function body. */
+function applyInject(
+  path: NodePath<t.Function>,
+  { body, runtimeImport }: TransformCodegenInput,
+  options: InternalTransformOptions,
+  state: PluginState,
+): void {
+  const call = t.expressionStatement(
+    t.callExpression(t.cloneNode(runtimeImport.identifier), []),
+  );
+  if (body.isBlockStatement()) {
+    body.unshiftContainer("body", call);
+  } else {
+    body.replaceWith(
+      t.blockStatement([
+        call,
+        t.returnStatement(body.node as t.Expression),
+      ]),
+    );
+  }
+  const injectedBody = path.node.body;
+  if (options.reactCompiler === "auto" && t.isBlockStatement(injectedBody)) {
+    addNoMemoDirective(injectedBody);
+  }
+  path.scope.crawl();
+  markTransformed(state);
+}
+
+/** Codegen: wrap the function body in the managed try/finally render-tracking scope. */
+function applyManaged(
+  path: NodePath<t.Function>,
+  { body, statements, explicit, runtimeImport }: TransformCodegenInput,
+  options: InternalTransformOptions,
+  state: PluginState,
+): void {
+  const store = path.scope.generateUidIdentifier("signals");
+  const declaration = t.variableDeclaration("const", [
+    t.variableDeclarator(
+      t.cloneNode(store),
+      t.callExpression(t.cloneNode(runtimeImport.identifier), []),
+    ),
+  ]);
+  const first = statements[0];
+  if (explicit && first !== undefined) t.inheritsComments(declaration, first.node);
+  const originalStatements = body.isBlockStatement()
+    ? statements.slice(explicit ? 1 : 0).map((statement) => statement.node)
+    : [t.returnStatement(body.node as t.Expression)];
+  const transformedBody = t.blockStatement([
+    declaration,
+    t.tryStatement(
+      t.blockStatement(originalStatements),
+      null,
+      t.blockStatement([
+        t.expressionStatement(
+          t.callExpression(
+            t.memberExpression(t.cloneNode(store), t.identifier("f")),
+            [],
+          ),
+        ),
+      ]),
+    ),
+  ]);
+  if (body.isBlockStatement()) transformedBody.directives = body.node.directives;
+  if (options.reactCompiler === "auto") addNoMemoDirective(transformedBody);
+  body.replaceWith(transformedBody);
+  path.scope.crawl();
+  markTransformed(state);
+}
+
 const babelTransform = declare<InternalTransformOptions>((api, options) => {
   api.assertVersion(7);
   const managedRuntimeSource = `${options.importSource}/runtime`;
   const reactImportSource = options.reactImportSource;
-  let programPath: NodePath<t.Program>;
-  let managedRuntimeImports: RuntimeImport[];
-  let directImports: RuntimeImport[];
 
   const plugin: PluginObj = {
     name: "unplugin-react-alien-signals",
     visitor: {
       Program: {
-        enter(path, state) {
-          programPath = path;
-          managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource);
-          directImports = findRuntimeImports(path, options.importSource);
+        // `declare()`'s own typing pins the visitor state to the base
+        // `PluginPass`, so the per-file fields this plugin adds are read back
+        // through one cast to `PluginState` rather than threaded through as a
+        // second type parameter it does not expose.
+        enter(path, untypedState) {
+          const state = untypedState as PluginState;
+          state.programPath = path;
+          state.managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource);
+          state.directImports = findRuntimeImports(path, options.importSource);
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
       },
-      Function(path, state) {
-        if (hasOwnedLeadingComment(path, noUseSignalsComment)) return;
-
-        const body = path.get("body");
-        const statements = body.isBlockStatement() ? body.get("body") : [];
-        const explicit = isExplicitUseSignals(path, statements, options.importSource);
-        const inspection = inspectFunction(path, options.importSource, reactImportSource);
-        const annotated =
-          hasOwnedLeadingComment(path, useSignalsComment) &&
-          (isComponent(path, reactImportSource) || isCustomHook(path, reactImportSource));
-        const automatic =
-          isAutomaticTransformCandidate(path, reactImportSource) &&
-          shouldAutomaticallyTransform(options.mode, path, inspection, reactImportSource);
-        if (!explicit && !annotated && !automatic) return;
-        if (!explicit && inspection.hasUseSignalsCall) return;
-        if (options.transform === "inject" && explicit) {
-          // Nothing to inject, but the author's own call still makes this
-          // function render-tracking, so it needs the memoization opt-out.
-          if (
-            options.reactCompiler === "auto" &&
-            body.isBlockStatement() &&
-            addNoMemoDirective(body.node)
-          ) {
-            (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
-          }
-          return;
+      Function(path, untypedState) {
+        const state = untypedState as PluginState;
+        const decision = decideTransform(path, state, options, reactImportSource);
+        switch (decision.kind) {
+          case "skip":
+            return;
+          case "directive-only":
+            // Nothing to inject, but the author's own call still makes this
+            // function render-tracking, so it needs the memoization opt-out.
+            if (
+              options.reactCompiler === "auto" &&
+              decision.body.isBlockStatement() &&
+              addNoMemoDirective(decision.body.node)
+            ) {
+              markTransformed(state);
+            }
+            return;
+          case "inject":
+            applyInject(path, decision, options, state);
+            return;
+          case "managed":
+            applyManaged(path, decision, options, state);
+            return;
         }
-        if (path.node.async || path.node.generator) {
-          if (!explicit && !annotated) return;
-          throw path.buildCodeFrameError(
-            "useSignals transform only supports synchronous, non-generator functions",
-          );
-        }
-
-        const importSource = options.transform === "managed"
-          ? managedRuntimeSource
-          : options.importSource;
-        const imports = options.transform === "managed" ? managedRuntimeImports : directImports;
-        let runtimeImport = imports.find(({ identifier, bindingPath }) =>
-          path.scope.getBinding(identifier.name)?.path === bindingPath
-        );
-        if (runtimeImport === undefined) {
-          runtimeImport = addRuntimeImport(programPath, importSource, path);
-          imports.push(runtimeImport);
-        }
-
-        if (options.transform === "inject") {
-          const call = t.expressionStatement(
-            t.callExpression(t.cloneNode(runtimeImport.identifier), []),
-          );
-          if (body.isBlockStatement()) {
-            body.unshiftContainer("body", call);
-          } else {
-            body.replaceWith(
-              t.blockStatement([
-                call,
-                t.returnStatement(body.node as t.Expression),
-              ]),
-            );
-          }
-          const injectedBody = path.node.body;
-          if (options.reactCompiler === "auto" && t.isBlockStatement(injectedBody)) {
-            addNoMemoDirective(injectedBody);
-          }
-          path.scope.crawl();
-          (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
-          return;
-        }
-
-        const store = path.scope.generateUidIdentifier("signals");
-        const declaration = t.variableDeclaration("const", [
-          t.variableDeclarator(
-            t.cloneNode(store),
-            t.callExpression(t.cloneNode(runtimeImport.identifier), []),
-          ),
-        ]);
-        const first = statements[0];
-        if (explicit && first !== undefined) t.inheritsComments(declaration, first.node);
-        const originalStatements = body.isBlockStatement()
-          ? statements.slice(explicit ? 1 : 0).map((statement) => statement.node)
-          : [t.returnStatement(body.node as t.Expression)];
-        const transformedBody = t.blockStatement([
-          declaration,
-          t.tryStatement(
-            t.blockStatement(originalStatements),
-            null,
-            t.blockStatement([
-              t.expressionStatement(
-                t.callExpression(
-                  t.memberExpression(t.cloneNode(store), t.identifier("f")),
-                  [],
-                ),
-              ),
-            ]),
-          ),
-        ]);
-        if (body.isBlockStatement()) transformedBody.directives = body.node.directives;
-        if (options.reactCompiler === "auto") addNoMemoDirective(transformedBody);
-        body.replaceWith(transformedBody);
-        path.scope.crawl();
-        (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
       },
     },
   };

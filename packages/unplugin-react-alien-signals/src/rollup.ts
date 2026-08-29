@@ -1,20 +1,12 @@
-import reactAlienSignals from "./unplugin.js";
-import type { ReactAlienSignalsOptions } from "./unplugin.js";
+import { createBundlerPlugin, type BundlerTransformOutput } from "./unplugin.js";
 
-export {
-  canTransform,
-  type ReactAlienSignalsMode,
-  type ReactAlienSignalsTransform,
-  type ReactAlienSignalsOptions,
-} from "./unplugin.js";
+export * from "./unplugin.js";
 
 /** A minimal Rollup-compatible plugin shape. */
 export interface RollupPlugin {
   name: string;
   enforce?: "pre" | "post";
-  transform?: (code: string, id: string) => { code: string; map?: null } | null;
+  transform?: (code: string, id: string) => BundlerTransformOutput;
 }
 
-const rollupPlugin = reactAlienSignals.rollup as (options?: ReactAlienSignalsOptions) => RollupPlugin;
-
-export default rollupPlugin;
+export default createBundlerPlugin<RollupPlugin>("rollup");

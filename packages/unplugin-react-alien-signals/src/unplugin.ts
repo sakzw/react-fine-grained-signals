@@ -1,4 +1,4 @@
-import { createUnplugin } from "unplugin";
+import { createUnplugin, type TransformResult } from "unplugin";
 import {
   transformReactAlienSignals,
   type ReactAlienSignalsMode,
@@ -77,3 +77,26 @@ export const reactAlienSignals = createUnplugin<ReactAlienSignalsOptions>(
 );
 
 export default reactAlienSignals;
+
+/**
+ * The `{ code, map }` shape a bundler's `transform` hook returns on a real
+ * change, `null` on none. Derived from unplugin's own `TransformResult`
+ * (rather than naming the source-map types by hand) so the accepted `map`
+ * shape -- a real source map object when `sourceMaps: true` produces one, not
+ * only `null` -- always matches what unplugin itself expects, and follows
+ * unplugin's own type surface if that ever changes.
+ */
+export type BundlerTransformOutput = Extract<TransformResult, { code: string }> | null;
+
+/**
+ * The one piece every per-bundler entry file (`vite.ts`, `webpack.ts`,
+ * `rollup.ts`, `esbuild.ts`, `rspack.ts`) repeated: casting `reactAlienSignals`'s
+ * `bundler` property to a callable factory of its own bundler-specific plugin
+ * type. Each entry file supplies only the two things that actually differ
+ * between bundlers -- which property to read and what shape it returns.
+ */
+export function createBundlerPlugin<Plugin>(
+  bundler: "vite" | "webpack" | "rollup" | "esbuild" | "rspack",
+): (options?: ReactAlienSignalsOptions) => Plugin {
+  return reactAlienSignals[bundler] as (options?: ReactAlienSignalsOptions) => Plugin;
+}
