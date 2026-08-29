@@ -192,7 +192,7 @@ export interface ManagedSignalsStore {
   f(): void;
 }
 
-/** Starts a managed render scope that must be closed synchronously with `f()`. */
+/** Starts a managed render scope that must be closed synchronously with `finish()` (or its `f()` alias). */
 export function useManagedSignals(): ManagedSignalsStore {
   return useSignalsImplementation(true);
 }
