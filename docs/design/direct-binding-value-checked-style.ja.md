@@ -12,7 +12,7 @@ JSX runtimeは、allowlistに含まれるnative host propに渡されたsignal�
 - **`<select>` の再同期。** `bindSelectValue` が通常のper-value effectに加えて、selectのsubtreeへ `MutationObserver` を設置します。これにより、mount後に追加された(例えばoption自体がsignalから描画される場合の)マッチする `<option>` も正しく選択されます。以前はbindingされたsignalだけを監視し、DOMの `<option>` listの変化には反応しなかったため、選択状態が空のまま固まっていました。
 - **IME compositionの安全性。** `bindTextValue` が、componentが独自のcomposition handlerを宣言しているかどうかに関係なく、`compositionstart`/`compositionend` をnode自身で直接追跡します。composition中に要求された `value` の書き込み ―― inputの `onChange` からではなく、同じsignalの別の購読者から発生したものも含む ―― は、即座に適用されず composition終了まで遅延されるため、進行中のcompositionを中断できなくなりました。
 - **`style`(粗い、object全体の形)。** `applyStyle` が解決済みのobjectを代入し、unit必須の数値propertyには `px` を付け、`--custom-property` entryは `setProperty` で書き込み、前回にはあり今回にはないkeyをclearします。scopeはHTML hostのみです。
-- `tests/react.test.tsx`(`<select>` の再同期、IME composition、独立した `computed` に支えられたradio groupの兄弟unchecking、`value` bindingをStrict Modeで包んだdouble-invoke testを含む)、`tests/ssr.test.tsx`、`tests/jsx-types.tsx` でtest済みです。
+- `tests/react-dom-binding.test.tsx`(`<select>` の再同期、IME composition、独立した `computed` に支えられたradio groupの兄弟unchecking、`value` bindingをStrict Modeで包んだdouble-invoke testを含む)、`tests/ssr.test.tsx`、`tests/jsx-types.tsx` でtest済みです。
 
 ## 未実装 ―― 未決定の設計課題
 
@@ -29,7 +29,7 @@ JSX runtimeは、allowlistに含まれるnative host propに渡されたsignal�
 - IME composition中にselectionを復元すると、それ自体がcompositionを壊しかねません。既存のwrite-skip checkと単に並べて動かすのではなく、組み合わせて動作するように設計する必要があります。
 - prototypeは存在しません。上記の論点を超えてscopeされていません。
 
-**出荷されるまでの間:** reactiveなpropを専用のleaf componentへ切り出してください(`TaskRow` が既に示しているpattern)。そのleafだけが再レンダーされます。
+**出荷されるまでの間:** reactiveなpropを専用のleaf componentへ切り出してください([`TaskRow` が既に示しているpattern](../../examples/react-router/app/components/TaskRow.tsx))。そのleafだけが再レンダーされます。
 
 ### fine-grainedなper-property `style` 追跡
 

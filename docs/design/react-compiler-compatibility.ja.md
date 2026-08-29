@@ -74,9 +74,9 @@ CompileError: (BuildHIR::lowerStatement) Handle TryStatement without a catch cla
 
 出力されるcodeはtransformの出力とbyte単位で同一で、runtime testも正しく更新されます。ただしこれは未対応構文によるbail-outであって互換性の保証ではありません。compilerが `catch` なしの `try` を拒否し続けることに依存しており、`panicThreshold: "all_errors"` では同じeventがfunctionのskipではなくbuildの失敗になります。これは直接計測しました。`reactCompiler: "off"` の出力では `transformSync` がthrowし、`reactCompiler: "auto"` の出力ではthrowせず、errorは記録されるだけでbuildは続行します。したがってopt-out directiveはmanagedモードでも出力します。全errorでpanicするbuildをこの形が通過できるのは、このdirectiveのおかげだけです。
 
-### 手書きの `react-alien-signals/runtime` 境界はmanagedの出力と同じ挙動になる
+### 手動ランタイムインポート境界はmanagedの出力と同じ挙動になる
 
-[hooksのdocs](../hooks.ja.md)に載せている手動の境界、つまり `react-alien-signals/runtime` からimportした `useSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
+[hooksのdocs](../hooks.ja.md)に載せている手動ランタイムインポート境界、つまり `react-alien-signals/runtime` からimportした `useSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
 
 ```jsx
 import { signal } from "react-alien-signals";

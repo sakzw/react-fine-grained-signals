@@ -8,13 +8,7 @@ An experimental React binding for [alien-signals](https://www.npmjs.com/package/
 
 ## Documentation
 
-- [Core primitives](docs/core-primitives.md) — `signal`, `computed`, `effect`, `batch`, `untracked`, and `deepSignal`.
-- [React hooks](docs/hooks.md) — `useSignals`, `useSignal`, `useDeepSignal`, `useComputed`, `useSignalEffect`, and the low-level selector hooks.
-- [Rendering optimization](docs/rendering-optimization.md) — explicit `useSignals()` tracking vs. the build plugin's automatic insertion.
-- [JSX signal children and host bindings](docs/jsx-bindings.md) — the custom JSX runtime's direct DOM bindings and their constraints.
-- [JSX control-flow utilities](docs/control-flow.md) — `Show`, `Switch`/`Match`, `For`, and `Index`.
-
-Design investigation memos for still-open or historical implementation decisions live under [`docs/design/`](docs/design/); see [`docs/README.md`](docs/README.md) for the full index.
+See [`docs/README.md`](docs/README.md) for guides on using the library, design investigation memos, and the full documentation index.
 
 ## Packaging
 

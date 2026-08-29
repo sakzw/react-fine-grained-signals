@@ -22,7 +22,7 @@ function Counter() {
 }
 ```
 
-If your build runs React Compiler, add `"use no memo"` to every component that calls `useSignals()` by hand: the compiler otherwise caches the component's JSX and never re-reads `signal.value`, so the component stops updating without any error. The build plugin below inserts that directive for you. See [the React Compiler compatibility note](design/react-compiler-compatibility.md).
+If your build runs React Compiler and you call the bare `useSignals()` hook by hand (imported directly from the package), add `"use no memo"` to your component: the compiler otherwise caches the component's JSX and never re-reads `signal.value`, so the component stops updating without any error. The build plugin below inserts that directive for you. Note: the hand-written managed boundary pattern (`import { useSignals } from "react-alien-signals/runtime"` with `try`/`finally`) does not need this directive — see [the React Compiler compatibility note](design/react-compiler-compatibility.md) for details.
 
 Synchronous signal reads made during the render after `useSignals()` are collected, and a change to one of those values schedules a rerender of that component. With `deepSignal`, property reads are tracked individually, so an unread sibling does not cause a rerender. This is the simplest option when you want explicit control and no build configuration.
 
@@ -51,42 +51,13 @@ export default defineConfig({
 
 The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry points. It is ESM-only, so use `import` in the bundler configuration. It is currently a private workspace package and is not published to npm; the install and configuration snippets document the intended release API.
 
-`mode` chooses how components opt in:
+Two main options control the plugin:
 
-- `"manual"`: transform an explicit first-statement imported `useSignals()` call, or a named component/custom hook marked with `@useSignals`. This preserves the explicit live-library style.
-- `"auto"` (default): additionally transform named JSX components that read `.value`, and named `useX` custom hooks that read `.value`.
-- `"all"`: additionally transform every named JSX component. Use it when a component should opt in even though the static `.value` check cannot see a direct read; arbitrary nested callbacks are not transform targets.
+- **`mode`**: how components opt in. Choose `"auto"` (default) for automatic detection of components that read `.value`, or `"manual"` for explicit opt-in via a `useSignals()` call or `@useSignals` annotation.
+- **`transform`**: how opted-in functions are wrapped. Choose `"managed"` (default) for an exact render boundary, or `"inject"` for the same best-effort behavior as a bare `useSignals()` hook written by hand.
 
-`transform` chooses how an opted-in function is generated: `managed` (default) adds an exact try/finally boundary; `inject` adds bare `useSignals()` for best-effort opt-in.
+One important caveat: when a first-statement `useSignals()` call is imported via a barrel/re-export rather than directly from the package, the plugin cannot verify it is genuine, so it leaves the call alone in both transform modes and emits a build warning that the component is left on the best-effort/bare boundary (not absorbed into the managed/verified boundary). Import `useSignals` directly from the package (or from `/runtime` for an exact boundary) to avoid this warning.
 
-- `"managed"` (default): import from `react-alien-signals/runtime` and emit the exact `try` / `finally` scope, closing the render-tracking window synchronously at the point the component function returns. This covers exact separation across Suspense-aborted renders, nested server rendering during render, and concurrent roots without any extra configuration.
-- `"inject"`: import normal `useSignals` from `react-alien-signals` and insert its call as the first hook. It does not emit `try` / `finally` or rewrite existing control flow, so it keeps the same best-effort boundary as calling the hook by hand — see [the boundary design note](design/use-signals-boundary-design.md) for the sibling-misattribution limitation this can expose.
-
-```ts
-// The default already emits the exact managed boundary; select "inject"
-// only where the plugin-free best-effort behavior is explicitly wanted.
-signals({ mode: "auto", transform: "inject" });
-```
-
-`reactCompiler` chooses whether the plugin protects what it transformed from React Compiler:
-
-- `"auto"` (default): mark every transformed function with the `"use no memo"` directive. Without it, the compiler caches the component's JSX and stops re-reading `signal.value`, so the component silently freezes after its first update. The directive is inert when the compiler is not used.
-- `"off"`: omit the directive. Choose it only when React Compiler is not in the build, or when the affected components were checked against [the React Compiler compatibility note](design/react-compiler-compatibility.md).
-
-The cost of `"auto"` is that a transformed component is no longer memoized by the compiler. The leaf hooks (`useSignalValue`, `useDeepSignalValue`) and the JSX runtime's direct host bindings are compiler-safe and are never transformed, so components written that way keep the compiler's optimization.
-
-`@useSignals` and `@noUseSignals` apply only to their owning function, not nested functions. Automatic modes support top-level declaration and arrow components, including named components wrapped with `memo` or `forwardRef`; arbitrary nested callbacks, class components, anonymous default exports, and async/generator functions are not automatic targets. A component that already calls `useSignals()` never receives a second call: `transform: "inject"` leaves the existing call in place, while `transform: "managed"` (the default) absorbs a first-statement call into the boundary it generates, rewriting that function body. Because of that rewrite, an explicit first-statement `useSignals()` call inside an `async` or generator function is a build error under the default, where `"inject"` left it alone. Reapplying either transform mode is a no-op. The `.value` check is intentionally heuristic, so `mode: "auto"` may add a harmless subscription to an object that is not a signal.
-
-Choose the approach based on how much build-time automation you want:
-
-| Goal | Recommended approach |
-| --- | --- |
-| No plugin or bundler integration | Call `useSignals()` explicitly; use the JSX runtime for native signal children and allowlisted props. |
-| Automatic insertion with an exact managed render boundary | Use the plugin with `mode: "auto"` (the default) — `transform` also defaults to `"managed"`. |
-| Automatic insertion with the normal best-effort `useSignals()` behavior instead of the managed boundary | Use `mode: "auto"` with `transform: "inject"`. |
-| Explicit opt-in with an exact render boundary | Use `mode: "manual"`; `transform` already defaults to `"managed"`. |
-| Broad migration or components whose reads are hidden from the heuristic | Use `mode: "all"`, then opt out individual functions with `@noUseSignals` where needed. |
-
-The plugin is not required for the core primitives, hooks, or JSX signal bindings. It is a development/build-time convenience for inserting `useSignals()` behind an exact managed render boundary by default, or as a bare best-effort call when `transform: "inject"` is selected; it does not replace `useSignals()` semantics or expand the native host-prop allowlist.
+For the full list of options, including `reactCompiler`, render-callback detection, memo/forwardRef recognition, and barrel-import handling, see [the plugin documentation](../../packages/unplugin-react-alien-signals/README.md).
 
 See also: [React hooks](hooks.md), [JSX signal children and host bindings](jsx-bindings.md).

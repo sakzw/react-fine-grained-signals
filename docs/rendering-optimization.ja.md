@@ -22,7 +22,7 @@ function Counter() {
 }
 ```
 
-buildでReact Compilerを使う場合は、手書きで `useSignals()` を呼ぶコンポーネントすべてに `"use no memo"` を付けてください。付けないとcompilerがコンポーネントのJSXをcacheして `signal.value` を読み直さなくなり、errorも出さずに更新が止まります。後述のbuild pluginはこのdirectiveを自動で挿入します。[React Compilerとの互換性の検討docs](design/react-compiler-compatibility.ja.md)を参照してください。
+buildでReact Compilerを使う場合で、変換なしの `useSignals()` hook(packageから直接importしたもの)を手書きで呼ぶコンポーネントについては、`"use no memo"` を付けてください。付けないとcompilerがコンポーネントのJSXをcacheして `signal.value` を読み直さなくなり、errorも出さずに更新が止まります。後述のbuild pluginはこのdirectiveを自動で挿入します。注: 手書きのmanaged boundary pattern(`react-alien-signals/runtime` からの `useSignals` を `try`/`finally` で使う形)はこのdirectiveを必要としません。詳細は[React Compilerとの互換性の検討docs](design/react-compiler-compatibility.ja.md)を参照してください。
 
 このフック以降の同期的なsignal読み取りが収集され、そのいずれかが変わったときだけ、そのコンポーネントをReactが再レンダーします。`deepSignal` を使う場合、propertyの読み取りは個別に追跡されるため、読んでいない隣接propertyの変更では再レンダーしません。build設定を変えずに明示的な制御がほしいときに最もシンプルな選択肢です。
 
@@ -51,42 +51,13 @@ export default defineConfig({
 
 同じパッケージは `/rollup`、`/webpack`、`/rspack`、`/esbuild` のentry pointも提供します。ESM-onlyのため、bundler設定ではCommonJSの `require()` ではなく `import` を使ってください。現在はprivateなworkspace packageであり、npmには公開していません。導入・設定例は将来の公開APIを示すものです。
 
-`mode` でコンポーネントを追跡対象にする方法を選びます。
+主な2つのオプションがpluginの動作を制御します。
 
-- `"manual"`: 先頭文にあるimport済みの `useSignals()`、または `@useSignals` を付けた名前付きコンポーネント／custom hookだけを変換します。明示的なライブラリの書き味を維持します。
-- `"auto"`（既定）: さらに `.value` を読む名前付きJSXコンポーネントと、`.value` を読む名前付き `useX` custom hookを変換します。
-- `"all"`: さらにすべての名前付きJSXコンポーネントを変換します。直接の `.value` 読み取りを静的検出できない場合でも、コンポーネントを明示的に対象にしたいときに使います。任意のネストしたcallback自体は変換対象ではありません。
+- **`mode`**: コンポーネントをどのようにopt-inさせるか。`.value` を読むコンポーネントを自動検出する `"auto"`（既定）か、`useSignals()` 呼び出しまたは `@useSignals` 注釈での明示的なopt-inを要求する `"manual"` を選びます。
+- **`transform`**: opt-inしたコンポーネントをどのように包むか。厳密なrender boundaryを得る `"managed"`（既定）か、手書きと同じbest-effort動作を得る `"inject"` を選びます。
 
-`transform` で、対象にした関数の生成方法を選びます。`managed`（既定）は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignals()` を追加します。
+重要な注意: 先頭文の `useSignals()` 呼び出しがpackageから直接importされているのではなく、barrelまたは再exportモジュール経由でimportされている場合、pluginはその呼び出しが正規のものであることを検証できません。そのため、どちらのtransformモードでも呼び出しはそのまま残り、コンポーネントがbest-effort/bare境界の上に残る（managed/検証済み境界に吸収されない）ことを説明するbuild警告が出力されます。この警告を避けるには、packageから直接（または `/runtime` 経由で正確な境界を得るために）`useSignals` をimportしてください。
 
-- `"managed"`（既定）: `react-alien-signals/runtime` からimportし、厳密な `try` / `finally` スコープを出力します。componentの関数がreturnする時点でrender tracking windowを同期的に閉じるため、Suspenseで中断されたレンダー、レンダー中のネストしたSSR、複数の並行rootをまたぐ正確な分離を、追加設定なしでカバーします。
-- `"inject"`: `react-alien-signals` から通常の `useSignals` をimportし、最初のフックとして呼び出しを挿入します。`try` / `finally` を出力せず既存の制御フローも書き換えないため、手書きと同じbest-effort境界のままです。このmodeが露呈し得るsibling誤帰属の制約については[境界の設計検討docs](design/use-signals-boundary-design.ja.md)を参照してください。
-
-```ts
-// 既定のままで厳密なmanaged boundaryを得られます。plugin不要な
-// best-effort動作が明示的に必要な場合だけ "inject" を選んでください。
-signals({ mode: "auto", transform: "inject" });
-```
-
-`reactCompiler` で、変換した関数をReact Compilerから保護するかどうかを選びます。
-
-- `"auto"`（既定）: 変換したすべての関数に `"use no memo"` directiveを付けます。付けない場合、compilerはコンポーネントのJSXをcacheして `signal.value` を読み直さなくなるため、最初の更新以降コンポーネントが無言で凍結します。compilerを使っていない場合、このdirectiveは無害です。
-- `"off"`: directiveを付けません。React Compilerをbuildで使っていない場合か、対象コンポーネントを[React Compilerとの互換性の検討docs](design/react-compiler-compatibility.ja.md)に照らして確認済みの場合だけ選んでください。
-
-`"auto"` のコストは、変換したコンポーネントがcompilerのmemoization対象から外れることです。leaf hook（`useSignalValue`、`useDeepSignalValue`）とJSX runtimeのhost直接bindingはcompiler-safeで、変換対象にもならないため、その書き方のコンポーネントはcompilerの最適化を保てます。
-
-`@useSignals` と `@noUseSignals` は、それぞれを所有する関数だけに適用され、ネストした関数へは継承されません。自動モードはトップレベルの宣言形式・arrow形式と、`memo` / `forwardRef` で包んだ名前付きコンポーネントを対象にします。任意のネストしたcallback、class component、匿名default export、async/generator関数は自動変換の対象にしません。すでに `useSignals()` を呼んでいるコンポーネントへ二重に呼び出しを追加することはありません。`transform: "inject"` は既存の呼び出しをそのまま残し、`transform: "managed"`（既定）は先頭文の呼び出しを生成する境界に吸収し、その関数本体を書き換えます。この書き換えのため、`async` 関数やgenerator関数の先頭文にある明示的な `useSignals()` 呼び出しは既定ではbuild errorになります（`"inject"` ではそのまま残っていました）。どちらの変換モードも再適用するとno-opになります。`.value` 判定は意図的にheuristicなので、`mode: "auto"` はsignalではないオブジェクトにも無害な購読を追加する場合があります。
-
-build時の自動化範囲に応じて、次のように選択します。
-
-| 目的 | 推奨する方法 |
-| --- | --- |
-| pluginやbundler integrationを使わない | `useSignals()` を明示的に呼び、native signal childと許可済みpropにはJSX runtimeを使う |
-| 厳密なmanaged render boundaryを自動挿入する | pluginを `mode: "auto"`（既定）で使う。`transform` も `"managed"` が既定 |
-| managed boundaryではなく、通常のbest-effortな `useSignals()` 動作を自動挿入する | `mode: "auto"` と `transform: "inject"` を使う |
-| 厳密なrender boundaryへ明示的にopt-inする | `mode: "manual"` を使う。`transform` はすでに `"managed"` が既定 |
-| 広範なmigration、またはheuristicから読み取りが見えないcomponent | `mode: "all"` を使い、必要な関数を `@noUseSignals` で除外する |
-
-pluginはcore primitive、hooks、JSX signal bindingに必須ではありません。開発・build時に、既定では厳密なmanaged render boundaryで包んだ `useSignals()` を挿入し、`transform: "inject"` を選んだ場合は変換なしのbest-effortな呼び出しを挿入する便宜機能であり、`useSignals()` のsemanticsを置き換えたり、native host propの許可リストを拡張したりはしません。
+オプションの完全なリスト（`reactCompiler`、render callbackの検出、memo/forwardRefの認識、barrel importの扱いなど）については、[pluginのdocs](../../packages/unplugin-react-alien-signals/README.ja.md)を参照してください。
 
 関連: [Reactフック](hooks.ja.md)、[JSXのsignal子要素とhost binding](jsx-bindings.ja.md)。

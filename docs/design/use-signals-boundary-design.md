@@ -46,15 +46,17 @@ Advantages: no build requirement, no API change, and the desired explicit call r
 
 ### 2. Make managed transformation the recommended strict path
 
+**Status: adopted for the plugin path.** The `unplugin-react-alien-signals` build plugin defaults to this option, implementing an exact `try` / `finally` boundary via the `transform: "managed"` setting.
+
 Keep the source-level `useSignals()` call but transform opted-in components to an exact `try` / `finally` scope. The transform could remain optional for users who knowingly accept best-effort behavior.
 
 Advantages: preserves source ergonomics and gives lexical ownership. Disadvantages: requires build integration, must handle every component form safely, and increases transform maintenance.
 
-### 3. Document the manual scope handle
+### 3. Document the manual runtime-import boundary
 
-**Status: adopted, for this narrower use case.** `transform: "managed"` remains the primary/recommended path when the build plugin is available; this manual pattern is the documented option for manual usage without a build transform.
+**Status: adopted, for this narrower use case.** `transform: "managed"` remains the primary/recommended path when the build plugin is available; the manual runtime-import boundary is the documented option for an exact boundary without a build transform.
 
-The managed runtime already ships an exact boundary that needs no compiler: `react-alien-signals/runtime` exports the transform target (`useManagedSignals`, re-exported there as `useSignals`), which returns a scope handle closed with `finish()` / `f()`. `const store = useSignals(); try { … } finally { store.f(); }` is now documented as a public pattern in [the hooks guide](../hooks.md) ("Tracking boundary"), offering strict ownership with no build integration and no wrapper. [The React Compiler compatibility note](react-compiler-compatibility.md#the-hand-written-react-alien-signalsruntime-boundary-behaves-like-managed-output) separately measures this exact hand-written pattern's behavior under `babel-plugin-react-compiler`.
+The managed runtime already ships an exact boundary that needs no compiler: `react-alien-signals/runtime` exports the transform target (`useManagedSignals`, re-exported there as `useSignals`), which returns a scope handle closed with `finish()` / `f()`. `const store = useSignals(); try { … } finally { store.f(); }` is now documented as a public pattern in [the hooks guide](../hooks.md) ("Tracking boundary"), offering strict ownership with no build integration and no wrapper. [The React Compiler compatibility note](react-compiler-compatibility.md#the-hand-written-react-alien-signalsruntime-boundary-behaves-like-managed-output) separately measures this exact manual runtime-import boundary's behavior under `babel-plugin-react-compiler`.
 
 Advantages: exact lexical ownership from a mechanism that already exists, with no compiler and no change to component identity. The trade-offs below are properties of the pattern itself and hold regardless of documentation status: boilerplate in every opted-in component; a forgotten `finally` leaks the scope from an API that claims exactness, which is worse than a forgotten hook call; and documenting the handle commits `react-alien-signals/runtime`'s shape as a public contract rather than leaving it an internal transform implementation detail.
 

@@ -8,7 +8,7 @@ How to use the library.
 
 - [Core primitives](core-primitives.md) — `signal`, `computed`, `effect`, `batch`, `untracked`, and `deepSignal`.
 - [React hooks](hooks.md) — `useSignals`, `useSignal`, `useDeepSignal`, `useComputed`, `useSignalEffect`, and the low-level selector hooks.
-- [Rendering optimization](rendering-optimization.md) — explicit `useSignals()` tracking vs. the build plugin's automatic insertion.
+- [Rendering optimization](rendering-optimization.md) — explicit `useSignals()` tracking vs. the build plugin's automatic insertion. See the [build plugin documentation](../packages/unplugin-react-alien-signals/README.md) for complete option reference.
 - [JSX signal children and host bindings](jsx-bindings.md) — the custom JSX runtime's direct DOM bindings and their constraints.
 - [JSX control-flow utilities](control-flow.md) — `Show`, `Switch`/`Match`, `For`, and `Index`.
 

@@ -12,7 +12,7 @@ The JSX runtime direct-binds a signal passed to an allowlisted native host prop:
 - **`<select>` resync.** `bindSelectValue` adds a `MutationObserver` on the select's subtree alongside the ordinary per-value effect, so a matching `<option>` added after mount (for example when the options are themselves rendered from a signal) still gets selected, instead of the selection getting stuck empty because only the bound signal, not the DOM's `<option>` list, was being watched.
 - **IME composition safety.** `bindTextValue` tracks `compositionstart`/`compositionend` directly on the node, independent of whether the component declares its own composition handlers. A `value` write requested while composing — including one triggered by another subscriber of the same signal, not the input's own `onChange` — is deferred until composition ends instead of applied immediately, so it can no longer abort an in-progress composition.
 - **`style`, coarse whole-object form.** `applyStyle` assigns the resolved object, adds `px` to non-unitless numeric properties, writes `--custom-property` entries via `setProperty`, and clears keys dropped between renders. HTML hosts only.
-- Tested in `tests/react.test.tsx` (including the `<select>` resync, IME composition, an independent-`computed` radio group unchecking its siblings, and a StrictMode-wrapped double-invoke of the `value` binding), `tests/ssr.test.tsx`, `tests/jsx-types.tsx`.
+- Tested in `tests/react-dom-binding.test.tsx` (including the `<select>` resync, IME composition, an independent-`computed` radio group unchecking its siblings, and a StrictMode-wrapped double-invoke of the `value` binding), `tests/ssr.test.tsx`, `tests/jsx-types.tsx`.
 
 ## Not implemented — open design work
 
@@ -29,7 +29,7 @@ Every reactive UI library that direct-binds `value` runs into this. Right now it
 - Restoring a selection mid-IME-composition can itself corrupt the composition — this needs to compose *with* the existing write-skip check, not just run alongside it.
 - No prototype exists. This is unscoped beyond the bullet points above.
 
-**Until this ships:** extract the reactive prop into its own leaf component (the pattern `TaskRow` already demonstrates), so only that leaf re-renders.
+**Until this ships:** extract the reactive prop into its own leaf component (the pattern [`TaskRow` already demonstrates](../../examples/react-router/app/components/TaskRow.tsx)), so only that leaf re-renders.
 
 ### Fine-grained per-property `style` tracking
 

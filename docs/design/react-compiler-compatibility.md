@@ -74,9 +74,9 @@ CompileError: (BuildHIR::lowerStatement) Handle TryStatement without a catch cla
 
 The emitted code is byte-for-byte the transform's own output, and the runtime test updates correctly. This is a bail-out on unsupported syntax, not a compatibility guarantee: it depends on the compiler continuing to reject `try` without `catch`, and with `panicThreshold: "all_errors"` the same event fails the build instead of skipping the function — measured directly: `transformSync` throws on `reactCompiler: "off"` output and does not throw on `reactCompiler: "auto"` output, where the error is logged and the build proceeds. The opt-out directive is therefore emitted in managed mode too, and it is the only thing that carries this shape through a panic-on-all-errors build.
 
-### The hand-written `react-alien-signals/runtime` boundary behaves like managed output
+### The manual runtime-import boundary behaves like managed output
 
-The manual boundary published in [the hooks guide](../hooks.md) — `useSignals()` imported from `react-alien-signals/runtime`, closed by the author's own `try` / `finally` — was measured on its own, with step 1 of the pipeline skipped entirely. That skip is the point: this is the shape a developer writes when the build plugin is not in the build, so nothing inserts a directive for it.
+The manual runtime-import boundary published in [the hooks guide](../hooks.md) — `useSignals()` imported from `react-alien-signals/runtime`, closed by the author's own `try` / `finally` — was measured on its own, with step 1 of the pipeline skipped entirely. That skip is the point: this is the shape a developer writes when the build plugin is not in the build, so nothing inserts a directive for it.
 
 ```jsx
 import { signal } from "react-alien-signals";

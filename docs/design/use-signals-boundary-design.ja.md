@@ -46,15 +46,17 @@
 
 ### 2. managed transformを推奨する厳密な経路にする
 
+**状態: plugin経路では採用済みです。** `unplugin-react-alien-signals` build pluginはこの選択肢をdefaultにしており、`transform: "managed"` 設定で厳密な `try` / `finally` 境界を実装しています。
+
 source上の `useSignals()` 呼び出しは維持しながら、opt-inしたcomponentを厳密な `try` / `finally` scopeへ変換します。危険性を理解した利用者向けに、best-effort動作を任意で残すこともできます。
 
 利点は、source上の書き味を保ちながら字句的な所有権を得られることです。欠点は、build integrationが必要で、あらゆるcomponent形式を安全に処理しなければならず、transformの保守コストも増えることです。
 
-### 3. 手動のscope handleを文書化する
+### 3. 手動ランタイムインポート境界を文書化する
 
-**状態: この範囲の狭い用途については採用済みです。** build pluginを利用できる場合は `transform: "managed"` が引き続き主要な推奨経路であり、この手動patternはbuild変換を使わない手動利用向けに文書化された選択肢です。
+**状態: この範囲の狭い用途については採用済みです。** build pluginを利用できる場合は `transform: "managed"` が引き続き主要な推奨経路であり、手動ランタイムインポート境界はbuild変換なしに厳密な境界を得るための文書化された選択肢です。
 
-managed runtimeは、compilerなしでも厳密な境界を既に備えています。`react-alien-signals/runtime` はtransformの対象である `useManagedSignals` を(同moduleでは `useSignals` として)exportしており、これは `finish()` / `f()` で閉じるscope handleを返します。`const store = useSignals(); try { … } finally { store.f(); }` は、公開patternとして[hooksのdocs](../hooks.ja.md)(「追跡境界について」)に既に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](react-compiler-compatibility.ja.md#手書きの-react-alien-signalsruntime-境界はmanagedの出力と同じ挙動になる)では、この手書きpatternの `babel-plugin-react-compiler` 下での挙動を別途計測しています。
+managed runtimeは、compilerなしでも厳密な境界を既に備えています。`react-alien-signals/runtime` はtransformの対象である `useManagedSignals` を(同moduleでは `useSignals` として)exportしており、これは `finish()` / `f()` で閉じるscope handleを返します。`const store = useSignals(); try { … } finally { store.f(); }` は、公開patternとして[hooksのdocs](../hooks.ja.md)(「追跡境界について」)に既に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](react-compiler-compatibility.ja.md#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、この手動ランタイムインポート境界の `babel-plugin-react-compiler` 下での挙動を別途計測しています。
 
 利点は、既存の仕組みだけで字句的に厳密な所有権を得られ、compilerが不要でcomponent identityにも影響しないことです。以下の欠点は、文書化された今も変わらない、pattern自体が持つ性質です。opt-inするすべてのcomponentにboilerplateが必要になること、`finally` の書き忘れは厳密さを掲げるAPIからscopeを漏らすためhookの呼び忘れより深刻であること、そして文書化によって `react-alien-signals/runtime` の形をtransform専用の内部実装詳細ではなく公開APIとして固定したことです。
 
