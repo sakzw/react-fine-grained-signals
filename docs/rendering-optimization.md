@@ -5,7 +5,7 @@
 There are two separate optimization layers. They can be used independently:
 
 1. The runtime hooks and JSX runtime work without a build plugin.
-2. The optional `unplugin-react-alien-signals` package inserts `useSignals()` around selected components and custom hooks, with an optional exact managed boundary.
+2. The optional `unplugin-react-alien-signals` package inserts `useSignals()` around selected components and custom hooks, wrapped by default in an exact managed boundary.
 
 Neither layer makes every React component signal-driven. React still owns the component tree and scheduling; the optimization narrows the work caused by signal changes to the component or native DOM leaf that actually read the signal.
 
@@ -32,7 +32,7 @@ The custom JSX runtime provides a second, independent optimization: a signal use
 
 ## With a plugin: automatic `useSignals()` insertion
 
-The optional universal build plugin keeps Babel private: configure the integration for your bundler instead of adding a Babel config. By default it detects selected functions and only inserts a normal `useSignals()` call as their first hook. That gives the same best-effort boundary as writing the hook yourself, without a control-flow rewrite. The JSX runtime's native leaf bindings work independently of the plugin.
+The optional universal build plugin keeps Babel private: configure the integration for your bundler instead of adding a Babel config. By default it detects selected functions and wraps each in an exact `try` / `finally` render boundary, closing the tracking window synchronously at the point the component function returns. Choose `transform: "inject"` to instead insert a bare `useSignals()` call as the first hook — the same best-effort boundary as writing the hook yourself, without a control-flow rewrite. The JSX runtime's native leaf bindings work independently of the plugin.
 
 ```sh
 # Planned package name — it is not published to npm yet.
@@ -57,14 +57,15 @@ The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry
 - `"auto"` (default): additionally transform named JSX components that read `.value`, and named `useX` custom hooks that read `.value`.
 - `"all"`: additionally transform every named JSX component. Use it when a component should opt in even though the static `.value` check cannot see a direct read; arbitrary nested callbacks are not transform targets.
 
-`transform` chooses how an opted-in function is generated:
+`transform` chooses how an opted-in function is generated: `managed` (default) adds an exact try/finally boundary; `inject` adds bare `useSignals()` for best-effort opt-in.
 
-- `"inject"` (default): import normal `useSignals` from `react-alien-signals` and insert its call as the first hook. It does not emit `try` / `finally` or rewrite existing control flow.
-- `"managed"`: import from `react-alien-signals/runtime` and emit the advanced `try` / `finally` scope. Choose this only when exact separation across Suspense-aborted renders, nested server rendering during render, or concurrent roots matters.
+- `"managed"` (default): import from `react-alien-signals/runtime` and emit the exact `try` / `finally` scope, closing the render-tracking window synchronously at the point the component function returns. This covers exact separation across Suspense-aborted renders, nested server rendering during render, and concurrent roots without any extra configuration.
+- `"inject"`: import normal `useSignals` from `react-alien-signals` and insert its call as the first hook. It does not emit `try` / `finally` or rewrite existing control flow, so it keeps the same best-effort boundary as calling the hook by hand — see [the boundary design note](design/use-signals-boundary-design.md) for the sibling-misattribution limitation this can expose.
 
 ```ts
-// Opt into the exact managed boundary only where that trade-off is wanted.
-signals({ mode: "auto", transform: "managed" });
+// The default already emits the exact managed boundary; select "inject"
+// only where the plugin-free best-effort behavior is explicitly wanted.
+signals({ mode: "auto", transform: "inject" });
 ```
 
 `reactCompiler` chooses whether the plugin protects what it transformed from React Compiler:
@@ -81,10 +82,11 @@ Choose the approach based on how much build-time automation you want:
 | Goal | Recommended approach |
 | --- | --- |
 | No plugin or bundler integration | Call `useSignals()` explicitly; use the JSX runtime for native signal children and allowlisted props. |
-| Automatic insertion with the normal `useSignals()` behavior | Use the plugin with `mode: "auto"` (the default). |
-| Explicit opt-in with an exact render boundary | Use `mode: "manual"` and `transform: "managed"`. |
+| Automatic insertion with an exact managed render boundary | Use the plugin with `mode: "auto"` (the default) — `transform` also defaults to `"managed"`. |
+| Automatic insertion with the normal best-effort `useSignals()` behavior instead of the managed boundary | Use `mode: "auto"` with `transform: "inject"`. |
+| Explicit opt-in with an exact render boundary | Use `mode: "manual"`; `transform` already defaults to `"managed"`. |
 | Broad migration or components whose reads are hidden from the heuristic | Use `mode: "all"`, then opt out individual functions with `@noUseSignals` where needed. |
 
-The plugin is not required for the core primitives, hooks, or JSX signal bindings. It is a development/build-time convenience for inserting `useSignals()` or, when selected, the managed render boundary; it does not replace `useSignals()` semantics or expand the native host-prop allowlist.
+The plugin is not required for the core primitives, hooks, or JSX signal bindings. It is a development/build-time convenience for inserting `useSignals()` behind an exact managed render boundary by default, or as a bare best-effort call when `transform: "inject"` is selected; it does not replace `useSignals()` semantics or expand the native host-prop allowlist.
 
 See also: [React hooks](hooks.md), [JSX signal children and host bindings](jsx-bindings.md).

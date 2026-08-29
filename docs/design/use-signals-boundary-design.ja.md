@@ -104,3 +104,5 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 ## 現在の推奨
 
 方針を決定するまでは、変換なしの `useSignals()` と `transform: "inject"` を、signalを読むすべてのcomponentがopt-inする同期render向けの、plugin不要なbest-effort機能として扱います。厳密なrender境界が必要な場合は `transform: "managed"` を使います。この説明は現在の制約を記録するものであり、設計課題を終了させたり、兄弟componentの誤帰属を正しい動作として再定義したりするものではありません。
+
+`unplugin-react-alien-signals` は現在、bundler pluginの経路について上記の選択肢2を実装する形で `transform: "managed"` をdefaultにしています。`managed`(default)は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignals()` を追加します。pluginでbuildし `transform` を上書きしない利用者は、source側の変更なしにこの厳密な境界を得られます。この変更はこの設計検討の範囲を狭めますが、終了させるものではありません。build変換を一切使わない変換なしの `useSignals()` と、明示的に選択した `transform: "inject"` は、上記の説明どおりbest-effortのままであり、本文書のその他の選択肢と判断基準は依然として未解決のままです。

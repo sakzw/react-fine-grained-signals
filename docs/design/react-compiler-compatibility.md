@@ -126,7 +126,7 @@ The cost is real: a component that opts out of memoization is a component the co
 
 ## Does this change the recommended `transform` default?
 
-No — not on React Compiler grounds. Managed output survives the compiler only because the compiler cannot lower `try` without `catch`, which is an implementation detail that also produces a build-breaking error under `panicThreshold: "all_errors"`. With the directive emitted in both modes, `"inject"` and `"managed"` are equally compiler-safe, so the choice between them rests entirely on the boundary-exactness argument in [the `useSignals()` boundary design note](use-signals-boundary-design.md), not on this document.
+No — not on React Compiler grounds. Managed output survives the compiler only because the compiler cannot lower `try` without `catch`, which is an implementation detail that also produces a build-breaking error under `panicThreshold: "all_errors"`. With the directive emitted in both modes, `"inject"` and `"managed"` are equally compiler-safe, so the choice between them rests entirely on the boundary-exactness argument in [the `useSignals()` boundary design note](use-signals-boundary-design.md), not on this document. Separately, `unplugin-react-alien-signals` now defaults to `transform: "managed"` for that boundary-exactness reason — a change made on the grounds in that note, not on any finding in this document.
 
 ## Open questions
 

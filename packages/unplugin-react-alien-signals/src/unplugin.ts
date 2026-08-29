@@ -20,7 +20,7 @@ export interface ReactAlienSignalsOptions {
    * do not statically expose a .value read.
    */
   mode?: ReactAlienSignalsMode;
-  /** `inject` (default) adds bare useSignals(); `managed` adds an exact try/finally boundary. */
+  /** `managed` (default) adds an exact try/finally boundary; `inject` adds bare useSignals() for best-effort opt-in. */
   transform?: ReactAlienSignalsTransform;
   /**
    * `auto` (default) marks every transformed function with `"use no memo"`, so
@@ -59,7 +59,7 @@ export const reactAlienSignals = createUnplugin<ReactAlienSignalsOptions>(
       return transformReactAlienSignals(code, id, {
         importSource: options.importSource ?? "react-alien-signals",
         mode: options.mode ?? "auto",
-        transform: options.transform ?? "inject",
+        transform: options.transform ?? "managed",
         reactCompiler: options.reactCompiler ?? "auto",
       });
     },

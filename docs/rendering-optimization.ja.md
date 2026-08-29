@@ -5,7 +5,7 @@
 このライブラリには、独立して使える二つの最適化レイヤーがあります。
 
 1. runtime hooksとJSX runtimeはbuild pluginなしで動作します。
-2. 任意の `unplugin-react-alien-signals` packageは、選択したcomponentとcustom hookへ `useSignals()` を挿入し、必要に応じて厳密なmanaged boundaryも生成します。
+2. 任意の `unplugin-react-alien-signals` packageは、選択したcomponentとcustom hookへ `useSignals()` を挿入し、既定で厳密なmanaged boundaryに包みます。
 
 どちらのレイヤーも、すべてのReact componentをsignal駆動へ変えるものではありません。component treeとschedulingの所有者は引き続きReactです。この最適化は、signal変更による作業を、そのsignalを実際に読んだcomponentまたはnative DOM leafへ絞ります。
 
@@ -32,7 +32,7 @@ buildでReact Compilerを使う場合は、手書きで `useSignals()` を呼ぶ
 
 ## Pluginあり: `useSignals()` の自動挿入
 
-任意で導入できる汎用ビルドpluginは、Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。既定では対象の関数を検出し、最初のフックとして通常の `useSignals()` を挿入するだけです。制御フローを書き換えず、手書きの `useSignals()` と同じbest-effortな追跡境界を使えます。JSXランタイムのネイティブリーフ更新はpluginと独立して動作します。
+任意で導入できる汎用ビルドpluginは、Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。既定では対象の関数を検出し、それぞれを厳密な `try` / `finally` render boundaryで包みます。componentの関数がreturnする時点で、追跡windowを同期的に閉じます。代わりに手書きと同じbest-effortな追跡境界がほしい場合は、`transform: "inject"` を選んで最初のフックとして変換なしの `useSignals()` を挿入してください。制御フローは書き換えません。JSXランタイムのネイティブリーフ更新はpluginと独立して動作します。
 
 ```sh
 # 将来のパッケージ名です。まだnpmには公開していません。
@@ -57,14 +57,15 @@ export default defineConfig({
 - `"auto"`（既定）: さらに `.value` を読む名前付きJSXコンポーネントと、`.value` を読む名前付き `useX` custom hookを変換します。
 - `"all"`: さらにすべての名前付きJSXコンポーネントを変換します。直接の `.value` 読み取りを静的検出できない場合でも、コンポーネントを明示的に対象にしたいときに使います。任意のネストしたcallback自体は変換対象ではありません。
 
-`transform` で、対象にした関数の生成方法を選びます。
+`transform` で、対象にした関数の生成方法を選びます。`managed`（既定）は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignals()` を追加します。
 
-- `"inject"`（既定）: `react-alien-signals` から通常の `useSignals` をimportし、最初のフックとして呼び出しを挿入します。`try` / `finally` を出力せず、既存の制御フローも書き換えません。
-- `"managed"`: `react-alien-signals/runtime` からimportし、厳密な `try` / `finally` スコープを出力します。Suspenseで中断されたレンダー、レンダー中のネストしたSSR、複数の並行rootをまたぐ正確な分離が必要な場合だけ選んでください。
+- `"managed"`（既定）: `react-alien-signals/runtime` からimportし、厳密な `try` / `finally` スコープを出力します。componentの関数がreturnする時点でrender tracking windowを同期的に閉じるため、Suspenseで中断されたレンダー、レンダー中のネストしたSSR、複数の並行rootをまたぐ正確な分離を、追加設定なしでカバーします。
+- `"inject"`: `react-alien-signals` から通常の `useSignals` をimportし、最初のフックとして呼び出しを挿入します。`try` / `finally` を出力せず既存の制御フローも書き換えないため、手書きと同じbest-effort境界のままです。このmodeが露呈し得るsibling誤帰属の制約については[境界の設計検討docs](design/use-signals-boundary-design.ja.md)を参照してください。
 
 ```ts
-// 厳密な管理境界が必要な箇所だけ、明示的に選びます。
-signals({ mode: "auto", transform: "managed" });
+// 既定のままで厳密なmanaged boundaryを得られます。plugin不要な
+// best-effort動作が明示的に必要な場合だけ "inject" を選んでください。
+signals({ mode: "auto", transform: "inject" });
 ```
 
 `reactCompiler` で、変換した関数をReact Compilerから保護するかどうかを選びます。
@@ -81,10 +82,11 @@ build時の自動化範囲に応じて、次のように選択します。
 | 目的 | 推奨する方法 |
 | --- | --- |
 | pluginやbundler integrationを使わない | `useSignals()` を明示的に呼び、native signal childと許可済みpropにはJSX runtimeを使う |
-| 通常の `useSignals()` 動作を自動挿入する | pluginを `mode: "auto"`（既定）で使う |
-| 厳密なrender boundaryへ明示的にopt-inする | `mode: "manual"` と `transform: "managed"` を使う |
+| 厳密なmanaged render boundaryを自動挿入する | pluginを `mode: "auto"`（既定）で使う。`transform` も `"managed"` が既定 |
+| managed boundaryではなく、通常のbest-effortな `useSignals()` 動作を自動挿入する | `mode: "auto"` と `transform: "inject"` を使う |
+| 厳密なrender boundaryへ明示的にopt-inする | `mode: "manual"` を使う。`transform` はすでに `"managed"` が既定 |
 | 広範なmigration、またはheuristicから読み取りが見えないcomponent | `mode: "all"` を使い、必要な関数を `@noUseSignals` で除外する |
 
-pluginはcore primitive、hooks、JSX signal bindingに必須ではありません。開発・build時に `useSignals()` またはmanaged render boundaryを挿入するための便宜機能であり、`useSignals()` のsemanticsを置き換えたり、native host propの許可リストを拡張したりはしません。
+pluginはcore primitive、hooks、JSX signal bindingに必須ではありません。開発・build時に、既定では厳密なmanaged render boundaryで包んだ `useSignals()` を挿入し、`transform: "inject"` を選んだ場合は変換なしのbest-effortな呼び出しを挿入する便宜機能であり、`useSignals()` のsemanticsを置き換えたり、native host propの許可リストを拡張したりはしません。
 
 関連: [Reactフック](hooks.ja.md)、[JSXのsignal子要素とhost binding](jsx-bindings.ja.md)。

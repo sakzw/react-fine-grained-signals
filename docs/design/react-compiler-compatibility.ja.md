@@ -126,7 +126,7 @@ transformの既存の契約から導かれる詳細は次のとおりです。
 
 ## 推奨する `transform` のdefaultは変わるか
 
-React Compilerを理由とするなら、変わりません。managedの出力がcompilerを生き延びるのは、compilerが `catch` なしの `try` をlowerできないという実装上の詳細のためであり、それは `panicThreshold: "all_errors"` ではbuildを壊すerrorにもなります。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignals()` 境界の設計検討docs](use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。
+React Compilerを理由とするなら、変わりません。managedの出力がcompilerを生き延びるのは、compilerが `catch` なしの `try` をlowerできないという実装上の詳細のためであり、それは `panicThreshold: "all_errors"` ではbuildを壊すerrorにもなります。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignals()` 境界の設計検討docs](use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。なお別件として、`unplugin-react-alien-signals` は現在 `transform: "managed"` を既定にしています。これはこの境界の厳密さを理由とする変更であり、根拠はそちらのdocsにあります。このdocsの計測結果が根拠になっているわけではありません。
 
 ## 未解決の論点
 

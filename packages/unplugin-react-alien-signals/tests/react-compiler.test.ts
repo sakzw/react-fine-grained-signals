@@ -124,7 +124,7 @@ function applySignalsTransform(source: string, options: PipelineOptions): string
     transformReactAlienSignals(source, "Fixture.jsx", {
       importSource: "react-alien-signals",
       mode: options.mode ?? "auto",
-      transform: options.transform ?? "inject",
+      transform: options.transform ?? "managed",
       reactCompiler: options.reactCompiler ?? "auto",
     })?.code ?? source
   );
@@ -295,14 +295,16 @@ describe("React Compiler compiled output", () => {
   it("keeps a prop-held signal's read as a reactive memo dependency", () => {
     // The hazard is specific to reads the compiler classifies as non-reactive.
     // A signal reached through props is a reactive input, so the compiler emits
-    // the `.value` read as the cache key and it runs on every render.
+    // the `.value` read as the cache key and it runs on every render. This needs
+    // the inject transform: managed output is not lowerable to the compiler's IR,
+    // so nothing would be compiled and there would be no memo cache to inspect.
     const { code } = compilePipeline(
       `
 export function Counter({ counter }) {
   return <output>{counter.value}</output>;
 }
 `,
-      { reactCompiler: "off" },
+      { transform: "inject", reactCompiler: "off" },
     );
 
     expect(code).toContain("$[0] !== counter.value");
