@@ -16,7 +16,7 @@ React Compilerはこの契約を設計上破ります。componentのJSXをinstan
 
 `packages/unplugin-react-alien-signals/tests/react-compiler.test.ts` は、実アプリケーションと同じ順序でpipelineを実行します。
 
-1. このpackageのBabel transform(`transformReactAlienSignals`)を対象モードで実行する。
+1. このpackageのBabel transform(`transformReactAlienSignals`)を対象モードで実行する。ただし[手書きのruntime境界](#手書きの-react-alien-signalsruntime-境界はmanagedの出力と同じ挙動になる)では、transformが一切走らないcaseを計測するため、このstepを意図的にskipします。
 2. `babel-plugin-react-compiler` 1.0.0 をdefault設定で実行し、`logger` eventを収集する。
 3. automatic runtimeのJSX transformを実行する。
 4. moduleをメモリ上でlinkし(importは実際のライブラリへ解決されるため、module scopeは本物です)、jsdomで評価する。
@@ -72,7 +72,39 @@ export function Counter() {
 CompileError: (BuildHIR::lowerStatement) Handle TryStatement without a catch clause
 ```
 
-出力されるcodeはtransformの出力とbyte単位で同一で、runtime testも正しく更新されます。ただしこれは未対応構文によるbail-outであって互換性の保証ではありません。compilerが `catch` なしの `try` を拒否し続けることに依存しており、`panicThreshold: "all_errors"` では同じeventがfunctionのskipではなくbuildの失敗になります。したがってopt-out directiveはmanagedモードでも出力します。
+出力されるcodeはtransformの出力とbyte単位で同一で、runtime testも正しく更新されます。ただしこれは未対応構文によるbail-outであって互換性の保証ではありません。compilerが `catch` なしの `try` を拒否し続けることに依存しており、`panicThreshold: "all_errors"` では同じeventがfunctionのskipではなくbuildの失敗になります。これは直接計測しました。`reactCompiler: "off"` の出力では `transformSync` がthrowし、`reactCompiler: "auto"` の出力ではthrowせず、errorは記録されるだけでbuildは続行します。したがってopt-out directiveはmanagedモードでも出力します。全errorでpanicするbuildをこの形が通過できるのは、このdirectiveのおかげだけです。
+
+### 手書きの `react-alien-signals/runtime` 境界はmanagedの出力と同じ挙動になる
+
+[hooksのdocs](../hooks.ja.md)に載せている手動の境界、つまり `react-alien-signals/runtime` からimportした `useSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
+
+```jsx
+import { signal } from "react-alien-signals";
+import { useSignals } from "react-alien-signals/runtime";
+
+export const count = signal(0);
+
+export function Counter() {
+  const store = useSignals();
+  try {
+    return <output>{count.value}</output>;
+  } finally {
+    store.f();
+  }
+}
+```
+
+compilerが分類するのはsourceであって、その書き手ではありません。transformが生成したmanagedの出力とまったく同じeventを記録し、functionを変更せずに出力します(`react/compiler-runtime` のimportもmemo cacheもありません)。
+
+```
+CompileError: Todo: (BuildHIR::lowerStatement) Handle TryStatement without a catch clause
+```
+
+jsdomでmountすると、componentは書き込みのたびに更新されます(`0`、`1`、`2`)。`"use no memo"` を手書きしても、どちらの結果も変わりません。記録されるeventは `CompileError` のままで、同じdirectiveが `inject` 形のbodyに対して生成する `CompileSkip` にはならず、DOMの推移も同一です。bail-outは構文だけから生じています。したがってこのパターンは、bare `useSignals()` のような「無言で凍結する」ハザードにはあたりません。
+
+それでもdirectiveには意味が1つだけ残ります。`panicThreshold: "all_errors"` の場合です。directiveがなければ `transformSync` がthrowしてbuildは失敗し、あればerror eventは記録されるもののpanicは発生しません。これは上のmanagedの出力で計測した分岐とまったく同じであり、両者が同じ形だと理解すれば当然の結果です。
+
+自動化の欠落は実在しますが、「directiveが付かない」よりは狭い話です。transformは `mode: "auto"` かつ `transform: "managed"` であってもこのfileに手を加えません。functionが既に `useSignals()` を呼んでいるため、directiveを付ける地点に到達する前にskipされ、`transformReactAlienSignals` は `null` を返してfileをtransformされなかったものとして報告します。つまり `"use no memo"` の手書きは、全errorでpanicするbuildに必要なものであり、compilerが将来 `try` / `finally` をlowerできるようになったときにopt-outを有効なまま保つためのものです。
 
 ### leaf hookはcompiler-safe
 
@@ -131,7 +163,7 @@ React Compilerを理由とするなら、変わりません。managedの出力�
 ## 未解決の論点
 
 - **bundler間での実行順序。** directiveが効くのは、このpackageのtransformがcompilerのBabel passより先に走る場合だけです。Viteでは構造的に成立します。pluginは `enforce: "pre"` を宣言しており、`@vitejs/plugin-react` は通常順のpluginとしてBabelを実行するためです。その間に走るVite自身のTypeScript passは、oxcとesbuildのどちらのtransformerでもdirectiveを保持します(JSXを保持したまま `.tsx` を入力にして直接確認しました)。Webpack、Rspack、Next.jsのpipelineは未計測です。
-- **`transform: "managed"` と `panicThreshold: "all_errors"`。** directiveがあっても `TryStatement` のerror eventは記録され続けるため、全errorでpanicする設定のbuildはmanagedの出力で失敗すると考えられます。実際のbundlerでのend-to-end再現はしていません。
-- **build pluginなしで手書きした `useSignals()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。
+- **実際のbundlerでの `panicThreshold: "all_errors"`。** transformが生成した形と手書きの `try` / `finally` の形の両方について、Babelのレイヤーで計測しました。directiveがあっても `TryStatement` のerror eventは記録され続けますが、panicは止まります。`transformSync` がthrowするのはdirectiveがない場合だけです。記録され続けるeventを、bundlerのReact Compiler統合が別経路でbuildの失敗に変えるかどうかは、end-to-endでは再現していません。
+- **build pluginなしで手書きしたbare `useSignals()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。これはbare hookに限った話です。手書きの `react-alien-signals/runtime` 境界は構造的に別のcaseであり、[上記](#手書きの-react-alien-signalsruntime-境界はmanagedの出力と同じ挙動になる)で計測しています。
 - **`transform: "inject"` でapplication barrel経由でimportした `useSignals()`。** transformは呼び出しを認識してfunctionをskipし、skipしたままにするため、directiveは付きません。設定した `importSource` からの直接importか、`@useSignals` 注釈であれば対象になります。
 - **compilerのversion。** 以上はすべて1.0.0のdefault設定での挙動です。`try` / `finally` に対応したversion、module scopeの読み取りの分類を変えたversion、`"use no memo"` の扱いを変えたversionが出た場合は、このdocsの計測をやり直す必要があります。testはその計測の実行可能な形です。

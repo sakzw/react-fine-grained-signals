@@ -116,6 +116,12 @@ interface PipelineOptions {
   reactCompiler?: ReactAlienSignalsReactCompiler;
   /** Whether babel-plugin-react-compiler runs on this package's output. */
   compile?: boolean;
+  /**
+   * Whether this package's own transform runs at all. `false` measures a
+   * hand-authored source exactly as the developer wrote it, which is the point
+   * of the runtime-import cases below.
+   */
+  signalsTransform?: boolean;
   jsxImportSource?: string;
 }
 
@@ -131,7 +137,10 @@ function applySignalsTransform(source: string, options: PipelineOptions): string
   );
 }
 
-function applyReactCompiler(source: string): { code: string; events: LoggerEvent[] } {
+function applyReactCompiler(
+  source: string,
+  compilerOptions: Record<string, unknown> = {},
+): { code: string; events: LoggerEvent[] } {
   const events: LoggerEvent[] = [];
   const result = transformSync(source, {
     babelrc: false,
@@ -142,6 +151,7 @@ function applyReactCompiler(source: string): { code: string; events: LoggerEvent
       [
         reactCompiler,
         {
+          ...compilerOptions,
           logger: {
             logEvent(_filename: string | null, event: LoggerEvent) {
               events.push(event);
@@ -159,7 +169,9 @@ function compilePipeline(
   source: string,
   options: PipelineOptions = {},
 ): { code: string; events: LoggerEvent[] } {
-  const transformed = applySignalsTransform(source, options);
+  const transformed = options.signalsTransform === false
+    ? source
+    : applySignalsTransform(source, options);
   if (options.compile === false) return { code: transformed, events: [] };
   return applyReactCompiler(transformed);
 }
@@ -258,6 +270,47 @@ export function Counter() {
 }
 `;
 
+// The manual boundary pattern published in docs/hooks.md, hand-authored. It
+// never goes through this package's transform (`signalsTransform: false`), so
+// nothing inserts an opt-out directive for it -- which is exactly the case
+// under measurement.
+const handWrittenRuntimeCounter = `
+import { signal } from "react-alien-signals";
+import { useSignals } from "react-alien-signals/runtime";
+
+export const count = signal(0);
+
+export function Counter() {
+  const store = useSignals();
+  try {
+    return <output>{count.value}</output>;
+  } finally {
+    store.f();
+  }
+}
+`;
+
+// The control: the same hand-authored shape with the directive written by hand.
+const handWrittenRuntimeCounterWithDirective = `
+import { signal } from "react-alien-signals";
+import { useSignals } from "react-alien-signals/runtime";
+
+export const count = signal(0);
+
+export function Counter() {
+  "use no memo";
+
+  const store = useSignals();
+  try {
+    return <output>{count.value}</output>;
+  } finally {
+    store.f();
+  }
+}
+`;
+
+const TRY_WITHOUT_CATCH = "(BuildHIR::lowerStatement) Handle TryStatement without a catch clause";
+
 describe("React Compiler compiled output", () => {
   it("caches an unguarded inject-transformed component behind the memo sentinel", () => {
     const { code } = compilePipeline(moduleScopeCounter, {
@@ -291,6 +344,76 @@ describe("React Compiler compiled output", () => {
     // output is skipped even without the directive -- but only as a logged
     // compile error, which a `panicThreshold: "all_errors"` build turns fatal.
     expect(unguarded.events.map((event) => event.kind)).toEqual(["CompileError"]);
+  });
+
+  it("panics on managed output under panicThreshold only without the directive", () => {
+    // The directive leaves the error event logged, so it does not look like it
+    // should help -- but measured, it is what keeps the panic from firing.
+    const guarded = applySignalsTransform(moduleScopeCounter, { transform: "managed" });
+    const unguarded = applySignalsTransform(moduleScopeCounter, {
+      transform: "managed",
+      reactCompiler: "off",
+    });
+
+    expect(() => applyReactCompiler(unguarded, { panicThreshold: "all_errors" })).toThrow(
+      TRY_WITHOUT_CATCH,
+    );
+    const compiled = applyReactCompiler(guarded, { panicThreshold: "all_errors" });
+    expect(compiled.events.map((event) => event.kind)).toEqual(["CompileError"]);
+  });
+
+  it("leaves a hand-written runtime-import component uncompiled, directive or not", () => {
+    // The manual `react-alien-signals/runtime` boundary is the transform's own
+    // managed shape, hand-authored. The compiler cannot lower `try` without
+    // `catch` whoever wrote it, so it bails on the syntax alone -- the same
+    // `CompileError` the transform-generated managed output produces, and the
+    // directive does not change it into a `CompileSkip`.
+    const plain = compilePipeline(handWrittenRuntimeCounter, { signalsTransform: false });
+    const directive = compilePipeline(handWrittenRuntimeCounterWithDirective, {
+      signalsTransform: false,
+    });
+
+    for (const { code, events } of [plain, directive]) {
+      expect(code).not.toContain("react/compiler-runtime");
+      expect(code).not.toContain("memo_cache_sentinel");
+      expect(events.map((event) => event.kind)).toEqual(["CompileError"]);
+      expect(JSON.stringify(events)).toContain(TRY_WITHOUT_CATCH);
+    }
+  });
+
+  it("leaves a hand-written runtime-import component untransformed by this package", () => {
+    // The build plugin has no automation to offer here even when it is in the
+    // build: the function already calls `useSignals()`, so the transform skips
+    // it and never reaches the point where it would add the directive.
+    expect(
+      transformReactAlienSignals(handWrittenRuntimeCounter, "Fixture.jsx", {
+        importSource: "react-alien-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "auto",
+        reactImportSource: "react",
+      }),
+    ).toBeNull();
+  });
+
+  it("panics on a hand-written runtime-import component under panicThreshold", () => {
+    // `panicThreshold: "all_errors"` is the real hazard for this shape: the
+    // same bail-out that protects the runtime becomes a fatal build error.
+    expect(() =>
+      applyReactCompiler(handWrittenRuntimeCounter, { panicThreshold: "all_errors" })
+    ).toThrow(TRY_WITHOUT_CATCH);
+  });
+
+  it("survives panicThreshold when the directive is written by hand", () => {
+    // The directive does not silence the logged event, but it does keep the
+    // panic from firing -- which is the one thing writing it by hand buys.
+    const { code, events } = applyReactCompiler(handWrittenRuntimeCounterWithDirective, {
+      panicThreshold: "all_errors",
+    });
+
+    expect(code).not.toContain("react/compiler-runtime");
+    expect(events.map((event) => event.kind)).toEqual(["CompileError"]);
+    expect(JSON.stringify(events)).toContain(TRY_WITHOUT_CATCH);
   });
 
   it("keeps a prop-held signal's read as a reactive memo dependency", () => {
@@ -373,6 +496,32 @@ describe("React Compiler runtime behavior", () => {
     expect(container.textContent).toBe("0");
     write(module, 1);
     expect(container.textContent).toBe("1");
+  });
+
+  it("updates a hand-written runtime-import component compiled by the compiler", async () => {
+    // No directive anywhere: the bail-out on `try` without `catch` is enough on
+    // its own to keep every render re-reading the signal.
+    const module = await loadModule(handWrittenRuntimeCounter, { signalsTransform: false });
+    const container = mount(module.Counter);
+
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
+  });
+
+  it("updates a hand-written runtime-import component carrying the directive", async () => {
+    const module = await loadModule(handWrittenRuntimeCounterWithDirective, {
+      signalsTransform: false,
+    });
+    const container = mount(module.Counter);
+
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
   });
 
   it("updates a leaf-hook component compiled by the compiler", async () => {
