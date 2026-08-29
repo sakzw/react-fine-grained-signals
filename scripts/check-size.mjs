@@ -73,7 +73,7 @@ export default [Show, Switch, Match, For, Index];`,
 
 // Markers are string literals a minifier cannot rename, so they survive as a
 // reliable probe for whether a module made it into the bundle.
-const DEEP_SIGNAL_MARKER = "deepSignal() Map#";
+const DEEP_SIGNAL_MARKER = "deepSignal() only accepts a plain object or array root";
 const REACT_STORE_MARKER = "useSyncExternalStore";
 
 /** Code that must be absent from a bundle, proving the shake actually worked. */

@@ -29,6 +29,11 @@ jobs:
           node-version-file: .node-version
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # examples/react-router's vite.config.ts imports the plugin's built
+      # dist/vite.js directly (see that file), so it must exist before
+      # anything loads that config -- both the typecheck below and the e2e
+      # run's webServer parse it.
+      - run: pnpm build:transform
       # examples/react-router is its own isolated pnpm workspace (own
       # lockfile -- see its pnpm-workspace.yaml), so the root install above
       # doesn't cover it and it isn't typechecked by the root `pnpm
