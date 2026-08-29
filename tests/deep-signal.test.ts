@@ -523,6 +523,17 @@ describe("deepSignal", () => {
     expect(Object.getOwnPropertySymbols(state.peek().user)).toEqual([]);
   });
 
+  it("rejects prototype mutation through deep state", () => {
+    const state = deepSignal({ user: { name: "Ada" } });
+    const user = state.value.user as unknown as Record<string, unknown>;
+
+    expect(() => {
+      user.__proto__ = { polluted: true };
+    }).toThrow(TypeError);
+    expect((state.value.user as unknown as Record<string, unknown>).polluted).toBeUndefined();
+    expect(Object.getPrototypeOf(state.peek().user)).toBe(Object.prototype);
+  });
+
   it("keeps proxy invariants when a raw reference brands state behind its back", () => {
     const raw = { name: "Ada", peek: () => "Ada" };
     const state = deepSignal({ user: raw });

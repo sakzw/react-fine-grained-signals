@@ -152,6 +152,32 @@ describe("JSX control flow utilities", () => {
     expect(within(list).getByText("empty")).toBeTruthy();
   });
 
+  it("renders For's fallback for a null or undefined collection", () => {
+    const items = signal<string[] | null | undefined>(["Ada"]);
+
+    render(
+      <ul>
+        <For each={items} by={(item) => item} fallback={<li>empty</li>}>{(item) => <li>{item}</li>}</For>
+      </ul>,
+    );
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Ada"]);
+
+    act(() => {
+      items.value = null;
+    });
+    expect(screen.getByText("empty")).toBeTruthy();
+
+    act(() => {
+      items.value = undefined;
+    });
+    expect(screen.getByText("empty")).toBeTruthy();
+
+    act(() => {
+      items.value = ["Bea"];
+    });
+    expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Bea"]);
+  });
+
   it("renders Map and Set inputs after immutable collection replacement", () => {
     const tags = signal(new Set(["react"]));
     const users = signal(new Map([["ada", { name: "Ada" }]]));

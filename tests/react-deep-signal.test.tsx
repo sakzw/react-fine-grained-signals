@@ -244,6 +244,54 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     },
   );
 
+  it("surfaces the latest selector error across consecutive failures", () => {
+    const state = deepSignal({ fail: false, attempt: 0 });
+    const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    class ErrorBoundary extends Component<
+      { children: ReactNode },
+      { error: unknown }
+    > {
+      state: { error: unknown } = { error: undefined };
+
+      static getDerivedStateFromError(error: unknown) {
+        return { error };
+      }
+
+      render() {
+        return this.state.error === undefined
+          ? this.props.children
+          : <output aria-label="selector error">{(this.state.error as Error).message}</output>;
+      }
+    }
+
+    function Selection() {
+      const value = useDeepSignalValue(
+        state,
+        (current) => {
+          if (current.fail) throw new Error(`attempt ${current.attempt}`);
+          return "ready";
+        },
+        [],
+      );
+      return <output aria-label="selector value">{value}</output>;
+    }
+
+    render(<ErrorBoundary><Selection /></ErrorBoundary>);
+    expect(screen.getByLabelText("selector value").textContent).toBe("ready");
+
+    // Both writes land inside the same reactive flush, so the store evaluates
+    // a first ("attempt 0") and then a second ("attempt 1") selector error
+    // before React ever commits the boundary's fallback and unsubscribes.
+    act(() => {
+      state.value.fail = true;
+      state.value.attempt = 1;
+    });
+
+    expect(screen.getByLabelText("selector error").textContent).toBe("attempt 1");
+    expect(reactError).toHaveBeenCalled();
+  });
+
   it("reconnects a selected deep leaf after its parent object is replaced", () => {
     let state: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
 
