@@ -272,44 +272,118 @@ function isUseSignalsCallee(
   );
 }
 
-/**
- * Is `node` handed to `call` as one of its arguments, where `call` is not a
- * `memo`/`forwardRef` wrapper? Passing a component to a React wrapper is the
- * supported pattern and must stay eligible for the transform.
- */
-function isBareCallbackArgument(
-  call: NodePath<t.CallExpression>,
-  node: t.Node,
-  reactImportSource: string,
-): boolean {
-  if (isKnownComponentWrapper(call, reactImportSource)) return false;
-  return call.get("arguments").some((argument) => argument.node === node);
+// A callback handed to one of these array iteration methods runs synchronously,
+// a variable number of times, inside a single render of the function that calls
+// it -- exactly what the Rules of Hooks forbid injecting a hook into.
+//
+// The set is deliberately minimal. `map` and `flatMap` build an element per
+// item and `forEach` pushes elements into an accumulator, so these are the
+// calls whose callbacks are routinely factored out under a PascalCase name
+// (`Row`, `Item`) that would otherwise look exactly like an independent
+// component. The predicate/accumulator methods (`filter`, `reduce`, `some`,
+// `every`, `find`) are left out on purpose: their callbacks are lowercase
+// helpers that return booleans or accumulators, so they never qualify as a
+// component or a `useX` hook and are never transform candidates in the first
+// place -- including them would buy nothing while widening the chance of
+// matching an unrelated user-defined method with the same name. That direction
+// of error is the expensive one: a false positive silently denies a real
+// component its subscription, which shows up as a stale UI rather than a crash.
+const renderCallbackMethods = new Set(["map", "flatMap", "forEach"]);
+
+/** The callee and arguments of a plain or optional-chained call. */
+function getCallParts(node: t.Node): { callee: t.Node; arguments: t.Node[] } | undefined {
+  if (t.isCallExpression(node) || t.isOptionalCallExpression(node)) {
+    return { callee: node.callee, arguments: node.arguments };
+  }
+  return undefined;
 }
 
-// A function handed to another call runs a variable number of times inside one
-// render of its owner, so a hook injected into it would break hook order. Both
-// the inline definition site and a callback factored out into its own binding
-// and passed by reference later (`const Row = ...; items.map(Row)`) count.
-// Tracing deliberately stops at that one binding: a re-assigned alias
-// (`const RowAlias = Row; items.map(RowAlias)`) is not followed.
-function isRenderCallback(path: NodePath<t.Function>, reactImportSource: string): boolean {
+/**
+ * Is `callee` a member access naming one of the known iteration methods
+ * (`items.map`, `items?.flatMap`, `items["forEach"]`)? The object's runtime
+ * type cannot be known statically, so this stays a heuristic on the method
+ * name -- but a targeted one. `memo`/`forwardRef` can never match it: a bare
+ * `memo(Row)` has an identifier callee, and `React.memo(Row)` names a property
+ * that is not in the set, so React's wrappers keep their wrapped component
+ * eligible for the transform without needing a special case here.
+ */
+function isRenderCallbackCallee(callee: t.Node): boolean {
+  const member = t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+    ? callee
+    : undefined;
+  if (member === undefined) return false;
+  const property = member.property;
+  return member.computed
+    ? t.isStringLiteral(property) && renderCallbackMethods.has(property.value)
+    : t.isIdentifier(property) && renderCallbackMethods.has(property.name);
+}
+
+/**
+ * The single notion of "this reference means the function runs synchronously,
+ * repeatedly, as part of the caller's render": `callback` is an argument of a
+ * call to a known array iteration method. Both the render-callback exclusion
+ * and the read propagation in `inspectFunction` ask this same question, so
+ * they cannot drift apart.
+ */
+function isRenderCallbackInvocation(call: t.Node, callback: t.Node): boolean {
+  const parts = getCallParts(call);
+  if (parts === undefined || !isRenderCallbackCallee(parts.callee)) return false;
+  return parts.arguments.some((argument) => argument === callback);
+}
+
+/** The name other statements can reach this function's own binding by. */
+function getBindingName(path: NodePath<t.Function>): string | undefined {
+  if (path.isFunctionDeclaration() && path.node.id !== null && path.node.id !== undefined) {
+    return path.node.id.name;
+  }
   const parent = path.parentPath;
-  if (parent.isCallExpression()) {
-    return isBareCallbackArgument(parent, path.node, reactImportSource);
+  if (parent !== null && parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
+    return parent.node.id.name;
   }
-  if (parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
-    const binding = parent.scope.getBinding(parent.node.id.name);
-    if (binding === undefined) return false;
-    return binding.referencePaths.some((reference) => {
-      const referenceParent = reference.parentPath;
-      return (
-        referenceParent !== null &&
-        referenceParent.isCallExpression() &&
-        isBareCallbackArgument(referenceParent, reference.node, reactImportSource)
-      );
-    });
+  return undefined;
+}
+
+// A function handed to an array iteration method runs a variable number of
+// times inside one render of its owner, so a hook injected into it would break
+// hook order. Both the inline definition site and a callback factored out into
+// its own binding and passed by reference later count, whether that binding is
+// a `const` (`const Row = ...; items.map(Row)`) or a function declaration
+// (`function Row() {}; items.map(Row)`). Tracing deliberately stops at that one
+// binding: a re-assigned alias (`const RowAlias = Row; items.map(RowAlias)`) is
+// not followed.
+function isRenderCallback(path: NodePath<t.Function>): boolean {
+  const parent = path.parentPath;
+  if (parent !== null && isRenderCallbackInvocation(parent.node, path.node)) return true;
+
+  const name = getBindingName(path);
+  if (name === undefined || parent === null) return false;
+  const binding = parent.scope.getBinding(name);
+  if (binding === undefined) return false;
+  // Only this function's own binding may speak for it, so a same-named binding
+  // from an outer scope cannot disqualify an unrelated function.
+  if (binding.path.node !== path.node && binding.path.node !== parent.node) return false;
+  return binding.referencePaths.some((reference) =>
+    reference.parentPath !== null &&
+    isRenderCallbackInvocation(reference.parentPath.node, reference.node)
+  );
+}
+
+/** The function `name`, referenced from `origin`'s scope, is bound to. */
+function resolveReferencedFunction(
+  origin: NodePath,
+  name: string,
+): NodePath<t.Function> | undefined {
+  const binding = origin.scope.getBinding(name);
+  if (binding === undefined) return undefined;
+  const bindingPath = binding.path;
+  if (bindingPath.isFunctionDeclaration()) return bindingPath;
+  if (bindingPath.isVariableDeclarator()) {
+    const init = bindingPath.get("init");
+    if (init.isArrowFunctionExpression() || init.isFunctionExpression()) return init;
   }
-  return false;
+  // An imported callback lives in another module, which a single-file
+  // transform cannot follow.
+  return undefined;
 }
 
 function isAutomaticTransformCandidate(
@@ -319,7 +393,7 @@ function isAutomaticTransformCandidate(
   // Render callbacks are tracked by the component that invokes them. Injecting
   // a hook into the callback would violate the Rules of Hooks because callbacks
   // such as Array#map can execute a variable number of times.
-  if (isRenderCallback(path, reactImportSource)) return false;
+  if (isRenderCallback(path)) return false;
   if (path.isFunctionDeclaration()) return true;
 
   let parent = path.parentPath;
@@ -333,12 +407,18 @@ function isAutomaticTransformCandidate(
   );
 }
 
+// A nested function is skipped only when it will own its subscription, which
+// is exactly when it is a component or hook the transform can target. A named
+// function the transform cannot target -- a render callback, or one in a
+// position that is never a candidate, such as a bare call argument or a JSX
+// attribute value -- stays part of the current render owner, so its JSX and
+// `.value` reads still cause that owner to be transformed.
 function isNestedTrackingBoundary(
   path: NodePath<t.Function>,
   reactImportSource: string,
 ): boolean {
   return (
-    !isRenderCallback(path, reactImportSource) &&
+    isAutomaticTransformCandidate(path, reactImportSource) &&
     (isComponent(path, reactImportSource) || isCustomHook(path, reactImportSource))
   );
 }
@@ -347,12 +427,39 @@ function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
   reactImportSource: string,
+  // Guards the render-callback recursion below against reference cycles
+  // (mutually referencing helpers) and re-inspecting the same body twice.
+  visited: Set<t.Node> = new Set([functionPath.node]),
 ): FunctionInspection {
   const inspection: FunctionInspection = {
     containsJSX: false,
     readsValue: false,
     hasUseSignalsCall: false,
   };
+
+  // A render callback defined elsewhere in the module runs inside this
+  // function's render, but its body is not inside the AST being walked, so its
+  // reads have to be folded in explicitly. Without this, the component that
+  // owns the only subscription point sees no `.value` read at all and is left
+  // untransformed while the excluded callback is left untransformed too, and
+  // nothing subscribes.
+  const foldReferencedRenderCallbacks = (
+    call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
+  ): void => {
+    for (const argument of call.node.arguments) {
+      if (!t.isIdentifier(argument)) continue;
+      if (!isRenderCallbackInvocation(call.node, argument)) continue;
+      const target = resolveReferencedFunction(call, argument.name);
+      // A callback defined inside this function is already part of the walk.
+      if (target === undefined || target.isDescendant(functionPath)) continue;
+      if (visited.has(target.node)) continue;
+      visited.add(target.node);
+      const nested = inspectFunction(target, importSource, reactImportSource, visited);
+      if (nested.containsJSX) inspection.containsJSX = true;
+      if (nested.readsValue) inspection.readsValue = true;
+    }
+  };
+
   functionPath.traverse({
     Function(path) {
       // Components and hooks own their subscriptions. Other nested callbacks
@@ -385,11 +492,15 @@ function inspectFunction(
       }
     },
     CallExpression(path) {
+      foldReferencedRenderCallbacks(path);
       if (path.getFunctionParent() !== functionPath) return;
       const callee = path.get("callee");
       if (isUseSignalsCallee(functionPath, callee, importSource)) {
         inspection.hasUseSignalsCall = true;
       }
+    },
+    OptionalCallExpression(path) {
+      foldReferencedRenderCallbacks(path);
     },
   });
   return inspection;

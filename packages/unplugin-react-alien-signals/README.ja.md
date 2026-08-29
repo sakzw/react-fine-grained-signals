@@ -60,17 +60,50 @@ Rollup、webpack、Rspack、esbuildにはそれぞれ `/rollup`、`/webpack`、
   設定しても既存のdirect importの認識が外れることはありません。
 - `include` / `exclude`: source module IDを絞る関数です。
 
-自動検出はrender callback（`items.map(...)` のように他の呼び出しへ渡す関数）を
-変換しません。呼び出し元の1回のrenderの中で実行回数が変わるため、Rules of
-Hooksに反するからです。定義箇所にinlineで書いた場合だけでなく、変数に切り出して
-その束縛名で参照して渡す場合（`const Row = …; items.map(Row)`）も認識し、その
-signal読み取りは呼び出し元のcomponentが収集します。`memo` / `forwardRef` へ名前で
-渡す参照はcomponentとしてサポートされたパターンなので、変換対象のままです。この
-判定は意図的にその束縛1つで止まり、再代入したaliasはたどりません。つまり
-`const RowAlias = Row; items.map(RowAlias)` 経由で渡したPascalCaseのhelperは、
-componentとして扱われたままになります。判断に迷う場合は、そうしたhelperを明示的に
-保ってください。小文字で `use` 始まりでない名前にするか、実際にcomponentとして
-renderされるときにだけ手動でopt-inします。
+自動検出はrender callback（配列のiteration method `map`、`flatMap`、`forEach`
+へ渡す関数）を変換しません。呼び出し元の1回のrenderの中で実行回数が変わるため、
+Rules of Hooksに反するからです。認識するのは、定義箇所にinlineで書いた場合
+（`items.map((item) => …)`）、変数に切り出してその束縛名で参照して渡す場合
+（`const` の `const Row = …; items.map(Row)` でも、function宣言の
+`function Row() {…}` … `items.map(Row)` でも）、およびそれぞれのoptional
+chaining形（`items?.map(Row)`）です。こうしたcallback自体は変換せず、そのJSXと
+`.value` 読み取りは呼び出し元のcomponentが収集します。callbackが同じmodule内の
+別の場所で定義されている場合も同様で、呼び出し元componentの本体自体がsignalを
+読んでいなくても、そのcomponentが変換対象になります。
+
+対象objectの実行時の型はbuild時にはわからないため、判定材料はmethod名だけです。
+そのため認識する集合は意図的に最小限にしています。`map` と `flatMap` は要素ごとに
+elementを組み立て、`forEach` は蓄積用の配列へelementを積む呼び出しで、callbackを
+component風の名前で切り出す典型がこの3つです。述語・畳み込み系（`filter`、
+`reduce`、`find`、`some`、`every`）は意図的に除外しています。これらのcallbackは
+そもそも変換対象にならない小文字のhelperであり、含めても得るものがない一方、
+同名の無関係なmethodに誤って一致する余地だけが広がるからです。しかもその向きの
+誤りのほうが高くつきます。実在のcomponentからsubscriptionを無言で奪うためです。
+したがって、それ以外の呼び出しへ名前で渡す参照は通常のcomponent登録として扱い、
+変換対象のままにします。従来どおりの `memo(Row)` / `forwardRef(Row)` に加えて、
+`observer(Row)` や `connect(…)(Row)` のようなサードパーティのwrapperも同じです。
+これらが返すcomponentは、Reactが独自のfiberとして、独自のhook contextで
+instance化します。
+
+この検出には既知の制約が3つあります。
+
+- 再代入したaliasはたどりません。`const RowAlias = Row; items.map(RowAlias)`
+  経由で渡したPascalCaseのhelperは、componentとして扱われたままになります。
+- JSXのprop値として渡すrender callbackは認識しません。`<Grid renderItem={Row} />`
+  は、`Grid` が1回のrenderで `renderItem(item)` を可変回数呼ぶ場合（render prop。
+  hook挿入は安全ではありません）でも、`Row` を独立したcomponentとしてinstance化
+  する場合（hook挿入こそが更新を成立させます）でも構文が同一で、そのファイルだけ
+  では区別できません。そのため `Row` は、単独で変換条件を満たすなら自分のhookを
+  持ったままになります。呼び出し箇所にcallbackをinlineで書くか
+  （`<Grid renderItem={(item) => <li>{item.value}</li>} />`。上記のinline検出が
+  呼び出し元componentに正しく帰属させます）、参照先の関数に `@useSignals` /
+  `@noUseSignals` コメントで意図を明示してください。
+- 別moduleからimportしたcallbackはたどりません。変換は1ファイルずつ処理する
+  ためです。
+
+判断に迷う場合は、そうしたhelperを明示的に保ってください。小文字で `use`
+始まりでない名前にするか、実際にcomponentとしてrenderされるときにだけ手動で
+opt-inします。
 
 `memo` / `forwardRef` の自動認識は、`"react"` または `reactImportSource` から
 のdirect importだけに一致します。ローカルのbarrelやre-export module経由の

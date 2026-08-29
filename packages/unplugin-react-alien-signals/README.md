@@ -93,15 +93,51 @@ export default {
 - `include` / `exclude`: functions that filter source module IDs.
 
 Automatic detection never transforms a render callback — a function handed to
-another call, such as `items.map(...)` — because it runs a variable number of
-times inside one render of its owner, which the Rules of Hooks forbid. It is
-recognized both inline at its definition site and when it is factored out and
-referenced directly by its own binding (`const Row = …; items.map(Row)`); its
-signal reads are collected by the component that invokes it instead. A
-reference passed to `memo` / `forwardRef` is the supported component pattern
-and stays eligible. The check deliberately stops at that one binding and does
-not follow a re-assigned alias, so a PascalCase helper reached through
-`const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
+one of the array iteration methods `map`, `flatMap`, or `forEach` — because it
+runs a variable number of times inside one render of its owner, which the Rules
+of Hooks forbid. Recognition covers the inline definition site
+(`items.map((item) => …)`), a callback factored out and referenced by its own
+binding, whether that binding is a `const` (`const Row = …; items.map(Row)`) or
+a function declaration (`function Row() {…}` … `items.map(Row)`), and the
+optional-chained form of either (`items?.map(Row)`). Such a callback is left
+alone, and its JSX and `.value` reads are collected by the component that
+invokes it — including when the callback is defined elsewhere in the same
+module, so that component is transformed even when its own body reads no
+signal.
+
+The method name is the whole signal here, because a build-time transform cannot
+know the object's runtime type. The recognized set is deliberately minimal:
+`map` and `flatMap` build an element per item and `forEach` pushes elements into
+an accumulator, which are the calls whose callbacks are routinely factored out
+under a component-shaped name. Predicate and accumulator methods (`filter`,
+`reduce`, `find`, `some`, `every`) are excluded on purpose — their callbacks are
+lowercase helpers that are never transform targets anyway, so including them
+would only widen the chance of matching an unrelated method of the same name,
+and that direction of error is the expensive one: it silently denies a real
+component its subscription. A reference passed to any other call is therefore
+ordinary component registration and stays eligible — `memo(Row)` and
+`forwardRef(Row)` as before, and equally third-party wrappers such as
+`observer(Row)` or `connect(…)(Row)`, where React instantiates the returned
+component as its own fiber with its own hooks.
+
+This detection has three known limitations:
+
+- A re-assigned alias is not followed, so a PascalCase helper reached through
+  `const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
+- A render callback passed as a JSX prop value is not recognized.
+  `<Grid renderItem={Row} />` is syntactically identical whether `Grid` calls
+  `renderItem(item)` a variable number of times per render (a render prop,
+  where hook injection is unsafe) or instantiates `Row` as its own component
+  (where hook injection is what makes it update), and nothing in the file says
+  which — so `Row` keeps its own hook whenever it is independently eligible.
+  Prefer inlining the callback at the call site
+  (`<Grid renderItem={(item) => <li>{item.value}</li>} />`), which the inline
+  detection above already attributes to the owning component, or state the
+  intent explicitly on the referenced function with a `@useSignals` /
+  `@noUseSignals` comment.
+- A callback imported from another module is not followed, because the
+  transform sees one file at a time.
+
 When in doubt, keep such helpers explicit: name them lowercase and without a
 `use` prefix, or opt them in manually only when they are genuinely rendered as
 components.

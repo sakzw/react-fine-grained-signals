@@ -433,6 +433,159 @@ describe("managed render transform", () => {
     },
   );
 
+  it.each(["auto", "all"] as const)(
+    "%s mode tracks a function declaration passed by reference to an iteration method",
+    (mode) => {
+      const output = compile(`
+        const items = [{ value: "one" }];
+        function Row(item) { return <li>{item.value}</li>; }
+        export function List() { return <ul>{items.map(Row)}</ul>; }
+      `, mode);
+
+      // Row runs once per item inside List's single render, so injecting a hook
+      // into it breaks hook order even though it is a function declaration
+      // rather than a `const` binding.
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
+      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    },
+  );
+
+  it("folds a separately defined render callback's reads into the component that runs it", () => {
+    // List's own body contains neither a `.value` read nor JSX: both live in
+    // Row, which List invokes once per item. Without folding Row's inspection
+    // into List's, nothing in the module would subscribe.
+    const output = compile(`
+      const items = [{ value: "one" }];
+      const Row = (item) => <li>{item.value}</li>;
+      export function List() { return items.map(Row); }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("stops folding at a cycle between mutually referenced render callbacks", () => {
+    const output = compile(`
+      const items = [{ value: 1 }];
+      function First(item) { return <li>{items.map(Second)}</li>; }
+      function Second(item) { return <li>{items.map(First)}{item.value}</li>; }
+      export function List() { return <ul>{items.map(First)}</ul>; }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/function First\(item\) \{\s+return <li>/);
+    expect(output).toMatch(/function Second\(item\) \{\s+return <li>/);
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("recognizes optional-chained iteration calls", () => {
+    const output = compile(`
+      const rows = [{ value: 1 }];
+      function Row(item) { return <li>{item.value}</li>; }
+      export function List() { return <ul>{rows?.map(Row)}</ul>; }
+      export function Inline({ items }) {
+        const Cell = (item) => <li>{item.value}</li>;
+        return <ul>{items?.map(Cell)}</ul>;
+      }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
+    expect(output).toContain("const Cell = item => <li>{item.value}</li>;");
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/function Inline\(\{[^}]*\}\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("recognizes flatMap and forEach alongside map", () => {
+    const output = compile(`
+      const items = [{ value: 1 }];
+      function Row(item) { return <li>{item.value}</li>; }
+      export function Flat() { return <ul>{items.flatMap(Row)}</ul>; }
+      export function Each() { const out = []; items.forEach(Row); return <ul>{out}</ul>; }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
+    expect(output).toMatch(/function Flat\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/function Each\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("keeps predicate iteration methods out of the recognized set", () => {
+    // `filter`/`find`/`some` take predicates, not element renderers, so a
+    // component-shaped callback handed to one is far likelier to be a call on
+    // an unrelated user-defined method than a genuine render callback. Keeping
+    // the set minimal avoids denying a real component its subscription.
+    const output = compile(`
+      const items = [{ value: 1 }];
+      const Row = (item) => <li>{item.value}</li>;
+      export const kept = items.filter(Row);
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("keeps a component referenced by a third-party HOC eligible", () => {
+    // `observer(Row)` / `connect(...)(Row)` register an independent component
+    // that React instantiates as its own fiber, so Row must keep its own hook.
+    const output = compile(`
+      const count = { value: 1 };
+      function observer(Component) { return Component; }
+      function connect() { return (Component) => Component; }
+      const Row = () => <li>{count.value}</li>;
+      const Cell = () => <li>{count.value}</li>;
+      export default observer(Row);
+      export const ConnectedCell = connect()(Cell);
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/const Cell = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toContain("export default observer(Row);");
+    expect(output).toContain("export const ConnectedCell = connect()(Cell);");
+  });
+
+  it("keeps forwardRef and namespaced memo references from counting as render callbacks", () => {
+    const output = compile(`
+      import * as React from "react";
+      import { forwardRef } from "react";
+      const count = { value: 1 };
+      const Row = () => <li>{count.value}</li>;
+      const Ref = (props, ref) => <li ref={ref}>{count.value}</li>;
+      export const MemoRow = React.memo(Row);
+      export const RefRow = forwardRef(Ref);
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/const Ref = \(props, ref\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("documents the JSX render-prop limitation and the inline workaround", () => {
+    // A bare identifier in a JSX attribute is syntactically identical whether
+    // the receiver instantiates it as a component or calls it per item, so a
+    // referenced callback keeps its own hook (known limitation), while the
+    // recommended inline form is collected by the component that owns it.
+    const referenced = compile(`
+      const count = { value: 1 };
+      const Row = (item) => <li>{item.value}</li>;
+      export function List() { return <Grid renderItem={Row} />; }
+    `, "auto");
+    const inline = compile(`
+      export function List() {
+        return <Grid renderItem={(item) => <li>{item.value}</li>} />;
+      }
+    `, "auto");
+
+    expect(referenced.match(/finally/g)).toHaveLength(1);
+    expect(referenced).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(inline.match(/finally/g)).toHaveLength(1);
+    expect(inline).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(inline).toContain("renderItem={item => <li>{item.value}</li>}");
+  });
+
   it("still transforms a component referenced by name into memo", () => {
     const output = compile(`
       import { memo } from "react";
