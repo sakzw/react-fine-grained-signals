@@ -137,6 +137,44 @@ describe("Direct DOM binding", () => {
     expect(box.style.getPropertyValue("--gap")).toBe("");
   });
 
+  it("correctly applies unitless CSS properties for numeric values", () => {
+    const style = signal<Record<string, string | number>>({
+      lineHeight: 1.2,
+      opacity: 0.5,
+      width: 10,
+      WebkitLineClamp: 2,
+      "--size": 2,
+    });
+
+    render(<div aria-label="unitless properties box" style={style} />);
+    const box = screen.getByLabelText("unitless properties box");
+    expect(box.style.lineHeight).toBe("1.2");
+    expect(box.style.opacity).toBe("0.5");
+    expect(box.style.width).toBe("10px");
+    expect((box.style as unknown as Record<string, string>)["WebkitLineClamp"]).toBe("2");
+    expect(box.style.getPropertyValue("--size")).toBe("2");
+  });
+
+  it("respects unitless rule for WebkitLineClamp and other unitless properties in signal-driven style updates", () => {
+    const style = signal<Record<string, string | number>>({ WebkitLineClamp: 2, lineHeight: 1.5 });
+
+    render(<div aria-label="webkit line clamp box" style={style} />);
+    const box = screen.getByLabelText("webkit line clamp box");
+    // Verify WebkitLineClamp is initially set correctly (no "px" appended)
+    expect((box.style as unknown as Record<string, string>)["WebkitLineClamp"]).toBe("2");
+    // Verify lineHeight is initially set correctly (no "px" appended)
+    expect(box.style.lineHeight).toBe("1.5");
+
+    // Update unitless properties and verify they maintain unitless format
+    act(() => {
+      style.value = { lineHeight: 1.8, scale: 2 };
+    });
+    expect(box.style.lineHeight).toBe("1.8");
+    expect(box.style.scale).toBe("2");
+    // WebkitLineClamp should be cleared from previous value
+    expect((box.style as unknown as Record<string, string>)["WebkitLineClamp"]).toBe("");
+  });
+
   it("binds a signal directly to a text input's value without React controlling it", () => {
     const text = signal("initial");
 
