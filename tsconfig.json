@@ -10,6 +10,7 @@
       "react-alien-signals/jsx-runtime": ["./src/jsx-runtime.ts"],
       "react-alien-signals/jsx-dev-runtime": ["./src/jsx-dev-runtime.ts"]
     },
+    "types": ["node"],
     "strict": true,
     "skipLibCheck": true,
     "verbatimModuleSyntax": true,

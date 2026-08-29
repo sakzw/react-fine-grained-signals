@@ -4,10 +4,6 @@
 import { act, Suspense } from "react";
 import { hydrateRoot } from "react-dom/client";
 import { renderToPipeableStream, renderToString } from "react-dom/server";
-// This workspace has no @types/node dependency, so "node:stream" has no
-// resolvable module declaration for the type checker even though Node
-// itself provides it at runtime -- only the type-level import is affected.
-// @ts-expect-error -- "node:stream" has no type declarations without @types/node
 import { Writable } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -363,7 +359,7 @@ describe("SSR and hydration", () => {
 
     const html = await new Promise<string>((resolvePromise, reject) => {
       const writable = new Writable({
-        write(chunk: { toString(): string }, _encoding: unknown, callback: (error?: unknown) => void) {
+        write(chunk, _encoding, callback) {
           chunks.push(chunk.toString());
           callback();
         },

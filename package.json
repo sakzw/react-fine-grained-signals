@@ -66,6 +66,7 @@
     "@playwright/test": "^1.62.1",
     "@preact/signals-core": "1.14.4",
     "@testing-library/react": "^16.3.2",
+    "@types/node": "^24.13.3",
     "@types/react": "^19.2.8",
     "@types/react-dom": "^19.2.4",
     "alien-signals": "^3.2.1",
