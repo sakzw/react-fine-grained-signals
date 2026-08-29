@@ -24,7 +24,20 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
       - run: pnpm typecheck
-      - run: pnpm test
+      # Runs both suites with V8 coverage instrumentation and prints the
+      # per-file summary to the log; each vitest.config.ts's
+      # coverage.thresholds gates the run on a real regression.
+      - run: pnpm test:coverage
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: coverage-report
+          path: |
+            coverage/
+            packages/unplugin-react-fine-grained-signals/coverage/
+          if-no-files-found: warn
+          retention-days: 14
       - run: pnpm build
       # Runs against the build above rather than `pnpm size`, which would rebuild.
       - run: node scripts/check-size.mjs

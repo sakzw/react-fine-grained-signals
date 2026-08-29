@@ -41,8 +41,17 @@ export default defineConfig({
     include: ["tests/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",
-      reporter: ["text", "html"],
+      reporter: ["text", "html", "lcov"],
       include: ["src/**"],
+      // Measured baseline (2026-08-30): statements 94.67%, branches 86.38%,
+      // functions 98.97%, lines 96.26%. Thresholds sit a modest margin below
+      // that so CI catches real regressions without flaking on minor diffs.
+      thresholds: {
+        statements: 92,
+        branches: 83,
+        functions: 96,
+        lines: 94,
+      },
     },
   },
 });
