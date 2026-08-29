@@ -14,8 +14,51 @@ const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 const resolvedPromise = Promise.resolve();
 
+/**
+ * Module-global state backing the managed/best-effort render-scope
+ * boundary. At most one `RenderStore` is "current" at a time: a component's
+ * `.start()` (called at the top of `useSignalsImplementation`, before it
+ * reads any signals) opens it, and closing it is what stops later `.value`
+ * reads from being attributed to it — every read after a close belongs to
+ * whichever scope opens next, not a leftover one from earlier in the render
+ * pass.
+ *
+ * A scope is closed by whichever of these three paths reaches it first:
+ *
+ *  1. `start()`'s own pre-emptive close (see `shouldCloseCurrentScope`
+ *     below) — the next component's `start()` finds a still-open scope
+ *     that isn't a legitimate managed/managed nesting and force-closes it
+ *     before opening its own, so a scope that outlives its owner's render
+ *     can't leak reads into a sibling or the next component down.
+ *  2. The commit-phase layout effect (`useIsomorphicLayoutEffect` in
+ *     `useSignalsImplementation`) — the normal, on-time close: the owning
+ *     component's own scope, if nothing already closed it, is finished
+ *     right before `store.commit()` subscribes to whatever it read.
+ *  3. The microtask scheduled by `ensureFinalCleanup` — the fallback for an
+ *     unmanaged (`useSignals()`) scope that reaches neither path above, for
+ *     example a component that reads signals during render but then
+ *     throws, suspends, or is otherwise abandoned before committing.
+ *     Managed scopes (`useManagedSignals()`) opt out of this fallback (see
+ *     the `!managed` guard in `useSignalsImplementation`) because their
+ *     owner is contractually responsible for calling `finish()`/`f()`
+ *     itself, synchronously, before returning.
+ */
 let currentStore: RenderStore | undefined;
 let finalCleanupScheduled = false;
+
+/**
+ * The nesting rule for path 1 above: a still-open scope is left alone only
+ * when both it and the incoming `next` scope are managed. A managed scope's
+ * owner is contractually responsible for closing it itself, so two managed
+ * scopes overlapping is tolerated as a transient nesting rather than treated
+ * as one of them having been abandoned. Anything else overlapping a
+ * still-open scope — `next` is unmanaged, or the still-open scope itself is
+ * unmanaged — is not a rule-following nesting, so the leftover scope is
+ * force-closed before `next` starts.
+ */
+function shouldCloseCurrentScope(next: RenderStore, current: RenderStore): boolean {
+  return !next.managed || !current.managed;
+}
 
 function cleanupTrailingStore(): void {
   finalCleanupScheduled = false;
@@ -72,7 +115,8 @@ class RenderStore implements RenderCollector {
   }
 
   start(): void {
-    if (currentStore !== undefined && (!this.managed || !currentStore.managed)) {
+    // See `shouldCloseCurrentScope` above for the nesting rule this enforces.
+    if (currentStore !== undefined && shouldCloseCurrentScope(this, currentStore)) {
       currentStore.finish();
     }
     const previousStore = currentStore;

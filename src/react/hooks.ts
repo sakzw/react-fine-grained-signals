@@ -40,10 +40,57 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
 }
 
 /**
+ * Shared `useSyncExternalStore` subscription wiring for a signal-backed
+ * store. On `subscribe`, starts an `effect()` that reruns `onEvaluate` on
+ * every relevant signal write and notifies React exactly when it reports a
+ * change; returns that effect's own dispose as the unsubscribe. The very
+ * first synchronous run — made while `subscribe` itself is still
+ * establishing the effect — never notifies, matching how each caller here
+ * already behaved: `useSyncExternalStore` performs its own "did the
+ * snapshot change since render" check independently of anything a `notify`
+ * call does, so a store's own subscribe-time run does not need to report on
+ * that window too.
+ *
+ * `getSnapshot` is intentionally not this helper's concern — the caller
+ * wires its own, whether that means recomputing fresh each call
+ * (`useSignalValue`) or returning a cached result (the deep-selector store).
+ *
+ * An exception thrown by `onEvaluate` is swallowed here and treated as a
+ * change worth notifying about. This mirrors `useSignalValue`'s prior
+ * inline behavior: a computed that starts failing must still trigger a
+ * re-render so `getSnapshot`'s own unguarded read can rethrow into an Error
+ * Boundary, rather than leaving this background effect's throw to escape
+ * into whatever write triggered the re-run. Callers whose `onEvaluate`
+ * already captures errors into its own return value (the deep-selector
+ * store) never hit this path.
+ */
+function createSignalStore(onEvaluate: () => boolean): (notify: () => void) => () => void {
+  return (notify: () => void): (() => void) => {
+    let isInitialRun = true;
+    return effect(() => {
+      let changed: boolean;
+      try {
+        changed = onEvaluate();
+      } catch {
+        changed = true;
+      }
+      if (isInitialRun) {
+        isInitialRun = false;
+        return;
+      }
+      if (changed) notify();
+    });
+  };
+}
+
+/**
  * Holds a selector result outside the reactive graph. In particular, a
  * selector error must not escape from the signal write that caused a reactive
  * re-evaluation: React needs to observe it during its next render so an Error
- * Boundary can handle it.
+ * Boundary can handle it. Unlike `useSignalValue`, errors are modeled as an
+ * explicit `SelectorResult` union rather than swallowed and re-thrown from a
+ * fresh read: `getSnapshot` below must return the same cached result the
+ * subscribed effect last settled on, not re-run `selector` on every render.
  */
 function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   source: DeepSignal<T>,
@@ -60,8 +107,6 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   };
 
   let result = evaluate();
-  let dispose: (() => void) | undefined;
-  let listener: (() => void) | undefined;
 
   const hasChanged = (next: SelectorResult<S>): boolean => {
     if (result.kind !== next.kind) return true;
@@ -73,20 +118,17 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   };
 
   return {
-    subscribe(notify: () => void): () => void {
-      listener = notify;
-      dispose = effect(() => {
-        const next = evaluate();
-        if (!hasChanged(next)) return;
-        result = next;
-        listener?.();
-      });
-      return () => {
-        listener = undefined;
-        dispose?.();
-        dispose = undefined;
-      };
-    },
+    // Layers Object.is diffing on top of the shared subscribe/notify core:
+    // an update to the deep signal reruns `selector`, but only a result that
+    // actually differs from the last one (by Object.is, same rule the
+    // `getSnapshot`-level comparison in `useSyncExternalStore` itself uses)
+    // is worth a React re-render.
+    subscribe: createSignalStore(() => {
+      const next = evaluate();
+      if (!hasChanged(next)) return false;
+      result = next;
+      return true;
+    }),
     getSnapshot(): S {
       if (result.kind === "error") throw result.error;
       return result.value;
@@ -208,33 +250,21 @@ export function useSignalEffect(
  *
  * The immediate run made by the public `effect` API establishes dependency
  * tracking only. It intentionally does not notify React: `useSyncExternalStore`
- * owns the initial consistency check after subscribing.
+ * owns the initial consistency check after subscribing. See `createSignalStore`
+ * for the shared subscribe/notify wiring, including why a read that throws
+ * (a computed whose cached error `.value` rethrows) is swallowed in the
+ * background effect and left for `getSnapshot` to rethrow instead.
  */
 export function useSignalValue<T>(source: ReadonlySignal<T>): T {
   const subscribe = useCallback(
-    (notify: () => void) => {
-      let isInitialRun = true;
-
-      return effect(() => {
-        try {
-          // The read (not this catch) is what registers the alien-signals
-          // dependency link, so it still happens even when `source` is a
-          // computed whose cached error `.value` rethrows. Swallowing it here
-          // keeps this background effect alive and its throw from escaping
-          // into whatever write triggered the re-run; `getSnapshot` performs
-          // the same read again during React's render, where the rethrow
-          // reaches an Error Boundary instead.
-          source.value;
-        } catch {
-          // Handled by getSnapshot on the next render; see above.
-        }
-        if (isInitialRun) {
-          isInitialRun = false;
-        } else {
-          notify();
-        }
-      });
-    },
+    createSignalStore(() => {
+      // The read (not its result) is what registers the alien-signals
+      // dependency link, so it still happens even though the return value
+      // here is constant: every non-initial run of this effect is reported
+      // as a change, exactly as before.
+      source.value;
+      return true;
+    }),
     [source],
   );
 

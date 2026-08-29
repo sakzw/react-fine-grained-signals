@@ -26,6 +26,30 @@ function isControlledTwoWayProp(tagName: string, name: string): boolean {
   return false;
 }
 
+/**
+ * The concrete strategy a direct binding is mounted with. Resolved once, in
+ * `transformProps`, from the JSX tag string that is already on hand at
+ * element-creation time — `"select"` needs `bindSelectValue`'s MutationObserver
+ * workaround, `"input"`/`"textarea"` need `bindTextValue`'s IME handling, and
+ * `<input checked>` is the only other two-way case — so the ref callback later
+ * only has to dispatch on this already-known value instead of re-deriving the
+ * same facts from the mounted DOM node's `tagName`.
+ */
+type BindingKind = "style" | "select-value" | "text-value" | "checked" | "prop";
+
+function resolveBindingKind(tagName: string, name: string): BindingKind {
+  if (name === "style") return "style";
+  if (isControlledTwoWayProp(tagName, name)) {
+    if (name === "value") return tagName === "select" ? "select-value" : "text-value";
+    return "checked";
+  }
+  return "prop";
+}
+
+function isTwoWayBindingKind(kind: BindingKind): boolean {
+  return kind === "select-value" || kind === "text-value" || kind === "checked";
+}
+
 // The uncontrolled counterpart React reads only at mount, used in place of the
 // controlled prop so React's own input reconciliation never re-asserts a stale
 // signal snapshot over what the direct-binding effect just wrote.
@@ -81,7 +105,7 @@ const NON_HTML_HOST_ELEMENTS = new Set<string>([...SVG_ELEMENTS, ...MATHML_ELEME
 
 type SignalChild = React.ReactNode | ReadonlySignal<SignalChild> | readonly SignalChild[];
 type HostProps = Record<string, unknown>;
-type Binding = readonly [name: string, source: ReadonlySignal<unknown>];
+type Binding = readonly [name: string, source: ReadonlySignal<unknown>, kind: BindingKind];
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
@@ -170,6 +194,41 @@ function readBoundSignal<T>(
     }
     return { ok: false };
   }
+}
+
+/**
+ * Reads via `readBoundSignal` and, on success, hands the value to `apply`; a
+ * failed read is already reported by `readBoundSignal`, so this just skips
+ * the write. Shared by every read-and-apply call site below, including the
+ * one that isn't itself an `effect()` — the MutationObserver-triggered
+ * re-apply in `bindSelectValue`, which reads outside the reactive graph via
+ * `.peek()`.
+ */
+function applyBoundSignal<T>(
+  read: () => T,
+  apply: (value: T) => void,
+  episode: FailureEpisode,
+): void {
+  const result = readBoundSignal(read, episode);
+  if (result.ok) apply(result.value);
+}
+
+/**
+ * The common case built on `applyBoundSignal`: subscribe to `source.value`
+ * inside an `effect()` and re-run `apply` whenever it changes. Centralizes
+ * the pattern that used to be hand-rolled at each binding site — declare an
+ * `episode`, then `effect(() => { const read = readBoundSignal(...); if
+ * (!read.ok) return; <apply the value> })` — so the read-and-skip contract
+ * can't drift between sites. An `episode` may be passed in to share a
+ * failure latch with a sibling read site (see `bindSelectValue`); otherwise
+ * each binding gets its own.
+ */
+function createBindingEffect<T>(
+  source: ReadonlySignal<T>,
+  apply: (value: T) => void,
+  episode: FailureEpisode = { hasReported: false },
+): () => void {
+  return effect(() => applyBoundSignal(() => source.value, apply, episode));
 }
 
 function setAttribute(node: Element, name: string, value: unknown): void {
@@ -271,15 +330,10 @@ function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unkno
   // MutationObserver-triggered failure are the same underlying computed
   // erroring, so they report as one episode, not two.
   const episode: FailureEpisode = { hasReported: false };
-  const stopEffect = effect(() => {
-    const read = readBoundSignal(() => source.value, episode);
-    if (!read.ok) return;
-    setControlledProp(select, "value", read.value);
-  });
+  const apply = (value: unknown) => setControlledProp(select, "value", value);
+  const stopEffect = createBindingEffect(source, apply, episode);
   const observer = new MutationObserver(() => {
-    const read = readBoundSignal(() => source.peek(), episode);
-    if (!read.ok) return;
-    setControlledProp(select, "value", read.value);
+    applyBoundSignal(() => source.peek(), apply, episode);
   });
   observer.observe(select, { childList: true, subtree: true });
   return () => {
@@ -318,19 +372,17 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
   node.addEventListener("compositionstart", onCompositionStart);
   node.addEventListener("compositionend", onCompositionEnd);
 
-  const stopEffect = effect(() => {
-    // A failed read must bail out here, before anything below touches
-    // `pending`/`hasPending` — a stale or garbage value must never latch in.
-    const read = readBoundSignal(() => source.value, episode);
-    if (!read.ok) return;
-    const next = read.value;
+  // A failed read must bail out before this touches `pending`/`hasPending` —
+  // a stale or garbage value must never latch in. `createBindingEffect`
+  // already skips `apply` on a failed read, so that guard lives there once.
+  const stopEffect = createBindingEffect(source, (next) => {
     if (composing) {
       hasPending = true;
       pending = next;
       return;
     }
     setControlledProp(node, "value", next);
-  });
+  }, episode);
 
   return () => {
     stopEffect();
@@ -416,36 +468,23 @@ function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) 
     }
 
     const userCleanup = applyRef(userRef, node);
-    const stop = bindings.map(([name, source]) => {
-      if (name === "style") {
-        let previousKeys: readonly string[] = [];
-        const episode: FailureEpisode = { hasReported: false };
-        return effect(() => {
-          const read = readBoundSignal(() => source.value, episode);
-          if (!read.ok) return;
-          previousKeys = applyStyle(node as HTMLElement, read.value, previousKeys);
-        });
-      }
-      if (isControlledTwoWayProp(node.tagName.toLowerCase(), name)) {
-        if (name === "value") {
-          if (node.tagName === "SELECT") {
-            return bindSelectValue(node as HTMLSelectElement, source);
-          }
-          return bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source);
+    const stop = bindings.map(([name, source, kind]) => {
+      switch (kind) {
+        case "style": {
+          let previousKeys: readonly string[] = [];
+          return createBindingEffect(source, (value) => {
+            previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
+          });
         }
-        const episode: FailureEpisode = { hasReported: false };
-        return effect(() => {
-          const read = readBoundSignal(() => source.value, episode);
-          if (!read.ok) return;
-          setControlledProp(node, name, read.value);
-        });
+        case "select-value":
+          return bindSelectValue(node as HTMLSelectElement, source);
+        case "text-value":
+          return bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source);
+        case "checked":
+          return createBindingEffect(source, (value) => setControlledProp(node, name, value));
+        case "prop":
+          return createBindingEffect(source, (value) => setDomProp(node, name, value));
       }
-      const episode: FailureEpisode = { hasReported: false };
-      return effect(() => {
-        const read = readBoundSignal(() => source.value, episode);
-        if (!read.ok) return;
-        setDomProp(node, name, read.value);
-      });
     });
 
     let isDisposed = false;
@@ -523,8 +562,9 @@ function transformProps(type: React.ElementType, input: unknown): { props: HostP
   if (isHtmlHost) {
     for (const [name, value] of Object.entries(props)) {
       if (isReactiveHostProp(name, value)) {
-        bindings.push([name, value]);
-        if (isControlledTwoWayProp(type as string, name)) {
+        const kind = resolveBindingKind(type as string, name);
+        bindings.push([name, value, kind]);
+        if (isTwoWayBindingKind(kind)) {
           // Leaving the controlled prop in place would keep the element
           // React-controlled, so an unrelated re-render of the owner would
           // re-diff and potentially re-write this prop — work relying on an
