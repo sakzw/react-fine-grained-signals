@@ -127,8 +127,7 @@ function isKnownComponentWrapper(path: NodePath<t.CallExpression>): boolean {
   const callee = path.get("callee");
   if (callee.isIdentifier()) {
     const name = callee.node.name;
-    if (name !== "memo" && name !== "forwardRef") return false;
-    return isReactNamedImport(path, name, name);
+    return isReactNamedImport(path, name, "memo") || isReactNamedImport(path, name, "forwardRef");
   }
   if (!callee.isMemberExpression()) return false;
   const property = callee.get("property");

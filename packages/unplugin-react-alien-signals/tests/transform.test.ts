@@ -173,6 +173,30 @@ describe("managed render transform", () => {
     }
   });
 
+  it("infers component names through memo and forwardRef wrappers reached via an aliased React import", () => {
+    const output = compile(`
+      import { memo as m, forwardRef as fr } from "react";
+      const count = { value: 1 };
+      export const MemoCounter = m(() => <p>{count.value}</p>);
+      export const RefCounter = fr((props, ref) => <p ref={ref}>{count.value}</p>);
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toContain("const MemoCounter = m(() => {");
+    expect(output).toContain("const RefCounter = fr((props, ref) => {");
+  });
+
+  it("does not mistake an aliased memo import from another package for React's wrapper", () => {
+    const output = compile(`
+      import { memo as m } from "state-lib";
+      const state = { value: 1 };
+      export const useCachedValue = m(() => state.value);
+    `, "auto");
+
+    expect(output).not.toContain("finally");
+    expect(output).not.toContain("react-alien-signals/runtime");
+  });
+
   it.each(["auto", "all"] as const)(
     "transforms named default-export memo and forwardRef components in %s mode",
     (mode) => {
