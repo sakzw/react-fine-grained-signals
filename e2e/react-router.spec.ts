@@ -116,3 +116,57 @@ test("navigates to the activity route client-side, without a full page reload", 
   expect(fullPageLoads).toBe(0);
   expect(errors).toEqual([]);
 });
+
+test("propagates a task added on the board into the activity log across routes", async ({
+  page,
+}) => {
+  const errors = await openHydrated(page);
+
+  // The board and the log read the same TaskStore via useOutletContext (see
+  // app/root.tsx's <Outlet context={store} />) — a write here must be
+  // visible on the other route without a page reload.
+  await page.getByPlaceholder("新しいタスク").fill("Ship the demo");
+  await page.getByRole("button", { name: "追加" }).click();
+
+  await page.getByRole("link", { name: "アクティビティ" }).click();
+  await page.waitForURL(/\/activity$/);
+
+  const rows = page.locator(".activity-row");
+  await expect(rows).toHaveCount(2);
+  await expect(rows.nth(0).locator(".slot")).toHaveText("#0");
+  await expect(rows.nth(0)).toContainText("追加: Ship the demo");
+  await expect(rows.nth(1)).toContainText("ボードを開きました");
+  expect(errors).toEqual([]);
+});
+
+test("reorders and limits the activity log positionally via LogSettingsForm", async ({
+  page,
+}) => {
+  const errors = await openHydrated(page);
+
+  for (const title of ["First task", "Second task", "Third task"]) {
+    await page.getByPlaceholder("新しいタスク").fill(title);
+    await page.getByRole("button", { name: "追加" }).click();
+  }
+
+  await page.getByRole("link", { name: "アクティビティ" }).click();
+  await page.waitForURL(/\/activity$/);
+
+  const rows = page.locator(".activity-row");
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(0)).toContainText("追加: Third task");
+  await expect(rows.nth(3)).toContainText("ボードを開きました");
+
+  // Index renders by position, not by each entry's identity (see
+  // activity.tsx's hint text), so flipping this settings-only signal must
+  // visibly reverse every row in place rather than just relabeling slots.
+  await page.getByLabel("古い順に表示").check();
+  await expect(rows.nth(0)).toContainText("ボードを開きました");
+  await expect(rows.nth(3)).toContainText("追加: Third task");
+
+  await page.getByLabel("表示件数", { exact: false }).fill("3");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.nth(0)).toContainText("ボードを開きました");
+  await expect(rows.nth(2)).toContainText("追加: Second task");
+  expect(errors).toEqual([]);
+});
