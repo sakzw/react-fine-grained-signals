@@ -42,6 +42,7 @@
     "build": "tsdown && node tests/build-smoke.mjs",
     "bench": "node --expose-gc benchmarks/transform.mjs",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:react-compiler": "vitest run tests/react-compiler.test.ts",
     "typecheck": "tsc --noEmit"
   },
@@ -57,6 +58,7 @@
   "devDependencies": {
     "@types/babel__core": "^7.20.5",
     "@types/babel__helper-plugin-utils": "^7.10.3",
+    "@vitest/coverage-v8": "4.1.11",
     "react-alien-signals": "workspace:*",
     "tsdown": "0.22.14",
     "typescript": "^7.0.2",
