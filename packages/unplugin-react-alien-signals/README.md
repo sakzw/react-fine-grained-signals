@@ -120,7 +120,7 @@ ordinary component registration and stays eligible — `memo(Row)` and
 `observer(Row)` or `connect(…)(Row)`, where React instantiates the returned
 component as its own fiber with its own hooks.
 
-This detection has three known limitations:
+This detection has four known limitations:
 
 - A re-assigned alias is not followed, so a PascalCase helper reached through
   `const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
@@ -137,6 +137,15 @@ This detection has three known limitations:
   `@noUseSignals` comment.
 - A callback imported from another module is not followed, because the
   transform sees one file at a time.
+- A function used in both roles keeps the exclusion. If `Row` is passed to
+  `map` / `flatMap` / `forEach` anywhere in the module and is *also* rendered
+  independently as a JSX tag (`<Row item={x} />`), the render-callback usage
+  wins: `Row` gets no hook of its own. That is the crash-safe direction — a
+  hook there would break hook order in the callback usage — but the
+  independently rendered instance then has no subscription and goes stale on
+  later signal writes. Split the two roles into two differently named
+  functions, one per role, or opt the independently rendered function in
+  explicitly with a `@useSignals` comment.
 
 When in doubt, keep such helpers explicit: name them lowercase and without a
 `use` prefix, or opt them in manually only when they are genuinely rendered as

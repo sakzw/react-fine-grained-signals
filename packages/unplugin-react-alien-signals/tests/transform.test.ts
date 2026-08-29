@@ -596,6 +596,61 @@ describe("managed render transform", () => {
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
+  it.each([
+    ["an as-expression", " as any"],
+    ["a non-null assertion", "!"],
+    ["a satisfies-expression", " satisfies unknown"],
+    ["a doubly wrapped initializer", "! as any"],
+  ])("looks through %s on a referenced callback's own initializer", (_label, wrapper) => {
+    // The wrapper sits between the declarator and the function it initializes,
+    // so both directions have to see past it: `Row` is still the callback `map`
+    // runs per item (no hook of its own), and its reads still have to reach the
+    // component that runs it -- which otherwise reads no signal at all and
+    // would be left untransformed too, leaving nothing subscribed.
+    const output = compile(`
+      const items = [{ value: "one" }];
+      const Row = ((item) => <li>{item.value}</li>)${wrapper};
+      export function List() { return items.map(Row); }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain(`const Row = (item => <li>{item.value}</li>)${wrapper};`);
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("names a component through interleaved memo and type-assertion wrappers", () => {
+    // The two wrapper families nest in either order, so the climb to the
+    // binding that names the function has to alternate between them.
+    const output = compile(`
+      import { memo } from "react";
+      const count = { value: 1 };
+      export const Inner = memo(((props) => <p>{count.value}</p>) as any);
+      export const Outer = (memo((props) => <p>{count.value}</p>)) as any;
+      export const Both = (memo(((props) => <p>{count.value}</p>) as any))!;
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(3);
+    expect(output).toMatch(/memo\(\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/memo\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it.each(["map", "flatMap"] as const)(
+    "looks through a type assertion on a computed %s property",
+    (method) => {
+      // Here the wrapper is around the key alone, so the callee is already a
+      // plain member expression and only the property node is wrapped.
+      const output = compile(`
+        const items = [{ value: "one" }];
+        const Row = (item) => <li>{item.value}</li>;
+        export function List() { return items["${method}" as const](Row); }
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    },
+  );
+
   it("keeps a wrapped memo or HOC reference from counting as a render callback", () => {
     // Unwrapping the transparent wrappers must not widen the exclusion: neither
     // `memo` nor a third-party HOC is an iteration method, so both keep their

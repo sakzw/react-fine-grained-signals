@@ -85,7 +85,7 @@ component風の名前で切り出す典型がこの3つです。述語・畳み�
 これらが返すcomponentは、Reactが独自のfiberとして、独自のhook contextで
 instance化します。
 
-この検出には既知の制約が3つあります。
+この検出には既知の制約が4つあります。
 
 - 再代入したaliasはたどりません。`const RowAlias = Row; items.map(RowAlias)`
   経由で渡したPascalCaseのhelperは、componentとして扱われたままになります。
@@ -100,6 +100,14 @@ instance化します。
   `@noUseSignals` コメントで意図を明示してください。
 - 別moduleからimportしたcallbackはたどりません。変換は1ファイルずつ処理する
   ためです。
+- 2つの役割を兼ねる関数は、除外されたままになります。`Row` をmodule内のどこかで
+  `map` / `flatMap` / `forEach` に渡していて、なおかつ別の場所でJSXタグとして
+  単独でrenderしている（`<Row item={x} />`）場合、render callbackとしての用法が
+  優先され、`Row` は自分のhookを持ちません。これはクラッシュしない側の選択です
+  （hookを持たせると、callbackとしての用法でhookの順序が壊れます）。ただし単独で
+  renderされるほうはsubscriptionを持たないため、以降のsignalの書き換えで
+  内容が古いままになります。役割ごとに別名の2つの関数へ分けるか、単独で
+  renderするほうの関数を `@useSignals` コメントで明示的にopt-inしてください。
 
 判断に迷う場合は、そうしたhelperを明示的に保ってください。小文字で `use`
 始まりでない名前にするか、実際にcomponentとしてrenderされるときにだけ手動で

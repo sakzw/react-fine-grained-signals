@@ -175,17 +175,14 @@ function getFunctionName(
   path: NodePath<t.Function>,
   reactImportSource: string,
 ): string | undefined {
-  let parent = path.parentPath;
-  while (parent.isCallExpression() && isKnownComponentWrapper(parent, reactImportSource)) {
-    parent = parent.parentPath;
-  }
+  const parent = climbComponentWrappers(path, reactImportSource).parentPath;
   // The enclosing binding -- reached through zero or more memo()/forwardRef()
   // wrappers -- is the function's real identity and always wins. A function
   // expression's own name is conventionally only a stack-trace/devtools label
   // and may legitimately differ from what it is bound to, in either direction:
   // `const Counter = function render() {}` is a component and
   // `const helper = function Counter() {}` is not.
-  if (parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
+  if (parent !== null && parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
     return parent.node.id.name;
   }
   if (
@@ -344,6 +341,44 @@ function climbTransparentWrappers(path: NodePath): NodePath {
   return current;
 }
 
+/**
+ * The mirror image of `climbTransparentWrappers`: the path of the value a
+ * chain of transparent wrappers is wrapped *around*. A declarator's initializer
+ * is such a chain in `const Row = ((item) => <li />) as Fn`, so a check that
+ * asks whether a binding was initialized with a function has to descend past
+ * the wrappers to find it.
+ */
+function unwrapTransparentPath(path: NodePath): NodePath {
+  let current = path;
+  while (isTransparentWrapper(current.node)) {
+    current = (current as NodePath<TransparentWrapper>).get("expression");
+  }
+  return current;
+}
+
+/**
+ * The syntactic slot a function really occupies, past every wrapper that leaves
+ * both its value and its identity alone: transparent TypeScript wrappers and
+ * React's own `memo()` / `forwardRef()` calls. The two interleave freely --
+ * `memo(((props) => <p />) as Fn)` puts the wrapper inside the call and
+ * `(memo((props) => <p />)) as Fn` puts it outside -- so one loop alternates
+ * between them rather than two separate passes, which would each stop at the
+ * first wrapper of the other kind.
+ */
+function climbComponentWrappers(path: NodePath, reactImportSource: string): NodePath {
+  let current = climbTransparentWrappers(path);
+  for (
+    let parent = current.parentPath;
+    parent !== null &&
+    parent.isCallExpression() &&
+    isKnownComponentWrapper(parent, reactImportSource);
+    parent = current.parentPath
+  ) {
+    current = climbTransparentWrappers(parent);
+  }
+  return current;
+}
+
 /** The callee and arguments of a plain or optional-chained call. */
 function getCallParts(node: t.Node): { callee: t.Node; arguments: t.Node[] } | undefined {
   if (t.isCallExpression(node) || t.isOptionalCallExpression(node)) {
@@ -369,10 +404,14 @@ function isRenderCallbackCallee(callee: t.Node): boolean {
     ? node
     : undefined;
   if (member === undefined) return false;
-  const property = member.property;
-  return member.computed
-    ? t.isStringLiteral(property) && renderCallbackMethods.has(property.value)
-    : t.isIdentifier(property) && renderCallbackMethods.has(property.name);
+  if (!member.computed) {
+    return t.isIdentifier(member.property) && renderCallbackMethods.has(member.property.name);
+  }
+  // A wrapper can also sit around the key alone -- `items["map" as const](Row)`
+  // is a plain member expression whose property is the wrapped node -- so
+  // unwrapping the callee is not enough to reach the method name.
+  const property = unwrapTransparent(member.property);
+  return t.isStringLiteral(property) && renderCallbackMethods.has(property.value);
 }
 
 /**
@@ -399,12 +438,17 @@ function isRenderCallbackInvocation(call: t.Node, callback: t.Node): boolean {
   return parts.arguments[0] === callback;
 }
 
-/** The name other statements can reach this function's own binding by. */
+/**
+ * The name other statements can reach this function's own binding by. The
+ * declarator is reached from the climbed position rather than the immediate
+ * parent, because a wrapper on the initializer -- `const Row = ((item) =>
+ * <li />) as Fn` -- stands between the function and the binding it names.
+ */
 function getBindingName(path: NodePath<t.Function>): string | undefined {
   if (path.isFunctionDeclaration() && path.node.id !== null && path.node.id !== undefined) {
     return path.node.id.name;
   }
-  const parent = path.parentPath;
+  const parent = climbTransparentWrappers(path).parentPath;
   if (parent !== null && parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
     return parent.node.id.name;
   }
@@ -428,14 +472,16 @@ function isRenderCallback(path: NodePath<t.Function>): boolean {
   const enclosing = argument.parentPath;
   if (enclosing !== null && isRenderCallbackInvocation(enclosing.node, argument.node)) return true;
 
-  const parent = path.parentPath;
   const name = getBindingName(path);
-  if (name === undefined || parent === null) return false;
-  const binding = parent.scope.getBinding(name);
+  if (name === undefined || enclosing === null) return false;
+  const binding = enclosing.scope.getBinding(name);
   if (binding === undefined) return false;
   // Only this function's own binding may speak for it, so a same-named binding
-  // from an outer scope cannot disqualify an unrelated function.
-  if (binding.path.node !== path.node && binding.path.node !== parent.node) return false;
+  // from an outer scope cannot disqualify an unrelated function. The declarator
+  // is compared against the climbed position for the same reason
+  // `getBindingName` reads the name from there: a wrapped initializer puts the
+  // wrapper, not the function, directly under the declarator.
+  if (binding.path.node !== path.node && binding.path.node !== enclosing.node) return false;
   return binding.referencePaths.some((reference) => {
     const slot = climbTransparentWrappers(reference);
     return (
@@ -455,7 +501,12 @@ function resolveReferencedFunction(
   if (bindingPath.isFunctionDeclaration()) return bindingPath;
   if (bindingPath.isVariableDeclarator()) {
     const init = bindingPath.get("init");
-    if (init.isArrowFunctionExpression() || init.isFunctionExpression()) return init;
+    // `const Row = ((item) => <li />) as Fn` initializes the binding with the
+    // wrapper, which erases to the function the caller actually runs.
+    if (init.hasNode()) {
+      const value = unwrapTransparentPath(init);
+      if (value.isArrowFunctionExpression() || value.isFunctionExpression()) return value;
+    }
   }
   // An imported callback lives in another module, which a single-file
   // transform cannot follow.
@@ -472,14 +523,12 @@ function isAutomaticTransformCandidate(
   if (isRenderCallback(path)) return false;
   if (path.isFunctionDeclaration()) return true;
 
-  let parent = path.parentPath;
-  while (parent.isCallExpression() && isKnownComponentWrapper(parent, reactImportSource)) {
-    parent = parent.parentPath;
-  }
+  const parent = climbComponentWrappers(path, reactImportSource).parentPath;
   return (
-    parent.isVariableDeclarator() ||
-    parent.isReturnStatement() ||
-    parent.isExportDefaultDeclaration()
+    parent !== null &&
+    (parent.isVariableDeclarator() ||
+      parent.isReturnStatement() ||
+      parent.isExportDefaultDeclaration())
   );
 }
 
