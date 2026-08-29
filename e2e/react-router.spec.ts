@@ -70,6 +70,25 @@ test("hydrates without console errors and responds to a real click", async ({ pa
   expect(errors).toEqual([]);
 });
 
+test("streams the activity route's Suspense fallback before its resolved insight", async ({
+  request,
+}) => {
+  // A raw streamed fetch, not `page`: Chromium's own load pipeline can
+  // easily outrun InsightPanel's short simulated delay (see
+  // InsightPanel.tsx), so a browser-side poll for the fallback text is
+  // racy. Reading the response body in arrival order instead observes
+  // exactly what renderToPipeableStream flushed, and when.
+  const response = await request.get("/activity");
+  expect(response.ok()).toBe(true);
+  const body = await response.body();
+  const text = body.toString("utf8");
+
+  const fallbackAt = text.indexOf("insight-loading");
+  const resolvedAt = text.indexOf("記録された操作");
+  expect(fallbackAt).toBeGreaterThanOrEqual(0);
+  expect(resolvedAt).toBeGreaterThan(fallbackAt);
+});
+
 test("navigates to the activity route client-side, without a full page reload", async ({
   page,
 }) => {
