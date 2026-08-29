@@ -26,7 +26,7 @@ buildでReact Compilerを使う場合は、手書きで `useSignals()` を呼ぶ
 
 このフック以降の同期的なsignal読み取りが収集され、そのいずれかが変わったときだけ、そのコンポーネントをReactが再レンダーします。`deepSignal` を使う場合、propertyの読み取りは個別に追跡されるため、読んでいない隣接propertyの変更では再レンダーしません。build設定を変えずに明示的な制御がほしいときに最もシンプルな選択肢です。
 
-変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、commit段階のlayout effect時、または現在の同期実行後に予約済みmicrotaskで閉じられます。レンダー中にsignalを読む各コンポーネント自身で `useSignals()` を呼んでください。effect、event handler、非同期callback、または追跡されていないコンポーネントの読み取りは、開いたままの境界に誤って紐付く場合があります。Suspense中断、レンダー中のネストしたserver rendering、複数rootをまたぐ厳密な境界には、後述のmanaged transformが必要です。未解決の境界問題と将来の契約候補は[境界の設計検討docs](design/use-signals-boundary-design.ja.md)にまとめています。
+変換なしの `useSignals()` は依存関係を収集する簡易的な境界です。追跡は次の `useSignals()` 呼び出し時、commit段階のlayout effect時、または現在の同期実行後に予約済みmicrotaskで閉じられます。レンダー中にsignalを読む各コンポーネント自身で `useSignals()` を呼んでください。effect、event handler、非同期callback、または追跡されていないコンポーネントの読み取りは、開いたままの境界に誤って紐付く場合があります。Suspense中断、レンダー中のネストしたserver rendering、複数rootをまたぐ厳密な分離には、コンポーネントがreturnする時点で同期的に閉じる、厳密な `try` / `finally` 境界が必要です。後述のmanaged transformはこの境界を自動生成しますが、同じ境界は `import { useSignals } from "react-alien-signals/runtime"` を使えば手書きでも得られます（[hooksの追跡境界に関する説明](hooks.ja.md)を参照）。pluginは、手書きの `try` / `finally` を書き忘れる心配がない分、より手間の少ない選択肢というだけです。未解決の境界問題と将来の契約候補は[境界の設計検討docs](design/use-signals-boundary-design.ja.md)にまとめています。
 
 独自のJSX runtimeは、これとは独立した2つ目の最適化を提供します。ネイティブホスト要素の子要素や許可済みのhost propとしてsignalを使うと、親コンポーネントを一切再レンダーせずに、局所的なDOM leafとして更新されます。許可リスト全体、値の変換規則、注意点については[JSXのsignal子要素とhost binding](jsx-bindings.ja.md)を参照してください。
 
