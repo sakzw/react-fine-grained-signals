@@ -67,6 +67,7 @@
     "test:coverage:runtime": "vitest run --coverage",
     "test:coverage:transform": "pnpm --filter unplugin-react-fine-grained-signals test:coverage",
     "test:consumer": "pnpm build && node tests/consumer-smoke.mjs",
+    "prepare:e2e": "pnpm --dir examples/react-router install --frozen-lockfile",
     "test:browser": "playwright test",
     "size": "pnpm build:runtime && node scripts/check-size.mjs",
     "size:update": "pnpm build:runtime && node scripts/check-size.mjs --update"

@@ -81,20 +81,22 @@ export default defineConfig({
     {
       // examples/react-router is its own isolated pnpm workspace (own
       // lockfile, independent dependency versions — see its
-      // pnpm-workspace.yaml), so it's never installed by the root
-      // `pnpm install` and everything here must be scoped to run inside
-      // that directory rather than via a root package.json script. A real
-      // `react-router build` (client + server bundles) served by
-      // `@react-router/serve`, as opposed to `react-router dev`.
+      // pnpm-workspace.yaml), so its dependencies must be installed beforehand
+      // (see `pnpm prepare:e2e` for local use, or the e2e.yml CI step for CI).
+      // Everything here must be scoped to run inside that directory rather
+      // than via a root package.json script. A real `react-router build`
+      // (client + server bundles) served by `@react-router/serve`, as opposed
+      // to `react-router dev`.
       command:
-        "pnpm --dir examples/react-router install --frozen-lockfile && pnpm --dir examples/react-router run build && pnpm --dir examples/react-router run start",
+        "pnpm --dir examples/react-router run build && pnpm --dir examples/react-router run start",
       url: "http://127.0.0.1:4175",
       reuseExistingServer: !process.env.CI,
       stdout: "pipe",
       stderr: "pipe",
-      // A fresh install + build of a whole separate workspace can be slow
-      // the first time (e.g. cold CI cache), on top of the build itself.
-      timeout: 300_000,
+      // Build and start a whole separate workspace. The install runs
+      // beforehand (see `pnpm prepare:e2e` for local use, or the e2e.yml CI
+      // step for CI).
+      timeout: 180_000,
     },
   ],
 });

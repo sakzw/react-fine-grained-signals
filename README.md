@@ -44,6 +44,7 @@ The browser proof of concept renders the app on the server, hydrates it with Rea
 
 ```sh
 pnpm exec playwright install --only-shell chromium
+pnpm prepare:e2e
 pnpm test:browser
 ```
 
