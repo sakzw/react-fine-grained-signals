@@ -290,6 +290,60 @@ function isUseSignalsCallee(
 // component its subscription, which shows up as a stale UI rather than a crash.
 const renderCallbackMethods = new Set(["map", "flatMap", "forEach"]);
 
+// TypeScript-only wrappers that restate a value's type without changing the
+// value. `Row!`, `Row as Fn`, `Row satisfies Fn`, `Row<Item>` and -- in a `.ts`
+// module, where angle brackets are not JSX -- `<Fn>Row` all erase to the very
+// same `Row`, so every one of them hands the same function to `items.map(...)`
+// at runtime. Detection has to see through them or the callback keeps a hook
+// the Rules of Hooks forbid, and they nest freely (`Row! as typeof Row`).
+//
+// The membership rule is exactly "erases to its own `.expression`", which is
+// what makes unwrapping sound: nothing else about the node survives to
+// runtime. Type arguments on the call itself (`items.map<Item>(Row)`) are not
+// in this family and need no handling -- they are a field of the call node,
+// not a wrapper around it.
+type TransparentWrapper =
+  | t.TSNonNullExpression
+  | t.TSAsExpression
+  | t.TSSatisfiesExpression
+  | t.TSTypeAssertion
+  | t.TSInstantiationExpression;
+
+function isTransparentWrapper(node: t.Node): node is TransparentWrapper {
+  return (
+    t.isTSNonNullExpression(node) ||
+    t.isTSAsExpression(node) ||
+    t.isTSSatisfiesExpression(node) ||
+    t.isTSTypeAssertion(node) ||
+    t.isTSInstantiationExpression(node)
+  );
+}
+
+/** The value-level node behind any chain of transparent TypeScript wrappers. */
+function unwrapTransparent(node: t.Node): t.Node {
+  let current = node;
+  while (isTransparentWrapper(current)) current = current.expression;
+  return current;
+}
+
+/**
+ * The path of the syntactic slot `path` really occupies. A reference wrapped in
+ * `Row!` or `Row as Fn` sits one or more nodes below the argument list it is
+ * actually part of, so climbing past those wrappers is what makes the enclosing
+ * call -- and the node that genuinely sits in its argument list -- visible.
+ */
+function climbTransparentWrappers(path: NodePath): NodePath {
+  let current = path;
+  for (
+    let parent = current.parentPath;
+    parent !== null && isTransparentWrapper(parent.node) && parent.node.expression === current.node;
+    parent = current.parentPath
+  ) {
+    current = parent;
+  }
+  return current;
+}
+
 /** The callee and arguments of a plain or optional-chained call. */
 function getCallParts(node: t.Node): { callee: t.Node; arguments: t.Node[] } | undefined {
   if (t.isCallExpression(node) || t.isOptionalCallExpression(node)) {
@@ -308,8 +362,11 @@ function getCallParts(node: t.Node): { callee: t.Node; arguments: t.Node[] } | u
  * eligible for the transform without needing a special case here.
  */
 function isRenderCallbackCallee(callee: t.Node): boolean {
-  const member = t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
-    ? callee
+  // `items.map!(Row)` puts a non-null assertion between the call and the member
+  // access it invokes, which erases to the same `items.map`.
+  const node = unwrapTransparent(callee);
+  const member = t.isMemberExpression(node) || t.isOptionalMemberExpression(node)
+    ? node
     : undefined;
   if (member === undefined) return false;
   const property = member.property;
@@ -320,15 +377,26 @@ function isRenderCallbackCallee(callee: t.Node): boolean {
 
 /**
  * The single notion of "this reference means the function runs synchronously,
- * repeatedly, as part of the caller's render": `callback` is an argument of a
- * call to a known array iteration method. Both the render-callback exclusion
- * and the read propagation in `inspectFunction` ask this same question, so
- * they cannot drift apart.
+ * repeatedly, as part of the caller's render": `callback` is *the* callback
+ * argument of a call to a known array iteration method. Both the render-callback
+ * exclusion and the read propagation in `inspectFunction` ask this same
+ * question, so they cannot drift apart.
+ *
+ * `map`, `flatMap` and `forEach` all have the signature `(callbackFn, thisArg?)`,
+ * so only argument 0 is ever invoked. Accepting any position would read the
+ * `thisArg` of `items.map(String, Row)` as a render callback and strip `Row` --
+ * a component this call never invokes at all -- of its own subscription, leaving
+ * it stale on every later signal write.
+ *
+ * `callback` is matched against the node that literally sits in the argument
+ * list, wrappers included, so a caller holding `Row!` compares equal while a
+ * caller holding the inner `Row` does not; use `climbTransparentWrappers` to
+ * reach the former from the latter.
  */
 function isRenderCallbackInvocation(call: t.Node, callback: t.Node): boolean {
   const parts = getCallParts(call);
   if (parts === undefined || !isRenderCallbackCallee(parts.callee)) return false;
-  return parts.arguments.some((argument) => argument === callback);
+  return parts.arguments[0] === callback;
 }
 
 /** The name other statements can reach this function's own binding by. */
@@ -351,10 +419,16 @@ function getBindingName(path: NodePath<t.Function>): string | undefined {
 // (`function Row() {}; items.map(Row)`). Tracing deliberately stops at that one
 // binding: a re-assigned alias (`const RowAlias = Row; items.map(RowAlias)`) is
 // not followed.
+//
+// Both branches ask about the argument slot rather than the bare node, because
+// a transparent TypeScript wrapper -- `items.map(Row!)`, or an inline
+// `items.map(((item) => <li />) as Fn)` -- stands between the two.
 function isRenderCallback(path: NodePath<t.Function>): boolean {
-  const parent = path.parentPath;
-  if (parent !== null && isRenderCallbackInvocation(parent.node, path.node)) return true;
+  const argument = climbTransparentWrappers(path);
+  const enclosing = argument.parentPath;
+  if (enclosing !== null && isRenderCallbackInvocation(enclosing.node, argument.node)) return true;
 
+  const parent = path.parentPath;
   const name = getBindingName(path);
   if (name === undefined || parent === null) return false;
   const binding = parent.scope.getBinding(name);
@@ -362,10 +436,12 @@ function isRenderCallback(path: NodePath<t.Function>): boolean {
   // Only this function's own binding may speak for it, so a same-named binding
   // from an outer scope cannot disqualify an unrelated function.
   if (binding.path.node !== path.node && binding.path.node !== parent.node) return false;
-  return binding.referencePaths.some((reference) =>
-    reference.parentPath !== null &&
-    isRenderCallbackInvocation(reference.parentPath.node, reference.node)
-  );
+  return binding.referencePaths.some((reference) => {
+    const slot = climbTransparentWrappers(reference);
+    return (
+      slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)
+    );
+  });
 }
 
 /** The function `name`, referenced from `origin`'s scope, is bound to. */
@@ -447,9 +523,13 @@ function inspectFunction(
     call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
   ): void => {
     for (const argument of call.node.arguments) {
-      if (!t.isIdentifier(argument)) continue;
+      // The wrapper node is what occupies the argument slot, so the position
+      // check compares against `argument` itself; only the name has to be read
+      // from underneath a `Row!` / `Row as Fn` / `Row satisfies Fn` wrapper.
+      const reference = unwrapTransparent(argument);
+      if (!t.isIdentifier(reference)) continue;
       if (!isRenderCallbackInvocation(call.node, argument)) continue;
-      const target = resolveReferencedFunction(call, argument.name);
+      const target = resolveReferencedFunction(call, reference.name);
       // A callback defined inside this function is already part of the walk.
       if (target === undefined || target.isDescendant(functionPath)) continue;
       if (visited.has(target.node)) continue;

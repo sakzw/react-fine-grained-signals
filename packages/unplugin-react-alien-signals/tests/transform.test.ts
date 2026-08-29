@@ -512,6 +512,109 @@ describe("managed render transform", () => {
     expect(output).toMatch(/function Each\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
+  it.each(["map", "forEach"] as const)(
+    "treats only %s's first argument as its callback, not its thisArg",
+    (method) => {
+      // `map`/`flatMap`/`forEach` are all `(callbackFn, thisArg?)`, so the
+      // second argument is never invoked. A component parked there must keep
+      // its own subscription or it silently goes stale.
+      const output = compile(`
+        const items = [{ value: 1 }];
+        const Row = (item) => <li>{item.value}</li>;
+        const Host = () => <li>{items[0].value}</li>;
+        export const out = items.${method}(Row, Host);
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/const Host = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+      expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+    },
+  );
+
+  it.each([
+    ["a non-null assertion", "Row!"],
+    ["an as-expression", "Row as typeof Row"],
+    ["a satisfies-expression", "Row satisfies typeof Row"],
+    ["an instantiation expression", "Row<{ value: string }>"],
+    ["a doubly wrapped reference", "(Row! as typeof Row)"],
+  ])("looks through %s on a referenced render callback", (_label, reference) => {
+    // The wrapper is erased at runtime, so `Row` is still the function `map`
+    // calls once per item: it must not get a hook of its own, and its reads
+    // still have to be folded into the component that runs it.
+    const output = compile(`
+      const items = [{ value: "one" }];
+      const Row = (item) => <li>{item.value}</li>;
+      export function List() { return items.map(${reference}); }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("looks through an angle-bracket type assertion in a non-JSX TypeScript module", () => {
+    // `<Fn>Row` only parses where angle brackets are not JSX, so this case
+    // needs a `.ts` fixture and a hook rather than a component.
+    const output = transformReactAlienSignals(`
+      const items = [{ value: 1 }];
+      const useRow = (item) => item.value;
+      export function useTotal() { return items.map(<typeof useRow>useRow); }
+    `, "fixture.ts", {
+      importSource: "react-alien-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })?.code ?? "";
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain("const useRow = item => item.value;");
+    expect(output).toMatch(/function useTotal\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("looks through a non-null assertion on the iteration method itself", () => {
+    const output = compile(`
+      const items = [{ value: "one" }];
+      const Row = (item) => <li>{item.value}</li>;
+      export function List() { return items.map!(Row); }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("keeps an inline render callback wrapped in a type assertion part of its owner", () => {
+    const output = compile(`
+      const items = [{ value: "one" }];
+      export function List() {
+        return <ul>{items.map(((item) => <li>{item.value}</li>) as any)}</ul>;
+      }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("keeps a wrapped memo or HOC reference from counting as a render callback", () => {
+    // Unwrapping the transparent wrappers must not widen the exclusion: neither
+    // `memo` nor a third-party HOC is an iteration method, so both keep their
+    // wrapped component eligible for its own hook.
+    const output = compile(`
+      import { memo } from "react";
+      const count = { value: 1 };
+      function observer(Component) { return Component; }
+      const Row = () => <li>{count.value}</li>;
+      const Cell = () => <li>{count.value}</li>;
+      export const MemoRow = memo(Row!);
+      export default observer(Cell as typeof Cell);
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/const Cell = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
   it("keeps predicate iteration methods out of the recognized set", () => {
     // `filter`/`find`/`some` take predicates, not element renderers, so a
     // component-shaped callback handed to one is far likelier to be a call on
