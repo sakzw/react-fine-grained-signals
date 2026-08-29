@@ -58,143 +58,186 @@ function isObjectLike(value: unknown): value is object {
   return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 
-function readonlyMapView<Key, Value>(raw: Map<Key, Value>): ReadonlyMap<Key, Value> {
-  const cached = readonlyMapViews.get(raw as Map<unknown, unknown>);
-  if (cached !== undefined) return cached as ReadonlyMap<Key, Value>;
+/**
+ * Resolves a value that may be one of our proxies or one of our readonly
+ * collection views back to the raw object it wraps. Returns `undefined` when
+ * `value` is not object-like or is not a value this module has wrapped, so
+ * callers can fall back to using it as-is.
+ */
+function toRaw(value: unknown): object | undefined {
+  if (!isObjectLike(value)) return undefined;
+  const directRaw = proxyToRaw.get(value);
+  if (directRaw !== undefined) return directRaw;
+  return readonlyCollectionViewToRaw.get(value);
+}
 
-  const view = Object.create(Map.prototype) as ReadonlyMap<Key, Value>;
-  const rejectMutation = (operation: string) => () => {
+type RejectMutation = (operation: string) => () => never;
+
+/**
+ * Shared scaffolding for `readonlyMapView`/`readonlySetView`: cache lookup,
+ * the "reject this mutation" factory, defining the descriptors, the
+ * feature-detected extras loop, and the dual-WeakMap registration. Only the
+ * per-type descriptor bodies (which truly differ between Map and Set) and
+ * the extras list are supplied by the caller.
+ */
+function createReadonlyCollectionView<Raw extends object, View extends object>(
+  raw: Raw,
+  cache: WeakMap<Raw, View>,
+  prototype: object,
+  kind: string,
+  buildCore: (raw: Raw, view: View, rejectMutation: RejectMutation) => Record<PropertyKey, PropertyDescriptor>,
+  buildExtras: (raw: Raw, rejectMutation: RejectMutation) => Array<[string, (...args: unknown[]) => unknown]>,
+): View {
+  const cached = cache.get(raw);
+  if (cached !== undefined) return cached;
+
+  const view = Object.create(prototype) as View;
+  const rejectMutation: RejectMutation = (operation: string) => () => {
     throw new TypeError(
-      `deepSignal() Map#${operation}() is not allowed through .value; replace the Map immutably`,
+      `deepSignal() ${kind}#${operation}() is not allowed through .value; replace the ${kind} immutably`,
     );
   };
-  Object.defineProperties(view, {
-    size: { enumerable: false, configurable: false, get: () => raw.size },
-    get: { enumerable: false, configurable: false, value: (key: Key) => raw.get(key) },
-    has: { enumerable: false, configurable: false, value: (key: Key) => raw.has(key) },
-    entries: {
-      enumerable: false,
-      configurable: false,
-      value: () => Map.prototype.entries.call(raw),
-    },
-    keys: {
-      enumerable: false,
-      configurable: false,
-      value: () => Map.prototype.keys.call(raw),
-    },
-    values: {
-      enumerable: false,
-      configurable: false,
-      value: () => Map.prototype.values.call(raw),
-    },
-    forEach: {
-      enumerable: false,
-      configurable: false,
-      value: (callback: (value: Value, key: Key, map: ReadonlyMap<Key, Value>) => void, thisArg?: unknown) => {
-        Map.prototype.forEach.call(raw, (value, key) => callback.call(thisArg, value, key, view));
-      },
-    },
-    [Symbol.iterator]: {
-      enumerable: false,
-      configurable: false,
-      value: () => Map.prototype.entries.call(raw),
-    },
-    set: { enumerable: false, configurable: false, value: rejectMutation("set") },
-    delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
-    clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
-  });
-  // Keep future mutating Map proposals from becoming an integrity bypass when
-  // they are present in the running JavaScript engine.
-  for (const operation of ["getOrInsert", "getOrInsertComputed", "emplace"]) {
-    if (typeof (Map.prototype as unknown as Record<string, unknown>)[operation] === "function") {
-      Object.defineProperty(view, operation, {
-        enumerable: false,
-        configurable: false,
-        value: rejectMutation(operation),
-      });
-    }
+  Object.defineProperties(view, buildCore(raw, view, rejectMutation));
+  for (const [name, impl] of buildExtras(raw, rejectMutation)) {
+    Object.defineProperty(view, name, { enumerable: false, configurable: false, value: impl });
   }
-  readonlyMapViews.set(raw as Map<unknown, unknown>, view as ReadonlyMap<unknown, unknown>);
-  readonlyCollectionViewToRaw.set(view, raw as Map<unknown, unknown>);
+
+  cache.set(raw, view);
+  readonlyCollectionViewToRaw.set(view, raw as Map<unknown, unknown> | Set<unknown>);
   return view;
 }
 
-function readonlySetView<Value>(raw: Set<Value>): ReadonlySet<Value> {
-  const cached = readonlySetViews.get(raw as Set<unknown>);
-  if (cached !== undefined) return cached as ReadonlySet<Value>;
-
-  const view = Object.create(Set.prototype) as ReadonlySet<Value>;
-  const rejectMutation = (operation: string) => () => {
-    throw new TypeError(
-      `deepSignal() Set#${operation}() is not allowed through .value; replace the Set immutably`,
-    );
-  };
-  const forwardSetOperation = (operation: string) => (other: unknown) => {
-    const method = (Set.prototype as unknown as Record<string, unknown>)[operation];
-    if (typeof method !== "function") {
-      throw new TypeError(`Set#${operation}() is unavailable in this JavaScript engine`);
-    }
-    const collection =
-      isObjectLike(other) ? readonlyCollectionViewToRaw.get(other) ?? other : other;
-    return Reflect.apply(method, raw, [collection]);
-  };
-  Object.defineProperties(view, {
-    size: { enumerable: false, configurable: false, get: () => raw.size },
-    has: { enumerable: false, configurable: false, value: (value: Value) => raw.has(value) },
-    entries: {
-      enumerable: false,
-      configurable: false,
-      value: () => Set.prototype.entries.call(raw),
-    },
-    keys: {
-      enumerable: false,
-      configurable: false,
-      value: () => Set.prototype.keys.call(raw),
-    },
-    values: {
-      enumerable: false,
-      configurable: false,
-      value: () => Set.prototype.values.call(raw),
-    },
-    forEach: {
-      enumerable: false,
-      configurable: false,
-      value: (callback: (value: Value, key: Value, set: ReadonlySet<Value>) => void, thisArg?: unknown) => {
-        Set.prototype.forEach.call(raw, (value) => callback.call(thisArg, value, value, view));
-      },
-    },
-    [Symbol.iterator]: {
-      enumerable: false,
-      configurable: false,
-      value: () => Set.prototype.values.call(raw),
-    },
-    add: { enumerable: false, configurable: false, value: rejectMutation("add") },
-    delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
-    clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
-  });
-  // ES2025's Set operations are non-mutating. Forward them to the raw Set so
-  // native methods receive their required internal-slot receiver. A second
-  // deepSignal read-only view is unwrapped first because it is also set-like.
-  for (const operation of [
-    "union",
-    "intersection",
-    "difference",
-    "symmetricDifference",
-    "isSubsetOf",
-    "isSupersetOf",
-    "isDisjointFrom",
-  ]) {
-    if (typeof (Set.prototype as unknown as Record<string, unknown>)[operation] === "function") {
-      Object.defineProperty(view, operation, {
+function readonlyMapView<Key, Value>(raw: Map<Key, Value>): ReadonlyMap<Key, Value> {
+  return createReadonlyCollectionView(
+    raw as Map<unknown, unknown>,
+    readonlyMapViews,
+    Map.prototype,
+    "Map",
+    (target, view, rejectMutation) => ({
+      size: { enumerable: false, configurable: false, get: () => target.size },
+      get: { enumerable: false, configurable: false, value: (key: unknown) => target.get(key) },
+      has: { enumerable: false, configurable: false, value: (key: unknown) => target.has(key) },
+      entries: {
         enumerable: false,
         configurable: false,
-        value: forwardSetOperation(operation),
-      });
-    }
-  }
-  readonlySetViews.set(raw as Set<unknown>, view as ReadonlySet<unknown>);
-  readonlyCollectionViewToRaw.set(view, raw as Set<unknown>);
-  return view;
+        value: () => Map.prototype.entries.call(target),
+      },
+      keys: {
+        enumerable: false,
+        configurable: false,
+        value: () => Map.prototype.keys.call(target),
+      },
+      values: {
+        enumerable: false,
+        configurable: false,
+        value: () => Map.prototype.values.call(target),
+      },
+      forEach: {
+        enumerable: false,
+        configurable: false,
+        value: (
+          callback: (value: unknown, key: unknown, map: ReadonlyMap<unknown, unknown>) => void,
+          thisArg?: unknown,
+        ) => {
+          Map.prototype.forEach.call(target, (value, key) => callback.call(thisArg, value, key, view));
+        },
+      },
+      [Symbol.iterator]: {
+        enumerable: false,
+        configurable: false,
+        value: () => Map.prototype.entries.call(target),
+      },
+      set: { enumerable: false, configurable: false, value: rejectMutation("set") },
+      delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
+      clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
+    }),
+    (_target, rejectMutation) => {
+      const extras: Array<[string, (...args: unknown[]) => unknown]> = [];
+      // Keep future mutating Map proposals from becoming an integrity bypass when
+      // they are present in the running JavaScript engine.
+      for (const operation of ["getOrInsert", "getOrInsertComputed", "emplace"]) {
+        if (typeof (Map.prototype as unknown as Record<string, unknown>)[operation] === "function") {
+          extras.push([operation, rejectMutation(operation)]);
+        }
+      }
+      return extras;
+    },
+  ) as ReadonlyMap<Key, Value>;
+}
+
+function readonlySetView<Value>(raw: Set<Value>): ReadonlySet<Value> {
+  return createReadonlyCollectionView(
+    raw as Set<unknown>,
+    readonlySetViews,
+    Set.prototype,
+    "Set",
+    (target, view, rejectMutation) => ({
+      size: { enumerable: false, configurable: false, get: () => target.size },
+      has: { enumerable: false, configurable: false, value: (value: unknown) => target.has(value) },
+      entries: {
+        enumerable: false,
+        configurable: false,
+        value: () => Set.prototype.entries.call(target),
+      },
+      keys: {
+        enumerable: false,
+        configurable: false,
+        value: () => Set.prototype.keys.call(target),
+      },
+      values: {
+        enumerable: false,
+        configurable: false,
+        value: () => Set.prototype.values.call(target),
+      },
+      forEach: {
+        enumerable: false,
+        configurable: false,
+        value: (
+          callback: (value: unknown, key: unknown, set: ReadonlySet<unknown>) => void,
+          thisArg?: unknown,
+        ) => {
+          Set.prototype.forEach.call(target, (value) => callback.call(thisArg, value, value, view));
+        },
+      },
+      [Symbol.iterator]: {
+        enumerable: false,
+        configurable: false,
+        value: () => Set.prototype.values.call(target),
+      },
+      add: { enumerable: false, configurable: false, value: rejectMutation("add") },
+      delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
+      clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
+    }),
+    (target) => {
+      const extras: Array<[string, (...args: unknown[]) => unknown]> = [];
+      const forwardSetOperation = (operation: string) => (other: unknown) => {
+        const method = (Set.prototype as unknown as Record<string, unknown>)[operation];
+        if (typeof method !== "function") {
+          throw new TypeError(`Set#${operation}() is unavailable in this JavaScript engine`);
+        }
+        const collection =
+          isObjectLike(other) ? readonlyCollectionViewToRaw.get(other) ?? other : other;
+        return Reflect.apply(method, target, [collection]);
+      };
+      // ES2025's Set operations are non-mutating. Forward them to the raw Set so
+      // native methods receive their required internal-slot receiver. A second
+      // deepSignal read-only view is unwrapped first because it is also set-like.
+      for (const operation of [
+        "union",
+        "intersection",
+        "difference",
+        "symmetricDifference",
+        "isSubsetOf",
+        "isSupersetOf",
+        "isDisjointFrom",
+      ]) {
+        if (typeof (Set.prototype as unknown as Record<string, unknown>)[operation] === "function") {
+          extras.push([operation, forwardSetOperation(operation)]);
+        }
+      }
+      return extras;
+    },
+  ) as ReadonlySet<Value>;
 }
 
 function assertRootValue(value: unknown): asserts value is object {
@@ -235,26 +278,18 @@ function assertDeepDataGraph(value: unknown): boolean {
       value: object;
       insideOpaque: boolean;
     };
-    const directRaw = proxyToRaw.get(current);
-    if (directRaw !== undefined) {
+    const wrapperRaw = toRaw(current);
+    if (wrapperRaw !== undefined) {
       if (insideOpaque) {
         throw new TypeError(
-          "deepSignal() cannot store a deep proxy inside an opaque value",
+          proxyToRaw.has(current)
+            ? "deepSignal() cannot store a deep proxy inside an opaque value"
+            : "deepSignal() cannot store a deep collection view inside an opaque value",
         );
       }
-      // The raw graph was validated when this proxy was created. Do not walk it
-      // again: this makes `{ inner: state.value.large }` proportional to the
-      // new carrier rather than the already-known subtree.
-      needsNormalization = true;
-      continue;
-    }
-    const readonlyRaw = readonlyCollectionViewToRaw.get(current);
-    if (readonlyRaw !== undefined) {
-      if (insideOpaque) {
-        throw new TypeError(
-          "deepSignal() cannot store a deep collection view inside an opaque value",
-        );
-      }
+      // The raw graph was validated when this proxy (or collection view) was
+      // created. Do not walk it again: this makes `{ inner: state.value.large }`
+      // proportional to the new carrier rather than the already-known subtree.
       needsNormalization = true;
       continue;
     }
@@ -326,14 +361,9 @@ function matchesNormalizedGraph(source: object, normalized: object): boolean {
       continue;
     }
 
-    const directRaw = proxyToRaw.get(currentSource);
-    if (directRaw !== undefined) {
-      if (directRaw !== currentTarget) return false;
-      continue;
-    }
-    const readonlyRaw = readonlyCollectionViewToRaw.get(currentSource);
-    if (readonlyRaw !== undefined) {
-      if (readonlyRaw !== currentTarget) return false;
+    const wrapperRaw = toRaw(currentSource);
+    if (wrapperRaw !== undefined) {
+      if (wrapperRaw !== currentTarget) return false;
       continue;
     }
     if (!isPlainObjectOrArray(currentSource)) {
@@ -391,11 +421,9 @@ function matchesNormalizedGraph(source: object, normalized: object): boolean {
 }
 
 function cloneWithoutProxies<T>(value: T): T {
+  const wrapperRaw = toRaw(value);
+  if (wrapperRaw !== undefined) return wrapperRaw as T;
   if (!isObjectLike(value)) return value;
-  const directRaw = proxyToRaw.get(value);
-  if (directRaw !== undefined) return directRaw as T;
-  const readonlyRaw = readonlyCollectionViewToRaw.get(value);
-  if (readonlyRaw !== undefined) return readonlyRaw as T;
 
   const cachedRoot = normalizedProxyCarriers.get(value);
   if (
@@ -410,11 +438,8 @@ function cloneWithoutProxies<T>(value: T): T {
   const pending: object[] = [];
 
   const resolve = (current: unknown): unknown => {
-    if (!isObjectLike(current)) return current;
-    const raw = proxyToRaw.get(current);
-    if (raw !== undefined) return raw;
-    const readonlyRaw = readonlyCollectionViewToRaw.get(current);
-    if (readonlyRaw !== undefined) return readonlyRaw;
+    const resolvedRaw = toRaw(current);
+    if (resolvedRaw !== undefined) return resolvedRaw;
     if (!isPlainObjectOrArray(current)) return current;
 
     const local = clones.get(current);
@@ -453,14 +478,10 @@ function cloneWithoutProxies<T>(value: T): T {
 }
 
 function prepareDeepValue<T>(value: T): T {
-  if (isObjectLike(value)) {
-    const directRaw = proxyToRaw.get(value);
-    // Reassigning a value obtained from this deep signal is already known-good.
-    // Avoid validating its entire graph again on this common O(1) path.
-    if (directRaw !== undefined) return directRaw as T;
-    const readonlyRaw = readonlyCollectionViewToRaw.get(value);
-    if (readonlyRaw !== undefined) return readonlyRaw as T;
-  }
+  // Reassigning a value obtained from this deep signal is already known-good.
+  // Avoid validating its entire graph again on this common O(1) path.
+  const wrapperRaw = toRaw(value);
+  if (wrapperRaw !== undefined) return wrapperRaw as T;
   const containsProxy = assertDeepDataGraph(value);
   return containsProxy ? cloneWithoutProxies(value) : value;
 }
@@ -476,272 +497,255 @@ function isArrayIndex(key: PropertyKey): key is string {
   );
 }
 
-function createDeepContext() {
-  const unwrap = <T>(value: T): T => {
-    return prepareDeepValue(value);
-  };
+// `wrap`/`unwrap` and their helpers below have no per-call state: every map
+// they touch (`rawToMetadata`, `proxyToRaw`, ...) is module-global, and each
+// `PropertyMetadata` is threaded through explicit parameters. They are
+// module-scoped functions rather than being re-allocated as closures on
+// every `deepSignal()` call.
 
-  const getVersion = (
-    versions: Map<PropertyKey, Signal<number>>,
-    key: PropertyKey,
-  ): Signal<number> => {
-    let version = versions.get(key);
-    if (version === undefined) {
-      version = signal(0);
-      versions.set(key, version);
+const unwrap = <T>(value: T): T => {
+  return prepareDeepValue(value);
+};
+
+const getVersion = (
+  versions: Map<PropertyKey, Signal<number>>,
+  key: PropertyKey,
+): Signal<number> => {
+  let version = versions.get(key);
+  if (version === undefined) {
+    version = signal(0);
+    versions.set(key, version);
+  }
+  return version;
+};
+
+const track = (
+  versions: Map<PropertyKey, Signal<number>>,
+  indices: Set<number>,
+  key: PropertyKey,
+): void => {
+  if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
+  if (isArrayIndex(key)) indices.add(Number(key));
+  getVersion(versions, key).value;
+};
+
+const notify = (
+  versions: Map<PropertyKey, Signal<number>>,
+  key: PropertyKey,
+): void => {
+  const version = versions.get(key);
+  if (version !== undefined) version.value += 1;
+};
+
+const trackIteration = (metadata: PropertyMetadata): void => {
+  if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
+  metadata.iteration ??= signal(0);
+  metadata.iteration.value;
+};
+
+const notifyIteration = (metadata: PropertyMetadata): void => {
+  if (metadata.iteration !== undefined) metadata.iteration.value += 1;
+};
+
+const notifyTruncatedIndices = (
+  metadata: PropertyMetadata,
+  currentLength: number,
+  oldLength: number,
+): void => {
+  const truncatedCount = oldLength - currentLength;
+  const trackedCount =
+    metadata.propertyIndices.size + metadata.existenceIndices.size;
+  if (trackedCount === 0) return;
+
+  if (truncatedCount <= trackedCount) {
+    for (let index = currentLength; index < oldLength; index++) {
+      const key = String(index);
+      notify(metadata.properties, key);
+      notify(metadata.existence, key);
     }
-    return version;
+    return;
+  }
+  for (const index of metadata.propertyIndices) {
+    if (index >= currentLength && index < oldLength) {
+      notify(metadata.properties, String(index));
+    }
+  }
+  for (const index of metadata.existenceIndices) {
+    if (index >= currentLength && index < oldLength) {
+      notify(metadata.existence, String(index));
+    }
+  }
+};
+
+const wrap = <T>(value: T): T => {
+  const rawValue = (toRaw(value) as T | undefined) ?? value;
+  if (rawValue instanceof Map) return readonlyMapView(rawValue) as T;
+  if (rawValue instanceof Set) return readonlySetView(rawValue) as T;
+  if (!isPlainObjectOrArray(rawValue)) return rawValue;
+  assertExtensible(rawValue);
+
+  const cached = rawToMetadata.get(rawValue);
+  if (cached !== undefined) return cached.proxy as T;
+  assertDataProperties(rawValue);
+
+  const metadata: PropertyMetadata = {
+    properties: new Map(),
+    existence: new Map(),
+    propertyIndices: new Set(),
+    existenceIndices: new Set(),
+    arrayMethods: new Map(),
+    proxy: undefined as unknown as object,
   };
 
-  const track = (
-    versions: Map<PropertyKey, Signal<number>>,
-    indices: Set<number>,
-    key: PropertyKey,
-  ): void => {
-    if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
-    if (isArrayIndex(key)) indices.add(Number(key));
-    getVersion(versions, key).value;
-  };
-
-  const notify = (
-    versions: Map<PropertyKey, Signal<number>>,
-    key: PropertyKey,
-  ): void => {
-    const version = versions.get(key);
-    if (version !== undefined) version.value += 1;
-  };
-
-  const trackIteration = (metadata: PropertyMetadata): void => {
-    if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
-    metadata.iteration ??= signal(0);
-    metadata.iteration.value;
-  };
-
-  const notifyIteration = (metadata: PropertyMetadata): void => {
-    if (metadata.iteration !== undefined) metadata.iteration.value += 1;
-  };
-
-  const notifyEveryMetadata = (
-    target: object,
-    callback: (metadata: PropertyMetadata) => void,
-  ): void => {
-    const metadata = rawToMetadata.get(target);
-    if (metadata !== undefined) callback(metadata);
-  };
-
-  const notifyTruncatedIndices = (
-    metadata: PropertyMetadata,
-    currentLength: number,
-    oldLength: number,
-  ): void => {
-    const truncatedCount = oldLength - currentLength;
-    const trackedCount =
-      metadata.propertyIndices.size + metadata.existenceIndices.size;
-    if (trackedCount === 0) return;
-
-    if (truncatedCount <= trackedCount) {
-      for (let index = currentLength; index < oldLength; index++) {
-        const key = String(index);
-        notify(metadata.properties, key);
-        notify(metadata.existence, key);
+  const proxy = new Proxy(rawValue, {
+    get(target, key, receiver) {
+      // Deep state is raw data, never a signal. Answering the identity probe
+      // up front keeps `isSignal()` on a nested proxy from allocating a
+      // version signal for a key that can never change. An own brand only
+      // exists if a raw reference bypassed this proxy, and it is reported so
+      // the proxy invariants hold.
+      if (key === SIGNAL_BRAND && !Object.prototype.hasOwnProperty.call(target, key)) {
+        return undefined;
       }
-      return;
-    }
-    for (const index of metadata.propertyIndices) {
-      if (index >= currentLength && index < oldLength) {
-        notify(metadata.properties, String(index));
+      track(metadata.properties, metadata.propertyIndices, key);
+      const result = Reflect.get(target, key, receiver);
+
+      if (
+        Array.isArray(target) &&
+        ARRAY_MUTATORS.has(key) &&
+        typeof result === "function"
+      ) {
+        const cachedMethod = metadata.arrayMethods.get(key);
+        if (cachedMethod?.method === result) return cachedMethod.wrapper;
+
+        const method = result as (...args: unknown[]) => unknown;
+        const wrapper = function (this: unknown, ...args: unknown[]) {
+          return batch(() => Reflect.apply(method, this, args));
+        };
+        metadata.arrayMethods.set(key, { method, wrapper });
+        return wrapper;
       }
-    }
-    for (const index of metadata.existenceIndices) {
-      if (index >= currentLength && index < oldLength) {
-        notify(metadata.existence, String(index));
-      }
-    }
-  };
 
-  const wrap = <T>(value: T): T => {
-    const rawValue =
-      typeof value === "object" && value !== null
-        ? (proxyToRaw.get(value) as T | undefined) ?? value
-        : value;
-    if (rawValue instanceof Map) return readonlyMapView(rawValue) as T;
-    if (rawValue instanceof Set) return readonlySetView(rawValue) as T;
-    if (!isPlainObjectOrArray(rawValue)) return rawValue;
-    assertExtensible(rawValue);
-
-    const cached = rawToMetadata.get(rawValue);
-    if (cached !== undefined) return cached.proxy as T;
-    assertDataProperties(rawValue);
-
-    const metadata: PropertyMetadata = {
-      properties: new Map(),
-      existence: new Map(),
-      propertyIndices: new Set(),
-      existenceIndices: new Set(),
-      arrayMethods: new Map(),
-      proxy: undefined as unknown as object,
-    };
-
-    const proxy = new Proxy(rawValue, {
-      get(target, key, receiver) {
-        // Deep state is raw data, never a signal. Answering the identity probe
-        // up front keeps `isSignal()` on a nested proxy from allocating a
-        // version signal for a key that can never change. An own brand only
-        // exists if a raw reference bypassed this proxy, and it is reported so
-        // the proxy invariants hold.
-        if (key === SIGNAL_BRAND && !Object.prototype.hasOwnProperty.call(target, key)) {
-          return undefined;
-        }
-        track(metadata.properties, metadata.propertyIndices, key);
-        const result = Reflect.get(target, key, receiver);
-
+      if (isPlainObjectOrArray(result)) {
+        const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
         if (
-          Array.isArray(target) &&
-          ARRAY_MUTATORS.has(key) &&
-          typeof result === "function"
+          descriptor !== undefined &&
+          "value" in descriptor &&
+          descriptor.configurable === false &&
+          descriptor.writable === false
         ) {
-          const cachedMethod = metadata.arrayMethods.get(key);
-          if (cachedMethod?.method === result) return cachedMethod.wrapper;
-
-          const method = result as (...args: unknown[]) => unknown;
-          const wrapper = function (this: unknown, ...args: unknown[]) {
-            return batch(() => Reflect.apply(method, this, args));
-          };
-          metadata.arrayMethods.set(key, { method, wrapper });
-          return wrapper;
+          throw new TypeError(
+            "deepSignal() cannot wrap a non-configurable, non-writable object property",
+          );
         }
+      }
 
-        if (isPlainObjectOrArray(result)) {
-          const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
-          if (
-            descriptor !== undefined &&
-            "value" in descriptor &&
-            descriptor.configurable === false &&
-            descriptor.writable === false
-          ) {
-            throw new TypeError(
-              "deepSignal() cannot wrap a non-configurable, non-writable object property",
-            );
+      return wrap(result);
+    },
+
+    set(target, key, nextValue) {
+      if (key === "__proto__") {
+        throw new TypeError("deepSignal() does not support prototype mutation");
+      }
+      // Storing the brand would make this subtree answer `isSignal()`, which
+      // silently stops it from being wrapped and kills its reactivity.
+      if (key === SIGNAL_BRAND) {
+        throw new TypeError("deepSignal() does not support branding state as a signal");
+      }
+      const oldValue = Reflect.get(target, key, target);
+      const existed = Reflect.has(target, key);
+      const owned = Object.prototype.hasOwnProperty.call(target, key);
+      const oldLength = Array.isArray(target) ? target.length : undefined;
+      const rawNextValue = unwrap(nextValue);
+      const succeeded = Reflect.set(target, key, rawNextValue, target);
+      if (!succeeded) return false;
+
+      const currentValue = Reflect.get(target, key, target);
+      const existsNow = Reflect.has(target, key);
+      const ownedNow = Object.prototype.hasOwnProperty.call(target, key);
+
+      batch(() => {
+        if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
+          notify(metadata.properties, key);
+        }
+        if (existed !== existsNow) notify(metadata.existence, key);
+        if (owned !== ownedNow) notifyIteration(metadata);
+
+        if (Array.isArray(target) && oldLength !== undefined) {
+          const currentLength = target.length;
+          if (key !== "length" && oldLength !== currentLength) {
+            notify(metadata.properties, "length");
+          }
+          if (key === "length" && currentLength < oldLength) {
+            notifyTruncatedIndices(metadata, currentLength, oldLength);
+            notifyIteration(metadata);
           }
         }
+      });
 
-        return wrap(result);
-      },
+      return true;
+    },
 
-      set(target, key, nextValue) {
-        if (key === "__proto__") {
-          throw new TypeError("deepSignal() does not support prototype mutation");
+    deleteProperty(target, key) {
+      const existed = Reflect.has(target, key);
+      const owned = Object.prototype.hasOwnProperty.call(target, key);
+      const succeeded = Reflect.deleteProperty(target, key);
+      if (!succeeded || !owned) return succeeded;
+
+      batch(() => {
+        notify(metadata.properties, key);
+        if (existed !== Reflect.has(target, key)) {
+          notify(metadata.existence, key);
         }
-        // Storing the brand would make this subtree answer `isSignal()`, which
-        // silently stops it from being wrapped and kills its reactivity.
-        if (key === SIGNAL_BRAND) {
-          throw new TypeError("deepSignal() does not support branding state as a signal");
-        }
-        const oldValue = Reflect.get(target, key, target);
-        const existed = Reflect.has(target, key);
-        const owned = Object.prototype.hasOwnProperty.call(target, key);
-        const oldLength = Array.isArray(target) ? target.length : undefined;
-        const rawNextValue = unwrap(nextValue);
-        const succeeded = Reflect.set(target, key, rawNextValue, target);
-        if (!succeeded) return false;
+        notifyIteration(metadata);
+      });
+      return true;
+    },
 
-        const currentValue = Reflect.get(target, key, target);
-        const existsNow = Reflect.has(target, key);
-        const ownedNow = Object.prototype.hasOwnProperty.call(target, key);
+    has(target, key) {
+      track(metadata.existence, metadata.existenceIndices, key);
+      return Reflect.has(target, key);
+    },
 
-        batch(() => {
-          notifyEveryMetadata(target, (targetMetadata) => {
-            if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
-              notify(targetMetadata.properties, key);
-            }
-            if (existed !== existsNow) notify(targetMetadata.existence, key);
-            if (owned !== ownedNow) notifyIteration(targetMetadata);
+    ownKeys(target) {
+      trackIteration(metadata);
+      return Reflect.ownKeys(target);
+    },
 
-            if (Array.isArray(target) && oldLength !== undefined) {
-              const currentLength = target.length;
-              if (key !== "length" && oldLength !== currentLength) {
-                notify(targetMetadata.properties, "length");
-              }
-              if (key === "length" && currentLength < oldLength) {
-                notifyTruncatedIndices(targetMetadata, currentLength, oldLength);
-                notifyIteration(targetMetadata);
-              }
-            }
-          });
-        });
+    defineProperty() {
+      throw new TypeError("deepSignal() does not support property descriptors");
+    },
 
-        return true;
-      },
+    preventExtensions() {
+      throw new TypeError("deepSignal() state must remain extensible");
+    },
 
-      deleteProperty(target, key) {
-        const existed = Reflect.has(target, key);
-        const owned = Object.prototype.hasOwnProperty.call(target, key);
-        const succeeded = Reflect.deleteProperty(target, key);
-        if (!succeeded || !owned) return succeeded;
+    setPrototypeOf() {
+      throw new TypeError("deepSignal() does not support prototype mutation");
+    },
+  });
 
-        batch(() => {
-          notifyEveryMetadata(target, (targetMetadata) => {
-            notify(targetMetadata.properties, key);
-            if (existed !== Reflect.has(target, key)) {
-              notify(targetMetadata.existence, key);
-            }
-            notifyIteration(targetMetadata);
-          });
-        });
-        return true;
-      },
-
-      has(target, key) {
-        track(metadata.existence, metadata.existenceIndices, key);
-        return Reflect.has(target, key);
-      },
-
-      ownKeys(target) {
-        trackIteration(metadata);
-        return Reflect.ownKeys(target);
-      },
-
-      defineProperty() {
-        throw new TypeError("deepSignal() does not support property descriptors");
-      },
-
-      preventExtensions() {
-        throw new TypeError("deepSignal() state must remain extensible");
-      },
-
-      setPrototypeOf() {
-        throw new TypeError("deepSignal() does not support prototype mutation");
-      },
-    });
-
-    metadata.proxy = proxy;
-    rawToMetadata.set(rawValue, metadata);
-    proxyToRaw.set(proxy, rawValue);
-    return proxy as T;
-  };
-
-  return { unwrap, wrap };
-}
-
-type DeepContext = ReturnType<typeof createDeepContext>;
+  metadata.proxy = proxy;
+  rawToMetadata.set(rawValue, metadata);
+  proxyToRaw.set(proxy, rawValue);
+  return proxy as T;
+};
 
 class DeepSignalImpl<T extends object> implements DeepSignal<T> {
   readonly #source: SignalImpl<T>;
-  readonly #context: DeepContext;
 
-  constructor(initialValue: T, context: DeepContext) {
+  constructor(initialValue: T) {
     this.#source = new SignalImpl(initialValue);
-    this.#context = context;
   }
 
   get value(): T {
     // Runtime collection views intentionally keep the established `.value: T`
     // public type. `DeepSignal<T>` must remain assignable to `Signal<T>`.
-    return this.#context.wrap(this.#source.value) as T;
+    return wrap(this.#source.value) as T;
   }
 
   set value(nextValue: T) {
-    const rawValue = this.#context.unwrap(nextValue);
+    const rawValue = unwrap(nextValue);
     assertRootValue(rawValue);
     this.#source.value = rawValue as T;
   }
@@ -760,7 +764,6 @@ export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
   const rawInitialValue = prepareDeepValue(initialValue);
   assertRootValue(rawInitialValue);
 
-  const context = createDeepContext();
-  context.wrap(rawInitialValue);
-  return registerSignal(new DeepSignalImpl(rawInitialValue as T, context)) as DeepSignal<T>;
+  wrap(rawInitialValue);
+  return registerSignal(new DeepSignalImpl(rawInitialValue as T)) as DeepSignal<T>;
 }
