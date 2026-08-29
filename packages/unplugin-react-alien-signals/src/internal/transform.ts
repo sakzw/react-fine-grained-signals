@@ -175,15 +175,17 @@ function getFunctionName(
   path: NodePath<t.Function>,
   reactImportSource: string,
 ): string | undefined {
-  const wrapped = path.parentPath;
-  let parent = wrapped;
+  let parent = path.parentPath;
   while (parent.isCallExpression() && isKnownComponentWrapper(parent, reactImportSource)) {
     parent = parent.parentPath;
   }
-  if (parent !== wrapped && parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
-    // Wrapped by memo()/forwardRef(): the variable the wrapper call is assigned
-    // to is the component's real identity, which can differ from the wrapped
-    // function's own name (a devtools-only or leftover inner name).
+  // The enclosing binding -- reached through zero or more memo()/forwardRef()
+  // wrappers -- is the function's real identity and always wins. A function
+  // expression's own name is conventionally only a stack-trace/devtools label
+  // and may legitimately differ from what it is bound to, in either direction:
+  // `const Counter = function render() {}` is a component and
+  // `const helper = function Counter() {}` is not.
+  if (parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
     return parent.node.id.name;
   }
   if (
@@ -192,9 +194,6 @@ function getFunctionName(
     path.node.id !== undefined
   ) {
     return path.node.id.name;
-  }
-  if (parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
-    return parent.node.id.name;
   }
   return undefined;
 }
@@ -273,12 +272,44 @@ function isUseSignalsCallee(
   );
 }
 
+/**
+ * Is `node` handed to `call` as one of its arguments, where `call` is not a
+ * `memo`/`forwardRef` wrapper? Passing a component to a React wrapper is the
+ * supported pattern and must stay eligible for the transform.
+ */
+function isBareCallbackArgument(
+  call: NodePath<t.CallExpression>,
+  node: t.Node,
+  reactImportSource: string,
+): boolean {
+  if (isKnownComponentWrapper(call, reactImportSource)) return false;
+  return call.get("arguments").some((argument) => argument.node === node);
+}
+
+// A function handed to another call runs a variable number of times inside one
+// render of its owner, so a hook injected into it would break hook order. Both
+// the inline definition site and a callback factored out into its own binding
+// and passed by reference later (`const Row = ...; items.map(Row)`) count.
+// Tracing deliberately stops at that one binding: a re-assigned alias
+// (`const RowAlias = Row; items.map(RowAlias)`) is not followed.
 function isRenderCallback(path: NodePath<t.Function>, reactImportSource: string): boolean {
   const parent = path.parentPath;
-  if (!parent.isCallExpression() || isKnownComponentWrapper(parent, reactImportSource)) {
-    return false;
+  if (parent.isCallExpression()) {
+    return isBareCallbackArgument(parent, path.node, reactImportSource);
   }
-  return parent.get("arguments").some((argument) => argument.node === path.node);
+  if (parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
+    const binding = parent.scope.getBinding(parent.node.id.name);
+    if (binding === undefined) return false;
+    return binding.referencePaths.some((reference) => {
+      const referenceParent = reference.parentPath;
+      return (
+        referenceParent !== null &&
+        referenceParent.isCallExpression() &&
+        isBareCallbackArgument(referenceParent, reference.node, reactImportSource)
+      );
+    });
+  }
+  return false;
 }
 
 function isAutomaticTransformCandidate(

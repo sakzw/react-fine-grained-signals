@@ -60,6 +60,18 @@ Rollup、webpack、Rspack、esbuildにはそれぞれ `/rollup`、`/webpack`、
   設定しても既存のdirect importの認識が外れることはありません。
 - `include` / `exclude`: source module IDを絞る関数です。
 
+自動検出はrender callback（`items.map(...)` のように他の呼び出しへ渡す関数）を
+変換しません。呼び出し元の1回のrenderの中で実行回数が変わるため、Rules of
+Hooksに反するからです。定義箇所にinlineで書いた場合だけでなく、変数に切り出して
+その束縛名で参照して渡す場合（`const Row = …; items.map(Row)`）も認識し、その
+signal読み取りは呼び出し元のcomponentが収集します。`memo` / `forwardRef` へ名前で
+渡す参照はcomponentとしてサポートされたパターンなので、変換対象のままです。この
+判定は意図的にその束縛1つで止まり、再代入したaliasはたどりません。つまり
+`const RowAlias = Row; items.map(RowAlias)` 経由で渡したPascalCaseのhelperは、
+componentとして扱われたままになります。判断に迷う場合は、そうしたhelperを明示的に
+保ってください。小文字で `use` 始まりでない名前にするか、実際にcomponentとして
+renderされるときにだけ手動でopt-inします。
+
 `memo` / `forwardRef` の自動認識は、`"react"` または `reactImportSource` から
 のdirect importだけに一致します。ローカルのbarrelやre-export module経由の
 import（`import { memo } from "./some-local-module"`）は、その moduleが最終的に

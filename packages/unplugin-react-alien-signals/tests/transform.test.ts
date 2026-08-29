@@ -147,6 +147,25 @@ describe("managed render transform", () => {
     expect(forwardRefOutput).toContain("_signals.f();");
   });
 
+  it("prefers the assigned binding over an unwrapped function expression's own name", () => {
+    // A function expression's own name is a stack-trace label, so the binding
+    // decides in both directions, wrapper or not.
+    const component = compile(`
+      const s = { value: 1 };
+      export const Counter = function render() { return <p>{s.value}</p>; };
+    `, "auto");
+    const helper = compile(`
+      const s = { value: 1 };
+      const helper = function Counter() { return <p>{s.value}</p>; };
+    `, "auto");
+
+    expect(component).toContain("export const Counter = function render() {");
+    expect(component.match(/finally/g)).toHaveLength(1);
+    expect(component).toContain("_signals.f();");
+    expect(helper).not.toContain("finally");
+    expect(helper).not.toContain("react-alien-signals/runtime");
+  });
+
   it("recognizes memo imported from a configured react re-export module", () => {
     const namedSource = `
       import { memo } from "./react-compat";
@@ -394,6 +413,52 @@ describe("managed render transform", () => {
       expect(output).toMatch(/function Row\(item\) \{\s+return/);
     },
   );
+
+  it.each(["auto", "all"] as const)(
+    "%s mode tracks a callback factored into a binding and passed by reference",
+    (mode) => {
+      const output = compile(`
+        const items = [{ value: "one" }];
+        export function List() {
+          const Row = (item) => <li>{item.value}</li>;
+          return <ul>{items.map(Row)}</ul>;
+        }
+      `, mode);
+
+      // Row runs once per item inside List's single render, so a hook injected
+      // into it would break hook order: List owns the read instead.
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+      expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+    },
+  );
+
+  it("still transforms a component referenced by name into memo", () => {
+    const output = compile(`
+      import { memo } from "react";
+      const count = { value: 1 };
+      const Row = () => <li>{count.value}</li>;
+      export const MemoRow = memo(Row);
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toContain("export const MemoRow = memo(Row);");
+  });
+
+  it("still transforms a nested component referenced only through JSX", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function List() {
+        const Row = () => <li>{count.value}</li>;
+        return <ul><Row /></ul>;
+      }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/export function List\(\) \{\s+const Row/);
+  });
 
   it("transforms a named component returned from a HOC", () => {
     const output = compile(`

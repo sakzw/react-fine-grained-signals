@@ -92,6 +92,20 @@ export default {
   widens detection and never turns off an existing direct import.
 - `include` / `exclude`: functions that filter source module IDs.
 
+Automatic detection never transforms a render callback — a function handed to
+another call, such as `items.map(...)` — because it runs a variable number of
+times inside one render of its owner, which the Rules of Hooks forbid. It is
+recognized both inline at its definition site and when it is factored out and
+referenced directly by its own binding (`const Row = …; items.map(Row)`); its
+signal reads are collected by the component that invokes it instead. A
+reference passed to `memo` / `forwardRef` is the supported component pattern
+and stays eligible. The check deliberately stops at that one binding and does
+not follow a re-assigned alias, so a PascalCase helper reached through
+`const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
+When in doubt, keep such helpers explicit: name them lowercase and without a
+`use` prefix, or opt them in manually only when they are genuinely rendered as
+components.
+
 Automatic `memo` / `forwardRef` recognition matches only a direct import from
 `"react"` or from `reactImportSource`. Importing them through a local
 barrel or re-export module (`import { memo } from "./some-local-module"`) is
