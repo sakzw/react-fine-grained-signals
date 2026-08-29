@@ -178,9 +178,9 @@ function useSignalsImplementation(managed: boolean): RenderStore {
  * point the component returns. Every component that reads a signal during
  * render must call this itself; a read from a sibling or descendant that does
  * not can be attributed to another component's still-open boundary, and then
- * silently stops updating the component that read it. Use `useManagedSignals`,
- * or the bundler plugin's default `transform: "managed"`, for an exact
- * boundary. See docs/design/use-signals-boundary-design.md.
+ * silently stops updating the component that read it. Use the bundler
+ * plugin's default `transform: "managed"` for an exact boundary. See
+ * docs/design/use-signals-boundary-design.md.
  */
 export function useSignals(): void {
   useSignalsImplementation(false);
