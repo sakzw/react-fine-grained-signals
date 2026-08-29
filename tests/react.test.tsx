@@ -1161,17 +1161,19 @@ describe("React bindings", () => {
   });
 
   it("treats known-unitless CSS properties and CSS custom properties correctly", () => {
-    const style = signal<Record<string, string | number>>({ opacity: 0.5, "--gap": 4 });
+    const style = signal<Record<string, string | number>>({ opacity: 0.5, scale: 2, "--gap": 4 });
 
     render(<div aria-label="unitless box" style={style} />);
     const box = screen.getByLabelText("unitless box");
     expect(box.style.opacity).toBe("0.5");
+    expect(box.style.scale).toBe("2");
     expect(box.style.getPropertyValue("--gap")).toBe("4");
 
     act(() => {
       style.value = { opacity: 1 };
     });
     expect(box.style.opacity).toBe("1");
+    expect(box.style.scale).toBe("");
     expect(box.style.getPropertyValue("--gap")).toBe("");
   });
 

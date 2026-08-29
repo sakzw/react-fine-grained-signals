@@ -44,7 +44,7 @@ const UNITLESS_CSS_PROPERTIES = new Set([
   "flexOrder", "gridArea", "gridColumn", "gridColumnEnd", "gridColumnSpan",
   "gridColumnStart", "gridRow", "gridRowEnd", "gridRowSpan", "gridRowStart",
   "fontWeight", "lineClamp", "lineHeight", "opacity", "order", "orphans",
-  "tabSize", "widows", "zIndex", "zoom",
+  "scale", "tabSize", "widows", "zIndex", "zoom",
 ]);
 
 // SVG has a different property model (for example, className is an SVGAnimatedString).
