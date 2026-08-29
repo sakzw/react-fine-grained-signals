@@ -1,7 +1,7 @@
 import { effect, isSignal } from "../core/index.js";
 import type { ReadonlySignal } from "../core/index.js";
 import { useSignalValue } from "../react/hooks.js";
-import { createElement, Fragment } from "react";
+import { createElement, Fragment, useLayoutEffect, useRef } from "react";
 import type * as React from "react";
 
 /** The small set of DOM properties that support direct signal bindings. */
@@ -31,9 +31,10 @@ function isControlledTwoWayProp(tagName: string, name: string): boolean {
  * `transformProps`, from the JSX tag string that is already on hand at
  * element-creation time — `"select"` needs `bindSelectValue`'s MutationObserver
  * workaround, `"input"`/`"textarea"` need `bindTextValue`'s IME handling, and
- * `<input checked>` is the only other two-way case — so the ref callback later
+ * `<input checked>` is the only other two-way case — so `mountBinding` later
  * only has to dispatch on this already-known value instead of re-deriving the
- * same facts from the mounted DOM node's `tagName`.
+ * same facts from the mounted DOM node's `tagName`. It is also half of a
+ * binding's identity for `createReactiveHostBinder`'s re-render diff.
  */
 type BindingKind = "style" | "select-value" | "text-value" | "checked" | "prop";
 
@@ -149,18 +150,18 @@ type FailureEpisode = { hasReported: boolean };
 
 /**
  * Reads a signal on behalf of one of this module's direct DOM bindings (see
- * the module doc: these write straight to the DOM from a callback ref's
- * `effect()`, bypassing React's render, so the owning component never
- * re-renders). A `computed()` whose getter throws caches and rethrows that
- * error on every read (see `computed()` in src/core/base.ts) — if `source` is
- * such a computed and it starts failing after the binding is already mounted,
- * an unguarded read here would throw synchronously out of `effect()`'s
- * callback body. Nothing catches that: not `effect()`, not alien-signals'
- * `run()`, not its `flush()`. It would propagate out of whatever write
- * triggered it (an event handler, anywhere), and `flush()`'s own `finally`
- * would mark any other effect still queued in that same flush as skipped for
- * this cycle — an unrelated binding, or a `useSignals()`-tracked component's
- * commit, silently missing one update.
+ * the module doc: these write straight to the DOM from an `effect()` installed
+ * alongside the element's ref, bypassing React's render, so the owning
+ * component never re-renders). A `computed()` whose getter throws caches and
+ * rethrows that error on every read (see `computed()` in src/core/base.ts) —
+ * if `source` is such a computed and it starts failing after the binding is
+ * already mounted, an unguarded read here would throw synchronously out of
+ * `effect()`'s callback body. Nothing catches that: not `effect()`, not
+ * alien-signals' `run()`, not its `flush()`. It would propagate out of
+ * whatever write triggered it (an event handler, anywhere), and `flush()`'s
+ * own `finally` would mark any other effect still queued in that same flush as
+ * skipped for this cycle — an unrelated binding, or a `useSignals()`-tracked
+ * component's commit, silently missing one update.
  *
  * Catching here keeps a failure local to this one binding: the DOM write for
  * this cycle is skipped (the DOM is left at its last successful value) and
@@ -443,67 +444,220 @@ function applyRef(ref: SupportedRef, node: Element | null): RefCleanup {
   if (ref != null) ref.current = node;
 }
 
+/** One live binding: the tuple it was mounted from, plus its teardown. */
+type MountedBinding = { readonly binding: Binding; readonly dispose: () => void };
+
+/** A binding's identity for the re-render diff: same name, source, and kind. */
+function isSameBinding(a: Binding, b: Binding): boolean {
+  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+}
+
 /**
- * React 19 callback refs may return a cleanup function.  The wrapper preserves
- * that contract and also tears down all signal subscriptions during StrictMode
- * ref replay and ordinary unmount.
+ * Subscribes a single binding to `node` and returns its teardown. Split out of
+ * the ref callback so `createReactiveHostBinder` can rebuild one binding on
+ * its own, without disturbing the siblings that did not change.
  */
-function createReactiveRef(bindings: readonly Binding[], userRef: SupportedRef) {
+function subscribeBinding(
+  node: Element,
+  name: string,
+  source: ReadonlySignal<unknown>,
+  kind: BindingKind,
+): () => void {
+  switch (kind) {
+    case "style": {
+      let previousKeys: readonly string[] = [];
+      return createBindingEffect(source, (value) => {
+        previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
+      });
+    }
+    case "select-value":
+      return bindSelectValue(node as HTMLSelectElement, source);
+    case "text-value":
+      return bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source);
+    case "checked":
+      return createBindingEffect(source, (value) => setControlledProp(node, name, value));
+    case "prop":
+      return createBindingEffect(source, (value) => setDomProp(node, name, value));
+  }
+}
+
+function mountBinding(node: Element, binding: Binding): MountedBinding {
+  return { binding, dispose: subscribeBinding(node, binding[0], binding[1], binding[2]) };
+}
+
+type ReactiveHostBinder = {
+  /** The one callback-ref identity React ever sees for this element. */
+  readonly ref: (node: Element | null) => RefCleanup;
+  /** Reconciles the attached node against the latest rendered inputs. */
+  sync(bindings: readonly Binding[], userRef: SupportedRef): void;
+};
+
+/**
+ * Owns everything one mounted `ReactiveHost` attaches to its DOM node: the
+ * user's own ref, plus one live subscription per binding.
+ *
+ * The ref callback is created once per binder, and a binder is created once
+ * per mounted `ReactiveHost`, so React only ever sees a single ref identity
+ * for the lifetime of that element. That is load-bearing: React responds to a
+ * *changed* callback-ref identity by detaching the old ref and attaching the
+ * new one on the very same, unchanged DOM node. While the ref closure was
+ * rebuilt on every render — which it was, since `transformProps` hands
+ * `ReactiveHost` a freshly allocated `bindings` array each time — every
+ * unrelated re-render of the owning component (any state, context, or parent
+ * update anywhere above this element) silently disconnected and recreated
+ * `bindSelectValue`'s `MutationObserver`, removed and re-added
+ * `bindTextValue`'s composition listeners *along with the closure-local
+ * `composing`/`pending` state they guard* — resetting `composing` to `false`
+ * mid-composition and letting the next write stomp in-flight IME input —
+ * resubscribed every binding's `effect()`, and called the user's own ref with
+ * `null` and then the identical node again.
+ *
+ * Pinning the identity moves that reconciliation here: `sync` runs from
+ * `ReactiveHost`'s layout effect after every commit and diffs the render's
+ * bindings against the mounted ones by `(name, source, kind)`, tearing down
+ * and rebuilding only the entries that actually changed. What is left in the
+ * ref callback is exactly the part React's attach/detach protocol has to
+ * drive: which node is current, and full teardown when there no longer is one.
+ *
+ * The split is safe because of how React orders a commit. A host element's ref
+ * is attached during the layout phase *before* the layout effects of the
+ * component that rendered it, so `sync` always finds the node already
+ * attached; and a ref is only ever (re)attached on a fiber React re-rendered,
+ * which is also the only way `ReactiveHost`'s dependency-less layout effect
+ * can fail to re-run — so no attach can slip past a `sync`.
+ */
+function createReactiveHostBinder(): ReactiveHostBinder {
+  let node: Element | null = null;
+  let mounted: MountedBinding[] = [];
+  let attachedUserRef: SupportedRef;
+  let userCleanup: RefCleanup;
   let activeCleanup: (() => void) | undefined;
 
-  const disposeActive = () => {
+  const attachUserRef = (target: Element, userRef: SupportedRef): void => {
+    attachedUserRef = userRef;
+    userCleanup = applyRef(userRef, target);
+  };
+
+  // React 19 callback refs may return a cleanup function; a user ref that did
+  // is torn down through it instead of through the `null` call React 18 used.
+  const detachUserRef = (): void => {
+    const cleanup = userCleanup;
+    const detached = attachedUserRef;
+    userCleanup = undefined;
+    attachedUserRef = undefined;
+    if (typeof cleanup === "function") cleanup();
+    else applyRef(detached, null);
+  };
+
+  const disposeActive = (): void => {
     const cleanup = activeCleanup;
     activeCleanup = undefined;
     cleanup?.();
   };
 
-  return (node: Element | null): RefCleanup => {
+  const ref = (target: Element | null): RefCleanup => {
     // React 18 clears callback refs with `null`, while React 19 can invoke the
     // returned cleanup.  A node replacement can use either order, so every
-    // entry point first disposes whichever subscription is currently active.
+    // entry point first disposes whichever node is currently attached.
     disposeActive();
 
-    if (node == null) {
+    if (target == null) {
       return;
     }
 
-    const userCleanup = applyRef(userRef, node);
-    const stop = bindings.map(([name, source, kind]) => {
-      switch (kind) {
-        case "style": {
-          let previousKeys: readonly string[] = [];
-          return createBindingEffect(source, (value) => {
-            previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
-          });
-        }
-        case "select-value":
-          return bindSelectValue(node as HTMLSelectElement, source);
-        case "text-value":
-          return bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source);
-        case "checked":
-          return createBindingEffect(source, (value) => setControlledProp(node, name, value));
-        case "prop":
-          return createBindingEffect(source, (value) => setDomProp(node, name, value));
-      }
-    });
+    node = target;
 
     let isDisposed = false;
     const cleanup = () => {
       if (isDisposed) return;
       isDisposed = true;
       if (activeCleanup === cleanup) activeCleanup = undefined;
-      for (const dispose of stop) dispose();
-      if (typeof userCleanup === "function") userCleanup();
-      else applyRef(userRef, null);
+      for (const binding of mounted) binding.dispose();
+      mounted = [];
+      detachUserRef();
+      node = null;
     };
 
     activeCleanup = cleanup;
     return cleanup;
   };
+
+  const syncBindings = (target: Element, bindings: readonly Binding[]): void => {
+    // The overwhelmingly common case — a re-render that changed nothing about
+    // the bindings — costs one walk and allocates nothing.
+    if (
+      mounted.length === bindings.length
+      && mounted.every((entry, index) => isSameBinding(entry.binding, bindings[index]))
+    ) {
+      return;
+    }
+
+    // Keyed by prop name, which is unique per element: a binding whose source
+    // or kind changed under the same name is a rebuild, not a reuse.
+    const reusable = new Map<string, MountedBinding>();
+    for (const entry of mounted) reusable.set(entry.binding[0], entry);
+
+    const reused = bindings.map((binding) => {
+      const candidate = reusable.get(binding[0]);
+      if (candidate === undefined || !isSameBinding(candidate.binding, binding)) return undefined;
+      reusable.delete(binding[0]);
+      return candidate;
+    });
+
+    // Everything stale is disposed before anything replacing it is mounted, so
+    // a rebuilt binding never briefly holds two live subscriptions on one node.
+    for (const stale of reusable.values()) stale.dispose();
+    mounted = bindings.map((binding, index) => reused[index] ?? mountBinding(target, binding));
+  };
+
+  return {
+    ref,
+    sync(bindings, userRef) {
+      const target = node;
+      if (target == null) return;
+      if (userRef !== attachedUserRef) {
+        detachUserRef();
+        attachUserRef(target, userRef);
+      }
+      syncBindings(target, bindings);
+    },
+  };
+}
+
+/**
+ * Hands `ReactiveHost` its one stable ref callback and drives the binder's
+ * post-commit reconciliation.
+ *
+ * The layout effect deliberately declares no dependency array and returns no
+ * cleanup: it must run after every commit (that is what makes it impossible
+ * for a ref attach to happen without a following `sync`), and its teardown
+ * belongs to the ref callback, which React already invokes on unmount, on
+ * node replacement, and on StrictMode's ref replay. Giving it a cleanup here
+ * would tear the whole element down again on every re-render — precisely the
+ * churn this exists to remove.
+ */
+function useReactiveHostBinder(
+  bindings: readonly Binding[],
+  userRef: SupportedRef,
+): (node: Element | null) => RefCleanup {
+  const binderRef = useRef<ReactiveHostBinder | undefined>(undefined);
+  if (binderRef.current === undefined) {
+    binderRef.current = createReactiveHostBinder();
+  }
+  const binder = binderRef.current;
+  useLayoutEffect(() => {
+    binder.sync(bindings, userRef);
+  });
+  return binder.ref;
 }
 
 /**
  * A host element with DOM-only signal subscriptions attached via its ref.
+ *
+ * The subscriptions themselves are owned by a per-instance binder
+ * (`useReactiveHostBinder`) rather than rebuilt inline here, so this
+ * component's ref prop keeps one identity for the element's whole lifetime
+ * and an unrelated re-render costs nothing — see `createReactiveHostBinder`.
  *
  * `children` arrives as ReactiveHost's own top-level prop (see
  * `createJsxWrapper` below) rather than folded into `props`/`hostProps`,
@@ -534,6 +688,7 @@ export function ReactiveHost({
   children?: React.ReactNode;
 }): React.ReactElement {
   const { ref: userRef, ...hostProps } = props;
+  const ref = useReactiveHostBinder(bindings, userRef as SupportedRef);
   return createElement(elementType, {
     ...hostProps,
     // `elementType` is a runtime string, so this can't be written as JSX; the
@@ -541,7 +696,7 @@ export function ReactiveHost({
     // which doesn't apply to a dynamic-host-element createElement call.
     // oxlint-disable-next-line react/no-children-prop
     children,
-    ref: createReactiveRef(bindings, userRef as SupportedRef),
+    ref,
   });
 }
 

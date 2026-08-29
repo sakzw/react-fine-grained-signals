@@ -14,6 +14,19 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+/** Spy shape shared by the call-counting helpers below. */
+type CallSpy = { mock: { calls: unknown[][] } };
+
+/** How many times `name` was written through `Element#setAttribute`. */
+function attributeWrites(spy: CallSpy, name: string): number {
+  return spy.mock.calls.filter(([written]) => written === name).length;
+}
+
+/** How many listeners of `type` were added or removed, across every EventTarget. */
+function listenerCalls(spy: CallSpy, type: string): number {
+  return spy.mock.calls.filter(([listened]) => listened === type).length;
+}
+
 describe("Direct DOM binding", () => {
   it("binds a signal directly to host DOM props", () => {
     function Field() {
@@ -441,5 +454,299 @@ describe("Direct DOM binding", () => {
     expect(document.activeElement).toBe(input);
     expect(input.value).toBe("abc");
     expect(input.selectionStart).toBe(1);
+  });
+});
+
+// `ReactiveHost` hands React one callback-ref identity for the lifetime of its
+// element and reconciles bindings from its own layout effect instead (see
+// `createReactiveHostBinder` in src/runtime/jsx.ts). Before that, the ref
+// closure was rebuilt on every render — `transformProps` allocates a fresh
+// `bindings` array each time — and React reads a changed callback-ref identity
+// as "detach the old ref, attach the new one" on the very same DOM node. So
+// *any* re-render of the owning component, for any reason at all, tore every
+// binding on that element down and built it back up: a `MutationObserver`
+// disconnected and recreated, composition listeners removed and re-added
+// together with the `composing`/`pending` state they guard, every `effect()`
+// resubscribed, and the user's own ref called with `null` and then the
+// identical node again. The tests below pin each of those, plus the cases the
+// identity churn was legitimately covering (a changed source, a changed key)
+// so the fix cannot buy stability by dropping a real teardown.
+describe("Direct DOM binding: ref identity stability", () => {
+  it("does not resubscribe a direct prop binding when its owner re-renders for an unrelated reason", () => {
+    const state = signal("initial-state");
+    const bump = signal(0);
+    // Every resubscribe re-runs the binding's effect body immediately, which
+    // for a `data-*` binding is exactly one `setAttribute` — so counting those
+    // counts subscriptions, without reaching into the reactive graph.
+    const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
+
+    function Box() {
+      useSignals();
+      void bump.value;
+      return <div aria-label="counted box" data-state={state} />;
+    }
+
+    render(<Box />);
+    const box = screen.getByLabelText("counted box");
+    expect(box.dataset.state).toBe("initial-state");
+    const afterMount = attributeWrites(setAttribute, "data-state");
+
+    act(() => {
+      bump.value++;
+    });
+    act(() => {
+      bump.value++;
+    });
+    expect(attributeWrites(setAttribute, "data-state")).toBe(afterMount);
+
+    // The binding is still live, not merely quiet.
+    act(() => {
+      state.value = "updated-state";
+    });
+    expect(box.dataset.state).toBe("updated-state");
+    expect(attributeWrites(setAttribute, "data-state")).toBe(afterMount + 1);
+  });
+
+  it("does not disconnect and recreate a bound select's MutationObserver on an unrelated re-render", () => {
+    const choice = signal("b");
+    const bump = signal(0);
+    const observe = vi.spyOn(MutationObserver.prototype, "observe");
+    const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
+
+    function Field() {
+      useSignals();
+      void bump.value;
+      return (
+        <select aria-label="observed choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+      );
+    }
+
+    render(<Field />);
+    const select = screen.getByLabelText("observed choice") as HTMLSelectElement;
+    expect(select.value).toBe("b");
+    const observed = observe.mock.calls.length;
+    const disconnected = disconnect.mock.calls.length;
+    expect(observed).toBeGreaterThan(0);
+
+    act(() => {
+      bump.value++;
+    });
+    expect(observe).toHaveBeenCalledTimes(observed);
+    expect(disconnect).toHaveBeenCalledTimes(disconnected);
+
+    act(() => {
+      choice.value = "c";
+    });
+    expect(select.value).toBe("c");
+  });
+
+  it("does not remove and re-add a bound input's composition listeners on an unrelated re-render", () => {
+    const text = signal("abc");
+    const bump = signal(0);
+    const addEventListener = vi.spyOn(EventTarget.prototype, "addEventListener");
+    const removeEventListener = vi.spyOn(EventTarget.prototype, "removeEventListener");
+
+    function Field() {
+      useSignals();
+      void bump.value;
+      return <input aria-label="listener field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+    }
+
+    render(<Field />);
+    const added = listenerCalls(addEventListener, "compositionstart");
+    const removed = listenerCalls(removeEventListener, "compositionend");
+    expect(added).toBeGreaterThan(0);
+
+    act(() => {
+      bump.value++;
+    });
+    expect(listenerCalls(addEventListener, "compositionstart")).toBe(added);
+    expect(listenerCalls(removeEventListener, "compositionend")).toBe(removed);
+  });
+
+  it("keeps an in-progress IME composition intact when its owner re-renders for an unrelated reason", () => {
+    const text = signal("abc");
+    const bump = signal(0);
+
+    function Field() {
+      useSignals();
+      void bump.value;
+      return <input aria-label="ime churn field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("ime churn field") as HTMLInputElement;
+    input.focus();
+
+    fireEvent.compositionStart(input);
+    // The browser renders composing IME candidates straight into `.value`.
+    input.value = "こんに";
+
+    // Rebuilding the binding here would resubscribe its effect and immediately
+    // write the signal's current value over the composing text, on top of
+    // losing the `composing` flag that defers later writes.
+    act(() => {
+      bump.value++;
+    });
+    expect(input.value).toBe("こんに");
+
+    // The deferral still works after that re-render, which is the part a reset
+    // `composing` flag would silently break.
+    act(() => {
+      text.value = "external update";
+    });
+    expect(input.value).toBe("こんに");
+
+    fireEvent.compositionEnd(input);
+    expect(input.value).toBe("external update");
+  });
+
+  it("does not re-invoke a stable user ref callback on an unrelated re-render", () => {
+    const text = signal("abc");
+    const bump = signal(0);
+    const attachments: (Element | null)[] = [];
+    // Declared outside the component, so its identity is stable across renders
+    // the way a `useCallback`ed or module-scope ref would be.
+    const trackRef = (node: Element | null) => {
+      attachments.push(node);
+    };
+
+    function Field() {
+      useSignals();
+      void bump.value;
+      return <input aria-label="tracked ref field" ref={trackRef} value={text} />;
+    }
+
+    const view = render(<Field />);
+    const input = screen.getByLabelText("tracked ref field") as HTMLInputElement;
+    expect(attachments).toEqual([input]);
+
+    act(() => {
+      bump.value++;
+    });
+    act(() => {
+      bump.value++;
+    });
+    expect(attachments).toEqual([input]);
+
+    view.unmount();
+    expect(attachments).toEqual([input, null]);
+  });
+
+  it("tears down a binding's old subscription and subscribes the new one when its source changes", () => {
+    const first = signal("first");
+    const second = signal("second");
+    const useSecond = signal(false);
+
+    function Box() {
+      useSignals();
+      return <div aria-label="swapped box" data-state={useSecond.value ? second : first} />;
+    }
+
+    render(<Box />);
+    const box = screen.getByLabelText("swapped box");
+    expect(box.dataset.state).toBe("first");
+
+    act(() => {
+      first.value = "first updated";
+    });
+    expect(box.dataset.state).toBe("first updated");
+
+    act(() => {
+      useSecond.value = true;
+    });
+    expect(box.dataset.state).toBe("second");
+
+    // The replaced source must be genuinely unsubscribed, not just unread.
+    act(() => {
+      first.value = "orphaned";
+    });
+    expect(box.dataset.state).toBe("second");
+
+    act(() => {
+      second.value = "second updated";
+    });
+    expect(box.dataset.state).toBe("second updated");
+  });
+
+  it("rebuilds only the binding whose source changed, leaving its siblings subscribed", () => {
+    const text = signal("abc");
+    const first = signal("first");
+    const second = signal("second");
+    const useSecond = signal(false);
+    const addEventListener = vi.spyOn(EventTarget.prototype, "addEventListener");
+    const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
+
+    function Field() {
+      useSignals();
+      return (
+        <input
+          aria-label="mixed field"
+          value={text}
+          data-state={useSecond.value ? second : first}
+        />
+      );
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("mixed field") as HTMLInputElement;
+    expect(input.value).toBe("abc");
+    expect(input.dataset.state).toBe("first");
+    const added = listenerCalls(addEventListener, "compositionstart");
+    const written = attributeWrites(setAttribute, "data-state");
+
+    act(() => {
+      useSecond.value = true;
+    });
+    // The `data-state` binding was rebuilt against its new source ...
+    expect(input.dataset.state).toBe("second");
+    expect(attributeWrites(setAttribute, "data-state")).toBeGreaterThan(written);
+    // ... while the untouched `value` binding kept the one subscription — and
+    // the composition state — it already had.
+    expect(listenerCalls(addEventListener, "compositionstart")).toBe(added);
+
+    act(() => {
+      text.value = "still bound";
+    });
+    expect(input.value).toBe("still bound");
+  });
+
+  it("gives a new key's node a fresh binding and fully cleans up the node it replaced", () => {
+    const text = signal("first");
+    const slot = signal("a");
+    const attachments: (Element | null)[] = [];
+    const trackRef = (node: Element | null) => {
+      attachments.push(node);
+    };
+
+    function Field() {
+      useSignals();
+      return <input key={slot.value} aria-label="keyed field" ref={trackRef} value={text} />;
+    }
+
+    render(<Field />);
+    const firstNode = screen.getByLabelText("keyed field") as HTMLInputElement;
+    expect(attachments).toEqual([firstNode]);
+    expect(firstNode.value).toBe("first");
+
+    act(() => {
+      slot.value = "b";
+    });
+    const secondNode = screen.getByLabelText("keyed field") as HTMLInputElement;
+    expect(secondNode).not.toBe(firstNode);
+    expect(attachments).toEqual([firstNode, null, secondNode]);
+    expect(secondNode.value).toBe("first");
+
+    act(() => {
+      text.value = "second";
+    });
+    expect(secondNode.value).toBe("second");
+    // The replaced node's subscription is disposed, not just detached from the
+    // document — a live effect would still be writing into it.
+    expect(firstNode.value).toBe("first");
   });
 });

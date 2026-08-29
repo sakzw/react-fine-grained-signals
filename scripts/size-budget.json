@@ -12,7 +12,7 @@
     "gzip": 8064
   },
   "jsx-runtime": {
-    "gzip": 4864
+    "gzip": 5632
   },
   "utils": {
     "gzip": 3264
