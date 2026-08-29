@@ -2,7 +2,7 @@
 
 [English](use-signals-boundary-design.md) | [日本語](use-signals-boundary-design.ja.md)
 
-Status: design investigation; no API or implementation decision has been made.
+Status: design investigation; no API or implementation decision has been made on the core question below — whether/how to give bare, non-managed `useSignals()` a strict boundary contract by default. One narrower option considered here (option 3, the manual scope handle) has since been documented and adopted for plugin-free manual usage; see "Current recommendation" at the end of this document.
 
 ## Context
 
@@ -52,9 +52,11 @@ Advantages: preserves source ergonomics and gives lexical ownership. Disadvantag
 
 ### 3. Document the manual scope handle
 
-The managed runtime already ships an exact boundary that needs no compiler: `react-alien-signals/runtime` exports the transform target (`useManagedSignals`, re-exported there as `useSignals`), which returns a scope handle closed with `finish()` / `f()`. Documenting `const store = useSignals(); try { … } finally { store.f(); }` as a public pattern would offer strict ownership with no build integration and no wrapper.
+**Status: adopted, for this narrower use case.** `transform: "managed"` remains the primary/recommended path when the build plugin is available; this manual pattern is the documented option for manual usage without a build transform.
 
-Advantages: exact lexical ownership from a mechanism that already exists, with no compiler and no change to component identity. Disadvantages: boilerplate in every opted-in component; a forgotten `finally` leaks the scope from an API that claims exactness, which is worse than a forgotten hook call; and publishing the handle freezes what is currently an internal transform contract.
+The managed runtime already ships an exact boundary that needs no compiler: `react-alien-signals/runtime` exports the transform target (`useManagedSignals`, re-exported there as `useSignals`), which returns a scope handle closed with `finish()` / `f()`. `const store = useSignals(); try { … } finally { store.f(); }` is now documented as a public pattern in [the hooks guide](../hooks.md) ("Tracking boundary"), offering strict ownership with no build integration and no wrapper. [The React Compiler compatibility note](react-compiler-compatibility.md#the-hand-written-react-alien-signalsruntime-boundary-behaves-like-managed-output) separately measures this exact hand-written pattern's behavior under `babel-plugin-react-compiler`.
+
+Advantages: exact lexical ownership from a mechanism that already exists, with no compiler and no change to component identity. The trade-offs below are properties of the pattern itself and hold regardless of documentation status: boilerplate in every opted-in component; a forgotten `finally` leaks the scope from an API that claims exactness, which is worse than a forgotten hook call; and documenting the handle commits `react-alien-signals/runtime`'s shape as a public contract rather than leaving it an internal transform implementation detail.
 
 ### 4. Introduce an explicit component wrapper
 
@@ -103,6 +105,6 @@ The decision should also compare bundle cost, per-render overhead, source-map/de
 
 ## Current recommendation
 
-Until a decision is made, treat bare `useSignals()` and `transform: "inject"` as plugin-free best-effort conveniences for synchronous renders where every signal-reading component opts in. Use `transform: "managed"` when an exact render boundary is required. This statement records the current limitation; it does not close the design issue or redefine the incorrect sibling case as correct behavior.
+Until a decision is made on the broader bare-`useSignals()` boundary question, treat bare `useSignals()` and `transform: "inject"` as plugin-free best-effort conveniences for synchronous renders where every signal-reading component opts in. Use `transform: "managed"` when an exact render boundary is required and the build plugin is available. Without the plugin, option 3's manual `react-alien-signals/runtime` scope handle — `const store = useSignals(); try { … } finally { store.f(); }` — is now documented in [the hooks guide](../hooks.md) as the exact-boundary alternative. This statement records the current limitation; it does not close the design issue or redefine the incorrect sibling case as correct behavior.
 
-`unplugin-react-alien-signals` now defaults to `transform: "managed"`, implementing option 2 above for the bundler-plugin path: `managed` (default) adds an exact try/finally boundary; `inject` adds bare `useSignals()` for best-effort opt-in. Consumers who build with the plugin and do not override `transform` therefore get the exact boundary without any source change. This narrows, but does not close, the scope of this investigation: bare `useSignals()` called with no build transform at all, and `transform: "inject"` when explicitly selected, remain exactly as best-effort as described above, and the other options and decision criteria in this document are otherwise unresolved.
+`unplugin-react-alien-signals` now defaults to `transform: "managed"`, implementing option 2 above for the bundler-plugin path: `managed` (default) adds an exact try/finally boundary; `inject` adds bare `useSignals()` for best-effort opt-in. Consumers who build with the plugin and do not override `transform` therefore get the exact boundary without any source change; consumers without the plugin can get the equivalent exact boundary manually via option 3, now that it is documented. This narrows, but does not close, the scope of this investigation: bare `useSignals()` called with no build transform at all, and `transform: "inject"` when explicitly selected, remain exactly as best-effort as described above, and the broader question this document is about — whether and how to give the bare hook a strict boundary contract by default — along with the other options and decision criteria in this document, remains unresolved.
