@@ -70,3 +70,9 @@ pnpm bench:transform
 `bench:react` は、jsdom上に小さなReactツリーをマウントし、N個の無関係な兄弟行の上に共有カウンターを置いた場合の3パターンを比較します: memo化していないhooks（更新のたびに全ての兄弟が再レンダリングされる）、`React.memo`でラップしたhooks（兄弟は一度だけレンダリングされるが、更新のたびにbail outのためfiberを走査する）、signals（所有コンポーネント自体が再レンダリングされないため兄弟は一切再訪問されない）。各パターンについて兄弟の再レンダリング回数と更新のスループットを報告します。
 
 `bench:transform` は最初にbuildを行い、配布済みVite adapterの小・大規模TSX moduleに対するparse、scope、書き換え、source map、code generationの経路を測定します。pass-throughの下限と、変換候補がないBabelケースを含むため、将来互換性のあるSWC/Oxc実装を同じcorpusで比較できます。
+
+## 謝辞
+
+- [alien-signals](https://www.npmjs.com/package/alien-signals) — 本パッケージが直接bindingを提供する基盤ライブラリ。
+- [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — ベンチマークの比較対象。
+- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](docs/design/use-signals-boundary-design.ja.md#prior-art)を参照。

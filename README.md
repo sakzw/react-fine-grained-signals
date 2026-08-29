@@ -69,3 +69,9 @@ parse, scope, rewrite, source-map, and code-generation path for small and
 large TSX modules. It includes a pass-through lower bound and a no-candidate
 Babel case, so it can be used later to compare a compatible SWC or Oxc
 implementation against the same corpus.
+
+## Acknowledgments
+
+- [alien-signals](https://www.npmjs.com/package/alien-signals) — the underlying library this package binds to.
+- [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — benchmark comparison target.
+- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — prior art for the `useSignals()` boundary's store protocol; see [Prior art](docs/design/use-signals-boundary-design.md#prior-art).
