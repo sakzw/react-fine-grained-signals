@@ -2,6 +2,16 @@
   "name": "react-fine-grained-signals",
   "version": "0.0.0",
   "description": "Fine-grained signal rendering for React 19, built on alien-signals.",
+  "license": "MIT",
+  "author": "akazawa",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sakzw/react-fine-grained-signals.git"
+  },
+  "homepage": "https://github.com/sakzw/react-fine-grained-signals#readme",
+  "bugs": {
+    "url": "https://github.com/sakzw/react-fine-grained-signals/issues"
+  },
   "keywords": [
     "react",
     "signals",

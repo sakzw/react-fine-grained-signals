@@ -34,6 +34,12 @@ const budgetPath = join(repositoryRoot, "scripts", "size-budget.json");
 /** Each scenario is what one realistic consumer import graph pulls in. */
 const scenarios = [
   {
+    name: "signal-only",
+    description: "importing only signal, as the README's sideEffects claim measures",
+    source: `import { signal } from "DIST/index.js";
+export default [signal];`,
+  },
+  {
     name: "core",
     description: "signal + computed + effect only",
     source: `import { signal, computed, effect, batch, untracked } from "DIST/index.js";
@@ -78,6 +84,7 @@ const REACT_STORE_MARKER = "useSyncExternalStore";
 
 /** Code that must be absent from a bundle, proving the shake actually worked. */
 const absenceChecks = {
+  "signal-only": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER],
   core: [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER],
   "core+hooks": [DEEP_SIGNAL_MARKER],
 };
