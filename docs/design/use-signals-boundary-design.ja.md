@@ -56,7 +56,7 @@ source上の `useSignals()` 呼び出しは維持しながら、opt-inしたcomp
 
 **状態: この範囲の狭い用途については採用済みです。** build pluginを利用できる場合は `transform: "managed"` が引き続き主要な推奨経路であり、手動ランタイムインポート境界はbuild変換なしに厳密な境界を得るための文書化された選択肢です。
 
-managed runtimeは、compilerなしでも厳密な境界を既に備えています。`react-fine-grained-signals/runtime` はtransformの対象である `useManagedSignals` を(同moduleでは `useSignals` として)exportしており、これは `finish()` / `f()` で閉じるscope handleを返します。`const store = useSignals(); try { … } finally { store.f(); }` は、公開patternとして[hooksのdocs](../hooks.ja.md)(「追跡境界について」)に既に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](react-compiler-compatibility.ja.md#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、この手動ランタイムインポート境界の `babel-plugin-react-compiler` 下での挙動を別途計測しています。
+managed runtimeは、compilerなしでも厳密な境界を既に備えています。`react-fine-grained-signals/runtime` はtransformの対象である `useManagedSignals` をexportしています。同moduleでは `useSignals` として再exportされているほか、それ自身の名前でもexportされているため、managed-modeの契約を曖昧な `useSignals` aliasを介さず使いたい呼び出し元は `useManagedSignals` を直接利用できます。これは `finish()` / `f()` で閉じるscope handleを返します。`const store = useSignals(); try { … } finally { store.f(); }` は、公開patternとして[hooksのdocs](../hooks.ja.md)(「追跡境界について」)に既に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](react-compiler-compatibility.ja.md#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、この手動ランタイムインポート境界の `babel-plugin-react-compiler` 下での挙動を別途計測しています。
 
 利点は、既存の仕組みだけで字句的に厳密な所有権を得られ、compilerが不要でcomponent identityにも影響しないことです。以下の欠点は、文書化された今も変わらない、pattern自体が持つ性質です。opt-inするすべてのcomponentにboilerplateが必要になること、`finally` の書き忘れは厳密さを掲げるAPIからscopeを漏らすためhookの呼び忘れより深刻であること、そして文書化によって `react-fine-grained-signals/runtime` の形をtransform専用の内部実装詳細ではなく公開APIとして固定したことです。
 

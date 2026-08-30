@@ -12,6 +12,17 @@ render scope変換を提供する汎用bundler integrationです。Babel実装�
 将来のパッケージはESM-onlyです。CommonJSの`require()`ではなく、ESM設定から
 `import`してください。
 
+## インストール(予定)
+
+このpackageはまだ公開していません。以下のcommandは、公開予定のAPIを
+示すものです。
+
+```sh
+pnpm add -D unplugin-react-fine-grained-signals
+```
+
+`react-fine-grained-signals` はpeer dependencyです。
+
 ## Vite
 
 ```ts
@@ -23,8 +34,24 @@ export default defineConfig({
 });
 ```
 
-Rollup、webpack、Rspack、esbuildにはそれぞれ `/rollup`、`/webpack`、
-`/rspack`、`/esbuild` のentry pointを使います。
+## その他のbundler
+
+対応するentry pointを同様の要領で使用します。
+
+| Bundler | Entry point |
+| --- | --- |
+| Rollup | `unplugin-react-fine-grained-signals/rollup` |
+| Webpack | `unplugin-react-fine-grained-signals/webpack` |
+| Rspack | `unplugin-react-fine-grained-signals/rspack` |
+| esbuild | `unplugin-react-fine-grained-signals/esbuild` |
+
+```ts
+import signals from "unplugin-react-fine-grained-signals/webpack";
+
+export default {
+  plugins: [signals({ mode: "auto" })],
+};
+```
 
 ## オプション
 

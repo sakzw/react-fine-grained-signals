@@ -8,19 +8,13 @@
 
 ## ドキュメント
 
-- [コアプリミティブ](docs/core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`。
-- [Reactフック](docs/hooks.ja.md) — `useSignals`、`useSignal`、`useDeepSignal`、`useComputed`、`useSignalEffect`、低レベルselector hooks。
-- [描画最適化](docs/rendering-optimization.ja.md) — 明示的な `useSignals()` 追跡とbuild pluginによる自動挿入の比較。
-- [JSXのsignal子要素とhost binding](docs/jsx-bindings.ja.md) — 独自JSXランタイムのDOM直接bindingとその制約。
-- [JSX制御フローユーティリティ](docs/control-flow.ja.md) — `Show`、`Switch` / `Match`、`For`、`Index`。
-
-未決定、または過去の実装判断に関する設計検討メモは[`docs/design/`](docs/design/)にあります。索引全体は[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
+ライブラリの使い方のガイド、設計検討メモ、ドキュメント索引全体については[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
 
 ## パッケージング
 
 `alien-signals` は直接のdependencyではなく **peer dependency** です。alien-signalsの依存追跡はmodule globalな状態（`getActiveSub` / `setActiveSub`）に置かれているため、1つのアプリケーションに2つのcopyが入るとbytesを無駄にするだけでは済みません。片方のcopyが追跡した読み取りはもう片方から見えず、しかも例外は投げられません。peerとして宣言することでpackage managerが単一instanceに解決し、`pnpm test:consumer` が公開manifestのその状態を検証します。
 
-packageは `"sideEffects": false` を設定しています。module graphからside effectを推論するbundlerは、この宣言がなくても既に正しくtree shakingできます。`signal` だけをimportした場合は2.96 kB gzipで、entry全体では7.13 kBです。Vite/Rolldownでは、このflagの有無で前者が約40 bytes動くだけで、後者は変わりません。それでも設定しているのは、証明する代わりに宣言を信頼するbundler（webpackの `sideEffects` 最適化）のためと、保証を固定するためです。後からtop levelのside effectを追加した場合、すべてのconsumerに黙ってcostを課す代わりにcheckが失敗します。
+packageは `"sideEffects": false` を設定しています。module graphからside effectを推論するbundlerは、この宣言がなくても既に正しくtree shakingできます。`signal` だけをimportした場合は2.55 kB gzipで、entry全体では7.79 kBです(`pnpm size`の`signal-only`/`index-full`シナリオとして追跡されているため、コードが変わればこの数値も追従します)。Vite/Rolldownでは、このflagの有無で前者が約40 bytes動くだけで、後者は変わりません。それでも設定しているのは、証明する代わりに宣言を信頼するbundler（webpackの `sideEffects` 最適化）のためと、保証を固定するためです。後からtop levelのside effectを追加した場合、すべてのconsumerに黙ってcostを課す代わりにcheckが失敗します。
 
 ```sh
 pnpm size
@@ -49,6 +43,7 @@ pnpm test:consumer
 
 ```sh
 pnpm exec playwright install --only-shell chromium
+pnpm prepare:e2e
 pnpm test:browser
 ```
 

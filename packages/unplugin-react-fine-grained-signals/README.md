@@ -188,7 +188,9 @@ prefer fixing the function; `transform: "inject"` restores the old behavior if
 the file must keep building unchanged.
 
 Reapplying either transform mode is a no-op. The transform runs before other
-plugin transforms and skips dependencies and non-JavaScript/TypeScript modules.
+plugin transforms via `enforce: "pre"` on bundlers that support it (Vite,
+webpack, Rspack) — Rollup has no such concept, so list this plugin first there
+instead — and skips dependencies and non-JavaScript/TypeScript modules.
 Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`, `.jsx`,
 and JavaScript files may use JSX.
 
