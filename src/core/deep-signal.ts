@@ -63,8 +63,74 @@ const readonlyCollectionViewToRaw = new WeakMap<object, Map<unknown, unknown> | 
 // same identity and aliases, just like assigning an ordinary raw object does.
 const normalizedProxyCarriers = new WeakMap<object, object>();
 
+/**
+ * The realm's built-in prototype objects, rejected deliberately rather than by
+ * accident. Several of them look exactly like plain data to the rest of this
+ * module: `Array.prototype` is array-exotic (so `Array.isArray` short-circuits
+ * the prototype check below), while `Error.prototype`, `Date.prototype`,
+ * `Promise.prototype`, `String.prototype`, ... all inherit straight from
+ * `Object.prototype` and expose only extensible, writable data properties, so
+ * neither `assertExtensible` nor `assertDataProperties` stops them. Adopting
+ * one as deep state would let the `set` trap `Reflect.set` onto the real,
+ * globally shared intrinsic. Some of them (`Object.prototype.__proto__`,
+ * `Map.prototype.size`, ...) happen to be caught today by the accessor check,
+ * but that protection is incidental and asymmetric; this set makes it uniform.
+ *
+ * Built from `globalThis` so an engine missing a builtin simply contributes
+ * nothing. Only this realm's intrinsics are listed: an object from another
+ * realm already fails the `Object.prototype` identity check below (the one
+ * exception being a cross-realm array, which stays accepted as it is today).
+ */
+const INTRINSIC_PROTOTYPES: ReadonlySet<object> = (() => {
+  const prototypes = new Set<object>();
+  for (const name of [
+    "Object",
+    "Array",
+    "Function",
+    "Boolean",
+    "Number",
+    "String",
+    "Symbol",
+    "BigInt",
+    "Date",
+    "RegExp",
+    "Error",
+    "AggregateError",
+    "EvalError",
+    "RangeError",
+    "ReferenceError",
+    "SyntaxError",
+    "TypeError",
+    "URIError",
+    "Map",
+    "Set",
+    "WeakMap",
+    "WeakSet",
+    "WeakRef",
+    "FinalizationRegistry",
+    "Promise",
+    "ArrayBuffer",
+    "SharedArrayBuffer",
+    "DataView",
+  ]) {
+    const intrinsic = (globalThis as unknown as Record<string, unknown>)[name];
+    if (typeof intrinsic !== "function") continue;
+    const prototype: unknown = (intrinsic as { prototype?: unknown }).prototype;
+    if ((typeof prototype === "object" && prototype !== null) || typeof prototype === "function") {
+      prototypes.add(prototype as object);
+    }
+  }
+  return prototypes;
+})();
+
+const isIntrinsicPrototype = (value: unknown): boolean =>
+  isObjectLike(value) && INTRINSIC_PROTOTYPES.has(value);
+
 function isPlainObjectOrArray(value: unknown): value is object {
   if (typeof value !== "object" || value === null || isSignal(value)) return false;
+  // Before `Array.isArray`, which would otherwise wave `Array.prototype`
+  // through: it is array-exotic, extensible, and carries only data properties.
+  if (INTRINSIC_PROTOTYPES.has(value)) return false;
   if (Array.isArray(value)) return true;
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
@@ -314,6 +380,17 @@ function assertDeepDataGraph(value: unknown): boolean {
     const visitFlag = insideOpaque ? 2 : 1;
     if ((visitedAs & visitFlag) !== 0) continue;
     seen.set(raw, visitedAs | visitFlag);
+
+    // A built-in prototype adopted as reactive data would be written through
+    // by the `set` trap, landing on the realm's shared intrinsic. Reject it
+    // here, ahead of every branch below, so the diagnosis is the same for
+    // `Array.prototype` (which nothing else catches) and for `Object.prototype`
+    // (which only trips the accessor check by accident). Values reached
+    // *through* an opaque one are exempt: they are never proxied and never
+    // written to, and `{ ctor: Array }` reaches `Array.prototype` that way.
+    if (!insideOpaque && isIntrinsicPrototype(raw)) {
+      throw new TypeError("deepSignal() cannot store a built-in prototype object in deep state");
+    }
 
     if (raw instanceof Map) {
       for (const [key, entry] of raw) {
@@ -843,6 +920,34 @@ const wrap = <T>(value: T): T => {
       });
       sweepPrunedKeys(metadata, target);
       return true;
+    },
+
+    getOwnPropertyDescriptor(target, key) {
+      // `Object.getOwnPropertyDescriptor(state, key).value` is a read of the
+      // property, so it subscribes through the same per-key version signal the
+      // `get` trap uses and hands back the same wrapped value. Without this
+      // trap the descriptor carried the raw nested object: a read that never
+      // re-ran, and — via `Object.getOwnPropertyDescriptors` — every top-level
+      // raw reference in one call.
+      track(target, metadata.properties, metadata.propertyIndices, key);
+      const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
+      if (descriptor === undefined || !("value" in descriptor)) return descriptor;
+
+      // The one value that cannot be substituted. [[GetOwnProperty]] requires
+      // the reported descriptor to be compatible with the target's, and for a
+      // non-configurable, non-writable data property that means reporting the
+      // very same value — a proxy may not lie about it, so the engine throws
+      // at the call site if we swap in a wrapper. `get` refuses such a
+      // property outright rather than hand back an unwrapped reference; here
+      // refusing would break `Object.getOwnPropertyDescriptors()` for the
+      // whole object, so report it exactly as it is, which is also all the
+      // invariant ever lets a caller observe.
+      if (descriptor.configurable === false && descriptor.writable === false) {
+        return descriptor;
+      }
+
+      descriptor.value = wrap(descriptor.value);
+      return descriptor;
     },
 
     has(target, key) {

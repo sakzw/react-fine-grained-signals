@@ -792,4 +792,131 @@ describe("deepSignal", () => {
     expect(Reflect.ownKeys(state.peek().left as object)).toEqual(["3", "length"]);
     expect((state.peek().left as unknown[]).length).toBe(4);
   });
+
+  it("tracks and wraps values read through getOwnPropertyDescriptor", () => {
+    const state = deepSignal({ nested: { count: 1 }, list: [1] });
+    const counts: number[] = [];
+
+    // Pre-fix there was no `getOwnPropertyDescriptor` trap, so the descriptor
+    // carried the raw nested object: this read subscribed to nothing and the
+    // effect never re-ran, while `get`, spread, `Object.entries` and
+    // `JSON.stringify` all wrapped and tracked the very same property.
+    disposers.push(effect(() => {
+      const descriptor = Object.getOwnPropertyDescriptor(
+        state.value,
+        "nested",
+      ) as PropertyDescriptor;
+      counts.push((descriptor.value as { count: number }).count);
+    }));
+    expect(counts).toEqual([1]);
+
+    state.value.nested.count = 2;
+    expect(counts).toEqual([1, 2]);
+
+    const descriptor = Object.getOwnPropertyDescriptor(state.value, "nested");
+    expect(descriptor?.value).toBe(state.value.nested);
+    expect(descriptor?.value).not.toBe(state.peek().nested);
+    // The reported descriptor still describes the property faithfully.
+    expect(descriptor).toMatchObject({ writable: true, enumerable: true, configurable: true });
+
+    // One call used to hand out every top-level raw reference at once.
+    const all = Object.getOwnPropertyDescriptors(state.value);
+    expect(all.nested.value).toBe(state.value.nested);
+    expect(all.list.value).toBe(state.value.list);
+    expect(all.nested.value).not.toBe(state.peek().nested);
+
+    // A missing key reports nothing, but the read is still a subscription.
+    const seen: unknown[] = [];
+    disposers.push(effect(() => {
+      seen.push(Object.getOwnPropertyDescriptor(state.value, "added")?.value);
+    }));
+    expect(seen).toEqual([undefined]);
+    (state.value as { added?: number }).added = 7;
+    expect(seen).toEqual([undefined, 7]);
+  });
+
+  it("reports a non-configurable property through the descriptor trap without breaking invariants", () => {
+    // A proxy may not report a different value for a non-configurable,
+    // non-writable property: substituting the wrapper makes the engine itself
+    // throw at the call site. `get` refuses such a property with the library's
+    // own error, but refusing here would break `getOwnPropertyDescriptors()`
+    // for the whole object, so the property is reported exactly as it is.
+    const frozenSlot = Object.defineProperty({}, "nested", {
+      value: { count: 1 },
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    }) as { nested: { count: number } };
+    const frozenState = deepSignal(frozenSlot);
+
+    const descriptor = Object.getOwnPropertyDescriptor(frozenState.value, "nested");
+    expect(descriptor?.value).toBe(frozenState.peek().nested);
+    expect(() => Object.getOwnPropertyDescriptors(frozenState.value)).not.toThrow();
+    // `get` keeps rejecting it with the library's message rather than lying.
+    expect(() => frozenState.value.nested).toThrow(
+      /non-configurable, non-writable object property/,
+    );
+
+    // Non-configurable but writable: the invariant permits a substituted
+    // value, so this one is wrapped and tracked like any other property.
+    const writableSlot = Object.defineProperty({}, "nested", {
+      value: { count: 1 },
+      writable: true,
+      configurable: false,
+      enumerable: true,
+    }) as { nested: { count: number } };
+    const writableState = deepSignal(writableSlot);
+    const writableDescriptor = Object.getOwnPropertyDescriptor(writableState.value, "nested");
+    expect(writableDescriptor?.value).toBe(writableState.value.nested);
+    expect(writableDescriptor?.value).not.toBe(writableState.peek().nested);
+
+    // An array's own `length` is non-configurable too, and still readable.
+    const listState = deepSignal({ list: ["a", "b"] });
+    expect(Object.getOwnPropertyDescriptor(listState.value.list, "length")?.value).toBe(2);
+  });
+
+  it("rejects built-in prototype objects as deep state", () => {
+    const message = /built-in prototype object/;
+
+    // `Array.prototype` used to slip through every check: `Array.isArray`
+    // short-circuits the prototype test, and it is extensible with only data
+    // properties, so the `set` trap would have written to the real intrinsic.
+    expect(() => deepSignal({ p: Array.prototype })).toThrow(message);
+    expect(() => deepSignal({ list: [Array.prototype] })).toThrow(message);
+    expect(() => deepSignal(Array.prototype as unknown as object)).toThrow(message);
+    // `Object.prototype` was only ever caught by accident, through its
+    // `__proto__` accessor tripping the accessor check; now it is deliberate.
+    expect(() => deepSignal({ p: Object.prototype })).toThrow(message);
+    expect(() => deepSignal(Object.prototype)).toThrow(message);
+    // These pass the accessor check outright and were accepted before.
+    expect(() => deepSignal({ p: Error.prototype })).toThrow(message);
+    expect(() => deepSignal({ p: Date.prototype })).toThrow(message);
+    expect(() => deepSignal({ p: Promise.prototype })).toThrow(message);
+    expect(() => deepSignal({ p: String.prototype })).toThrow(message);
+    expect(() => deepSignal({ p: WeakMap.prototype })).toThrow(message);
+    // And these now report the same deliberate reason as the rest.
+    expect(() => deepSignal({ p: Map.prototype })).toThrow(message);
+    expect(() => deepSignal({ p: Set.prototype })).toThrow(message);
+    expect(() => deepSignal({ p: RegExp.prototype })).toThrow(message);
+    expect(() => deepSignal({ p: Function.prototype })).toThrow(message);
+
+    // Assigning one later is rejected the same way, and nothing lands on the
+    // shared intrinsic on the way out.
+    const state = deepSignal({ p: 1 as unknown });
+    expect(() => {
+      state.value.p = Array.prototype;
+    }).toThrow(message);
+    expect(() => {
+      state.value = { p: Object.prototype };
+    }).toThrow(message);
+    expect(state.peek().p).toBe(1);
+    expect(Object.hasOwn(Array.prototype, "p")).toBe(false);
+
+    // Instances of those builtins, and a constructor's own `.prototype` reached
+    // through an opaque value, stay perfectly storable.
+    expect(deepSignal({ d: new Date(0) }).value.d.getTime()).toBe(0);
+    expect(deepSignal({ e: new Error("boom") }).value.e.message).toBe("boom");
+    expect(deepSignal({ m: new Map([["a", 1]]) }).value.m.get("a")).toBe(1);
+    expect(deepSignal({ ctor: Array as unknown as object }).peek().ctor).toBe(Array);
+  });
 });
