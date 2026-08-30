@@ -67,8 +67,14 @@ export function canTransform(id: string, options: ReactFineGrainedSignalsOptions
 }
 
 /**
- * The esbuild loader each extension this plugin claims must be read with.
- *
+ * The esbuild loader names this plugin itself ever chooses. esbuild's own
+ * `Loader` union is wider and is not importable here (esbuild is not a
+ * dependency of this package), so a value read out of the project's configured
+ * loader map is handed straight back and narrowed to this at the hook boundary.
+ */
+export type EsbuildLoaderName = "js" | "jsx" | "ts" | "tsx";
+
+/**
  * `.js`/`.mjs` deliberately resolve to `"jsx"`. JavaScript commonly carries JSX
  * without a `.jsx` suffix -- the transform's own parser configuration says so,
  * and its output for such a file still contains that JSX -- but unplugin's
@@ -79,14 +85,6 @@ export function canTransform(id: string, options: ReactFineGrainedSignalsOptions
  * ones this transform declines to touch, a single wrong answer here breaks the
  * whole build rather than just one module.
  */
-/**
- * The esbuild loader names this plugin itself ever chooses. esbuild's own
- * `Loader` union is wider and is not importable here (esbuild is not a
- * dependency of this package), so a value read out of the project's configured
- * loader map is handed straight back and narrowed to this at the hook boundary.
- */
-export type EsbuildLoaderName = "js" | "jsx" | "ts" | "tsx";
-
 const ESBUILD_LOADERS: Record<string, EsbuildLoaderName> = {
   ".js": "jsx",
   ".mjs": "jsx",
