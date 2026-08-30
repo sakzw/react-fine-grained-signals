@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { batch, deepSignal, effect, isSignal } from "../src/index.js";
+import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
+
+/** Reads the internal per-key metadata a deep proxy is retaining. */
+function metadataOf(value: object) {
+  const metadata = inspectDeepSignalMetadata(value);
+  if (metadata === undefined) throw new Error("no deep-signal metadata for this value");
+  return metadata;
+}
 
 // Spelled out rather than imported: the literal string is the cross-instance
 // wire format, so a second copy of the package can only agree by matching it.
@@ -636,5 +644,152 @@ describe("deepSignal", () => {
       state.value = deeplyInvalid as never;
     }).toThrow(TypeError);
     expect(state.peek().nested.value).toBe(1);
+  });
+
+  it("does not mint version signals for inherited prototype members", () => {
+    const state = deepSignal({ list: ["a", "b", "c"], label: "x" });
+
+    disposers.push(effect(() => {
+      state.value.list.map((entry) => entry.toUpperCase());
+      state.value.list.includes("a");
+      "map" in state.value.list;
+      String(state.value.label);
+    }));
+
+    const list = metadataOf(state.value.list);
+    // Only real data keys: the indices the read touched, plus `length`.
+    expect(new Set(list.properties)).toEqual(new Set(["0", "1", "2", "length"]));
+    expect(list.properties).not.toContain("map");
+    expect(list.properties).not.toContain("includes");
+    expect(list.properties).not.toContain(Symbol.iterator);
+    expect(list.existence).not.toContain("map");
+
+    // A key that shadows a prototype member as real own data stays reactive.
+    const shadowing = deepSignal({ map: 1 });
+    const seen: number[] = [];
+    disposers.push(effect(() => {
+      seen.push(shadowing.value.map);
+    }));
+    expect(metadataOf(shadowing.value).properties).toContain("map");
+    shadowing.value.map = 2;
+    expect(seen).toEqual([1, 2]);
+  });
+
+  it("prunes per-key metadata for removed keys once nothing subscribes", () => {
+    const state = deepSignal({
+      list: Array.from({ length: 40 }, (_, index) => `row-${index}`),
+      removable: "here" as string | undefined,
+    });
+
+    const dispose = effect(() => {
+      for (const entry of state.value.list) String(entry);
+      "removable" in state.value;
+      String(state.value.removable);
+    });
+
+    const before = metadataOf(state.value.list);
+    expect(before.propertyIndices).toHaveLength(40);
+    expect(before.properties).toHaveLength(41);
+
+    // With the subscriber gone, the version signals for keys that no longer
+    // exist are garbage. Pre-fix they were retained for the life of the proxy.
+    dispose();
+    state.value.list.length = 0;
+
+    const afterTruncation = metadataOf(state.value.list);
+    expect(afterTruncation.propertyIndices).toEqual([]);
+    expect(afterTruncation.properties).toEqual(["length"]);
+
+    const rootBefore = metadataOf(state.value);
+    expect(rootBefore.properties).toContain("removable");
+    expect(rootBefore.existence).toContain("removable");
+    delete (state.value as { removable?: string }).removable;
+    const rootAfter = metadataOf(state.value);
+    expect(rootAfter.properties).not.toContain("removable");
+    expect(rootAfter.existence).not.toContain("removable");
+  });
+
+  it("keeps a removed key's version signal while a subscriber still reads it", () => {
+    const state = deepSignal({ list: ["a", "b", "c"] });
+    const seen: Array<string | undefined> = [];
+
+    // This subscriber keeps reading index 2 even after it is truncated away,
+    // so its version signal must survive — dropping it would strand the
+    // effect on a `RenderSubscription` the property map no longer reaches.
+    disposers.push(effect(() => {
+      seen.push(state.value.list[2]);
+    }));
+    expect(seen).toEqual(["c"]);
+
+    state.value.list.length = 2;
+    expect(seen).toEqual(["c", undefined]);
+    expect(metadataOf(state.value.list).properties).toContain("2");
+
+    // Still wired up: restoring the index notifies the same subscriber.
+    state.value.list[2] = "c2";
+    expect(seen).toEqual(["c", undefined, "c2"]);
+  });
+
+  it("reports a frozen collection-valued property with the library's own error", () => {
+    // `wrap()` substitutes a readonly view for a Map/Set exactly as it
+    // substitutes a proxy for a plain object, and neither can be handed back
+    // through a non-configurable, non-writable slot without violating the
+    // proxy invariants. Gating the check on `isPlainObjectOrArray` let the
+    // Map/Set case fall through to a raw engine TypeError instead.
+    const withMap = Object.defineProperty({}, "collection", {
+      value: new Map([["a", 1]]),
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    }) as { collection: Map<string, number> };
+    const mapState = deepSignal(withMap);
+    expect(() => mapState.value.collection).toThrow(
+      /non-configurable, non-writable object property/,
+    );
+
+    const withSet = Object.defineProperty({}, "collection", {
+      value: new Set([1]),
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    }) as { collection: Set<number> };
+    const setState = deepSignal(withSet);
+    expect(() => setState.value.collection).toThrow(
+      /non-configurable, non-writable object property/,
+    );
+
+    // An opaque value needs no substitution, so it is still readable.
+    const withDate = Object.defineProperty({}, "at", {
+      value: new Date(0),
+      writable: false,
+      configurable: false,
+      enumerable: true,
+    }) as { at: Date };
+    expect(deepSignal(withDate).value.at.getTime()).toBe(0);
+  });
+
+  it("keeps a sparse carrier's identity across repeated assignment", () => {
+    const state = deepSignal({
+      source: { count: 1 },
+      left: undefined as unknown[] | undefined,
+      right: undefined as unknown[] | undefined,
+    });
+
+    // A carrier containing one of our proxies must be copied before storage;
+    // pre-fix that copy densified the array (`Array.from({ length })`), so the
+    // clone had more own keys than its source and the cache could never match
+    // it again — every re-assignment produced a new identity.
+    const carrier: unknown[] = [];
+    carrier[3] = state.value.source;
+
+    state.value.left = carrier;
+    state.value.right = carrier;
+
+    expect(state.peek().left).toBe(state.peek().right);
+    expect(state.peek().left?.[3]).toBe(state.peek().source);
+    // Holes stay holes rather than becoming own `undefined` properties.
+    expect(Object.hasOwn(state.peek().left as object, "0")).toBe(false);
+    expect(Reflect.ownKeys(state.peek().left as object)).toEqual(["3", "length"]);
+    expect((state.peek().left as unknown[]).length).toBe(4);
   });
 });

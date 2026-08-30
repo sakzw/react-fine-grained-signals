@@ -7,7 +7,19 @@ import {
   type ReactNode,
 } from "react";
 import { isSignal, type ReadonlySignal } from "./core/index.js";
-import { useSignals } from "./react/use-signals.js";
+import { useManagedSignals } from "./react/use-signals.js";
+
+/*
+ * These four components use the *managed* render scope rather than the
+ * best-effort `useSignals()`. The library owns their entire function body, so
+ * an exact boundary — open at the top, closed in a `finally` before the
+ * component returns — costs nothing here, while `useSignals()`' scope can stay
+ * open past the return (until the next `useSignals()` call, a layout effect, or
+ * a microtask) and misattribute a *sibling's* render-time signal read to this
+ * component's store, which then silently stops updating the sibling. Every
+ * branch and early return must stay inside the `try`. See
+ * docs/design/use-signals-boundary-design.md.
+ */
 
 /** A plain value or a value created by `signal`, `computed`, or `deepSignal`. */
 export type SignalInput<T> = T | ReadonlySignal<T>;
@@ -26,13 +38,17 @@ export interface ShowProps<T> {
  * only this component rerenders when a signal read from `when` changes.
  */
 export function Show<T>({ when, fallback = null, children }: ShowProps<T>): ReactNode {
-  useSignals();
-  const value = readSignalInput(when);
+  const store = useManagedSignals();
+  try {
+    const value = readSignalInput(when);
 
-  if (!value) return fallback;
-  return typeof children === "function"
-    ? children(value as NonNullable<T>)
-    : children;
+    if (!value) return fallback;
+    return typeof children === "function"
+      ? children(value as NonNullable<T>)
+      : children;
+  } finally {
+    store.f();
+  }
 }
 
 /** A branch declaration consumed by the nearest `Switch`. */
@@ -58,19 +74,22 @@ export interface SwitchProps {
  * A small reactive multi-branch boundary inspired by Solid's `Switch`/`Match`.
  */
 export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
-  useSignals();
+  const store = useManagedSignals();
+  try {
+    for (const match of collectMatches(children)) {
+      const value = readSignalInput(match.props.when);
+      if (!value) continue;
 
-  for (const match of collectMatches(children)) {
-    const value = readSignalInput(match.props.when);
-    if (!value) continue;
+      const branch = match.props.children;
+      return typeof branch === "function"
+        ? branch(value as NonNullable<unknown>)
+        : branch;
+    }
 
-    const branch = match.props.children;
-    return typeof branch === "function"
-      ? branch(value as NonNullable<unknown>)
-      : branch;
+    return fallback;
+  } finally {
+    store.f();
   }
-
-  return fallback;
 }
 
 /** A collection supported by `For` when each item has its own identity. */
@@ -105,19 +124,23 @@ export function For<K, V>(props: ForMapProps<K, V>): ReactNode;
 export function For(
   { each, fallback = null, by, children }: ForProps<unknown> | ForMapProps<unknown, unknown>,
 ): ReactNode {
-  useSignals();
-  const collection = readSignalInput(each);
+  const store = useManagedSignals();
+  try {
+    const collection = readSignalInput(each);
 
-  if (collection === null || collection === undefined) {
-    return fallback;
+    if (collection === null || collection === undefined) {
+      return fallback;
+    }
+
+    const items = Array.isArray(collection) ? collection : Array.from(collection);
+    if (items.length === 0) return fallback;
+
+    return items.map((item, index) => (
+      <Fragment key={by(item, index)}>{children(item, index)}</Fragment>
+    ));
+  } finally {
+    store.f();
   }
-
-  const items = Array.isArray(collection) ? collection : Array.from(collection);
-  if (items.length === 0) return fallback;
-
-  return items.map((item, index) => (
-    <Fragment key={by(item, index)}>{children(item, index)}</Fragment>
-  ));
 }
 
 /** Renders an array whose row identity is intentionally its position. */
@@ -135,16 +158,30 @@ export interface IndexProps<T> {
  * `For` instead and provide `by`.
  */
 export function Index<T>({ each, fallback = null, children }: IndexProps<T>): ReactNode {
-  useSignals();
-  const items = readSignalInput(each);
+  const store = useManagedSignals();
+  try {
+    const items = readSignalInput(each);
 
-  if (items === null || items === undefined || items.length === 0) {
-    return fallback;
+    if (items === null || items === undefined || items.length === 0) {
+      return fallback;
+    }
+
+    // Reads back through `each` on every call rather than closing over the
+    // render-time `items` snapshot, so an accessor a child stores and calls
+    // later (from an event handler, say) still sees the current value instead
+    // of a stale row. The snapshot is only the fallback for a collection that
+    // has since become null/undefined. `as T` stands in for the old `!`: an
+    // out-of-range position reads as `undefined`, exactly as before, and a
+    // sparse hole is no longer disguised as a present value.
+    const readAt = (index: number): T =>
+      (readSignalInput(each) ?? items)[index] as T;
+
+    return items.map((_item, index) => (
+      <Fragment key={index}>{children(() => readAt(index), index)}</Fragment>
+    ));
+  } finally {
+    store.f();
   }
-
-  return items.map((_item, index) => (
-    <Fragment key={index}>{children(() => items[index]!, index)}</Fragment>
-  ));
 }
 
 function readSignalInput<T>(value: SignalInput<T>): T {

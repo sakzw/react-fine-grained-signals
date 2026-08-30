@@ -5,7 +5,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { computed, deepSignal, effect, signal } from "../core/index.js";
+import { computed, deepSignal, effect, signal, untracked } from "../core/index.js";
 import type {
   DeepSignal,
   ReadonlySignal,
@@ -16,6 +16,9 @@ import type { DependencyList } from "react";
 export { useSignals } from "./use-signals.js";
 
 const EMPTY_DEPENDENCIES: DependencyList = [];
+
+/** Which of `useComputed`'s two mutually exclusive modes a call site uses. */
+type ComputedMode = "without a dependency array" | "with a dependency array";
 
 /** An immutable value that React can safely compare as an external-store snapshot. */
 export type SignalSnapshot =
@@ -214,10 +217,30 @@ export function useComputed<T>(
     dependencies ?? EMPTY_DEPENDENCIES,
   );
 
+  const initialModeRef = useRef<ComputedMode | undefined>(undefined);
   const signalOnlyComputedRef = useRef<ReadonlySignal<T> | undefined>(undefined);
-  if (dependencies !== undefined) {
-    return dependencyComputed!;
+
+  // Both directions of a mode switch are silently destructive, so neither is
+  // allowed to reach the caller as a mystery. Going deps -> no-deps used to
+  // hand back `undefined` typed as `ReadonlySignal<T>`, so the crash surfaced
+  // at the call site as "Cannot read properties of undefined (reading
+  // 'value')" with nothing pointing back here. Going no-deps -> deps quietly
+  // built a *second* computed with a new identity mid-lifetime, invalidating
+  // every subscription already made to the first.
+  const mode: ComputedMode =
+    dependencies === undefined ? "without a dependency array" : "with a dependency array";
+  initialModeRef.current ??= mode;
+  if (initialModeRef.current !== mode) {
+    const error = new Error(
+      `useComputed: the dependency-array mode changed between renders (from ${initialModeRef.current} to ${mode}) for this call site. Keep passing deps consistently, matching useMemo's rules.`,
+    );
+    error.name = "UseComputedModeChangeError";
+    throw error;
   }
+
+  // Defined exactly when `dependencies` is, per the memo above; checking the
+  // result rather than the argument is what removes the old `!` assertion.
+  if (dependencyComputed !== undefined) return dependencyComputed;
 
   if (signalOnlyComputedRef.current === undefined) {
     signalOnlyComputedRef.current = computed(getValue);
@@ -271,8 +294,14 @@ export function useSignalValue<T>(source: ReadonlySignal<T>): T {
   // A leaf subscription owns this read. An unmanaged useSignals() scope may
   // still be open for an ancestor or earlier sibling until React commits, so
   // do not also register the source with that component's render collector.
+  // `untracked` rather than `untrackedRender`: the latter clears only this
+  // package's render collector, leaving alien-signals' own `activeSub` in
+  // place, so a `getSnapshot` reached while some effect or computed is
+  // evaluating would silently graft this source onto that subscriber's
+  // dependency list. `computed()` and `peek()` already use `untracked` for
+  // exactly this reason.
   const getSnapshot = useCallback(
-    () => untrackedRender(() => source.value),
+    () => untracked(() => source.value),
     [source],
   );
 

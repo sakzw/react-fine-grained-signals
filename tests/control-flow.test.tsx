@@ -254,4 +254,73 @@ describe("JSX control flow utilities", () => {
     });
     expect(within(list).getByText("empty")).toBeTruthy();
   });
+
+  it("does not leak For's render scope onto a later sibling", () => {
+    const rows = signal(["a"]);
+    const orphan = signal("before");
+    const forRenders = vi.fn();
+
+    // Deliberately has no `useSignals()`: its render-time read belongs to
+    // nobody. With `For` on the best-effort boundary, `For`'s scope was still
+    // open when this sibling rendered, so the read was collected into `For`'s
+    // store and writing `orphan` re-rendered `For` instead.
+    function Orphan() {
+      return <output aria-label="orphan">{orphan.value}</output>;
+    }
+
+    function Parent() {
+      return (
+        <>
+          <For each={rows} by={(row) => row}>
+            {(row) => {
+              forRenders();
+              return <span>{row}</span>;
+            }}
+          </For>
+          <Orphan />
+        </>
+      );
+    }
+
+    render(<Parent />);
+    expect(forRenders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      orphan.value = "after";
+    });
+    expect(forRenders).toHaveBeenCalledTimes(1);
+
+    // `For` itself still tracks what it actually read.
+    act(() => {
+      rows.value = ["a", "b"];
+    });
+    expect(forRenders).toHaveBeenCalledTimes(3);
+  });
+
+  it("gives Index accessors the current value rather than the render snapshot", () => {
+    const rows = signal(["a", "b"]);
+    let firstAccessor: (() => string) | undefined;
+
+    function Row({ item }: { item: () => string }) {
+      firstAccessor ??= item;
+      return <li>{item()}</li>;
+    }
+
+    const view = render(
+      <ul>
+        <Index each={rows}>{(item) => <Row item={item} />}</Index>
+      </ul>,
+    );
+    const list = view.container.querySelector("ul")!;
+    expect(within(list).getAllByRole("listitem").map((entry) => entry.textContent))
+      .toEqual(["a", "b"]);
+
+    act(() => {
+      rows.value = ["z", "b"];
+    });
+    // The accessor captured on the first render is what a child would keep in
+    // an event handler; it must read back through `each`, not through the
+    // array snapshot it was created with.
+    expect(firstAccessor?.()).toBe("z");
+  });
 });

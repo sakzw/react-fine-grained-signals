@@ -85,6 +85,17 @@ export class RenderSubscription implements RenderDependency {
     return trackRenderDependency(this);
   }
 
+  /**
+   * Whether anything is currently subscribed on the React side. Used by
+   * `deepSignal`'s metadata pruning to tell a genuinely dead per-key version
+   * signal from one a mounted component still depends on — dropping the
+   * latter would strand that subscriber on a `RenderSubscription` the
+   * property map no longer reaches, so it would never be notified again.
+   */
+  hasListeners(): boolean {
+    return this.#listeners !== undefined && this.#listeners.size !== 0;
+  }
+
   bumpVersion(): void {
     this.#version = (this.#version + 1) | 0;
   }
@@ -95,6 +106,25 @@ export class RenderSubscription implements RenderDependency {
     if (listeners === undefined) return;
     // Snapshot before iterating: a listener may (un)subscribe synchronously.
     // oxlint-disable-next-line unicorn/no-useless-spread
-    for (const listener of [...listeners]) listener();
+    for (const listener of [...listeners]) notifyListener(listener);
+  }
+}
+
+/**
+ * Invokes one subscription listener, keeping its failure from cancelling the
+ * listeners queued behind it. Without this, a single throwing subscriber
+ * aborts the rest of the notify cycle, so unrelated components silently miss
+ * the update that was being delivered. Reported the same way as the other
+ * background-callback failures in this codebase (`readBoundSignal` in
+ * src/runtime/jsx.ts): `console.error(message, { cause })`.
+ */
+export function notifyListener(listener: () => void): void {
+  try {
+    listener();
+  } catch (error) {
+    console.error(
+      "react-fine-grained-signals: a render-subscription listener threw; continuing with the remaining listeners.",
+      { cause: error },
+    );
   }
 }

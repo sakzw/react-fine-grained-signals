@@ -226,4 +226,36 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     view.rerender(<Product factor={3} />);
     expect(screen.getByLabelText("product").textContent).toBe("6");
   });
+
+  it("reports a useComputed dependency-mode switch instead of crashing obscurely", () => {
+    const source = signal(2);
+
+    function Switcher({ withDependencies }: { withDependencies: boolean }) {
+      const value = useComputed(
+        () => source.value * 2,
+        withDependencies ? [source] : undefined,
+      );
+      return <output aria-label="switcher">{useSignalValue(value)}</output>;
+    }
+
+    // Starting without deps and then passing them used to quietly build a
+    // second computed with a fresh identity mid-lifetime; the reverse handed
+    // back `undefined` typed as `ReadonlySignal<T>`, so the failure surfaced
+    // at the call site as "Cannot read properties of undefined".
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<Switcher withDependencies={false} />);
+    expect(screen.getByLabelText("switcher").textContent).toBe("4");
+    expect(() => view.rerender(<Switcher withDependencies />)).toThrow(
+      /dependency-array mode changed between renders/,
+    );
+    errorSpy.mockRestore();
+
+    // ...and the same error in the other direction.
+    const reverseErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reverse = render(<Switcher withDependencies />);
+    expect(() => reverse.rerender(<Switcher withDependencies={false} />)).toThrow(
+      /dependency-array mode changed between renders/,
+    );
+    reverseErrorSpy.mockRestore();
+  });
 });

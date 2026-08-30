@@ -5,6 +5,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  notifyListener,
   setActiveRenderCollector,
   type RenderCollector,
   type RenderDependency,
@@ -118,6 +119,20 @@ class RenderStore implements RenderCollector {
   }
 
   start(): void {
+    // Close this store's own still-open scope first. `shouldCloseCurrentScope`
+    // deliberately tolerates managed/managed overlap as legitimate nesting,
+    // but legitimate nesting is always between *distinct* store instances —
+    // each component owns its own `useRef` slot, so a store can never nest
+    // inside itself. A self-overlap therefore always means the previous scope
+    // was abandoned (e.g. the commit-phase layout effect threw between two
+    // `start()` calls, reachable in dev on a hook-order violation). Without
+    // this, `previousCollector`/`previousStore` would both capture `this`, and
+    // the eventual `finish()` would restore the collector *to this store* —
+    // leaving `activeRenderCollector` permanently non-undefined, so
+    // `deepSignal`'s `track()` stops short-circuiting and allocates a version
+    // signal for every property read anywhere in the app for the rest of the
+    // page's life.
+    if (this.#finishCollection !== undefined) this.finish();
     // See `shouldCloseCurrentScope` above for the nesting rule this enforces.
     if (currentStore !== undefined && shouldCloseCurrentScope(this, currentStore)) {
       currentStore.finish();
@@ -185,8 +200,10 @@ class RenderStore implements RenderCollector {
   readonly #notifyReact = (): void => {
     this.#version = (this.#version + 1) | 0;
     // Snapshot before iterating: a listener may (un)subscribe synchronously.
+    // `notifyListener` isolates a throwing listener so it cannot cancel the
+    // ones queued behind it in this same cycle.
     // oxlint-disable-next-line unicorn/no-useless-spread
-    for (const listener of [...this.#reactListeners]) listener();
+    for (const listener of [...this.#reactListeners]) notifyListener(listener);
   };
 
   #disposeDependencies(): void {

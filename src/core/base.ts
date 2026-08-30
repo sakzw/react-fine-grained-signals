@@ -81,10 +81,38 @@ export class SignalImpl<T> implements Signal<T> {
   readonly #source: ReturnType<typeof createSignal<T>>;
   readonly #renderSubscription = new RenderSubscription();
   #currentValue: T;
+  // Liveness bookkeeping for `deepSignal`'s per-key metadata pruning; see
+  // `markWatched`/`hasSubscribers` below. Not maintained on the read path
+  // itself — `deepSignal`'s `track()` already knows whether a subscriber is
+  // active and calls `markWatched()` there, so ordinary reads pay nothing.
+  #watchedSinceWrite = false;
 
   constructor(initialValue: T) {
     this.#source = createSignal(initialValue);
     this.#currentValue = initialValue;
+  }
+
+  /**
+   * Records that this signal was read while some subscriber (an alien-signals
+   * effect/computed, or a React render collector) was active. Cleared by the
+   * next write, so after that write's flush has drained, a still-false flag
+   * means every reactive subscriber has re-run without re-reading this signal
+   * and has therefore been unlinked from it.
+   */
+  markWatched(): void {
+    this.#watchedSinceWrite = true;
+  }
+
+  /**
+   * Conservative "somebody still depends on me" test used to decide whether a
+   * `deepSignal` per-key version signal is safe to drop. Never reports `false`
+   * for a signal that still has a live dependent: the React side is exact
+   * (`hasListeners`), and the alien-signals side is covered by `markWatched`,
+   * whose flag can only be `false` once a write has notified every subscriber
+   * and none of them read this signal again.
+   */
+  hasSubscribers(): boolean {
+    return this.#watchedSinceWrite || this.#renderSubscription.hasListeners();
   }
 
   get value(): T {
@@ -99,12 +127,27 @@ export class SignalImpl<T> implements Signal<T> {
     if (Object.is(this.#currentValue, nextValue)) return;
     const requiresManualTrigger = this.#currentValue === nextValue;
     this.#currentValue = nextValue;
-    if (requiresManualTrigger) {
-      trigger(this.#source);
-    } else {
-      this.#source(nextValue);
+    // Every subscriber is about to be notified, so each one either re-reads
+    // this signal (setting the flag again through `markWatched`) or drops its
+    // link to it. See `hasSubscribers`.
+    this.#watchedSinceWrite = false;
+    // The alien-signals write below flushes effects synchronously, so it can
+    // throw whatever an effect body threw. `#currentValue` is already
+    // committed at that point, so skipping the React-side notification would
+    // leave every subscribed `RenderStore` believing the old value is still
+    // current — a permanently stale UI that no later write can repair,
+    // because a subsequent write compares against the already-updated
+    // `#currentValue`. `finally` keeps React in sync no matter how the flush
+    // exits, and still lets the original error propagate to the writer.
+    try {
+      if (requiresManualTrigger) {
+        trigger(this.#source);
+      } else {
+        this.#source(nextValue);
+      }
+    } finally {
+      this.#renderSubscription.notify();
     }
-    this.#renderSubscription.notify();
   }
 
   peek(): T {
@@ -202,13 +245,46 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
   return registerSignal(result);
 }
 
+/**
+ * Reports an error thrown by an `effect()` body without letting it escape into
+ * the flush that ran it.
+ *
+ * alien-signals' `flush()` drains the rest of its effect queue in a `finally`
+ * *without running those effects*, so one throwing effect silently cancels
+ * every effect still queued behind it in that cycle — an unrelated binding, or
+ * a `useSignals()`-tracked component's commit, quietly missing an update — and
+ * then propagates out of whatever write triggered the flush (an event handler,
+ * anywhere). Catching here keeps the failure local to this one effect.
+ *
+ * The error is logged with `console.error(message, { cause })`, matching
+ * `readBoundSignal` in src/runtime/jsx.ts (assert against
+ * `mock.calls[i][1].cause` in tests), and then rethrown from a microtask so it
+ * still reaches `window.onerror` / an unhandled-rejection handler rather than
+ * vanishing — but from outside the flush, where it can no longer corrupt it.
+ */
+function reportEffectError(error: unknown): void {
+  console.error(
+    "react-fine-grained-signals: an effect() callback threw; the error is rethrown asynchronously so this flush can finish.",
+    { cause: error },
+  );
+  queueMicrotask(() => {
+    throw error;
+  });
+}
+
 /** Runs a reactive side effect and returns a disposer. */
 export function effect(fn: () => void | (() => void)): () => void {
   let disposed = false;
   let disposeEffect: (() => void) | undefined;
   disposeEffect = createEffect(() => {
     if (disposed) return;
-    const cleanup = untrackedRender(fn);
+    let cleanup: void | (() => void);
+    try {
+      cleanup = untrackedRender(fn);
+    } catch (error) {
+      reportEffectError(error);
+      return;
+    }
     if (disposed && cleanup !== undefined) {
       untracked(cleanup);
       return;

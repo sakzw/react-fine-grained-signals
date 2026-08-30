@@ -1,4 +1,4 @@
-import { getActiveSub } from "alien-signals";
+import { getActiveSub, getBatchDepth } from "alien-signals";
 import {
   batch,
   isSignal,
@@ -13,9 +13,16 @@ import { hasActiveRenderCollector } from "./render-tracking.js";
 /** A signal whose plain-object and array values are reactive by property. */
 export interface DeepSignal<T extends object> extends Signal<T> {}
 
+/**
+ * Per-key version counter. Typed as the concrete implementation rather than
+ * `Signal<number>` so the metadata sweep below can consult its
+ * `hasSubscribers()` liveness check; these never escape into user code.
+ */
+type VersionSignal = SignalImpl<number>;
+
 interface PropertyMetadata {
-  properties: Map<PropertyKey, Signal<number>>;
-  existence: Map<PropertyKey, Signal<number>>;
+  properties: Map<PropertyKey, VersionSignal>;
+  existence: Map<PropertyKey, VersionSignal>;
   propertyIndices: Set<number>;
   existenceIndices: Set<number>;
   iteration?: Signal<number>;
@@ -23,6 +30,15 @@ interface PropertyMetadata {
     PropertyKey,
     { method: (...args: unknown[]) => unknown; wrapper: (...args: unknown[]) => unknown }
   >;
+  /**
+   * Keys whose property has been removed (deleted, or truncated out of an
+   * array) and whose version signals are therefore candidates for removal from
+   * the maps above. Drained by `sweepPrunedKeys`; a key that still has a live
+   * subscriber stays queued and is retried on the next sweep. Left `undefined`
+   * until the first removal so the common append-only workload allocates
+   * nothing extra.
+   */
+  prunable?: Set<PropertyKey> | undefined;
   proxy: object;
 }
 
@@ -422,6 +438,21 @@ function matchesNormalizedGraph(source: object, normalized: object): boolean {
   return true;
 }
 
+/**
+ * An array of `length` with no own index properties — holes, not `undefined`s.
+ * `Array.from({ length })` would materialize every index as an own property,
+ * so cloning a sparse carrier produced an array with strictly more own keys
+ * than its source. `matchesNormalizedGraph` compares own keys one-for-one, so
+ * that clone could never match its source again: the carrier cache missed on
+ * every re-assignment, breaking the documented guarantee that assigning the
+ * same carrier twice preserves identity and aliasing.
+ */
+function emptyArrayOfLength(length: number): unknown[] {
+  const result: unknown[] = [];
+  result.length = length;
+  return result;
+}
+
 function cloneWithoutProxies<T>(value: T): T {
   const wrapperRaw = toRaw(value);
   if (wrapperRaw !== undefined) return wrapperRaw as T;
@@ -448,7 +479,7 @@ function cloneWithoutProxies<T>(value: T): T {
     if (local !== undefined) return local;
 
     const result: object = Array.isArray(current)
-      ? Array.from({ length: current.length })
+      ? emptyArrayOfLength(current.length)
       : Object.create(Object.getPrototypeOf(current));
     clones.set(current, result);
     created.push([current, result]);
@@ -509,34 +540,117 @@ const unwrap = <T>(value: T): T => {
   return prepareDeepValue(value);
 };
 
+// Inherited members of the two prototypes a deep-signal target can have.
+// Reading one of these through the proxy (`list.map`, `list[Symbol.iterator]`,
+// `state.constructor`, ...) used to mint a permanent version signal for a key
+// that can never change, so a single `.map()` per render leaked one entry per
+// method name for the lifetime of the page. They are only skipped while the
+// key is *not* an own property, so a real data property named `map` or
+// `toString` — and an array's own `length` — stays fully reactive, and a
+// null-prototype object (which inherits nothing) is never affected.
+const OBJECT_PROTOTYPE_KEYS: ReadonlySet<PropertyKey> = new Set(
+  Reflect.ownKeys(Object.prototype),
+);
+const ARRAY_PROTOTYPE_KEYS: ReadonlySet<PropertyKey> = new Set([
+  ...Reflect.ownKeys(Object.prototype),
+  ...Reflect.ownKeys(Array.prototype),
+]);
+
+const isInheritedPrototypeMember = (target: object, key: PropertyKey): boolean => {
+  if (Object.prototype.hasOwnProperty.call(target, key)) return false;
+  const prototype = Object.getPrototypeOf(target) as object | null;
+  if (prototype === Object.prototype) return OBJECT_PROTOTYPE_KEYS.has(key);
+  if (prototype === Array.prototype) return ARRAY_PROTOTYPE_KEYS.has(key);
+  return false;
+};
+
 const getVersion = (
-  versions: Map<PropertyKey, Signal<number>>,
+  versions: Map<PropertyKey, VersionSignal>,
   key: PropertyKey,
-): Signal<number> => {
+): VersionSignal => {
   let version = versions.get(key);
   if (version === undefined) {
-    version = signal(0);
+    version = registerSignal(new SignalImpl<number>(0));
     versions.set(key, version);
   }
   return version;
 };
 
 const track = (
-  versions: Map<PropertyKey, Signal<number>>,
+  target: object,
+  versions: Map<PropertyKey, VersionSignal>,
   indices: Set<number>,
   key: PropertyKey,
 ): void => {
   if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
+  if (isInheritedPrototypeMember(target, key)) return;
   if (isArrayIndex(key)) indices.add(Number(key));
-  getVersion(versions, key).value;
+  const version = getVersion(versions, key);
+  // Records that something reactive depends on this key right now, which is
+  // what keeps `sweepPrunedKeys` from dropping it out from under a subscriber.
+  version.markWatched();
+  version.value;
 };
 
 const notify = (
-  versions: Map<PropertyKey, Signal<number>>,
+  versions: Map<PropertyKey, VersionSignal>,
   key: PropertyKey,
 ): void => {
   const version = versions.get(key);
   if (version !== undefined) version.value += 1;
+};
+
+/**
+ * Queues `key`'s version signals for removal once nothing depends on them.
+ * Only called for a key that has just been removed *and* notified, which is
+ * what makes the eventual removal safe: the notification forces every
+ * subscriber to re-run, so one that still cares re-reads the key (re-arming
+ * `markWatched`) and one that does not has already been unlinked.
+ */
+const markPrunable = (metadata: PropertyMetadata, key: PropertyKey): void => {
+  if (!metadata.properties.has(key) && !metadata.existence.has(key)) return;
+  (metadata.prunable ??= new Set()).add(key);
+};
+
+/**
+ * Drops the version signals of removed keys once they have no subscribers
+ * left, so a virtualized or repeatedly-spliced list stops accumulating one
+ * entry per key that ever existed.
+ *
+ * Runs only at batch depth 0, where the write that queued these keys has
+ * already flushed its effects; before that, `hasSubscribers()` would still
+ * report the pre-flush picture. A key that is still subscribed (typically a
+ * React store whose re-render has not committed yet) stays queued and is
+ * reconsidered on the next sweep rather than being dropped early.
+ */
+const sweepPrunedKeys = (metadata: PropertyMetadata, target: object): void => {
+  const prunable = metadata.prunable;
+  if (prunable === undefined || prunable.size === 0) return;
+  if (getBatchDepth() !== 0) return;
+
+  for (const key of prunable) {
+    // The key came back (an index was written again, a property re-added):
+    // its version signals are live metadata again, not garbage.
+    if (Object.prototype.hasOwnProperty.call(target, key)) {
+      prunable.delete(key);
+      continue;
+    }
+    const property = metadata.properties.get(key);
+    const existence = metadata.existence.get(key);
+    if (property?.hasSubscribers() === true || existence?.hasSubscribers() === true) {
+      continue;
+    }
+    metadata.properties.delete(key);
+    metadata.existence.delete(key);
+    if (isArrayIndex(key)) {
+      const index = Number(key);
+      metadata.propertyIndices.delete(index);
+      metadata.existenceIndices.delete(index);
+    }
+    prunable.delete(key);
+  }
+
+  if (prunable.size === 0) metadata.prunable = undefined;
 };
 
 const trackIteration = (metadata: PropertyMetadata): void => {
@@ -564,20 +678,34 @@ const notifyTruncatedIndices = (
       const key = String(index);
       notify(metadata.properties, key);
       notify(metadata.existence, key);
+      markPrunable(metadata, key);
     }
     return;
   }
   for (const index of metadata.propertyIndices) {
     if (index >= currentLength && index < oldLength) {
-      notify(metadata.properties, String(index));
+      const key = String(index);
+      notify(metadata.properties, key);
+      markPrunable(metadata, key);
     }
   }
   for (const index of metadata.existenceIndices) {
     if (index >= currentLength && index < oldLength) {
-      notify(metadata.existence, String(index));
+      const key = String(index);
+      notify(metadata.existence, key);
+      markPrunable(metadata, key);
     }
   }
 };
+
+/**
+ * Whether `wrap()` would hand back something other than `value` itself — a
+ * deep proxy for a plain object/array, or a readonly view for a Map/Set. The
+ * `get` trap uses this to reject a non-configurable, non-writable property
+ * whose value cannot be substituted, before `wrap()` performs the swap.
+ */
+const isWrappedByValue = (value: unknown): boolean =>
+  isPlainObjectOrArray(value) || value instanceof Map || value instanceof Set;
 
 const wrap = <T>(value: T): T => {
   const rawValue = (toRaw(value) as T | undefined) ?? value;
@@ -609,7 +737,7 @@ const wrap = <T>(value: T): T => {
       if (key === SIGNAL_BRAND && !Object.prototype.hasOwnProperty.call(target, key)) {
         return undefined;
       }
-      track(metadata.properties, metadata.propertyIndices, key);
+      track(target, metadata.properties, metadata.propertyIndices, key);
       const result = Reflect.get(target, key, receiver);
 
       if (
@@ -622,13 +750,23 @@ const wrap = <T>(value: T): T => {
 
         const method = result as (...args: unknown[]) => unknown;
         const wrapper = function (this: unknown, ...args: unknown[]) {
-          return batch(() => Reflect.apply(method, this, args));
+          try {
+            return batch(() => Reflect.apply(method, this, args));
+          } finally {
+            sweepPrunedKeys(metadata, target);
+          }
         };
         metadata.arrayMethods.set(key, { method, wrapper });
         return wrapper;
       }
 
-      if (isPlainObjectOrArray(result)) {
+      // Checked before `wrap()` substitutes anything: `wrap()` also swaps a
+      // Map/Set for a readonly view, and those views are just as unassignable
+      // back through a non-configurable, non-writable slot as a nested proxy
+      // is. Gating this on `isPlainObjectOrArray(result)` let a frozen
+      // Map/Set-valued property past the friendly error and into a raw engine
+      // `TypeError` later on.
+      if (isWrappedByValue(result)) {
         const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
         if (
           descriptor !== undefined &&
@@ -684,6 +822,7 @@ const wrap = <T>(value: T): T => {
           }
         }
       });
+      sweepPrunedKeys(metadata, target);
 
       return true;
     },
@@ -700,12 +839,14 @@ const wrap = <T>(value: T): T => {
           notify(metadata.existence, key);
         }
         notifyIteration(metadata);
+        markPrunable(metadata, key);
       });
+      sweepPrunedKeys(metadata, target);
       return true;
     },
 
     has(target, key) {
-      track(metadata.existence, metadata.existenceIndices, key);
+      track(target, metadata.existence, metadata.existenceIndices, key);
       return Reflect.has(target, key);
     },
 
@@ -755,6 +896,28 @@ class DeepSignalImpl<T extends object> implements DeepSignal<T> {
   peek(): T {
     return this.#source.peek();
   }
+}
+
+/**
+ * Reports the per-key reactive metadata currently retained for a deep proxy
+ * (or for the raw object behind it). Exposed for this package's own tests
+ * only — it is deliberately absent from every published entry point, and the
+ * shape it returns is internal detail, not API.
+ */
+export function inspectDeepSignalMetadata(value: object): {
+  properties: PropertyKey[];
+  existence: PropertyKey[];
+  propertyIndices: number[];
+  existenceIndices: number[];
+} | undefined {
+  const metadata = rawToMetadata.get(toRaw(value) ?? value);
+  if (metadata === undefined) return undefined;
+  return {
+    properties: [...metadata.properties.keys()],
+    existence: [...metadata.existence.keys()],
+    propertyIndices: [...metadata.propertyIndices],
+    existenceIndices: [...metadata.existenceIndices],
+  };
 }
 
 /**

@@ -1,5 +1,27 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { batch, computed, effect, isSignal, signal, untracked } from "../src/index.js";
+import {
+  setActiveRenderCollector,
+  type RenderDependency,
+} from "../src/core/render-tracking.js";
+
+/**
+ * Stands in for what a `useSignals()` component's `RenderStore` does: installs
+ * a render collector, performs the reads, and hands back the dependencies the
+ * signals registered — the same handles React later subscribes to.
+ */
+function collectRenderDependencies(read: () => void): RenderDependency[] {
+  const dependencies: RenderDependency[] = [];
+  const previous = setActiveRenderCollector({
+    add: (dependency) => dependencies.push(dependency),
+  });
+  try {
+    read();
+  } finally {
+    setActiveRenderCollector(previous);
+  }
+  return dependencies;
+}
 
 // Spelled out rather than imported: the literal string is the cross-instance
 // wire format, so a second copy of the package can only agree by matching it.
@@ -262,6 +284,10 @@ describe("computed error propagation", () => {
 
   afterEach(() => {
     while (disposers.length > 0) disposers.pop()?.();
+    // Tests below spy on `console.error`/`queueMicrotask` to observe how a
+    // thrown callback is reported; leaving those installed would leak both the
+    // stubbed behavior and the call history into the next test.
+    vi.restoreAllMocks();
   });
 
   it("surfaces the getter's own error, unchanged, from both .value and .peek()", () => {
@@ -388,5 +414,111 @@ describe("computed error propagation", () => {
     // Confirm it keeps reacting afterward too, not just this one time.
     b.value = 300;
     expect(healthySeen).toEqual([200, 400, 600]);
+  });
+
+  it("contains a throwing effect() body instead of corrupting the flush", () => {
+    // The effect body is queued first, so pre-fix its throw escaped `flush()`
+    // (whose `finally` marks the rest of the queue as skipped rather than
+    // running it) and propagated out of the write that triggered it.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rethrows: Array<() => void> = [];
+    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
+      rethrows.push(callback);
+    });
+
+    const trigger = signal(0);
+    const other = signal(0);
+    const healthySeen: number[] = [];
+
+    disposers.push(effect(() => {
+      if (trigger.value === 1) throw new Error("effect boom");
+    }));
+    disposers.push(effect(() => {
+      healthySeen.push(other.value);
+    }));
+    expect(healthySeen).toEqual([0]);
+
+    expect(() => {
+      batch(() => {
+        trigger.value = 1;
+        other.value = 1;
+      });
+    }).not.toThrow();
+    // The effect queued behind the failing one still ran in that same flush.
+    expect(healthySeen).toEqual([0, 1]);
+
+    // Reported once, in the codebase's `console.error(message, { cause })`
+    // shape, and rethrown from a microtask so it still reaches a global
+    // handler without being able to corrupt the flush it came from.
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
+    expect(reported?.cause).toBeInstanceOf(Error);
+    expect(rethrows).toHaveLength(1);
+    expect(() => rethrows[0]?.()).toThrow("effect boom");
+
+    // The graph keeps working for later, unrelated writes.
+    other.value = 2;
+    expect(healthySeen).toEqual([0, 1, 2]);
+    trigger.value = 2;
+    other.value = 3;
+    expect(healthySeen).toEqual([0, 1, 2, 3]);
+  });
+
+  it("notifies render subscribers even when the write's flush throws", () => {
+    // An effect *cleanup* runs inside alien-signals' `run()`, outside the
+    // guard `effect()` puts around the body, so it is still a live path for a
+    // throw escaping the synchronous flush inside `set value`. Pre-fix the
+    // write committed `#currentValue` and then never reached
+    // `#renderSubscription.notify()`, so `.value` reported the new value while
+    // every React-side subscriber stayed parked on the old one forever.
+    const source = signal(0);
+    const notifications: number[] = [];
+    const [dependency] = collectRenderDependencies(() => {
+      source.value;
+    });
+    disposers.push(dependency!.subscribeRender(() => {
+      notifications.push(source.peek());
+    }));
+
+    disposers.push(effect(() => {
+      source.value;
+      return () => {
+        throw new Error("cleanup boom");
+      };
+    }));
+
+    expect(() => {
+      source.value = 1;
+    }).toThrow("cleanup boom");
+    expect(source.value).toBe(1);
+    // The React-side notification happened anyway, so a `useSignals()`
+    // component subscribed to this signal still re-renders.
+    expect(notifications).toEqual([1]);
+  });
+
+  it("keeps one throwing render listener from cancelling the others", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const source = signal(0);
+    const [dependency] = collectRenderDependencies(() => {
+      source.value;
+    });
+    const later: number[] = [];
+
+    disposers.push(dependency!.subscribeRender(() => {
+      throw new Error("listener boom");
+    }));
+    disposers.push(dependency!.subscribeRender(() => {
+      later.push(source.peek());
+    }));
+
+    expect(() => {
+      source.value = 1;
+    }).not.toThrow();
+    // Pre-fix the first listener's throw aborted the loop, so every listener
+    // registered behind it silently missed this notify cycle.
+    expect(later).toEqual([1]);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
+    expect(reported?.cause).toBeInstanceOf(Error);
   });
 });

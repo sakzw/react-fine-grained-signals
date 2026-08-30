@@ -6,6 +6,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, deepSignal, signal } from "../src/index.js";
 import { useSignals as useManagedSignals } from "../src/runtime.js";
+import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
+import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -261,5 +263,58 @@ describe("managed useSignals render scope", () => {
     });
 
     expect(screen.getByLabelText("managed custom hook").textContent).toBe("after");
+  });
+
+  it("recovers the global collector when a store re-opens its own scope", () => {
+    // Self-overlap: `start()` runs while this store's previous scope is still
+    // open, which is what a `useIsomorphicLayoutEffect` that threw between two
+    // render passes leaves behind. `shouldCloseCurrentScope` treats
+    // managed/managed overlap as legitimate nesting, so pre-fix the store
+    // captured *itself* as the scope to restore and `finish()` handed the
+    // global collector back to itself — permanently non-undefined, which makes
+    // `deepSignal`'s `track()` allocate a version signal for every property
+    // read anywhere in the app for the rest of the page's life.
+    const state = deepSignal({ overlapped: "before" });
+
+    function SelfOverlapping() {
+      const store = useManagedSignals();
+      (store as unknown as { start(): void }).start();
+      try {
+        return (
+          <output aria-label="self overlapping">{state.value.overlapped}</output>
+        );
+      } finally {
+        store.f();
+      }
+    }
+
+    render(<SelfOverlapping />);
+    expect(screen.getByLabelText("self overlapping").textContent).toBe("before");
+    expect(hasActiveRenderCollector()).toBe(false);
+
+    // The surviving scope is still the real one: this component keeps tracking.
+    act(() => {
+      state.value.overlapped = "after";
+    });
+    expect(screen.getByLabelText("self overlapping").textContent).toBe("after");
+    expect(hasActiveRenderCollector()).toBe(false);
+
+    // A later, ordinary start()/finish() cycle leaves the collector clean too,
+    // rather than inheriting a leaked one.
+    const untracked = deepSignal({ leaked: 0 });
+    function Ordinary() {
+      return managed(() => (
+        <output aria-label="ordinary">{untracked.value.leaked}</output>
+      ));
+    }
+    render(<Ordinary />);
+    expect(hasActiveRenderCollector()).toBe(false);
+    expect(inspectDeepSignalMetadata(untracked.peek())?.properties).toEqual(["leaked"]);
+
+    // Nothing is collecting now, so a read outside a render mints no metadata.
+    const idle = deepSignal({ a: 1, b: 2 });
+    idle.value.a;
+    idle.value.b;
+    expect(inspectDeepSignalMetadata(idle.peek())?.properties).toEqual([]);
   });
 });
