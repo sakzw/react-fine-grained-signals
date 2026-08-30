@@ -206,13 +206,8 @@ function isKnownComponentWrapper(
     );
   }
   if (!callee.isMemberExpression()) return false;
-  const property = callee.get("property");
-  const isMemoOrForwardRefProperty =
-    (!callee.node.computed && property.isIdentifier() &&
-      (property.node.name === "memo" || property.node.name === "forwardRef")) ||
-    (callee.node.computed && property.isStringLiteral() &&
-      (property.node.value === "memo" || property.node.value === "forwardRef"));
-  if (!isMemoOrForwardRefProperty) return false;
+  const propertyName = getReadPropertyName(callee.node);
+  if (propertyName !== "memo" && propertyName !== "forwardRef") return false;
   const object = callee.get("object");
   return (
     object.isIdentifier() &&
@@ -470,13 +465,9 @@ function isUseSignalsCallee(
   }
   if (!callee.isMemberExpression()) return false;
   const object = callee.get("object");
-  const property = callee.get("property");
   if (!object.isIdentifier()) return false;
-  const isUseSignalsProperty =
-    (!callee.node.computed && property.isIdentifier({ name: "useSignals" })) ||
-    (callee.node.computed && property.isStringLiteral({ value: "useSignals" }));
   return (
-    isUseSignalsProperty &&
+    getReadPropertyName(callee.node) === "useSignals" &&
     isNamespaceUseSignalsImport(
       functionPath,
       object.node.name,
@@ -625,18 +616,9 @@ function isRenderCallbackCallee(callee: t.Node): boolean {
   // `items.map!(Row)` puts a non-null assertion between the call and the member
   // access it invokes, which erases to the same `items.map`.
   const node = unwrapTransparent(callee);
-  const member = t.isMemberExpression(node) || t.isOptionalMemberExpression(node)
-    ? node
-    : undefined;
-  if (member === undefined) return false;
-  if (!member.computed) {
-    return t.isIdentifier(member.property) && renderCallbackMethods.has(member.property.name);
-  }
-  // A wrapper can also sit around the key alone -- `items["map" as const](Row)`
-  // is a plain member expression whose property is the wrapped node -- so
-  // unwrapping the callee is not enough to reach the method name.
-  const property = unwrapTransparent(member.property);
-  return t.isStringLiteral(property) && renderCallbackMethods.has(property.value);
+  if (!t.isMemberExpression(node) && !t.isOptionalMemberExpression(node)) return false;
+  const name = getReadPropertyName(node);
+  return name !== undefined && renderCallbackMethods.has(name);
 }
 
 /**
@@ -791,9 +773,6 @@ function isAutomaticTransformCandidate(
   // caller didn't already have a climbed parent to give.
   climbedParent?: NodePath | null,
 ): boolean {
-  // Render callbacks are tracked by the component that invokes them. Injecting
-  // a hook into the callback would violate the Rules of Hooks because callbacks
-  // such as Array#map can execute a variable number of times.
   if (isRenderCallback(path)) return false;
   if (path.isFunctionDeclaration()) return true;
 
@@ -855,7 +834,12 @@ const deferredCallbackHooks = new Set([
   "useMemo",
 ]);
 
-/** The property name a member expression reads, for the forms this file tracks. */
+/**
+ * The property name a member expression reads, for the forms this file
+ * tracks. A wrapper can sit around the key alone -- `items["map" as
+ * const](Row)` is a plain member expression whose property is the wrapped
+ * node -- so a computed property still needs unwrapping to reach the name.
+ */
 function getReadPropertyName(
   node: t.MemberExpression | t.OptionalMemberExpression,
 ): string | undefined {
@@ -962,22 +946,24 @@ function inspectFunction(
   const foldReferencedRenderCallbacks = (
     call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
   ): void => {
-    for (const argument of call.node.arguments) {
-      // The wrapper node is what occupies the argument slot, so the position
-      // check compares against `argument` itself; only the name has to be read
-      // from underneath a `Row!` / `Row as Fn` / `Row satisfies Fn` wrapper.
-      const reference = unwrapTransparent(argument);
-      if (!t.isIdentifier(reference)) continue;
-      if (!isRenderCallbackInvocation(call.node, argument)) continue;
-      const target = resolveReferencedFunction(call, reference.name);
-      // A callback defined inside this function is already part of the walk.
-      if (target === undefined || target.isDescendant(functionPath)) continue;
-      if (visited.has(target.node)) continue;
-      visited.add(target.node);
-      const nested = inspectFunction(target, importSource, reactImportSource, visited);
-      if (nested.containsJSX) inspection.containsJSX = true;
-      if (nested.readsValue) inspection.readsValue = true;
-    }
+    // Only argument 0 can ever be the callback (see `isRenderCallbackInvocation`),
+    // so there is no need to scan the rest of the argument list for it.
+    const argument = call.node.arguments[0];
+    if (argument === undefined) return;
+    // The wrapper node is what occupies the argument slot, so the position
+    // check compares against `argument` itself; only the name has to be read
+    // from underneath a `Row!` / `Row as Fn` / `Row satisfies Fn` wrapper.
+    const reference = unwrapTransparent(argument);
+    if (!t.isIdentifier(reference)) return;
+    if (!isRenderCallbackInvocation(call.node, argument)) return;
+    const target = resolveReferencedFunction(call, reference.name);
+    // A callback defined inside this function is already part of the walk.
+    if (target === undefined || target.isDescendant(functionPath)) return;
+    if (visited.has(target.node)) return;
+    visited.add(target.node);
+    const nested = inspectFunction(target, importSource, reactImportSource, visited);
+    if (nested.containsJSX) inspection.containsJSX = true;
+    if (nested.readsValue) inspection.readsValue = true;
   };
 
   // The direct-call twin of the fold above: `items.map((item) => Row(item))`
@@ -989,8 +975,22 @@ function inspectFunction(
   ): void => {
     const callee = unwrapTransparent(call.node.callee);
     // Only a component- or hook-shaped callee can ever have been a transform
-    // candidate, so anything else is not worth a scope walk to resolve.
-    if (!t.isIdentifier(callee) || !/^[A-Z]/.test(callee.name)) return;
+    // candidate, so anything else is not worth a scope walk to resolve. The
+    // hook shape belongs here just as much as the component one:
+    // `isRenderCallback` demotes a callee by *position*, never by name, so a
+    // `useX`-named helper called from inside a render callback loses the
+    // boundary it would otherwise have had (`shouldAutomaticallyTransform`
+    // transforms a hook identity on a `.value` read alone) and its reads have
+    // to reach the owner here or nothing subscribes to them at all. A
+    // lowercase callee is deliberately still skipped: it was never a candidate
+    // to begin with, so it is an ordinary helper call, which this transform
+    // does not follow anywhere else either.
+    if (
+      !t.isIdentifier(callee) ||
+      (!isComponentName(callee.name) && !isHookName(callee.name))
+    ) {
+      return;
+    }
     const owner = call.getFunctionParent();
     if (owner === null || owner.node === functionPath.node || !isRenderCallback(owner)) return;
     const target = resolveReferencedFunction(call, callee.name);
@@ -1014,9 +1014,6 @@ function inspectFunction(
 
   functionPath.traverse({
     Function(path) {
-      // Components and hooks own their subscriptions. Other nested callbacks
-      // remain part of the current render owner so hidden JSX/.value reads in a
-      // map/render-prop still cause the owner component to be transformed.
       if (isNestedTrackingBoundary(path, reactImportSource)) path.skip();
     },
     JSXElement(_path) {
@@ -1328,6 +1325,15 @@ function decideTransform(
   // position is worth reporting, and only when no enclosing function owns the
   // very same comment -- otherwise every nested arrow under an annotated
   // component would report the component's own annotation a second time.
+  //
+  // `identity === undefined` is the whole condition on purpose: a *resolved*
+  // identity that merely fails the component/hook shape check is the ordinary
+  // lowercase binding the README documents as a no-op -- and, crucially, it is
+  // also exactly what an annotated HOC factory looks like from here
+  // (`withCount` is camelCase by definition, so `annotated` is false for it
+  // while the component it returns honors the very same annotation). Widening
+  // this to every `annotation && !annotated` would call that supported case
+  // "ignored", and no name shape can tell the two apart.
   if (annotation && !annotated && candidate) {
     const enclosing = path.getFunctionParent();
     if (

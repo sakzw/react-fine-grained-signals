@@ -868,6 +868,31 @@ describe("managed render transform", () => {
     },
   );
 
+  it.each(["auto", "all"] as const)(
+    "%s mode tracks a hook called directly inside a render callback",
+    (mode) => {
+      // The render-callback exclusion demotes by position, never by name, so a
+      // `useX`-named helper called once per item loses the boundary its hook
+      // identity would otherwise have earned it -- exactly as the
+      // component-shaped callee above does. Folding its read into List is the
+      // only thing left that can subscribe: the by-reference twin
+      // (`items.map(useLabel)`) already does, and the direct-call form must not
+      // silently differ from it.
+      const output = compile(`
+        const count = { value: 1 };
+        const items = [1];
+        const useLabel = (item) => count.value + item;
+        export function List() {
+          return <ul>{items.map((item) => <li>{useLabel(item)}</li>)}</ul>;
+        }
+      `, mode);
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toContain("const useLabel = item => count.value + item;");
+      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    },
+  );
+
   it("keeps a component called from an event handler inside a render callback eligible", () => {
     // The call sits in an onClick handler, not in the render callback's own
     // body, so it is not a per-item render call and Row keeps its own boundary.
@@ -1333,13 +1358,26 @@ describe("managed render transform", () => {
     });
 
     it("does not warn about an annotation on a named-but-lowercase function", () => {
-      // `callback` has an identity; it is simply not a component or a hook, and
-      // that is a deliberate, already-documented no-op rather than a mistake.
+      // `callback` and `helper` both have an identity; it is simply not a
+      // component or a hook, and that is a deliberate, already-documented no-op
+      // rather than a mistake.
+      //
+      // The `identity === undefined` half of the warning's guard is what keeps
+      // them quiet, and it is load-bearing beyond this case: an annotated HOC
+      // factory ("attributes an annotation on the factory to the component it
+      // returns", above) is also a lowercase-named candidate whose `annotated`
+      // is false, so warning on `annotation && !annotated` alone would report
+      // "this annotation is ignored" for an annotation the returned component
+      // does honor. Name shape cannot separate the two -- a factory is
+      // camelCase by definition -- so the warning stays on the genuinely
+      // unnameable case only.
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       compile(`
         const count = { value: 1 };
         /** @useSignals */
         export function callback() { return count.value; }
+        /** @useSignals */
+        export const helper = () => { return count.value + 1; };
       `);
 
       expect(warn).not.toHaveBeenCalled();
