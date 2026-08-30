@@ -22,9 +22,10 @@ jobs:
       options: --user 1001
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/setup@84cb39b217b10273981911c288cd62326dc7c6d2 # v2.0.2
+      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
         with:
           cache: true
+          require-lockfile: true
       # examples/react-router's vite.config.ts imports the plugin's built
       # dist/vite.js directly (see that file), so it must exist before
       # anything loads that config -- both the typecheck below and the e2e
