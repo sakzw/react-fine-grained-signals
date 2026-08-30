@@ -43,9 +43,12 @@ export function untrackedRender<T>(callback: () => T): T {
 
 /** A small versioned subscription surface shared by signals and computeds. */
 export class RenderSubscription implements RenderDependency {
-  readonly #onFirstSubscriber?: () => void;
-  readonly #onLastSubscriber?: () => void;
-  #listeners?: Set<() => void>;
+  // Written slots, not absent ones: the hooks are `undefined` whenever the
+  // constructor is called without them, and `#listeners` is cleared back to
+  // `undefined` to release the Set once the last listener unsubscribes.
+  readonly #onFirstSubscriber?: (() => void) | undefined;
+  readonly #onLastSubscriber?: (() => void) | undefined;
+  #listeners?: Set<() => void> | undefined;
   #version = 0;
 
   constructor(

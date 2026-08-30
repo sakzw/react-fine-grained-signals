@@ -75,8 +75,11 @@ class RenderStore implements RenderCollector {
   readonly managed: boolean;
   readonly #reactListeners = new Set<() => void>();
   #dependencySubscriptions = new Map<RenderDependency, () => void>();
-  #pendingDependencies?: Map<RenderDependency, number>;
-  #finishCollection?: () => void;
+  // Both are cleared back to `undefined` rather than left absent — that is how
+  // "not collecting" and "collection already finished" are represented — so
+  // `undefined` belongs in the type, not just the absence of the slot.
+  #pendingDependencies?: Map<RenderDependency, number> | undefined;
+  #finishCollection?: (() => void) | undefined;
   #disposeGeneration = 0;
   #version = 0;
 
