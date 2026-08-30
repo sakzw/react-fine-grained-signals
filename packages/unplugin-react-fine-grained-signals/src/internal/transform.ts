@@ -215,6 +215,94 @@ function isKnownComponentWrapper(
   );
 }
 
+/**
+ * The static name of an object property's or class field's key. A computed key
+ * is only readable when it is a string literal (`{ ["Home"]: ... }`), exactly as
+ * `getReadPropertyName` reads `items["map"]`; anything else is decided at
+ * runtime and stays unnamed, which leaves the function untransformed.
+ */
+function getPropertyKeyName(node: t.ObjectProperty | t.ClassProperty): string | undefined {
+  const key = unwrapTransparent(node.key);
+  if (node.computed) return t.isStringLiteral(key) ? key.value : undefined;
+  if (t.isIdentifier(key)) return key.name;
+  return t.isStringLiteral(key) ? key.value : undefined;
+}
+
+/**
+ * The component/hook name a function held in a *keyed slot* takes from its key:
+ *
+ * ```js
+ * Card.Header = () => <h1>{count.value}</h1>;          // a compound component
+ * export const ns = { Home: () => <p>{count.value}</p> };  // an object namespace
+ * class Holder { Row = () => <li>{count.value}</li>; }     // a class field
+ * ```
+ *
+ * All three are ordinary ways to hold a component that no *binding* names, so
+ * without this they resolved to no identity at all and `auto` mode passed over
+ * them in silence. The key is the name the rest of the module reaches them by
+ * (`<ns.Home />`, `<Card.Header />`), which is precisely what the PascalCase /
+ * `useX` conventions are asked to classify -- so a lowercase key (`{ render:
+ * ... }`, `obj.onClick = ...`) resolves to a lowercase identity and is filtered
+ * out by those same conventions, exactly as a lowercase binding is.
+ *
+ * Reading the key *before* the function's own `id` is the same precedence the
+ * enclosing binding already takes: `Card.onSelect = function Row() {}` is a
+ * handler named for debugging, not a component, and the slot it was put in says
+ * so more reliably than the label it carries.
+ *
+ * An identifier-target assignment (`Row = (props) => ...` after a separate
+ * `let Row`) is deliberately not named here: the declaration is the binding, and
+ * routing it through this would give a re-assignment the same authority as a
+ * declaration. It keeps resolving through `getBindingIdentityName`'s own
+ * branches exactly as before.
+ *
+ * An assignment target is required to root in a plain identifier
+ * (`getStaticMemberPath`), which is what excludes `this.Row = ...` in a class
+ * component's constructor. That shape is genuinely ambiguous here: it is just as
+ * often a per-item row renderer invoked through `this.props.items.map(this.Row)`
+ * as it is a component, and `this` is not a binding, so the reference walk that
+ * disqualifies every other keyed slot (`isKeyedRenderCallback`) cannot see those
+ * uses at all -- there would be no way to take the boundary back once given. So
+ * the ambiguous case resolves the way this file always resolves one: name
+ * nothing, transform nothing. Class components stay a manual `useSignals()` /
+ * `@useSignals` opt-in.
+ */
+function getKeyedIdentityName(parent: NodePath): string | undefined {
+  if (parent.isAssignmentExpression()) {
+    const left = parent.node.left;
+    if (!t.isMemberExpression(left)) return undefined;
+    return getStaticMemberPath(left)?.keys.at(-1);
+  }
+  if (parent.isObjectProperty() || parent.isClassProperty()) {
+    return getPropertyKeyName(parent.node);
+  }
+  return undefined;
+}
+
+/**
+ * A member expression read as a root binding plus the chain of static keys
+ * taken from it: `a.b.Row` gives `a` / `["b", "Row"]`. Every link has to be a
+ * statically readable key and the innermost object a plain identifier, so a
+ * computed runtime key (`a[k].Row`) and a `this`-rooted path (`this.Row`) both
+ * yield nothing rather than a partial answer.
+ *
+ * The chain, rather than just the last key, is what lets `isKeyedRenderCallback`
+ * match a use site against the definition site: a one-level walk saw
+ * `const a = { b: { Row } }` handed to `items.map(a.b.Row)` as an unrelated
+ * reference and let the per-item callback keep a hook boundary of its own.
+ */
+function getStaticMemberPath(node: t.MemberExpression): { root: string; keys: string[] } | undefined {
+  const keys: string[] = [];
+  let current: t.Node = node;
+  while (t.isMemberExpression(current)) {
+    const key = getReadPropertyName(current);
+    if (key === undefined) return undefined;
+    keys.unshift(key);
+    current = current.object;
+  }
+  return t.isIdentifier(current) ? { root: current.name, keys } : undefined;
+}
+
 // Named `getBindingIdentityName` -- not `getBindingName` -- to keep it
 // visually distinct from its twin below, `getOwnBindingName`: the two answer
 // different questions (what is this function's public component/hook
@@ -240,8 +328,14 @@ function getBindingIdentityName(
   // and may legitimately differ from what it is bound to, in either direction:
   // `const Counter = function render() {}` is a component and
   // `const helper = function Counter() {}` is not.
-  if (parent !== null && parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
-    return parent.node.id.name;
+  if (parent !== null) {
+    if (parent.isVariableDeclarator() && t.isIdentifier(parent.node.id)) {
+      return parent.node.id.name;
+    }
+    // A keyed slot names its function for the same reason and with the same
+    // authority as a binding does -- see `getKeyedIdentityName`.
+    const keyed = getKeyedIdentityName(parent);
+    if (keyed !== undefined) return keyed;
   }
   if (
     (path.isFunctionDeclaration() || path.isFunctionExpression()) &&
@@ -296,6 +390,69 @@ function rendersJsx(path: NodePath<t.Function>): boolean {
   return found;
 }
 
+/**
+ * Is `path` a higher-order component factory -- a function that *produces* a
+ * component rather than being one, and that React itself therefore never
+ * renders?
+ *
+ * The evidence is the parameter list. React calls a component with exactly one
+ * props object, and a `forwardRef` render function with `(props, ref)`; neither
+ * of those parameters is ever PascalCase, and a destructured one is a pattern
+ * rather than a plain identifier. A PascalCase *identifier* parameter is
+ * therefore a component being handed in, which only a factory receives. That is
+ * the same naming convention this file already reads to classify `Counter` as a
+ * component and `useCount` as a hook, applied one position further in -- not a
+ * new kind of guess.
+ *
+ * The second half -- rendering no JSX of its own (`rendersJsx`, which looks past
+ * nested functions) -- keeps a genuine component out no matter how its
+ * parameters are spelled: a function that renders is a component.
+ *
+ * Two consequences follow, and together they are the whole policy for a
+ * PascalCase factory such as
+ * `export const WithCount = (Base) => (props) => <Base count={count.value} />`:
+ *
+ * - the factory is never transformed itself (`decideTransform` withholds both
+ *   the automatic and the annotated route from it), and
+ * - the function it returns inherits the factory's name (`getIdentityFactory`)
+ *   exactly as a camelCase `withCount` factory's returned component already did.
+ *
+ * The first half is the load-bearing one. Without it the factory looked like an
+ * ordinary component from every angle -- a PascalCase binding, and (because the
+ * component it returns owned no identity, so `inspectFunction` never skipped it)
+ * the returned component's JSX and `.value` reads credited to the factory's own
+ * body. `auto` mode injected the boundary into the factory, `all` mode did so
+ * with no `.value` read needed at all, and since `WithCount(Foo)` is normally
+ * called at module scope the injected `useSignals()` ran with no React
+ * dispatcher and threw at import time -- the unrecoverable direction this file
+ * steers away from everywhere else.
+ */
+function isHigherOrderComponentFactory(path: NodePath<t.Function>): boolean {
+  return (
+    path.node.params.some((param) => {
+      const name = getSimpleParameterName(param);
+      return name !== undefined && isComponentName(name);
+    }) && !rendersJsx(path)
+  );
+}
+
+/**
+ * The name a parameter binds, seen through a default value. `(Base)` and
+ * `(Base = Fallback)` bind the very same `Base`, but a default makes the node an
+ * `AssignmentPattern` wrapping the identifier rather than an identifier itself
+ * -- so matching only `Identifier` let a defaulted parameter fall through and
+ * put the factory straight back in front of the import-time crash
+ * `isHigherOrderComponentFactory` exists to prevent.
+ *
+ * A destructured or rest parameter binds no single name and yields nothing,
+ * which is what keeps a component's `({ Icon })` prop out.
+ */
+function getSimpleParameterName(param: t.Node): string | undefined {
+  if (t.isIdentifier(param)) return param.name;
+  if (t.isAssignmentPattern(param) && t.isIdentifier(param.left)) return param.left.name;
+  return undefined;
+}
+
 /** The enclosing factory a returned component inherits its identity from. */
 interface IdentityFactory {
   /** The enclosing function that returns the component. */
@@ -324,13 +481,24 @@ interface IdentityFactory {
  * - `path` sits in a return position of the enclosing function: an explicit
  *   `return`, or an arrow's concise body, which returns just as literally.
  *   Missing the second is what made the concise form fail even when annotated.
- * - The enclosing function has a resolvable name that is neither a component
- *   nor a hook name. A function returned by a *component* or a *hook* is a
- *   render prop or a callback that runs inside that owner's render rather than
- *   an independently mounted component, and a hook boundary of its own would
- *   be an invalid hook call. Factories are camelCase by convention
- *   (`withCount`, `connect`, `observer`), so this reads as "returned from a
- *   plain factory".
+ * - The enclosing function has a resolvable name that is not a hook name, and
+ *   -- if it is a *component* name -- is a function `isHigherOrderComponentFactory`
+ *   independently identifies as a factory. A function returned by a component or
+ *   a hook is otherwise a render prop or a callback that runs inside that owner's
+ *   render rather than an independently mounted component, and a hook boundary of
+ *   its own would be an invalid hook call. Factories are camelCase by convention
+ *   (`withCount`, `connect`, `observer`), so the plain name test reads as
+ *   "returned from a plain factory"; the PascalCase escape hatch exists because
+ *   `WithCount` is an equally common spelling of the very same thing, and there
+ *   the convention alone was not merely unhelpful but actively harmful (see
+ *   `isHigherOrderComponentFactory`).
+ *
+ *   A `useX` name gets no such escape hatch, deliberately. React calls a hook
+ *   from inside a render that is already in progress, so anything the hook hands
+ *   back is a closure the caller may invoke during that same render -- no
+ *   structural evidence in this file can rule that out, and the safe reading of
+ *   an ambiguous case is to leave the returned function unresolved rather than
+ *   give it a boundary that would be an invalid hook call.
  * - `path` renders JSX itself (`rendersJsx`). A factory handing back a
  *   comparator, a reducer or any other plain closure returns no component and
  *   must not be swept up -- and neither must the middle link of a factory
@@ -361,8 +529,9 @@ function getIdentityFactory(
   }
   if (enclosing === null) return undefined;
   const name = getBindingIdentityName(enclosing, reactImportSource);
-  if (name === undefined || isComponentName(name) || isHookName(name)) return undefined;
+  if (name === undefined || isHookName(name)) return undefined;
   if (!rendersJsx(path)) return undefined;
+  if (isComponentName(name) && !isHigherOrderComponentFactory(enclosing)) return undefined;
   return { path: enclosing, name };
 }
 
@@ -410,6 +579,54 @@ function isHookIdentity(identity: ComponentIdentity | undefined): boolean {
   // and it carries a factory's name rather than its own, so it can never name
   // a hook.
   return identity.kind === "binding" && isHookName(identity.name);
+}
+
+/**
+ * A PascalCase identity derived from the module's own file name.
+ *
+ * `export default (props) => <p>{count.value}</p>` is a perfectly ordinary way
+ * to write a component and the only component position in a module that carries
+ * no name at all: there is no binding, no key, and no function `id` for
+ * `getBindingIdentityName` to read, so the export resolved to no identity and
+ * `auto` and `all` alike passed straight over it in silence -- while the named
+ * `export default function App()` one line away was transformed.
+ *
+ * The file name is the name such a module actually has: `Counter.tsx` is
+ * imported as `Counter`, which is exactly the identity the rest of the codebase
+ * refers to it by. Only its *shape* is ever used -- the derived string
+ * classifies the export through `isComponentName`/`isHookName` and is never
+ * emitted into the output -- so sanitizing punctuation away (`my-widget.tsx` ->
+ * `MyWidget`) costs nothing and cannot collide with anything.
+ *
+ * A name that does not come out PascalCase (`123.tsx`, a module with no usable
+ * stem) yields nothing rather than something invented, and the caller reports
+ * that rather than silently skipping the export.
+ */
+function deriveModuleIdentityName(filename: string | undefined): string | undefined {
+  if (filename === undefined) return undefined;
+  const base = filename.replace(/[?#].*$/, "").replace(/\\/g, "/");
+  const stem = base.slice(base.lastIndexOf("/") + 1).replace(/\.[^.]*$/, "");
+  const name = stem
+    .split(/[^A-Za-z0-9]+/)
+    .filter((part) => part.length > 0)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join("");
+  return isComponentName(name) ? name : undefined;
+}
+
+/**
+ * The derived identity for an anonymous `export default`, and nothing else.
+ * Reached only after `resolveComponentIdentity` has found no real name, so a
+ * named default export (`export default function App()`, `export default memo(
+ * function App() {})`) keeps the name it wrote for itself.
+ */
+function getDefaultExportIdentity(
+  climbedParent: NodePath | null,
+  filename: string | undefined,
+): ComponentIdentity | undefined {
+  if (climbedParent === null || !climbedParent.isExportDefaultDeclaration()) return undefined;
+  const name = deriveModuleIdentityName(filename);
+  return name === undefined ? undefined : { kind: "binding", name };
 }
 
 // The library exports `useSignals` from two first-party entry points: the
@@ -674,6 +891,99 @@ function getOwnBindingName(path: NodePath<t.Function>): string | undefined {
   return undefined;
 }
 
+/**
+ * The full path a function in a keyed slot is reached by, from a root binding
+ * down: `const ns = { Row: ... }` gives `ns` / `["Row"]`, `Card.Row = ...` gives
+ * `Card` / `["Row"]`, and `const a = { b: { Row: ... } }` gives `a` /
+ * `["b", "Row"]`.
+ *
+ * Nesting has to be followed all the way out rather than one level, because the
+ * path is matched against use sites: stopping early left `items.map(a.b.Row)`
+ * unrecognized, so the per-item callback kept a boundary that React would run
+ * once per item inside a single render.
+ *
+ * A class field is deliberately absent -- it is reached through an instance
+ * (`new Holder().Row`), which no binding walk can follow.
+ */
+function getKeyedAccessPath(
+  parent: NodePath,
+): { origin: NodePath; root: string; keys: string[] } | undefined {
+  if (parent.isAssignmentExpression()) {
+    const left = parent.node.left;
+    if (!t.isMemberExpression(left)) return undefined;
+    const path = getStaticMemberPath(left);
+    return path === undefined ? undefined : { origin: parent, ...path };
+  }
+  if (!parent.isObjectProperty()) return undefined;
+  const key = getPropertyKeyName(parent.node);
+  if (key === undefined) return undefined;
+  const keys = [key];
+  // Climb out through however many object literals nest this property, until
+  // the outermost one reaches a binding or a member-expression target.
+  for (let container = parent.parentPath; container.isObjectExpression(); ) {
+    const holder = container.parentPath;
+    if (holder === null) return undefined;
+    if (holder.isVariableDeclarator() && t.isIdentifier(holder.node.id)) {
+      return { origin: parent, root: holder.node.id.name, keys };
+    }
+    if (holder.isAssignmentExpression() && t.isMemberExpression(holder.node.left)) {
+      const path = getStaticMemberPath(holder.node.left);
+      return path === undefined
+        ? undefined
+        : { origin: parent, root: path.root, keys: [...path.keys, ...keys] };
+    }
+    if (!holder.isObjectProperty() || holder.node.value !== container.node) return undefined;
+    const outerKey = getPropertyKeyName(holder.node);
+    if (outerKey === undefined) return undefined;
+    keys.unshift(outerKey);
+    container = holder.parentPath;
+  }
+  return undefined;
+}
+
+/**
+ * The keyed-slot twin of the by-reference check below: is a function held at
+ * `ns.Row` / `Card.Row` handed to an iteration method anywhere in the module
+ * (`items.map(ns.Row)`)?
+ *
+ * A keyed component has no binding of its own, so `getOwnBindingName` can say
+ * nothing about it and the ordinary reference walk never runs. Naming such a
+ * slot (`getKeyedIdentityName`) is what made it eligible for a boundary in the
+ * first place, so this is the exclusion that has to come with it: without it,
+ * `const handlers = { Row: (item) => <li>{item.value}</li> }` passed to `map`
+ * would be the one keyed shape that gets a hook injected into a per-item
+ * callback.
+ *
+ * The walk goes through the *root* binding rather than the function's, then
+ * follows the same chain of keys back down from each reference, so only a use
+ * that reads this exact slot counts. A JSX use (`<ns.Row />`) is a
+ * `JSXMemberExpression`, not a member expression, so it never matches and a
+ * genuine compound component keeps its boundary.
+ */
+function isKeyedRenderCallback(parent: NodePath): boolean {
+  const access = getKeyedAccessPath(parent);
+  if (access === undefined) return false;
+  const binding = access.origin.scope.getBinding(access.root);
+  if (binding === undefined) return false;
+  return binding.referencePaths.some((rootPath) => {
+    let current: NodePath = rootPath;
+    for (const key of access.keys) {
+      const member = current.parentPath;
+      if (
+        member === null ||
+        !member.isMemberExpression() ||
+        member.node.object !== current.node ||
+        getReadPropertyName(member.node) !== key
+      ) {
+        return false;
+      }
+      current = member;
+    }
+    const slot = climbTransparentWrappers(current);
+    return slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node);
+  });
+}
+
 // A function handed to an array iteration method runs a variable number of
 // times inside one render of its owner, so a hook injected into it would break
 // hook order. Both the inline definition site and a callback factored out into
@@ -699,6 +1009,7 @@ function isRenderCallback(
   const argument = climbTransparentWrappers(path);
   const enclosing = argument.parentPath;
   if (enclosing !== null && isRenderCallbackInvocation(enclosing.node, argument.node)) return true;
+  if (enclosing !== null && isKeyedRenderCallback(enclosing)) return true;
 
   const name = getOwnBindingName(path);
   if (name === undefined || enclosing === null) return false;
@@ -762,6 +1073,49 @@ function resolveReferencedFunction(
   return undefined;
 }
 
+/**
+ * Is `path` a component defined inline as a call argument --
+ * `observer(function App() { return <p>{count.value}</p>; })`?
+ *
+ * The by-reference form is already eligible and documented as such: `const App
+ * = ...; observer(App)` is named by its binding, and a reference passed to any
+ * call that is not a known iteration method is "ordinary component
+ * registration", where React instantiates the result as its own fiber with its
+ * own hooks. The inline form is the same registration written in one
+ * expression, and left out it was the one shape a third-party HOC could take
+ * that went untransformed *and* unreported.
+ *
+ * Admitting it needs a discriminator with no ambiguity left in it, so all four
+ * of these hold:
+ *
+ * - a function *expression carrying its own PascalCase name*. An arrow or an
+ *   anonymous function expression has no identity for a boundary to attach to
+ *   anyway, and the written-out name is the author's own statement that this is
+ *   a component -- the same statement `const App = ...` makes.
+ * - it renders JSX itself. A named callback that renders nothing is a
+ *   comparator, a reducer, or a test body.
+ * - it sits in an *argument* slot, never the callee, so the IIFE
+ *   `(function App() { ... })()` -- which runs once at module scope, outside any
+ *   render, exactly where a hook call throws -- is excluded.
+ * - it is not the callback of a deferred hook (`useMemo(function Rows() {...},
+ *   [])`), which runs inside the caller's render and must carry no hook of its
+ *   own. The render-callback form (`items.map(function Row() {...})`) is
+ *   excluded before this is ever reached, by `isRenderCallback`.
+ */
+function isInlineNamedComponentArgument(
+  path: NodePath<t.Function>,
+  call: NodePath<t.CallExpression>,
+  reactImportSource: string,
+): boolean {
+  if (!path.isFunctionExpression()) return false;
+  const id = path.node.id;
+  if (id === null || id === undefined || !isComponentName(id.name)) return false;
+  const slot = climbComponentWrappers(path, reactImportSource);
+  if (!call.node.arguments.some((argument) => argument === slot.node)) return false;
+  if (isDeferredCallbackArgument(path)) return false;
+  return rendersJsx(path);
+}
+
 function isAutomaticTransformCandidate(
   path: NodePath<t.Function>,
   reactImportSource: string,
@@ -792,7 +1146,23 @@ function isAutomaticTransformCandidate(
       // resolve (`resolveComponentIdentity`) before anything is transformed --
       // so this widens what is *considered*, not what is transformed.
       parent.isArrowFunctionExpression() ||
-      parent.isExportDefaultDeclaration())
+      parent.isExportDefaultDeclaration() ||
+      // Keyed slots: a component held in an object namespace, a class field, or
+      // a compound-component assignment (`Card.Header = ...`). All three are
+      // named by `getKeyedIdentityName`, and all three were invisible to `auto`
+      // mode while they were not candidates -- no transform and no warning, even
+      // when the name resolved perfectly well. The naming conventions still
+      // decide what is actually transformed, so a lowercase key stays out.
+      parent.isObjectProperty() ||
+      parent.isClassProperty() ||
+      // The assignment target has to root in a plain identifier, which excludes
+      // `this.Row = ...` in a class component's constructor -- see
+      // `getKeyedIdentityName`, where the same rule keeps that shape unnamed.
+      (parent.isAssignmentExpression() &&
+        t.isMemberExpression(parent.node.left) &&
+        getStaticMemberPath(parent.node.left) !== undefined) ||
+      (parent.isCallExpression() &&
+        isInlineNamedComponentArgument(path, parent, reactImportSource)))
   );
 }
 
@@ -1031,7 +1401,10 @@ function inspectFunction(
     CallExpression(path) {
       foldReferencedRenderCallbacks(path);
       foldDirectlyCalledRenderCallbacks(path);
-      if (path.getFunctionParent() !== functionPath) return;
+      // Compared by node, as the equivalent checks in `isDeferredReadContext`
+      // and `foldDirectlyCalledRenderCallbacks` are: a re-crawled scope can hand
+      // back a fresh NodePath for the very same function.
+      if (path.getFunctionParent()?.node !== functionPath.node) return;
       const callee = path.get("callee");
       if (isUseSignalsCallee(functionPath, callee, importSource)) {
         inspection.hasUseSignalsCall = true;
@@ -1193,17 +1566,33 @@ function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSour
 // An `@useSignals` annotation is only actionable once the transform can name
 // the function it sits on: the boundary is attached to a component or hook
 // identity. A component returned straight out of a HOC has no name of its own
-// but does inherit the factory's (`getIdentityFactory`), so what is left here
-// is the genuinely unresolvable remainder -- a factory returning a factory
+// but does inherit the factory's (`getIdentityFactory`), and a component held
+// in a keyed slot takes its key's (`getKeyedIdentityName`), so what is left
+// here is the remainder those cannot reach -- a factory returning a factory
 // (`(a) => (b) => (props) => <p />`), where the middle function has no name to
-// inherit either. Left silent, such an annotation reads as an opt-in that
-// simply never happened. Warn instead, matching the barrel case above.
+// inherit either, or a name that resolves but is neither PascalCase nor `useX`.
+// Left silent, such an annotation reads as an opt-in that simply never
+// happened. Warn instead, matching the barrel case above.
 function warnUnnamedUseSignalsAnnotation(path: NodePath<t.Function>): void {
   const warning = path.buildCodeFrameError(
     "This @useSignals annotation is ignored: the transform could not resolve a component " +
-      "or hook name for the annotated function, and the boundary is attached to that " +
-      "identity. Name the function -- assign it to a PascalCase (component) or useX (hook) " +
-      "binding, or use a named function declaration -- to opt it in.",
+      "or hook identity for the annotated function, and the boundary is attached to that " +
+      "identity. Give it a PascalCase (component) or useX (hook) name -- a binding, a named " +
+      "function declaration, or an object/class property key -- to opt it in.",
+  );
+  console.warn(warning.message);
+}
+
+// The one anonymous `export default` shape `deriveModuleIdentityName` cannot
+// name. Reported rather than skipped for exactly the reason the annotation
+// warning above exists: the author wrote a component in a position the
+// transform recognizes, and silence would read as "handled".
+function warnUnnamedDefaultExport(path: NodePath<t.Function>): void {
+  const warning = path.buildCodeFrameError(
+    "This anonymous default export is left untransformed: its component identity is derived " +
+      "from the module's file name, and this module's name does not yield a PascalCase " +
+      "identifier. Name the function (`export default function App() { ... }`), or assign it " +
+      "to a PascalCase binding and export that binding, to opt it in.",
   );
   console.warn(warning.message);
 }
@@ -1294,7 +1683,9 @@ function decideTransform(
   // through this same function's memo()/forwardRef() wrappers on its own --
   // see `getBindingIdentityName`'s matching parameter.
   const climbedParent = climbComponentWrappers(path, reactImportSource).parentPath;
-  const identity = resolveComponentIdentity(path, reactImportSource, climbedParent);
+  const identity =
+    resolveComponentIdentity(path, reactImportSource, climbedParent) ??
+    getDefaultExportIdentity(climbedParent, state.filename);
   // A `@useSignals`/`@noUseSignals` comment on a HOC factory is written for the
   // component that factory returns: the factory is never a component itself and
   // can never carry a boundary, so it has nothing else to mean.
@@ -1318,32 +1709,72 @@ function decideTransform(
   }
   const inspection = inspectFunction(path, options.importSource, reactImportSource);
   const annotation = ownsLeadingComment(useSignalsComment);
-  const annotated = annotation && (isComponentIdentity(identity) || isHookIdentity(identity));
-  const candidate = isAutomaticTransformCandidate(path, reactImportSource, climbedParent);
-  // The annotation was written for a function the transform cannot name, so it
-  // will be dropped. Only a function that is otherwise in a transformable
-  // position is worth reporting, and only when no enclosing function owns the
-  // very same comment -- otherwise every nested arrow under an annotated
-  // component would report the component's own annotation a second time.
+  // A factory is not a component, so no automatic route and no annotation may
+  // attach a boundary to it -- the component it returns carries one instead
+  // (`getIdentityFactory`). An explicit, hand-written `useSignals()` call is
+  // left alone, here as everywhere: the author's own call is their statement
+  // about their own code, not something inferred.
   //
-  // `identity === undefined` is the whole condition on purpose: a *resolved*
-  // identity that merely fails the component/hook shape check is the ordinary
-  // lowercase binding the README documents as a no-op -- and, crucially, it is
-  // also exactly what an annotated HOC factory looks like from here
-  // (`withCount` is camelCase by definition, so `annotated` is false for it
-  // while the component it returns honors the very same annotation). Widening
-  // this to every `annotation && !annotated` would call that supported case
-  // "ignored", and no name shape can tell the two apart.
-  if (annotation && !annotated && candidate) {
+  // A *hook* identity is exempt, and the exemption is the whole reason the gate
+  // is written against the resolved identity rather than the shape alone. The
+  // rationale for standing a factory down is that React never calls it during a
+  // render, so a boundary inside it would run with no dispatcher -- and that
+  // rationale simply does not reach a hook, which React calls from inside a
+  // render that is already in progress, where a boundary is valid. Without this,
+  // `function useModal(Overlay) { const n = count.value; ... }` was skipped for
+  // taking a component-shaped parameter, silently and with its `@useSignals`
+  // annotation dropped too (the annotation warning is gated on rendering JSX,
+  // which a hook does not do).
+  const isFactory = isHigherOrderComponentFactory(path) && !isHookIdentity(identity);
+  const annotated =
+    annotation && !isFactory && (isComponentIdentity(identity) || isHookIdentity(identity));
+  const candidate = isAutomaticTransformCandidate(path, reactImportSource, climbedParent);
+  // The annotation was written for a function no boundary ended up attached to,
+  // so it will be dropped. An opt-in that silently does nothing is the worst of
+  // both outcomes -- the author believes the component is subscribed and it is
+  // not -- so this reports it wherever the annotation could plausibly have
+  // meant a component.
+  //
+  // `rendersJsx(path)` is the whole condition, and candidacy deliberately is
+  // not part of it any more. The positions candidacy excludes -- a bare call
+  // argument, a JSX attribute value, an object or class member before this file
+  // learned to name one -- are exactly the positions where an annotation used to
+  // vanish without a word, which is the reason this check exists at all.
+  // Requiring the function to render JSX of its own is what keeps it honest in
+  // the two directions that matter:
+  //
+  // - a function that renders nothing was never going to be a component, so an
+  //   annotation on it is the lowercase-helper no-op the README documents; and
+  // - an annotated HOC *factory* renders nothing itself while the component it
+  //   returns honors that very same annotation, so it must stay quiet. That is
+  //   the case the old `identity === undefined` guard was protecting, and
+  //   rendering is a sounder test for it than name shape, which cannot tell a
+  //   factory from a helper at all.
+  //
+  // The enclosing-function guard stays: `hasOwnedLeadingComment` climbs through
+  // expressions up to the declaration, so every nested arrow under an annotated
+  // concise-body component reads that component's annotation as its own and
+  // would otherwise report it a second time.
+  if (annotation && !annotated && rendersJsx(path)) {
     const enclosing = path.getFunctionParent();
-    if (
-      identity === undefined &&
-      (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalsComment))
-    ) {
+    if (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalsComment)) {
       warnUnnamedUseSignalsAnnotation(path);
     }
   }
-  const automatic = candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
+  // An anonymous default export the file name could not name is the one
+  // recognized component position left with no identity at all, and `auto`/`all`
+  // would otherwise skip it in silence.
+  if (
+    options.mode !== "manual" &&
+    identity === undefined &&
+    climbedParent !== null &&
+    climbedParent.isExportDefaultDeclaration() &&
+    rendersJsx(path)
+  ) {
+    warnUnnamedDefaultExport(path);
+  }
+  const automatic =
+    !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
   if (!explicit && inspection.hasUseSignalsCall) return { kind: "skip" };
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
@@ -1572,18 +2003,41 @@ export function transformReactFineGrainedSignals(
   if (supportsJsx) parserPlugins.push("jsx");
   if (isTypeScript) parserPlugins.push("typescript");
   parserPlugins.push("decorators-legacy", "decoratorAutoAccessors");
-  const result = transformSync(code, {
-    babelrc: false,
-    configFile: false,
-    filename: id,
-    // Babel otherwise derives `sources` from `filename`'s basename, which both
-    // loses the path a debugger needs and, under Vite, leaks the HMR query
-    // string (`App.tsx?t=173...`) into the map as if it were a real file name.
-    sourceFileName: cleanId,
-    parserOpts: { plugins: parserPlugins },
-    plugins: [[babelTransform, options]],
-    sourceMaps: true,
-  });
+  let result: ReturnType<typeof transformSync>;
+  try {
+    result = transformSync(code, {
+      babelrc: false,
+      configFile: false,
+      filename: id,
+      // Babel otherwise derives `sources` from `filename`'s basename, which both
+      // loses the path a debugger needs and, under Vite, leaks the HMR query
+      // string (`App.tsx?t=173...`) into the map as if it were a real file name.
+      sourceFileName: cleanId,
+      parserOpts: { plugins: parserPlugins },
+      plugins: [[babelTransform, options]],
+      sourceMaps: true,
+    });
+  } catch (error) {
+    // Fatal on purpose. Swallowing this and returning `null` would hand the
+    // bundler the untransformed source, which is the silent stale-UI failure
+    // this file refuses everywhere else -- and here it would also hide a real
+    // syntax error behind a component that merely stopped updating.
+    //
+    // What is added is attribution. The raw Babel error names neither the
+    // plugin that raised it nor the parser configuration it used, so the most
+    // likely cause -- a syntax this plugin list does not enable, such as JSX in
+    // a `.ts` module (where TypeScript's angle-bracket assertions make JSX
+    // parsing unsafe, so `jsx` is deliberately off) or a proposal this
+    // transform does not opt into -- reads as an unattributable build failure
+    // somewhere in the bundler. `cause` keeps the original error and its code
+    // frame intact for anything that prints it.
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `unplugin-react-fine-grained-signals could not parse ${cleanId} ` +
+        `(Babel parser plugins: ${parserPlugins.join(", ") || "none"}): ${detail}`,
+      { cause: error },
+    );
+  }
   if (
     result === null ||
     typeof result.code !== "string" ||

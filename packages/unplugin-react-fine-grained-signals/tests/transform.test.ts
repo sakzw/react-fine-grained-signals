@@ -304,8 +304,13 @@ describe("managed render transform", () => {
   );
 
   it.each(["auto", "all"] as const)(
-    "does not transform anonymous default-export wrappers in %s mode",
+    "transforms anonymous default-export wrappers in %s mode",
     (mode) => {
+      // These used to pass straight through: an anonymous default export has no
+      // binding, no key and no function `id`, so no identity resolved and the
+      // export was skipped without a word -- one line away from the named form
+      // above, which was transformed. The module's own file name is the name the
+      // rest of the codebase imports it by, so it supplies the identity.
       const memoOutput = compile(`
           import { memo } from "react";
           const count = { value: 1 };
@@ -317,10 +322,10 @@ describe("managed render transform", () => {
           export default forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
         `, mode);
 
-      expect(memoOutput).not.toContain("finally {");
-      expect(memoOutput).not.toContain('from "react-fine-grained-signals/runtime"');
-      expect(forwardRefOutput).not.toContain("finally {");
-      expect(forwardRefOutput).not.toContain('from "react-fine-grained-signals/runtime"');
+      expect(memoOutput).toContain("memo(() => {");
+      expect(memoOutput).toContain("finally {");
+      expect(forwardRefOutput).toContain("forwardRef((props, ref) => {");
+      expect(forwardRefOutput).toContain("finally {");
     },
   );
 
@@ -1618,4 +1623,693 @@ describe("React Compiler opt-out directive", () => {
       expect(compile(once, "auto", transform)).toBe(once);
     },
   );
+});
+
+describe("PascalCase higher-order component factories", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("puts the boundary on the returned component, not on the factory itself", () => {
+    // The blocker this policy exists for. The factory is PascalCase, and the
+    // component it returned owned no identity -- so its JSX and `.value` read
+    // were credited to the factory's own body and the boundary was injected
+    // there. `WithCount(Foo)` is called at module scope, where there is no React
+    // dispatcher, so that boundary threw at import time.
+    const concise = compile(`
+      const count = { value: 1 };
+      export const WithCount = (Base) => (props) => <Base n={count.value} />;
+    `, "auto");
+    const block = compile(`
+      const count = { value: 1 };
+      export function WithCount(Base) { return (props) => <Base n={count.value} />; }
+    `, "auto");
+
+    expect(concise.match(/finally/g)).toHaveLength(1);
+    expect(concise).toMatch(
+      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+    expect(block.match(/finally/g)).toHaveLength(1);
+    expect(block).toMatch(/function WithCount\(Base\) \{\s+return props => \{/);
+  });
+
+  it("keeps a PascalCase factory off a boundary in all mode, which needs no signal read", () => {
+    // `all` mode wraps every component-named function that contains JSX, so
+    // before the factory was recognized as one, every PascalCase HOC in a
+    // codebase broke at import time without reading a signal at all.
+    const output = compile(`
+      const count = { value: 1 };
+      export const WithCount = (Base) => (props) => <Base />;
+    `, "all");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(
+      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+  });
+
+  it("recognizes the factory by its parameter, not by what the returned component renders", () => {
+    // The discriminator is the PascalCase *parameter*: React calls a component
+    // with `(props)` and a render function with `(props, ref)`, so a PascalCase
+    // identifier parameter is a component being handed in, which only a factory
+    // receives. That holds whether or not the returned component renders the
+    // argument directly, which an alias or a spread would hide.
+    const output = compile(`
+      const count = { value: 1 };
+      export const WithCount = (Base) => (props) => <div>{count.value}</div>;
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(
+      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+  });
+
+  it("attributes an annotation on a PascalCase factory to the component it returns", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const concise = compile(`
+      const count = { value: 1 };
+      /** @useSignals */
+      export const WithCount = (Base) => (props) => <Base n={count.value} />;
+    `);
+    const block = compile(`
+      const count = { value: 1 };
+      /** @useSignals */
+      export function WithBlock(Base) { return (props) => <Base n={count.value} />; }
+    `);
+
+    // Exactly one boundary each: the factory must not take the annotation for
+    // itself now that the component it returns can honor it.
+    expect(concise.match(/finally/g)).toHaveLength(1);
+    expect(concise).toMatch(
+      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+    expect(block.match(/finally/g)).toHaveLength(1);
+    expect(block).toMatch(/function WithBlock\(Base\) \{\s+return props => \{/);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("honors a @noUseSignals opt-out written on a PascalCase factory", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      /** @noUseSignals */
+      export const WithCount = (Base) => (props) => <Base n={count.value} />;
+    `, "all");
+
+    expect(output).not.toContain("finally");
+  });
+
+  it("leaves an author's own useSignals() call in a factory alone", () => {
+    // The factory rule withholds the inferred routes -- `auto`, `all` and the
+    // annotation. A hand-written call is a statement about the author's own
+    // code, and this transform never second-guesses one.
+    const output = compile(`
+      import { useSignals } from "react-fine-grained-signals";
+      const count = { value: 1 };
+      export function WithCount(Base) {
+        useSignals();
+        return (props) => <Base n={count.value} />;
+      }
+    `);
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/function WithCount\(Base\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("still treats a function whose parameters look ordinary as a component", () => {
+    // A destructured prop is an ObjectPattern, not an identifier parameter, so
+    // `<Icon />` coming in as a prop leaves `Card` a component; and a function
+    // that renders JSX itself is a component whatever its parameters are named.
+    const output = compile(`
+      const count = { value: 1 };
+      export function Card({ Icon }) { return <Icon>{count.value}</Icon>; }
+      export function Panel(Base) { return <p>{count.value}</p>; }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+  });
+
+  it("gives a useX name no identity-inheritance escape hatch, and still transforms the hook", () => {
+    // React calls a hook from inside a render already in progress, so anything
+    // it hands back may be invoked during that same render. No structural
+    // evidence here can rule that out, so the returned function stays
+    // unresolved rather than getting a boundary that would be an invalid hook
+    // call.
+    //
+    // The hook itself is a different question, and the factory rule must not
+    // answer it: standing a factory down is justified by React never calling it
+    // during a render, which is exactly what React *does* do to a hook. So the
+    // one boundary here goes on `useRow`, precisely as it did before the
+    // PascalCase-factory policy existed.
+    const output = compile(`
+      const count = { value: 1 };
+      export const useRow = (Base) => (props) => <Base n={count.value} />;
+    `, "all");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/const useRow = Base => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toContain("return props => <Base n={count.value} />;");
+  });
+
+  it("keeps transforming a hook that takes a component-shaped parameter", () => {
+    // The regression the hook exemption exists for: `useModal` takes a
+    // component-shaped parameter and renders no JSX, which is the factory shape
+    // exactly -- but it is a hook, so `auto` mode and an annotation both still
+    // reach it. Skipping it was silent in both directions: no boundary, and no
+    // warning either, since the annotation report is gated on rendering JSX.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const auto = compile(`
+      const count = { value: 1 };
+      export function useModal(Overlay) {
+        const n = count.value;
+        return { open: () => n, Overlay };
+      }
+    `, "auto");
+    const annotated = compile(`
+      const count = { value: 1 };
+      /** @useSignals */
+      export function useModal(Overlay) {
+        const n = count.value;
+        return { open: () => n, Overlay };
+      }
+    `);
+
+    expect(auto.match(/finally/g)).toHaveLength(1);
+    expect(auto).toMatch(/function useModal\(Overlay\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(annotated.match(/finally/g)).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("recognizes a factory whose component parameter carries a default value", () => {
+    // `(Base = Fallback)` is an AssignmentPattern wrapping the identifier, not
+    // an identifier -- so matching only identifiers let a defaulted parameter
+    // fall through and put the factory straight back in front of the
+    // import-time crash the whole policy exists to prevent.
+    const output = compile(`
+      const count = { value: 1 };
+      const Fallback = () => <p />;
+      export const WithCount = (Base = Fallback) => (props) => <Base n={count.value} />;
+    `, "auto");
+
+    expect(output).toMatch(
+      /const WithCount = \(Base = Fallback\) => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+    // `Fallback` renders JSX but reads no signal, so `auto` leaves it alone and
+    // the returned component owns the file's only boundary.
+    expect(output.match(/finally/g)).toHaveLength(1);
+  });
+
+  it("leaves a factory whose returned component is separately named alone", () => {
+    // `inner` is a real binding, and a lowercase one, so it is not a component
+    // and inherits nothing. Nothing is transformed: the factory is excluded by
+    // its parameter and the closure by its name. That is the stale-UI direction,
+    // which is the recoverable one.
+    const source = `
+      const count = { value: 1 };
+      export const WithCount = (Base) => {
+        const inner = (props) => <Base n={count.value} />;
+        return inner;
+      };
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+    expect(compile(source, "all")).toBe(source);
+  });
+
+  it("keeps the two fixes this subsystem was already patched for intact", () => {
+    // Locks in commit 9fbda5a (a component returned from a camelCase factory is
+    // named by that factory) and commit 74b20e0 (a hook called directly inside a
+    // render callback is demoted and its reads folded into the owner), which the
+    // PascalCase policy above reaches into the very same code paths for.
+    const camelCaseFactory = compile(`
+      const count = { value: 1 };
+      export const withCount = (Base) => (props) => <Base {...props} count={count.value} />;
+    `, "auto");
+    const hookInRenderCallback = compile(`
+      const count = { value: 1 };
+      const items = [1];
+      const useLabel = (item) => count.value + item;
+      export function List() {
+        return <ul>{items.map((item) => <li>{useLabel(item)}</li>)}</ul>;
+      }
+    `, "auto");
+
+    expect(camelCaseFactory.match(/finally/g)).toHaveLength(1);
+    expect(camelCaseFactory).toMatch(
+      /const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+    expect(hookInRenderCallback.match(/finally/g)).toHaveLength(1);
+    expect(hookInRenderCallback).toContain("const useLabel = item => count.value + item;");
+    expect(hookInRenderCallback).toMatch(
+      /function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+  });
+});
+
+describe("anonymous default exports", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it.each(["auto", "all"] as const)("transforms an anonymous default export in %s mode", (mode) => {
+    // No binding, no key and no function `id`, so no identity resolved and both
+    // modes skipped these in silence -- while the named `export default function
+    // App()` one line away was transformed.
+    const arrow = compile(`
+      const count = { value: 1 };
+      export default (props) => <p>{count.value}</p>;
+    `, mode);
+    const expression = compile(`
+      const count = { value: 1 };
+      export default function () { return <p>{count.value}</p>; }
+    `, mode);
+
+    expect(arrow.match(/finally/g)).toHaveLength(1);
+    expect(arrow).toMatch(/export default props => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(expression.match(/finally/g)).toHaveLength(1);
+    expect(expression).toMatch(
+      /export default function \(\) \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+  });
+
+  it("derives the identity from the module's file name, punctuation and all", () => {
+    // Only the *shape* of the derived name is ever used -- it classifies the
+    // export through the PascalCase convention and is never emitted -- so a
+    // kebab-case module name and a bundler query string both resolve cleanly.
+    const output = transformReactFineGrainedSignals(
+      "const count = { value: 1 }; export default (props) => <p>{count.value}</p>;",
+      "/project/src/my-widget.tsx?t=1730000000",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "auto",
+        reactImportSource: "react",
+      },
+    )?.code;
+
+    expect(output).toContain("finally {");
+  });
+
+  it("leaves a non-component default export alone", () => {
+    const source = `
+      const count = { value: 1 };
+      export default (a, b) => a.value + b.value;
+    `;
+
+    expect(compile(source, "all")).toBe(source);
+  });
+
+  it("reports an anonymous default export whose module name yields no identifier", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const source = "const count = { value: 1 }; export default (props) => <p>{count.value}</p>;";
+    const options = {
+      importSource: "react-fine-grained-signals",
+      mode: "auto" as const,
+      transform: "managed" as const,
+      reactCompiler: "auto" as const,
+      reactImportSource: "react",
+    };
+
+    expect(transformReactFineGrainedSignals(source, "123.tsx", options)).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toContain("anonymous default export is left untransformed");
+
+    // `manual` mode transforms nothing on its own, so it has nothing to report.
+    warn.mockClear();
+    transformReactFineGrainedSignals(source, "123.tsx", { ...options, mode: "manual" });
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("components held in keyed slots", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("names a compound component from its assignment target", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      const Card = {};
+      Card.Header = () => <p>{count.value}</p>;
+      Card.Footer = function Footer() { return <p>{count.value}</p>; };
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output).toMatch(/Card\.Header = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(
+      /Card\.Footer = function Footer\(\) \{\s+(?:"use no memo";\s+)?const _signals/,
+    );
+  });
+
+  it("names a component held in an object-literal namespace or a class field", () => {
+    const namespace = compile(`
+      const count = { value: 1 };
+      export const ns = { Home: () => <p>{count.value}</p> };
+      export function App() { return <ns.Home />; }
+    `, "auto");
+    const field = compile(`
+      const count = { value: 1 };
+      export class Holder {
+        Row = () => <p>{count.value}</p>;
+        static Cell = () => <p>{count.value}</p>;
+      }
+    `, "auto");
+
+    expect(namespace.match(/finally/g)).toHaveLength(1);
+    expect(namespace).toMatch(/Home: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(field.match(/finally/g)).toHaveLength(2);
+  });
+
+  it("reads the key rather than the function's own name", () => {
+    // The slot a function was put in says what it is more reliably than the
+    // label it carries, exactly as an enclosing binding already outranks a
+    // function expression's own `id`.
+    const source = `
+      const count = { value: 1 };
+      const Card = {};
+      Card.onSelect = function Row() { return <p>{count.value}</p>; };
+      const ns = { render: () => <p>{count.value}</p> };
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+    expect(compile(source, "all")).toBe(source);
+  });
+
+  it("reads a string-literal key, computed or not, and stops at a runtime one", () => {
+    // A computed key is only readable when it is a string literal, exactly as
+    // `items["map"]` is; anything decided at runtime leaves the slot unnamed,
+    // which leaves the function untransformed rather than guessed at.
+    const literal = compile(`
+      const count = { value: 1 };
+      export const ns = { "Home": () => <p>{count.value}</p> };
+    `, "auto");
+    const computed = compile(`
+      const count = { value: 1 };
+      export const ns = { ["Home"]: () => <p>{count.value}</p> };
+    `, "auto");
+    const runtime = `
+      const count = { value: 1 };
+      const key = "Home";
+      export const ns = { [key]: () => <p>{count.value}</p> };
+    `;
+
+    expect(literal.match(/finally/g)).toHaveLength(1);
+    expect(computed.match(/finally/g)).toHaveLength(1);
+    expect(compile(runtime, "auto")).toBe(runtime);
+    expect(compile(runtime, "all")).toBe(runtime);
+  });
+
+  it("names a nested compound target and an inline object property", () => {
+    // Naming reads the key alone, so neither a deeper member target nor an
+    // object literal that no binding holds needs a holder to resolve through.
+    const nested = compile(`
+      const count = { value: 1 };
+      const Card = { Sub: {} };
+      Card.Sub.Header = () => <p>{count.value}</p>;
+    `, "auto");
+    const inline = compile(`
+      const count = { value: 1 };
+      function register(config) { return config; }
+      export const registered = register({ Home: () => <p>{count.value}</p> });
+    `, "auto");
+
+    expect(nested.match(/finally/g)).toHaveLength(1);
+    expect(inline.match(/finally/g)).toHaveLength(1);
+  });
+
+  it("keeps a keyed component handed to an iteration method off its own boundary", () => {
+    // The exclusion that has to come with naming keyed slots: these run once per
+    // item inside the owner's single render, so a hook injected into one breaks
+    // hook order the moment the array length changes.
+    const namespace = compile(`
+      const items = [{ value: 1 }];
+      const handlers = { Row: (item) => <li>{item.value}</li> };
+      export function List() { return <ul>{items.map(handlers.Row)}</ul>; }
+    `, "auto");
+    const compound = compile(`
+      const items = [{ value: 1 }];
+      const Card = {};
+      Card.Row = (item) => <li>{item.value}</li>;
+      export function List() { return <ul>{items.map(Card.Row)}</ul>; }
+    `, "auto");
+
+    expect(namespace).not.toContain("finally");
+    expect(compound).not.toContain("finally");
+  });
+
+  it("follows a nested namespace out to its root binding before excluding it", () => {
+    // A one-level holder walk saw `items.map(a.b.Row)` as an unrelated
+    // reference, so the per-item callback kept a boundary of its own -- which
+    // React would then run once per item inside a single render.
+    const nested = `
+      const count = { value: 1 };
+      const a = { b: { Row: (item) => <li>{count.value}{item}</li> } };
+      export const List = ({ items }) => <ul>{items.map(a.b.Row)}</ul>;
+    `;
+    const assignedHolder = `
+      const count = { value: 1 };
+      const a = {};
+      a.b = { Row: (item) => <li>{count.value}{item}</li> };
+      export const List = ({ items }) => <ul>{items.map(a.b.Row)}</ul>;
+    `;
+
+    expect(compile(nested, "auto")).not.toContain("finally");
+    expect(compile(assignedHolder, "auto")).not.toContain("finally");
+
+    // `all` mode still wraps `List` itself, which is an ordinary component; what
+    // must not happen is `Row` getting a second boundary of its own.
+    const all = compile(nested, "all");
+    expect(all.match(/finally/g)).toHaveLength(1);
+    expect(all).toContain("Row: item => <li>{count.value}{item}</li>");
+  });
+
+  it("still transforms a nested namespace component nothing iterates over", () => {
+    // The chain walk only disqualifies a slot that is actually handed to an
+    // iteration method; a genuine nested compound component keeps its boundary.
+    const output = compile(`
+      const count = { value: 1 };
+      export const a = { b: { Row: () => <li>{count.value}</li> } };
+      export function List() { return <ul><a.b.Row /></ul>; }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/Row: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("leaves a this-rooted assignment in a class component alone", () => {
+    // `this.Row = ...` is as often a per-item row renderer reached through
+    // `this.props.items.map(this.Row)` as it is a component, and `this` is not a
+    // binding -- so the reference walk that disqualifies every other keyed slot
+    // cannot see those uses, and a boundary given here could never be taken
+    // back. The ambiguous case resolves the way this file always resolves one.
+    const source = `
+      const count = { value: 1 };
+      export class Legacy extends React.Component {
+        constructor(props) {
+          super(props);
+          this.Row = (item) => <li>{count.value}{item}</li>;
+        }
+        render() { return <ul>{this.props.items.map(this.Row)}</ul>; }
+      }
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+    expect(compile(source, "all")).toBe(source);
+  });
+
+  it("leaves object and class methods out of the keyed-slot widening", () => {
+    // A method is far likelier to be called as one (`config.Header()`) than
+    // rendered as a component, and no name shape separates the two -- so the
+    // widening deliberately stops at properties and fields holding a function.
+    const source = `
+      const count = { value: 1 };
+      export const ns = { Home() { return <p>{count.value}</p>; } };
+      export class Holder { Row() { return <p>{count.value}</p>; } }
+    `;
+
+    expect(compile(source, "all")).toBe(source);
+  });
+
+  it("still leaves a re-assigned plain binding alone", () => {
+    // Only a *member* target is named from its key: the declaration is the
+    // binding, and routing a re-assignment through the keyed path would give it
+    // the same authority as a declaration.
+    const source = `
+      const count = { value: 1 };
+      let Row;
+      Row = (props) => <p>{count.value}</p>;
+      export { Row };
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+    expect(compile(source, "all")).toBe(source);
+  });
+});
+
+describe("components defined inline as a call argument", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("transforms a named function expression handed to a third-party HOC", () => {
+    // The by-reference form (`observer(Row)`) was already eligible; this is the
+    // same registration written in one expression, and it used to go both
+    // untransformed and unreported.
+    const output = compile(`
+      const count = { value: 1 };
+      function observer(C) { return C; }
+      export default observer(function App() { return <p>{count.value}</p>; });
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/observer\(function App\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("requires the author's own PascalCase name on the function expression", () => {
+    // An arrow or an anonymous function expression in a bare call argument has
+    // no identity to attach a boundary to, and nothing in the call says what the
+    // callee does with it -- so it stays out rather than being guessed at.
+    const source = `
+      const count = { value: 1 };
+      function observer(C) { return C; }
+      export default observer((props) => <p>{count.value}</p>);
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+    expect(compile(source, "all")).toBe(source);
+  });
+
+  it("excludes an IIFE, a deferred hook callback, and a render callback", () => {
+    // Each of these runs somewhere a hook call is invalid: module scope, a
+    // memoized callback, and once per item inside the owner's render.
+    const output = compile(`
+      import { useMemo } from "react";
+      const count = { value: 1 };
+      const items = [1];
+      export const eager = (function App() { return <p>{count.value}</p>; })();
+      export function Panel() {
+        const rows = useMemo(function Rows() { return <p>{count.value}</p>; }, []);
+        return <div>{rows}</div>;
+      }
+      export function List() {
+        return <ul>{items.map(function Row(item) { return <li>{count.value}{item}</li>; })}</ul>;
+      }
+    `, "auto");
+
+    // Only `List` is transformed, and only because the render callback's read is
+    // folded into it -- none of `App`, `Rows` or `Row` gets a boundary.
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/function App\(\) \{\s+return <p>/);
+    expect(output).toMatch(/function Rows\(\) \{\s+return <p>/);
+    expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
+  });
+});
+
+describe("@useSignals annotations that attach to nothing", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("reports an annotation on a JSX-rendering function in any position", () => {
+    // The warning used to be gated on candidacy, so it fired only in a subset of
+    // the positions an annotation could legitimately appear in and do nothing --
+    // a bare call argument was silent, which is exactly where an opt-in most
+    // needs to be heard.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    compile(`
+      const count = { value: 1 };
+      function register(fn) { return fn; }
+      register(/** @useSignals */ () => <p>{count.value}</p>);
+    `);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.[0]).toContain("@useSignals annotation is ignored");
+  });
+
+  it("reports an annotation on a resolvable but lowercase JSX function", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    compile(`
+      const count = { value: 1 };
+      /** @useSignals */
+      export const helper = () => <p>{count.value}</p>;
+    `);
+
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
+
+  it("stays quiet for annotations that are doing their job", () => {
+    // A function that renders nothing was never a component candidate, so an
+    // annotation on it is the documented lowercase no-op; an annotated factory
+    // renders nothing itself while the component it returns honors the very same
+    // annotation; and a nested arrow reads its enclosing component's annotation
+    // as its own through the comment climb, which must not report it twice.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    compile(`
+      const count = { value: 1 };
+      const items = [1];
+      /** @useSignals */
+      export function callback() { return count.value; }
+      /** @useSignals */
+      export const withCount = (Base) => (props) => <Base n={count.value} />;
+      /** @useSignals */
+      export const WithCount = (Base) => (props) => <Base n={count.value} />;
+      /** @useSignals */
+      export const App = () => <div>{items.map((i) => <li>{count.value}{i}</li>)}</div>;
+    `);
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("no longer needs to report an annotation on a keyed component", () => {
+    // Widening the candidate positions made this case moot rather than merely
+    // audible: the annotation now resolves and the component is transformed.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const output = compile(`
+      const count = { value: 1 };
+      export const ns = { /** @useSignals */ Home: () => <p>{count.value}</p> };
+    `);
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("parse failures", () => {
+  it("attributes an unparseable file to the plugin, the file and the parser config", () => {
+    // Fatal on purpose: returning null would hand the bundler the untransformed
+    // source, which is the silent stale-UI failure this transform exists to
+    // prevent -- and here it would also hide a real syntax error.
+    const options = {
+      importSource: "react-fine-grained-signals",
+      mode: "auto" as const,
+      transform: "managed" as const,
+      reactCompiler: "auto" as const,
+      reactImportSource: "react",
+    };
+
+    let thrown: unknown;
+    try {
+      transformReactFineGrainedSignals(
+        "const count = { value: 1 }; export function App( { return <p/>; }",
+        "/project/src/App.tsx?t=1730000000",
+        options,
+      );
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    const message = (thrown as Error).message;
+    // The attribution names the plugin, the file without the bundler's query
+    // string, and the exact parser configuration the parse ran under -- none of
+    // which the raw Babel error carries.
+    expect(message).toMatch(
+      /^unplugin-react-fine-grained-signals could not parse \/project\/src\/App\.tsx \(Babel parser plugins: jsx, typescript, decorators-legacy, decoratorAutoAccessors\):/,
+    );
+    // The original Babel error, and its code frame, stay reachable.
+    expect(message).toContain("Unexpected token");
+    expect((thrown as Error).cause).toBeInstanceOf(Error);
+  });
 });
