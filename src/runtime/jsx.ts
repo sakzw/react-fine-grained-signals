@@ -28,7 +28,7 @@ function isControlledTwoWayProp(tagName: string, name: string): boolean {
 
 /**
  * The concrete strategy a direct binding is mounted with. Resolved once, in
- * `transformProps`, from the JSX tag string that is already on hand at
+ * `findHostBindings`, from the JSX tag string that is already on hand at
  * element-creation time — `"select"` needs `bindSelectValue`'s MutationObserver
  * workaround, `"input"`/`"textarea"` need `bindTextValue`'s IME handling, and
  * `<input checked>` is the only other two-way case — so `mountBinding` later
