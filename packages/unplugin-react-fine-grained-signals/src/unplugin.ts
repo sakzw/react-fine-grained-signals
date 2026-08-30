@@ -53,15 +53,41 @@ export interface ReactFineGrainedSignalsOptions {
 // either invalid or reinterpreted as ESM, which makes `module` undefined at
 // runtime. Excluding them outright is the honest boundary -- an author who
 // wants the transform on that code can move it to `.mjs`/`.js`.
-const SCRIPT_MODULE = /\.m?[jt]sx?(?:\?.*)?$/;
+const SCRIPT_MODULE = /\.m?[jt]sx?$/;
 
 export const pluginName = "unplugin-react-fine-grained-signals";
 
+/**
+ * `id` with the `?query`/`#fragment` a bundler appends taken off, which is
+ * exactly what the transform strips before it picks its parser plugins.
+ *
+ * Deciding on the raw id instead diverges from that decision in both
+ * directions. Vite's SFC sub-request `App.vue?vue&type=script&lang.tsx` ends in
+ * `.tsx` only because its *query* does, so it would be claimed and then reach
+ * the parser as `App.vue` -- with neither the `jsx` nor the `typescript` plugin
+ * enabled -- and fail as though the author had written broken syntax.
+ * `App.tsx#frag` ends in neither, so it would be skipped although the transform
+ * handles it perfectly well. Cleaning here keeps the claim and the parse
+ * looking at the same name.
+ */
+function cleanModuleId(id: string): string {
+  return id.replace(/[?#].*$/, "");
+}
+
 export function canTransform(id: string, options: ReactFineGrainedSignalsOptions): boolean {
+  // Rollup's convention for a module another plugin generated and owns. The id
+  // is not a path, its text belongs to that plugin rather than to the author,
+  // and the only binding this transform introduces is a bare `import` that
+  // would have to resolve from a module with no directory of its own -- so
+  // `\0`-prefixed ids are left to whoever made them, as the convention asks.
+  if (id.startsWith("\0")) return false;
   if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
     return false;
   }
-  if (!SCRIPT_MODULE.test(id)) return false;
+  // `include`/`exclude` still see the id the bundler actually gave, so a
+  // predicate written against a query (Vite's `?t=` HMR stamp, say) keeps
+  // working.
+  if (!SCRIPT_MODULE.test(cleanModuleId(id))) return false;
   if (options.exclude?.(id)) return false;
   return options.include?.(id) ?? true;
 }
@@ -104,8 +130,7 @@ export function resolveEsbuildLoader(
   id: string,
   configuredLoaders?: Record<string, string> | undefined,
 ): string {
-  const cleanId = id.replace(/[?#].*$/, "");
-  const extension = /\.[^./\\]*$/.exec(cleanId)?.[0].toLowerCase() ?? "";
+  const extension = /\.[^./\\]*$/.exec(cleanModuleId(id))?.[0].toLowerCase() ?? "";
   return configuredLoaders?.[extension] ?? ESBUILD_LOADERS[extension] ?? "js";
 }
 
@@ -134,6 +159,28 @@ interface WebpackLikeCompiler {
 
 const patchedMarker = "__reactFineGrainedSignalsLoaderPatched";
 
+let loaderPatchReported = false;
+
+/**
+ * Says, once per process, that the rewrite below found nothing to rewrite.
+ *
+ * That rewrite is deliberately shape-matched, so an unplugin release which
+ * restructures its transform rule keeps its own behaviour rather than breaking
+ * the build -- but its own behaviour is the dropped source map this package's
+ * loader exists to avoid, and falling back to it in silence is precisely the
+ * regression nobody would notice. One line is enough to find it; repeating it
+ * per module or per rebuild would only teach people to ignore it.
+ */
+function reportLoaderPatchSkipped(reason: string): void {
+  if (loaderPatchReported) return;
+  loaderPatchReported = true;
+  console.warn(
+    `[${pluginName}] Source map fix not applied: ${reason}. ` +
+    "Falling back to unplugin's own transform loader, whose output maps point " +
+    "at pre-transform line numbers.",
+  );
+}
+
 /** Is this the bare `{ enforce, use(data) }` rule unplugin adds for `transform`? */
 function isUnpluginTransformRule(rule: unknown): rule is WebpackLikeRule {
   if (rule === null || typeof rule !== "object") return false;
@@ -156,11 +203,19 @@ function isUnpluginTransformRule(rule: unknown): rule is WebpackLikeRule {
  */
 function useOwnTransformLoader(compiler: unknown): void {
   const loaderPath = resolveTransformLoaderPath();
-  if (loaderPath === null) return;
+  if (loaderPath === null) {
+    reportLoaderPatchSkipped("this package's own loader could not be located on disk");
+    return;
+  }
   const rules = (compiler as WebpackLikeCompiler | null)?.options?.module?.rules;
-  if (!Array.isArray(rules)) return;
+  if (!Array.isArray(rules)) {
+    reportLoaderPatchSkipped("the compiler exposes no `module.rules` array");
+    return;
+  }
+  let matched = false;
   for (const rule of rules) {
     if (!isUnpluginTransformRule(rule)) continue;
+    matched = true;
     const original = rule.use as ((data: unknown) => unknown) & { [patchedMarker]?: true };
     if (original[patchedMarker] === true) continue;
     const patched = (data: unknown): unknown => {
@@ -176,6 +231,9 @@ function useOwnTransformLoader(compiler: unknown): void {
     };
     patched[patchedMarker] = true;
     rule.use = patched;
+  }
+  if (!matched) {
+    reportLoaderPatchSkipped("unplugin's transform rule was not found in `module.rules`");
   }
 }
 

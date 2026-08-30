@@ -20,6 +20,15 @@ import {
 
 const counterSource = "const count = { value: 1 }; export const App = () => <p>{count.value}</p>;";
 
+/** The defaults the plugin's own `transform` hook fills in, for direct calls. */
+const internalOptions = {
+  importSource: "react-fine-grained-signals",
+  reactImportSource: "react",
+  mode: "auto" as const,
+  transform: "managed" as const,
+  reactCompiler: "auto" as const,
+};
+
 function transformSource(
   source: string,
   options: ReactFineGrainedSignalsOptions,
@@ -72,6 +81,55 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(canTransform("/project/src/legacy.cts", {})).toBe(false);
     expect(canTransform("/project/src/modern.mjs", {})).toBe(true);
     expect(canTransform("/project/src/modern.mts", {})).toBe(true);
+  });
+
+  it("decides on the module id the transform will actually parse", () => {
+    // The transform strips `?query`/`#fragment` before choosing its parser
+    // plugins, so a decision made on the raw id is a decision about a different
+    // file name than the one that gets parsed.
+    //
+    // Vite hands a Vue SFC's script block over as `App.vue?...&lang.tsx`: the
+    // raw id ends in `.tsx`, but the name that reaches the parser is `App.vue`,
+    // which gets neither the `jsx` nor the `typescript` parser plugin.
+    expect(canTransform("/src/App.vue?vue&type=script&lang.tsx", {})).toBe(false);
+    expect(canTransform("/src/App.vue?vue&type=script&setup=true&lang.ts", {})).toBe(false);
+    // A `#fragment` is not part of the file name either, and the file beneath
+    // it is one the transform handles perfectly well.
+    expect(canTransform("/project/src/App.tsx#frag", {})).toBe(true);
+    expect(canTransform("/project/src/App.tsx?t=1730000000#frag", {})).toBe(true);
+    // Still the extension that decides, not the query: cleaning must not let a
+    // declared-CommonJS module back in.
+    expect(canTransform("/project/src/legacy.cjs?t=1730000000", {})).toBe(false);
+    expect(canTransform("/project/src/legacy.cts#frag", {})).toBe(false);
+  });
+
+  it("claims exactly the ids the transform can parse", () => {
+    // Both halves of the divergence above, stated against the transform itself
+    // rather than against a second copy of the rule.
+    const sfcId = "/src/App.vue?vue&type=script&lang.tsx";
+
+    expect(canTransform(sfcId, {})).toBe(false);
+    // Claiming it is what turns a file this plugin has no business touching
+    // into a parse failure that reads like the author's own syntax error.
+    expect(() => transformReactFineGrainedSignals(counterSource, sfcId, internalOptions))
+      .toThrow(/jsx/);
+
+    const fragmentId = "/project/src/App.tsx#frag";
+
+    expect(canTransform(fragmentId, {})).toBe(true);
+    const result = transformReactFineGrainedSignals(counterSource, fragmentId, internalOptions);
+    expect(result?.code).toContain("_useSignals()");
+    expect((result?.map as { sources: string[] } | undefined)?.sources)
+      .toEqual(["/project/src/App.tsx"]);
+  });
+
+  it("leaves modules another plugin generated and owns alone", () => {
+    // Rollup's convention: a `\0` prefix marks an id some other plugin created
+    // and is responsible for, including the proxy modules `@rollup/plugin-commonjs`
+    // synthesises around real files.
+    expect(canTransform("\0virtual:mod.tsx", {})).toBe(false);
+    expect(canTransform("\0/project/src/legacy.js?commonjs-proxy", {})).toBe(false);
+    expect(canTransform("/project/src/virtual.tsx", {})).toBe(true);
   });
 
   it("never claims a CommonJS module for transformation", () => {
@@ -305,6 +363,156 @@ describe("bundler adapters", () => {
         .toBe((expected?.map as { mappings: string } | undefined)?.mappings);
     },
   );
+
+  // What an upstream `pre` loader that prepended a banner line hands on: the
+  // text this loader receives, plus a map from it back to the real file.
+  const upstreamOriginal = "/project/src/App.original.tsx";
+  const bannerSource = `// generated banner\n${componentSource}`;
+
+  function upstreamMap(): Record<string, unknown> {
+    return {
+      version: 3,
+      file: "App.tsx",
+      sources: [upstreamOriginal],
+      sourcesContent: [componentSource],
+      names: [],
+      // Nothing on the banner line; generated lines 2 and 3 are original 1 and 2.
+      mappings: ";AAAA;AACA",
+    };
+  }
+
+  it.each(["webpack", "rspack"] as const)(
+    "%s composes an incoming source map with the transform's own",
+    async (bundler) => {
+      // `enforce: "pre"` puts this loader first in an ordinary config, but
+      // webpack lets several `pre` loaders chain, so an incoming map is
+      // possible -- and keeping only one of the two maps leaves every position
+      // wrong by whatever the other one changed.
+      const resource = "/project/src/App.tsx";
+      const [entry] = transformLoaderEntries(bundler, resource);
+      expect(entry).toBeDefined();
+
+      const run = await runTransformLoader(entry!, resource, bannerSource, upstreamMap());
+      const expected = transformReactFineGrainedSignals(bannerSource, resource, internalOptions);
+
+      expect(run.error).toBeNull();
+      // Carrying the incoming map in does not change a byte of the output, and
+      // the inline comment it travels in never reaches it.
+      expect(run.content).toBe(expected?.code);
+      expect(run.content).not.toContain("sourceMappingURL");
+
+      const map = run.map as {
+        version: number;
+        sources: string[];
+        sourcesContent?: string[];
+        mappings: string;
+      };
+      expect(map.version).toBe(3);
+      // Composed, not clobbered. The upstream loader's original file and its
+      // content survive...
+      expect(map.sources).toEqual([upstreamOriginal]);
+      expect(map.sourcesContent).toEqual([componentSource]);
+      const ownMappings = (expected?.map as { mappings: string } | undefined)?.mappings ?? "";
+      // ...while the generated side stays the transform's own -- one entry per
+      // line of the file it just printed -- with the original side re-pointed
+      // through the upstream map rather than left at this resource.
+      expect(map.mappings.split(";")).toHaveLength(ownMappings.split(";").length);
+      expect(map.mappings).not.toBe(ownMappings);
+      expect(map.mappings).not.toBe(upstreamMap().mappings);
+    },
+  );
+
+  it("accepts an incoming source map handed over as JSON text", async () => {
+    // webpack passes a loader's map either as an object or as its JSON.
+    const resource = "/project/src/App.tsx";
+    const [entry] = transformLoaderEntries("webpack", resource);
+
+    const run = await runTransformLoader(
+      entry!,
+      resource,
+      bannerSource,
+      JSON.stringify(upstreamMap()),
+    );
+
+    expect(run.error).toBeNull();
+    expect((run.map as { sources: string[] }).sources).toEqual([upstreamOriginal]);
+  });
+
+  it.each([
+    // Babel throws outright on a map object with no `sources` at all...
+    ["no sources at all", { version: 3, mappings: "" }],
+    // ...and one whose `sources` is present but empty composes into a map with
+    // no sources either, throwing away the file name the transform's own map
+    // would have carried -- worse than not composing at all.
+    ["an empty sources array", { version: 3, sources: [], names: [], mappings: "" }],
+    ["a version this loader does not know", { version: 2, sources: ["/a.tsx"], mappings: "" }],
+  ])("keeps transforming when the incoming map has %s", async (_label, incomingMap) => {
+    // Forwarding the incoming map must never leave the result worse off than
+    // not forwarding it: an unusable map is left behind and the transform's own
+    // is emitted, exactly as it is when no map comes in.
+    const resource = "/project/src/App.tsx";
+    const [entry] = transformLoaderEntries("webpack", resource);
+
+    const run = await runTransformLoader(entry!, resource, componentSource, incomingMap);
+
+    expect(run.error).toBeNull();
+    expect(run.content).toContain("_useSignals()");
+    expect((run.map as { sources: string[] }).sources).toEqual([resource]);
+  });
+
+  it("leaves a source that names its own map file uncomposed", async () => {
+    // Babel strips a `sourceMappingURL` comment naming a map *file* only on the
+    // branch it takes when it found no input map, so appending one would leave
+    // that stale line in the output. Such a file keeps the behaviour it had
+    // before incoming maps were forwarded at all: its own map, not a composed
+    // one, and the comment gone because Babel is the one removing it.
+    const resource = "/project/src/App.tsx";
+    const [entry] = transformLoaderEntries("webpack", resource);
+    const source = `${componentSource}//# sourceMappingURL=App.tsx.map\n`;
+
+    const run = await runTransformLoader(entry!, resource, source, upstreamMap());
+
+    expect(run.error).toBeNull();
+    expect(run.content).toContain("_useSignals()");
+    expect(run.content).not.toContain("sourceMappingURL");
+    expect((run.map as { sources: string[] }).sources).toEqual([resource]);
+  });
+
+  it("keeps the inlined incoming map out of a transform hook's own output", async () => {
+    // The map reaches Babel as a trailing `sourceMappingURL` comment, which
+    // Babel lifts out as it reads it -- but a hook that is not Babel would
+    // print it straight back into its result.
+    const query = { plugin: { transform: (code: string) => `${code}\n// seen` } };
+
+    const run = await runLoader(query, "/project/src/App.tsx", "export const a = 1;\n", {
+      version: 3,
+      sources: ["/project/src/App.tsx"],
+      names: [],
+      mappings: "AAAA",
+    });
+
+    expect(run.content).toBe("export const a = 1;\n\n// seen");
+  });
+
+  it("warns once when unplugin's transform rule is not there to patch", () => {
+    // The rewrite is shape-matched so a future unplugin can restructure its
+    // transform rule without breaking the build -- but the source map fix then
+    // stops applying, which is exactly the regression nobody would notice.
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const raw = (reactFineGrainedSignals as unknown as {
+      raw(
+        options: ReactFineGrainedSignalsOptions,
+        meta: { framework: string },
+      ): { webpack(compiler: unknown): void };
+    }).raw({ mode: "auto" }, { framework: "webpack" });
+
+    raw.webpack({ options: { module: { rules: [] } } });
+    raw.webpack({ options: { module: { rules: [] } } });
+
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain("Source map fix not applied");
+    warn.mockRestore();
+  });
 
   it("passes an untransformed module through the loader unchanged", async () => {
     const resource = "/project/src/plain.tsx";
