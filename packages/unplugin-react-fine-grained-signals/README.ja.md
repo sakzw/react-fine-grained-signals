@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals)
+[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals)（npmへまだ公開されていません）
 向けの、`useSignals()` 自動挿入と任意のmanaged render scope変換を提供する汎用
 bundler integrationです。
 
@@ -107,7 +107,11 @@ component風の名前で切り出す典型がこの3つです。述語・畳み�
 変換対象のままにします。従来どおりの `memo(Row)` / `forwardRef(Row)` に加えて、
 `observer(Row)` や `connect(…)(Row)` のようなサードパーティのwrapperも同じです。
 これらが返すcomponentは、Reactが独自のfiberとして、独自のhook contextで
-instance化します。
+instance化します。同じ登録はinlineで書いても機能します。関数自身が
+PascalCaseの名前を持っていればよく、`observer(function Row() { … })` は
+`observer(Row)` とまったく同様に認識されます。同じ形でもanonymousな関数や
+arrow関数（`observer((props) => …)`）は、boundaryを結び付けるための名前を
+持たないため、変換されないままです。
 
 この検出には既知の制約が4つあります。
 
@@ -151,16 +155,50 @@ export const withCount = (Base) => (props) => <Base {...props} count={count.valu
 `@useSignals`（`@noUseSignals` も同様）コメントは、返される関数側とfactoryの
 宣言側のどちらに書いても適用されます。通常のclosureを巻き込まないための条件は
 3つです。囲む関数から直接returnされていること（明示的な `return`、または
-arrowの簡潔なbody）、囲む関数の名前がPascalCaseでも `useX` でもないこと
-（componentやhookが返す関数は、そのownerのrender内で動くrender propであって、
-独立したcomponentではありません）、そして返される関数自身がJSXをrenderして
-いることです。名前の継承はちょうど1段だけたどるため、factoryを返すfactory
+arrowの簡潔なbody）、返される関数自身がJSXをrenderしていること、そして囲む
+関数の名前がhookの名前（`useX`）でないこと — あるいはcomponentの名前
+（PascalCase）である場合は、その囲む関数自身が後述のhigher-order component
+factoryの条件を満たしていることです。その条件を満たさないcomponentが返す
+関数、またはhookが返す関数は、そのownerのrender内で動くrender propであって、
+独立したcomponentではありません。
+
+PascalCaseの名前を持つfactoryは、componentらしきものを自分の引数として
+受け取り — destructureされていない、PascalCaseの名前を持つ単なる識別子の
+引数 — 、かつ自分自身はJSXをrenderしない場合に該当します。
+
+```jsx
+export const WithCount = (Base) => (props) => <Base {...props} count={count.value} />;
+```
+
+`WithCount` 自体は変換されません。返されるcomponentは、上記のcamelCase形と
+まったく同様に `WithCount` の名前を継承します。`useX` という名前のfactoryが
+返すclosureには、これに相当する例外は意図的にありません。Reactはすでに進行中の
+renderの中からhookを呼び出すため、そのhookが返すものはまさにそのrender中に
+呼び出される可能性があり、それを否定する材料がここには何もないからです。
+このことはhook自体には影響しません。hookそのものは、signalを読む・JSXを
+renderするといった条件を満たす限り、他のhookとまったく同様に変換対象のまま
+です。名前を継承しないのは、返されるclosureだけです。
+
+名前の継承はちょうど1段だけたどるため、factoryを返すfactory
 （`(a) => (b) => (props) => …`）は解決せず、そこに書いた `@useSignals` コメントは
 無言で消えるのではなく警告として報告されます。唯一区別できない形は、factoryの
 戻り値をそのままiteration methodへ渡す場合（`items.map(makeRow(prefix))`）です。
 これは構文上componentを返すHOCそのものなので、独自のboundaryを持ちます。その
 ようなcallbackは参照で渡すか（`items.map(Row)`）、inlineで書いて呼び出し元の
 componentに収集させてください。
+
+componentは、自分自身のbindingを持たなくても名前を得られる場合があります。
+objectやclassのproperty — `Card.Header = () => <p>{count.value}</p>` や、
+`class Holder { Row = () => <p>{count.value}</p> }` のようなfield — として
+保持されているcomponentは、`<Card.Header />` や `<ns.Row />` がそこへ到達する
+のと同じ、そのkeyから名前を得ます（小文字のkeyは、小文字のbindingと同様に
+除外されたままです）。また、名前を持たないdefault export
+（`export default (props) => <p>{count.value}</p>`）は、moduleのファイル名から
+名前を得ます。これは `import App from "./App"` が実際にそのcomponentへ与えて
+いる識別子そのものです。ただし、class内での `this.Row = …` という代入
+（たとえばconstructor内）は意図的に対象外です。そうした `this` を束縛する
+rendererには、この機能が存在する以前と同様、明示的な `useSignals()` 呼び出し
+か `@useSignals` コメントが必要です。
 
 ## `memo` / `forwardRef` の認識
 

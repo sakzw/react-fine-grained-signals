@@ -16,7 +16,7 @@ React Compilerはこの契約を設計上破ります。componentのJSXをinstan
 
 `packages/unplugin-react-fine-grained-signals/tests/react-compiler.test.ts` は、実アプリケーションと同じ順序でpipelineを実行します。
 
-1. このpackageのBabel transform(`transformReactFineGrainedSignals`)を対象モードで実行する。ただし[手書きのruntime境界](#手書きの-react-fine-grained-signalsruntime-境界はmanagedの出力と同じ挙動になる)では、transformが一切走らないcaseを計測するため、このstepを意図的にskipします。
+1. このpackageのBabel transform(`transformReactFineGrainedSignals`)を対象モードで実行する。ただし[手書きのruntime境界](#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、transformが一切走らないcaseを計測するため、このstepを意図的にskipします。
 2. `babel-plugin-react-compiler` 1.0.0 をdefault設定で実行し、`logger` eventを収集する。
 3. automatic runtimeのJSX transformを実行する。
 4. moduleをメモリ上でlinkし(importは実際のライブラリへ解決されるため、module scopeは本物です)、jsdomで評価する。
@@ -164,6 +164,6 @@ React Compilerを理由とするなら、変わりません。managedの出力�
 
 - **bundler間での実行順序。** directiveが効くのは、このpackageのtransformがcompilerのBabel passより先に走る場合だけです。Viteでは構造的に成立します。pluginは `enforce: "pre"` を宣言しており、`@vitejs/plugin-react` は通常順のpluginとしてBabelを実行するためです。その間に走るVite自身のTypeScript passは、oxcとesbuildのどちらのtransformerでもdirectiveを保持します(JSXを保持したまま `.tsx` を入力にして直接確認しました)。Webpack、Rspack、Next.jsのpipelineは未計測です。
 - **実際のbundlerでの `panicThreshold: "all_errors"`。** transformが生成した形と手書きの `try` / `finally` の形の両方について、Babelのレイヤーで計測しました。directiveがあっても `TryStatement` のerror eventは記録され続けますが、panicは止まります。`transformSync` がthrowするのはdirectiveがない場合だけです。記録され続けるeventを、bundlerのReact Compiler統合が別経路でbuildの失敗に変えるかどうかは、end-to-endでは再現していません。
-- **build pluginなしで手書きしたbare `useSignals()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。これはbare hookに限った話です。手書きの `react-fine-grained-signals/runtime` 境界は構造的に別のcaseであり、[上記](#手書きの-react-fine-grained-signalsruntime-境界はmanagedの出力と同じ挙動になる)で計測しています。
+- **build pluginなしで手書きしたbare `useSignals()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。これはbare hookに限った話です。手書きの `react-fine-grained-signals/runtime` 境界は構造的に別のcaseであり、[上記](#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)で計測しています。
 - **`transform: "inject"` でapplication barrel経由でimportした `useSignals()`。** transformは呼び出しを認識してfunctionをskipし、skipしたままにするため、directiveは付きません。設定した `importSource` からの直接importか、`@useSignals` 注釈であれば対象になります。
 - **compilerのversion。** 以上はすべて1.0.0のdefault設定での挙動です。`try` / `finally` に対応したversion、module scopeの読み取りの分類を変えたversion、`"use no memo"` の扱いを変えたversionが出た場合は、このdocsの計測をやり直す必要があります。testはその計測の実行可能な形です。

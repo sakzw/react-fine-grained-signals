@@ -4,7 +4,7 @@
 
 Universal bundler integration for automatic `useSignals()` insertion and the
 optional managed render-scope transform in
-[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals).
+[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals) (not yet published to npm).
 
 This package is deliberately the only build-time integration. It keeps the
 Babel implementation private, so application configuration is the same across
@@ -112,7 +112,12 @@ component its subscription. A reference passed to any other call is therefore
 ordinary component registration and stays eligible — `memo(Row)` and
 `forwardRef(Row)` as before, and equally third-party wrappers such as
 `observer(Row)` or `connect(…)(Row)`, where React instantiates the returned
-component as its own fiber with its own hooks.
+component as its own fiber with its own hooks. The same registration works
+written inline too, as long as the function keeps its own PascalCase name:
+`observer(function Row() { … })` is recognized exactly as `observer(Row)` is.
+An anonymous or arrow function passed the same way —
+`observer((props) => …)` — carries no name for a boundary to attach to, and is
+left untransformed.
 
 This detection has four known limitations:
 
@@ -159,17 +164,49 @@ factory's own binding — `withCount` — so `auto` mode subscribes it and a
 `@useSignals` (or `@noUseSignals`) comment on either the returned function or the
 factory's declaration applies to it. Three conditions keep ordinary closures out:
 the function must be returned directly by the enclosing function (an explicit
-`return`, or an arrow's concise body), that enclosing function's name must be
-neither PascalCase nor `useX` — a function returned by a component or a hook is a
-render prop that runs inside that owner's render, not a component of its own —
-and the returned function must render JSX itself. The name is inherited from
-exactly one level out, so a factory returning a factory
-(`(a) => (b) => (props) => …`) resolves to nothing, and a `@useSignals` comment
-there reports that rather than silently doing nothing. The one shape this cannot
-tell apart is a factory whose result is handed straight to an iteration method
-(`items.map(makeRow(prefix))`): that is syntactically a HOC returning a
-component, so it gets a boundary of its own. Pass such a callback by reference
-(`items.map(Row)`) or write it inline, so the owning component collects it.
+`return`, or an arrow's concise body); the returned function must render JSX
+itself; and the enclosing function's name must not be a hook name (`useX`) — or,
+if it is a component name (PascalCase), the enclosing function must itself
+qualify as a higher-order component factory (described next). A function
+returned by a component that fails that test, or by a hook, is instead a render
+prop that runs inside that owner's render, not a component of its own.
+
+A PascalCase-named factory qualifies when it takes what looks like a component
+as its own parameter — a plain (not destructured) identifier parameter with a
+PascalCase name — and renders no JSX itself:
+
+```jsx
+export const WithCount = (Base) => (props) => <Base {...props} count={count.value} />;
+```
+
+`WithCount` is never transformed itself; the component it returns inherits
+`WithCount`'s name exactly as the camelCase form above does. A `useX`-named
+factory gets no equivalent exception for the closure it returns, deliberately:
+React calls a hook from inside a render already in progress, so anything the
+hook hands back may be invoked during that very render, and nothing here can
+rule that out. The hook itself is unaffected by this and is still transformed
+normally whenever it qualifies — reading a signal, rendering JSX — exactly like
+any other hook; only the returned closure inherits no name from it.
+
+The name is inherited from exactly one level out, so a factory returning a
+factory (`(a) => (b) => (props) => …`) resolves to nothing, and a `@useSignals`
+comment there reports that rather than silently doing nothing. The one shape
+this cannot tell apart is a factory whose result is handed straight to an
+iteration method (`items.map(makeRow(prefix))`): that is syntactically a HOC
+returning a component, so it gets a boundary of its own. Pass such a callback by
+reference (`items.map(Row)`) or write it inline, so the owning component
+collects it.
+
+A component can also carry no binding of its own and still be named: one held
+as an object or class property — `Card.Header = () => <p>{count.value}</p>`, or
+a `class Holder { Row = () => <p>{count.value}</p> }` field — is named by its
+key, the same way `<Card.Header />` or `<ns.Row />` reaches it (a lowercase key
+stays excluded, exactly as a lowercase binding does), and a nameless default
+export (`export default (props) => <p>{count.value}</p>`) is named after the
+module's own file — the identity an `import App from "./App"` already gives it.
+A `this.Row = …` assignment inside a class is deliberately excluded, though —
+such a `this`-bound renderer still needs an explicit `useSignals()` call or
+`@useSignals` comment, as before this feature existed.
 
 ## `memo` / `forwardRef` recognition
 

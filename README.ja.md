@@ -70,4 +70,4 @@ pnpm bench:transform
 
 - [alien-signals](https://www.npmjs.com/package/alien-signals) — 本パッケージが基盤とするシグナルエンジン。
 - [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — ベンチマークの比較対象。
-- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](docs/design/use-signals-boundary-design.ja.md#prior-art)を参照。
+- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](docs/design/use-signals-boundary-design.ja.md#先行事例)を参照。
