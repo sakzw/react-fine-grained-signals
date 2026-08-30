@@ -132,8 +132,11 @@ export class SignalImpl<T> implements Signal<T> {
     // link to it. See `hasSubscribers`.
     this.#watchedSinceWrite = false;
     // The alien-signals write below flushes effects synchronously, so it can
-    // throw whatever an effect body threw. `#currentValue` is already
-    // committed at that point, so skipping the React-side notification would
+    // still throw even though `effect()` now contains both its body and its
+    // cleanup: anything else sharing this graph (an alien-signals effect
+    // created directly, a computed's render bridge) is outside that guard.
+    // `#currentValue` is already committed at that point, so skipping the
+    // React-side notification would
     // leave every subscribed `RenderStore` believing the old value is still
     // current — a permanently stale UI that no later write can repair,
     // because a subsequent write compares against the already-updated
@@ -246,8 +249,8 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
 }
 
 /**
- * Reports an error thrown by an `effect()` body without letting it escape into
- * the flush that ran it.
+ * Reports an error thrown by an `effect()` callback — its body or its cleanup —
+ * without letting it escape into the flush that ran it.
  *
  * alien-signals' `flush()` drains the rest of its effect queue in a `finally`
  * *without running those effects*, so one throwing effect silently cancels
@@ -272,6 +275,40 @@ function reportEffectError(error: unknown): void {
   });
 }
 
+/**
+ * Wraps the cleanup an effect body returned so a throw out of it is contained
+ * exactly like a throw out of the body.
+ *
+ * alien-signals stores the returned cleanup on the effect node and calls it
+ * through its own private `runCleanup`, from two places this package cannot
+ * intercept (verified against alien-signals@3.2.1):
+ *
+ * - `run()` calls it *before* re-running the body, i.e. inside `flush()`'s
+ *   `try`, so a throw there hits the very same queue-cancelling failure mode
+ *   `reportEffectError` exists for — worse, in fact, because it aborts the
+ *   flush before this effect's own body has even re-run.
+ * - `effectOper()` calls it on disposal — both the disposer returned below and
+ *   the `unwatched` hook alien-signals fires when a nested effect loses its
+ *   last subscriber, which happens during `unlink`/`purgeDeps` and so can also
+ *   land in the middle of a flush.
+ *
+ * Neither call site is reachable from outside the module, so the guard goes on
+ * the cleanup itself, on its way back to alien-signals: one wrapper covers
+ * every path that can invoke it, now and later. The wrapper never rethrows, so
+ * alien-signals always sees the cleanup return normally and its own
+ * bookkeeping (`e.cleanup = undefined`, `activeSub` restore, the flags check
+ * after `runCleanup`) stays on the success path.
+ */
+function guardCleanup(cleanup: () => void): () => void {
+  return () => {
+    try {
+      cleanup();
+    } catch (error) {
+      reportEffectError(error);
+    }
+  };
+}
+
 /** Runs a reactive side effect and returns a disposer. */
 export function effect(fn: () => void | (() => void)): () => void {
   let disposed = false;
@@ -285,11 +322,13 @@ export function effect(fn: () => void | (() => void)): () => void {
       reportEffectError(error);
       return;
     }
-    if (disposed && cleanup !== undefined) {
-      untracked(cleanup);
+    if (cleanup === undefined) return;
+    const guardedCleanup = guardCleanup(cleanup);
+    if (disposed) {
+      untracked(guardedCleanup);
       return;
     }
-    return cleanup;
+    return guardedCleanup;
   });
   return () => {
     if (disposed) return;

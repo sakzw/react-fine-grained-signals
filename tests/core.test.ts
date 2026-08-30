@@ -464,13 +464,22 @@ describe("computed error propagation", () => {
     expect(healthySeen).toEqual([0, 1, 2, 3]);
   });
 
-  it("notifies render subscribers even when the write's flush throws", () => {
-    // An effect *cleanup* runs inside alien-signals' `run()`, outside the
-    // guard `effect()` puts around the body, so it is still a live path for a
-    // throw escaping the synchronous flush inside `set value`. Pre-fix the
-    // write committed `#currentValue` and then never reached
-    // `#renderSubscription.notify()`, so `.value` reported the new value while
-    // every React-side subscriber stayed parked on the old one forever.
+  it("notifies render subscribers when an effect cleanup throws during a write", () => {
+    // An effect *cleanup* runs inside alien-signals' `run()`, before that
+    // effect's body re-runs and inside `flush()`'s `try`. `effect()` now wraps
+    // the cleanup it hands back to alien-signals, so the throw is reported the
+    // same way a throwing body is instead of escaping the write.
+    //
+    // The `finally` in `set value` is the invariant this test exists for and
+    // still guards every other way the flush can exit: `#currentValue` is
+    // committed before the flush, so a missed `#renderSubscription.notify()`
+    // would park every React-side subscriber on the old value forever.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rethrows: Array<() => void> = [];
+    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
+      rethrows.push(callback);
+    });
+
     const source = signal(0);
     const notifications: number[] = [];
     const [dependency] = collectRenderDependencies(() => {
@@ -489,11 +498,106 @@ describe("computed error propagation", () => {
 
     expect(() => {
       source.value = 1;
-    }).toThrow("cleanup boom");
+    }).not.toThrow();
     expect(source.value).toBe(1);
+
+    // Same treatment as a throwing body: reported once as
+    // `console.error(message, { cause })`, then rethrown from a microtask so a
+    // global handler still sees it, from outside the flush it came from.
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
+    expect(reported?.cause).toBeInstanceOf(Error);
+    expect(rethrows).toHaveLength(1);
+    expect(() => rethrows[0]?.()).toThrow("cleanup boom");
+
     // The React-side notification happened anyway, so a `useSignals()`
     // component subscribed to this signal still re-renders.
     expect(notifications).toEqual([1]);
+  });
+
+  it("keeps the rest of a flush running when an effect cleanup throws", () => {
+    // The queue-cancelling failure mode, reached through the cleanup rather
+    // than the body: the cleanup of the first-queued effect runs before its
+    // own body does, so pre-fix its throw aborted `flush()` even earlier than
+    // a throwing body would.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rethrows: Array<() => void> = [];
+    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
+      rethrows.push(callback);
+    });
+
+    const trigger = signal(0);
+    const other = signal(0);
+    const healthySeen: number[] = [];
+
+    disposers.push(effect(() => {
+      trigger.value;
+      return () => {
+        throw new Error("cleanup boom");
+      };
+    }));
+    disposers.push(effect(() => {
+      healthySeen.push(other.value);
+    }));
+    expect(healthySeen).toEqual([0]);
+
+    expect(() => {
+      batch(() => {
+        trigger.value = 1;
+        other.value = 1;
+      });
+    }).not.toThrow();
+    // The effect queued behind the one whose cleanup threw still ran.
+    expect(healthySeen).toEqual([0, 1]);
+
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
+    expect(reported?.cause).toBeInstanceOf(Error);
+    expect(rethrows).toHaveLength(1);
+    expect(() => rethrows[0]?.()).toThrow("cleanup boom");
+
+    // The failing effect re-registered a fresh (also throwing) cleanup, and
+    // the graph keeps serving later writes.
+    other.value = 2;
+    expect(healthySeen).toEqual([0, 1, 2]);
+    trigger.value = 2;
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("contains a throwing effect() cleanup on disposal", () => {
+    // Disposal is a different alien-signals code path from the re-run above:
+    // `effectOper()` calls the stored cleanup after tearing the node's links
+    // down, with no `flush()` wrapped around it, so pre-fix the throw came
+    // straight back out of the disposer — out of the `useEffect` teardown
+    // behind `useSignalEffect`, or out of any caller's own `dispose()`.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const rethrows: Array<() => void> = [];
+    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
+      rethrows.push(callback);
+    });
+
+    const source = signal(0);
+    const runs: number[] = [];
+    const dispose = effect(() => {
+      runs.push(source.value);
+      return () => {
+        throw new Error("dispose cleanup boom");
+      };
+    });
+    expect(runs).toEqual([0]);
+
+    expect(() => dispose()).not.toThrow();
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+    const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
+    expect(reported?.cause).toBeInstanceOf(Error);
+    expect(rethrows).toHaveLength(1);
+    expect(() => rethrows[0]?.()).toThrow("dispose cleanup boom");
+
+    // The throw did not leave a half-disposed effect behind: the teardown that
+    // ran before the cleanup stands, so later writes never run it again.
+    source.value = 1;
+    expect(runs).toEqual([0]);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
   });
 
   it("keeps one throwing render listener from cancelling the others", () => {
