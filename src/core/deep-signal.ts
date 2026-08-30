@@ -397,8 +397,10 @@ function matchesNormalizedGraph(source: object, normalized: object): boolean {
     const sourceKeys = Reflect.ownKeys(currentSource);
     const targetKeys = Reflect.ownKeys(currentTarget);
     if (sourceKeys.length !== targetKeys.length) return false;
-    for (let index = 0; index < sourceKeys.length; index++) {
-      const key = sourceKeys[index];
+    // `entries()` rather than a plain index read so `key` is typed as a key
+    // rather than `key | undefined`: `Reflect.ownKeys` returns a dense array,
+    // so every index in range holds one, but only iteration says that in types.
+    for (const [index, key] of sourceKeys.entries()) {
       if (key !== targetKeys[index]) return false;
       const sourceDescriptor = Reflect.getOwnPropertyDescriptor(currentSource, key);
       const targetDescriptor = Reflect.getOwnPropertyDescriptor(currentTarget, key);

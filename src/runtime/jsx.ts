@@ -448,8 +448,10 @@ function applyRef(ref: SupportedRef, node: Element | null): RefCleanup {
 type MountedBinding = { readonly binding: Binding; readonly dispose: () => void };
 
 /** A binding's identity for the re-render diff: same name, source, and kind. */
-function isSameBinding(a: Binding, b: Binding): boolean {
-  return a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+// `b` is optional so callers can pass a positional lookup straight in: a
+// missing counterpart is simply not the same binding.
+function isSameBinding(a: Binding, b: Binding | undefined): boolean {
+  return b !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
 /**
@@ -753,7 +755,11 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
     props.children = normalizeChild(rawChildren);
   }
   for (const [name, value, kind] of bindings) {
-    if (isTwoWayBindingKind(kind)) {
+    // A two-way kind is only ever derived from a `value`/`checked` name (see
+    // `resolveBindingKind`), so the lookup always hits; should it ever not, the
+    // prop is written directly, which is the pre-substitution behaviour.
+    const uncontrolledName = isTwoWayBindingKind(kind) ? UNCONTROLLED_PROP_NAMES[name] : undefined;
+    if (uncontrolledName !== undefined) {
       // Leaving the controlled prop in place would keep the element
       // React-controlled, so an unrelated re-render of the owner would
       // re-diff and potentially re-write this prop — work relying on an
@@ -762,7 +768,7 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
       // React only ever reads it once, at mount, and never touches this
       // property again — see docs/direct-binding-value-checked-style.md.
       delete props[name];
-      props[UNCONTROLLED_PROP_NAMES[name]] = readInitialValue(value);
+      props[uncontrolledName] = readInitialValue(value);
     } else {
       props[name] = readInitialValue(value);
     }
