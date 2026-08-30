@@ -140,6 +140,29 @@ instance化します。
 始まりでない名前にするか、実際にcomponentとしてrenderされるときにだけ手動で
 opt-inします。
 
+higher-order component（HOC）が返すcomponentは、自分自身の名前を持たなくても
+認識します。
+
+```jsx
+export const withCount = (Base) => (props) => <Base {...props} count={count.value} />;
+```
+
+ここでcomponentは内側の関数であり、その識別子はfactory自身のbinding
+（`withCount`）から継承します。したがって `auto` modeはこれをsubscribeし、
+`@useSignals`（`@noUseSignals` も同様）コメントは、返される関数側とfactoryの
+宣言側のどちらに書いても適用されます。通常のclosureを巻き込まないための条件は
+3つです。囲む関数から直接returnされていること（明示的な `return`、または
+arrowの簡潔なbody）、囲む関数の名前がPascalCaseでも `useX` でもないこと
+（componentやhookが返す関数は、そのownerのrender内で動くrender propであって、
+独立したcomponentではありません）、そして返される関数自身がJSXをrenderして
+いることです。名前の継承はちょうど1段だけたどるため、factoryを返すfactory
+（`(a) => (b) => (props) => …`）は解決せず、そこに書いた `@useSignals` コメントは
+無言で消えるのではなく警告として報告されます。唯一区別できない形は、factoryの
+戻り値をそのままiteration methodへ渡す場合（`items.map(makeRow(prefix))`）です。
+これは構文上componentを返すHOCそのものなので、独自のboundaryを持ちます。その
+ようなcallbackは参照で渡すか（`items.map(Row)`）、inlineで書いて呼び出し元の
+componentに収集させてください。
+
 `memo` / `forwardRef` の自動認識は、`"react"` または `reactImportSource` から
 のdirect importだけに一致します。ローカルのbarrelやre-export module経由の
 import（`import { memo } from "./some-local-module"`）は、その moduleが最終的に

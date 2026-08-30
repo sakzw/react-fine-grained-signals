@@ -948,6 +948,185 @@ describe("managed render transform", () => {
     expect(output).toMatch(/function Wrapped\(props\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
+  describe("anonymous component returned from a HOC factory", () => {
+    afterEach(() => {
+      vi.restoreAllMocks();
+    });
+
+    it("auto-detects the component a concise-body factory returns", () => {
+      // The inner arrow is the real component, but its only identity comes
+      // from being what `withCount` returns. Unresolved, it used to be no
+      // candidate at all: no boundary, no warning, and a signal write that
+      // silently stopped re-rendering it.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const output = compile(`
+        const count = { value: 1 };
+        export const withCount = (Base) => (props) => <Base {...props} count={count.value} />;
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(
+        /const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+      );
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("auto-detects the component a block-bodied factory returns", () => {
+      // The same identity, reached through every other shape the returned
+      // function can take: a block-bodied arrow, an explicit `return`, and an
+      // anonymous function expression.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const output = compile(`
+        const count = { value: 1 };
+        export const withBlock = (Base) => (props) => {
+          return <Base {...props} count={count.value} />;
+        };
+        export function withReturn(Base) {
+          return (props) => <Base {...props} count={count.value} />;
+        }
+        export function withExpression(Base) {
+          return function (props) {
+            return <Base {...props} count={count.value} />;
+          };
+        }
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(3);
+      // Only the returned components are wrapped; the factories keep their
+      // bodies, which React never renders.
+      expect(output).toMatch(/const withBlock = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
+      expect(output).toMatch(/function withReturn\(Base\) \{\s+return props => \{/);
+      expect(output).toMatch(/function withExpression\(Base\) \{\s+return function \(props\) \{/);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("derives the identity through a memo wrapper without adopting its comparator", () => {
+      // The returned component is still reached through React's own wrappers,
+      // and argument 0 is still the only one that may inherit an identity:
+      // `areEqual` runs during reconciliation, outside any render.
+      const output = compile(`
+        import { memo } from "react";
+        const count = { value: 1 };
+        export const withCount = (Base) =>
+          memo((props) => <Base {...props} count={count.value} />, (a, b) => a.id === b.id);
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/memo\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
+      expect(output).toContain("(a, b) => a.id === b.id");
+    });
+
+    it("still gates on the auto-mode signal-read heuristic", () => {
+      // Identity resolution is all this fixes: a returned component with no
+      // `.value` read is still nothing for `auto` mode to subscribe, while
+      // `all` mode wraps it as it does any other component.
+      // `count` exists but is never read by the component, so the file still
+      // gets past the pre-parse screen and the decision is the AST's.
+      const source = `
+        const count = { value: 1 };
+        export const withCount = (Base) => (props) => <Base {...props} />;
+      `;
+
+      expect(compile(source, "auto")).toBe(source);
+      expect(compile(source, "all").match(/finally/g)).toHaveLength(1);
+    });
+
+    it("attributes an annotation on the returned component to it", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const output = compile(`
+        const count = { value: 1 };
+        export function withCount(Base) {
+          /** @useSignals */
+          return (props) => <Base {...props} count={count.value} />;
+        }
+      `);
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/return props => \{\s+(?:"use no memo";\s+)?const _signals/);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("attributes an annotation on the factory to the component it returns", () => {
+      // A factory is never a component itself, so an annotation written on its
+      // declaration can only mean the component it hands back -- in both the
+      // concise form (where the comment climb already reached the inner arrow)
+      // and the block-bodied one (where it stops at the `return`).
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const output = compile(`
+        const count = { value: 1 };
+        /** @useSignals */
+        export const withConcise = (Base) => (props) => <Base {...props} count={count.value} />;
+        /** @useSignals */
+        export function withBlock(Base) {
+          return (props) => <Base {...props} count={count.value} />;
+        }
+      `);
+
+      expect(output.match(/finally/g)).toHaveLength(2);
+      expect(output).toMatch(
+        /const withConcise = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
+      );
+      expect(output).toMatch(/function withBlock\(Base\) \{\s+return props => \{/);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("honors a @noUseSignals opt-out written on the factory", () => {
+      const output = compile(`
+        const count = { value: 1 };
+        /** @noUseSignals */
+        export function withCount(Base) {
+          return (props) => <Base {...props} count={count.value} />;
+        }
+      `, "auto");
+
+      expect(output).not.toContain("finally");
+    });
+
+    it("leaves a factory that returns a plain closure alone", () => {
+      // Nothing here renders anything, so nothing may be mistaken for a
+      // component: a hook injected into a closure React never mounts throws
+      // "Invalid hook call" the first time it is called.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const source = `
+        const count = { value: 1 };
+        export const readCount = (fallback) => () => count.value ?? fallback;
+        export function makeAdder(a) {
+          return (b) => a + b.value;
+        }
+      `;
+
+      expect(compile(source, "auto")).toBe(source);
+      expect(compile(source, "all")).toBe(source);
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("keeps a function returned by a component or a hook off its own boundary", () => {
+      // A function returned by a component or a hook is a render prop or a
+      // callback that runs inside that owner's render, not an independently
+      // mounted component, so the owner keeps the one boundary.
+      const output = compile(`
+        const count = { value: 1 };
+        export function List() { return () => <li>{count.value}</li>; }
+        export function useRow() { return () => <li>{count.value}</li>; }
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(2);
+      expect(output.match(/return \(\) => <li>\{count\.value\}<\/li>;/g)).toHaveLength(2);
+    });
+
+    it("leaves a factory of factories unresolved rather than guessing", () => {
+      // Derivation reaches exactly one level out, to a real binding. The middle
+      // function has no name to inherit and renders nothing itself, so neither
+      // it nor the component below it is transformed.
+      const output = compile(`
+        const count = { value: 1 };
+        export const makeHoc = () => (Base) => (props) => <Base {...props} count={count.value} />;
+      `, "auto");
+
+      expect(output).not.toContain("finally");
+    });
+  });
+
   it("gives nested named components their own automatic tracking boundary", () => {
     const source = `
       const count = { value: 1 };
@@ -1120,15 +1299,18 @@ describe("managed render transform", () => {
     });
 
     it("warns when an annotation lands on a function it cannot name", () => {
-      // An anonymous function returned straight out of a HOC has no component
-      // identity to attach a boundary to, so the annotation is dropped. That
-      // used to happen silently.
+      // Identity derivation reaches one level out, to the enclosing factory's
+      // own binding. Here the annotated arrow is returned by a *middle*
+      // function that has no binding of its own either, so there is still no
+      // name to attach a boundary to and the annotation is dropped -- loudly.
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const output = compile(`
         const count = { value: 1 };
-        export function withCount(Base) {
-          /** @useSignals */
-          return (props) => <Base {...props} count={count.value} />;
+        export function makeHoc() {
+          return (Base) => {
+            /** @useSignals */
+            return (props) => <Base {...props} count={count.value} />;
+          };
         }
       `);
 

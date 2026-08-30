@@ -151,6 +151,30 @@ When in doubt, keep such helpers explicit: name them lowercase and without a
 `use` prefix, or opt them in manually only when they are genuinely rendered as
 components.
 
+A component a higher-order component returns is recognized even though it has no
+name of its own:
+
+```jsx
+export const withCount = (Base) => (props) => <Base {...props} count={count.value} />;
+```
+
+The inner function is the component here, and it inherits its identity from the
+factory's own binding — `withCount` — so `auto` mode subscribes it and a
+`@useSignals` (or `@noUseSignals`) comment on either the returned function or the
+factory's declaration applies to it. Three conditions keep ordinary closures out:
+the function must be returned directly by the enclosing function (an explicit
+`return`, or an arrow's concise body), that enclosing function's name must be
+neither PascalCase nor `useX` — a function returned by a component or a hook is a
+render prop that runs inside that owner's render, not a component of its own —
+and the returned function must render JSX itself. The name is inherited from
+exactly one level out, so a factory returning a factory
+(`(a) => (b) => (props) => …`) resolves to nothing, and a `@useSignals` comment
+there reports that rather than silently doing nothing. The one shape this cannot
+tell apart is a factory whose result is handed straight to an iteration method
+(`items.map(makeRow(prefix))`): that is syntactically a HOC returning a
+component, so it gets a boundary of its own. Pass such a callback by reference
+(`items.map(Row)`) or write it inline, so the owning component collects it.
+
 Automatic `memo` / `forwardRef` recognition matches only a direct import from
 `"react"` or from `reactImportSource`. Importing them through a local
 barrel or re-export module (`import { memo } from "./some-local-module"`) is

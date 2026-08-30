@@ -220,13 +220,13 @@ function isKnownComponentWrapper(
   );
 }
 
-// Named `getComponentIdentityName` -- not `getBindingName` -- to keep it
+// Named `getBindingIdentityName` -- not `getBindingName` -- to keep it
 // visually distinct from its twin below, `getOwnBindingName`: the two answer
 // different questions (what is this function's public component/hook
 // identity, vs. what name can other code in this module reach this exact
 // function by) and were each the subject of a separate past regression, so a
 // future edit must not casually merge their logic back together.
-function getComponentIdentityName(
+function getBindingIdentityName(
   path: NodePath<t.Function>,
   reactImportSource: string,
   // `climbComponentWrappers(path, reactImportSource).parentPath`, when a
@@ -258,22 +258,163 @@ function getComponentIdentityName(
   return undefined;
 }
 
-function isComponent(
-  path: NodePath<t.Function>,
-  reactImportSource: string,
-  climbedParent?: NodePath | null,
-): boolean {
-  const name = getComponentIdentityName(path, reactImportSource, climbedParent);
-  return name !== undefined && /^[A-Z]/.test(name);
+/** Does a name read as a React component -- PascalCase -- by convention? */
+function isComponentName(name: string): boolean {
+  return /^[A-Z]/.test(name);
 }
 
-function isCustomHook(
+/** Does a name read as a custom hook -- `useX` -- by convention? */
+function isHookName(name: string): boolean {
+  return /^use[A-Z]/.test(name);
+}
+
+/**
+ * Does `path` render JSX *itself*, rather than merely containing some?
+ *
+ * Nested functions are skipped, because their JSX is their own output and not
+ * this function's: `(Base) => (props) => <Base />` renders nothing at all, it
+ * returns a function that does. That distinction is the whole difference
+ * between a factory and a component here, so without it a factory of factories
+ * would be mistaken for the component at the bottom of the chain and have a
+ * hook injected into a function React never renders.
+ *
+ * The cost of the stricter reading is a component whose only JSX lives inside a
+ * callback (`(props) => items.map((i) => <li />)`) -- it renders JSX, but not
+ * itself. That direction is the safe one: it declines to derive an identity,
+ * leaving behavior exactly as it was, rather than injecting an invalid hook.
+ */
+function rendersJsx(path: NodePath<t.Function>): boolean {
+  let found = false;
+  path.traverse({
+    Function(nested) {
+      nested.skip();
+    },
+    JSXElement(jsx) {
+      found = true;
+      jsx.stop();
+    },
+    JSXFragment(jsx) {
+      found = true;
+      jsx.stop();
+    },
+  });
+  return found;
+}
+
+/** The enclosing factory a returned component inherits its identity from. */
+interface IdentityFactory {
+  /** The enclosing function that returns the component. */
+  path: NodePath<t.Function>;
+  /** Its own binding name -- always a real binding, never itself derived. */
+  name: string;
+}
+
+/**
+ * The higher-order-component factory whose identity `path` inherits, when
+ * `path` is the component that factory returns:
+ *
+ * ```js
+ * export const withCount = (Base) => (props) => <Base count={count.value} />;
+ * export function withCount(Base) { return (props) => <Base ... />; }
+ * ```
+ *
+ * The inner function is the real component in both, but it has no name of its
+ * own: its only identity comes from being what `withCount` returns. Left
+ * unresolved it is not a component to `auto` mode and not an annotatable
+ * function to `@useSignals`, so a signal write silently stops re-rendering it
+ * -- no error, just a stale UI.
+ *
+ * Three things have to hold, tested cheapest-first:
+ *
+ * - `path` sits in a return position of the enclosing function: an explicit
+ *   `return`, or an arrow's concise body, which returns just as literally.
+ *   Missing the second is what made the concise form fail even when annotated.
+ * - The enclosing function has a resolvable name that is neither a component
+ *   nor a hook name. A function returned by a *component* or a *hook* is a
+ *   render prop or a callback that runs inside that owner's render rather than
+ *   an independently mounted component, and a hook boundary of its own would
+ *   be an invalid hook call. Factories are camelCase by convention
+ *   (`withCount`, `connect`, `observer`), so this reads as "returned from a
+ *   plain factory".
+ * - `path` renders JSX itself (`rendersJsx`). A factory handing back a
+ *   comparator, a reducer or any other plain closure returns no component and
+ *   must not be swept up -- and neither must the middle link of a factory
+ *   chain, whose JSX is all inside the function *it* returns.
+ *
+ * Only the immediately enclosing function is consulted, so the inherited name
+ * is always a real module binding. A factory that returns a factory
+ * (`(a) => (b) => (props) => <p />`) deliberately leaves the innermost
+ * function unresolved rather than inventing a name for a middle function that
+ * has none -- an `@useSignals` annotation there still warns
+ * (`warnUnnamedUseSignalsAnnotation`) instead of silently doing nothing.
+ */
+function getIdentityFactory(
   path: NodePath<t.Function>,
   reactImportSource: string,
-  climbedParent?: NodePath | null,
-): boolean {
-  const name = getComponentIdentityName(path, reactImportSource, climbedParent);
-  return name !== undefined && /^use[A-Z]/.test(name);
+  climbedParent: NodePath | null,
+): IdentityFactory | undefined {
+  if (climbedParent === null) return undefined;
+  let enclosing: NodePath<t.Function> | null;
+  if (climbedParent.isArrowFunctionExpression()) {
+    // The only slot of an arrow function a function can occupy is its concise
+    // body: a parameter's default value sits under an `AssignmentPattern`.
+    enclosing = climbedParent;
+  } else if (climbedParent.isReturnStatement()) {
+    enclosing = climbedParent.getFunctionParent();
+  } else {
+    return undefined;
+  }
+  if (enclosing === null) return undefined;
+  const name = getBindingIdentityName(enclosing, reactImportSource);
+  if (name === undefined || isComponentName(name) || isHookName(name)) return undefined;
+  if (!rendersJsx(path)) return undefined;
+  return { path: enclosing, name };
+}
+
+/**
+ * A function's public component/hook identity, and where it came from:
+ *
+ * - `"binding"`: a name the module itself gives the function -- the enclosing
+ *   binding, or the function's own `id`. The naming conventions classify it.
+ * - `"hoc-return"`: the function is the component a factory returns and has no
+ *   name of its own, so it inherits the factory's (see `getIdentityFactory`).
+ *   The conventions cannot classify that name -- it is the factory's, camelCase
+ *   by definition -- so the classification is structural instead: the identity
+ *   only exists at all because the function renders JSX, which makes it a
+ *   component and never a hook.
+ */
+type ComponentIdentity =
+  | { kind: "binding"; name: string }
+  | { kind: "hoc-return"; name: string; factory: NodePath<t.Function> };
+
+function resolveComponentIdentity(
+  path: NodePath<t.Function>,
+  reactImportSource: string,
+  // See `getBindingIdentityName`'s matching parameter.
+  climbedParent: NodePath | null = climbComponentWrappers(path, reactImportSource).parentPath,
+): ComponentIdentity | undefined {
+  const own = getBindingIdentityName(path, reactImportSource, climbedParent);
+  if (own !== undefined) return { kind: "binding", name: own };
+  const factory = getIdentityFactory(path, reactImportSource, climbedParent);
+  if (factory === undefined) return undefined;
+  // Every other identity in this file is the bare binding name it was read
+  // from; the call spelled out here marks the one identity that is not a
+  // binding of its own, so the two never read as the same thing: `withCount`
+  // is the factory, `withCount()` is the component it returns.
+  return { kind: "hoc-return", name: `${factory.name}()`, factory: factory.path };
+}
+
+function isComponentIdentity(identity: ComponentIdentity | undefined): boolean {
+  if (identity === undefined) return false;
+  return identity.kind === "hoc-return" || isComponentName(identity.name);
+}
+
+function isHookIdentity(identity: ComponentIdentity | undefined): boolean {
+  if (identity === undefined) return false;
+  // A derived identity is only ever handed out to a function that renders JSX,
+  // and it carries a factory's name rather than its own, so it can never name
+  // a hook.
+  return identity.kind === "binding" && isHookName(identity.name);
 }
 
 // The library exports `useSignals` from two first-party entry points: the
@@ -528,7 +669,7 @@ function isRenderCallbackInvocation(call: t.Node, callback: t.Node): boolean {
  * parent, because a wrapper on the initializer -- `const Row = ((item) =>
  * <li />) as Fn` -- stands between the function and the binding it names.
  *
- * This is `getComponentIdentityName`'s twin, deliberately not shared with it:
+ * This is `getBindingIdentityName`'s twin, deliberately not shared with it:
  * that function asks what a function *is* (its public component/hook
  * identity, where the enclosing binding always outranks the function's own
  * name and a `memo()`/`forwardRef()` wrapper is climbed through to reach it);
@@ -642,7 +783,7 @@ function resolveReferencedFunction(
 function isAutomaticTransformCandidate(
   path: NodePath<t.Function>,
   reactImportSource: string,
-  // See `getComponentIdentityName`'s matching parameter: an already-walked
+  // See `getBindingIdentityName`'s matching parameter: an already-walked
   // `climbComponentWrappers(path, reactImportSource).parentPath` a caller can
   // hand in instead of having this function redo the walk. Read lazily, not
   // as a default parameter, so the common `isRenderCallback`/
@@ -663,6 +804,15 @@ function isAutomaticTransformCandidate(
     parent !== null &&
     (parent.isVariableDeclarator() ||
       parent.isReturnStatement() ||
+      // An arrow's concise body is a return position too: `(Base) => (props) =>
+      // <Base />` hands back the inner arrow exactly as `(Base) => { return
+      // (props) => <Base />; }` does. Treating only the explicit `return` as
+      // one left the concise HOC form outside candidacy altogether, so it was
+      // neither transformed in `auto` mode nor reported when annotated.
+      // Position alone is never enough on its own -- an identity still has to
+      // resolve (`resolveComponentIdentity`) before anything is transformed --
+      // so this widens what is *considered*, not what is transformed.
+      parent.isArrowFunctionExpression() ||
       parent.isExportDefaultDeclaration())
   );
 }
@@ -678,18 +828,15 @@ function isNestedTrackingBoundary(
   reactImportSource: string,
 ): boolean {
   // Every nested `Function` node `inspectFunction` walks past is checked
-  // against this predicate, and `isAutomaticTransformCandidate` plus
-  // `isComponent`/`isCustomHook` each independently climb through
-  // memo()/forwardRef() wrappers to answer it -- so without sharing the walk,
-  // one nested node could trigger it three times. Climbing once here and
-  // handing the result to all three keeps the eligibility logic itself
-  // (and its short-circuiting) untouched.
+  // against this predicate, and both the candidacy test and the identity
+  // resolution would otherwise climb through memo()/forwardRef() wrappers on
+  // their own -- so without sharing the walk, one nested node could trigger it
+  // twice. Climbing once here and handing the result to both keeps the
+  // eligibility logic itself (and its short-circuiting) untouched.
   const climbedParent = climbComponentWrappers(path, reactImportSource).parentPath;
-  return (
-    isAutomaticTransformCandidate(path, reactImportSource, climbedParent) &&
-    (isComponent(path, reactImportSource, climbedParent) ||
-      isCustomHook(path, reactImportSource, climbedParent))
-  );
+  if (!isAutomaticTransformCandidate(path, reactImportSource, climbedParent)) return false;
+  const identity = resolveComponentIdentity(path, reactImportSource, climbedParent);
+  return isComponentIdentity(identity) || isHookIdentity(identity);
 }
 
 // React hooks whose callback argument is deliberately *not* part of the read
@@ -1048,10 +1195,12 @@ function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSour
 
 // An `@useSignals` annotation is only actionable once the transform can name
 // the function it sits on: the boundary is attached to a component or hook
-// identity, and an anonymous function returned straight out of a HOC
-// (`export function withCount(Base) { /** @useSignals */ return (props) => ... }`)
-// has none. Left silent, that annotation reads as an opt-in that simply never
-// happened. Warn instead, matching the barrel case above.
+// identity. A component returned straight out of a HOC has no name of its own
+// but does inherit the factory's (`getIdentityFactory`), so what is left here
+// is the genuinely unresolvable remainder -- a factory returning a factory
+// (`(a) => (b) => (props) => <p />`), where the middle function has no name to
+// inherit either. Left silent, such an annotation reads as an opt-in that
+// simply never happened. Warn instead, matching the barrel case above.
 function warnUnnamedUseSignalsAnnotation(path: NodePath<t.Function>): void {
   const warning = path.buildCodeFrameError(
     "This @useSignals annotation is ignored: the transform could not resolve a component " +
@@ -1064,21 +1213,15 @@ function warnUnnamedUseSignalsAnnotation(path: NodePath<t.Function>): void {
 
 function shouldAutomaticallyTransform(
   mode: ReactFineGrainedSignalsMode,
-  functionPath: NodePath<t.Function>,
   inspection: FunctionInspection,
-  reactImportSource: string,
-  // Forwarded straight through to `isCustomHook`/`isComponent` -- see
-  // `getComponentIdentityName`'s matching parameter. `decideTransform` calls
-  // this right alongside its own `isComponent`/`isCustomHook`/
-  // `isAutomaticTransformCandidate` checks on the same `functionPath`, so it
-  // passes its already-climbed parent in rather than have this trigger a
-  // fourth walk.
-  climbedParent?: NodePath | null,
+  // The identity `decideTransform` already resolved for this same function,
+  // rather than a path this would have to re-resolve (and re-climb) itself.
+  identity: ComponentIdentity | undefined,
 ): boolean {
-  if (isCustomHook(functionPath, reactImportSource, climbedParent)) {
+  if (isHookIdentity(identity)) {
     return mode !== "manual" && inspection.readsValue;
   }
-  if (!isComponent(functionPath, reactImportSource, climbedParent) || !inspection.containsJSX) {
+  if (!isComponentIdentity(identity) || !inspection.containsJSX) {
     return false;
   }
   return mode === "all" || (mode === "auto" && inspection.readsValue);
@@ -1150,7 +1293,25 @@ function decideTransform(
   options: InternalTransformOptions,
   reactImportSource: string,
 ): TransformDecision {
-  if (hasOwnedLeadingComment(path, noUseSignalsComment)) return { kind: "skip" };
+  // Computed once and given to every check below that would otherwise climb
+  // through this same function's memo()/forwardRef() wrappers on its own --
+  // see `getBindingIdentityName`'s matching parameter.
+  const climbedParent = climbComponentWrappers(path, reactImportSource).parentPath;
+  const identity = resolveComponentIdentity(path, reactImportSource, climbedParent);
+  // A `@useSignals`/`@noUseSignals` comment on a HOC factory is written for the
+  // component that factory returns: the factory is never a component itself and
+  // can never carry a boundary, so it has nothing else to mean.
+  // `hasOwnedLeadingComment` already reaches such a comment from the returned
+  // function when the factory is a concise-body arrow -- the climb runs through
+  // expressions all the way up to the declaration -- but the block-bodied form
+  // puts a `return` statement in the way, where the climb stops by design, so
+  // the factory is asked directly.
+  const factory = identity?.kind === "hoc-return" ? identity.factory : undefined;
+  const ownsLeadingComment = (pattern: RegExp): boolean =>
+    hasOwnedLeadingComment(path, pattern) ||
+    (factory !== undefined && hasOwnedLeadingComment(factory, pattern));
+
+  if (ownsLeadingComment(noUseSignalsComment)) return { kind: "skip" };
 
   const body = path.get("body");
   const statements = body.isBlockStatement() ? body.get("body") : [];
@@ -1159,15 +1320,8 @@ function decideTransform(
     warnUnverifiableBarrelUseSignals(path, options.importSource);
   }
   const inspection = inspectFunction(path, options.importSource, reactImportSource);
-  // Computed once and given to every check below that would otherwise climb
-  // through this same function's memo()/forwardRef() wrappers on its own --
-  // see `getComponentIdentityName`'s matching parameter.
-  const climbedParent = climbComponentWrappers(path, reactImportSource).parentPath;
-  const annotation = hasOwnedLeadingComment(path, useSignalsComment);
-  const annotated =
-    annotation &&
-    (isComponent(path, reactImportSource, climbedParent) ||
-      isCustomHook(path, reactImportSource, climbedParent));
+  const annotation = ownsLeadingComment(useSignalsComment);
+  const annotated = annotation && (isComponentIdentity(identity) || isHookIdentity(identity));
   const candidate = isAutomaticTransformCandidate(path, reactImportSource, climbedParent);
   // The annotation was written for a function the transform cannot name, so it
   // will be dropped. Only a function that is otherwise in a transformable
@@ -1177,15 +1331,13 @@ function decideTransform(
   if (annotation && !annotated && candidate) {
     const enclosing = path.getFunctionParent();
     if (
-      getComponentIdentityName(path, reactImportSource, climbedParent) === undefined &&
+      identity === undefined &&
       (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalsComment))
     ) {
       warnUnnamedUseSignalsAnnotation(path);
     }
   }
-  const automatic =
-    candidate &&
-    shouldAutomaticallyTransform(options.mode, path, inspection, reactImportSource, climbedParent);
+  const automatic = candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
   if (!explicit && inspection.hasUseSignalsCall) return { kind: "skip" };
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
