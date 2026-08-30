@@ -4,8 +4,9 @@
 import { StrictMode, createRef, act } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsx, jsxs } from "../src/jsx-runtime.js";
+import { Fragment, jsx, jsxs } from "../src/jsx-runtime.js";
 import { jsxDEV } from "../src/jsx-dev-runtime.js";
+import { ReactiveHost } from "../src/runtime/jsx.js";
 import { signal } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -292,5 +293,91 @@ describe("Signal children, props, and refs", () => {
     expect(dev.key).toBe("dev-key");
     expect(devProps.value).toBe(source);
     expect(devProps.children).toBe(source);
+  });
+});
+
+// `transformProps` (see src/runtime/jsx.ts) used to unconditionally shallow-copy
+// every element's props, even when nothing downstream ever read the copy: a
+// non-reactive custom component's props are never touched after the copy, and
+// a plain host element with nothing reactive in it has nothing for the copy to
+// change either. These tests pin the resulting fast paths -- the original
+// props object is passed straight through to the real factory, uncopied and
+// unmutated -- alongside the cases that still require a copy (a reactive host
+// prop or a signal/array Fragment child), which must keep working exactly as
+// before.
+describe("JSX pragma: uncopied-props fast path", () => {
+  it("passes a non-reactive custom component's props straight through, uncopied", () => {
+    const original = { label: "hello", count: 1 };
+    const element = jsx(function Widget() { return null; }, original, undefined);
+    expect(element.props).toBe(original);
+  });
+
+  it("renders a non-reactive custom component with plain props unchanged", () => {
+    function Label({ text, count }: { text: string; count: number }) {
+      return <span aria-label="plain label">{text}:{count}</span>;
+    }
+
+    render(<Label text="score" count={5} />);
+    expect(screen.getByLabelText("plain label").textContent).toBe("score:5");
+  });
+
+  it("passes a plain host element's props straight through, uncopied, when nothing is reactive", () => {
+    const original = { id: "box", title: "hello", "data-count": 3 };
+    const element = jsx("div", original, undefined);
+    expect(element.props).toBe(original);
+  });
+
+  it("renders a host element with only plain string/number props exactly as before", () => {
+    render(<div aria-label="plain box" id="my-id" tabIndex={3} data-count={7} />);
+    const node = screen.getByLabelText("plain box");
+    expect(node.id).toBe("my-id");
+    expect(node.tabIndex).toBe(3);
+    expect(node.dataset.count).toBe("7");
+  });
+
+  it("passes a Fragment's props straight through, uncopied, when children need no normalization", () => {
+    const original = { children: "hello" };
+    const element = jsx(Fragment, original, undefined);
+    expect(element.props).toBe(original);
+  });
+
+  it("still builds a fresh props object for a host element with a reactive prop", () => {
+    const disabled = signal(true);
+    const original: Record<string, unknown> = { "aria-label": "reactive box", disabled };
+
+    const element = jsx("button", original, undefined);
+    // A binding was found, so this call is routed through `ReactiveHost`
+    // instead of straight to the host factory -- proving the fast path was
+    // correctly skipped, not merely that some object happens to differ.
+    expect(element.type).toBe(ReactiveHost);
+    expect((element.props as { props: unknown }).props).not.toBe(original);
+    // The original object itself must never be mutated, even though a copy
+    // was required.
+    expect(original.disabled).toBe(disabled);
+  });
+
+  it("never mutates the original props object for a two-way bound value", () => {
+    const text = signal("initial");
+    const original: Record<string, unknown> = { "aria-label": "two-way field", value: text, onChange: () => {} };
+
+    render(jsx("input", original, undefined));
+    expect(original.value).toBe(text);
+    expect("defaultValue" in original).toBe(false);
+  });
+
+  it("normalizes a signal passed directly as a Fragment's children", () => {
+    const source = signal("before");
+
+    function Parent() {
+      return <>{source}</>;
+    }
+
+    const view = render(<Parent />);
+    expect(view.container.textContent).toBe("before");
+
+    act(() => {
+      source.value = "after";
+    });
+    expect(view.container.textContent).toBe("after");
   });
 });

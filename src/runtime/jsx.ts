@@ -702,58 +702,122 @@ export function ReactiveHost({
 
 type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) => React.ReactElement;
 
-function transformProps(type: React.ElementType, input: unknown): { props: HostProps; bindings: Binding[] } {
-  const props: HostProps = { ...(input as HostProps | null) };
-  const isHtmlHost = typeof type === "string" && !NON_HTML_HOST_ELEMENTS.has(type);
-  const isFragment = type === Fragment;
-  // User components receive all props, including `children`, exactly as their
-  // caller passed them. Native host elements (including SVG) and fragments opt
-  // into signal-child normalization, while direct prop bindings remain HTML-only.
-  if ((typeof type === "string" || isFragment) && "children" in props) {
-    props.children = normalizeChild(props.children);
-  }
-
+/**
+ * Scans a native host element's props for anything reactive (see
+ * `isReactiveHostProp`). Kept separate from building the transformed props
+ * copy in `transformHostProps` so that function can decide whether a copy is
+ * needed at all before ever allocating one.
+ */
+function findHostBindings(props: HostProps, tagName: string): Binding[] {
   const bindings: Binding[] = [];
-  if (isHtmlHost) {
-    for (const [name, value] of Object.entries(props)) {
-      if (isReactiveHostProp(name, value)) {
-        const kind = resolveBindingKind(type as string, name);
-        bindings.push([name, value, kind]);
-        if (isTwoWayBindingKind(kind)) {
-          // Leaving the controlled prop in place would keep the element
-          // React-controlled, so an unrelated re-render of the owner would
-          // re-diff and potentially re-write this prop — work relying on an
-          // internal React guard (skipping a same-value write) rather than a
-          // documented one. Substituting the uncontrolled prop instead means
-          // React only ever reads it once, at mount, and never touches this
-          // property again — see docs/direct-binding-value-checked-style.md.
-          delete props[name];
-          props[UNCONTROLLED_PROP_NAMES[name]] = readInitialValue(value);
-        } else {
-          props[name] = readInitialValue(value);
-        }
-      }
+  for (const [name, value] of Object.entries(props)) {
+    if (isReactiveHostProp(name, value)) {
+      bindings.push([name, value, resolveBindingKind(tagName, name)]);
     }
   }
+  return bindings;
+}
 
+/**
+ * Transforms a native host element's (`<div>`, `<svg>`, ...) props: replaces
+ * any directly-bound prop with its initial, non-reactive value (`bindings`
+ * carries the reactive ones for `ReactiveHost` to mount later — see
+ * `createJsxWrapper`) and normalizes a signal/array `children` the same way
+ * `Fragment` does.
+ *
+ * The overwhelmingly common host element has neither. Scanning first and only
+ * allocating a copy when something is actually found means a plain
+ * `<div className="card">…</div>` costs one prop walk and zero extra
+ * allocations — the original props object is returned as-is (see the
+ * `bindings.length === 0 && !childrenNeedNormalization` branch below), and
+ * `createJsxWrapper` passes it straight to `factory` unchanged.
+ */
+function transformHostProps(type: string, input: unknown): { props: HostProps; bindings: Binding[] } {
+  const inputProps = (input ?? {}) as HostProps;
+  const isHtmlHost = !NON_HTML_HOST_ELEMENTS.has(type);
+  const bindings = isHtmlHost ? findHostBindings(inputProps, type) : [];
+
+  const rawChildren = inputProps.children;
+  const childrenNeedNormalization =
+    "children" in inputProps && (isSignal(rawChildren) || Array.isArray(rawChildren));
+
+  if (bindings.length === 0 && !childrenNeedNormalization) {
+    return { props: inputProps, bindings };
+  }
+
+  // Something needs to change, so — and only so — a copy is made; the
+  // original `inputProps` (and, transitively, whatever object the caller
+  // passed as `input`) is never mutated.
+  const props: HostProps = { ...inputProps };
+  if (childrenNeedNormalization) {
+    props.children = normalizeChild(rawChildren);
+  }
+  for (const [name, value, kind] of bindings) {
+    if (isTwoWayBindingKind(kind)) {
+      // Leaving the controlled prop in place would keep the element
+      // React-controlled, so an unrelated re-render of the owner would
+      // re-diff and potentially re-write this prop — work relying on an
+      // internal React guard (skipping a same-value write) rather than a
+      // documented one. Substituting the uncontrolled prop instead means
+      // React only ever reads it once, at mount, and never touches this
+      // property again — see docs/direct-binding-value-checked-style.md.
+      delete props[name];
+      props[UNCONTROLLED_PROP_NAMES[name]] = readInitialValue(value);
+    } else {
+      props[name] = readInitialValue(value);
+    }
+  }
   return { props, bindings };
+}
+
+/**
+ * `Fragment`'s only prop worth transforming is `children`, and only when it
+ * is itself a signal or array — `normalizeChild` is the identity for
+ * anything else (see its definition) — so a plain `<>...</>` with ordinary
+ * children is passed straight through, uncopied, the same way a custom
+ * component is below.
+ */
+function transformFragmentProps(input: unknown): unknown {
+  const props = input as HostProps | null;
+  if (
+    props == null
+    || !("children" in props)
+    || (!isSignal(props.children) && !Array.isArray(props.children))
+  ) {
+    return input;
+  }
+  return { ...props, children: normalizeChild(props.children) };
 }
 
 /** Creates a JSX wrapper while letting each module supply React's JSX factory. */
 export function createJsxWrapper(factory: CreateElement): CreateElement {
   return (type, input, key) => {
-    const { props, bindings } = transformProps(type, input);
-    if (typeof type === "string" && bindings.length > 0) {
-      // `children` is lifted out to be `factory`'s own top-level prop (see
-      // the comment on ReactiveHost) instead of staying nested inside
-      // `props`, so `factory` — the real jsx/jsxs/jsxDEV already correctly
-      // wired to know whether this call site's children are a static JSX
-      // list — validates them exactly as it would have for the
-      // un-intercepted host element.
-      const { children, ...hostProps } = props;
-      return factory(ReactiveHost, { elementType: type, props: hostProps, bindings, children }, key);
+    if (typeof type === "string") {
+      const { props, bindings } = transformHostProps(type, input);
+      if (bindings.length > 0) {
+        // `children` is lifted out to be `factory`'s own top-level prop (see
+        // the comment on ReactiveHost) instead of staying nested inside
+        // `props`, so `factory` — the real jsx/jsxs/jsxDEV already correctly
+        // wired to know whether this call site's children are a static JSX
+        // list — validates them exactly as it would have for the
+        // un-intercepted host element.
+        const { children, ...hostProps } = props;
+        return factory(ReactiveHost, { elementType: type, props: hostProps, bindings, children }, key);
+      }
+      return factory(type, props, key);
     }
-    return factory(type, props, key);
+
+    if (type === Fragment) {
+      return factory(type, transformFragmentProps(input), key);
+    }
+
+    // Every other type — function/class components, `memo`, `forwardRef`,
+    // Context.Provider/Consumer, Suspense, lazy, ... — receives its props
+    // exactly as its caller passed them. None of these were ever touched by
+    // children normalization or the reactive-prop scan above, even before
+    // this fast path existed, so skipping the copy here changes nothing
+    // observable and removes an allocation nothing downstream ever read.
+    return factory(type, input, key);
   };
 }
 

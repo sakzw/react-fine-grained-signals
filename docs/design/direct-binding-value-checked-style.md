@@ -6,7 +6,7 @@
 
 ## Implemented (shipped)
 
-The JSX runtime direct-binds a signal passed to an allowlisted native host prop: seed the DOM from `.peek()` at mount, then write later changes through a ref-installed `effect()` that bypasses React's re-render for that prop (`transformProps` / `ReactiveHost` in `src/runtime/jsx.ts`; see [JSX signal children and host bindings](../jsx-bindings.md) for the full allowlist).
+The JSX runtime direct-binds a signal passed to an allowlisted native host prop: seed the DOM from `.peek()` at mount, then write later changes through a ref-installed `effect()` that bypasses React's re-render for that prop (`transformHostProps` / `ReactiveHost` in `src/runtime/jsx.ts`; see [JSX signal children and host bindings](../jsx-bindings.md) for the full allowlist).
 
 - **`value`/`checked`.** `isControlledTwoWayProp` + `setControlledProp` restrict two-way handling to the tags React itself treats as controlled — `value` on `input`/`textarea`/`select`, `checked` on `input`. The controlled prop is replaced with `defaultValue`/`defaultChecked` seeded from `.peek()`, so React never re-diffs it, and the DOM write is skipped when it already matches. `<select multiple>` goes through `setMultiSelectValue` (toggles each `<option>.selected`, not `String(value)`). Every other `value`/`checked` host (`<li value>`, `<option value>`, `<meter value>`, ...) keeps the ordinary peek-and-substitute path.
 - **`<select>` resync.** `bindSelectValue` adds a `MutationObserver` on the select's subtree alongside the ordinary per-value effect, so a matching `<option>` added after mount (for example when the options are themselves rendered from a signal) still gets selected, instead of the selection getting stuck empty because only the bound signal, not the DOM's `<option>` list, was being watched.
@@ -35,7 +35,7 @@ Every reactive UI library that direct-binds `value` runs into this. Right now it
 
 The shipped binding only handles `style={signal}` as a single whole-object write. It does not support `style={{ color: signal }}` — a style object whose individual entries are themselves signals. A consumer who wants only one CSS property to be reactive currently has to route the entire style object through a `computed`.
 
-**Candidate approach, undecided:** detect signals as values inside the `style` object at the JSX-transform boundary (`transformProps` or a sibling helper), and bind each such entry as its own effect, leaving non-signal entries untouched.
+**Candidate approach, undecided:** detect signals as values inside the `style` object at the JSX-transform boundary (`transformHostProps` or a sibling helper), and bind each such entry as its own effect, leaving non-signal entries untouched.
 
 - Would get closest to Solid-style ergonomics, and would not need the SVG/MathML exclusion the rest of `setDomProp` carries — `.style` exists uniformly across HTML, SVG, and MathML.
 - `isReactiveHostProp` today only inspects top-level prop values; walking one level into an object literal is a different shape of transform, not yet designed.

@@ -28,6 +28,13 @@ const { signal, useSignals } = await import("../dist/index.js");
 // sites to this runtime entry point's managed boundary instead. Imported
 // under an alias so both variants can be benchmarked side by side.
 const { useSignals: useManagedSignals } = await import("../dist/runtime.js");
+// The JSX pragma a compiled `.tsx` file actually calls -- `jsx`/`jsxs` wrap
+// `react/jsx-runtime`'s own factories with `createJsxWrapper` (src/runtime/jsx.ts),
+// which runs `transformProps`-style work on *every* element, custom
+// components and host elements alike. Every case above builds elements with
+// `React.createElement` directly and so never touches this module at all;
+// the cases below (`jsx-component`, `jsx-host-element`) close that gap.
+const { jsx: signalsJsx, jsxs: signalsJsxs } = await import("../dist/jsx-runtime.js");
 
 const rows = Number.parseInt(process.argv[2] ?? process.env.BENCH_ROWS ?? "500", 10);
 const updates = Number.parseInt(process.argv[3] ?? process.env.BENCH_UPDATES ?? "300", 10);
@@ -58,6 +65,8 @@ const renderCounts = {
   hooksMemo: { counter: 0, siblings: 0 },
   signals: { counter: 0, siblings: 0 },
   signalsManaged: { counter: 0, siblings: 0 },
+  jsxComponent: { counter: 0, siblings: 0 },
+  jsxHostElement: { counter: 0, siblings: 0 },
 };
 
 /**
@@ -173,6 +182,90 @@ function createManagedSignalsVariant(counts) {
   return { App: ManagedSignalsApp, count };
 }
 
+/**
+ * Builds the JSX-pragma variant for a non-reactive custom function component:
+ * `rows` `PlainPropsRow`s, each created via `signalsJsx(PlainPropsRow, props,
+ * key)` -- exactly what a compiled `<PlainPropsRow ... />` call site becomes
+ * -- with a handful of plain props (no signals anywhere). Since none of it is
+ * memoized, every update re-renders `JsxComponentApp`, which re-invokes
+ * `signalsJsx` for all `rows` elements again, the same shape as
+ * `hooks-naive` above but exercising the real JSX pragma instead of
+ * `React.createElement`.
+ */
+function createJsxComponentVariant(counts) {
+  function PlainPropsRow(props) {
+    counts.siblings += 1;
+    return signalsJsx("li", { children: ["row ", props.index] }, undefined);
+  }
+
+  /** Builds `count` `<PlainPropsRow ... />` elements via the real JSX pragma, keyed by index. */
+  const buildPlainPropsRows = (count) =>
+    Array.from({ length: count }, (_, index) =>
+      signalsJsx(
+        PlainPropsRow,
+        { id: `row-${index}`, label: "Row label", count: index, active: index % 2 === 0, index },
+        index,
+      ),
+    );
+
+  const handle = {};
+
+  function JsxComponentApp() {
+    const [count, setCount] = useState(0);
+    handle.increment = () => setCount((previous) => previous + 1);
+    counts.counter += 1;
+    return signalsJsxs(
+      "ul",
+      { children: [signalsJsx("li", { children: ["count:", count] }, "counter"), buildPlainPropsRows(rows)] },
+      undefined,
+    );
+  }
+
+  return { App: JsxComponentApp, handle };
+}
+
+/**
+ * Builds the JSX-pragma variant for a plain native host element: `rows`
+ * `<li>`s, each created via `signalsJsx("li", props, key)` with several plain
+ * string/number attributes and no signal bindings at all -- so
+ * `transformHostProps`'s reactive-prop scan always finds nothing to bind.
+ * Otherwise identical in shape to `createJsxComponentVariant` above.
+ */
+function createJsxHostVariant(counts) {
+  /** Builds `count` plain `<li id=... className=... .../>` elements via the real JSX pragma. */
+  const buildPlainHostRows = (count) =>
+    Array.from({ length: count }, (_, index) => {
+      counts.siblings += 1;
+      return signalsJsx(
+        "li",
+        {
+          id: `row-${index}`,
+          className: "row",
+          title: "Row title",
+          "data-index": index,
+          tabIndex: index,
+          children: ["row ", index],
+        },
+        index,
+      );
+    });
+
+  const handle = {};
+
+  function JsxHostApp() {
+    const [count, setCount] = useState(0);
+    handle.increment = () => setCount((previous) => previous + 1);
+    counts.counter += 1;
+    return signalsJsxs(
+      "ul",
+      { children: [signalsJsx("li", { children: ["count:", count] }, "counter"), buildPlainHostRows(rows)] },
+      undefined,
+    );
+  }
+
+  return { App: JsxHostApp, handle };
+}
+
 const { App: HooksNaiveApp, handle: hooksNaiveHandle } = createHooksVariant(renderCounts.hooksNaive, false);
 const { App: HooksMemoApp, handle: hooksMemoHandle } = createHooksVariant(renderCounts.hooksMemo, true);
 // `count` is created once, above, and outlives every individual mount --
@@ -180,6 +273,8 @@ const { App: HooksMemoApp, handle: hooksMemoHandle } = createHooksVariant(render
 const { App: SignalsApp, count: signalsCount } = createSignalsVariant(renderCounts.signals);
 const { App: ManagedSignalsApp, count: managedSignalsCount } =
   createManagedSignalsVariant(renderCounts.signalsManaged);
+const { App: JsxComponentApp, handle: jsxComponentHandle } = createJsxComponentVariant(renderCounts.jsxComponent);
+const { App: JsxHostApp, handle: jsxHostHandle } = createJsxHostVariant(renderCounts.jsxHostElement);
 
 /**
  * Wraps one variant's App/increment/render-counts into the create/run/check/
@@ -276,6 +371,22 @@ const variants = [
     },
     getStart: () => managedSignalsCount.value,
   }),
+  makeVariant({
+    name: "jsx-component",
+    counts: renderCounts.jsxComponent,
+    expectedSiblingRenders: (updateCount) => rows * (updateCount + 1),
+    App: JsxComponentApp,
+    increment: () => jsxComponentHandle.increment(),
+    getStart: () => 0,
+  }),
+  makeVariant({
+    name: "jsx-host-element",
+    counts: renderCounts.jsxHostElement,
+    expectedSiblingRenders: (updateCount) => rows * (updateCount + 1),
+    App: JsxHostApp,
+    increment: () => jsxHostHandle.increment(),
+    getStart: () => 0,
+  }),
 ];
 
 function benchmark(variant) {
@@ -323,3 +434,70 @@ console.log(
 console.log(`${os.platform()} ${os.arch()}; ${os.cpus()[0]?.model ?? "unknown CPU"}`);
 console.log("Manual diagnostics only: compare results only on identical Node versions and hardware.");
 console.table(variants.map(benchmark));
+
+/**
+ * The React-render harness above wraps every `jsx`/`jsxs` call in `act()`,
+ * a full commit, and real DOM work -- useful for "did this regress the whole
+ * app", but too noisy to see a per-call saving of one small object
+ * allocation. This isolates `jsx`/`jsxs` themselves: build the element, read
+ * one field back off it (so V8 can't prove the call is dead and elide it),
+ * never touch React DOM at all.
+ */
+function benchmarkJsxCalls(name, callsPerSample, callJsx) {
+  const jsxWarmups = 3;
+  const jsxSamples = 7;
+
+  const run = () => {
+    let sink = 0;
+    for (let index = 0; index < callsPerSample; index += 1) {
+      sink += callJsx(index).props.index;
+    }
+    return sink;
+  };
+
+  for (let round = 0; round < jsxWarmups; round += 1) run();
+
+  const timings = [];
+  for (let sample = 0; sample < jsxSamples; sample += 1) {
+    global.gc?.();
+    const start = process.hrtime.bigint();
+    const sink = run();
+    timings.push(Number(process.hrtime.bigint() - start) / 1e9);
+    assert(Number.isFinite(sink), `${name}: sink was not finite`);
+  }
+
+  timings.sort((left, right) => left - right);
+  const median = percentile(timings, 0.5);
+  return {
+    case: name,
+    "calls/sample": callsPerSample.toLocaleString("en-US"),
+    "median ms": (median * 1e3).toFixed(3),
+    "ns/call": ((median * 1e9) / callsPerSample).toFixed(1),
+    "calls/s": (callsPerSample / median).toLocaleString("en-US", { maximumFractionDigits: 0 }),
+  };
+}
+
+// Never actually rendered by React -- `jsx()` only builds an element object
+// referencing this as `type`, it never invokes the function -- so its body
+// is irrelevant; only its identity as "a custom function component" matters.
+function MicroBenchComponent(props) {
+  return props.index;
+}
+
+const microBenchComponentProps = { id: "row", label: "Row label", count: 0, active: true };
+const microBenchHostProps = { id: "row", className: "row", title: "Row title", "data-index": 0, tabIndex: 0 };
+const jsxCallsPerSample = 200_000;
+
+const jsxMicroCases = [
+  {
+    name: "jsx() custom component (plain props)",
+    callJsx: (index) => signalsJsx(MicroBenchComponent, { ...microBenchComponentProps, index }, index),
+  },
+  {
+    name: "jsx() host element (plain props, no signals)",
+    callJsx: (index) => signalsJsx("li", { ...microBenchHostProps, index }, index),
+  },
+];
+
+console.log("\nIsolated JSX-pragma cost (jsx()/jsxs() only -- no React render/commit):");
+console.table(jsxMicroCases.map((jsxCase) => benchmarkJsxCalls(jsxCase.name, jsxCallsPerSample, jsxCase.callJsx)));
