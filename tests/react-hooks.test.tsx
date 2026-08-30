@@ -197,6 +197,35 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(evaluate).toHaveBeenCalledTimes(evaluationsAtMount);
   });
 
+  it("keeps a single useSignalValue effect subscription across unrelated re-renders", () => {
+    const source = signal(1);
+    const evaluate = vi.fn((value: number) => value * 2);
+    const doubled = computed(() => evaluate(source.value));
+
+    function Leaf({ tick }: { tick: number }) {
+      const value = useSignalValue(doubled);
+      return <output aria-label="stable subscription">{`${tick}:${value}`}</output>;
+    }
+
+    const view = render(<Leaf tick={0} />);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+
+    // Re-rendering with an unrelated prop change must not tear down and
+    // recreate the underlying effect subscription: `subscribe` is memoized on
+    // `source` alone (via useMemo, mirroring useDeepSignalValue's store
+    // construction), so an unchanged `source` should keep the same effect
+    // running instead of resubscribing on every render.
+    view.rerender(<Leaf tick={1} />);
+    view.rerender(<Leaf tick={2} />);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      source.value = 5;
+    });
+    expect(screen.getByLabelText("stable subscription").textContent).toBe("2:10");
+    expect(evaluate).toHaveBeenCalledTimes(2);
+  });
+
   it("exposes useComputed to an explicit leaf hook", () => {
     const source = signal(2);
 

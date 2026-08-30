@@ -156,18 +156,20 @@ type FailureEpisode = { hasReported: boolean };
  * rethrows that error on every read (see `computed()` in src/core/base.ts) —
  * if `source` is such a computed and it starts failing after the binding is
  * already mounted, an unguarded read here would throw synchronously out of
- * `effect()`'s callback body. Nothing catches that: not `effect()`, not
- * alien-signals' `run()`, not its `flush()`. It would propagate out of
- * whatever write triggered it (an event handler, anywhere), and `flush()`'s
- * own `finally` would mark any other effect still queued in that same flush as
- * skipped for this cycle — an unrelated binding, or a `useSignals()`-tracked
- * component's commit, silently missing one update.
+ * `effect()`'s callback body. Since 41c77ea that no longer escapes the flush —
+ * `effect()` catches it and routes it through `reportEffectError`
+ * (src/core/base.ts), so the write that triggered it still completes and the
+ * rest of the effect queue still runs. But that containment is whole-callback:
+ * it abandons the remainder of this binding's callback for the cycle and
+ * reports a generic "an effect() callback threw", with no idea which binding
+ * failed or that the DOM was left mid-update.
  *
  * Catching here keeps a failure local to this one binding: the DOM write for
  * this cycle is skipped (the DOM is left at its last successful value) and
  * the failure is reported with `console.error(message, { cause: error })` —
- * assert against `mock.calls[i][1].cause` in tests. This is the first
- * `console.*` call in this codebase, and intentionally so: a direct binding
+ * assert against `mock.calls[i][1].cause` in tests, the same shape used by
+ * `computed()`'s own error report (src/core/base.ts) and by
+ * `render-tracking.ts`. Reporting is intentional here too: a direct binding
  * has no Error Boundary or other surface to fall back on, and silence would
  * mean a binding that mysteriously stops updating with zero trace.
  *
@@ -260,7 +262,17 @@ function setDomProp(node: Element, name: string, value: unknown): void {
       (node as HTMLElement).className = value == null ? "" : String(value);
       return;
     case "hidden":
-      (node as HTMLElement).hidden = Boolean(value);
+      // The `hidden` content attribute also accepts the DOM-native keyword
+      // `"until-found"` (a collapsible, find-in-page-revealable hidden
+      // state) — coercing every value through `Boolean(...)` and the
+      // `.hidden` IDL property would turn that truthy string into a plain
+      // `true`, downgrading it to a hard hide. Writing it as the attribute
+      // directly instead preserves the keyword; every other value keeps
+      // going through `.hidden` so `disabled`-style boolean semantics
+      // (including the false/null/undefined-removes-the-attribute cases)
+      // are unchanged.
+      if (value === "until-found") setAttribute(node, "hidden", value);
+      else (node as HTMLElement).hidden = Boolean(value);
       return;
     case "disabled":
       // Only controls expose this property, but the runtime remains safe when
@@ -444,8 +456,21 @@ function applyRef(ref: SupportedRef, node: Element | null): RefCleanup {
   if (ref != null) ref.current = node;
 }
 
-/** One live binding: the tuple it was mounted from, plus its teardown. */
-type MountedBinding = { readonly binding: Binding; readonly dispose: () => void };
+/**
+ * One live binding: the tuple it was mounted from, its teardown, and — for a
+ * `"style"` binding only — a live accessor for the CSS property keys it has
+ * actually applied to the node so far. `undefined` for every other kind.
+ *
+ * This is a getter, not a one-time snapshot, because a style binding's own
+ * `previousKeys` keeps changing across its lifetime as its effect re-runs; a
+ * rebuild reads it just before disposing the binding, so it sees whatever the
+ * binding last actually wrote, not what it started with. See `syncBindings`.
+ */
+type MountedBinding = {
+  readonly binding: Binding;
+  readonly dispose: () => void;
+  readonly getStyleKeys: (() => readonly string[]) | undefined;
+};
 
 /** A binding's identity for the re-render diff: same name, source, and kind. */
 // `b` is optional so callers can pass a positional lookup straight in: a
@@ -454,37 +479,49 @@ function isSameBinding(a: Binding, b: Binding | undefined): boolean {
   return b !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
+/** What `subscribeBinding` hands back to `mountBinding`. See `MountedBinding`. */
+type Subscription = { readonly dispose: () => void; readonly getStyleKeys: (() => readonly string[]) | undefined };
+
 /**
  * Subscribes a single binding to `node` and returns its teardown. Split out of
  * the ref callback so `createReactiveHostBinder` can rebuild one binding on
  * its own, without disturbing the siblings that did not change.
+ *
+ * `initialStyleKeys` seeds a `"style"` binding's own `previousKeys` — passed
+ * by `syncBindings` when this binding is replacing a disposed style binding,
+ * so the fresh one starts already knowing which CSS properties are actually
+ * on the node, instead of starting from an empty set and never clearing them.
+ * Ignored for every other kind.
  */
 function subscribeBinding(
   node: Element,
   name: string,
   source: ReadonlySignal<unknown>,
   kind: BindingKind,
-): () => void {
+  initialStyleKeys: readonly string[] | undefined,
+): Subscription {
   switch (kind) {
     case "style": {
-      let previousKeys: readonly string[] = [];
-      return createBindingEffect(source, (value) => {
+      let previousKeys: readonly string[] = initialStyleKeys ?? [];
+      const dispose = createBindingEffect(source, (value) => {
         previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
       });
+      return { dispose, getStyleKeys: () => previousKeys };
     }
     case "select-value":
-      return bindSelectValue(node as HTMLSelectElement, source);
+      return { dispose: bindSelectValue(node as HTMLSelectElement, source), getStyleKeys: undefined };
     case "text-value":
-      return bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source);
+      return { dispose: bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source), getStyleKeys: undefined };
     case "checked":
-      return createBindingEffect(source, (value) => setControlledProp(node, name, value));
+      return { dispose: createBindingEffect(source, (value) => setControlledProp(node, name, value)), getStyleKeys: undefined };
     case "prop":
-      return createBindingEffect(source, (value) => setDomProp(node, name, value));
+      return { dispose: createBindingEffect(source, (value) => setDomProp(node, name, value)), getStyleKeys: undefined };
   }
 }
 
-function mountBinding(node: Element, binding: Binding): MountedBinding {
-  return { binding, dispose: subscribeBinding(node, binding[0], binding[1], binding[2]) };
+function mountBinding(node: Element, binding: Binding, initialStyleKeys?: readonly string[]): MountedBinding {
+  const { dispose, getStyleKeys } = subscribeBinding(node, binding[0], binding[1], binding[2], initialStyleKeys);
+  return { binding, dispose, getStyleKeys };
 }
 
 type ReactiveHostBinder = {
@@ -606,10 +643,29 @@ function createReactiveHostBinder(): ReactiveHostBinder {
       return candidate;
     });
 
+    // A stale binding being replaced under the same prop name (its source or
+    // kind changed — see `isSameBinding`) is disposed just below. For a
+    // `"style"` binding specifically, that disposal would otherwise discard
+    // the one thing that makes `applyStyle`'s clearing logic work: the CSS
+    // property keys it actually last wrote to `node.style`. Nothing else
+    // remembers that set — the node itself can hold keys today's rendered
+    // value never mentions (an off-render signal write applied a value React
+    // never saw), and the fresh binding about to replace this one would
+    // otherwise start its own `previousKeys` at `[]`, with no memory of them
+    // either. Snapshotting it here, before `dispose()` tears down the closure
+    // that holds it, lets the replacement start already knowing what is
+    // really on the node, so it can still clear it on its first write.
+    const staleStyleKeys = new Map<string, readonly string[]>();
+    for (const stale of reusable.values()) {
+      if (stale.getStyleKeys !== undefined) staleStyleKeys.set(stale.binding[0], stale.getStyleKeys());
+    }
+
     // Everything stale is disposed before anything replacing it is mounted, so
     // a rebuilt binding never briefly holds two live subscriptions on one node.
     for (const stale of reusable.values()) stale.dispose();
-    mounted = bindings.map((binding, index) => reused[index] ?? mountBinding(target, binding));
+    mounted = bindings.map(
+      (binding, index) => reused[index] ?? mountBinding(target, binding, staleStyleKeys.get(binding[0])),
+    );
   };
 
   return {

@@ -188,6 +188,89 @@ describe("Direct DOM binding", () => {
     expect((box.style as unknown as Record<string, string>)["WebkitLineClamp"]).toBe("");
   });
 
+  it("clears a rebuilt style binding's inherited keys, not just the new value's own keys", () => {
+    // Regression test for a bug where rebuilding a style binding (the
+    // `style={...}` prop switches from one signal to another between
+    // renders) reset the fresh binding's memory of "keys currently on the
+    // node" to `[]`, instead of inheriting what the disposed binding had
+    // actually applied. `a` is written to *between* renders — through this
+    // library's own reactive effect, which React's render never sees — so by
+    // the time the binding rebuilds onto `b`, the node carries CSS
+    // properties neither the disposed binding's own starting value nor the
+    // new binding's value ever mentioned, and only the disposed binding's
+    // live bookkeeping knew about them.
+    const a = signal<Record<string, string | number>>({ color: "red", fontWeight: 700 });
+    const b = signal<Record<string, string | number>>({ opacity: 0.5 });
+    const useB = signal(false);
+
+    function Box() {
+      useSignals();
+      return <div aria-label="rebind style box" style={useB.value ? b : a} />;
+    }
+
+    render(<Box />);
+    const box = screen.getByLabelText("rebind style box");
+    expect(box.style.color).toBe("red");
+    expect(box.style.fontWeight).toBe("700");
+
+    // Off-render write: `Box` never reads `a.value` while rendering (only
+    // `a` itself, as the style source), so this does not trigger a re-render
+    // and React's own reconciliation never observes this value.
+    act(() => {
+      a.value = { color: "blue", background: "green" };
+    });
+    expect(box.style.color).toBe("blue");
+    expect(box.style.background).toBe("green");
+
+    // Switching to `b` disposes the `a` binding and mounts a fresh one. The
+    // fresh binding must inherit what the disposed one actually left on the
+    // node — color and background — not start believing the node is bare.
+    act(() => {
+      useB.value = true;
+    });
+    expect(box.style.opacity).toBe("0.5");
+    expect(box.style.color).toBe("");
+    expect(box.style.fontWeight).toBe("");
+    expect(box.style.background).toBe("");
+  });
+
+  it("preserves the DOM-native \"until-found\" hidden value instead of coercing it to a boolean", () => {
+    // Regression test: the `hidden` content attribute also accepts the
+    // keyword "until-found" (a collapsible, find-in-page-revealable hidden
+    // state). `setDomProp`'s "hidden" case used to run every value through
+    // `Boolean(...)` and the `.hidden` IDL property, which turns this truthy
+    // string into a plain `true`, silently downgrading it to a hard hide.
+    // Asserted via `getAttribute` rather than the `.hidden` property because
+    // jsdom's own `.hidden` accessor still reflects it as a plain boolean
+    // (https://github.com/jsdom/jsdom doesn't yet implement this recent HTML
+    // living-standard addition) even though real browsers and the attribute
+    // itself preserve the string; `getAttribute` reads the raw attribute
+    // this library writes, independent of that jsdom gap. `jsx` is called
+    // directly (as in the "unsupported disabled host" case above) because
+    // this signal's value isn't one `React.HTMLAttributes["hidden"]`'s own
+    // type admits.
+    const hidden = signal<boolean | "until-found">("until-found");
+
+    render(jsx("div", { "aria-label": "until-found box", hidden }, undefined));
+    const box = screen.getByLabelText("until-found box");
+    expect(box.getAttribute("hidden")).toBe("until-found");
+
+    act(() => {
+      hidden.value = false;
+    });
+    expect(box.getAttribute("hidden")).toBeNull();
+
+    act(() => {
+      hidden.value = true;
+    });
+    expect(box.getAttribute("hidden")).toBe("");
+
+    act(() => {
+      hidden.value = "until-found";
+    });
+    expect(box.getAttribute("hidden")).toBe("until-found");
+  });
+
   it("binds a signal directly to a text input's value without React controlling it", () => {
     const text = signal("initial");
 

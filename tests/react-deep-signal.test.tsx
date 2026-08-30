@@ -454,6 +454,35 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(screen.getByLabelText("selected product").textContent).toBe("4");
   });
 
+  it("reports a useDeepSignalValue dependencies length change instead of silently degrading", () => {
+    // useMemo's own dependency array (built internally as
+    // `[source, ...dependencies]`) must stay a fixed length across renders.
+    // A caller passing a `dependencies` array whose length changes used to
+    // only surface as React's silent "changed size between renders" dev
+    // warning while quietly rebuilding the store on every render thereafter.
+    // Mirrors the useComputed dependency-mode-switch test above: a violation
+    // must be a loud, actionable error instead.
+    const state = deepSignal({ count: 1 });
+
+    function Selected({ dependencies }: { dependencies: number[] }) {
+      const value = useDeepSignalValue(
+        state,
+        (current) => current.count,
+        dependencies,
+      );
+      return <output aria-label="dependency length guard">{value}</output>;
+    }
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<Selected dependencies={[]} />);
+    expect(screen.getByLabelText("dependency length guard").textContent).toBe("1");
+
+    expect(() => view.rerender(<Selected dependencies={[1]} />)).toThrow(
+      /`dependencies` array length changed between renders/,
+    );
+    errorSpy.mockRestore();
+  });
+
   it("cleans a selected deep subscription during StrictMode unmount", () => {
     const state = deepSignal({ user: { name: "Ada" } });
     const renders = vi.fn();

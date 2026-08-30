@@ -175,6 +175,13 @@ export function useDeepSignal<T extends object>(
  * Every non-signal value captured by `selector` must be listed in
  * `dependencies`. Object and proxy results are intentionally rejected because
  * mutable snapshots cannot satisfy `useSyncExternalStore` identity semantics.
+ *
+ * `dependencies` must keep a fixed length across this component's lifetime,
+ * matching `useMemo`'s own rule (its length feeds a `useMemo` deps array
+ * below via `[source, ...dependencies]`). A length change is caught and
+ * thrown as a clear error rather than left to degrade into React's silent
+ * "changed size between renders" dev warning, mirroring `useComputed`'s
+ * dependency-mode-switch guard.
  */
 export function useDeepSignalValue<
   T extends object,
@@ -184,6 +191,22 @@ export function useDeepSignalValue<
   selector: (value: T) => S,
   dependencies: DependencyList,
 ): S {
+  // A variable-length `dependencies` would otherwise only surface as React's
+  // dev-mode "changed size between renders" warning on the `useMemo` call
+  // below, while silently recreating the store (and losing selector/error
+  // history) on every subsequent render. Mirrors `useComputed`'s mode-switch
+  // guard below: a violation is a loud, actionable error instead of a
+  // silently degraded memo.
+  const initialDependencyLengthRef = useRef<number | undefined>(undefined);
+  initialDependencyLengthRef.current ??= dependencies.length;
+  if (dependencies.length !== initialDependencyLengthRef.current) {
+    const error = new Error(
+      `useDeepSignalValue: the \`dependencies\` array length changed between renders (from ${initialDependencyLengthRef.current} to ${dependencies.length}) for this call site. Keep \`dependencies\` a fixed length across the component's lifetime, matching useMemo's rules.`,
+    );
+    error.name = "UseDeepSignalValueDependencyLengthChangeError";
+    throw error;
+  }
+
   const store = useMemo(
     () => createDeepSelectorStore(source, selector),
     [source, ...dependencies],
@@ -279,15 +302,16 @@ export function useSignalEffect(
  * background effect and left for `getSnapshot` to rethrow instead.
  */
 export function useSignalValue<T>(source: ReadonlySignal<T>): T {
-  const subscribe = useCallback(
-    createSignalStore(() => {
-      // The read (not its result) is what registers the alien-signals
-      // dependency link, so it still happens even though the return value
-      // here is constant: every non-initial run of this effect is reported
-      // as a change, exactly as before.
-      source.value;
-      return true;
-    }),
+  const subscribe = useMemo(
+    () =>
+      createSignalStore(() => {
+        // The read (not its result) is what registers the alien-signals
+        // dependency link, so it still happens even though the return value
+        // here is constant: every non-initial run of this effect is reported
+        // as a change, exactly as before.
+        source.value;
+        return true;
+      }),
     [source],
   );
 
