@@ -30,7 +30,7 @@ pnpm size
 
 ## 開発
 
-workspaceの開発にはNode.js 24.19.0、pnpm 11、React 19以降を使用します。privateなroot manifestはNode.js `^24.19.0` を許可し、`.node-version` にはNode 24 LTSの最新patchを記載しています。CIもこのファイルを直接読みます。これはpackageがprivateな間のrepository tooling向けguardであり、公開runtimeの互換性を示すものではありません。公開前には配布packageのNode.js下限を別途検証し、test/build toolの厳しい要件を誤って引き継がないようにします。
+workspaceの開発にはNode.js 24.19.0、pnpm 11、React 19以降を使用します。privateなroot manifestはNode.js `^24.19.0` を許可し、`package.json`の`devEngines.runtime`にNode 24 LTSの最新patchを固定しています。CIおよびローカルのinstallも`pnpm/setup`経由でこの設定を直接読みます。これはpackageがprivateな間のrepository tooling向けguardであり、公開runtimeの互換性を示すものではありません。公開前には配布packageのNode.js下限を別途検証し、test/build toolの厳しい要件を誤って引き継がないようにします。
 
 ```sh
 pnpm install --frozen-lockfile

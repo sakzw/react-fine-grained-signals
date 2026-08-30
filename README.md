@@ -24,7 +24,7 @@ pnpm size
 
 ## Development
 
-Workspace development uses Node.js 24.19.0, pnpm 11, and React 19 or newer. The private root manifest accepts Node.js `^24.19.0`; `.node-version` is the current Node 24 LTS patch and CI reads that file directly. This is a repository-tooling guard while the package is private, not a public runtime compatibility claim. Before publication, the distributed package's Node.js runtime floor must be tested separately and must not inherit the stricter test/build-tool requirement by accident.
+Workspace development uses Node.js 24.19.0, pnpm 11, and React 19 or newer. The private root manifest accepts Node.js `^24.19.0`; `package.json`'s `devEngines.runtime` pins the exact Node 24 LTS patch, which CI and local installs read directly via `pnpm/setup`. This is a repository-tooling guard while the package is private, not a public runtime compatibility claim. Before publication, the distributed package's Node.js runtime floor must be tested separately and must not inherit the stricter test/build-tool requirement by accident.
 
 ```sh
 pnpm install --frozen-lockfile
