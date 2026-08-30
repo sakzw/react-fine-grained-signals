@@ -38,6 +38,16 @@ jobs:
       # CI), before the e2e run below (whose webServer builds/starts, not
       # installs), so a type error in the example fails fast instead of only
       # surfacing as a build failure.
-      - run: pnpm --dir examples/react-router install --frozen-lockfile
+      - run: pnpm run prepare:e2e
       - run: pnpm --dir examples/react-router run typecheck
       - run: pnpm test:browser
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: warn
+          retention-days: 14
