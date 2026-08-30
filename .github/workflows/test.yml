@@ -19,7 +19,6 @@ jobs:
       - uses: pnpm/setup@v2
         with:
           cache: true
-          require-lockfile: true
       - run: pnpm lint
       - run: pnpm typecheck
       # Runs both suites with V8 coverage instrumentation and prints the

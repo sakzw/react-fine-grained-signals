@@ -25,7 +25,6 @@ jobs:
       - uses: pnpm/setup@v2
         with:
           cache: true
-          require-lockfile: true
       # examples/react-router's vite.config.ts imports the plugin's built
       # dist/vite.js directly (see that file), so it must exist before
       # anything loads that config -- both the typecheck below and the e2e
