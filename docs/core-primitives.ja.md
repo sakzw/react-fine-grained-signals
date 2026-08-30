@@ -25,6 +25,12 @@ dispose();
 
 `computed` のgetterが例外を投げても、再評価の引き金になった書き込みはそのまま正常に完了します。エラーはキャッシュされ、そのcomputedを次に読み取ったときの `.value` と `.peek()` から再度投げ直されるため、Reactの描画中に `useSignalValue` / `useSignals()` がそのcomputedを読み取った場合はError Boundaryまで届きます。getterが失敗する前に読んでいた依存が原因の値であれば、その後の書き込みで次回読み取り時に正しく再評価され、getterが成功する入力に戻ればcomputedは復帰します。一方、getterが例外を投げるより前に到達できず読まれなかった依存は追跡されないため、その依存だけへの書き込みはそれ単独では再評価を引き起こしません。
 
+`effect()` のコールバック（本体、またはそれが返したクリーンアップ関数）が例外を投げても、その実行の引き金になった書き込みにエラーは伝播しません。この封じ込めは体裁の問題ではなく必須です。`alien-signals` はeffectが例外を投げるとeffect queueの残りを実行せずに破棄するため、エラーがそのまま抜けると同じflushでキューに並んでいた他のeffectがすべて黙って取り消され、さらにその書き込みを行ったevent handlerまで例外が飛び出してしまいます。実際にはスキップされるのは失敗したeffectだけで、同じflush内の他のeffectは実行され、失敗したeffect自身も以降の書き込みに反応し続けます。クリーンアップが投げた例外も同じように封じ込められ、そのeffectの本体が次に再実行されるのを妨げません。
+
+エラーは握り潰されず、必ず報告されます。`console.error` に `"react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish."` というメッセージが `{ cause: error }` 付きで記録されます。ホストが [`reportError()`](https://developer.mozilla.org/ja/docs/Web/API/Window/reportError) を実装している環境（ブラウザ、Web Worker、Deno、Bun）では、さらに元のエラーがそこへ渡されて `error` イベントとしてdispatchされるため、`window.onerror` や `addEventListener("error")` のハンドラ、テレメトリSDKからは未捕捉エラーとまったく同じように観測できます（実際に未捕捉の例外が発生するわけではありません）。Nodeにはサポート対象のどのバージョンにも `reportError` グローバルが存在しないため、そちらでは `console.error` が報告手段となります。
+
+この封じ込めが対象とするのは、effectの本体やクリーンアップから投げられる*同期的な*例外です。そうした例外が `uncaughtException` を発生させることはないため、それ単独でNodeのサーバーやスクリプト、テストのプロセスを終了させることはありません。一方、`async` なeffect本体は対象外で、rejectされたPromiseはunhandled rejectionとして表面化し、Nodeでは既定で致命的なままです。そのため `await` する処理には独自の `try` / `catch` が必要です。封じ込められた失敗は引き金となった書き込みには届かないので、独自に処理したい場合は実際の失敗箇所、つまりeffectの本体やクリーンアップの内側で対処してください。報告処理自体も完全にガードされています。`console.error` が例外を投げるようにされていても、`reportError` が例外を投げるgetterとして定義されていても、封じ込めたeffectの失敗が再び外へ抜け出すことはありません。
+
 ## ディープシグナル
 
 `deepSignal` はプレーンオブジェクトと配列にプロパティ単位の追跡を追加します。Proxyはアクセス時に遅延生成されてキャッシュされるため、別名参照や循環参照でも同一性が安定して維持されます。

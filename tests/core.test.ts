@@ -421,10 +421,7 @@ describe("computed error propagation", () => {
     // (whose `finally` marks the rest of the queue as skipped rather than
     // running it) and propagated out of the write that triggered it.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const rethrows: Array<() => void> = [];
-    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
-      rethrows.push(callback);
-    });
+    const microtasks = vi.spyOn(globalThis, "queueMicrotask");
 
     const trigger = signal(0);
     const other = signal(0);
@@ -448,13 +445,21 @@ describe("computed error propagation", () => {
     expect(healthySeen).toEqual([0, 1]);
 
     // Reported once, in the codebase's `console.error(message, { cause })`
-    // shape, and rethrown from a microtask so it still reaches a global
-    // handler without being able to corrupt the flush it came from.
+    // shape, carrying the original error — and contained there, not re-raised.
     expect(errorSpy).toHaveBeenCalledTimes(1);
+    // The literal message is pinned because docs/core-primitives.md and its
+    // Japanese counterpart quote it verbatim; editing it here without editing
+    // them would silently make the documented contract stale.
+    expect(errorSpy.mock.calls[0]?.[0]).toBe(
+      "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
+    );
     const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
     expect(reported?.cause).toBeInstanceOf(Error);
-    expect(rethrows).toHaveLength(1);
-    expect(() => rethrows[0]?.()).toThrow("effect boom");
+    expect((reported?.cause as Error | undefined)?.message).toBe("effect boom");
+    // The error is NOT rethrown from a microtask any more: that re-raise was a
+    // browser-shaped assumption, and on Node a throw out of a microtask is an
+    // `uncaughtException` that terminates the process by default.
+    expect(microtasks).not.toHaveBeenCalled();
 
     // The graph keeps working for later, unrelated writes.
     other.value = 2;
@@ -475,10 +480,7 @@ describe("computed error propagation", () => {
     // committed before the flush, so a missed `#renderSubscription.notify()`
     // would park every React-side subscriber on the old value forever.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const rethrows: Array<() => void> = [];
-    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
-      rethrows.push(callback);
-    });
+    const microtasks = vi.spyOn(globalThis, "queueMicrotask");
 
     const source = signal(0);
     const notifications: number[] = [];
@@ -502,13 +504,13 @@ describe("computed error propagation", () => {
     expect(source.value).toBe(1);
 
     // Same treatment as a throwing body: reported once as
-    // `console.error(message, { cause })`, then rethrown from a microtask so a
-    // global handler still sees it, from outside the flush it came from.
+    // `console.error(message, { cause })` carrying the original error, and
+    // contained there rather than re-raised from a microtask.
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
     expect(reported?.cause).toBeInstanceOf(Error);
-    expect(rethrows).toHaveLength(1);
-    expect(() => rethrows[0]?.()).toThrow("cleanup boom");
+    expect((reported?.cause as Error | undefined)?.message).toBe("cleanup boom");
+    expect(microtasks).not.toHaveBeenCalled();
 
     // The React-side notification happened anyway, so a `useSignals()`
     // component subscribed to this signal still re-renders.
@@ -521,10 +523,7 @@ describe("computed error propagation", () => {
     // own body does, so pre-fix its throw aborted `flush()` even earlier than
     // a throwing body would.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const rethrows: Array<() => void> = [];
-    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
-      rethrows.push(callback);
-    });
+    const microtasks = vi.spyOn(globalThis, "queueMicrotask");
 
     const trigger = signal(0);
     const other = signal(0);
@@ -553,8 +552,8 @@ describe("computed error propagation", () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
     expect(reported?.cause).toBeInstanceOf(Error);
-    expect(rethrows).toHaveLength(1);
-    expect(() => rethrows[0]?.()).toThrow("cleanup boom");
+    expect((reported?.cause as Error | undefined)?.message).toBe("cleanup boom");
+    expect(microtasks).not.toHaveBeenCalled();
 
     // The failing effect re-registered a fresh (also throwing) cleanup, and
     // the graph keeps serving later writes.
@@ -571,10 +570,7 @@ describe("computed error propagation", () => {
     // straight back out of the disposer — out of the `useEffect` teardown
     // behind `useSignalEffect`, or out of any caller's own `dispose()`.
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const rethrows: Array<() => void> = [];
-    vi.spyOn(globalThis, "queueMicrotask").mockImplementation((callback) => {
-      rethrows.push(callback);
-    });
+    const microtasks = vi.spyOn(globalThis, "queueMicrotask");
 
     const source = signal(0);
     const runs: number[] = [];
@@ -590,14 +586,251 @@ describe("computed error propagation", () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
     expect(reported?.cause).toBeInstanceOf(Error);
-    expect(rethrows).toHaveLength(1);
-    expect(() => rethrows[0]?.()).toThrow("dispose cleanup boom");
+    expect((reported?.cause as Error | undefined)?.message).toBe("dispose cleanup boom");
+    expect(microtasks).not.toHaveBeenCalled();
 
     // The throw did not leave a half-disposed effect behind: the teardown that
     // ran before the cleanup stands, so later writes never run it again.
     source.value = 1;
     expect(runs).toEqual([0]);
     expect(errorSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it("re-runs the same effect on later writes after its own cleanup threw", () => {
+    // The guarantee 49c1b01 added, stated directly rather than as a side effect
+    // of another assertion: a cleanup exception is reported rather than
+    // silently dropped, and it does not stop the effect it belongs to from
+    // running again. alien-signals invokes the stored cleanup from inside
+    // `run()`, immediately *before* re-running the body, so an unguarded throw
+    // there aborts the flush before the body ever executes — and the effect
+    // never recovers on later writes.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const source = signal(0);
+    const runs: number[] = [];
+    const cleanups: number[] = [];
+
+    disposers.push(effect(() => {
+      const seen = source.value;
+      runs.push(seen);
+      return () => {
+        cleanups.push(seen);
+        throw new Error("cleanup boom");
+      };
+    }));
+    expect(runs).toEqual([0]);
+
+    source.value = 1;
+    // The cleanup ran, threw, and was reported — and the body still re-ran.
+    expect(cleanups).toEqual([0]);
+    expect(runs).toEqual([0, 1]);
+    expect(errorSpy).toHaveBeenCalledTimes(1);
+
+    // Not a one-time recovery: it keeps re-running for every later write.
+    source.value = 2;
+    expect(cleanups).toEqual([0, 1]);
+    expect(runs).toEqual([0, 1, 2]);
+    expect(errorSpy).toHaveBeenCalledTimes(2);
+
+    const reported = errorSpy.mock.calls[1]?.[1] as { cause: unknown } | undefined;
+    expect(reported?.cause).toBeInstanceOf(Error);
+    expect((reported?.cause as Error | undefined)?.message).toBe("cleanup boom");
+  });
+
+  it("reports effect errors without raising an uncaught exception", async () => {
+    // The regression this guards. `reportEffectError` used to re-raise the
+    // error from `queueMicrotask`. In a browser that surfaces on
+    // `window.onerror`; in Node a throw out of a microtask raises
+    // `uncaughtException`, which by default *terminates the process* (verified
+    // on Node 24.19: exit code 1). Every server-side consumer — SSR data
+    // plumbing, a Node script, this very test runner — got an unrecoverable
+    // crash out of an effect body that a plain `try`/`catch` would have
+    // handled, with no way to catch it because the throw had been deferred out
+    // of the write that caused it.
+    //
+    // Nothing here mocks `queueMicrotask` or the timers, so real timing
+    // applies: the test awaits a full macrotask turn, which is more than enough
+    // for a deferred re-raise to land. Vitest fails a run on any uncaught
+    // exception, so this file passing is itself part of the evidence.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const uncaught: unknown[] = [];
+    const onUncaught = (error: unknown) => {
+      uncaught.push(error);
+    };
+    process.on("uncaughtException", onUncaught);
+    process.on("unhandledRejection", onUncaught);
+
+    try {
+      const source = signal(0);
+      // Both reporting paths at once: a throwing body and a throwing cleanup.
+      disposers.push(effect(() => {
+        if (source.value > 0) throw new Error("body boom");
+      }));
+      disposers.push(effect(() => {
+        source.value;
+        return () => {
+          throw new Error("cleanup boom");
+        };
+      }));
+
+      expect(() => {
+        source.value = 1;
+      }).not.toThrow();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      // Both failures were surfaced, never silently swallowed...
+      expect(errorSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+      // ...and neither reached Node's process-terminating error channels.
+      expect(uncaught).toEqual([]);
+    } finally {
+      process.off("uncaughtException", onUncaught);
+      process.off("unhandledRejection", onUncaught);
+    }
+  });
+
+  it("hands the error to a host reportError() when the environment defines one", () => {
+    // Browsers and workers define `reportError`, which *dispatches an error
+    // event* instead of throwing: `window.onerror`, an `error` listener, or a
+    // telemetry SDK still sees the failure, and execution continues either way.
+    // Node defines no such global at any version this package supports, so the
+    // implementation feature-detects rather than sniffing the runtime, and this
+    // test stubs the global to exercise the browser branch under Node.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+
+    try {
+      const source = signal(0);
+      disposers.push(effect(() => {
+        if (source.value > 0) throw new Error("body boom");
+      }));
+
+      expect(() => {
+        source.value = 1;
+      }).not.toThrow();
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      // The original error, not the `{ cause }` wrapper: a global handler needs
+      // the real value and its stack.
+      expect(reportError).toHaveBeenCalledTimes(1);
+      const forwarded = reportError.mock.calls[0]?.[0];
+      expect(forwarded).toBeInstanceOf(Error);
+      expect((forwarded as Error).message).toBe("body boom");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("still contains the failure when the host console.error itself throws", () => {
+    // A real pattern, not a contrived one: React test setups routinely install a
+    // throwing `console.error` to make warnings fatal. The reporter must survive
+    // it — an escape from inside `reportEffectError` would propagate out of the
+    // write *and* cancel the rest of the flush queue, which is the exact failure
+    // the function exists to prevent.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {
+      throw new Error("console boom");
+    });
+    const reportError = vi.fn();
+    vi.stubGlobal("reportError", reportError);
+
+    try {
+      const trigger = signal(0);
+      const other = signal(0);
+      const healthySeen: number[] = [];
+
+      disposers.push(effect(() => {
+        if (trigger.value === 1) throw new Error("body boom");
+      }));
+      disposers.push(effect(() => {
+        healthySeen.push(other.value);
+      }));
+
+      expect(() => {
+        batch(() => {
+          trigger.value = 1;
+          other.value = 1;
+        });
+      }).not.toThrow();
+      // The effect queued behind the failing one still ran in that flush.
+      expect(healthySeen).toEqual([0, 1]);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      // The two reporting hooks are guarded separately, so a broken console
+      // still leaves `reportError` to surface the original error.
+      expect(reportError).toHaveBeenCalledTimes(1);
+      expect((reportError.mock.calls[0]?.[0] as Error | undefined)?.message).toBe("body boom");
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("still contains the failure when reportError is a throwing getter", () => {
+    // The property *access* is guarded too, not just the call: a host that
+    // defines `reportError` as a throwing accessor would otherwise escape at the
+    // feature check, before the call site's guard could ever apply.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    Object.defineProperty(globalThis, "reportError", {
+      configurable: true,
+      get() {
+        throw new Error("getter boom");
+      },
+    });
+
+    try {
+      const trigger = signal(0);
+      const other = signal(0);
+      const healthySeen: number[] = [];
+
+      disposers.push(effect(() => {
+        if (trigger.value === 1) throw new Error("body boom");
+      }));
+      disposers.push(effect(() => {
+        healthySeen.push(other.value);
+      }));
+
+      expect(() => {
+        batch(() => {
+          trigger.value = 1;
+          other.value = 1;
+        });
+      }).not.toThrow();
+      expect(healthySeen).toEqual([0, 1]);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      delete (globalThis as { reportError?: unknown }).reportError;
+    }
+  });
+
+  it("still contains the failure when a host reportError() itself throws", () => {
+    // A broken host reporter must not turn a contained effect failure back into
+    // an escaping one that corrupts the flush.
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("reportError", () => {
+      throw new Error("reporter boom");
+    });
+
+    try {
+      const trigger = signal(0);
+      const other = signal(0);
+      const healthySeen: number[] = [];
+
+      disposers.push(effect(() => {
+        if (trigger.value === 1) throw new Error("body boom");
+      }));
+      disposers.push(effect(() => {
+        healthySeen.push(other.value);
+      }));
+
+      expect(() => {
+        batch(() => {
+          trigger.value = 1;
+          other.value = 1;
+        });
+      }).not.toThrow();
+      // The effect queued behind the failing one still ran in that flush.
+      expect(healthySeen).toEqual([0, 1]);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 
   it("keeps one throwing render listener from cancelling the others", () => {

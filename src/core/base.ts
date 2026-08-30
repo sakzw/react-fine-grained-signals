@@ -259,20 +259,69 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
  * then propagates out of whatever write triggered the flush (an event handler,
  * anywhere). Catching here keeps the failure local to this one effect.
  *
- * The error is logged with `console.error(message, { cause })`, matching
- * `readBoundSignal` in src/runtime/jsx.ts (assert against
- * `mock.calls[i][1].cause` in tests), and then rethrown from a microtask so it
- * still reaches `window.onerror` / an unhandled-rejection handler rather than
- * vanishing — but from outside the flush, where it can no longer corrupt it.
+ * The policy is *report, never re-raise*, matching the two other reporters in
+ * this codebase (`readBoundSignal` in src/runtime/jsx.ts and `notifyListener`
+ * in src/core/render-tracking.ts):
+ *
+ * 1. Always `console.error(message, { cause })` — the package-wide reporting
+ *    shape; assert against `mock.calls[i][1].cause` in tests.
+ * 2. Then hand the error to `reportError()` when the host defines it, so
+ *    `window.onerror` / `addEventListener("error")` / a telemetry SDK still see
+ *    the failure. `reportError` *dispatches an error event* rather than
+ *    throwing, so it reports exactly like an uncaught error while remaining
+ *    non-fatal by construction.
+ *
+ * Both hooks are host-controlled, so **everything in this function runs inside a
+ * `try`/`catch`, property lookups included**. A host can legitimately make
+ * `console.error` throw (some React test setups install a throwing one to make
+ * warnings fatal) or expose `reportError` as a throwing getter; either would
+ * otherwise re-raise out of the reporter itself and cancel the rest of the
+ * flush — precisely the failure this function exists to prevent. The two steps
+ * get separate guards rather than one shared one, so a broken `console.error`
+ * still leaves the `reportError` channel to surface the error, and vice versa.
+ *
+ * What this deliberately no longer does is `queueMicrotask(() => { throw })`.
+ * That reads like a browser-only "let it reach `window.onerror`" trick, but a
+ * throw out of a microtask is not a recoverable event outside a browser: in
+ * Node it raises `uncaughtException`, which by default **terminates the
+ * process** (verified on Node 24.19: exit code 1). Every server-side consumer —
+ * SSR data plumbing, a Node script, a test harness — got an unrecoverable crash
+ * from an effect body that a plain `try`/`catch` would have handled, and
+ * because the throw was deferred out of the write, nothing could catch it
+ * anywhere. `reportError` is not a fallback for that on Node: it is the WHATWG
+ * reporting API, implemented by browsers, Web Workers, Deno, and Bun, but not
+ * defined by Node at any version this package supports (absent on Node 24 LTS,
+ * still not listed in the Node 26 globals docs). The feature check below is
+ * therefore the whole story — where it fails, step 1 is the report.
+ *
+ * The failure therefore never propagates to the write that triggered it, and
+ * that containment covers *synchronous* throws from the body and the cleanup.
+ * An `async` effect body that rejects is a different channel this cannot reach
+ * (an unhandled rejection, still fatal by default on Node), so `await`ed work
+ * needs its own `try`/`catch`. Either way, code that wants to handle its own
+ * failure should do so at the real failure site — inside the effect body or
+ * cleanup — which is always possible and is where the `try`/`catch` belongs.
  */
 function reportEffectError(error: unknown): void {
-  console.error(
-    "react-fine-grained-signals: an effect() callback threw; the error is rethrown asynchronously so this flush can finish.",
-    { cause: error },
-  );
-  queueMicrotask(() => {
-    throw error;
-  });
+  try {
+    console.error(
+      "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
+      { cause: error },
+    );
+  } catch {
+    // A host that made `console.error` itself throw does not get to turn a
+    // contained effect failure back into one that escapes and kills the flush.
+  }
+  try {
+    // Looked up per call, not captured at module load, so a host (or a test)
+    // that installs its own `reportError` later is still honored — and read
+    // inside the guard, because the property itself can be a throwing getter.
+    const report = (globalThis as { reportError?: (error: unknown) => void }).reportError;
+    if (typeof report === "function") report.call(globalThis, error);
+  } catch {
+    // Same rule for the second hook: a host whose `reportError` throws must not
+    // break containment either. The error already went to the console above.
+  }
 }
 
 /**
