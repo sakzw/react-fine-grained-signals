@@ -8,8 +8,8 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "html", "lcov"],
       include: ["src/**"],
-      // Measured baseline (2026-08-30): statements 94.97%, branches 93.22%,
-      // functions 95.23%, lines 97.25%. Thresholds sit a modest margin below
+      // Measured baseline (2026-08-30): statements 93.66%, branches 91.38%,
+      // functions 97.89%, lines 98.20%. Thresholds sit a modest margin below
       // that so CI catches real regressions without flaking on minor diffs.
       thresholds: {
         statements: 92,

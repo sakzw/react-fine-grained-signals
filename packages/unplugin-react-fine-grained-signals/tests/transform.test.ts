@@ -368,6 +368,102 @@ describe("managed render transform", () => {
     expect(output.match(/finally/g)).toHaveLength(2);
   });
 
+  describe("value reads that are not signal reads", () => {
+    // Every one of these components uses no signal at all. Counting their
+    // `.value` member accesses as evidence would opt an ordinary form or event
+    // component out of React Compiler memoization and wrap its render in a
+    // try/finally boundary it has no use for.
+    it.each([
+      [
+        "e.target.value in an inline change handler",
+        `export function Form({ setV }) {
+          return <input onChange={(e) => setV(e.target.value)} />;
+        }`,
+      ],
+      [
+        "e.target.value in a handler factored into a binding",
+        `export function Form({ setV }) {
+          const onChange = (e) => setV(e.target.value);
+          return <input onChange={onChange} />;
+        }`,
+      ],
+      [
+        "e.currentTarget.value",
+        `export function Form({ setV }) {
+          return <input onInput={(e) => setV(e.currentTarget.value)} />;
+        }`,
+      ],
+      [
+        "ref.current.value",
+        `export function Field({ ref, submit }) {
+          const read = () => submit(ref.current.value);
+          return <input ref={ref} onBlur={read} />;
+        }`,
+      ],
+      [
+        "a read confined to a useEffect callback",
+        `export function Panel({ store, useEffect }) {
+          useEffect(() => { console.log(store.value); }, [store]);
+          return <p>panel</p>;
+        }`,
+      ],
+      [
+        "a read confined to a React.useLayoutEffect callback",
+        `export function Panel({ store }) {
+          React.useLayoutEffect(() => { console.log(store.value); }, [store]);
+          return <p>panel</p>;
+        }`,
+      ],
+      [
+        "a read confined to a useCallback callback",
+        `export function Panel({ store, useCallback }) {
+          const read = useCallback(() => store.value, [store]);
+          return <p onClick={read}>panel</p>;
+        }`,
+      ],
+      [
+        "a read confined to an async callback",
+        `export function Panel({ store, load }) {
+          const run = async () => { await load(store.value); };
+          return <p>{String(run)}</p>;
+        }`,
+      ],
+    ])("leaves a component whose only .value read is %s untransformed", (_label, source) => {
+      const output = compile(source, "auto");
+
+      expect(output).not.toContain("react-fine-grained-signals/runtime");
+      expect(output).not.toContain("finally");
+      expect(output).not.toContain("use no memo");
+    });
+
+    it("still tracks a genuine signal read alongside an event handler", () => {
+      // The exclusions must stay narrow: a component that reads a signal in its
+      // own body keeps its boundary even when it also reads `e.target.value`.
+      const output = compile(`
+        const count = { value: 1 };
+        export function Form({ setV }) {
+          return <input value={count.value} onChange={(e) => setV(e.target.value)} />;
+        }
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/function Form\(\{[^}]*\}\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    });
+
+    it("keeps a receiver that could genuinely be a signal", () => {
+      // Only `target`/`currentTarget`/`current` receivers are ruled out; an
+      // element of an array or a nested prop still counts, or a real signal
+      // reached through one would silently lose its subscription.
+      const output = compile(`
+        const items = [{ value: 1 }];
+        export function First() { return <p>{items[0].value}</p>; }
+        export function Nested({ props }) { return <p>{props.count.value}</p>; }
+      `, "auto");
+
+      expect(output.match(/finally/g)).toHaveLength(2);
+    });
+  });
+
   it("all mode wraps named JSX components without a statically visible signal read", () => {
     const output = compile(`
       export function App() { return <main />; }
@@ -721,6 +817,72 @@ describe("managed render transform", () => {
     expect(output).toMatch(/const Ref = \(props, ref\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
+  it.each(["auto", "all"] as const)(
+    "%s mode leaves memo's areEqual comparator alone",
+    (mode) => {
+      // React calls `areEqual` during reconciliation, outside any component's
+      // render, so a hook injected into it throws "Invalid hook call" on the
+      // first re-render. Only argument 0 of memo() is the component.
+      const output = compile(`
+        import { memo } from "react";
+        const count = { value: 1 };
+        const Row = (props) => <li>{count.value}</li>;
+        export const MemoRow = memo(Row, (a, b) => a.id === b.id);
+      `, mode);
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/const Row = props => \{\s+(?:"use no memo";\s+)?const _signals/);
+      expect(output).toContain("memo(Row, (a, b) => a.id === b.id)");
+    },
+  );
+
+  it("leaves memo's comparator alone even under an explicit annotation", () => {
+    // The annotation names the wrapped component, and the comparator must not
+    // inherit that identity by sitting in the same call.
+    const output = compile(`
+      import { memo } from "react";
+      /** @useSignals */
+      export const MemoRow = memo((props) => <li />, (a, b) => a.id === b.id);
+    `);
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain("(a, b) => a.id === b.id");
+  });
+
+  it.each(["auto", "all"] as const)(
+    "%s mode tracks a component called directly inside a render callback",
+    (mode) => {
+      // `items.map((i) => Row(i))` calls Row as a plain function once per item
+      // inside List's single render: React never mounts it, so hooks injected
+      // into it would run in a loop and crash with "Rendered more hooks than
+      // during the previous render". List owns the read instead.
+      const output = compile(`
+        const items = [{ value: 1 }];
+        function Row(item) { return <li>{item.value}</li>; }
+        export function List() { return <ul>{items.map((i) => Row(i))}</ul>; }
+      `, mode);
+
+      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
+      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    },
+  );
+
+  it("keeps a component called from an event handler inside a render callback eligible", () => {
+    // The call sits in an onClick handler, not in the render callback's own
+    // body, so it is not a per-item render call and Row keeps its own boundary.
+    const output = compile(`
+      const count = { value: 1 };
+      const items = [1];
+      const Row = (item) => <li>{count.value}</li>;
+      export function List() {
+        return <ul>{items.map((i) => <button onClick={() => Row(i)} />)}</ul>;
+      }
+    `, "auto");
+
+    expect(output).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
   it("documents the JSX render-prop limitation and the inline workaround", () => {
     // A bare identifier in a JSX attribute is syntactically identical whether
     // the receiver instantiates it as a component or calls it per item, so a
@@ -925,6 +1087,182 @@ describe("managed render transform", () => {
 
       expect(warn).not.toHaveBeenCalled();
     });
+
+    it("verifies a useSignals imported from the /runtime entry point", () => {
+      // `<importSource>/runtime` is a first-party entry point this plugin emits
+      // itself, so a bare call imported from it is a verified opt-in. Rejecting
+      // it produced a warning telling the author to import from exactly where
+      // they already had, and left the file untransformed.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const output = compile(`
+        import { useSignals } from "react-fine-grained-signals/runtime";
+        const count = { value: 1 };
+        export function App() { useSignals(); return <p>{count.value}</p>; }
+      `);
+
+      expect(warn).not.toHaveBeenCalled();
+      expect(output.match(/finally/g)).toHaveLength(1);
+      // The author's own import is reused rather than a second one added.
+      expect(output).toContain("const _signals = useSignals();");
+      expect(output).not.toContain("_useSignals");
+    });
+
+    it("verifies a namespaced useSignals call from the /runtime entry point", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const output = compile(`
+        import * as runtime from "react-fine-grained-signals/runtime";
+        const count = { value: 1 };
+        export function App() { runtime.useSignals(); return <p>{count.value}</p>; }
+      `);
+
+      expect(warn).not.toHaveBeenCalled();
+      expect(output.match(/finally/g)).toHaveLength(1);
+    });
+
+    it("warns when an annotation lands on a function it cannot name", () => {
+      // An anonymous function returned straight out of a HOC has no component
+      // identity to attach a boundary to, so the annotation is dropped. That
+      // used to happen silently.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      const output = compile(`
+        const count = { value: 1 };
+        export function withCount(Base) {
+          /** @useSignals */
+          return (props) => <Base {...props} count={count.value} />;
+        }
+      `);
+
+      expect(output).not.toContain("finally");
+      expect(warn).toHaveBeenCalledTimes(1);
+      expect(warn.mock.calls[0]?.[0]).toContain("@useSignals annotation is ignored");
+    });
+
+    it("does not warn about an annotation an enclosing component already owns", () => {
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      compile(`
+        /** @useSignals */
+        export function App() {
+          const items = [1];
+          return <ul>{items.map(() => <li />)}</ul>;
+        }
+      `);
+
+      expect(warn).not.toHaveBeenCalled();
+    });
+
+    it("does not warn about an annotation on a named-but-lowercase function", () => {
+      // `callback` has an identity; it is simply not a component or a hook, and
+      // that is a deliberate, already-documented no-op rather than a mistake.
+      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+      compile(`
+        const count = { value: 1 };
+        /** @useSignals */
+        export function callback() { return count.value; }
+      `);
+
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
+  it("drops the import left dead by absorbing an explicit useSignals call", () => {
+    // The managed boundary replaces the author's call with its own store
+    // declaration, so the non-runtime entry point it came from is no longer
+    // referenced and must not stay in the bundle graph.
+    const output = compile(`
+      import { useSignals } from "react-fine-grained-signals";
+      const count = { value: 1 };
+      export function App() { useSignals(); return <p>{count.value}</p>; }
+    `);
+
+    expect(output).toContain('from "react-fine-grained-signals/runtime"');
+    expect(output).not.toContain('from "react-fine-grained-signals"');
+    expect(output.match(/finally/g)).toHaveLength(1);
+  });
+
+  it("keeps an absorbed import that something else still uses", () => {
+    const output = compile(`
+      import { useSignals } from "react-fine-grained-signals";
+      const count = { value: 1 };
+      export const escaped = useSignals;
+      export function App() { useSignals(); return <p>{count.value}</p>; }
+    `);
+
+    expect(output).toContain('from "react-fine-grained-signals"');
+    expect(output).toContain("export const escaped = useSignals;");
+  });
+
+  it("keeps other specifiers of a partially absorbed import declaration", () => {
+    const output = compile(`
+      import { signal, useSignals } from "react-fine-grained-signals";
+      const count = signal(1);
+      export function App() { useSignals(); return <p>{count.value}</p>; }
+    `);
+
+    expect(output).toContain('import { signal } from "react-fine-grained-signals"');
+    expect(output).not.toContain("signal, useSignals");
+  });
+
+  it("parses class auto-accessors rather than failing the build", () => {
+    const options = {
+      importSource: "react-fine-grained-signals",
+      mode: "auto" as const,
+      transform: "managed" as const,
+      reactCompiler: "auto" as const,
+      reactImportSource: "react",
+    };
+    const source = "const count = { value: 1 }; class Store { @dec accessor x = 1; }";
+
+    expect(() => transformReactFineGrainedSignals(source, "fixture.ts", options)).not.toThrow();
+    expect(() => transformReactFineGrainedSignals(source, "fixture.tsx", options)).not.toThrow();
+    expect(() => transformReactFineGrainedSignals(source, "fixture.jsx", options)).not.toThrow();
+  });
+
+  it("names the source map's original file without a bundler query string", () => {
+    const result = transformReactFineGrainedSignals(
+      "const count = { value: 1 }; export const App = () => <p>{count.value}</p>;",
+      "/project/src/App.tsx?t=1730000000",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "auto",
+        reactImportSource: "react",
+      },
+    );
+
+    expect(result?.map).toBeTruthy();
+    expect((result?.map as { sources: string[] } | undefined)?.sources)
+      .toEqual(["/project/src/App.tsx"]);
+  });
+
+  it("skips the parse entirely for files nothing can apply to", () => {
+    const options = {
+      importSource: "react-fine-grained-signals",
+      transform: "managed" as const,
+      reactCompiler: "auto" as const,
+      reactImportSource: "react",
+    };
+    // Syntax the configured parser cannot handle at all: reaching the parser
+    // would throw, so returning null proves the raw-text screen ran first.
+    const unparsable = "const a = 1 +* 2;";
+
+    expect(
+      transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "manual" }),
+    ).toBeNull();
+    expect(
+      transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "auto" }),
+    ).toBeNull();
+    expect(
+      transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "all" }),
+    ).toBeNull();
+    // A file the screen lets through still parses and transforms as before.
+    expect(
+      transformReactFineGrainedSignals(
+        "const count = { value: 1 }; export const App = () => <p>{count.value}</p>;",
+        "fixture.tsx",
+        { ...options, mode: "auto" },
+      )?.code,
+    ).toContain("finally");
   });
 
   it.each(["inject", "managed"] as const)("keeps the %s transform idempotent", (transform) => {

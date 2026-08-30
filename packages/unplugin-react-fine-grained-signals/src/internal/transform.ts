@@ -44,6 +44,14 @@ interface PluginState extends PluginPass {
   programPath: NodePath<t.Program>;
   managedRuntimeImports: RuntimeImport[];
   directImports: RuntimeImport[];
+  /**
+   * Import specifiers whose only use was an explicit `useSignals()` call the
+   * managed transform absorbed into its own store declaration. They are
+   * re-checked in `Program.exit` and dropped if nothing else references them,
+   * so absorbing the call does not leave a dead import pulling the non-runtime
+   * entry point into the bundle graph.
+   */
+  absorbedImports: NodePath<t.ImportSpecifier>[];
 }
 
 interface FunctionInspection {
@@ -268,6 +276,16 @@ function isCustomHook(
   return name !== undefined && /^use[A-Z]/.test(name);
 }
 
+// The library exports `useSignals` from two first-party entry points: the
+// package root (the bare, best-effort hook) and its `/runtime` subpath (the
+// managed boundary this transform itself emits). Both are unambiguously this
+// library's own export, so an import from either is verified. Accepting only
+// the root would reject `/runtime` and then tell the author, in the barrel
+// warning below, to import from exactly where they already imported.
+function isVerifiedUseSignalsSource(source: string, importSource: string): boolean {
+  return source === importSource || source === `${importSource}/runtime`;
+}
+
 function isNamedUseSignalsImport(
   functionPath: NodePath<t.Function>,
   name: string,
@@ -277,7 +295,7 @@ function isNamedUseSignalsImport(
   if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return false;
   return (
     t.isIdentifier(resolved.specifier.node.imported, { name: "useSignals" }) &&
-    (importSource === undefined || resolved.source === importSource)
+    (importSource === undefined || isVerifiedUseSignalsSource(resolved.source, importSource))
   );
 }
 
@@ -290,7 +308,7 @@ function isNamespaceUseSignalsImport(
   return (
     resolved !== undefined &&
     resolved.specifier.isImportNamespaceSpecifier() &&
-    (importSource === undefined || resolved.source === importSource)
+    (importSource === undefined || isVerifiedUseSignalsSource(resolved.source, importSource))
   );
 }
 
@@ -421,6 +439,14 @@ function unwrapTransparentPath(path: NodePath): NodePath {
  * `(memo((props) => <p />)) as Fn` puts it outside -- so one loop alternates
  * between them rather than two separate passes, which would each stop at the
  * first wrapper of the other kind.
+ *
+ * Only argument 0 -- the component itself -- may climb. `memo`'s second
+ * argument is an `areEqual` comparator that React calls during reconciliation,
+ * outside any component's render: letting it inherit the wrapper's binding name
+ * would classify `memo(Row, (a, b) => a.id === b.id)`'s comparator as the
+ * component `MemoRow`, inject a full hook boundary into it, and throw
+ * "Invalid hook call" on the first re-render. `forwardRef` takes only one
+ * argument, so the same rule costs it nothing.
  */
 function climbComponentWrappers(path: NodePath, reactImportSource: string): NodePath {
   let current = climbTransparentWrappers(path);
@@ -428,6 +454,7 @@ function climbComponentWrappers(path: NodePath, reactImportSource: string): Node
     let parent = current.parentPath;
     parent !== null &&
     parent.isCallExpression() &&
+    parent.node.arguments[0] === current.node &&
     isKnownComponentWrapper(parent, reactImportSource);
     parent = current.parentPath
   ) {
@@ -536,7 +563,16 @@ function getOwnBindingName(path: NodePath<t.Function>): string | undefined {
 // Both branches ask about the argument slot rather than the bare node, because
 // a transparent TypeScript wrapper -- `items.map(Row!)`, or an inline
 // `items.map(((item) => <li />) as Fn)` -- stands between the two.
-function isRenderCallback(path: NodePath<t.Function>): boolean {
+//
+// `visited` guards the mutual recursion with `isCalledFromRenderCallback`
+// below against a reference cycle between two functions that call each other.
+function isRenderCallback(
+  path: NodePath<t.Function>,
+  visited: Set<t.Node> = new Set(),
+): boolean {
+  if (visited.has(path.node)) return false;
+  visited.add(path.node);
+
   const argument = climbTransparentWrappers(path);
   const enclosing = argument.parentPath;
   if (enclosing !== null && isRenderCallbackInvocation(enclosing.node, argument.node)) return true;
@@ -553,10 +589,31 @@ function isRenderCallback(path: NodePath<t.Function>): boolean {
   if (binding.path.node !== path.node && binding.path.node !== enclosing.node) return false;
   return binding.referencePaths.some((reference) => {
     const slot = climbTransparentWrappers(reference);
-    return (
-      slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)
-    );
+    if (slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)) {
+      return true;
+    }
+    return isCalledFromRenderCallback(slot, visited);
   });
+}
+
+/**
+ * Is `slot` the callee of a call that happens inside a render callback --
+ * `items.map((item) => Row(item))` rather than `items.map(Row)`?
+ *
+ * Both forms run `Row` once per item inside the owner's single render pass, so
+ * both must keep `Row` off a boundary of its own: `Row` called as a plain
+ * function is never mounted as a fiber, so three hooks injected into it would
+ * run in a loop and crash with "Rendered more hooks than during the previous
+ * render" the moment the array length changes. The by-reference form is caught
+ * by `isRenderCallbackInvocation`; this is the direct-call twin of it.
+ */
+function isCalledFromRenderCallback(slot: NodePath, visited: Set<t.Node>): boolean {
+  const call = slot.parentPath;
+  if (call === null) return false;
+  const parts = getCallParts(call.node);
+  if (parts === undefined || parts.callee !== slot.node) return false;
+  const owner = call.getFunctionParent();
+  return owner !== null && isRenderCallback(owner, visited);
 }
 
 /** The function `name`, referenced from `origin`'s scope, is bound to. */
@@ -635,6 +692,106 @@ function isNestedTrackingBoundary(
   );
 }
 
+// React hooks whose callback argument is deliberately *not* part of the read
+// set of the render that declares it: an effect body runs after the commit, and
+// `useCallback`/`useMemo` hand back a value reused across renders rather than
+// re-evaluated on each one. Making reads in effects, event handlers and
+// asynchronous callbacks into render dependencies is an explicit non-goal of
+// the boundary design (docs/design/use-signals-boundary-design.md), so a
+// `.value` read confined to one of these is no evidence that the surrounding
+// component subscribes to anything.
+const deferredCallbackHooks = new Set([
+  "useEffect",
+  "useLayoutEffect",
+  "useInsertionEffect",
+  "useCallback",
+  "useMemo",
+]);
+
+/** The property name a member expression reads, for the forms this file tracks. */
+function getReadPropertyName(
+  node: t.MemberExpression | t.OptionalMemberExpression,
+): string | undefined {
+  if (!node.computed) {
+    return t.isIdentifier(node.property) ? node.property.name : undefined;
+  }
+  const property = unwrapTransparent(node.property);
+  return t.isStringLiteral(property) ? property.value : undefined;
+}
+
+// `e.target.value`, `e.currentTarget.value` and `ref.current.value` are the DOM
+// and React idioms that collide with a signal's `.value` accessor. None of them
+// can be a signal: `target`/`currentTarget` are an event's element fields and
+// `current` is a ref's mutable slot, so a `.value` hanging off one of them is
+// never evidence of a signal read -- unlike `items[0].value` or `props.n.value`,
+// where the receiver genuinely could be a signal and so still counts.
+const nonSignalValueReceivers = new Set(["target", "currentTarget", "current"]);
+
+function isNonSignalValueReceiver(object: t.Node): boolean {
+  const receiver = unwrapTransparent(object);
+  if (!t.isMemberExpression(receiver) && !t.isOptionalMemberExpression(receiver)) return false;
+  const name = getReadPropertyName(receiver);
+  return name !== undefined && nonSignalValueReceivers.has(name);
+}
+
+/**
+ * Is `path` the value of a JSX event-handler attribute -- `onClick={() => ...}`,
+ * `onChange={(e) => ...}`?
+ *
+ * The `on[A-Z]` naming convention is what separates the two kinds of function
+ * a JSX attribute can carry. A handler runs from the event loop, long after the
+ * render that created it, so `e.target.value` inside one is not a render read.
+ * A render prop (`renderItem={(item) => ...}`) is invoked by the receiver
+ * during the very same render and stays deliberately included -- it is the
+ * documented workaround for the render-prop limitation, and excluding it would
+ * leave a component that only reads through one with no subscription at all.
+ */
+function isJsxEventHandlerValue(path: NodePath): boolean {
+  const container = climbTransparentWrappers(path).parentPath;
+  if (container === null || !container.isJSXExpressionContainer()) return false;
+  const attribute = container.parentPath;
+  if (attribute === null || !attribute.isJSXAttribute()) return false;
+  const name = attribute.node.name;
+  return t.isJSXIdentifier(name) && /^on[A-Z]/.test(name.name);
+}
+
+/** Is `path` the callback argument of `useEffect`/`useMemo`/one of their kin? */
+function isDeferredCallbackArgument(path: NodePath): boolean {
+  const slot = climbTransparentWrappers(path);
+  const call = slot.parentPath;
+  if (call === null) return false;
+  const parts = getCallParts(call.node);
+  // All of these hooks take the callback first; a dependency array parked in
+  // any later position is not a callback at all.
+  if (parts === undefined || parts.arguments[0] !== slot.node) return false;
+  const callee = unwrapTransparent(parts.callee);
+  if (t.isIdentifier(callee)) return deferredCallbackHooks.has(callee.name);
+  // `React.useEffect(...)` / `React["useEffect"](...)` reach the same hook.
+  if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return false;
+  const property = getReadPropertyName(callee);
+  return property !== undefined && deferredCallbackHooks.has(property);
+}
+
+/**
+ * Does a read at `path` sit inside a nested function that `functionPath`'s
+ * render never runs -- an event handler, a deferred hook callback, or an async
+ * body? Only the functions between the read and `functionPath` are examined:
+ * the enclosing component is already known to be synchronous by the time any of
+ * this matters, and anything further out owns its own inspection.
+ */
+function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function>): boolean {
+  for (
+    let current = path.getFunctionParent();
+    current !== null && current.node !== functionPath.node;
+    current = current.getFunctionParent()
+  ) {
+    if (current.node.async) return true;
+    if (isJsxEventHandlerValue(current)) return true;
+    if (isDeferredCallbackArgument(current)) return true;
+  }
+  return false;
+}
+
 function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
@@ -676,6 +833,38 @@ function inspectFunction(
     }
   };
 
+  // The direct-call twin of the fold above: `items.map((item) => Row(item))`
+  // runs `Row` inside this render without React ever mounting it, so `Row` is
+  // kept off a boundary of its own (see `isCalledFromRenderCallback`) and its
+  // reads have to reach the component that actually runs them.
+  const foldDirectlyCalledRenderCallbacks = (
+    call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
+  ): void => {
+    const callee = unwrapTransparent(call.node.callee);
+    // Only a component- or hook-shaped callee can ever have been a transform
+    // candidate, so anything else is not worth a scope walk to resolve.
+    if (!t.isIdentifier(callee) || !/^[A-Z]/.test(callee.name)) return;
+    const owner = call.getFunctionParent();
+    if (owner === null || owner.node === functionPath.node || !isRenderCallback(owner)) return;
+    const target = resolveReferencedFunction(call, callee.name);
+    if (target === undefined || target.isDescendant(functionPath)) return;
+    if (visited.has(target.node)) return;
+    visited.add(target.node);
+    const nested = inspectFunction(target, importSource, reactImportSource, visited);
+    if (nested.containsJSX) inspection.containsJSX = true;
+    if (nested.readsValue) inspection.readsValue = true;
+  };
+
+  const recordValueRead = (
+    node: t.MemberExpression | t.OptionalMemberExpression,
+    path: NodePath,
+  ): void => {
+    if (getReadPropertyName(node) !== "value") return;
+    if (isNonSignalValueReceiver(node.object)) return;
+    if (isDeferredReadContext(path, functionPath)) return;
+    inspection.readsValue = true;
+  };
+
   functionPath.traverse({
     Function(path) {
       // Components and hooks own their subscriptions. Other nested callbacks
@@ -690,25 +879,14 @@ function inspectFunction(
       inspection.containsJSX = true;
     },
     MemberExpression(path) {
-      const property = path.node.property;
-      if (
-        (!path.node.computed && t.isIdentifier(property, { name: "value" })) ||
-        (path.node.computed && t.isStringLiteral(property, { value: "value" }))
-      ) {
-        inspection.readsValue = true;
-      }
+      recordValueRead(path.node, path);
     },
     OptionalMemberExpression(path) {
-      const property = path.node.property;
-      if (
-        (!path.node.computed && t.isIdentifier(property, { name: "value" })) ||
-        (path.node.computed && t.isStringLiteral(property, { value: "value" }))
-      ) {
-        inspection.readsValue = true;
-      }
+      recordValueRead(path.node, path);
     },
     CallExpression(path) {
       foldReferencedRenderCallbacks(path);
+      foldDirectlyCalledRenderCallbacks(path);
       if (path.getFunctionParent() !== functionPath) return;
       const callee = path.get("callee");
       if (isUseSignalsCallee(functionPath, callee, importSource)) {
@@ -717,6 +895,7 @@ function inspectFunction(
     },
     OptionalCallExpression(path) {
       foldReferencedRenderCallbacks(path);
+      foldDirectlyCalledRenderCallbacks(path);
     },
   });
   return inspection;
@@ -807,6 +986,29 @@ function isExplicitUseSignals(
   return isFirstStatementUseSignalsCall(functionPath, statements, importSource, false);
 }
 
+/**
+ * The named import specifier the absorbed explicit `useSignals()` call resolves
+ * to, when the call is a bare identifier bound by one. `applyManaged` replaces
+ * that call with its own store declaration, which can leave the import behind
+ * with nothing referencing it -- so `Program.exit` needs the specifier to check
+ * and drop. A namespace import is deliberately not returned: the namespace
+ * object may be used for other exports of the same module.
+ */
+function getAbsorbedUseSignalsImport(
+  functionPath: NodePath<t.Function>,
+  statements: NodePath<t.Statement>[],
+): NodePath<t.ImportSpecifier> | undefined {
+  const first = statements[0];
+  if (first === undefined || !first.isExpressionStatement()) return undefined;
+  const expression = first.get("expression");
+  if (!expression.isCallExpression()) return undefined;
+  const callee = expression.get("callee");
+  if (!callee.isIdentifier()) return undefined;
+  const resolved = resolveImportedBinding(functionPath, callee.node.name);
+  if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return undefined;
+  return resolved.specifier;
+}
+
 // A call the transform cannot verify as this library's own `useSignals` --
 // because a single-file transform cannot follow the re-export chain to
 // confirm the barrel target -- can still be written in exactly the shape of a
@@ -840,6 +1042,22 @@ function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSour
       "chain to confirm the target. The component stays on the bare, best-effort useSignals() " +
       `boundary. Import useSignals directly from "${importSource}" or "${importSource}/runtime" ` +
       "instead to get the verified boundary.",
+  );
+  console.warn(warning.message);
+}
+
+// An `@useSignals` annotation is only actionable once the transform can name
+// the function it sits on: the boundary is attached to a component or hook
+// identity, and an anonymous function returned straight out of a HOC
+// (`export function withCount(Base) { /** @useSignals */ return (props) => ... }`)
+// has none. Left silent, that annotation reads as an opt-in that simply never
+// happened. Warn instead, matching the barrel case above.
+function warnUnnamedUseSignalsAnnotation(path: NodePath<t.Function>): void {
+  const warning = path.buildCodeFrameError(
+    "This @useSignals annotation is ignored: the transform could not resolve a component " +
+      "or hook name for the annotated function, and the boundary is attached to that " +
+      "identity. Name the function -- assign it to a PascalCase (component) or useX (hook) " +
+      "binding, or use a named function declaration -- to opt it in.",
   );
   console.warn(warning.message);
 }
@@ -892,6 +1110,12 @@ interface TransformCodegenInput {
   statements: NodePath<t.Statement>[];
   explicit: boolean;
   runtimeImport: RuntimeImport;
+  /**
+   * The import specifier the absorbed explicit call resolved to, when there is
+   * one -- see `getAbsorbedUseSignalsImport`. Only `applyManaged` absorbs, so
+   * only it records this.
+   */
+  absorbedImport?: NodePath<t.ImportSpecifier> | undefined;
 }
 
 /**
@@ -939,12 +1163,28 @@ function decideTransform(
   // through this same function's memo()/forwardRef() wrappers on its own --
   // see `getComponentIdentityName`'s matching parameter.
   const climbedParent = climbComponentWrappers(path, reactImportSource).parentPath;
+  const annotation = hasOwnedLeadingComment(path, useSignalsComment);
   const annotated =
-    hasOwnedLeadingComment(path, useSignalsComment) &&
+    annotation &&
     (isComponent(path, reactImportSource, climbedParent) ||
       isCustomHook(path, reactImportSource, climbedParent));
+  const candidate = isAutomaticTransformCandidate(path, reactImportSource, climbedParent);
+  // The annotation was written for a function the transform cannot name, so it
+  // will be dropped. Only a function that is otherwise in a transformable
+  // position is worth reporting, and only when no enclosing function owns the
+  // very same comment -- otherwise every nested arrow under an annotated
+  // component would report the component's own annotation a second time.
+  if (annotation && !annotated && candidate) {
+    const enclosing = path.getFunctionParent();
+    if (
+      getComponentIdentityName(path, reactImportSource, climbedParent) === undefined &&
+      (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalsComment))
+    ) {
+      warnUnnamedUseSignalsAnnotation(path);
+    }
+  }
   const automatic =
-    isAutomaticTransformCandidate(path, reactImportSource, climbedParent) &&
+    candidate &&
     shouldAutomaticallyTransform(options.mode, path, inspection, reactImportSource, climbedParent);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
   if (!explicit && inspection.hasUseSignalsCall) return { kind: "skip" };
@@ -971,7 +1211,14 @@ function decideTransform(
     imports.push(runtimeImport);
   }
 
-  return { kind: options.transform, body, statements, explicit, runtimeImport };
+  return {
+    kind: options.transform,
+    body,
+    statements,
+    explicit,
+    runtimeImport,
+    absorbedImport: explicit ? getAbsorbedUseSignalsImport(path, statements) : undefined,
+  };
 }
 
 /** Codegen: inject a bare `useSignals()` call at the top of the function body. */
@@ -1005,7 +1252,7 @@ function applyInject(
 /** Codegen: wrap the function body in the managed try/finally render-tracking scope. */
 function applyManaged(
   path: NodePath<t.Function>,
-  { body, statements, explicit, runtimeImport }: TransformCodegenInput,
+  { body, statements, explicit, runtimeImport, absorbedImport }: TransformCodegenInput,
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
@@ -1040,7 +1287,36 @@ function applyManaged(
   if (options.reactCompiler === "auto") addNoMemoDirective(transformedBody);
   body.replaceWith(transformedBody);
   path.scope.crawl();
+  // The author's own call is gone; whether its import is now dead can only be
+  // answered once every function in the file has been visited, so record it and
+  // let `Program.exit` decide.
+  if (absorbedImport !== undefined) state.absorbedImports.push(absorbedImport);
   markTransformed(state);
+}
+
+/**
+ * Drops an `import { useSignals } from "<importSource>"` the managed transform
+ * absorbed and nothing else refers to any more, along with the whole
+ * declaration once its last specifier goes. A reused `/runtime` import survives
+ * this untouched: the emitted store declaration still calls it, so the binding
+ * is still referenced.
+ */
+function removeAbsorbedImports(programPath: NodePath<t.Program>, state: PluginState): void {
+  if (state.absorbedImports.length === 0) return;
+  programPath.scope.crawl();
+  for (const specifier of state.absorbedImports) {
+    if (specifier.removed) continue;
+    const binding = programPath.scope.getBinding(specifier.node.local.name);
+    if (binding === undefined || binding.path.node !== specifier.node || binding.referenced) {
+      continue;
+    }
+    const declaration = specifier.parentPath;
+    specifier.remove();
+    if (declaration.isImportDeclaration() && declaration.node.specifiers.length === 0) {
+      declaration.remove();
+    }
+  }
+  state.absorbedImports = [];
 }
 
 const babelTransform = declare<InternalTransformOptions>((api, options) => {
@@ -1061,7 +1337,11 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
           state.programPath = path;
           state.managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource);
           state.directImports = findRuntimeImports(path, options.importSource);
+          state.absorbedImports = [];
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
+        },
+        exit(path, untypedState) {
+          removeAbsorbedImports(path, untypedState as PluginState);
         },
       },
       Function(path, untypedState) {
@@ -1094,12 +1374,37 @@ const babelTransform = declare<InternalTransformOptions>((api, options) => {
   return plugin;
 });
 
+/**
+ * A raw-text screen run before the file is parsed at all. Parsing, walking,
+ * printing and generating a source map is the whole cost of this transform, and
+ * it is discarded outright for every file none of the three opt-in routes can
+ * possibly apply to:
+ *
+ * - explicit and annotated opt-in both need the text `useSignals` (an aliased
+ *   import, a namespace call and the `@useSignals` comment all still contain
+ *   it);
+ * - `auto` needs a `.value` read, so it needs the text `value`;
+ * - `all` additionally wraps JSX components, so it needs a `<` -- but its
+ *   custom-hook rule still needs a `.value` read.
+ *
+ * Each test is a plain substring scan and each one is deliberately wider than
+ * what the AST check accepts, so this can only ever bail out on files the walk
+ * would have rejected anyway.
+ */
+function mightTransform(code: string, mode: ReactFineGrainedSignalsMode): boolean {
+  if (code.includes("useSignals")) return true;
+  if (mode === "manual") return false;
+  if (code.includes("value")) return true;
+  return mode === "all" && code.includes("<");
+}
+
 /** Runs the private Babel transform for the universal bundler adapter. */
 export function transformReactFineGrainedSignals(
   code: string,
   id: string,
   options: InternalTransformOptions,
 ): InternalTransformResult | null {
+  if (!mightTransform(code, options.mode)) return null;
   const cleanId = id.replace(/[?#].*$/, "");
   const isTypeScript = /\.[cm]?tsx?$/i.test(cleanId);
   // JavaScript commonly carries JSX without using a .jsx suffix, while
@@ -1108,11 +1413,15 @@ export function transformReactFineGrainedSignals(
   const parserPlugins: NonNullable<ParserOptions["plugins"]> = [];
   if (supportsJsx) parserPlugins.push("jsx");
   if (isTypeScript) parserPlugins.push("typescript");
-  parserPlugins.push("decorators-legacy");
+  parserPlugins.push("decorators-legacy", "decoratorAutoAccessors");
   const result = transformSync(code, {
     babelrc: false,
     configFile: false,
     filename: id,
+    // Babel otherwise derives `sources` from `filename`'s basename, which both
+    // loses the path a debugger needs and, under Vite, leaks the HMR query
+    // string (`App.tsx?t=173...`) into the map as if it were a real file name.
+    sourceFileName: cleanId,
     parserOpts: { plugins: parserPlugins },
     plugins: [[babelTransform, options]],
     sourceMaps: true,
