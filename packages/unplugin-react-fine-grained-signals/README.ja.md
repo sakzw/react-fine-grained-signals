@@ -2,26 +2,21 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-`react-fine-grained-signals` 向けの、`useSignals()` 自動挿入と任意のmanaged
-render scope変換を提供する汎用bundler integrationです。Babel実装は内部に
+[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals)
+向けの、`useSignals()` 自動挿入と任意のmanaged render scope変換を提供する汎用
+bundler integrationです。
+
+このpackageは意図的に唯一のbuild-time integrationです。Babel実装は内部に
 閉じ込め、利用側はbundlerごとのentry pointだけを設定します。
 
-## 状態
-
-このworkspace packageは完成作業中のためprivateであり、npmには公開していません。
-将来のパッケージはESM-onlyです。CommonJSの`require()`ではなく、ESM設定から
-`import`してください。
-
-## インストール(予定)
-
-このpackageはまだ公開していません。以下のcommandは、公開予定のAPIを
-示すものです。
+## インストール
 
 ```sh
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-`react-fine-grained-signals` はpeer dependencyです。
+`react-fine-grained-signals` はpeer dependencyです。このpackageはESM-onlyです。
+CommonJSの`require()`ではなく、ESM設定から`import`してください。
 
 ## Vite
 
@@ -87,6 +82,8 @@ export default {
   設定しても既存のdirect importの認識が外れることはありません。
 - `include` / `exclude`: source module IDを絞る関数です。
 
+## Render callbackの検出
+
 自動検出はrender callback（配列のiteration method `map`、`flatMap`、`forEach`
 へ渡す関数）を変換しません。呼び出し元の1回のrenderの中で実行回数が変わるため、
 Rules of Hooksに反するからです。認識するのは、定義箇所にinlineで書いた場合
@@ -140,6 +137,8 @@ instance化します。
 始まりでない名前にするか、実際にcomponentとしてrenderされるときにだけ手動で
 opt-inします。
 
+## Higher-order component (HOC)
+
 higher-order component（HOC）が返すcomponentは、自分自身の名前を持たなくても
 認識します。
 
@@ -163,6 +162,8 @@ arrowの簡潔なbody）、囲む関数の名前がPascalCaseでも `useX` で�
 ようなcallbackは参照で渡すか（`items.map(Row)`）、inlineで書いて呼び出し元の
 componentに収集させてください。
 
+## `memo` / `forwardRef` の認識
+
 `memo` / `forwardRef` の自動認識は、`"react"` または `reactImportSource` から
 のdirect importだけに一致します。ローカルのbarrelやre-export module経由の
 import（`import { memo } from "./some-local-module"`）は、その moduleが最終的に
@@ -177,6 +178,8 @@ re-exportの連鎖をたどらないためです。認識できなかった場�
 - 該当箇所で `memo` / `forwardRef` を `"react"` から直接importする。
 - `@useSignals` コメントか手書きの `useSignals()` 呼び出しで明示的にopt-inする。
 
+## `useSignals()` のopt-inと書き換え
+
 `@useSignals` と `@noUseSignals` は、その関数だけに適用されます。pluginが
 二重の `useSignals()` 呼び出しを挿入することはありません。既存のdirect
 import、namespace import、barrel import経由の呼び出しは、その関数のopt-inと
@@ -187,19 +190,23 @@ namespace importした先頭文の呼び出しは、`"inject"` ではそのま�
 managed storeの宣言と `try` / `finally` scopeに置き換わるため、関数本体は
 そのまま残るのではなく書き換えられます。
 
-既定が関数を書き換えるようになったため、この呼び出しが `async` 関数や
-generator関数の先頭文にあると、
+先頭文での `useSignals()` 呼び出しが `async` 関数やgenerator関数の中にあると、
+既定の `"managed"` 変換ではbuildが失敗し、
 `useSignals transform only supports synchronous, non-generator functions`
-でbuildが失敗します。以前の `"inject"` 既定では無言でbuildが通っていました。
-この組み合わせはそもそもReactとして不正です（hookは同期のfunction componentを
-必要とします）。関数側を直すのが望ましく、どうしても現状のままbuildを通す
-必要がある場合は `transform: "inject"` で以前の挙動に戻せます。
+というエラーになります。この組み合わせはそもそもReactとして不正です
+（hookは同期のfunction componentを必要とします）。関数側を直すのが望ましく、
+どうしても現状のままbuildを通す必要がある場合は `transform: "inject"` を
+使うと、関数を書き換えずにこの呼び出しを受け入れます。
 
-いずれの変換モードも再適用するとno-opです。`.ts` はJSXなしのTypeScriptとして、
-`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析します。
+## Buildへの組み込み
 
-## 開発用ベンチマーク
+いずれの変換モードも再適用するとno-opです。この変換は、対応するbundler
+（Vite、webpack、Rspack）では `enforce: "pre"` によって他のplugin変換より
+先に実行されます。Rollupにはこの概念がないため、このpluginを最初にlistして
+ください。また、依存関係やJavaScript/TypeScript以外のmoduleはskipします。
+`.ts` はJSXなしのTypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて
+解析します。
 
-workspace rootから `pnpm bench:transform` を実行すると、ビルド済みVite
-adapterに対して小・大TSX入力の変換時間を計測できます。これはCIの性能gateでは
-なく、ローカル診断用です。
+## License
+
+MIT © akazawa。[LICENSE](LICENSE) を参照してください。

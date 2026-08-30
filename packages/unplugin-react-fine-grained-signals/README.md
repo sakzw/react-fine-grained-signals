@@ -10,22 +10,14 @@ This package is deliberately the only build-time integration. It keeps the
 Babel implementation private, so application configuration is the same across
 supported bundlers.
 
-## Status
-
-This workspace package is private while the integration is being completed. It
-is not published to npm. The planned package is ESM-only: use an ESM build
-configuration and `import`, not CommonJS `require()`.
-
-## Planned installation
-
-This package is not published yet; the following command documents the
-intended release API.
+## Installation
 
 ```sh
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-`react-fine-grained-signals` is a peer dependency.
+`react-fine-grained-signals` is a peer dependency. This package is ESM-only:
+use an ESM build configuration and `import`, not CommonJS `require()`.
 
 ## Vite
 
@@ -92,6 +84,8 @@ export default {
   widens detection and never turns off an existing direct import.
 - `include` / `exclude`: functions that filter source module IDs.
 
+## Render callback detection
+
 Automatic detection never transforms a render callback — a function handed to
 one of the array iteration methods `map`, `flatMap`, or `forEach` — because it
 runs a variable number of times inside one render of its owner, which the Rules
@@ -151,6 +145,8 @@ When in doubt, keep such helpers explicit: name them lowercase and without a
 `use` prefix, or opt them in manually only when they are genuinely rendered as
 components.
 
+## Higher-order components
+
 A component a higher-order component returns is recognized even though it has no
 name of its own:
 
@@ -175,6 +171,8 @@ tell apart is a factory whose result is handed straight to an iteration method
 component, so it gets a boundary of its own. Pass such a callback by reference
 (`items.map(Row)`) or write it inline, so the owning component collects it.
 
+## `memo` / `forwardRef` recognition
+
 Automatic `memo` / `forwardRef` recognition matches only a direct import from
 `"react"` or from `reactImportSource`. Importing them through a local
 barrel or re-export module (`import { memo } from "./some-local-module"`) is
@@ -192,6 +190,8 @@ skipped, so signal writes stop re-rendering it. Three workarounds:
 - opt the component in explicitly with a `@useSignals` comment or a manual
   `useSignals()` call.
 
+## `useSignals()` opt-in and rewriting
+
 `@useSignals` and `@noUseSignals` apply only to their owning function; they do
 not affect nested functions. The plugin never adds a second `useSignals()`
 call: a direct, namespace, or barrel-imported call it finds is treated as the
@@ -203,13 +203,14 @@ absorbed into the generated boundary: the statement is removed and replaced by
 the managed store declaration plus the `try` / `finally` scope, so the function
 body is rewritten rather than left byte-for-byte untouched.
 
-Because the default now rewrites those functions, such a call as the first
-statement of an `async` or generator function fails the build with
-`useSignals transform only supports synchronous, non-generator functions`,
-where the previous `"inject"` default compiled it silently. That combination is
-already invalid React — hooks require a synchronous function component — so
-prefer fixing the function; `transform: "inject"` restores the old behavior if
-the file must keep building unchanged.
+A first-statement `useSignals()` call inside an `async` or generator function
+fails the build under the default `"managed"` transform, with
+`useSignals transform only supports synchronous, non-generator functions`. That
+combination is already invalid React — hooks require a synchronous function
+component — so prefer fixing the function; `transform: "inject"` accepts it
+without rewriting the function, if the file must keep building unchanged.
+
+## Build integration
 
 Reapplying either transform mode is a no-op. The transform runs before other
 plugin transforms via `enforce: "pre"` on bundlers that support it (Vite,
@@ -218,9 +219,6 @@ instead — and skips dependencies and non-JavaScript/TypeScript modules.
 Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`, `.jsx`,
 and JavaScript files may use JSX.
 
-## Development benchmark
+## License
 
-Run `pnpm bench:transform` from the workspace root to build and measure the
-distributed Vite adapter on fixed small and large TSX inputs. The benchmark
-reports pass-through, no-candidate, lightweight injection, and managed-boundary
-cases; it is a local diagnostic, not a CI performance gate.
+MIT © akazawa. See [LICENSE](LICENSE).
