@@ -10,7 +10,7 @@
 
 ## `"sideEffects": false`
 
-The package sets `"sideEffects": false`. Bundlers that infer side effects from the module graph already shake this package correctly without it — importing only `signal` costs 2.55 kB gzip against 7.79 kB for the whole entry (tracked by `pnpm size`'s `signal-only` and `index-full` scenarios, so these numbers move when the code does), and under Vite/Rolldown the flag moves the first number by about 40 bytes and the second not at all. It is kept for bundlers that trust the declaration instead of proving it (webpack's `sideEffects` optimization), and because it pins the guarantee: adding a top-level side effect later fails a check rather than silently costing every consumer.
+The package sets `"sideEffects": false`. Bundlers that infer side effects from the module graph already shake this package correctly without it — importing only `signal` costs 2.55 kB gzip against 8.20 kB for the whole entry (tracked by `pnpm size`'s `signal-only` and `index-full` scenarios, so these numbers move when the code does), and under Vite/Rolldown the flag moves the first number by about 40 bytes and the second not at all. It is kept for bundlers that trust the declaration instead of proving it (webpack's `sideEffects` optimization), and because it pins the guarantee: adding a top-level side effect later fails a check rather than silently costing every consumer.
 
 ```sh
 pnpm size

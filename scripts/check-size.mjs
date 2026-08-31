@@ -35,7 +35,7 @@ const budgetPath = join(repositoryRoot, "scripts", "size-budget.json");
 const scenarios = [
   {
     name: "signal-only",
-    description: "importing only signal, as the README's sideEffects claim measures",
+    description: "importing only signal, as the packaging note's sideEffects claim measures",
     source: `import { signal } from "DIST/index.js";
 export default [signal];`,
   },
