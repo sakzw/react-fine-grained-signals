@@ -37,7 +37,6 @@ export default defineConfig({
   },
   test: {
     environment: "node",
-    environmentMatchGlobs: [["tests/**/*.test.tsx", "jsdom"]],
     include: ["tests/**/*.test.{ts,tsx}"],
     coverage: {
       provider: "v8",

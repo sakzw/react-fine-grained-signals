@@ -20,6 +20,7 @@
     "noEmit": true
   },
   "include": [
+    "vitest.config.ts",
     "src/**/*.ts",
     "src/**/*.tsx",
     "tests/**/*.ts",
