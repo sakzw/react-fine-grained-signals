@@ -58,6 +58,6 @@ Two main options control the plugin:
 
 One important caveat: when a first-statement `useSignals()` call is imported via a barrel/re-export rather than directly from the package, the plugin cannot verify it is genuine, so it leaves the call alone in both transform modes and emits a build warning that the component is left on the best-effort/bare boundary (not absorbed into the managed/verified boundary). Import `useSignals` directly from the package (or from `/runtime` for an exact boundary) to avoid this warning.
 
-For the full list of options, including `reactCompiler`, render-callback detection, memo/forwardRef recognition, and barrel-import handling, see [the plugin documentation](../../packages/unplugin-react-fine-grained-signals/README.md).
+For the full list of options, including `reactCompiler`, render-callback detection, memo/forwardRef recognition, and barrel-import handling, see [the plugin documentation](../packages/unplugin-react-fine-grained-signals/README.md).
 
 See also: [React hooks](hooks.md), [JSX signal children and host bindings](jsx-bindings.md).

@@ -60,7 +60,7 @@ state.value.items.push("second");
 
 そのため判定はpackage instanceをまたいで機能する必要があります。すべてのsignalは `Symbol.for("react-fine-grained-signals.signal")` をキーとする列挙不可のbrandを持ち、その値はプロトコルバージョン（現在は `1`）です。`isSignal` は、サポートされたバージョンのbrandを持ち、かつ `peek()` を公開している値を受け入れます。これにより、packageが二重に解決された場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）や、realmの境界をまたいだsignalも認識されます。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
 
-これが解決するのは判定だけです。リアクティビティにはさらに `alien-signals` のinstanceが共有されていることが必要で、依存追跡がそのmoduleのglobalな状態に置かれているためです。peer dependencyにしている理由は[パッケージング](../README.ja.md#パッケージング)を参照してください。認識された外部のsignalは値を正しく読み取れますが、更新が伝播するのは下層のリアクティブコアが共有されている間だけです。
+これが解決するのは判定だけです。リアクティビティにはさらに `alien-signals` のinstanceが共有されていることが必要で、依存追跡がそのmoduleのglobalな状態に置かれているためです。peer dependencyにしている理由は[パッケージングの検討docs](design/packaging.ja.md)を参照してください。認識された外部のsignalは値を正しく読み取れますが、更新が伝播するのは下層のリアクティブコアが共有されている間だけです。
 
 `deepSignal` の状態にbrandを代入すると例外になります。brandが付いた部分木はsignalとして判定され、リアクティブ化されなくなるためです。
 

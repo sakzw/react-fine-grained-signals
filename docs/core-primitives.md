@@ -60,7 +60,7 @@ This view guarantee does not cross an opaque boundary. Class instances, `Date`, 
 
 Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
 
-This fixes identification only. Reactivity additionally requires a shared `alien-signals` instance, because dependency tracking lives in that module's global state; see [Packaging](../README.md#packaging) for why it is a peer dependency. A recognized foreign signal reads correctly, but it propagates updates only while the reactive core underneath is shared.
+This fixes identification only. Reactivity additionally requires a shared `alien-signals` instance, because dependency tracking lives in that module's global state; see [the packaging note](design/packaging.md) for why it is a peer dependency. A recognized foreign signal reads correctly, but it propagates updates only while the reactive core underneath is shared.
 
 Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
 

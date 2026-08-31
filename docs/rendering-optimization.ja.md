@@ -58,6 +58,6 @@ export default defineConfig({
 
 重要な注意: 先頭文の `useSignals()` 呼び出しがpackageから直接importされているのではなく、barrelまたは再exportモジュール経由でimportされている場合、pluginはその呼び出しが正規のものであることを検証できません。そのため、どちらのtransformモードでも呼び出しはそのまま残り、コンポーネントがbest-effort/bare境界の上に残る（managed/検証済み境界に吸収されない）ことを説明するbuild警告が出力されます。この警告を避けるには、packageから直接（または `/runtime` 経由で正確な境界を得るために）`useSignals` をimportしてください。
 
-オプションの完全なリスト（`reactCompiler`、render callbackの検出、memo/forwardRefの認識、barrel importの扱いなど）については、[pluginのdocs](../../packages/unplugin-react-fine-grained-signals/README.ja.md)を参照してください。
+オプションの完全なリスト（`reactCompiler`、render callbackの検出、memo/forwardRefの認識、barrel importの扱いなど）については、[pluginのdocs](../packages/unplugin-react-fine-grained-signals/README.ja.md)を参照してください。
 
 関連: [Reactフック](hooks.ja.md)、[JSXのsignal子要素とhost binding](jsx-bindings.ja.md)。

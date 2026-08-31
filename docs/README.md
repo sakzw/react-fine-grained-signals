@@ -16,4 +16,4 @@ How to use the library.
 
 Investigation memos for still-open or historical implementation decisions, not usage docs.
 
-- [`design/`](design/) — see [the direct-binding design note](design/direct-binding-value-checked-style.md), [the `useSignals()` boundary design note](design/use-signals-boundary-design.md), [the transform toolchain alternatives note](design/transform-toolchain-alternatives.md), and [the React Compiler compatibility note](design/react-compiler-compatibility.md).
+- [`design/`](design/) — see [the direct-binding design note](design/direct-binding-value-checked-style.md), [the `useSignals()` boundary design note](design/use-signals-boundary-design.md), [the transform toolchain alternatives note](design/transform-toolchain-alternatives.md), [the React Compiler compatibility note](design/react-compiler-compatibility.md), and [the packaging note](design/packaging.md).
