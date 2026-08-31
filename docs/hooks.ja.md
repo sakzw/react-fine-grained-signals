@@ -18,6 +18,51 @@ function Counter({ step }: { step: number }) {
 }
 ```
 
+## useSignal
+
+```ts
+useSignal<T>(initialValue: T): Signal<T>
+```
+
+コンポーネントの生存期間中、同じsignalを1つ保持します。
+
+- `initialValue` が使われるのは初回レンダーのみで、以降は同じsignalが返ります。
+- レンダー中に `.value` を読むには、そのコンポーネント自身で [`useSignals()`](#usesignals)（またはplugin）が必要です。
+
+## useDeepSignal
+
+```ts
+useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
+```
+
+property単位で追跡するdeep signalを、コンポーネントの生存期間中1つ保持します。
+
+- 生成コストが高い初期値には、純粋なファクトリを渡してください: `useDeepSignal(() => ({ items: [] }))`。
+- [`useSignals()`](#usesignals) 後に読んだpropertyは個別に追跡されるため、読んでいない隣接propertyの変更では再レンダーしません。
+
+## useComputed
+
+```ts
+useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
+```
+
+安定したidentityを持つcomputed signalを作ります。2つのモードがあり、コンポーネントの生存期間中はどちらか一方を使い続けてください。
+
+- **依存配列を省略する場合**、getterはsignalだけを読む必要があります。最初のクロージャがコンポーネントの生存期間中保持されるため、props、React state、その他のsignalではない値を捕捉しないでください。
+- **依存配列を渡す場合**、getterが捕捉するsignal以外の値をすべて列挙します: `useComputed(() => count.value * step, [step])`。
+
+## useSignalEffect
+
+```ts
+useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyList): void
+```
+
+コミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
+
+- 依存配列を省略する場合、callbackはsignalだけを読む必要があり、最初のクロージャがコンポーネントの生存期間中保持されます。
+- props、state、その他のsignalではない値を捕捉する場合は、それらを列挙してください: `useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])`。
+- callbackが返した関数はcleanupとして扱われ、次回の実行前と解除時に実行されます。
+
 ## useSignals
 
 ```ts
@@ -25,6 +70,8 @@ useSignals(): void
 ```
 
 レンダー追跡のウィンドウを開きます。レンダー中にsignalの `.value` を読むコンポーネントでは、最初のフックとして1回、無条件に呼び出してください。
+
+build pluginをbuildに入れている場合、これを手で書く必要はありません。既定の `mode: "auto"` では、`.value` を読むコンポーネントとカスタムフックにplugin自身が境界を挿入します。手で書くのは、pluginを使わずにbuildする場合か、`mode: "manual"` で明示的にopt inさせたい場合です。2つのレイヤーの比較は[描画最適化](rendering-optimization.ja.md)を参照してください。
 
 - 引数も戻り値もありません。
 - フック以降の同期的なsignal読み取りが自動収集され、そのいずれかが変わるとコンポーネントが再レンダーされます。
@@ -67,51 +114,6 @@ function Row() {
 このdirectiveが効くのはruntimeではなくbuildです。`panicThreshold: "all_errors"` の場合、directiveがなければ同じbail-outがbuildを失敗させ、あればログに記録されるだけで済みます。build pluginは自身のmanaged出力には既定の `reactCompiler: "auto"` でdirectiveを自動的に挿入しますが、手書きのランタイムインポート境界には手を加えません。buildが全errorでpanicする設定なら手書きで付けてください。また、このbail-outはcompilerの制約であって保証ではないため、将来のversionに備える意味でも付けておく価値があります。
 
 詳細は[React Compilerとの互換性の検討docs](design/react-compiler-compatibility.ja.md)と[境界設計の検討docs](design/use-signals-boundary-design.ja.md)を参照してください。
-
-## useSignal
-
-```ts
-useSignal<T>(initialValue: T): Signal<T>
-```
-
-コンポーネントの生存期間中、同じsignalを1つ保持します。
-
-- `initialValue` が使われるのは初回レンダーのみで、以降は同じsignalが返ります。
-- レンダー中に `.value` を読むには、そのコンポーネント自身で `useSignals()`（またはplugin）が必要です。
-
-## useDeepSignal
-
-```ts
-useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
-```
-
-property単位で追跡するdeep signalを、コンポーネントの生存期間中1つ保持します。
-
-- 生成コストが高い初期値には、純粋なファクトリを渡してください: `useDeepSignal(() => ({ items: [] }))`。
-- `useSignals()` 後に読んだpropertyは個別に追跡されるため、読んでいない隣接propertyの変更では再レンダーしません。
-
-## useComputed
-
-```ts
-useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
-```
-
-安定したidentityを持つcomputed signalを作ります。2つのモードがあり、コンポーネントの生存期間中はどちらか一方を使い続けてください。
-
-- **依存配列を省略する場合**、getterはsignalだけを読む必要があります。最初のクロージャがコンポーネントの生存期間中保持されるため、props、React state、その他のsignalではない値を捕捉しないでください。
-- **依存配列を渡す場合**、getterが捕捉するsignal以外の値をすべて列挙します: `useComputed(() => count.value * step, [step])`。
-
-## useSignalEffect
-
-```ts
-useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyList): void
-```
-
-コミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
-
-- 依存配列を省略する場合、callbackはsignalだけを読む必要があり、最初のクロージャがコンポーネントの生存期間中保持されます。
-- props、state、その他のsignalではない値を捕捉する場合は、それらを列挙してください: `useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])`。
-- callbackが返した関数はcleanupとして扱われ、次回の実行前と解除時に実行されます。
 
 ## useSignalValue
 

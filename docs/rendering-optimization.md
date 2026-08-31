@@ -32,6 +32,8 @@ The custom JSX runtime provides a second, independent optimization: a signal use
 
 ## With a plugin: automatic `useSignals()` insertion
 
+With the plugin in the build, components no longer call `useSignals()` by hand: in `mode: "auto"` (the default) the plugin finds every component and custom hook that reads `.value` and inserts the boundary itself.
+
 The optional universal build plugin keeps Babel private: configure the integration for your bundler instead of adding a Babel config. By default it detects selected functions and wraps each in an exact `try` / `finally` render boundary, closing the tracking window synchronously at the point the component function returns. Choose `transform: "inject"` to instead insert a bare `useSignals()` call as the first hook — the same best-effort boundary as writing the hook yourself, without a control-flow rewrite. The JSX runtime's native leaf bindings work independently of the plugin.
 
 ```sh

@@ -32,6 +32,8 @@ buildでReact Compilerを使う場合で、変換なしの `useSignals()` hook(p
 
 ## Pluginあり: `useSignals()` の自動挿入
 
+pluginをbuildに入れると、コンポーネント側で `useSignals()` を手書きする必要はなくなります。既定の `mode: "auto"` では、`.value` を読むコンポーネントとカスタムフックをplugin自身が検出し、境界を挿入します。
+
 任意で導入できる汎用ビルドpluginは、Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。既定では対象の関数を検出し、それぞれを厳密な `try` / `finally` render boundaryで包みます。componentの関数がreturnする時点で、追跡windowを同期的に閉じます。代わりに手書きと同じbest-effortな追跡境界がほしい場合は、`transform: "inject"` を選んで最初のフックとして変換なしの `useSignals()` を挿入してください。制御フローは書き換えません。JSXランタイムのネイティブリーフ更新はpluginと独立して動作します。
 
 ```sh
