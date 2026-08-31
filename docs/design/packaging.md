@@ -18,6 +18,14 @@ pnpm size
 
 `scripts/check-size.mjs` bundles representative consumer import graphs, reports gzip and brotli sizes against `scripts/size-budget.json`, and asserts that code which must be shaken out really is absent. The absence checks are paired with positive controls, so a renamed marker string fails the check instead of quietly making it vacuous. Run `pnpm size:update` when growth is intentional.
 
+## What the published package contains
+
+The tarball is `dist` plus the READMEs and LICENSE. The `.js` source maps ship and embed `sourcesContent`, so they resolve on their own inside `node_modules`.
+
+Declaration maps do not ship. They would point at `../src/*.ts`, which `files: ["dist"]` does not publish, so an editor following one would land on a path that is not there. Of 190 packages in this repository's own `node_modules`, four ship `.d.ts.map` and only one of those (`entities`, which publishes `src` alongside `dist`) ships maps that resolve — including a broken one in TypeScript itself, so this is a common accident rather than a practice worth copying.
+
+Turning them off takes two steps, because `tsdown`'s `dts.sourcemap: false` stops the files but not the `//# sourceMappingURL` comment: the declaration pass inherits the top-level `sourcemap: true` that the `.js` maps need. `scripts/strip-dts-sourcemap-comments.mjs` removes the dead pointers after each build, and fails if a declaration map is ever emitted again rather than silently breaking a real one.
+
 ## Releases go through `pnpm publish`
 
 Releases must go through `pnpm publish` rather than plain `npm publish`, so the `workspace:*` peer range on `react-fine-grained-signals` gets rewritten to a real semver range before publishing; `unplugin-react-fine-grained-signals`'s `prepublishOnly` script enforces this.

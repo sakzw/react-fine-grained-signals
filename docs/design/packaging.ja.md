@@ -18,6 +18,14 @@ pnpm size
 
 `scripts/check-size.mjs` は代表的なconsumerのimport graphをbundleし、gzipとbrotliのサイズを `scripts/size-budget.json` と比較したうえで、tree shakingで落ちるべきcodeが実際に存在しないことを検証します。この不在checkには陽性対照を組み合わせてあるため、marker文字列がrenameされた場合はcheckが無意味化する代わりに失敗します。サイズの増加が意図的な場合は `pnpm size:update` を実行してください。
 
+## 公開パッケージに含まれるもの
+
+tarballの中身は `dist` とREADME群、LICENSEです。`.js` のsource mapは同梱しており、`sourcesContent` にソースを埋め込んでいるため `node_modules` の中だけで解決できます。
+
+declaration map（`.d.ts.map`）は同梱しません。参照先が `../src/*.ts` になりますが、`files: ["dist"]` はそれを公開しないため、エディタがmapを辿ると存在しないパスに行き着きます。このリポジトリの `node_modules` にある190パッケージのうち `.d.ts.map` を同梱しているのは4つだけで、そのmapが実際に解決するのは `src` も併せて公開している `entities` の1つだけです（TypeScript本体のものも壊れています）。つまりこれは真似すべき慣行ではなく、よくある事故です。
+
+無効化には2手必要です。`tsdown` の `dts.sourcemap: false` はファイル生成を止めますが、`//# sourceMappingURL` コメントは残ります。declarationのパスが、`.js` のmapに必要なトップレベルの `sourcemap: true` を継承するためです。`scripts/strip-dts-sourcemap-comments.mjs` がbuildのたびに宙吊りのポインタを削除し、declaration mapが再び出力された場合は、実在するmapを黙って壊す代わりに失敗します。
+
 ## リリースは `pnpm publish` を使う
 
 リリースは素の `npm publish` ではなく `pnpm publish` を通す必要があります。これにより `react-fine-grained-signals` に対する `workspace:*` のpeer rangeが、公開前に実際のsemver rangeへ書き換えられます。`unplugin-react-fine-grained-signals` の `prepublishOnly` scriptがこれを強制します。

@@ -67,7 +67,7 @@
     "bench:react": "pnpm build:runtime && node --expose-gc benchmarks/react-render.mjs",
     "bench:transform": "pnpm build:transform && pnpm --filter unplugin-react-fine-grained-signals bench",
     "build": "pnpm build:runtime && pnpm build:transform",
-    "build:runtime": "tsdown",
+    "build:runtime": "tsdown && node scripts/strip-dts-sourcemap-comments.mjs",
     "build:transform": "pnpm --filter unplugin-react-fine-grained-signals build",
     "dev:browser": "pnpm build:transform && node examples/browser/server.mjs",
     "build:browser": "pnpm build:transform && vite build --config examples/browser/vite.config.ts",
