@@ -117,6 +117,27 @@ test("navigates to the activity route client-side, without a full page reload", 
   expect(errors).toEqual([]);
 });
 
+test("resolves the streamed insight after a client-side navigation too", async ({
+  page,
+}) => {
+  const errors = await openHydrated(page);
+
+  await page.getByRole("link", { name: "アクティビティ" }).click();
+  await page.waitForURL(/\/activity$/);
+
+  // On a full load the boundary arrives already resolved from the stream, so
+  // only a client-side navigation exercises <Insight> suspending for real.
+  // Its simulated-delay promise is cached by a ref in <InsightPanel>, above
+  // the boundary, precisely so every retry `use()`s the same promise. Created
+  // inside <Insight> instead, a component that suspends before it has ever
+  // committed loses its hook state, builds a fresh promise on each retry, and
+  // so re-renders every INSIGHT_DELAY_MS forever behind a fallback that never
+  // goes away.
+  await expect(page.locator(".insight")).toHaveText("記録された操作: 1件");
+  await expect(page.locator(".insight-loading")).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test("propagates a task added on the board into the activity log across routes", async ({
   page,
 }) => {

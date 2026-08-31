@@ -9,6 +9,16 @@ const INSIGHT_DELAY_MS = 150;
  * concurrent request during streaming SSR never shares this promise with
  * another -- the same per-request lifetime useTaskStore's useRef gives the
  * store itself.
+ *
+ * It must be called from <InsightPanel>, *outside* the Suspense boundary,
+ * never from <Insight> itself: a component that suspends before it has ever
+ * committed has its hook state thrown away, so a promise created during
+ * <Insight>'s own render is a brand-new one on every retry. That never
+ * settles from React's point of view -- each retry suspends again on a fresh
+ * promise -- so the boundary stays on its fallback and <Insight> re-renders
+ * every INSIGHT_DELAY_MS forever. <InsightPanel> commits (its subtree is what
+ * suspends, not it), so its ref survives and every retry `use()`s the same
+ * promise.
  */
 function useSimulatedDelay(ms: number): Promise<void> {
   const delayRef = useRef<Promise<void> | undefined>(undefined);
@@ -28,17 +38,19 @@ function useSimulatedDelay(ms: number): Promise<void> {
  * free -- mirroring the regression this repo's tests/ssr.test.tsx guards
  * (search it for renderToPipeableStream).
  */
-function Insight({ store }: { store: TaskStore }) {
-  use(useSimulatedDelay(INSIGHT_DELAY_MS));
+function Insight({ store, delay }: { store: TaskStore; delay: Promise<void> }) {
+  use(delay);
   return <p className="insight">記録された操作: {store.state.value.activity.length}件</p>;
 }
 
 /** Its own Suspense boundary so the rest of the route ships in the initial
  * shell while only this panel streams in once its "computation" is ready. */
 export function InsightPanel({ store }: { store: TaskStore }) {
+  const delay = useSimulatedDelay(INSIGHT_DELAY_MS);
+
   return (
     <Suspense fallback={<p className="insight insight-loading">集計中…</p>}>
-      <Insight store={store} />
+      <Insight store={store} delay={delay} />
     </Suspense>
   );
 }
