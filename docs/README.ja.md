@@ -8,6 +8,7 @@
 
 - [コアプリミティブ](core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`、`isSignal`。
 - [Reactフック](hooks.ja.md) — `useSignals`、`useSignal`、`useDeepSignal`、`useComputed`、`useSignalEffect`、低レベルselector hooks。
+- [グローバルステート](global-state.ja.md) — module scopeのsignalをストアとして使う方法と、SSRで必要になるリクエストごとのストア。
 - [描画最適化](rendering-optimization.ja.md) — 明示的な `useSignals()` 追跡とbuild pluginによる自動挿入の比較。完全なオプションリファレンスについては[build pluginのdocs](../packages/unplugin-react-fine-grained-signals/README.ja.md)を参照してください。
 - [JSXのsignal子要素とhost binding](jsx-bindings.ja.md) — 独自JSXランタイムのDOM直接bindingとその制約。
 - [JSX制御フローユーティリティ](control-flow.ja.md) — `Show`、`Switch` / `Match`、`For`、`Index`。
