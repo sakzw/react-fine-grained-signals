@@ -14,7 +14,7 @@
  * pinning the unguarded behavior the default now prevents.
  */
 
-import { transformSync, type PluginObj } from "@babel/core";
+import { transformSync, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
 import reactCompiler, { type LoggerEvent } from "babel-plugin-react-compiler";
 import { act, createElement, type FunctionComponent } from "react";
@@ -51,7 +51,7 @@ const moduleRegistry: Record<string, unknown> = {
 // Rewrites the compiled ES module into something `new Function` can run, so a
 // fixture keeps real module scope -- what the compiler's reactivity analysis
 // looks at -- without needing a file on disk.
-const moduleLinker: PluginObj = {
+const moduleLinker: PluginObject = {
   name: "test-module-linker",
   visitor: {
     ImportDeclaration(path) {
@@ -189,7 +189,9 @@ async function loadModule(
     babelrc: false,
     configFile: false,
     filename: "Fixture.js",
-    plugins: [moduleLinker],
+    // Babel 8 dropped the plain plugin object from `PluginItem`, which the
+    // runtime still accepts and this fixture linker relies on.
+    plugins: [moduleLinker as PluginItem],
   });
   if (typeof linked?.code !== "string") throw new Error("module linking emitted no code");
   const moduleExports: Record<string, unknown> = {};

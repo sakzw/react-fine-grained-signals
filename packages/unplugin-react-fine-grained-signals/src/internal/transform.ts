@@ -1,9 +1,10 @@
 import { declare } from "@babel/helper-plugin-utils";
 import {
   transformSync,
+  type InputOptions,
   type NodePath,
-  type ParserOptions,
-  type PluginObj,
+  type PluginItem,
+  type PluginObject,
   type PluginPass,
 } from "@babel/core";
 import * as t from "@babel/types";
@@ -667,7 +668,7 @@ function isNamespaceUseSignalsImport(
 
 function isUseSignalsCallee(
   functionPath: NodePath<t.Function>,
-  callee: NodePath<t.Expression | t.V8IntrinsicIdentifier | t.Super>,
+  callee: NodePath<t.CallExpression["callee"]>,
   importSource: string,
   allowBarrel = true,
 ): boolean {
@@ -1063,7 +1064,10 @@ function resolveReferencedFunction(
     const init = bindingPath.get("init");
     // `const Row = ((item) => <li />) as Fn` initializes the binding with the
     // wrapper, which erases to the function the caller actually runs.
-    if (init.hasNode()) {
+    // `isExpression()` rather than `hasNode()`: a declarator's initializer is
+    // an expression or nothing, and Babel 8 dropped the type guard from
+    // `hasNode()`, so only this narrows the `null` out of the path type.
+    if (init.isExpression()) {
       const value = unwrapTransparentPath(init);
       if (value.isArrowFunctionExpression() || value.isFunctionExpression()) return value;
     }
@@ -1908,33 +1912,27 @@ function removeAbsorbedImports(programPath: NodePath<t.Program>, state: PluginSt
   state.absorbedImports = [];
 }
 
-const babelTransform = declare<InternalTransformOptions>((api, options) => {
-  api.assertVersion(7);
+const babelTransform = declare<PluginState, InternalTransformOptions>((api, options) => {
+  api.assertVersion(8);
   const managedRuntimeSource = `${options.importSource}/runtime`;
   const reactImportSource = options.reactImportSource;
 
-  const plugin: PluginObj = {
+  const plugin: PluginObject<PluginState> = {
     name: "unplugin-react-fine-grained-signals",
     visitor: {
       Program: {
-        // `declare()`'s own typing pins the visitor state to the base
-        // `PluginPass`, so the per-file fields this plugin adds are read back
-        // through one cast to `PluginState` rather than threaded through as a
-        // second type parameter it does not expose.
-        enter(path, untypedState) {
-          const state = untypedState as PluginState;
+        enter(path, state) {
           state.programPath = path;
           state.managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource);
           state.directImports = findRuntimeImports(path, options.importSource);
           state.absorbedImports = [];
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
-        exit(path, untypedState) {
-          removeAbsorbedImports(path, untypedState as PluginState);
+        exit(path, state) {
+          removeAbsorbedImports(path, state);
         },
       },
-      Function(path, untypedState) {
-        const state = untypedState as PluginState;
+      Function(path, state) {
         const decision = decideTransform(path, state, options, reactImportSource);
         switch (decision.kind) {
           case "skip":
@@ -1999,7 +1997,7 @@ export function transformReactFineGrainedSignals(
   // JavaScript commonly carries JSX without using a .jsx suffix, while
   // TypeScript's angle-bracket assertions make JSX parsing unsafe for .ts.
   const supportsJsx = /\.[cm]?(?:jsx?|tsx)$/i.test(cleanId);
-  const parserPlugins: NonNullable<ParserOptions["plugins"]> = [];
+  const parserPlugins: NonNullable<NonNullable<InputOptions["parserOpts"]>["plugins"]> = [];
   if (supportsJsx) parserPlugins.push("jsx");
   if (isTypeScript) parserPlugins.push("typescript");
   parserPlugins.push("decorators-legacy", "decoratorAutoAccessors");
@@ -2014,7 +2012,11 @@ export function transformReactFineGrainedSignals(
       // string (`App.tsx?t=173...`) into the map as if it were a real file name.
       sourceFileName: cleanId,
       parserOpts: { plugins: parserPlugins },
-      plugins: [[babelTransform, options]],
+      // Babel 8 types `plugins` as `PluginItem<object>[]`, which cannot carry a
+      // plugin whose options are a specific interface. The pair is built from
+      // `babelTransform`'s own option type one line up, so this only restates
+      // what that call site already checked.
+      plugins: [[babelTransform, options] as PluginItem],
       sourceMaps: true,
     });
   } catch (error) {

@@ -4,12 +4,15 @@ import { fileURLToPath } from "node:url";
 const source = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 export default defineConfig({
-  // Vitest 4 defaults to Oxc; disable it so the explicit esbuild JSX settings
-  // below are used for test transforms.
-  oxc: false,
-  esbuild: {
-    jsx: "automatic",
-    jsxImportSource: "react-fine-grained-signals",
+  // Tests compile JSX through this library's runtime rather than React's.
+  // These settings live on Oxc, which Vitest 4 uses by default: esbuild is an
+  // optional Vite peer that nothing in this workspace pulls in any more, so
+  // configuring `esbuild` here would be silently inert.
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+      importSource: "react-fine-grained-signals",
+    },
   },
   resolve: {
     alias: [
