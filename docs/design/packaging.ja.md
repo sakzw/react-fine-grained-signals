@@ -10,7 +10,7 @@
 
 ## `"sideEffects": false`
 
-packageは `"sideEffects": false` を設定しています。module graphからside effectを推論するbundlerは、この宣言がなくても既に正しくtree shakingできます。`signal` だけをimportした場合は2.55 kB gzipで、entry全体では8.20 kBです(`pnpm size`の`signal-only`/`index-full`シナリオとして追跡されているため、コードが変わればこの数値も追従します)。Vite/Rolldownでは、このflagの有無で前者が約40 bytes動くだけで、後者は変わりません。それでも設定しているのは、証明する代わりに宣言を信頼するbundler（webpackの `sideEffects` 最適化）のためと、保証を固定するためです。後からtop levelのside effectを追加した場合、すべてのconsumerに黙ってcostを課す代わりにcheckが失敗します。
+packageは `"sideEffects": false` を設定しています。module graphからside effectを推論するbundlerは、この宣言がなくても既に正しくtree shakingできます。`signal` だけをimportした場合のコストは、entry全体の3分の1未満です(`pnpm size` の `signal-only` / `index-full` シナリオが現在の実測値を出します)。Vite/Rolldownでは、このflagの有無で前者が約40 bytes動くだけで、後者は変わりません。それでも設定しているのは、証明する代わりに宣言を信頼するbundler（webpackの `sideEffects` 最適化）のためと、保証を固定するためです。後からtop levelのside effectを追加した場合、すべてのconsumerに黙ってcostを課す代わりにcheckが失敗します。
 
 ```sh
 pnpm size
