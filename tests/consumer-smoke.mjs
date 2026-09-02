@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { existsSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -9,6 +10,20 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const pluginRoot = join(repositoryRoot, "packages", "unplugin-react-fine-grained-signals");
 const fixtureRoot = join(repositoryRoot, "tests", "fixtures", "consumer-vite");
+
+// `pnpm pack` below tars up whatever `dist` already holds -- neither package
+// declares a `prepack` script -- so a missing build surfaces as a confusing tsc
+// or vite failure inside the throwaway consumer instead of here. CI runs this
+// file directly after its own `pnpm build` step rather than through `pnpm
+// test:consumer`, whose script would rebuild; that is the same contract
+// scripts/check-size.mjs enforces for the size budget.
+for (const packageRoot of [repositoryRoot, pluginRoot]) {
+  if (!existsSync(join(packageRoot, "dist", "index.js"))) {
+    console.error(`No build found at ${join(packageRoot, "dist")}. Run \`pnpm build\` first.`);
+    process.exit(1);
+  }
+}
+
 const temporaryRoot = await mkdtemp(join(tmpdir(), "react-fine-grained-signals-consumer-"));
 
 async function run(command, arguments_, cwd) {

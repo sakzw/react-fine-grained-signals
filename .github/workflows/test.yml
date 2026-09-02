@@ -20,12 +20,38 @@ jobs:
         with:
           cache: true
           require-lockfile: true
-      - run: pnpm lint
-      - run: pnpm typecheck
-      # Runs both suites with V8 coverage instrumentation and prints the
-      # per-file summary to the log; each vitest.config.ts's
-      # coverage.thresholds gates the run on a real regression.
-      - run: pnpm test:coverage
+
+      # Independent, so they run as one job -- a single checkout and install --
+      # and each failure surfaces at the next `wait` rather than halting here.
+      - name: Lint
+        id: lint
+        run: pnpm lint
+        background: true
+      - name: Typecheck
+        id: typecheck
+        run: pnpm typecheck
+        background: true
+      # Each vitest.config.ts's coverage.thresholds gates the run on a real
+      # regression.
+      - name: Test
+        id: test
+        run: pnpm test:coverage
+        background: true
+      - name: Build
+        id: build
+        run: pnpm build
+        background: true
+
+      # Only the build gates these two, so they overlap the test run; `parallel:`
+      # could not express that. Both refuse to run against a missing build, and
+      # going through `pnpm size` / `pnpm test:consumer` would rebuild it.
+      - name: Wait for the build
+        wait: build
+      - run: node scripts/check-size.mjs
+      - run: node tests/consumer-smoke.mjs
+
+      - name: Wait for lint, typecheck and the test suites
+        wait-all:
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -36,7 +62,3 @@ jobs:
             packages/unplugin-react-fine-grained-signals/coverage/
           if-no-files-found: warn
           retention-days: 14
-      - run: pnpm build
-      # Runs against the build above rather than `pnpm size`, which would rebuild.
-      - run: node scripts/check-size.mjs
-      - run: pnpm test:consumer
