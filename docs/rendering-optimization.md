@@ -37,7 +37,6 @@ With the plugin in the build, components no longer call `useSignals()` by hand: 
 The optional universal build plugin keeps Babel private: configure the integration for your bundler instead of adding a Babel config. By default it detects selected functions and wraps each in an exact `try` / `finally` render boundary, closing the tracking window synchronously at the point the component function returns. Choose `transform: "inject"` to instead insert a bare `useSignals()` call as the first hook — the same best-effort boundary as writing the hook yourself, without a control-flow rewrite. The JSX runtime's native leaf bindings work independently of the plugin.
 
 ```sh
-# Planned package name — it is not published to npm yet.
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
@@ -51,7 +50,7 @@ export default defineConfig({
 });
 ```
 
-The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry points. It is ESM-only, so use `import` in the bundler configuration. It is currently a private workspace package and is not published to npm; the install and configuration snippets document the intended release API.
+The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild` entry points. It is ESM-only, so use `import` in the bundler configuration.
 
 Two main options control the plugin:
 

@@ -13,7 +13,6 @@ See [`docs/README.md`](docs/README.md) for guides on using the library, design i
 ## Installation
 
 ```sh
-# Planned package name — it is not published to npm yet.
 pnpm add react-fine-grained-signals alien-signals
 ```
 

@@ -37,7 +37,6 @@ pluginをbuildに入れると、コンポーネント側で `useSignals()` を�
 任意で導入できる汎用ビルドpluginは、Babel設定を利用者に要求せず、bundler向けのintegrationだけを設定します。既定では対象の関数を検出し、それぞれを厳密な `try` / `finally` render boundaryで包みます。componentの関数がreturnする時点で、追跡windowを同期的に閉じます。代わりに手書きと同じbest-effortな追跡境界がほしい場合は、`transform: "inject"` を選んで最初のフックとして変換なしの `useSignals()` を挿入してください。制御フローは書き換えません。JSXランタイムのネイティブリーフ更新はpluginと独立して動作します。
 
 ```sh
-# 将来のパッケージ名です。まだnpmには公開していません。
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
@@ -51,7 +50,7 @@ export default defineConfig({
 });
 ```
 
-同じパッケージは `/rollup`、`/webpack`、`/rspack`、`/esbuild` のentry pointも提供します。ESM-onlyのため、bundler設定ではCommonJSの `require()` ではなく `import` を使ってください。現在はprivateなworkspace packageであり、npmには公開していません。導入・設定例は将来の公開APIを示すものです。
+同じパッケージは `/rollup`、`/webpack`、`/rspack`、`/esbuild` のentry pointも提供します。ESM-onlyのため、bundler設定ではCommonJSの `require()` ではなく `import` を使ってください。
 
 主な2つのオプションがpluginの動作を制御します。
 

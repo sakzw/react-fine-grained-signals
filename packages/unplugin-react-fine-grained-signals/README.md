@@ -4,7 +4,7 @@
 
 Universal bundler integration for automatic `useSignals()` insertion and the
 optional managed render-scope transform in
-[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals) (not yet published to npm).
+[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals).
 
 This package is deliberately the only build-time integration. It keeps the
 Babel implementation private, so application configuration is the same across

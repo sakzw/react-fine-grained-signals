@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals)（npmへまだ公開されていません）
+[`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals)
 向けの、`useSignals()` 自動挿入と任意のmanaged render scope変換を提供する汎用
 bundler integrationです。
 

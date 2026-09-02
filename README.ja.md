@@ -13,7 +13,6 @@
 ## インストール
 
 ```sh
-# 公開予定のパッケージ名です。まだnpmには公開していません。
 pnpm add react-fine-grained-signals alien-signals
 ```
 
