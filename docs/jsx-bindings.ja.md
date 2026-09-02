@@ -4,7 +4,15 @@
 
 ## セットアップ
 
-提供される自動JSXランタイムを使うようにTypeScriptを設定します。
+このruntimeは明示的に有効化した場合のみ使われます。有効化とは、自動JSX変換の向き先をこのruntimeに変えることで、ファイル単位でもプロジェクト単位でも設定できます。
+
+ファイル単位では、先頭行にpragmaを書きます。他のファイルはReactのJSXランタイムのままになるため、アプリの一部だけで直接バインディングを使いたい場合はこちらが適しています。
+
+```tsx
+/** @jsxImportSource react-fine-grained-signals */
+```
+
+プロジェクト全体で有効にする場合は `tsconfig.json` に設定します。
 
 ```json
 {
@@ -14,6 +22,26 @@
   }
 }
 ```
+
+Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じで、[`tests/fixtures/consumer-vite`](../tests/fixtures/consumer-vite)はこれに依存しています。
+
+一方Babelは `tsconfig.json` を読みません。JSXの変換をBabelに任せるbuild（webpackの `babel-loader` が代表例です）では、preset側でランタイムを指定してください。
+
+```js
+// babel.config.js
+export default {
+  presets: [
+    [
+      "@babel/preset-react",
+      { runtime: "automatic", importSource: "react-fine-grained-signals" },
+    ],
+  ],
+};
+```
+
+どちらの場合も2つのentry pointが使われます。productionビルドでは `jsx-runtime`、開発時には `jsx-dev-runtime` で、本パッケージは両方を提供しています。
+
+どちらの形式でも選択されるruntimeは同じで、pragmaは適用範囲を絞るだけです。[`examples/react-router`](../examples/react-router)は `tsconfig.json` に `jsx` だけを設定して `jsxImportSource` は置かず、2つのコンポーネントをpragmaで有効化しています。
 
 これはこのruntimeが提供する最も細かい描画最適化ですが、対応するのはネイティブ要素のsignal子要素と、以下に挙げるpropsだけです。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。
 

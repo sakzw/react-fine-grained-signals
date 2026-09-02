@@ -18,7 +18,68 @@ pnpm add react-fine-grained-signals alien-signals
 
 `alien-signals` はpeer dependencyなので、上のように併せてinstallしてください。
 
-`useSignals()` を自動挿入するオプションのbuild pluginは別途installします。[描画最適化](docs/rendering-optimization.ja.md)を参照してください。
+## セットアップ
+
+プリミティブとフックは、installした時点で動作します。buildツールやコンパイラの設定は不要です。
+
+```tsx
+import { useSignal, useSignals } from "react-fine-grained-signals";
+
+function Counter() {
+  useSignals();
+  const count = useSignal(0);
+
+  return <button onClick={() => count.value++}>{count.value}</button>;
+}
+```
+
+以下の2つの最適化は任意であり、互いに独立しています。どちらもinstall後に別途設定するもので、上記のフックを使うだけなら不要です。
+
+### JSXランタイム — DOMへの直接バインディング
+
+ネイティブホスト要素の子要素として使われたsignalが、周囲のコンポーネントを再レンダーせずに、そのDOMノードだけを更新できるようになります。
+
+ファイル単位で有効にするには、先頭行にpragmaを書きます。他のファイルはReactのJSXランタイムのままになるため、アプリの一部だけで直接バインディングを使いたい場合はこちらを選んでください。[`examples/react-router`](examples/react-router)がこの構成です。
+
+```tsx
+/** @jsxImportSource react-fine-grained-signals */
+```
+
+プロジェクト全体で有効にする場合は `tsconfig.json` に設定します。
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react-fine-grained-signals"
+  }
+}
+```
+
+Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じです。
+
+このランタイムが対象とするのはネイティブ要素と、意図的に絞ったpropsだけです。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。許可リスト全体と、JSXをBabelで変換するツールチェーン（`tsconfig.json` を読みません）については[JSXのsignal子要素とhost binding](docs/jsx-bindings.ja.md)を参照してください。
+
+### ビルドplugin — `useSignals()` の自動挿入
+
+追跡境界をbuild時に挿入するため、コンポーネント側で `useSignals()` を手書きする必要がなくなります。別packageなので個別にinstallします。
+
+```sh
+pnpm add -D unplugin-react-fine-grained-signals
+```
+
+そのうえで、bundlerに応じたentry point（`/vite`、`/rollup`、`/webpack`、`/rspack`、`/esbuild`）をbuild設定に追加します。
+
+```ts
+// vite.config.ts
+import signals from "unplugin-react-fine-grained-signals/vite";
+
+export default defineConfig({
+  plugins: [signals({ mode: "auto" })],
+});
+```
+
+オプションの詳細と、フックを手書きする場合との使い分けについては[描画最適化](docs/rendering-optimization.ja.md)を参照してください。
 
 ## 開発
 

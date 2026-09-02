@@ -4,7 +4,15 @@
 
 ## Setup
 
-Configure TypeScript to use the supplied automatic JSX runtime:
+The runtime is opt-in, and opting in is a matter of pointing the automatic JSX transform at it. That can be done per file or per project.
+
+Per file, with a pragma on the first line. Every other file keeps React's JSX runtime, which makes this the right form when only part of an app needs the direct bindings:
+
+```tsx
+/** @jsxImportSource react-fine-grained-signals */
+```
+
+Project-wide, in `tsconfig.json`:
 
 ```json
 {
@@ -14,6 +22,26 @@ Configure TypeScript to use the supplied automatic JSX runtime:
   }
 }
 ```
+
+Vite reads both of those from `tsconfig.json` — with its default transform and with `@vitejs/plugin-react` alike — so `vite.config.ts` needs no JSX configuration of its own, which is what [`tests/fixtures/consumer-vite`](../tests/fixtures/consumer-vite) relies on.
+
+Babel never reads `tsconfig.json`. A build that hands JSX to Babel — `babel-loader` under webpack being the usual case — names the runtime on the preset instead:
+
+```js
+// babel.config.js
+export default {
+  presets: [
+    [
+      "@babel/preset-react",
+      { runtime: "automatic", importSource: "react-fine-grained-signals" },
+    ],
+  ],
+};
+```
+
+Either way both entry points are used: `jsx-runtime` in production builds and `jsx-dev-runtime` in development, and this package ships both.
+
+The two forms select the same runtime; the pragma only narrows where it applies. [`examples/react-router`](../examples/react-router) sets `jsx` but not `jsxImportSource` in its `tsconfig.json`, and opts two of its components in by pragma.
 
 This is the most fine-grained render optimization the runtime offers, but it covers only native elements' signal children and the props listed below. Signals passed to React component props or component children are not unwrapped.
 
