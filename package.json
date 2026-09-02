@@ -1,6 +1,6 @@
 {
   "name": "react-fine-grained-signals",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fine-grained signal rendering for React 19, built on alien-signals.",
   "license": "MIT",
   "author": "akazawa",
