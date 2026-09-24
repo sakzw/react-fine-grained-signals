@@ -108,6 +108,15 @@ try {
       `Vite consumer output should hold the fixture's hand-written managed boundary plus the one the transform injects into Counter, found ${managedBoundaries.length}`,
     );
   }
+
+  // Exercise two freshly copied runtime builds in this same consumer smoke
+  // path. This keeps duplicate-copy coverage independent of stale dist during
+  // ordinary source unit tests.
+  await run(
+    process.execPath,
+    [join(repositoryRoot, "tests", "cross-copy-smoke.mjs")],
+    repositoryRoot,
+  );
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }

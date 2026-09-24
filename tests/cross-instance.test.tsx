@@ -13,12 +13,12 @@ import { isSignal, signal, type ReadonlySignal } from "../src/index.js";
 const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal");
 
 /**
- * Stands in for a signal owned by a second copy of this package: the brand and
- * the `{ value, peek() }` contract are all this instance can see, which is the
- * situation duplicate resolution or a realm boundary actually produces. The
- * reads delegate to a local signal so the JSX runtime has something to react
- * to; a genuine duplicate keeps reactivity only while the alien-signals core
- * underneath is shared.
+ * Simulates the public shape of a signal owned by a second copy of this
+ * package: the brand and the `{ value, peek() }` contract are all this instance
+ * can see, which is the situation duplicate resolution or a realm boundary
+ * actually produces. The reads delegate to a local signal so the JSX runtime
+ * has something to react to; a genuine duplicate keeps reactivity only while
+ * the alien-signals core underneath is shared.
  */
 function foreignSignal<T>(source: ReadonlySignal<T>): ReadonlySignal<T> {
   const foreign: ReadonlySignal<T> = {
@@ -40,7 +40,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe("signals from a second package instance", () => {
+describe("simulated signals from a second package instance", () => {
   it("is recognized without this instance having created it", () => {
     const foreign = foreignSignal(signal(1));
 
