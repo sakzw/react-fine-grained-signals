@@ -89,23 +89,22 @@ build pluginをbuildに入れている場合、これを手で書く必要はあ
 
 ### pluginを使わずに厳密な境界を作る
 
-`react-fine-grained-signals/runtime` は、同じ `useSignals` という名前で別の関数をexportしています。こちらはscope handleを返し、自分で閉じます。build時のtransformなしに、pluginのmanaged出力と同じ厳密な境界が得られます。
+`react-fine-grained-signals/runtime` は `useManagedSignals` をexportしています。scope handleを返すため、自分で閉じます。build時のtransformなしに、pluginのmanaged出力と同じ厳密な境界が得られます。
 
 ```tsx
-import { useSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 function Row() {
-  const store = useSignals();
+  const store = useManagedSignals();
   try {
     // signalの読み取り
   } finally {
-    store.f();
+    store.finish();
   }
 }
 ```
 
 - ウィンドウは `finally` が実行される箇所でちょうど閉じます。
-- 同じ関数は `useManagedSignals` という名前でもexportされています。呼び出し箇所でmanagedの契約を、曖昧な `useSignals` aliasではなく明示的に示したい場合は、こちらをimportしてください。
 
 ### React Compiler
 

@@ -278,16 +278,16 @@ export function Counter() {
 // under measurement.
 const handWrittenRuntimeCounter = `
 import { signal } from "react-fine-grained-signals";
-import { useSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
 export function Counter() {
-  const store = useSignals();
+  const store = useManagedSignals();
   try {
     return <output>{count.value}</output>;
   } finally {
-    store.f();
+    store.finish();
   }
 }
 `;
@@ -295,18 +295,18 @@ export function Counter() {
 // The control: the same hand-authored shape with the directive written by hand.
 const handWrittenRuntimeCounterWithDirective = `
 import { signal } from "react-fine-grained-signals";
-import { useSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
 export function Counter() {
   "use no memo";
 
-  const store = useSignals();
+  const store = useManagedSignals();
   try {
     return <output>{count.value}</output>;
   } finally {
-    store.f();
+    store.finish();
   }
 }
 `;

@@ -102,7 +102,7 @@ try {
   // The fixture hand-writes one managed boundary (ManagedBoundary, opted out of
   // the transform) and leaves exactly one automatic candidate (Counter), so the
   // default `transform: "managed"` must produce two boundaries in total.
-  const managedBoundaries = output.match(/finally\s*\{\s*\w+\.f\(\);/g) ?? [];
+  const managedBoundaries = output.match(/finally\s*\{\s*\w+\.finish\(\);/g) ?? [];
   if (managedBoundaries.length !== 2) {
     throw new Error(
       `Vite consumer output should hold the fixture's hand-written managed boundary plus the one the transform injects into Counter, found ${managedBoundaries.length}`,

@@ -6,3 +6,5 @@ coverage/
 .pnpm-store/
 playwright-report/
 test-results/
+.sandbox/
+playground/

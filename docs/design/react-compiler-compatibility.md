@@ -76,20 +76,20 @@ The emitted code is byte-for-byte the transform's own output, and the runtime te
 
 ### The manual runtime-import boundary behaves like managed output
 
-The manual runtime-import boundary published in [the hooks guide](../hooks.md) — `useSignals()` imported from `react-fine-grained-signals/runtime`, closed by the author's own `try` / `finally` — was measured on its own, with step 1 of the pipeline skipped entirely. That skip is the point: this is the shape a developer writes when the build plugin is not in the build, so nothing inserts a directive for it.
+The manual runtime-import boundary published in [the hooks guide](../hooks.md) — `useManagedSignals()` imported from `react-fine-grained-signals/runtime`, closed by the author's own `try` / `finally` — was measured on its own, with step 1 of the pipeline skipped entirely. That skip is the point: this is the shape a developer writes when the build plugin is not in the build, so nothing inserts a directive for it.
 
 ```jsx
 import { signal } from "react-fine-grained-signals";
-import { useSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
 export function Counter() {
-  const store = useSignals();
+  const store = useManagedSignals();
   try {
     return <output>{count.value}</output>;
   } finally {
-    store.f();
+    store.finish();
   }
 }
 ```

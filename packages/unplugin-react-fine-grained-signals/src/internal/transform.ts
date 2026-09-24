@@ -59,6 +59,7 @@ interface FunctionInspection {
   containsJSX: boolean;
   readsValue: boolean;
   hasUseSignalsCall: boolean;
+  hasUseManagedSignalsCall: boolean;
 }
 
 const useSignalsComment = /(^|\s)@useSignals(\s|$)/;
@@ -630,14 +631,37 @@ function getDefaultExportIdentity(
   return name === undefined ? undefined : { kind: "binding", name };
 }
 
-// The library exports `useSignals` from two first-party entry points: the
-// package root (the bare, best-effort hook) and its `/runtime` subpath (the
-// managed boundary this transform itself emits). Both are unambiguously this
-// library's own export, so an import from either is verified. Accepting only
-// the root would reject `/runtime` and then tell the author, in the barrel
-// warning below, to import from exactly where they already imported.
+// The root `useSignals` import is the bare, best-effort hook. Its direct import
+// remains recognizable as an explicit opt-in that managed mode can absorb.
 function isVerifiedUseSignalsSource(source: string, importSource: string): boolean {
-  return source === importSource || source === `${importSource}/runtime`;
+  return source === importSource;
+}
+
+function isNamedUseManagedSignalsImport(
+  functionPath: NodePath<t.Function>,
+  name: string,
+  runtimeSource: string,
+): boolean {
+  const resolved = resolveImportedBinding(functionPath, name);
+  return (
+    resolved !== undefined &&
+    resolved.specifier.isImportSpecifier() &&
+    resolved.source === runtimeSource &&
+    t.isIdentifier(resolved.specifier.node.imported, { name: "useManagedSignals" })
+  );
+}
+
+function isNamespaceUseManagedSignalsImport(
+  functionPath: NodePath<t.Function>,
+  name: string,
+  runtimeSource: string,
+): boolean {
+  const resolved = resolveImportedBinding(functionPath, name);
+  return (
+    resolved !== undefined &&
+    resolved.specifier.isImportNamespaceSpecifier() &&
+    resolved.source === runtimeSource
+  );
 }
 
 function isNamedUseSignalsImport(
@@ -1300,6 +1324,7 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
 function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
+  managedRuntimeSource: string,
   reactImportSource: string,
   // Guards the render-callback recursion below against reference cycles
   // (mutually referencing helpers) and re-inspecting the same body twice.
@@ -1309,6 +1334,7 @@ function inspectFunction(
     containsJSX: false,
     readsValue: false,
     hasUseSignalsCall: false,
+    hasUseManagedSignalsCall: false,
   };
 
   // A render callback defined elsewhere in the module runs inside this
@@ -1335,7 +1361,13 @@ function inspectFunction(
     if (target === undefined || target.isDescendant(functionPath)) return;
     if (visited.has(target.node)) return;
     visited.add(target.node);
-    const nested = inspectFunction(target, importSource, reactImportSource, visited);
+    const nested = inspectFunction(
+      target,
+      importSource,
+      managedRuntimeSource,
+      reactImportSource,
+      visited,
+    );
     if (nested.containsJSX) inspection.containsJSX = true;
     if (nested.readsValue) inspection.readsValue = true;
   };
@@ -1371,7 +1403,13 @@ function inspectFunction(
     if (target === undefined || target.isDescendant(functionPath)) return;
     if (visited.has(target.node)) return;
     visited.add(target.node);
-    const nested = inspectFunction(target, importSource, reactImportSource, visited);
+    const nested = inspectFunction(
+      target,
+      importSource,
+      managedRuntimeSource,
+      reactImportSource,
+      visited,
+    );
     if (nested.containsJSX) inspection.containsJSX = true;
     if (nested.readsValue) inspection.readsValue = true;
   };
@@ -1413,6 +1451,23 @@ function inspectFunction(
       if (isUseSignalsCallee(functionPath, callee, importSource)) {
         inspection.hasUseSignalsCall = true;
       }
+      if (
+        (callee.isIdentifier() && isNamedUseManagedSignalsImport(
+          functionPath,
+          callee.node.name,
+          managedRuntimeSource,
+        )) ||
+        (callee.isMemberExpression() &&
+          getReadPropertyName(callee.node) === "useManagedSignals" &&
+          callee.get("object").isIdentifier() &&
+          isNamespaceUseManagedSignalsImport(
+            functionPath,
+            (callee.get("object") as NodePath<t.Identifier>).node.name,
+            managedRuntimeSource,
+          ))
+      ) {
+        inspection.hasUseManagedSignalsCall = true;
+      }
     },
     OptionalCallExpression(path) {
       foldReferencedRenderCallbacks(path);
@@ -1425,6 +1480,7 @@ function inspectFunction(
 function findRuntimeImports(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
+  importedName: "useSignals" | "useManagedSignals",
 ): RuntimeImport[] {
   const imports: RuntimeImport[] = [];
   for (const statement of programPath.get("body")) {
@@ -1439,7 +1495,7 @@ function findRuntimeImports(
       if (
         specifier.isImportSpecifier() &&
         specifier.node.importKind !== "type" &&
-        t.isIdentifier(specifier.node.imported, { name: "useSignals" })
+        t.isIdentifier(specifier.node.imported, { name: importedName })
       ) {
         imports.push({
           identifier: t.cloneNode(specifier.node.local),
@@ -1454,11 +1510,12 @@ function findRuntimeImports(
 function addRuntimeImport(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
+  importedName: "useSignals" | "useManagedSignals",
   functionPath: NodePath<t.Function>,
 ): RuntimeImport {
-  const local = functionPath.scope.generateUidIdentifier("useSignals");
+  const local = functionPath.scope.generateUidIdentifier(importedName);
   const declaration = t.importDeclaration(
-    [t.importSpecifier(t.cloneNode(local), t.identifier("useSignals"))],
+    [t.importSpecifier(t.cloneNode(local), t.identifier(importedName))],
     t.stringLiteral(runtimeSource),
   );
   const imports = programPath.get("body").filter((path) => path.isImportDeclaration());
@@ -1467,12 +1524,12 @@ function addRuntimeImport(
     : imports.at(-1)!.insertAfter(declaration);
   const inserted = insertedPaths[0];
   if (inserted === undefined || !inserted.isImportDeclaration()) {
-    throw new Error("Failed to insert the useSignals import");
+    throw new Error(`Failed to insert the ${importedName} import`);
   }
   programPath.scope.registerDeclaration(inserted);
   const specifier = inserted.get("specifiers")[0];
   if (specifier === undefined || !specifier.isImportSpecifier()) {
-    throw new Error("Failed to register the useSignals import");
+    throw new Error(`Failed to register the ${importedName} import`);
   }
   return { identifier: local, bindingPath: specifier };
 }
@@ -1561,7 +1618,7 @@ function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSour
     `This useSignals() call cannot be verified as "${importSource}"'s own export: it resolves ` +
       "only through a barrel/re-export module, and a single-file transform cannot follow that " +
       "chain to confirm the target. The component stays on the bare, best-effort useSignals() " +
-      `boundary. Import useSignals directly from "${importSource}" or "${importSource}/runtime" ` +
+      `boundary. Import useSignals directly from "${importSource}" ` +
       "instead to get the verified boundary.",
   );
   console.warn(warning.message);
@@ -1637,7 +1694,7 @@ type FunctionBody = ReturnType<typeof getFunctionBody>;
 // `decideTransform` has settled on a codegen strategy: the body slot to
 // rewrite, the original statement list it came from (empty for a concise
 // arrow body), whether the author's own call is being absorbed, and the
-// runtime `useSignals` binding to call.
+// runtime hook binding to call.
 interface TransformCodegenInput {
   body: FunctionBody;
   statements: NodePath<t.Statement>[];
@@ -1673,7 +1730,7 @@ type TransformDecision =
  * explicit/annotated/automatic eligibility (plus the barrel-useSignals
  * warning that eligibility check surfaces along the way), the
  * async/generator guard, and -- once a function is confirmed eligible for
- * real codegen -- acquiring the runtime `useSignals` import it will call.
+ * real codegen -- acquiring the corresponding runtime hook import it will call.
  * Pure decision-making: no AST mutation happens here, so every early return is
  * just a `return`, not a `return` guarding mutations already made.
  */
@@ -1711,7 +1768,13 @@ function decideTransform(
   if (isUnverifiableBarrelUseSignals(path, statements, options.importSource, explicit)) {
     warnUnverifiableBarrelUseSignals(path, options.importSource);
   }
-  const inspection = inspectFunction(path, options.importSource, reactImportSource);
+  const managedRuntimeSource = `${options.importSource}/runtime`;
+  const inspection = inspectFunction(
+    path,
+    options.importSource,
+    managedRuntimeSource,
+    reactImportSource,
+  );
   const annotation = ownsLeadingComment(useSignalsComment);
   // A factory is not a component, so no automatic route and no annotation may
   // attach a boundary to it -- the component it returns carries one instead
@@ -1780,7 +1843,9 @@ function decideTransform(
   const automatic =
     !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
-  if (!explicit && inspection.hasUseSignalsCall) return { kind: "skip" };
+  if (!explicit && (inspection.hasUseSignalsCall || inspection.hasUseManagedSignalsCall)) {
+    return { kind: "skip" };
+  }
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
   if (path.node.async || path.node.generator) {
     if (!explicit && !annotated) return { kind: "skip" };
@@ -1789,7 +1854,6 @@ function decideTransform(
     );
   }
 
-  const managedRuntimeSource = `${options.importSource}/runtime`;
   const importSource = options.transform === "managed"
     ? managedRuntimeSource
     : options.importSource;
@@ -1800,7 +1864,12 @@ function decideTransform(
     path.scope.getBinding(identifier.name)?.path === bindingPath
   );
   if (runtimeImport === undefined) {
-    runtimeImport = addRuntimeImport(state.programPath, importSource, path);
+    runtimeImport = addRuntimeImport(
+      state.programPath,
+      importSource,
+      options.transform === "managed" ? "useManagedSignals" : "useSignals",
+      path,
+    );
     imports.push(runtimeImport);
   }
 
@@ -1869,7 +1938,7 @@ function applyManaged(
       t.blockStatement([
         t.expressionStatement(
           t.callExpression(
-            t.memberExpression(t.cloneNode(store), t.identifier("f")),
+            t.memberExpression(t.cloneNode(store), t.identifier("finish")),
             [],
           ),
         ),
@@ -1923,8 +1992,12 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
       Program: {
         enter(path, state) {
           state.programPath = path;
-          state.managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource);
-          state.directImports = findRuntimeImports(path, options.importSource);
+          state.managedRuntimeImports = findRuntimeImports(
+            path,
+            managedRuntimeSource,
+            "useManagedSignals",
+          );
+          state.directImports = findRuntimeImports(path, options.importSource, "useSignals");
           state.absorbedImports = [];
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },

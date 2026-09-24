@@ -30,7 +30,7 @@ export interface ReactFineGrainedSignalsOptions {
    * when its memoization has been verified against this library's tracking.
    */
   reactCompiler?: ReactFineGrainedSignalsReactCompiler;
-  /** Package that exports `useSignals` and its `/runtime` entry. */
+  /** Package whose root exports bare `useSignals` and whose `/runtime` entry exports `useManagedSignals`. */
   importSource?: string;
   /**
    * Extra module specifier whose `memo`/`forwardRef` exports are treated as

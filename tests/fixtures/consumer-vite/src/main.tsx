@@ -1,5 +1,5 @@
 import { signal } from "react-fine-grained-signals";
-import { useSignals as useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 const count = signal(0);
@@ -16,7 +16,7 @@ export function ManagedBoundary() {
   try {
     return <output>{count.value}</output>;
   } finally {
-    signals.f();
+    signals.finish();
   }
 }
 

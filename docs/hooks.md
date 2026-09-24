@@ -89,23 +89,22 @@ Use the build plugin's `transform: "managed"` (its default) when an exact bounda
 
 ### Exact boundary without the plugin
 
-`react-fine-grained-signals/runtime` exports a different function under the same `useSignals` name: it returns a scope handle that you close yourself, giving the identical exact boundary with no build-time transform.
+`react-fine-grained-signals/runtime` exports `useManagedSignals`, which returns a scope handle that you close yourself, giving the identical exact boundary with no build-time transform.
 
 ```tsx
-import { useSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 function Row() {
-  const store = useSignals();
+  const store = useManagedSignals();
   try {
     // signal reads
   } finally {
-    store.f();
+    store.finish();
   }
 }
 ```
 
 - The window closes exactly where `finally` runs, matching the plugin's managed output.
-- The same function is also exported as `useManagedSignals`. Import that name when you want the managed contract to read explicitly at the call site instead of through the ambiguous `useSignals` alias.
 
 ### React Compiler
 

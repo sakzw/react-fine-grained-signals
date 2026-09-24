@@ -47,7 +47,7 @@ export function Show<T>({ when, fallback = null, children }: ShowProps<T>): Reac
       ? children(value as NonNullable<T>)
       : children;
   } finally {
-    store.f();
+    store.finish();
   }
 }
 
@@ -88,7 +88,7 @@ export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
 
     return fallback;
   } finally {
-    store.f();
+    store.finish();
   }
 }
 
@@ -139,7 +139,7 @@ export function For(
       <Fragment key={by(item, index)}>{children(item, index)}</Fragment>
     ));
   } finally {
-    store.f();
+    store.finish();
   }
 }
 
@@ -180,7 +180,7 @@ export function Index<T>({ each, fallback = null, children }: IndexProps<T>): Re
       <Fragment key={index}>{children(() => readAt(index), index)}</Fragment>
     ));
   } finally {
-    store.f();
+    store.finish();
   }
 }
 

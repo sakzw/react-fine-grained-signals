@@ -41,7 +41,7 @@ const resolvedPromise = Promise.resolve();
  *     throws, suspends, or is otherwise abandoned before committing.
  *     Managed scopes (`useManagedSignals()`) opt out of this fallback (see
  *     the `!managed` guard in `useSignalsImplementation`) because their
- *     owner is contractually responsible for calling `finish()`/`f()`
+ *     owner is contractually responsible for calling `finish()`
  *     itself, synchronously, before returning.
  */
 let currentStore: RenderStore | undefined;
@@ -155,10 +155,6 @@ class RenderStore implements RenderCollector {
     finishCollection?.();
   }
 
-  f(): void {
-    this.finish();
-  }
-
   commit(): void {
     const dependencies = this.#pendingDependencies;
     this.#pendingDependencies = undefined;
@@ -253,10 +249,9 @@ export function useSignals(): void {
 /** The render-scope handle consumed by the source transform runtime. */
 export interface ManagedSignalsStore {
   finish(): void;
-  f(): void;
 }
 
-/** Starts a managed render scope that must be closed synchronously with `finish()` (or its `f()` alias). */
+/** Starts a managed render scope that must be closed synchronously with `finish()`. */
 export function useManagedSignals(): ManagedSignalsStore {
   return useSignalsImplementation(true);
 }

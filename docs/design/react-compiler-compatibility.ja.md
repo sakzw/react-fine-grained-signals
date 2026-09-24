@@ -76,20 +76,20 @@ CompileError: (BuildHIR::lowerStatement) Handle TryStatement without a catch cla
 
 ### 手動ランタイムインポート境界はmanagedの出力と同じ挙動になる
 
-[hooksのdocs](../hooks.ja.md)に載せている手動ランタイムインポート境界、つまり `react-fine-grained-signals/runtime` からimportした `useSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
+[hooksのdocs](../hooks.ja.md)に載せている手動ランタイムインポート境界、つまり `react-fine-grained-signals/runtime` からimportした `useManagedSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
 
 ```jsx
 import { signal } from "react-fine-grained-signals";
-import { useSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 export const count = signal(0);
 
 export function Counter() {
-  const store = useSignals();
+  const store = useManagedSignals();
   try {
     return <output>{count.value}</output>;
   } finally {
-    store.f();
+    store.finish();
   }
 }
 ```

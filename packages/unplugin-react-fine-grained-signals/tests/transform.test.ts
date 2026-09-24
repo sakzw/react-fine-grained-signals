@@ -38,7 +38,7 @@ describe("managed render transform", () => {
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("try {");
     expect(output).toContain("finally {");
-    expect(output).toContain("_signals.f();");
+    expect(output).toContain("_signals.finish();");
     expect(output).not.toMatch(/\buseSignals\(\);/);
   });
 
@@ -82,7 +82,7 @@ describe("managed render transform", () => {
     expect(output).toContain("_useSignals();");
     expect(output).not.toContain("try {");
     expect(output).not.toContain("finally {");
-    expect(output).not.toContain(".f();");
+    expect(output).not.toContain(".finish();");
   });
 
   it("reuses a direct import and leaves an explicit bare useSignals call untouched", () => {
@@ -141,10 +141,10 @@ describe("managed render transform", () => {
 
     expect(memoOutput).toContain("memo(function inner() {");
     expect(memoOutput.match(/finally/g)).toHaveLength(1);
-    expect(memoOutput).toContain("_signals.f();");
+    expect(memoOutput).toContain("_signals.finish();");
     expect(forwardRefOutput).toContain("forwardRef(function render(props, ref) {");
     expect(forwardRefOutput.match(/finally/g)).toHaveLength(1);
-    expect(forwardRefOutput).toContain("_signals.f();");
+    expect(forwardRefOutput).toContain("_signals.finish();");
   });
 
   it("prefers the assigned binding over an unwrapped function expression's own name", () => {
@@ -161,7 +161,7 @@ describe("managed render transform", () => {
 
     expect(component).toContain("export const Counter = function render() {");
     expect(component.match(/finally/g)).toHaveLength(1);
-    expect(component).toContain("_signals.f();");
+    expect(component).toContain("_signals.finish();");
     expect(helper).not.toContain("finally");
     expect(helper).not.toContain("react-fine-grained-signals/runtime");
   });
@@ -1297,37 +1297,6 @@ describe("managed render transform", () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
-    it("verifies a useSignals imported from the /runtime entry point", () => {
-      // `<importSource>/runtime` is a first-party entry point this plugin emits
-      // itself, so a bare call imported from it is a verified opt-in. Rejecting
-      // it produced a warning telling the author to import from exactly where
-      // they already had, and left the file untransformed.
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const output = compile(`
-        import { useSignals } from "react-fine-grained-signals/runtime";
-        const count = { value: 1 };
-        export function App() { useSignals(); return <p>{count.value}</p>; }
-      `);
-
-      expect(warn).not.toHaveBeenCalled();
-      expect(output.match(/finally/g)).toHaveLength(1);
-      // The author's own import is reused rather than a second one added.
-      expect(output).toContain("const _signals = useSignals();");
-      expect(output).not.toContain("_useSignals");
-    });
-
-    it("verifies a namespaced useSignals call from the /runtime entry point", () => {
-      const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const output = compile(`
-        import * as runtime from "react-fine-grained-signals/runtime";
-        const count = { value: 1 };
-        export function App() { runtime.useSignals(); return <p>{count.value}</p>; }
-      `);
-
-      expect(warn).not.toHaveBeenCalled();
-      expect(output.match(/finally/g)).toHaveLength(1);
-    });
-
     it("warns when an annotation lands on a function it cannot name", () => {
       // Identity derivation reaches one level out, to the enclosing factory's
       // own binding. Here the annotated arrow is returned by a *middle*
@@ -1534,21 +1503,21 @@ describe("managed render transform", () => {
     ).toContain("_useSignals();");
   });
 
-  it("does not reuse a type-only runtime import or a shadowed runtime alias", () => {
+  it("does not reuse a type-only managed import or a shadowed runtime alias", () => {
     const typeOnly = compile(`
       import { useSignals } from "react-fine-grained-signals";
-      import type { useSignals as managed } from "react-fine-grained-signals/runtime";
+      import type { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
       export function App() { useSignals(); return <main />; }
     `);
     const shadowed = compile(`
       import { useSignals } from "react-fine-grained-signals";
-      import { useSignals as managed } from "react-fine-grained-signals/runtime";
+      import { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
       export function App(managed) { useSignals(); return <main />; }
     `);
 
-    expect(typeOnly).toContain("const _signals = _useSignals();");
+    expect(typeOnly).toContain("const _signals = _useManagedSignals();");
     expect(typeOnly).not.toContain("const _signals = managed();");
-    expect(shadowed).toContain("const _signals = _useSignals();");
+    expect(shadowed).toContain("const _signals = _useManagedSignals();");
     expect(shadowed).not.toContain("const _signals = managed();");
   });
 });

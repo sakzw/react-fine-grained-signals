@@ -1,4 +1,4 @@
-import { useSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
 import type { ActivityEntry } from "../lib/task-store.js";
 
 /**
@@ -7,7 +7,7 @@ import type { ActivityEntry } from "../lib/task-store.js";
  * from the build plugin's transform (see vite.config.ts) and reaches for the
  * manual react-fine-grained-signals/runtime boundary directly instead -- the
  * documented exact-boundary alternative for a component you want correct
- * independent of build-tool configuration. useSignals() here returns a scope
+ * independent of build-tool configuration. useManagedSignals() returns a scope
  * handle that must be closed with f() in a finally, not the plugin-provided
  * convenience hook TaskRow uses.
  */
@@ -18,7 +18,7 @@ export function ActivityRow({
   entry: () => ActivityEntry;
   slot: number;
 }) {
-  const scope = useSignals();
+  const scope = useManagedSignals();
   try {
     return (
       <li className="activity-row">
@@ -27,6 +27,6 @@ export function ActivityRow({
       </li>
     );
   } finally {
-    scope.f();
+    scope.finish();
   }
 }

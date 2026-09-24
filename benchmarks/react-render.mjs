@@ -27,7 +27,7 @@ const { signal, useSignals } = await import("../dist/index.js");
 // 57f824e) never calls the bare `useSignals()` above -- it rewrites call
 // sites to this runtime entry point's managed boundary instead. Imported
 // under an alias so both variants can be benchmarked side by side.
-const { useSignals: useManagedSignals } = await import("../dist/runtime.js");
+const { useManagedSignals } = await import("../dist/runtime.js");
 // The JSX pragma a compiled `.tsx` file actually calls -- `jsx`/`jsxs` wrap
 // `react/jsx-runtime`'s own factories with `createJsxWrapper` (src/runtime/jsx.ts),
 // which runs `transformProps`-style work on *every* element, custom
@@ -146,8 +146,8 @@ function createSignalsVariant(counts) {
  * Builds the managed-boundary signals variant: same shape as
  * `createSignalsVariant` above, but `ManagedSignalsCounter` opens and closes
  * its render scope the way the plugin's shipped `transform: "managed"`
- * output does -- `const store = useSignals(); try { ... } finally {
- * store.f(); }` against `react-fine-grained-signals/runtime` -- instead of calling
+ * output does -- `const store = useManagedSignals(); try { ... } finally {
+ * store.finish(); }` against `react-fine-grained-signals/runtime` -- instead of calling
  * the bare `useSignals()` hook. This is the boundary real apps built with
  * the default toolchain actually run, so it's benchmarked alongside the bare
  * variant rather than in its place.
@@ -161,7 +161,7 @@ function createManagedSignalsVariant(counts) {
       counts.counter += 1;
       return React.createElement("li", null, "count:", count.value);
     } finally {
-      store.f();
+      store.finish();
     }
   }
 

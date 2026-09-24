@@ -118,7 +118,7 @@ describe("unplugin-react-fine-grained-signals", () => {
 
     expect(canTransform(fragmentId, {})).toBe(true);
     const result = transformReactFineGrainedSignals(counterSource, fragmentId, internalOptions);
-    expect(result?.code).toContain("_useSignals()");
+    expect(result?.code).toContain("_useManagedSignals()");
     expect((result?.map as { sources: string[] } | undefined)?.sources)
       .toEqual(["/project/src/App.tsx"]);
   });
@@ -153,9 +153,10 @@ describe("unplugin-react-fine-grained-signals", () => {
     const output = transformCounter({ mode: "auto" });
 
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("const _signals = _useSignals();");
+    expect(output).toContain('import { useManagedSignals as _useManagedSignals } from "react-fine-grained-signals/runtime"');
+    expect(output).toContain("const _signals = _useManagedSignals();");
     expect(output).toContain("try {");
-    expect(output).toContain("_signals.f();");
+    expect(output).toContain("_signals.finish();");
   });
 
   it("uses the lightweight injection transform when it is opted into", () => {
@@ -174,10 +175,27 @@ describe("unplugin-react-fine-grained-signals", () => {
     // the body is rewritten rather than left untouched — but no second
     // `useSignals()` call is ever added.
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("const _signals = _useSignals();");
+    expect(output).toContain("const _signals = _useManagedSignals();");
     expect(output).toContain("try {");
-    expect(output).toContain("_signals.f();");
+    expect(output).toContain("_signals.finish();");
     expect(output).not.toMatch(/^\s*useSignals\(\);$/m);
+  });
+
+  it("leaves a hand-written useManagedSignals boundary untouched", () => {
+    const source = [
+      'import { useManagedSignals } from "react-fine-grained-signals/runtime";',
+      "const count = { value: 1 };",
+      "export function App() {",
+      "  const store = useManagedSignals();",
+      "  try { return <p>{count.value}</p>; }",
+      "  finally { store.finish(); }",
+      "}",
+    ].join("\n");
+
+    // The manually managed call itself is enough to identify its owner. The
+    // plugin leaves the existing exact boundary as authored rather than
+    // wrapping it in a second managed scope.
+    expect(transformSource(source, { mode: "auto" })).toBeUndefined();
   });
 
   it("keeps an explicit useSignals call in place under the injection transform", () => {
@@ -456,7 +474,7 @@ describe("bundler adapters", () => {
     const run = await runTransformLoader(entry!, resource, componentSource, incomingMap);
 
     expect(run.error).toBeNull();
-    expect(run.content).toContain("_useSignals()");
+    expect(run.content).toContain("_useManagedSignals()");
     expect((run.map as { sources: string[] }).sources).toEqual([resource]);
   });
 
@@ -473,7 +491,7 @@ describe("bundler adapters", () => {
     const run = await runTransformLoader(entry!, resource, source, upstreamMap());
 
     expect(run.error).toBeNull();
-    expect(run.content).toContain("_useSignals()");
+    expect(run.content).toContain("_useManagedSignals()");
     expect(run.content).not.toContain("sourceMappingURL");
     expect((run.map as { sources: string[] }).sources).toEqual([resource]);
   });

@@ -5,7 +5,7 @@ import { StrictMode, Suspense, act, useLayoutEffect } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, deepSignal, signal } from "../src/index.js";
-import { useSignals as useManagedSignals } from "../src/runtime.js";
+import { useManagedSignals } from "../src/runtime.js";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
 import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
 
@@ -26,6 +26,23 @@ function managed<T>(renderBody: () => T): T {
 }
 
 describe("managed useSignals render scope", () => {
+  it("exposes finish() without the abbreviated f() alias", () => {
+    const api = vi.fn();
+
+    function Probe() {
+      const store = useManagedSignals();
+      try {
+        api(typeof store.finish, "f" in store);
+        return null;
+      } finally {
+        store.finish();
+      }
+    }
+
+    render(<Probe />);
+    expect(api).toHaveBeenCalledWith("function", false);
+  });
+
   it("closes synchronously in finally while retaining committed render dependencies", () => {
     const source = signal("before");
     const renders = vi.fn();
@@ -284,7 +301,7 @@ describe("managed useSignals render scope", () => {
           <output aria-label="self overlapping">{state.value.overlapped}</output>
         );
       } finally {
-        store.f();
+        store.finish();
       }
     }
 
