@@ -26,11 +26,11 @@ function compile(
 }
 
 describe("managed render transform", () => {
-  it("turns an explicit useSignals call into a managed try/finally scope", () => {
+  it("turns an explicit useSignalTracking call into a managed try/finally scope", () => {
     const output = compile(`
-      import { useSignals } from "react-fine-grained-signals";
+      import { useSignalTracking } from "react-fine-grained-signals";
       export function Counter({ count }) {
-        useSignals();
+        useSignalTracking();
         return <button>{count.value}</button>;
       }
     `);
@@ -39,18 +39,18 @@ describe("managed render transform", () => {
     expect(output).toContain("try {");
     expect(output).toContain("finally {");
     expect(output).toContain("_signals.finish();");
-    expect(output).not.toMatch(/\buseSignals\(\);/);
+    expect(output).not.toMatch(/\buseSignalTracking\(\);/);
   });
 
   it("keeps the default manual mode and supports comment opt-in/out", () => {
     const output = compile(`
       const count = { value: 1 };
       export function Untouched() { return <p>{count.value}</p>; }
-      /** @useSignals */
+      /** @signalTracking */
       export function callback() { return count.value; }
-      /** @useSignals */
+      /** @signalTracking */
       export function OptIn() { return <p>{count.value}</p>; }
-      /** @noUseSignals */
+      /** @noSignalTracking */
       export function OptOut() { return <p>{count.value}</p>; }
     `);
 
@@ -58,6 +58,30 @@ describe("managed render transform", () => {
     expect(output).toContain("function Untouched");
     expect(output).toContain("function callback");
     expect(output).toContain("function OptOut");
+  });
+
+  it("finds the new opt-in annotation through the manual-mode fast path", () => {
+    const output = compile(`
+      /** @signalTracking */
+      export function Static() { return <p>static</p>; }
+    `);
+
+    expect(output).toContain("_signals.finish();");
+  });
+
+  it("does not recognize the old annotation names", () => {
+    const oldOptIn = `
+      /** @useSignals */
+      export function Static() { return <p>static</p>; }
+    `;
+    const oldOptOut = compile(`
+      const count = { value: 1 };
+      /** @noUseSignals */
+      export function Counter() { return <p>{count.value}</p>; }
+    `, "auto");
+
+    expect(compile(oldOptIn)).toBe(oldOptIn);
+    expect(oldOptOut).toContain("_signals.finish();");
   });
 
   it("auto-detects named JSX components that read .value", () => {
@@ -70,7 +94,7 @@ describe("managed render transform", () => {
     expect(output).toContain("finally {");
   });
 
-  it("injects a bare useSignals call without a managed render rewrite", () => {
+  it("injects a bare useSignalTracking call without a managed render rewrite", () => {
     const output = compile(`
       const count = { value: 1 };
       export const Counter = () => <p>{count.value}</p>;
@@ -79,25 +103,25 @@ describe("managed render transform", () => {
     expect(output).toContain('from "react-fine-grained-signals"');
     expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("const Counter = () => {");
-    expect(output).toContain("_useSignals();");
+    expect(output).toContain("_useSignalTracking();");
     expect(output).not.toContain("try {");
     expect(output).not.toContain("finally {");
     expect(output).not.toContain(".finish();");
   });
 
-  it("reuses a direct import and leaves an explicit bare useSignals call untouched", () => {
+  it("reuses a direct import and leaves an explicit bare useSignalTracking call untouched", () => {
     const annotated = compile(`
-      import { useSignals as track } from "react-fine-grained-signals";
-      /** @useSignals */
+      import { useSignalTracking as track } from "react-fine-grained-signals";
+      /** @signalTracking */
       export function Counter() { return <p>tracked</p>; }
     `, "manual", "inject");
     const explicit = `
-      import { useSignals } from "react-fine-grained-signals";
-      export function Counter() { useSignals(); return <p />; }
+      import { useSignalTracking } from "react-fine-grained-signals";
+      export function Counter() { useSignalTracking(); return <p />; }
     `;
 
     expect(annotated).toContain("track();");
-    expect(annotated).not.toContain("_useSignals");
+    expect(annotated).not.toContain("_useSignalTracking");
     expect(compile(explicit, "manual", "inject", "react-fine-grained-signals", "off")).toBe(explicit);
   });
 
@@ -108,7 +132,7 @@ describe("managed render transform", () => {
     `, "auto", "inject", "custom-signals");
 
     expect(output).toContain('from "custom-signals"');
-    expect(output).toContain("_useSignals();");
+    expect(output).toContain("_useSignalTracking();");
     expect(output).not.toContain('from "custom-signals/runtime"');
   });
 
@@ -332,7 +356,7 @@ describe("managed render transform", () => {
   it("supports comment opt-in on a wrapped named component", () => {
     const output = compile(`
       import { memo } from "react";
-      /** @useSignals */
+      /** @signalTracking */
       export const Counter = memo(() => <p>tracked manually</p>);
     `);
 
@@ -846,7 +870,7 @@ describe("managed render transform", () => {
     // inherit that identity by sitting in the same call.
     const output = compile(`
       import { memo } from "react";
-      /** @useSignals */
+      /** @signalTracking */
       export const MemoRow = memo((props) => <li />, (a, b) => a.id === b.id);
     `);
 
@@ -1066,7 +1090,7 @@ describe("managed render transform", () => {
       const output = compile(`
         const count = { value: 1 };
         export function withCount(Base) {
-          /** @useSignals */
+          /** @signalTracking */
           return (props) => <Base {...props} count={count.value} />;
         }
       `);
@@ -1084,9 +1108,9 @@ describe("managed render transform", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       const output = compile(`
         const count = { value: 1 };
-        /** @useSignals */
+        /** @signalTracking */
         export const withConcise = (Base) => (props) => <Base {...props} count={count.value} />;
-        /** @useSignals */
+        /** @signalTracking */
         export function withBlock(Base) {
           return (props) => <Base {...props} count={count.value} />;
         }
@@ -1100,10 +1124,10 @@ describe("managed render transform", () => {
       expect(warn).not.toHaveBeenCalled();
     });
 
-    it("honors a @noUseSignals opt-out written on the factory", () => {
+    it("honors a @noSignalTracking opt-out written on the factory", () => {
       const output = compile(`
         const count = { value: 1 };
-        /** @noUseSignals */
+        /** @noSignalTracking */
         export function withCount(Base) {
           return (props) => <Base {...props} count={count.value} />;
         }
@@ -1193,42 +1217,42 @@ describe("managed render transform", () => {
 
   it("rejects explicit or annotated async opt-in", () => {
     expect(() => compile(`
-      import { useSignals } from "react-fine-grained-signals";
-      export async function Explicit() { useSignals(); return <p />; }
+      import { useSignalTracking } from "react-fine-grained-signals";
+      export async function Explicit() { useSignalTracking(); return <p />; }
     `)).toThrow("only supports synchronous, non-generator functions");
 
     expect(() => compile(`
-      /** @useSignals */
+      /** @signalTracking */
       export async function Annotated() { return <p />; }
     `)).toThrow("only supports synchronous, non-generator functions");
   });
 
-  it("does not turn a late explicit useSignals call into a second hook", () => {
+  it("does not turn a late explicit useSignalTracking call into a second hook", () => {
     const output = compile(`
-      import { useSignals } from "react-fine-grained-signals";
+      import { useSignalTracking } from "react-fine-grained-signals";
       const count = { value: 1 };
-      export function App() { const prefix = "v"; useSignals(); return <p>{prefix}{count.value}</p>; }
+      export function App() { const prefix = "v"; useSignalTracking(); return <p>{prefix}{count.value}</p>; }
     `, "auto");
 
     expect(output).not.toContain("react-fine-grained-signals/runtime");
-    expect(output).toContain("useSignals();");
+    expect(output).toContain("useSignalTracking();");
   });
 
-  it("recognizes existing namespace and barrel-imported useSignals calls", () => {
+  it("recognizes existing namespace and barrel-imported useSignalTracking calls", () => {
     const namespaceSource = `
       import * as signals from "react-fine-grained-signals";
       const count = { value: 1 };
-      export function App() { const prefix = "v"; signals.useSignals(); return <p>{prefix}{count.value}</p>; }
+      export function App() { const prefix = "v"; signals.useSignalTracking(); return <p>{prefix}{count.value}</p>; }
     `;
     const barrelSource = `
-      import { useSignals as track } from "./signals.js";
+      import { useSignalTracking as track } from "./signals.js";
       const count = { value: 1 };
       export function App() { const prefix = "v"; track(); return <p>{prefix}{count.value}</p>; }
     `;
     const namespaceBarrelSource = `
       import * as signals from "./signals.js";
       const count = { value: 1 };
-      export function App() { const prefix = "v"; signals.useSignals(); return <p>{prefix}{count.value}</p>; }
+      export function App() { const prefix = "v"; signals.useSignalTracking(); return <p>{prefix}{count.value}</p>; }
     `;
 
     expect(compile(namespaceSource, "auto", "inject")).toBe(namespaceSource);
@@ -1237,23 +1261,23 @@ describe("managed render transform", () => {
     expect(compile(namespaceBarrelSource, "auto", "managed")).toBe(namespaceBarrelSource);
   });
 
-  describe("first-statement barrel useSignals() call", () => {
+  describe("first-statement barrel useSignalTracking() call", () => {
     afterEach(() => {
       vi.restoreAllMocks();
     });
 
     it("warns and leaves the component on the bare best-effort boundary", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      // useSignals is re-exported through a local barrel module rather than
+      // useSignalTracking is re-exported through a local barrel module rather than
       // imported directly from the package, so a single-file transform cannot
-      // verify it is this library's own useSignals -- but it is called as the
+      // verify it is this library's own useSignalTracking -- but it is called as the
       // very first statement, exactly the shape of a deliberate explicit
       // opt-in, so a developer relying on it would otherwise never learn they
       // did not get the verified/managed boundary.
       const barrelFirstStatementSource = `
-        import { useSignals } from "./signals.js";
+        import { useSignalTracking } from "./signals.js";
         export function Counter({ count }) {
-          useSignals();
+          useSignalTracking();
           return <button>{count.value}</button>;
         }
       `;
@@ -1273,12 +1297,12 @@ describe("managed render transform", () => {
       expect(warn).toHaveBeenCalledTimes(1);
     });
 
-    it("does not warn for a directly imported explicit useSignals call", () => {
+    it("does not warn for a directly imported explicit useSignalTracking call", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       compile(`
-        import { useSignals } from "react-fine-grained-signals";
+        import { useSignalTracking } from "react-fine-grained-signals";
         export function Counter({ count }) {
-          useSignals();
+          useSignalTracking();
           return <button>{count.value}</button>;
         }
       `);
@@ -1289,7 +1313,7 @@ describe("managed render transform", () => {
     it("does not warn when the barrel call is not the function's first statement", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       compile(`
-        import { useSignals as track } from "./signals.js";
+        import { useSignalTracking as track } from "./signals.js";
         const count = { value: 1 };
         export function App() { const prefix = "v"; track(); return <p>{prefix}{count.value}</p>; }
       `, "auto", "managed");
@@ -1307,7 +1331,7 @@ describe("managed render transform", () => {
         const count = { value: 1 };
         export function makeHoc() {
           return (Base) => {
-            /** @useSignals */
+            /** @signalTracking */
             return (props) => <Base {...props} count={count.value} />;
           };
         }
@@ -1315,13 +1339,13 @@ describe("managed render transform", () => {
 
       expect(output).not.toContain("finally");
       expect(warn).toHaveBeenCalledTimes(1);
-      expect(warn.mock.calls[0]?.[0]).toContain("@useSignals annotation is ignored");
+      expect(warn.mock.calls[0]?.[0]).toContain("@signalTracking annotation is ignored");
     });
 
     it("does not warn about an annotation an enclosing component already owns", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       compile(`
-        /** @useSignals */
+        /** @signalTracking */
         export function App() {
           const items = [1];
           return <ul>{items.map(() => <li />)}</ul>;
@@ -1348,9 +1372,9 @@ describe("managed render transform", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
       compile(`
         const count = { value: 1 };
-        /** @useSignals */
+        /** @signalTracking */
         export function callback() { return count.value; }
-        /** @useSignals */
+        /** @signalTracking */
         export const helper = () => { return count.value + 1; };
       `);
 
@@ -1358,14 +1382,14 @@ describe("managed render transform", () => {
     });
   });
 
-  it("drops the import left dead by absorbing an explicit useSignals call", () => {
+  it("drops the import left dead by absorbing an explicit useSignalTracking call", () => {
     // The managed boundary replaces the author's call with its own store
     // declaration, so the non-runtime entry point it came from is no longer
     // referenced and must not stay in the bundle graph.
     const output = compile(`
-      import { useSignals } from "react-fine-grained-signals";
+      import { useSignalTracking } from "react-fine-grained-signals";
       const count = { value: 1 };
-      export function App() { useSignals(); return <p>{count.value}</p>; }
+      export function App() { useSignalTracking(); return <p>{count.value}</p>; }
     `);
 
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
@@ -1375,25 +1399,25 @@ describe("managed render transform", () => {
 
   it("keeps an absorbed import that something else still uses", () => {
     const output = compile(`
-      import { useSignals } from "react-fine-grained-signals";
+      import { useSignalTracking } from "react-fine-grained-signals";
       const count = { value: 1 };
-      export const escaped = useSignals;
-      export function App() { useSignals(); return <p>{count.value}</p>; }
+      export const escaped = useSignalTracking;
+      export function App() { useSignalTracking(); return <p>{count.value}</p>; }
     `);
 
     expect(output).toContain('from "react-fine-grained-signals"');
-    expect(output).toContain("export const escaped = useSignals;");
+    expect(output).toContain("export const escaped = useSignalTracking;");
   });
 
   it("keeps other specifiers of a partially absorbed import declaration", () => {
     const output = compile(`
-      import { signal, useSignals } from "react-fine-grained-signals";
+      import { signal, useSignalTracking } from "react-fine-grained-signals";
       const count = signal(1);
-      export function App() { useSignals(); return <p>{count.value}</p>; }
+      export function App() { useSignalTracking(); return <p>{count.value}</p>; }
     `);
 
     expect(output).toContain('import { signal } from "react-fine-grained-signals"');
-    expect(output).not.toContain("signal, useSignals");
+    expect(output).not.toContain("signal, useSignalTracking");
   });
 
   it("parses class auto-accessors rather than failing the build", () => {
@@ -1471,7 +1495,7 @@ describe("managed render transform", () => {
 
   it("does not inherit an annotation into descendant component declarations", () => {
     const output = compile(`
-      /** @useSignals */
+      /** @signalTracking */
       export function Parent() {
         function Child() { return <span>child</span>; }
         return <Child />;
@@ -1500,19 +1524,19 @@ describe("managed render transform", () => {
         "fixture.js",
         options,
       )?.code,
-    ).toContain("_useSignals();");
+    ).toContain("_useSignalTracking();");
   });
 
   it("does not reuse a type-only managed import or a shadowed runtime alias", () => {
     const typeOnly = compile(`
-      import { useSignals } from "react-fine-grained-signals";
+      import { useSignalTracking } from "react-fine-grained-signals";
       import type { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
-      export function App() { useSignals(); return <main />; }
+      export function App() { useSignalTracking(); return <main />; }
     `);
     const shadowed = compile(`
-      import { useSignals } from "react-fine-grained-signals";
+      import { useSignalTracking } from "react-fine-grained-signals";
       import { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
-      export function App(managed) { useSignals(); return <main />; }
+      export function App(managed) { useSignalTracking(); return <main />; }
     `);
 
     expect(typeOnly).toContain("const _signals = _useManagedSignals();");
@@ -1548,23 +1572,23 @@ describe("React Compiler opt-out directive", () => {
     expect(output).toContain('"use no memo";');
   });
 
-  it("marks an explicit useSignals component the inject transform leaves alone", () => {
+  it("marks an explicit useSignalTracking component the inject transform leaves alone", () => {
     const explicit = `
-      import { useSignals } from "react-fine-grained-signals";
-      export function Counter({ count }) { useSignals(); return <p>{count.value}</p>; }
+      import { useSignalTracking } from "react-fine-grained-signals";
+      export function Counter({ count }) { useSignalTracking(); return <p>{count.value}</p>; }
     `;
     const output = compile(explicit, "manual", "inject");
 
     expect(output).toContain('"use no memo";');
-    expect(output).toContain("useSignals();");
-    expect(output).not.toContain("_useSignals");
+    expect(output).toContain("useSignalTracking();");
+    expect(output).not.toContain("_useSignalTracking");
   });
 
   it("does not mark functions it leaves untransformed", () => {
     const output = compile(`
       const count = { value: 1 };
       export function Untouched() { return <p>{count.value}</p>; }
-      /** @noUseSignals */
+      /** @noSignalTracking */
       export function OptOut() { return <p>{count.value}</p>; }
       export function helper() { return count.value; }
     `, "manual", "inject");
@@ -1580,7 +1604,7 @@ describe("React Compiler opt-out directive", () => {
 
     expect(optIn).toContain('"use memo";');
     expect(optIn).not.toContain("use no memo");
-    expect(optIn).toContain("_useSignals();");
+    expect(optIn).toContain("_useSignalTracking();");
   });
 
   it.each(["inject", "managed"] as const)(
@@ -1658,12 +1682,12 @@ describe("PascalCase higher-order component factories", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const concise = compile(`
       const count = { value: 1 };
-      /** @useSignals */
+      /** @signalTracking */
       export const WithCount = (Base) => (props) => <Base n={count.value} />;
     `);
     const block = compile(`
       const count = { value: 1 };
-      /** @useSignals */
+      /** @signalTracking */
       export function WithBlock(Base) { return (props) => <Base n={count.value} />; }
     `);
 
@@ -1678,25 +1702,25 @@ describe("PascalCase higher-order component factories", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("honors a @noUseSignals opt-out written on a PascalCase factory", () => {
+  it("honors a @noSignalTracking opt-out written on a PascalCase factory", () => {
     const output = compile(`
       const count = { value: 1 };
-      /** @noUseSignals */
+      /** @noSignalTracking */
       export const WithCount = (Base) => (props) => <Base n={count.value} />;
     `, "all");
 
     expect(output).not.toContain("finally");
   });
 
-  it("leaves an author's own useSignals() call in a factory alone", () => {
+  it("leaves an author's own useSignalTracking() call in a factory alone", () => {
     // The factory rule withholds the inferred routes -- `auto`, `all` and the
     // annotation. A hand-written call is a statement about the author's own
     // code, and this transform never second-guesses one.
     const output = compile(`
-      import { useSignals } from "react-fine-grained-signals";
+      import { useSignalTracking } from "react-fine-grained-signals";
       const count = { value: 1 };
       export function WithCount(Base) {
-        useSignals();
+        useSignalTracking();
         return (props) => <Base n={count.value} />;
       }
     `);
@@ -1756,7 +1780,7 @@ describe("PascalCase higher-order component factories", () => {
     `, "auto");
     const annotated = compile(`
       const count = { value: 1 };
-      /** @useSignals */
+      /** @signalTracking */
       export function useModal(Overlay) {
         const n = count.value;
         return { open: () => n, Overlay };
@@ -2176,7 +2200,7 @@ describe("components defined inline as a call argument", () => {
   });
 });
 
-describe("@useSignals annotations that attach to nothing", () => {
+describe("@signalTracking annotations that attach to nothing", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -2190,18 +2214,18 @@ describe("@useSignals annotations that attach to nothing", () => {
     compile(`
       const count = { value: 1 };
       function register(fn) { return fn; }
-      register(/** @useSignals */ () => <p>{count.value}</p>);
+      register(/** @signalTracking */ () => <p>{count.value}</p>);
     `);
 
     expect(warn).toHaveBeenCalledTimes(1);
-    expect(warn.mock.calls[0]?.[0]).toContain("@useSignals annotation is ignored");
+    expect(warn.mock.calls[0]?.[0]).toContain("@signalTracking annotation is ignored");
   });
 
   it("reports an annotation on a resolvable but lowercase JSX function", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     compile(`
       const count = { value: 1 };
-      /** @useSignals */
+      /** @signalTracking */
       export const helper = () => <p>{count.value}</p>;
     `);
 
@@ -2218,13 +2242,13 @@ describe("@useSignals annotations that attach to nothing", () => {
     compile(`
       const count = { value: 1 };
       const items = [1];
-      /** @useSignals */
+      /** @signalTracking */
       export function callback() { return count.value; }
-      /** @useSignals */
+      /** @signalTracking */
       export const withCount = (Base) => (props) => <Base n={count.value} />;
-      /** @useSignals */
+      /** @signalTracking */
       export const WithCount = (Base) => (props) => <Base n={count.value} />;
-      /** @useSignals */
+      /** @signalTracking */
       export const App = () => <div>{items.map((i) => <li>{count.value}{i}</li>)}</div>;
     `);
 
@@ -2237,7 +2261,7 @@ describe("@useSignals annotations that attach to nothing", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const output = compile(`
       const count = { value: 1 };
-      export const ns = { /** @useSignals */ Home: () => <p>{count.value}</p> };
+      export const ns = { /** @signalTracking */ Home: () => <p>{count.value}</p> };
     `);
 
     expect(output.match(/finally/g)).toHaveLength(1);

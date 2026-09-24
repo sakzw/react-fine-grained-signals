@@ -6,7 +6,7 @@ import {
 } from "../src/core/render-tracking.js";
 
 /**
- * Stands in for what a `useSignals()` component's `RenderStore` does: installs
+ * Stands in for what a `useSignalTracking()` component's `RenderStore` does: installs
  * a render collector, performs the reads, and hands back the dependencies the
  * signals registered — the same handles React later subscribes to.
  */
@@ -512,7 +512,7 @@ describe("computed error propagation", () => {
     expect((reported?.cause as Error | undefined)?.message).toBe("cleanup boom");
     expect(microtasks).not.toHaveBeenCalled();
 
-    // The React-side notification happened anyway, so a `useSignals()`
+    // The React-side notification happened anyway, so a `useSignalTracking()`
     // component subscribed to this signal still re-renders.
     expect(notifications).toEqual([1]);
   });

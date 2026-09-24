@@ -2,7 +2,7 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-Universal bundler integration for automatic `useSignals()` insertion and the
+Universal bundler integration for automatic `useSignalTracking()` insertion and the
 optional managed render-scope transform in
 [`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals).
 
@@ -52,8 +52,8 @@ export default {
 ## Options
 
 - `mode`:
-  - `"manual"`: only an explicit first-statement imported `useSignals()` call
-    or a `@useSignals` comment on a named component/custom hook opts it in.
+  - `"manual"`: only an explicit first-statement imported `useSignalTracking()` call
+    or a `@signalTracking` comment on a named component/custom hook opts it in.
   - `"auto"` (default): additionally transforms named JSX components and
     named `useX` custom hooks that read `.value`.
   - `"all"`: additionally transforms every named JSX component. Nested
@@ -63,8 +63,8 @@ export default {
   - `"managed"` (default): adds an exact `try` / `finally` boundary, importing
     from the package's `/runtime` entry and closing the render-tracking
     window synchronously at the point the component function returns.
-  - `"inject"`: adds bare `useSignals()` for best-effort opt-in. It inserts a
-    normal `useSignals()` call without rewriting control flow, so it has the
+  - `"inject"`: adds bare `useSignalTracking()` for best-effort opt-in. It inserts a
+    normal `useSignalTracking()` call without rewriting control flow, so it has the
     same best-effort tracking boundary as a handwritten call — see
     [the boundary design investigation](../../docs/design/use-signals-boundary-design.md)
     for the known sibling-misattribution limitation this mode can expose.
@@ -132,8 +132,8 @@ This detection has four known limitations:
   Prefer inlining the callback at the call site
   (`<Grid renderItem={(item) => <li>{item.value}</li>} />`), which the inline
   detection above already attributes to the owning component, or state the
-  intent explicitly on the referenced function with a `@useSignals` /
-  `@noUseSignals` comment.
+  intent explicitly on the referenced function with a `@signalTracking` /
+  `@noSignalTracking` comment.
 - A callback imported from another module is not followed, because the
   transform sees one file at a time.
 - A function used in both roles keeps the exclusion. If `Row` is passed to
@@ -144,7 +144,7 @@ This detection has four known limitations:
   independently rendered instance then has no subscription and goes stale on
   later signal writes. Split the two roles into two differently named
   functions, one per role, or opt the independently rendered function in
-  explicitly with a `@useSignals` comment.
+  explicitly with a `@signalTracking` comment.
 
 When in doubt, keep such helpers explicit: name them lowercase and without a
 `use` prefix, or opt them in manually only when they are genuinely rendered as
@@ -161,7 +161,7 @@ export const withCount = (Base) => (props) => <Base {...props} count={count.valu
 
 The inner function is the component here, and it inherits its identity from the
 factory's own binding — `withCount` — so `auto` mode subscribes it and a
-`@useSignals` (or `@noUseSignals`) comment on either the returned function or the
+`@signalTracking` (or `@noSignalTracking`) comment on either the returned function or the
 factory's declaration applies to it. Three conditions keep ordinary closures out:
 the function must be returned directly by the enclosing function (an explicit
 `return`, or an arrow's concise body); the returned function must render JSX
@@ -189,7 +189,7 @@ normally whenever it qualifies — reading a signal, rendering JSX — exactly l
 any other hook; only the returned closure inherits no name from it.
 
 The name is inherited from exactly one level out, so a factory returning a
-factory (`(a) => (b) => (props) => …`) resolves to nothing, and a `@useSignals`
+factory (`(a) => (b) => (props) => …`) resolves to nothing, and a `@signalTracking`
 comment there reports that rather than silently doing nothing. The one shape
 this cannot tell apart is a factory whose result is handed straight to an
 iteration method (`items.map(makeRow(prefix))`): that is syntactically a HOC
@@ -205,8 +205,8 @@ stays excluded, exactly as a lowercase binding does), and a nameless default
 export (`export default (props) => <p>{count.value}</p>`) is named after the
 module's own file — the identity an `import App from "./App"` already gives it.
 A `this.Row = …` assignment inside a class is deliberately excluded, though —
-such a `this`-bound renderer still needs an explicit `useSignals()` call or
-`@useSignals` comment, as before this feature existed.
+such a `this`-bound renderer still needs an explicit `useSignalTracking()` call or
+`@signalTracking` comment, as before this feature existed.
 
 ## `memo` / `forwardRef` recognition
 
@@ -224,13 +224,13 @@ skipped, so signal writes stop re-rendering it. Three workarounds:
   way);
 - import `memo` / `forwardRef` directly from `"react"` at the affected call
   sites;
-- opt the component in explicitly with a `@useSignals` comment or a manual
-  `useSignals()` call.
+- opt the component in explicitly with a `@signalTracking` comment or a manual
+  `useSignalTracking()` call.
 
-## `useSignals()` opt-in and rewriting
+## `useSignalTracking()` opt-in and rewriting
 
-`@useSignals` and `@noUseSignals` apply only to their owning function; they do
-not affect nested functions. The plugin never adds a second `useSignals()`
+`@signalTracking` and `@noSignalTracking` apply only to their owning function; they do
+not affect nested functions. The plugin never adds a second `useSignalTracking()`
 call: a direct, namespace, or barrel-imported call it finds is treated as the
 function's existing opt-in. A call that is not the function's first statement,
 and any barrel-imported call, is left alone in both transform modes. A
@@ -240,9 +240,9 @@ absorbed into the generated boundary: the statement is removed and replaced by
 the managed store declaration plus the `try` / `finally` scope, so the function
 body is rewritten rather than left byte-for-byte untouched.
 
-A first-statement `useSignals()` call inside an `async` or generator function
+A first-statement `useSignalTracking()` call inside an `async` or generator function
 fails the build under the default `"managed"` transform, with
-`useSignals transform only supports synchronous, non-generator functions`. That
+`useSignalTracking transform only supports synchronous, non-generator functions`. That
 combination is already invalid React — hooks require a synchronous function
 component — so prefer fixing the function; `transform: "inject"` accepts it
 without rewriting the function, if the file must keep building unchanged.

@@ -18,7 +18,7 @@ const resolvedPromise = Promise.resolve();
 /**
  * Module-global state backing the managed/best-effort render-scope
  * boundary. At most one `RenderStore` is "current" at a time: a component's
- * `.start()` (called at the top of `useSignalsImplementation`, before it
+ * `.start()` (called at the top of `useSignalTrackingImplementation`, before it
  * reads any signals) opens it, and closing it is what stops later `.value`
  * reads from being attributed to it — every read after a close belongs to
  * whichever scope opens next, not a leftover one from earlier in the render
@@ -32,15 +32,15 @@ const resolvedPromise = Promise.resolve();
  *     before opening its own, so a scope that outlives its owner's render
  *     can't leak reads into a sibling or the next component down.
  *  2. The commit-phase layout effect (`useIsomorphicLayoutEffect` in
- *     `useSignalsImplementation`) — the normal, on-time close: the owning
+ *     `useSignalTrackingImplementation`) — the normal, on-time close: the owning
  *     component's own scope, if nothing already closed it, is finished
  *     right before `store.commit()` subscribes to whatever it read.
  *  3. The microtask scheduled by `ensureFinalCleanup` — the fallback for an
- *     unmanaged (`useSignals()`) scope that reaches neither path above, for
+ *     unmanaged (`useSignalTracking()`) scope that reaches neither path above, for
  *     example a component that reads signals during render but then
  *     throws, suspends, or is otherwise abandoned before committing.
  *     Managed scopes (`useManagedSignals()`) opt out of this fallback (see
- *     the `!managed` guard in `useSignalsImplementation`) because their
+ *     the `!managed` guard in `useSignalTrackingImplementation`) because their
  *     owner is contractually responsible for calling `finish()`
  *     itself, synchronously, before returning.
  */
@@ -214,7 +214,7 @@ class RenderStore implements RenderCollector {
  * Makes the component reactive to signals whose `.value` is read during render.
  * Call this as the component's first hook and before those reads.
  */
-function useSignalsImplementation(managed: boolean): RenderStore {
+function useSignalTrackingImplementation(managed: boolean): RenderStore {
   if (!managed) ensureFinalCleanup();
   const storeRef = useRef<RenderStore | undefined>(undefined);
   if (storeRef.current === undefined) storeRef.current = new RenderStore(managed);
@@ -234,7 +234,7 @@ function useSignalsImplementation(managed: boolean): RenderStore {
  * Call this as the component's first hook and before those reads.
  *
  * The boundary is best-effort: tracking stays open until the next
- * `useSignals()` call, the commit-phase layout effect, or a microtask — not the
+ * `useSignalTracking()` call, the commit-phase layout effect, or a microtask — not the
  * point the component returns. Every component that reads a signal during
  * render must call this itself; a read from a sibling or descendant that does
  * not can be attributed to another component's still-open boundary, and then
@@ -242,8 +242,8 @@ function useSignalsImplementation(managed: boolean): RenderStore {
  * plugin's default `transform: "managed"` for an exact boundary. See
  * docs/design/use-signals-boundary-design.md.
  */
-export function useSignals(): void {
-  useSignalsImplementation(false);
+export function useSignalTracking(): void {
+  useSignalTrackingImplementation(false);
 }
 
 /** The render-scope handle consumed by the source transform runtime. */
@@ -253,5 +253,5 @@ export interface ManagedSignalsStore {
 
 /** Starts a managed render scope that must be closed synchronously with `finish()`. */
 export function useManagedSignals(): ManagedSignalsStore {
-  return useSignalsImplementation(true);
+  return useSignalTrackingImplementation(true);
 }

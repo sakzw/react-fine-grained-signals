@@ -68,7 +68,7 @@ function transformedCase(name, source, transformMode, expected) {
         return;
       }
       if (result === null) throw new Error(`${name} did not transform source`);
-      if (!result.code.includes("useSignals") && !result.code.includes("useManagedSignals")) {
+      if (!result.code.includes("useSignalTracking") && !result.code.includes("useManagedSignals")) {
         throw new Error(`${name} omitted the runtime hook`);
       }
       if (transformMode === "managed" && (!result.code.includes("try") || !result.code.includes(".finish()"))) {

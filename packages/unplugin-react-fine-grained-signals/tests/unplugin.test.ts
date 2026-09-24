@@ -44,21 +44,21 @@ function transformCounter(options: ReactFineGrainedSignalsOptions): string | und
 }
 
 const explicitSource = [
-  'import { useSignals } from "react-fine-grained-signals";',
+  'import { useSignalTracking } from "react-fine-grained-signals";',
   "const count = { value: 1 };",
-  "export function App() { useSignals(); return <p>{count.value}</p>; }",
+  "export function App() { useSignalTracking(); return <p>{count.value}</p>; }",
 ].join("\n");
 
 const explicitAsyncSource = [
-  'import { useSignals } from "react-fine-grained-signals";',
+  'import { useSignalTracking } from "react-fine-grained-signals";',
   "const count = { value: 1 };",
-  "export async function App() { useSignals(); return <p>{count.value}</p>; }",
+  "export async function App() { useSignalTracking(); return <p>{count.value}</p>; }",
 ].join("\n");
 
 const explicitGeneratorSource = [
-  'import { useSignals } from "react-fine-grained-signals";',
+  'import { useSignalTracking } from "react-fine-grained-signals";',
   "const count = { value: 1 };",
-  "export function* App() { useSignals(); yield <p>{count.value}</p>; }",
+  "export function* App() { useSignalTracking(); yield <p>{count.value}</p>; }",
 ].join("\n");
 
 describe("unplugin-react-fine-grained-signals", () => {
@@ -164,21 +164,21 @@ describe("unplugin-react-fine-grained-signals", () => {
 
     expect(output).toContain('from "react-fine-grained-signals"');
     expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("_useSignals();");
+    expect(output).toContain("_useSignalTracking();");
     expect(output).not.toContain("try {");
   });
 
-  it("absorbs an explicit useSignals call into the default managed boundary", () => {
+  it("absorbs an explicit useSignalTracking call into the default managed boundary", () => {
     const output = transformSource(explicitSource, { mode: "auto" });
 
     // The author's own call is replaced by the managed store declaration, so
     // the body is rewritten rather than left untouched — but no second
-    // `useSignals()` call is ever added.
+    // `useSignalTracking()` call is ever added.
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
     expect(output).toContain("const _signals = _useManagedSignals();");
     expect(output).toContain("try {");
     expect(output).toContain("_signals.finish();");
-    expect(output).not.toMatch(/^\s*useSignals\(\);$/m);
+    expect(output).not.toMatch(/^\s*useSignalTracking\(\);$/m);
   });
 
   it("leaves a hand-written useManagedSignals boundary untouched", () => {
@@ -198,22 +198,22 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(transformSource(source, { mode: "auto" })).toBeUndefined();
   });
 
-  it("keeps an explicit useSignals call in place under the injection transform", () => {
+  it("keeps an explicit useSignalTracking call in place under the injection transform", () => {
     const output = transformSource(explicitSource, { mode: "auto", transform: "inject" });
 
     expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
     expect(output).not.toContain("try {");
-    expect(output).toMatch(/^\s*useSignals\(\);$/m);
+    expect(output).toMatch(/^\s*useSignalTracking\(\);$/m);
   });
 
-  it("rejects an explicit useSignals call in an async or generator function by default", () => {
+  it("rejects an explicit useSignalTracking call in an async or generator function by default", () => {
     expect(() => transformSource(explicitAsyncSource, { mode: "auto" }))
       .toThrow("only supports synchronous, non-generator functions");
     expect(() => transformSource(explicitGeneratorSource, { mode: "auto" }))
       .toThrow("only supports synchronous, non-generator functions");
   });
 
-  it("leaves an explicit async or generator useSignals call alone under the injection transform", () => {
+  it("leaves an explicit async or generator useSignalTracking call alone under the injection transform", () => {
     const asyncOutput = transformSource(explicitAsyncSource, {
       mode: "auto",
       transform: "inject",
@@ -549,8 +549,8 @@ describe("bundler adapters", () => {
     const resource = "/project/src/Broken.tsx";
     const [entry] = transformLoaderEntries("webpack", resource);
     const source = [
-      'import { useSignals } from "react-fine-grained-signals";',
-      "export async function App() { useSignals(); return <p />; }",
+      'import { useSignalTracking } from "react-fine-grained-signals";',
+      "export async function App() { useSignalTracking(); return <p />; }",
     ].join("\n");
 
     const run = await runTransformLoader(entry!, resource, source, undefined);

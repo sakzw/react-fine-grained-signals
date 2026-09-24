@@ -16,12 +16,12 @@ export const board = deepSignal({ filter: "all", tasks: [] as Task[] });
 import { board, theme } from "./store.js";
 
 function FilterBadge() {
-  useSignals();
+  useSignalTracking();
   return <span className={theme.value}>{board.value.filter}</span>;
 }
 ```
 
-`useSignals()` が追跡するのは読み取りであって所有者ではありません。レンダー中の `.value` の読み取りは、そのsignalがどこで作られたかに関係なく、読んだコンポーネント自身の依存になります。module scope、ファクトリ、クロージャ、`useSignal()` のいずれでも挙動は同一で、property単位の追跡もそのまま働きます。上のコンポーネントが再レンダーするのは `filter` が変わったときだけで、タスクのtitleが変わったときではありません。
+`useSignalTracking()` が追跡するのは読み取りであって所有者ではありません。レンダー中の `.value` の読み取りは、そのsignalがどこで作られたかに関係なく、読んだコンポーネント自身の依存になります。module scope、ファクトリ、クロージャ、`useSignal()` のいずれでも挙動は同一で、property単位の追跡もそのまま働きます。上のコンポーネントが再レンダーするのは `filter` が変わったときだけで、タスクのtitleが変わったときではありません。
 
 クライアントだけのアプリではこれで話は終わりで、signalがストアライブラリをそのまま置き換えられる唯一の場面でもあります。以下はすべて、module scopeが状態の置き場所として誤りになるケースの話です。
 

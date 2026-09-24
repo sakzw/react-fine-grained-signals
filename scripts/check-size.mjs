@@ -48,8 +48,8 @@ export default [signal, computed, effect, batch, untracked];`,
   {
     name: "core+hooks",
     description: "core primitives plus the React hooks",
-    source: `import { signal, computed, effect, useSignal, useSignalValue, useSignals, useComputed, useSignalEffect } from "DIST/index.js";
-export default [signal, computed, effect, useSignal, useSignalValue, useSignals, useComputed, useSignalEffect];`,
+    source: `import { signal, computed, effect, useSignal, useSignalValue, useSignalTracking, useComputed, useSignalEffect } from "DIST/index.js";
+export default [signal, computed, effect, useSignal, useSignalValue, useSignalTracking, useComputed, useSignalEffect];`,
   },
   {
     name: "deep",

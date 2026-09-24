@@ -16,7 +16,7 @@ export {
   useDeepSignalValue,
   useSignal,
   useSignalEffect,
-  useSignals,
+  useSignalTracking,
   useSignalValue,
   type SignalSnapshot,
 } from "./react/hooks.js";

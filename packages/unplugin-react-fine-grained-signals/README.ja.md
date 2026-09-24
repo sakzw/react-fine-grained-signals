@@ -3,7 +3,7 @@
 [English](README.md) | [日本語](README.ja.md)
 
 [`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals)
-向けの、`useSignals()` 自動挿入と任意のmanaged render scope変換を提供する汎用
+向けの、`useSignalTracking()` 自動挿入と任意のmanaged render scope変換を提供する汎用
 bundler integrationです。
 
 このpackageは意図的に唯一のbuild-time integrationです。Babel実装は内部に
@@ -51,8 +51,8 @@ export default {
 ## オプション
 
 - `mode`
-  - `"manual"`: 先頭文にあるimport済みの `useSignals()`、または
-    `@useSignals` を付けた名前付きcomponent/custom hookだけを変換します。
+  - `"manual"`: 先頭文にあるimport済みの `useSignalTracking()`、または
+    `@signalTracking` を付けた名前付きcomponent/custom hookだけを変換します。
   - `"auto"`（既定）: さらに `.value` を読む名前付きJSX componentと
     名前付き `useX` custom hookを変換します。
   - `"all"`: さらにすべての名前付きJSX componentを変換します。ネストした
@@ -61,8 +61,8 @@ export default {
   - `"managed"`（既定）: 厳密な `try` / `finally` 境界を追加します。
     `/runtime` からimportし、componentの関数がreturnする時点でrender
     tracking windowを同期的に閉じます。
-  - `"inject"`: best-effortなopt-in向けに変換なしの `useSignals()` を
-    追加します。制御フローを書き換えず、通常の `useSignals()` を先頭hook
+  - `"inject"`: best-effortなopt-in向けに変換なしの `useSignalTracking()` を
+    追加します。制御フローを書き換えず、通常の `useSignalTracking()` を先頭hook
     として挿入するため、手書きと同じbest-effort境界になります。この
     modeが露呈し得るsibling誤帰属の既知の制約については、
     [境界設計の検討docs](../../docs/design/use-signals-boundary-design.ja.md)
@@ -124,8 +124,8 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   では区別できません。そのため `Row` は、単独で変換条件を満たすなら自分のhookを
   持ったままになります。呼び出し箇所にcallbackをinlineで書くか
   （`<Grid renderItem={(item) => <li>{item.value}</li>} />`。上記のinline検出が
-  呼び出し元componentに正しく帰属させます）、参照先の関数に `@useSignals` /
-  `@noUseSignals` コメントで意図を明示してください。
+  呼び出し元componentに正しく帰属させます）、参照先の関数に `@signalTracking` /
+  `@noSignalTracking` コメントで意図を明示してください。
 - 別moduleからimportしたcallbackはたどりません。変換は1ファイルずつ処理する
   ためです。
 - 2つの役割を兼ねる関数は、除外されたままになります。`Row` をmodule内のどこかで
@@ -135,7 +135,7 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   （hookを持たせると、callbackとしての用法でhookの順序が壊れます）。ただし単独で
   renderされるほうはsubscriptionを持たないため、以降のsignalの書き換えで
   内容が古いままになります。役割ごとに別名の2つの関数へ分けるか、単独で
-  renderするほうの関数を `@useSignals` コメントで明示的にopt-inしてください。
+  renderするほうの関数を `@signalTracking` コメントで明示的にopt-inしてください。
 
 判断に迷う場合は、そうしたhelperを明示的に保ってください。小文字で `use`
 始まりでない名前にするか、実際にcomponentとしてrenderされるときにだけ手動で
@@ -152,7 +152,7 @@ export const withCount = (Base) => (props) => <Base {...props} count={count.valu
 
 ここでcomponentは内側の関数であり、その識別子はfactory自身のbinding
 （`withCount`）から継承します。したがって `auto` modeはこれをsubscribeし、
-`@useSignals`（`@noUseSignals` も同様）コメントは、返される関数側とfactoryの
+`@signalTracking`（`@noSignalTracking` も同様）コメントは、返される関数側とfactoryの
 宣言側のどちらに書いても適用されます。通常のclosureを巻き込まないための条件は
 3つです。囲む関数から直接returnされていること（明示的な `return`、または
 arrowの簡潔なbody）、返される関数自身がJSXをrenderしていること、そして囲む
@@ -180,7 +180,7 @@ renderするといった条件を満たす限り、他のhookとまったく同�
 です。名前を継承しないのは、返されるclosureだけです。
 
 名前の継承はちょうど1段だけたどるため、factoryを返すfactory
-（`(a) => (b) => (props) => …`）は解決せず、そこに書いた `@useSignals` コメントは
+（`(a) => (b) => (props) => …`）は解決せず、そこに書いた `@signalTracking` コメントは
 無言で消えるのではなく警告として報告されます。唯一区別できない形は、factoryの
 戻り値をそのままiteration methodへ渡す場合（`items.map(makeRow(prefix))`）です。
 これは構文上componentを返すHOCそのものなので、独自のboundaryを持ちます。その
@@ -197,8 +197,8 @@ objectやclassのproperty — `Card.Header = () => <p>{count.value}</p>` や、
 名前を得ます。これは `import App from "./App"` が実際にそのcomponentへ与えて
 いる識別子そのものです。ただし、class内での `this.Row = …` という代入
 （たとえばconstructor内）は意図的に対象外です。そうした `this` を束縛する
-rendererには、この機能が存在する以前と同様、明示的な `useSignals()` 呼び出し
-か `@useSignals` コメントが必要です。
+rendererには、この機能が存在する以前と同様、明示的な `useSignalTracking()` 呼び出し
+か `@signalTracking` コメントが必要です。
 
 ## `memo` / `forwardRef` の認識
 
@@ -214,12 +214,12 @@ re-exportの連鎖をたどらないためです。認識できなかった場�
   specifierを設定する（`"@app/react"` のようなbare specifierはどのファイルでも
   一致します。相対pathは同じ綴りのファイルにしか一致しません）。
 - 該当箇所で `memo` / `forwardRef` を `"react"` から直接importする。
-- `@useSignals` コメントか手書きの `useSignals()` 呼び出しで明示的にopt-inする。
+- `@signalTracking` コメントか手書きの `useSignalTracking()` 呼び出しで明示的にopt-inする。
 
-## `useSignals()` のopt-inと書き換え
+## `useSignalTracking()` のopt-inと書き換え
 
-`@useSignals` と `@noUseSignals` は、その関数だけに適用されます。pluginが
-二重の `useSignals()` 呼び出しを挿入することはありません。既存のdirect
+`@signalTracking` と `@noSignalTracking` は、その関数だけに適用されます。pluginが
+二重の `useSignalTracking()` 呼び出しを挿入することはありません。既存のdirect
 import、namespace import、barrel import経由の呼び出しは、その関数のopt-inと
 みなします。先頭文でない呼び出しと、barrel import経由の呼び出しは、いずれの
 変換モードでもそのまま残ります。`importSource` からdirect importまたは
@@ -228,9 +228,9 @@ namespace importした先頭文の呼び出しは、`"inject"` ではそのま�
 managed storeの宣言と `try` / `finally` scopeに置き換わるため、関数本体は
 そのまま残るのではなく書き換えられます。
 
-先頭文での `useSignals()` 呼び出しが `async` 関数やgenerator関数の中にあると、
+先頭文での `useSignalTracking()` 呼び出しが `async` 関数やgenerator関数の中にあると、
 既定の `"managed"` 変換ではbuildが失敗し、
-`useSignals transform only supports synchronous, non-generator functions`
+`useSignalTracking transform only supports synchronous, non-generator functions`
 というエラーになります。この組み合わせはそもそもReactとして不正です
 （hookは同期のfunction componentを必要とします）。関数側を直すのが望ましく、
 どうしても現状のままbuildを通す必要がある場合は `transform: "inject"` を

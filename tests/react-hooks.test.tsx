@@ -10,7 +10,7 @@ import {
   signal,
   useComputed,
   useSignalValue,
-  useSignals,
+  useSignalTracking,
 } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -48,7 +48,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(leafRenders).toHaveBeenCalledTimes(2);
   });
 
-  it("does not add an explicit leaf subscription to an ancestor useSignals scope", () => {
+  it("does not add an explicit leaf subscription to an ancestor useSignalTracking scope", () => {
     const parentSource = signal("parent");
     const leafSource = signal("before");
     const parentRenders = vi.fn();
@@ -60,7 +60,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     }
 
     function Parent() {
-      useSignals();
+      useSignalTracking();
       parentRenders();
       return <section data-parent={parentSource.value}><Leaf /></section>;
     }

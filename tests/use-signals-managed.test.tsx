@@ -25,7 +25,7 @@ function managed<T>(renderBody: () => T): T {
   }
 }
 
-describe("managed useSignals render scope", () => {
+describe("managed useManagedSignals render scope", () => {
   it("exposes finish() without the abbreviated f() alias", () => {
     const api = vi.fn();
 

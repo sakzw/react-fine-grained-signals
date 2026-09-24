@@ -11,10 +11,10 @@ import { useManagedSignals } from "./react/use-signals.js";
 
 /*
  * These four components use the *managed* render scope rather than the
- * best-effort `useSignals()`. The library owns their entire function body, so
+ * best-effort `useSignalTracking()`. The library owns their entire function body, so
  * an exact boundary — open at the top, closed in a `finally` before the
- * component returns — costs nothing here, while `useSignals()`' scope can stay
- * open past the return (until the next `useSignals()` call, a layout effect, or
+ * component returns — costs nothing here, while the `useSignalTracking()` scope can stay
+ * open past the return (until the next `useSignalTracking()` call, a layout effect, or
  * a microtask) and misattribute a *sibling's* render-time signal read to this
  * component's store, which then silently stops updating the sibling. Every
  * branch and early return must stay inside the `try`. See

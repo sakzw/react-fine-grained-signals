@@ -52,7 +52,7 @@
       // The library's own signal/hook/JSX-runtime implementation. Reading
       // `.value` as a bare statement is how this code registers a reactive
       // dependency (the getter has the tracking side effect, so the read
-      // isn't dead code), and `useSignals()`/deep-signal hooks intentionally
+      // isn't dead code), and render-tracking/deep-signal hooks intentionally
       // read `ref.current` during render to drive that same tracking.
       "files": ["src/core/**", "src/react/**", "src/runtime/**"],
       "rules": {
@@ -77,8 +77,8 @@
       // exempt in the library itself: mutating deep-signal proxies in place
       // via `.value` (which `react/immutability` can't distinguish from
       // mutating classic immutable props/state), reading `ref.current`
-      // during render through `useSignals()`, and reading `.value` as a bare
-      // statement to measure/exercise a tracked read.
+      // during render through the render-tracking hook, and reading `.value`
+      // as a bare statement to measure/exercise a tracked read.
       "files": ["examples/**", "benchmarks/**", ".sandbox/**"],
       "rules": {
         "no-unused-expressions": "off",

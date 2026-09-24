@@ -13,7 +13,7 @@ import type {
 } from "../core/index.js";
 import { untrackedRender } from "../core/render-tracking.js";
 import type { DependencyList } from "react";
-export { useSignals } from "./use-signals.js";
+export { useSignalTracking } from "./use-signals.js";
 
 const EMPTY_DEPENDENCIES: DependencyList = [];
 
@@ -315,7 +315,7 @@ export function useSignalValue<T>(source: ReadonlySignal<T>): T {
     [source],
   );
 
-  // A leaf subscription owns this read. An unmanaged useSignals() scope may
+  // A leaf subscription owns this read. An unmanaged useSignalTracking() scope may
   // still be open for an ancestor or earlier sibling until React commits, so
   // do not also register the source with that component's render collector.
   // `untracked` rather than `untrackedRender`: the latter clears only this

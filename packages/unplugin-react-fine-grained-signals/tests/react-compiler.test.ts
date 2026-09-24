@@ -385,7 +385,7 @@ describe("React Compiler compiled output", () => {
 
   it("leaves a hand-written runtime-import component untransformed by this package", () => {
     // The build plugin has no automation to offer here even when it is in the
-    // build: the function already calls `useSignals()`, so the transform skips
+    // build: the function already calls `useSignalTracking()`, so the transform skips
     // it and never reaches the point where it would add the directive.
     expect(
       transformReactFineGrainedSignals(handWrittenRuntimeCounter, "Fixture.jsx", {

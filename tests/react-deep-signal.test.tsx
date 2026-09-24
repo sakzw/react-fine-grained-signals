@@ -12,7 +12,7 @@ import {
   useDeepSignal,
   useDeepSignalValue,
   useSignalValue,
-  useSignals,
+  useSignalTracking,
 } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -23,7 +23,7 @@ afterEach(() => {
 });
 
 describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
-  it("does not add a selected deep leaf to an ancestor useSignals scope", () => {
+  it("does not add a selected deep leaf to an ancestor useSignalTracking scope", () => {
     const parentSource = signal("parent");
     const state = deepSignal({ user: { name: "Ada" } });
     const parentRenders = vi.fn();
@@ -35,7 +35,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     }
 
     function Parent() {
-      useSignals();
+      useSignalTracking();
       parentRenders();
       return <section data-parent={parentSource.value}><Leaf /></section>;
     }

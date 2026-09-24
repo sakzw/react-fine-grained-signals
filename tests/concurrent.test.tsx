@@ -22,7 +22,7 @@ import {
   effect,
   signal,
   useSignalValue,
-  useSignals,
+  useSignalTracking,
 } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -138,12 +138,12 @@ describe("concurrent rendering", () => {
     expect(screen.getByLabelText("urgent").textContent).toBe("typing");
   });
 
-  it("agrees across useSignals render-tracking and a useSignalValue leaf after a transitioned write", () => {
+  it("agrees across useSignalTracking render-tracking and a useSignalValue leaf after a transitioned write", () => {
     const source = signal(1);
     const doubled = computed(() => source.value * 2);
 
     function TrackedConsumer() {
-      useSignals();
+      useSignalTracking();
       return <output aria-label="tracked">{doubled.value}</output>;
     }
     function LeafConsumer() {
@@ -216,7 +216,7 @@ describe("concurrent rendering", () => {
     document.body.append(containerA, containerB);
 
     function TrackedInRootA() {
-      useSignals();
+      useSignalTracking();
       return <output aria-label="root-a">{shared.value}</output>;
     }
     function LeafInRootB() {

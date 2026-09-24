@@ -16,12 +16,12 @@ export const board = deepSignal({ filter: "all", tasks: [] as Task[] });
 import { board, theme } from "./store.js";
 
 function FilterBadge() {
-  useSignals();
+  useSignalTracking();
   return <span className={theme.value}>{board.value.filter}</span>;
 }
 ```
 
-`useSignals()` tracks reads, not ownership: a `.value` read during render becomes a dependency of the component that made it, no matter where the signal was created. Module scope, a factory, a closure, and `useSignal()` all behave identically, and per-property tracking is unaffected — the component above rereads when `filter` changes, not when a task's title does.
+`useSignalTracking()` tracks reads, not ownership: a `.value` read during render becomes a dependency of the component that made it, no matter where the signal was created. Module scope, a factory, a closure, and `useSignal()` all behave identically, and per-property tracking is unaffected — the component above rereads when `filter` changes, not when a task's title does.
 
 For a client-only app this is the whole story, and it is the one place where signals replace a store library outright. Everything below is about the cases where module scope is the wrong place to put the state.
 

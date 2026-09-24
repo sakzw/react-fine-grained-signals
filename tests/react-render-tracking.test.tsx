@@ -9,7 +9,7 @@ import {
   computed,
   deepSignal,
   signal,
-  useSignals,
+  useSignalTracking,
   untracked,
 } from "../src/index.js";
 
@@ -20,14 +20,14 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("useSignals render tracking", () => {
-  it("tracks shallow and multiple deep reads made after useSignals", () => {
+describe("useSignalTracking render tracking", () => {
+  it("tracks shallow and multiple deep reads made after useSignalTracking", () => {
     const title = signal("one");
     const state = deepSignal({ profile: { name: "Ada", role: "admin", unread: 0 } });
     const renders = vi.fn();
 
     function Profile() {
-      useSignals();
+      useSignalTracking();
       renders();
       return <output aria-label="tracked profile">{
         `${title.value}:${state.value.profile.name}:${state.value.profile.role}`
@@ -54,12 +54,12 @@ describe("useSignals render tracking", () => {
     expect(renders).toHaveBeenCalledTimes(rendersAfterTrackedWrites);
   });
 
-  it("releases an old dynamic branch collected after useSignals", () => {
+  it("releases an old dynamic branch collected after useSignalTracking", () => {
     const state = deepSignal({ useFirst: true, first: "A", second: "B" });
     const renders = vi.fn();
 
     function Selection() {
-      useSignals();
+      useSignalTracking();
       renders();
       const selected = state.value.useFirst ? state.value.first : state.value.second;
       return <output aria-label="tracked branch">{selected}</output>;
@@ -86,13 +86,13 @@ describe("useSignals render tracking", () => {
     expect(screen.getByLabelText("tracked branch").textContent).toBe("B2");
   });
 
-  it("keeps StrictMode useSignals subscriptions live through update and disposes them on unmount", () => {
+  it("keeps StrictMode useSignalTracking subscriptions live through update and disposes them on unmount", () => {
     const source = signal(0);
     const state = deepSignal({ value: 0 });
     const renders = vi.fn();
 
     function Reader() {
-      useSignals();
+      useSignalTracking();
       renders();
       return <output aria-label="strict tracked values">{`${source.value}:${state.value.value}`}</output>;
     }
@@ -117,13 +117,13 @@ describe("useSignals render tracking", () => {
     expect(renders).toHaveBeenCalledTimes(rendersAtUnmount);
   });
 
-  // Bare useSignals() only closes its collector deterministically from the
+  // Bare useSignalTracking() only closes its collector deterministically from the
   // commit-phase layout effect; a render that never commits (throws, or is
   // discarded by Suspense) instead relies on a microtask fallback scheduled
   // by ensureFinalCleanup() (see docs/rendering-optimization.md's "best-effort"
   // section). These two tests pin that documented fallback path itself, not
   // just its externally visible effect: start() also self-heals a dangling
-  // collector the moment any *later* useSignals() call runs, which would
+  // collector the moment any *later* useSignalTracking() call runs, which would
   // mask a broken fallback microtask if these tests only asserted behavior
   // after mounting something else. hasActiveRenderCollector() lets each test
   // observe the collector closing while nothing else has run start() yet.
@@ -133,12 +133,12 @@ describe("useSignals render tracking", () => {
     const healthyRenders = vi.fn();
 
     function Throwing(): never {
-      useSignals();
+      useSignalTracking();
       abandoned.value;
       throw new Error("render failed");
     }
     function Healthy() {
-      useSignals();
+      useSignalTracking();
       healthyRenders();
       return <output aria-label="healthy root">{healthy.value}</output>;
     }
@@ -147,7 +147,7 @@ describe("useSignals render tracking", () => {
     // The layout effect that normally closes the collector never ran, so it
     // is still the active collector right after the throw.
     expect(hasActiveRenderCollector()).toBe(true);
-    // Nothing else calls useSignals() here, so only the microtask fallback
+    // Nothing else calls useSignalTracking() here, so only the microtask fallback
     // (not start()'s self-heal on a later call) can close it at this point.
     await Promise.resolve();
     expect(hasActiveRenderCollector()).toBe(false);
@@ -171,7 +171,7 @@ describe("useSignals render tracking", () => {
     const renders = vi.fn();
 
     function Reader() {
-      useSignals();
+      useSignalTracking();
       const value = source.value;
       renders(value);
       if (suspended) throw gate;
@@ -184,7 +184,7 @@ describe("useSignals render tracking", () => {
       </Suspense>,
     );
     expect(screen.getByLabelText("suspense fallback").textContent).toBe("loading");
-    // The fallback tree doesn't call useSignals(), and the gate is still
+    // The fallback tree doesn't call useSignalTracking(), and the gate is still
     // pending so no retry (and thus no self-heal) can have happened yet;
     // only the microtask fallback can close the abandoned attempt from here.
     expect(hasActiveRenderCollector()).toBe(true);
@@ -220,12 +220,12 @@ describe("useSignals render tracking", () => {
     const rightRenders = vi.fn();
 
     function Left() {
-      useSignals();
+      useSignalTracking();
       leftRenders();
       return <output aria-label="tracked left">{state.value.left}</output>;
     }
     function Right() {
-      useSignals();
+      useSignalTracking();
       rightRenders();
       return <output aria-label="tracked right">{state.value.right}</output>;
     }
@@ -246,7 +246,7 @@ describe("useSignals render tracking", () => {
   });
 
   // Pins the documented boundary hazard (docs/hooks.md's "Tracking boundary"
-  // section): a sibling that reads a signal without calling useSignals()
+  // section): a sibling that reads a signal without calling useSignalTracking()
   // itself gets that read attributed to whichever collector is still open,
   // not its own (nonexistent) one. This is a regression pin on the current
   // best-effort behavior, not an assertion that it's correct.
@@ -257,12 +257,12 @@ describe("useSignals render tracking", () => {
     const unguardedRenders = vi.fn();
 
     function Guarded() {
-      useSignals();
+      useSignalTracking();
       guardedRenders();
       return <output aria-label="guarded sibling">{guarded.value}</output>;
     }
     function Unguarded() {
-      // Deliberately omits useSignals().
+      // Deliberately omits useSignalTracking().
       unguardedRenders();
       return <output aria-label="unguarded sibling">{unguarded.value}</output>;
     }
@@ -294,7 +294,7 @@ describe("useSignals render tracking", () => {
     const doubled = computed(() => source.value * 2);
 
     function Value({ label }: { label: string }) {
-      useSignals();
+      useSignalTracking();
       return <output aria-label="tracked computed">{`${label}:${doubled.value}`}</output>;
     }
 
@@ -312,7 +312,7 @@ describe("useSignals render tracking", () => {
     const renders = vi.fn();
 
     function Value() {
-      useSignals();
+      useSignalTracking();
       renders();
       return <output aria-label="array computed">{doubled.value.join(",")}</output>;
     }
@@ -334,7 +334,7 @@ describe("useSignals render tracking", () => {
     const renders = vi.fn();
 
     function Value() {
-      useSignals();
+      useSignalTracking();
       renders();
       return <output aria-label="untracked render reads">{
         `${tracked.value}:${untracked(() => ignored.value)}:${derived.peek()}`
@@ -360,7 +360,7 @@ describe("useSignals render tracking", () => {
     const readerRenders = vi.fn();
 
     function Reader() {
-      useSignals();
+      useSignalTracking();
       readerRenders();
       return <output aria-label="isolated reader">{value.value}</output>;
     }

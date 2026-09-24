@@ -12,7 +12,7 @@ import {
   deepSignal,
   useDeepSignal,
   useDeepSignalValue,
-  useSignals,
+  useSignalTracking,
   type DeepSignal,
 } from "../src/index.js";
 import { For, Index, Show } from "react-fine-grained-signals/utils";
@@ -84,14 +84,14 @@ describe("SSR and hydration", () => {
     consoleError.mockRestore();
   });
 
-  it("keeps useSignals render tracking server-inert, deterministic, and live after hydration", async () => {
+  it("keeps useSignalTracking render tracking server-inert, deterministic, and live after hydration", async () => {
     const source = signal("server");
     const state = deepSignal({ profile: { name: "Ada", unread: 0 } });
     const derivedRuns = vi.fn(() => source.value.toUpperCase());
     const derived = computed(derivedRuns);
 
     function App() {
-      useSignals();
+      useSignalTracking();
       return <span data-testid="tracked-ssr-value">{
         `${derived.value}:${state.value.profile.name}`
       }</span>;
@@ -175,7 +175,7 @@ describe("SSR and hydration", () => {
     const bump = signal(0);
 
     function App() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return (
         <input
@@ -334,7 +334,7 @@ describe("SSR and hydration", () => {
     let attempts = 0;
 
     function Slow() {
-      useSignals();
+      useSignalTracking();
       attempts += 1;
       // The first render pass suspends before reading the signal at all, so
       // the fallback below is the only thing the shell can legitimately emit.

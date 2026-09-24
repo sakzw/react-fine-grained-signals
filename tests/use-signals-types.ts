@@ -1,11 +1,11 @@
-import { useSignals } from "../src/index.js";
+import { useSignalTracking } from "../src/index.js";
 
 function TypeContract() {
-  const result: void = useSignals();
-  // @ts-expect-error useSignals does not accept explicit sources.
-  useSignals({});
+  const result: void = useSignalTracking();
+  // @ts-expect-error useSignalTracking does not accept explicit sources.
+  useSignalTracking({});
   // @ts-expect-error void is intentionally not a value-returning API.
-  const undefinedResult: undefined = useSignals();
+  const undefinedResult: undefined = useSignalTracking();
 
   void [result, undefinedResult];
 }

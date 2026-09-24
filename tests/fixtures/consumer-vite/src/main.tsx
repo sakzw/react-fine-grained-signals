@@ -10,7 +10,7 @@ export function Counter() {
   return <output>{count.value}</output>;
 }
 
-/** @noUseSignals */
+/** @noSignalTracking */
 export function ManagedBoundary() {
   const signals = useManagedSignals();
   try {

@@ -6,7 +6,7 @@
 
 ## 背景
 
-`useSignals()` はrender collector(`src/react/use-signals.ts`)を開き、そのrender中に行われた `signal.value` の読み取りをすべて記録することでcomponentをreactiveにします。commit時に `RenderStore.commit()` は記録した読み取りを前回commitの購読と差分比較し、今回のrenderで読まれ**なかった**依存をすべて解除します。つまり「componentが表示する値は毎回のrenderで読み直される」ことが前提の契約です。
+`useSignalTracking()` はrender collector(`src/react/use-signals.ts`)を開き、そのrender中に行われた `signal.value` の読み取りをすべて記録することでcomponentをreactiveにします。commit時に `RenderStore.commit()` は記録した読み取りを前回commitの購読と差分比較し、今回のrenderで読まれ**なかった**依存をすべて解除します。つまり「componentが表示する値は毎回のrenderで読み直される」ことが前提の契約です。
 
 React Compilerはこの契約を設計上破ります。componentのJSXをinstanceごとのmemo cacheへ保存し、reactiveな入力が変化した部分だけを再実行します。compilerがnon-reactiveと判定した対象への `signal.value` 読み取り — module scopeのbindingやimport、つまり多くのsignalライブラリが推奨する形 — は `Symbol.for("react.memo_cache_sentinel")` で守られたblockの中に置かれ、component instanceごとに一度しか実行されません。
 
@@ -44,11 +44,11 @@ export function Counter() {
 ```jsx
 import { c as _c } from "react/compiler-runtime";
 import { signal } from "react-fine-grained-signals";
-import { useSignals as _useSignals } from "react-fine-grained-signals";
+import { useSignalTracking as _useSignalTracking } from "react-fine-grained-signals";
 export const count = signal(0);
 export function Counter() {
   const $ = _c(1);
-  _useSignals();
+  _useSignalTracking();
   let t0;
   if ($[0] === Symbol.for("react.memo_cache_sentinel")) {
     t0 = <output>{count.value}</output>;
@@ -62,7 +62,7 @@ export function Counter() {
 
 `count.value` はsentinel blockの内側にあるため、mount renderで一度読まれたきり二度と読まれません。jsdomで計測した実行時の帰結は次のとおりです。mountでは `0` が描画される。`count` への最初の書き込みは、mount renderが依存を記録済みなのでReactへ通知される。しかしその再renderはcacheされたelementを返すだけで何も読まないため、`commit()` は依存が空になったと判断して購読を解除する。以降の書き込みは何も起こさない。signalが `2` を保持していてもDOMは `0` のままです。componentは更新される瞬間まで正常に見えます。
 
-ここで失敗しているのは `useSignals()` ではありません。毎回のrenderで呼ばれています。凍結されているのは読み取りだけでなくJSXそのものなので、runtime側で修復する余地はありません。collectorが購読を保持し続けたとしても、再renderはcacheされたelementを返すだけです。
+ここで失敗しているのは `useSignalTracking()` ではありません。毎回のrenderで呼ばれています。凍結されているのは読み取りだけでなくJSXそのものなので、runtime側で修復する余地はありません。collectorが購読を保持し続けたとしても、再renderはcacheされたelementを返すだけです。
 
 ### `transform: "managed"`: compilerに無視されるが、それは偶然
 
@@ -100,11 +100,11 @@ compilerが分類するのはsourceであって、その書き手ではありま
 CompileError: Todo: (BuildHIR::lowerStatement) Handle TryStatement without a catch clause
 ```
 
-jsdomでmountすると、componentは書き込みのたびに更新されます(`0`、`1`、`2`)。`"use no memo"` を手書きしても、どちらの結果も変わりません。記録されるeventは `CompileError` のままで、同じdirectiveが `inject` 形のbodyに対して生成する `CompileSkip` にはならず、DOMの推移も同一です。bail-outは構文だけから生じています。したがってこのパターンは、bare `useSignals()` のような「無言で凍結する」ハザードにはあたりません。
+jsdomでmountすると、componentは書き込みのたびに更新されます(`0`、`1`、`2`)。`"use no memo"` を手書きしても、どちらの結果も変わりません。記録されるeventは `CompileError` のままで、同じdirectiveが `inject` 形のbodyに対して生成する `CompileSkip` にはならず、DOMの推移も同一です。bail-outは構文だけから生じています。したがってこのパターンは、bare `useSignalTracking()` のような「無言で凍結する」ハザードにはあたりません。
 
 それでもdirectiveには意味が1つだけ残ります。`panicThreshold: "all_errors"` の場合です。directiveがなければ `transformSync` がthrowしてbuildは失敗し、あればerror eventは記録されるもののpanicは発生しません。これは上のmanagedの出力で計測した分岐とまったく同じであり、両者が同じ形だと理解すれば当然の結果です。
 
-自動化の欠落は実在しますが、「directiveが付かない」よりは狭い話です。transformは `mode: "auto"` かつ `transform: "managed"` であってもこのfileに手を加えません。functionが既に `useSignals()` を呼んでいるため、directiveを付ける地点に到達する前にskipされ、`transformReactFineGrainedSignals` は `null` を返してfileをtransformされなかったものとして報告します。つまり `"use no memo"` の手書きは、全errorでpanicするbuildに必要なものであり、compilerが将来 `try` / `finally` をlowerできるようになったときにopt-outを有効なまま保つためのものです。
+自動化の欠落は実在しますが、「directiveが付かない」よりは狭い話です。transformは `mode: "auto"` かつ `transform: "managed"` であってもこのfileに手を加えません。functionが既に `useSignalTracking()` を呼んでいるため、directiveを付ける地点に到達する前にskipされ、`transformReactFineGrainedSignals` は `null` を返してfileをtransformされなかったものとして報告します。つまり `"use no memo"` の手書きは、全errorでpanicするbuildに必要なものであり、compilerが将来 `try` / `finally` をlowerできるようになったときにopt-outを有効なまま保つためのものです。
 
 ### leaf hookはcompiler-safe
 
@@ -140,7 +140,7 @@ build pluginに `reactCompiler` optionを追加しました。値は `"auto"`(de
 export function Counter() {
   "use no memo";
 
-  _useSignals();
+  _useSignalTracking();
   return <output>{count.value}</output>;
 }
 ```
@@ -149,7 +149,7 @@ compilerは該当functionに `CompileSkip` を記録し、codeを変更せずに
 
 transformの既存の契約から導かれる詳細は次のとおりです。
 
-- directiveを付けるのは、実際にtransformしたfunctionと、意図的に手を加えないcase 1つだけです。後者は `transform: "inject"` で、componentが最初の文として自分で `useSignals()` を呼んでおり、それが設定された `importSource` からのimportである場合です。挿入するものはありませんが、そのfunctionはrender trackingを行っているためdirectiveを付け、fileはtransform済みとして扱います。
+- directiveを付けるのは、実際にtransformしたfunctionと、意図的に手を加えないcase 1つだけです。後者は `transform: "inject"` で、componentが最初の文として自分で `useSignalTracking()` を呼んでおり、それが設定された `importSource` からのimportである場合です。挿入するものはありませんが、そのfunctionはrender trackingを行っているためdirectiveを付け、fileはtransform済みとして扱います。
 - functionのbodyに既に自前のmemoization directive(`"use memo"`、`"use forget"`、`"use no memo"`、`"use no forget"`)がある場合は何も追加しません。作者の明示的な指定を優先します。
 - transformは冪等のままです。再実行するとdirectiveが既にあることを検出し、何も変更せず、fileはtransformされなかったものとして報告します。
 - `reactCompiler: "off"` は以前の出力を完全に復元します。これが妥当なのは、React Compilerをbuildに使っていない場合か、対象componentが上記の計測結果に照らして安全だと確認済みの場合だけです。
@@ -158,12 +158,12 @@ transformの既存の契約から導かれる詳細は次のとおりです。
 
 ## 推奨する `transform` のdefaultは変わるか
 
-React Compilerを理由とするなら、変わりません。managedの出力がcompilerを生き延びるのは、compilerが `catch` なしの `try` をlowerできないという実装上の詳細のためであり、それは `panicThreshold: "all_errors"` ではbuildを壊すerrorにもなります。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignals()` 境界の設計検討docs](use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。なお別件として、`unplugin-react-fine-grained-signals` は現在 `transform: "managed"` を既定にしています。これはこの境界の厳密さを理由とする変更であり、根拠はそちらのdocsにあります。このdocsの計測結果が根拠になっているわけではありません。
+React Compilerを理由とするなら、変わりません。managedの出力がcompilerを生き延びるのは、compilerが `catch` なしの `try` をlowerできないという実装上の詳細のためであり、それは `panicThreshold: "all_errors"` ではbuildを壊すerrorにもなります。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignalTracking()` 境界の設計検討docs](use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。なお別件として、`unplugin-react-fine-grained-signals` は現在 `transform: "managed"` を既定にしています。これはこの境界の厳密さを理由とする変更であり、根拠はそちらのdocsにあります。このdocsの計測結果が根拠になっているわけではありません。
 
 ## 未解決の論点
 
 - **bundler間での実行順序。** directiveが効くのは、このpackageのtransformがcompilerのBabel passより先に走る場合だけです。Viteでは構造的に成立します。pluginは `enforce: "pre"` を宣言しており、`@vitejs/plugin-react` は通常順のpluginとしてBabelを実行するためです。その間に走るVite自身のTypeScript passは、oxcとesbuildのどちらのtransformerでもdirectiveを保持します(JSXを保持したまま `.tsx` を入力にして直接確認しました)。Webpack、Rspack、Next.jsのpipelineは未計測です。
 - **実際のbundlerでの `panicThreshold: "all_errors"`。** transformが生成した形と手書きの `try` / `finally` の形の両方について、Babelのレイヤーで計測しました。directiveがあっても `TryStatement` のerror eventは記録され続けますが、panicは止まります。`transformSync` がthrowするのはdirectiveがない場合だけです。記録され続けるeventを、bundlerのReact Compiler統合が別経路でbuildの失敗に変えるかどうかは、end-to-endでは再現していません。
-- **build pluginなしで手書きしたbare `useSignals()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。これはbare hookに限った話です。手書きの `react-fine-grained-signals/runtime` 境界は構造的に別のcaseであり、[上記](#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)で計測しています。
-- **`transform: "inject"` でapplication barrel経由でimportした `useSignals()`。** transformは呼び出しを認識してfunctionをskipし、skipしたままにするため、directiveは付きません。設定した `importSource` からの直接importか、`@useSignals` 注釈であれば対象になります。
+- **build pluginなしで手書きしたbare `useSignalTracking()`。** directiveを挿入するものが存在せず、失敗は無言です。該当componentには `"use no memo"` を手書きするか、`mode: "manual"` のpluginを使う必要があります(manualモードは今回の変更でdirectiveを付けます)。これはbare hookに限った話です。手書きの `react-fine-grained-signals/runtime` 境界は構造的に別のcaseであり、[上記](#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)で計測しています。
+- **`transform: "inject"` でapplication barrel経由でimportした `useSignalTracking()`。** transformは呼び出しを認識してfunctionをskipし、skipしたままにするため、directiveは付きません。設定した `importSource` からの直接importか、`@signalTracking` 注釈であれば対象になります。
 - **compilerのversion。** 以上はすべて1.0.0のdefault設定での挙動です。`try` / `finally` に対応したversion、module scopeの読み取りの分類を変えたversion、`"use no memo"` の扱いを変えたversionが出た場合は、このdocsの計測をやり直す必要があります。testはその計測の実行可能な形です。

@@ -24,10 +24,10 @@ The primitives and hooks work as soon as the package is installed — no build
 or compiler configuration is involved:
 
 ```tsx
-import { useSignal, useSignals } from "react-fine-grained-signals";
+import { useSignal, useSignalTracking } from "react-fine-grained-signals";
 
 function Counter() {
-  useSignals();
+  useSignalTracking();
   const count = useSignal(0);
 
   return <button onClick={() => count.value++}>{count.value}</button>;
@@ -72,10 +72,10 @@ unwrapped. See [JSX signal children and host bindings](docs/jsx-bindings.md)
 for the full allow-list, and for toolchains that transform JSX through Babel,
 which do not read `tsconfig.json`.
 
-### Build plugin — automatic `useSignals()`
+### Build plugin — automatic `useSignalTracking()`
 
 Inserts the tracking boundary during the build, so components no longer call
-`useSignals()` by hand. It is a separate package:
+`useSignalTracking()` by hand. It is a separate package:
 
 ```sh
 pnpm add -D unplugin-react-fine-grained-signals
@@ -126,4 +126,4 @@ Run `pnpm dev:browser` to build the transform package and inspect the same examp
 
 - [alien-signals](https://www.npmjs.com/package/alien-signals) — the signal engine this package builds on.
 - [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — benchmark comparison target.
-- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — prior art for the `useSignals()` boundary's store protocol; see [Prior art](docs/design/use-signals-boundary-design.md#prior-art).
+- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — prior art for the external `useSignals()` boundary's store protocol; see [Prior art](docs/design/use-signals-boundary-design.md#prior-art).

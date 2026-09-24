@@ -46,7 +46,7 @@ interface PluginState extends PluginPass {
   managedRuntimeImports: RuntimeImport[];
   directImports: RuntimeImport[];
   /**
-   * Import specifiers whose only use was an explicit `useSignals()` call the
+   * Import specifiers whose only use was an explicit `useSignalTracking()` call the
    * managed transform absorbed into its own store declaration. They are
    * re-checked in `Program.exit` and dropped if nothing else references them,
    * so absorbing the call does not leave a dead import pulling the non-runtime
@@ -58,12 +58,12 @@ interface PluginState extends PluginPass {
 interface FunctionInspection {
   containsJSX: boolean;
   readsValue: boolean;
-  hasUseSignalsCall: boolean;
+  hasSignalTrackingCall: boolean;
   hasUseManagedSignalsCall: boolean;
 }
 
-const useSignalsComment = /(^|\s)@useSignals(\s|$)/;
-const noUseSignalsComment = /(^|\s)@noUseSignals(\s|$)/;
+const useSignalTrackingComment = /(^|\s)@signalTracking(\s|$)/;
+const noSignalTrackingComment = /(^|\s)@noSignalTracking(\s|$)/;
 const transformedMetadataKey = "reactFineGrainedSignalsTransformed";
 
 // React Compiler caches a component's JSX in its memo cache, and a signal read
@@ -135,7 +135,7 @@ interface ResolvedImportBinding {
  *
  * Every import-recognition predicate in this file -- React's `memo`/
  * `forwardRef` wrappers, a default-or-namespace React import, a named or
- * namespace `useSignals` import -- reduces to "does this resolved binding
+ * namespace `useSignalTracking` import -- reduces to "does this resolved binding
  * have the right specifier kind and source", so they all build on this one
  * binding walk instead of each repeating
  * `getBinding` -> specifier-kind -> `importKind` -> parent-declaration.
@@ -193,7 +193,7 @@ function isReactDefaultOrNamespaceImport(
 // A bare `memo`/`forwardRef` name (or `X.memo`/`X.forwardRef`) only counts as
 // React's wrapper when it actually resolves back to an import from "react".
 // Otherwise a same-named local helper (e.g. a homemade memoization cache)
-// could be mistaken for it and have a `useSignals()` hook injected into a
+// could be mistaken for it and have a `useSignalTracking()` hook injected into a
 // function that is never actually rendered by React, which throws at runtime.
 function isKnownComponentWrapper(
   path: NodePath<t.CallExpression>,
@@ -266,8 +266,8 @@ function getPropertyKeyName(node: t.ObjectProperty | t.ClassProperty): string | 
  * disqualifies every other keyed slot (`isKeyedRenderCallback`) cannot see those
  * uses at all -- there would be no way to take the boundary back once given. So
  * the ambiguous case resolves the way this file always resolves one: name
- * nothing, transform nothing. Class components stay a manual `useSignals()` /
- * `@useSignals` opt-in.
+ * nothing, transform nothing. Class components stay a manual `useSignalTracking()` /
+ * `@signalTracking` opt-in.
  */
 function getKeyedIdentityName(parent: NodePath): string | undefined {
   if (parent.isAssignmentExpression()) {
@@ -425,7 +425,7 @@ function rendersJsx(path: NodePath<t.Function>): boolean {
  * the returned component's JSX and `.value` reads credited to the factory's own
  * body. `auto` mode injected the boundary into the factory, `all` mode did so
  * with no `.value` read needed at all, and since `WithCount(Foo)` is normally
- * called at module scope the injected `useSignals()` ran with no React
+ * called at module scope the injected `useSignalTracking()` ran with no React
  * dispatcher and threw at import time -- the unrecoverable direction this file
  * steers away from everywhere else.
  */
@@ -475,7 +475,7 @@ interface IdentityFactory {
  * The inner function is the real component in both, but it has no name of its
  * own: its only identity comes from being what `withCount` returns. Left
  * unresolved it is not a component to `auto` mode and not an annotatable
- * function to `@useSignals`, so a signal write silently stops re-rendering it
+ * function to `@signalTracking`, so a signal write silently stops re-rendering it
  * -- no error, just a stale UI.
  *
  * Three things have to hold, tested cheapest-first:
@@ -510,8 +510,8 @@ interface IdentityFactory {
  * is always a real module binding. A factory that returns a factory
  * (`(a) => (b) => (props) => <p />`) deliberately leaves the innermost
  * function unresolved rather than inventing a name for a middle function that
- * has none -- an `@useSignals` annotation there still warns
- * (`warnUnnamedUseSignalsAnnotation`) instead of silently doing nothing.
+ * has none -- an `@signalTracking` annotation there still warns
+ * (`warnUnnamedSignalTrackingAnnotation`) instead of silently doing nothing.
  */
 function getIdentityFactory(
   path: NodePath<t.Function>,
@@ -631,9 +631,9 @@ function getDefaultExportIdentity(
   return name === undefined ? undefined : { kind: "binding", name };
 }
 
-// The root `useSignals` import is the bare, best-effort hook. Its direct import
+// The root `useSignalTracking` import is the bare, best-effort hook. Its direct import
 // remains recognizable as an explicit opt-in that managed mode can absorb.
-function isVerifiedUseSignalsSource(source: string, importSource: string): boolean {
+function isVerifiedSignalTrackingSource(source: string, importSource: string): boolean {
   return source === importSource;
 }
 
@@ -664,7 +664,7 @@ function isNamespaceUseManagedSignalsImport(
   );
 }
 
-function isNamedUseSignalsImport(
+function isNamedSignalTrackingImport(
   functionPath: NodePath<t.Function>,
   name: string,
   importSource?: string,
@@ -672,12 +672,12 @@ function isNamedUseSignalsImport(
   const resolved = resolveImportedBinding(functionPath, name);
   if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return false;
   return (
-    t.isIdentifier(resolved.specifier.node.imported, { name: "useSignals" }) &&
-    (importSource === undefined || isVerifiedUseSignalsSource(resolved.source, importSource))
+    t.isIdentifier(resolved.specifier.node.imported, { name: "useSignalTracking" }) &&
+    (importSource === undefined || isVerifiedSignalTrackingSource(resolved.source, importSource))
   );
 }
 
-function isNamespaceUseSignalsImport(
+function isNamespaceSignalTrackingImport(
   functionPath: NodePath<t.Function>,
   name: string,
   importSource?: string,
@@ -686,11 +686,11 @@ function isNamespaceUseSignalsImport(
   return (
     resolved !== undefined &&
     resolved.specifier.isImportNamespaceSpecifier() &&
-    (importSource === undefined || isVerifiedUseSignalsSource(resolved.source, importSource))
+    (importSource === undefined || isVerifiedSignalTrackingSource(resolved.source, importSource))
   );
 }
 
-function isUseSignalsCallee(
+function isSignalTrackingCallee(
   functionPath: NodePath<t.Function>,
   callee: NodePath<t.CallExpression["callee"]>,
   importSource: string,
@@ -698,8 +698,8 @@ function isUseSignalsCallee(
 ): boolean {
   if (callee.isIdentifier()) {
     // A named re-export keeps the imported name, so this also recognizes
-    // `useSignals` aliases imported through application barrel modules.
-    return isNamedUseSignalsImport(
+    // `useSignalTracking` aliases imported through application barrel modules.
+    return isNamedSignalTrackingImport(
       functionPath,
       callee.node.name,
       allowBarrel ? undefined : importSource,
@@ -709,8 +709,8 @@ function isUseSignalsCallee(
   const object = callee.get("object");
   if (!object.isIdentifier()) return false;
   return (
-    getReadPropertyName(callee.node) === "useSignals" &&
-    isNamespaceUseSignalsImport(
+    getReadPropertyName(callee.node) === "useSignalTracking" &&
+    isNamespaceSignalTrackingImport(
       functionPath,
       object.node.name,
       allowBarrel ? undefined : importSource,
@@ -1333,7 +1333,7 @@ function inspectFunction(
   const inspection: FunctionInspection = {
     containsJSX: false,
     readsValue: false,
-    hasUseSignalsCall: false,
+    hasSignalTrackingCall: false,
     hasUseManagedSignalsCall: false,
   };
 
@@ -1448,8 +1448,8 @@ function inspectFunction(
       // back a fresh NodePath for the very same function.
       if (path.getFunctionParent()?.node !== functionPath.node) return;
       const callee = path.get("callee");
-      if (isUseSignalsCallee(functionPath, callee, importSource)) {
-        inspection.hasUseSignalsCall = true;
+      if (isSignalTrackingCallee(functionPath, callee, importSource)) {
+        inspection.hasSignalTrackingCall = true;
       }
       if (
         (callee.isIdentifier() && isNamedUseManagedSignalsImport(
@@ -1480,7 +1480,7 @@ function inspectFunction(
 function findRuntimeImports(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
-  importedName: "useSignals" | "useManagedSignals",
+  importedName: "useSignalTracking" | "useManagedSignals",
 ): RuntimeImport[] {
   const imports: RuntimeImport[] = [];
   for (const statement of programPath.get("body")) {
@@ -1510,7 +1510,7 @@ function findRuntimeImports(
 function addRuntimeImport(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
-  importedName: "useSignals" | "useManagedSignals",
+  importedName: "useSignalTracking" | "useManagedSignals",
   functionPath: NodePath<t.Function>,
 ): RuntimeImport {
   const local = functionPath.scope.generateUidIdentifier(importedName);
@@ -1536,13 +1536,13 @@ function addRuntimeImport(
 
 /**
  * Is `statements`' first entry a bare zero-argument call whose callee resolves
- * to `useSignals`, with `allowBarrel` controlling whether a barrel/re-export
- * chain counts (see `isUseSignalsCallee`)? Shared by `isExplicitUseSignals`
+ * to `useSignalTracking`, with `allowBarrel` controlling whether a barrel/re-export
+ * chain counts (see `isSignalTrackingCallee`)? Shared by `isExplicitSignalTracking`
  * (`allowBarrel: false`, the verified boundary) and
- * `isUnverifiableBarrelUseSignals` (`allowBarrel: true`, to detect the exact
+ * `isUnverifiableBarrelSignalTracking` (`allowBarrel: true`, to detect the exact
  * call the former rejects).
  */
-function isFirstStatementUseSignalsCall(
+function isFirstStatementSignalTrackingCall(
   functionPath: NodePath<t.Function>,
   statements: NodePath<t.Statement>[],
   importSource: string,
@@ -1553,26 +1553,26 @@ function isFirstStatementUseSignalsCall(
   const expression = first.get("expression");
   if (!expression.isCallExpression() || expression.node.arguments.length !== 0) return false;
   const callee = expression.get("callee");
-  return isUseSignalsCallee(functionPath, callee, importSource, allowBarrel);
+  return isSignalTrackingCallee(functionPath, callee, importSource, allowBarrel);
 }
 
-function isExplicitUseSignals(
+function isExplicitSignalTracking(
   functionPath: NodePath<t.Function>,
   statements: NodePath<t.Statement>[],
   importSource: string,
 ): boolean {
-  return isFirstStatementUseSignalsCall(functionPath, statements, importSource, false);
+  return isFirstStatementSignalTrackingCall(functionPath, statements, importSource, false);
 }
 
 /**
- * The named import specifier the absorbed explicit `useSignals()` call resolves
+ * The named import specifier the absorbed explicit `useSignalTracking()` call resolves
  * to, when the call is a bare identifier bound by one. `applyManaged` replaces
  * that call with its own store declaration, which can leave the import behind
  * with nothing referencing it -- so `Program.exit` needs the specifier to check
  * and drop. A namespace import is deliberately not returned: the namespace
  * object may be used for other exports of the same module.
  */
-function getAbsorbedUseSignalsImport(
+function getAbsorbedSignalTrackingImport(
   functionPath: NodePath<t.Function>,
   statements: NodePath<t.Statement>[],
 ): NodePath<t.ImportSpecifier> | undefined {
@@ -1587,25 +1587,25 @@ function getAbsorbedUseSignalsImport(
   return resolved.specifier;
 }
 
-// A call the transform cannot verify as this library's own `useSignals` --
+// A call the transform cannot verify as this library's own `useSignalTracking` --
 // because a single-file transform cannot follow the re-export chain to
 // confirm the barrel target -- can still be written in exactly the shape of a
 // deliberate opt-in: the first statement, zero arguments, no different from
-// `isExplicitUseSignals`'s own shape. Left unflagged, that call makes
-// `hasUseSignalsCall` true (`isUseSignalsCallee` is barrel-permissive there,
+// `isExplicitSignalTracking`'s own shape. Left unflagged, that call makes
+// `hasSignalTrackingCall` true (`isSignalTrackingCallee` is barrel-permissive there,
 // see `inspectFunction`) while `explicit` stays false, so the component is
 // silently kept on the bare/best-effort boundary: no transform, no directive,
 // and -- without this check -- no warning telling the author why. `explicit`
 // is passed in rather than recomputed so this only does the extra
 // barrel-permissive walk when the direct-import check already failed.
-function isUnverifiableBarrelUseSignals(
+function isUnverifiableBarrelSignalTracking(
   functionPath: NodePath<t.Function>,
   statements: NodePath<t.Statement>[],
   importSource: string,
   explicit: boolean,
 ): boolean {
   if (explicit) return false;
-  return isFirstStatementUseSignalsCall(functionPath, statements, importSource, true);
+  return isFirstStatementSignalTrackingCall(functionPath, statements, importSource, true);
 }
 
 // Barrel resolution can't be verified, so this is valid-but-unconfirmable
@@ -1613,18 +1613,18 @@ function isUnverifiableBarrelUseSignals(
 // plugins use for non-fatal diagnostics, rather than `path.buildCodeFrameError`
 // thrown outright (reserved for the genuinely invalid async/generator case
 // below).
-function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSource: string): void {
+function warnUnverifiableBarrelSignalTracking(path: NodePath<t.Function>, importSource: string): void {
   const warning = path.buildCodeFrameError(
-    `This useSignals() call cannot be verified as "${importSource}"'s own export: it resolves ` +
+    `This useSignalTracking() call cannot be verified as "${importSource}"'s own export: it resolves ` +
       "only through a barrel/re-export module, and a single-file transform cannot follow that " +
-      "chain to confirm the target. The component stays on the bare, best-effort useSignals() " +
-      `boundary. Import useSignals directly from "${importSource}" ` +
+      "chain to confirm the target. The component stays on the bare, best-effort useSignalTracking() " +
+      `boundary. Import useSignalTracking directly from "${importSource}" ` +
       "instead to get the verified boundary.",
   );
   console.warn(warning.message);
 }
 
-// An `@useSignals` annotation is only actionable once the transform can name
+// An `@signalTracking` annotation is only actionable once the transform can name
 // the function it sits on: the boundary is attached to a component or hook
 // identity. A component returned straight out of a HOC has no name of its own
 // but does inherit the factory's (`getIdentityFactory`), and a component held
@@ -1634,9 +1634,9 @@ function warnUnverifiableBarrelUseSignals(path: NodePath<t.Function>, importSour
 // inherit either, or a name that resolves but is neither PascalCase nor `useX`.
 // Left silent, such an annotation reads as an opt-in that simply never
 // happened. Warn instead, matching the barrel case above.
-function warnUnnamedUseSignalsAnnotation(path: NodePath<t.Function>): void {
+function warnUnnamedSignalTrackingAnnotation(path: NodePath<t.Function>): void {
   const warning = path.buildCodeFrameError(
-    "This @useSignals annotation is ignored: the transform could not resolve a component " +
+    "This @signalTracking annotation is ignored: the transform could not resolve a component " +
       "or hook identity for the annotated function, and the boundary is attached to that " +
       "identity. Give it a PascalCase (component) or useX (hook) name -- a binding, a named " +
       "function declaration, or an object/class property key -- to opt it in.",
@@ -1702,7 +1702,7 @@ interface TransformCodegenInput {
   runtimeImport: RuntimeImport;
   /**
    * The import specifier the absorbed explicit call resolved to, when there is
-   * one -- see `getAbsorbedUseSignalsImport`. Only `applyManaged` absorbs, so
+   * one -- see `getAbsorbedSignalTrackingImport`. Only `applyManaged` absorbs, so
    * only it records this.
    */
   absorbedImport?: NodePath<t.ImportSpecifier> | undefined;
@@ -1713,7 +1713,7 @@ interface TransformCodegenInput {
  * front by `decideTransform` so the two codegen strategies below never have to
  * re-derive eligibility themselves:
  * - `"skip"`: opted out, ineligible, or already covered by an unverifiable or
- *   late `useSignals()` call the component keeps on its own.
+ *   late `useSignalTracking()` call the component keeps on its own.
  * - `"directive-only"`: `transform: "inject"` with the author's own explicit
  *   call already in place -- nothing to inject, but the memoization opt-out
  *   directive may still need adding.
@@ -1727,7 +1727,7 @@ type TransformDecision =
 
 /**
  * Resolves what, if anything, `path` needs done to it: the opt-out check,
- * explicit/annotated/automatic eligibility (plus the barrel-useSignals
+ * explicit/annotated/automatic eligibility (plus the barrel-useSignalTracking
  * warning that eligibility check surfaces along the way), the
  * async/generator guard, and -- once a function is confirmed eligible for
  * real codegen -- acquiring the corresponding runtime hook import it will call.
@@ -1747,7 +1747,7 @@ function decideTransform(
   const identity =
     resolveComponentIdentity(path, reactImportSource, climbedParent) ??
     getDefaultExportIdentity(climbedParent, state.filename);
-  // A `@useSignals`/`@noUseSignals` comment on a HOC factory is written for the
+  // A `@signalTracking`/`@noSignalTracking` comment on a HOC factory is written for the
   // component that factory returns: the factory is never a component itself and
   // can never carry a boundary, so it has nothing else to mean.
   // `hasOwnedLeadingComment` already reaches such a comment from the returned
@@ -1760,13 +1760,13 @@ function decideTransform(
     hasOwnedLeadingComment(path, pattern) ||
     (factory !== undefined && hasOwnedLeadingComment(factory, pattern));
 
-  if (ownsLeadingComment(noUseSignalsComment)) return { kind: "skip" };
+  if (ownsLeadingComment(noSignalTrackingComment)) return { kind: "skip" };
 
   const body = path.get("body");
   const statements = body.isBlockStatement() ? body.get("body") : [];
-  const explicit = isExplicitUseSignals(path, statements, options.importSource);
-  if (isUnverifiableBarrelUseSignals(path, statements, options.importSource, explicit)) {
-    warnUnverifiableBarrelUseSignals(path, options.importSource);
+  const explicit = isExplicitSignalTracking(path, statements, options.importSource);
+  if (isUnverifiableBarrelSignalTracking(path, statements, options.importSource, explicit)) {
+    warnUnverifiableBarrelSignalTracking(path, options.importSource);
   }
   const managedRuntimeSource = `${options.importSource}/runtime`;
   const inspection = inspectFunction(
@@ -1775,10 +1775,10 @@ function decideTransform(
     managedRuntimeSource,
     reactImportSource,
   );
-  const annotation = ownsLeadingComment(useSignalsComment);
+  const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
   // attach a boundary to it -- the component it returns carries one instead
-  // (`getIdentityFactory`). An explicit, hand-written `useSignals()` call is
+  // (`getIdentityFactory`). An explicit, hand-written `useSignalTracking()` call is
   // left alone, here as everywhere: the author's own call is their statement
   // about their own code, not something inferred.
   //
@@ -1789,7 +1789,7 @@ function decideTransform(
   // rationale simply does not reach a hook, which React calls from inside a
   // render that is already in progress, where a boundary is valid. Without this,
   // `function useModal(Overlay) { const n = count.value; ... }` was skipped for
-  // taking a component-shaped parameter, silently and with its `@useSignals`
+  // taking a component-shaped parameter, silently and with its `@signalTracking`
   // annotation dropped too (the annotation warning is gated on rendering JSX,
   // which a hook does not do).
   const isFactory = isHigherOrderComponentFactory(path) && !isHookIdentity(identity);
@@ -1824,8 +1824,8 @@ function decideTransform(
   // would otherwise report it a second time.
   if (annotation && !annotated && rendersJsx(path)) {
     const enclosing = path.getFunctionParent();
-    if (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalsComment)) {
-      warnUnnamedUseSignalsAnnotation(path);
+    if (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalTrackingComment)) {
+      warnUnnamedSignalTrackingAnnotation(path);
     }
   }
   // An anonymous default export the file name could not name is the one
@@ -1843,14 +1843,14 @@ function decideTransform(
   const automatic =
     !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
-  if (!explicit && (inspection.hasUseSignalsCall || inspection.hasUseManagedSignalsCall)) {
+  if (!explicit && (inspection.hasSignalTrackingCall || inspection.hasUseManagedSignalsCall)) {
     return { kind: "skip" };
   }
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
   if (path.node.async || path.node.generator) {
     if (!explicit && !annotated) return { kind: "skip" };
     throw path.buildCodeFrameError(
-      "useSignals transform only supports synchronous, non-generator functions",
+      "useSignalTracking transform only supports synchronous, non-generator functions",
     );
   }
 
@@ -1867,7 +1867,7 @@ function decideTransform(
     runtimeImport = addRuntimeImport(
       state.programPath,
       importSource,
-      options.transform === "managed" ? "useManagedSignals" : "useSignals",
+      options.transform === "managed" ? "useManagedSignals" : "useSignalTracking",
       path,
     );
     imports.push(runtimeImport);
@@ -1879,11 +1879,11 @@ function decideTransform(
     statements,
     explicit,
     runtimeImport,
-    absorbedImport: explicit ? getAbsorbedUseSignalsImport(path, statements) : undefined,
+    absorbedImport: explicit ? getAbsorbedSignalTrackingImport(path, statements) : undefined,
   };
 }
 
-/** Codegen: inject a bare `useSignals()` call at the top of the function body. */
+/** Codegen: inject a bare `useSignalTracking()` call at the top of the function body. */
 function applyInject(
   path: NodePath<t.Function>,
   { body, runtimeImport }: TransformCodegenInput,
@@ -1957,7 +1957,7 @@ function applyManaged(
 }
 
 /**
- * Drops an `import { useSignals } from "<importSource>"` the managed transform
+ * Drops an `import { useSignalTracking } from "<importSource>"` the managed transform
  * absorbed and nothing else refers to any more, along with the whole
  * declaration once its last specifier goes. A reused `/runtime` import survives
  * this untouched: the emitted store declaration still calls it, so the binding
@@ -1997,7 +1997,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
             managedRuntimeSource,
             "useManagedSignals",
           );
-          state.directImports = findRuntimeImports(path, options.importSource, "useSignals");
+          state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
           state.absorbedImports = [];
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
@@ -2040,9 +2040,8 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
  * it is discarded outright for every file none of the three opt-in routes can
  * possibly apply to:
  *
- * - explicit and annotated opt-in both need the text `useSignals` (an aliased
- *   import, a namespace call and the `@useSignals` comment all still contain
- *   it);
+ * - explicit opt-in needs `useSignalTracking`; annotation opt-in and opt-out
+ *   need `@signalTracking` or `@noSignalTracking`;
  * - `auto` needs a `.value` read, so it needs the text `value`;
  * - `all` additionally wraps JSX components, so it needs a `<` -- but its
  *   custom-hook rule still needs a `.value` read.
@@ -2052,7 +2051,11 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
  * would have rejected anyway.
  */
 function mightTransform(code: string, mode: ReactFineGrainedSignalsMode): boolean {
-  if (code.includes("useSignals")) return true;
+  if (
+    code.includes("useSignalTracking") ||
+    code.includes("@signalTracking") ||
+    code.includes("@noSignalTracking")
+  ) return true;
   if (mode === "manual") return false;
   if (code.includes("value")) return true;
   return mode === "all" && code.includes("<");

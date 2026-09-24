@@ -1,4 +1,4 @@
-import { useSignals } from "react-fine-grained-signals";
+import { useSignalTracking } from "react-fine-grained-signals";
 import type { DeepSignal } from "react-fine-grained-signals";
 
 export interface LogSettings {
@@ -8,7 +8,7 @@ export interface LogSettings {
 
 /** Owns its own tracking scope, separate from the route component. */
 export function LogSettingsForm({ settings }: { settings: DeepSignal<LogSettings> }) {
-  useSignals();
+  useSignalTracking();
 
   return (
     <div className="log-settings">

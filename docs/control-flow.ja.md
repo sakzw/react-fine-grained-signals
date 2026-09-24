@@ -89,7 +89,7 @@ itemが安定したidentityを持つリストをレンダーします。新し�
 
 - 配列、`Set`、`Map` を受け付けます。`Map` の場合、`by` とchildrenの両方が `[key, value]` のentryを受け取ります。
 - `by` は常に必須です。純粋であり、render中に生成するのではなくitemから導出してください。
-- 行コンポーネント内でsignalやdeep item propertyを読む場合は、その行で `useSignals()` を呼ぶかpluginを使い、行自身に購読を持たせてください。
+- 行コンポーネント内でsignalやdeep item propertyを読む場合は、その行で `useSignalTracking()` を呼ぶかpluginを使い、行自身に購読を持たせてください。
 
 ## Index
 

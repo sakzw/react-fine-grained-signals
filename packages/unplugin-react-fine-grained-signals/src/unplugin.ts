@@ -16,12 +16,12 @@ export type {
 
 export interface ReactFineGrainedSignalsOptions {
   /**
-   * `manual` preserves explicit useSignals() opt-in. `auto` detects signal
+   * `manual` preserves explicit useSignalTracking() opt-in. `auto` detects signal
    * reads in components and custom hooks; `all` also wraps JSX components that
    * do not statically expose a .value read.
    */
   mode?: ReactFineGrainedSignalsMode;
-  /** `managed` (default) adds an exact try/finally boundary; `inject` adds bare useSignals() for best-effort opt-in. */
+  /** `managed` (default) adds an exact try/finally boundary; `inject` adds bare useSignalTracking() for best-effort opt-in. */
   transform?: ReactFineGrainedSignalsTransform;
   /**
    * `auto` (default) marks every transformed function with `"use no memo"`, so
@@ -30,7 +30,7 @@ export interface ReactFineGrainedSignalsOptions {
    * when its memoization has been verified against this library's tracking.
    */
   reactCompiler?: ReactFineGrainedSignalsReactCompiler;
-  /** Package whose root exports bare `useSignals` and whose `/runtime` entry exports `useManagedSignals`. */
+  /** Package whose root exports bare `useSignalTracking` and whose `/runtime` entry exports `useManagedSignals`. */
   importSource?: string;
   /**
    * Extra module specifier whose `memo`/`forwardRef` exports are treated as

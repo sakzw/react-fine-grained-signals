@@ -22,9 +22,9 @@ const ReactModule = await import("react");
 const React = ReactModule;
 const { useState, act } = ReactModule;
 const { createRoot } = await import("react-dom/client");
-const { signal, useSignals } = await import("../dist/index.js");
+const { signal, useSignalTracking } = await import("../dist/index.js");
 // The bundler plugin's shipped default (`transform: "managed"`, since commit
-// 57f824e) never calls the bare `useSignals()` above -- it rewrites call
+// 57f824e) never calls the bare `useSignalTracking()` above -- it rewrites call
 // sites to this runtime entry point's managed boundary instead. Imported
 // under an alias so both variants can be benchmarked side by side.
 const { useManagedSignals } = await import("../dist/runtime.js");
@@ -111,7 +111,7 @@ function createHooksVariant(counts, memoizeSibling) {
 /**
  * Builds the signals variant: `count` is a single module/benchmark-scoped
  * signal (not per-mount `useState`), created once here. `SignalsApp` never
- * calls `useSignals()` and never reads `count.value`, so it renders exactly
+ * calls `useSignalTracking()` and never reads `count.value`, so it renders exactly
  * once, ever; only `SignalsCounter` opts in and re-renders on writes.
  * `SignalsSibling` is a plain, unmemoized component -- proof that siblings
  * need zero opt-in to be skipped.
@@ -120,7 +120,7 @@ function createSignalsVariant(counts) {
   const count = signal(0);
 
   function SignalsCounter() {
-    useSignals();
+    useSignalTracking();
     counts.counter += 1;
     return React.createElement("li", null, "count:", count.value);
   }
@@ -148,7 +148,7 @@ function createSignalsVariant(counts) {
  * its render scope the way the plugin's shipped `transform: "managed"`
  * output does -- `const store = useManagedSignals(); try { ... } finally {
  * store.finish(); }` against `react-fine-grained-signals/runtime` -- instead of calling
- * the bare `useSignals()` hook. This is the boundary real apps built with
+ * the bare `useSignalTracking()` hook. This is the boundary real apps built with
  * the default toolchain actually run, so it's benchmarked alongside the bare
  * variant rather than in its place.
  */

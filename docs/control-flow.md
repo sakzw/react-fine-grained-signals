@@ -89,7 +89,7 @@ Renders a list whose items have stable identities. It is a local React list boun
 
 - Accepts arrays, `Set`, and `Map`. For a `Map`, both `by` and the child receive a `[key, value]` entry.
 - `by` is always required, and must be pure and derived from the item rather than generated during render.
-- For a row that reads signals or deep item properties inside a child component, call `useSignals()` in that row (or use the plugin) so the row owns the subscription.
+- For a row that reads signals or deep item properties inside a child component, call `useSignalTracking()` in that row (or use the plugin) so the row owns the subscription.
 
 ## Index
 

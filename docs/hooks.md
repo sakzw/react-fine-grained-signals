@@ -3,10 +3,10 @@
 [English](hooks.md) | [日本語](hooks.ja.md)
 
 ```tsx
-import { useComputed, useSignal, useSignalEffect, useSignals } from "react-fine-grained-signals";
+import { useComputed, useSignal, useSignalEffect, useSignalTracking } from "react-fine-grained-signals";
 
 function Counter({ step }: { step: number }) {
-  useSignals();
+  useSignalTracking();
   const count = useSignal(0);
   const scaled = useComputed(() => count.value * step, [step]);
 
@@ -27,7 +27,7 @@ useSignal<T>(initialValue: T): Signal<T>
 Keeps one signal for the component lifetime.
 
 - `initialValue` is used on the first render only; later renders return the same signal.
-- Reading `.value` during render requires [`useSignals()`](#usesignals) (or the plugin) in that same component.
+- Reading `.value` during render requires [`useSignalTracking()`](#usesignaltracking) (or the plugin) in that same component.
 
 ## useDeepSignal
 
@@ -38,7 +38,7 @@ useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
 Keeps one deep signal, with property-level tracking, for the component lifetime.
 
 - For an expensive initial value, pass a pure factory: `useDeepSignal(() => ({ items: [] }))`.
-- Properties read after [`useSignals()`](#usesignals) are tracked individually, so changing an unread sibling does not rerender the component.
+- Properties read after [`useSignalTracking()`](#usesignaltracking) are tracked individually, so changing an unread sibling does not rerender the component.
 
 ## useComputed
 
@@ -63,10 +63,10 @@ Starts an effect after commit and disposes it on unmount, including Strict Mode 
 - When it captures props, state, or another non-signal value, list those values: `useSignalEffect(() => { /* reads signals and props */ }, [prop])`.
 - A function returned from the callback is its cleanup, run before the next execution and on disposal.
 
-## useSignals
+## useSignalTracking
 
 ```ts
-useSignals(): void
+useSignalTracking(): void
 ```
 
 Opens the render-tracking window. Call it once and unconditionally as the first hook in every component that reads signal `.value` during render.
@@ -81,9 +81,9 @@ With the build plugin in your build you do not write this by hand: in its defaul
 
 ### Tracking boundary
 
-The collection window closes at the next `useSignals()` call, at the commit-phase layout effect, or in a microtask after the current synchronous execution — not at the point the component returns.
+The collection window closes at the next `useSignalTracking()` call, at the commit-phase layout effect, or in a microtask after the current synchronous execution — not at the point the component returns.
 
-That is why every reading component needs its own call: a read from a sibling or descendant that does not call `useSignals()` can be attributed to another component's still-open window, and that signal then silently stops updating the component that actually read it.
+That is why every reading component needs its own call: a read from a sibling or descendant that does not call `useSignalTracking()` can be attributed to another component's still-open window, and that signal then silently stops updating the component that actually read it.
 
 Use the build plugin's `transform: "managed"` (its default) when an exact boundary is required. It needs no hand-written `try` / `finally`, so it is the least error-prone option when available.
 
@@ -108,7 +108,7 @@ function Row() {
 
 ### React Compiler
 
-The runtime-import boundary above is not the silent-freeze hazard that a bare `useSignals()` is. Measured against `babel-plugin-react-compiler` 1.0.0, the compiler cannot lower `try` without `catch`, so it abandons the function, emits it unchanged, and the component keeps updating on every write — with or without `"use no memo"`.
+The runtime-import boundary above is not the silent-freeze hazard that a bare `useSignalTracking()` is. Measured against `babel-plugin-react-compiler` 1.0.0, the compiler cannot lower `try` without `catch`, so it abandons the function, emits it unchanged, and the component keeps updating on every write — with or without `"use no memo"`.
 
 What the directive buys is the build, not the runtime: under `panicThreshold: "all_errors"` the same bail-out is fatal without it and merely logged with it. The build plugin adds the directive to its own `managed` output automatically (`reactCompiler: "auto"`, the default) but leaves a hand-written runtime-import boundary untouched. Write it by hand if your build panics on all errors, and for forward compatibility, since the bail-out is a compiler limitation rather than a guarantee.
 
@@ -120,7 +120,7 @@ See [the React Compiler compatibility note](design/react-compiler-compatibility.
 useSignalValue<T>(source: ReadonlySignal<T>): T
 ```
 
-Subscribes to a single signal and returns its current value. This is the low-level explicit leaf subscription, for when you want one named subscription instead of a component-wide `useSignals()` window.
+Subscribes to a single signal and returns its current value. This is the low-level explicit leaf subscription, for when you want one named subscription instead of a component-wide `useSignalTracking()` window.
 
 ## useDeepSignalValue
 

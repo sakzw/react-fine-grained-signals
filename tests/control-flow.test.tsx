@@ -3,7 +3,7 @@
 import { act, Fragment, StrictMode, useState } from "react";
 import { cleanup, render, screen, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deepSignal, signal, useSignals } from "../src/index.js";
+import { deepSignal, signal, useSignalTracking } from "../src/index.js";
 import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -116,7 +116,7 @@ describe("JSX control flow utilities", () => {
     const keyCalls = vi.fn((item: { id: string }) => item.id);
 
     function Row({ item }: { item: { id: string; label: string } }) {
-      useSignals();
+      useSignalTracking();
       const [mountedFor] = useState(item.id);
       return <li data-testid={item.id}>{`${mountedFor}:${item.label}`}</li>;
     }
@@ -220,7 +220,7 @@ describe("JSX control flow utilities", () => {
     ]);
 
     function Row({ item }: { item: () => { id: string; name: string } }) {
-      useSignals();
+      useSignalTracking();
       const current = item();
       const [positionOwner] = useState(current.id);
       return <li>{`${positionOwner}:${current.name}`}</li>;
@@ -260,7 +260,7 @@ describe("JSX control flow utilities", () => {
     const orphan = signal("before");
     const forRenders = vi.fn();
 
-    // Deliberately has no `useSignals()`: its render-time read belongs to
+    // Deliberately has no `useSignalTracking()`: its render-time read belongs to
     // nobody. With `For` on the best-effort boundary, `For`'s scope was still
     // open when this sibling rendered, so the read was collected into `For`'s
     // store and writing `orphan` re-rendered `For` instead.

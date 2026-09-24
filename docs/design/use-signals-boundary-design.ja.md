@@ -1,20 +1,20 @@
-# 変換なしの `useSignals()` 境界に関する設計検討
+# 変換なしの `useSignalTracking()` 境界に関する設計検討
 
 [English](use-signals-boundary-design.md) | [日本語](use-signals-boundary-design.ja.md)
 
-状態: 設計検討中。以下の中心的な問い ── 変換なしの `useSignals()` に既定でどのような厳密な境界契約を与えるか(あるいは与えないか) ── については、APIや実装方針をまだ決定していません。ただし、ここで検討した選択肢のうち範囲の狭いもの(選択肢3、手動のscope handle)は、その後文書化され、pluginを使わない手動利用向けとして採用済みです。文末の「現在の推奨」を参照してください。
+状態: 設計検討中。以下の中心的な問い ── 変換なしの `useSignalTracking()` に既定でどのような厳密な境界契約を与えるか(あるいは与えないか) ── については、APIや実装方針をまだ決定していません。ただし、ここで検討した選択肢のうち範囲の狭いもの(選択肢3、手動のscope handle)は、その後文書化され、pluginを使わない手動利用向けとして採用済みです。文末の「現在の推奨」を参照してください。
 
 ## 背景
 
-変換なしの `useSignals()` を呼ぶとrender collectorが開き、それ以降の同期的なsignal読み取りを記録します。Reactは通常のfunction component呼び出しの終了を通知するcallbackを公開していないため、runtimeは次の3つのうち最初に到達した時点でcollectorを閉じます。
+変換なしの `useSignalTracking()` を呼ぶとrender collectorが開き、それ以降の同期的なsignal読み取りを記録します。Reactは通常のfunction component呼び出しの終了を通知するcallbackを公開していないため、runtimeは次の3つのうち最初に到達した時点でcollectorを閉じます。
 
-- 次の `useSignals()` 呼び出し。変換なしのcollectorが別の呼び出しをまたいで生き残ることはなく、変換なしの呼び出しは開いているmanaged scopeも閉じます。managed scope同士は入れ子になります。
+- 次の `useSignalTracking()` 呼び出し。変換なしのcollectorが別の呼び出しをまたいで生き残ることはなく、変換なしの呼び出しは開いているmanaged scopeも閉じます。managed scope同士は入れ子になります。
 - render passに続くcommit段階のlayout effect。同期renderでは、予約済みmicrotaskより先にこれが実行されます。
 - 変換なしのcollectorが開くときに予約されるmicrotask。現在の同期実行が完了した後、次のmacrotaskの前に実行されます。
 
-この仕組みは、明示的でpluginを必要としないAPIを維持できます。しかし、どの時点も所有者であるcomponentの呼び出し終了とは一致しません。先にrenderされたcomponentのcollectorが開いたまま、`useSignals()` を呼ばない兄弟や子孫componentがsignalを読む場合があります。その読み取りは誤ったcomponentに紐付く可能性があります。signalを更新するとcollectorの所有者だけが再レンダーされ、実際に値を表示したcomponentが古い表示のまま残り得ます。render passは原子的でもありません。time-slicingされるrender(例えば `startTransition` 内)ではReactがcomponentの間でyieldするため、予約済みmicrotaskがrender passの途中でcollectorを閉じることがあります。Suspenseで中断されたrender、render中のネストしたserver rendering、複数の並行rootでも、同種の所有権の曖昧さが発生します。
+この仕組みは、明示的でpluginを必要としないAPIを維持できます。しかし、どの時点も所有者であるcomponentの呼び出し終了とは一致しません。先にrenderされたcomponentのcollectorが開いたまま、`useSignalTracking()` を呼ばない兄弟や子孫componentがsignalを読む場合があります。その読み取りは誤ったcomponentに紐付く可能性があります。signalを更新するとcollectorの所有者だけが再レンダーされ、実際に値を表示したcomponentが古い表示のまま残り得ます。render passは原子的でもありません。time-slicingされるrender(例えば `startTransition` 内)ではReactがcomponentの間でyieldするため、予約済みmicrotaskがrender passの途中でcollectorを閉じることがあります。Suspenseで中断されたrender、render中のネストしたserver rendering、複数の並行rootでも、同種の所有権の曖昧さが発生します。
 
-したがって、現行動作は厳密なcomponent境界ではなく、**best-effort**です。render中にsignalを読む各component自身が `useSignals()` を呼ぶ必要があります。build時の変換を許容できる場合、既存のmanaged transformは字句的に厳密な `try` / `finally` 境界を提供できます。
+したがって、現行動作は厳密なcomponent境界ではなく、**best-effort**です。render中にsignalを読む各component自身が `useSignalTracking()` を呼ぶ必要があります。build時の変換を許容できる場合、既存のmanaged transformは字句的に厳密な `try` / `finally` 境界を提供できます。
 
 ## 先行事例
 
@@ -22,7 +22,7 @@
 
 ## 将来の判断で達成したいこと
 
-- このライブラリを作る動機になった、先頭で `useSignals()` を呼ぶ書き味を維持する。
+- このライブラリを作る動機になった、先頭で `useSignalTracking()` を呼ぶ書き味を維持する。
 - signal読み取りが誤ったcomponentへ静かに紐付くことを防ぐ。
 - React 19のStrict Mode、Suspense中断、SSR、hydration、並行root、time-slicingされるrenderで正しく動作する。
 - React Compilerが前提とするrenderの純粋性およびmemo化と両立する。
@@ -38,17 +38,17 @@
 
 ## 評価する選択肢
 
-### 1. 変換なしの `useSignals()` をbest-effortのまま維持する
+### 1. 変換なしの `useSignalTracking()` をbest-effortのまま維持する
 
 現行runtimeと説明を維持し、厳密な動作にはmanaged transformを使います。
 
-利点は、buildが不要でAPI変更もなく、明示的な呼び出しを残せることです。欠点は、`useSignals()` を呼ばないrender処理がsignalを読むと、誤った所有者へ紐付く可能性が残ることです。第三者componentや呼び忘れを文書だけで防ぐことはできません。
+利点は、buildが不要でAPI変更もなく、明示的な呼び出しを残せることです。欠点は、`useSignalTracking()` を呼ばないrender処理がsignalを読むと、誤った所有者へ紐付く可能性が残ることです。第三者componentや呼び忘れを文書だけで防ぐことはできません。
 
 ### 2. managed transformを推奨する厳密な経路にする
 
 **状態: plugin経路では採用済みです。** `unplugin-react-fine-grained-signals` build pluginはこの選択肢をdefaultにしており、`transform: "managed"` 設定で厳密な `try` / `finally` 境界を実装しています。
 
-source上の `useSignals()` 呼び出しは維持しながら、opt-inしたcomponentを厳密な `try` / `finally` scopeへ変換します。危険性を理解した利用者向けに、best-effort動作を任意で残すこともできます。
+source上の `useSignalTracking()` 呼び出しは維持しながら、opt-inしたcomponentを厳密な `try` / `finally` scopeへ変換します。危険性を理解した利用者向けに、best-effort動作を任意で残すこともできます。
 
 利点は、source上の書き味を保ちながら字句的な所有権を得られることです。欠点は、build integrationが必要で、あらゆるcomponent形式を安全に処理しなければならず、transformの保守コストも増えることです。
 
@@ -80,7 +80,7 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 ### 7. 変換なしのAPIを限定または置換する
 
-変換なしの `useSignals()` に対する厳密性の主張を廃止し、正確性が必要な利用者を、明示的なleaf購読、JSX host binding、またはmanaged transformへ案内します。
+変換なしの `useSignalTracking()` に対する厳密性の主張を廃止し、正確性が必要な利用者を、明示的なleaf購読、JSX host binding、またはmanaged transformへ案内します。
 
 利点は、保証内容が正確になり、曖昧な仕組みを減らせることです。欠点は、ライブライブラリとしての体験(render中に `.value` を読むだけで表示が追従する書き味)を弱める、大きなproduct/API判断になることです。
 
@@ -88,7 +88,7 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 採用する設計には、少なくとも次の実行可能なtestが必要です。
 
-- 一方だけが `useSignals()` を呼ぶ隣接した兄弟component。
+- 一方だけが `useSignalTracking()` を呼ぶ隣接した兄弟component。
 - opt-in状態が異なるnested componentとrender props。
 - Strict Modeの再実行とcleanup。
 - 完了前にsuspendまたはthrowするrender。
@@ -107,6 +107,6 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 ## 現在の推奨
 
-変換なしの `useSignals()` に関するより広い境界の問いについて方針を決定するまでは、変換なしの `useSignals()` と `transform: "inject"` を、signalを読むすべてのcomponentがopt-inする同期render向けの、plugin不要なbest-effort機能として扱います。build pluginを利用できて厳密なrender境界が必要な場合は `transform: "managed"` を使います。pluginを使わない場合は、選択肢3の手動 `react-fine-grained-signals/runtime` scope handle ── `const store = useManagedSignals(); try { … } finally { store.finish(); }` ── が、[hooksのdocs](../hooks.ja.md)に厳密な境界の代替として文書化されています。この説明は現在の制約を記録するものであり、設計課題を終了させたり、兄弟componentの誤帰属を正しい動作として再定義したりするものではありません。
+変換なしの `useSignalTracking()` に関するより広い境界の問いについて方針を決定するまでは、変換なしの `useSignalTracking()` と `transform: "inject"` を、signalを読むすべてのcomponentがopt-inする同期render向けの、plugin不要なbest-effort機能として扱います。build pluginを利用できて厳密なrender境界が必要な場合は `transform: "managed"` を使います。pluginを使わない場合は、選択肢3の手動 `react-fine-grained-signals/runtime` scope handle ── `const store = useManagedSignals(); try { … } finally { store.finish(); }` ── が、[hooksのdocs](../hooks.ja.md)に厳密な境界の代替として文書化されています。この説明は現在の制約を記録するものであり、設計課題を終了させたり、兄弟componentの誤帰属を正しい動作として再定義したりするものではありません。
 
-`unplugin-react-fine-grained-signals` は現在、bundler pluginの経路について上記の選択肢2を実装する形で `transform: "managed"` をdefaultにしています。`managed`(default)は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignals()` を追加します。pluginでbuildし `transform` を上書きしない利用者は、source側の変更なしにこの厳密な境界を得られます。pluginを使わない利用者も、文書化された選択肢3を手動で使うことで同等の厳密な境界を得られます。この変更はこの設計検討の範囲を狭めますが、終了させるものではありません。build変換を一切使わない変換なしの `useSignals()` と、明示的に選択した `transform: "inject"` は、上記の説明どおりbest-effortのままであり、本文書が扱う中心的な問い(変換なしのhookに既定でどのような厳密な境界契約を与えるか)を含め、本文書のその他の選択肢と判断基準は依然として未解決のままです。
+`unplugin-react-fine-grained-signals` は現在、bundler pluginの経路について上記の選択肢2を実装する形で `transform: "managed"` をdefaultにしています。`managed`(default)は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignalTracking()` を追加します。pluginでbuildし `transform` を上書きしない利用者は、source側の変更なしにこの厳密な境界を得られます。pluginを使わない利用者も、文書化された選択肢3を手動で使うことで同等の厳密な境界を得られます。この変更はこの設計検討の範囲を狭めますが、終了させるものではありません。build変換を一切使わない変換なしの `useSignalTracking()` と、明示的に選択した `transform: "inject"` は、上記の説明どおりbest-effortのままであり、本文書が扱う中心的な問い(変換なしのhookに既定でどのような厳密な境界契約を与えるか)を含め、本文書のその他の選択肢と判断基準は依然として未解決のままです。

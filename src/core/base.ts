@@ -255,7 +255,7 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
  * alien-signals' `flush()` drains the rest of its effect queue in a `finally`
  * *without running those effects*, so one throwing effect silently cancels
  * every effect still queued behind it in that cycle — an unrelated binding, or
- * a `useSignals()`-tracked component's commit, quietly missing an update — and
+ * a `useSignalTracking()`-tracked component's commit, quietly missing an update — and
  * then propagates out of whatever write triggered the flush (an event handler,
  * anywhere). Catching here keeps the failure local to this one effect.
  *

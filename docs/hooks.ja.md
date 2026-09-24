@@ -3,10 +3,10 @@
 [English](hooks.md) | [日本語](hooks.ja.md)
 
 ```tsx
-import { useComputed, useSignal, useSignalEffect, useSignals } from "react-fine-grained-signals";
+import { useComputed, useSignal, useSignalEffect, useSignalTracking } from "react-fine-grained-signals";
 
 function Counter({ step }: { step: number }) {
-  useSignals();
+  useSignalTracking();
   const count = useSignal(0);
   const scaled = useComputed(() => count.value * step, [step]);
 
@@ -27,7 +27,7 @@ useSignal<T>(initialValue: T): Signal<T>
 コンポーネントの生存期間中、同じsignalを1つ保持します。
 
 - `initialValue` が使われるのは初回レンダーのみで、以降は同じsignalが返ります。
-- レンダー中に `.value` を読むには、そのコンポーネント自身で [`useSignals()`](#usesignals)（またはplugin）が必要です。
+- レンダー中に `.value` を読むには、そのコンポーネント自身で [`useSignalTracking()`](#usesignaltracking)（またはplugin）が必要です。
 
 ## useDeepSignal
 
@@ -38,7 +38,7 @@ useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
 property単位で追跡するdeep signalを、コンポーネントの生存期間中1つ保持します。
 
 - 生成コストが高い初期値には、純粋なファクトリを渡してください: `useDeepSignal(() => ({ items: [] }))`。
-- [`useSignals()`](#usesignals) 後に読んだpropertyは個別に追跡されるため、読んでいない隣接propertyの変更では再レンダーしません。
+- [`useSignalTracking()`](#usesignaltracking) 後に読んだpropertyは個別に追跡されるため、読んでいない隣接propertyの変更では再レンダーしません。
 
 ## useComputed
 
@@ -63,10 +63,10 @@ useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyLi
 - props、state、その他のsignalではない値を捕捉する場合は、それらを列挙してください: `useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])`。
 - callbackが返した関数はcleanupとして扱われ、次回の実行前と解除時に実行されます。
 
-## useSignals
+## useSignalTracking
 
 ```ts
-useSignals(): void
+useSignalTracking(): void
 ```
 
 レンダー追跡のウィンドウを開きます。レンダー中にsignalの `.value` を読むコンポーネントでは、最初のフックとして1回、無条件に呼び出してください。
@@ -81,7 +81,7 @@ build pluginをbuildに入れている場合、これを手で書く必要はあ
 
 ### 追跡境界
 
-収集ウィンドウが閉じるのは、次の `useSignals()` 呼び出し時、コミット時のlayout effect、または現在の同期実行後のmicrotaskであり、コンポーネントがreturnした時点ではありません。
+収集ウィンドウが閉じるのは、次の `useSignalTracking()` 呼び出し時、コミット時のlayout effect、または現在の同期実行後のmicrotaskであり、コンポーネントがreturnした時点ではありません。
 
 読むコンポーネントがすべて自分で呼ぶ必要があるのはこのためです。呼んでいない兄弟・子孫コンポーネントの読み取りは、別のコンポーネントの開いたままのウィンドウに帰属してしまうことがあり、その場合、実際に読んだコンポーネントはそのsignalに対して無言で更新されなくなります。
 
@@ -108,7 +108,7 @@ function Row() {
 
 ### React Compiler
 
-上のランタイムインポート境界は、bare `useSignals()` のような「無言で凍結する」ハザードにはあたりません。`babel-plugin-react-compiler` 1.0.0で計測したところ、compilerは `catch` のない `try` を下位表現に落とせないためcompileを中断し、functionをそのまま出力します。その結果、`"use no memo"` の有無にかかわらず、コンポーネントは書き込みのたびに更新され続けます。
+上のランタイムインポート境界は、bare `useSignalTracking()` のような「無言で凍結する」ハザードにはあたりません。`babel-plugin-react-compiler` 1.0.0で計測したところ、compilerは `catch` のない `try` を下位表現に落とせないためcompileを中断し、functionをそのまま出力します。その結果、`"use no memo"` の有無にかかわらず、コンポーネントは書き込みのたびに更新され続けます。
 
 このdirectiveが効くのはruntimeではなくbuildです。`panicThreshold: "all_errors"` の場合、directiveがなければ同じbail-outがbuildを失敗させ、あればログに記録されるだけで済みます。build pluginは自身のmanaged出力には既定の `reactCompiler: "auto"` でdirectiveを自動的に挿入しますが、手書きのランタイムインポート境界には手を加えません。buildが全errorでpanicする設定なら手書きで付けてください。また、このbail-outはcompilerの制約であって保証ではないため、将来のversionに備える意味でも付けておく価値があります。
 
@@ -120,7 +120,7 @@ function Row() {
 useSignalValue<T>(source: ReadonlySignal<T>): T
 ```
 
-1つのsignalを購読し、現在の値を返します。コンポーネント全体の `useSignals()` ウィンドウではなく、名前の付いた購読を1つだけ張りたい場合の低レベルAPIです。
+1つのsignalを購読し、現在の値を返します。コンポーネント全体の `useSignalTracking()` ウィンドウではなく、名前の付いた購読を1つだけ張りたい場合の低レベルAPIです。
 
 ## useDeepSignalValue
 

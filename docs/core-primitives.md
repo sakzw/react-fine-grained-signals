@@ -43,7 +43,7 @@ Creates a lazily evaluated, read-only derived value. It exposes the same `.value
 
 ### When the getter throws
 
-The write that triggered re-evaluation still completes normally. The error is cached and rethrown from `.value` and `.peek()` on the next read of that computed instead, so a `useSignalValue`/`useSignals()` read of it during React's render reaches an Error Boundary.
+The write that triggered re-evaluation still completes normally. The error is cached and rethrown from `.value` and `.peek()` on the next read of that computed instead, so a `useSignalValue`/`useSignalTracking()` read of it during React's render reaches an Error Boundary.
 
 A later write to a dependency the getter did read before failing correctly triggers re-evaluation on the next read, so the computed recovers once its inputs make the getter succeed again. A dependency the getter never reached because it threw first is not tracked, so a write to only that dependency does not by itself trigger re-evaluation.
 

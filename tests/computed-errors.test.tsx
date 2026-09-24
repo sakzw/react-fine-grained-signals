@@ -9,7 +9,7 @@ import {
   computed,
   signal,
   useSignalValue,
-  useSignals,
+  useSignalTracking,
 } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -90,7 +90,7 @@ describe("computed error propagation (React)", () => {
     expect(reactError).toHaveBeenCalled();
   });
 
-  it("delivers a useSignals()-tracked render read to an Error Boundary, not just the leaf hook path", () => {
+  it("delivers a useSignalTracking()-tracked render read to an Error Boundary, not just the leaf hook path", () => {
     const source = signal(1);
     const broken = computed(() => {
       if (source.value === 2) throw new Error("render read failed");
@@ -99,7 +99,7 @@ describe("computed error propagation (React)", () => {
     const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     function Reader() {
-      useSignals();
+      useSignalTracking();
       return <output aria-label="tracked value">{broken.value}</output>;
     }
 
@@ -115,7 +115,7 @@ describe("computed error propagation (React)", () => {
     expect(reactError).toHaveBeenCalled();
   });
 
-  it("re-renders a useSignals()-tracked component through error -> success -> error transitions", () => {
+  it("re-renders a useSignalTracking()-tracked component through error -> success -> error transitions", () => {
     // The render bridge's own change check (`nextValue !== lastRenderValue`) is
     // a plain reference comparison. Every branch of the computed's internal
     // try/catch always constructs a fresh box on change, including switching
@@ -129,7 +129,7 @@ describe("computed error propagation (React)", () => {
     const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     function Reader() {
-      useSignals();
+      useSignalTracking();
       return <output aria-label="flippy value">{flippy.value}</output>;
     }
 
@@ -143,7 +143,7 @@ describe("computed error propagation (React)", () => {
     expect(reactError).toHaveBeenCalled();
   });
 
-  it("leaves an unrelated useSignals()-tracked component unaffected by another computed throwing in the same commit", () => {
+  it("leaves an unrelated useSignalTracking()-tracked component unaffected by another computed throwing in the same commit", () => {
     // Reproduces claim 2's blast radius through the public API: in raw
     // alien-signals@3.2.1, once one queued effect's dirty-check throws mid-flush
     // every effect still queued behind it in that flush is skipped and never
@@ -160,11 +160,11 @@ describe("computed error propagation (React)", () => {
     const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
 
     function ErroringReader() {
-      useSignals();
+      useSignalTracking();
       return <output aria-label="erroring value">{erroring.value}</output>;
     }
     function HealthyReader() {
-      useSignals();
+      useSignalTracking();
       healthyRenders();
       return <output aria-label="healthy value">{b.value}</output>;
     }

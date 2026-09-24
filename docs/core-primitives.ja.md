@@ -43,7 +43,7 @@ computed<T>(getter: () => T): ReadonlySignal<T>
 
 ### getterが例外を投げた場合
 
-再評価の引き金になった書き込みはそのまま正常に完了します。エラーはキャッシュされ、そのcomputedを次に読み取ったときの `.value` と `.peek()` から再度投げ直されるため、Reactの描画中に `useSignalValue` / `useSignals()` がそのcomputedを読み取った場合はError Boundaryまで届きます。
+再評価の引き金になった書き込みはそのまま正常に完了します。エラーはキャッシュされ、そのcomputedを次に読み取ったときの `.value` と `.peek()` から再度投げ直されるため、Reactの描画中に `useSignalValue` / `useSignalTracking()` がそのcomputedを読み取った場合はError Boundaryまで届きます。
 
 getterが失敗する前に読んでいた依存であれば、その後の書き込みで次回読み取り時に正しく再評価され、getterが成功する入力に戻ればcomputedは復帰します。一方、getterが例外を投げるより前に到達できず読まれなかった依存は追跡されないため、その依存だけへの書き込みはそれ単独では再評価を引き起こしません。
 

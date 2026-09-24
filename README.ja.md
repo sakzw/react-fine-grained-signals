@@ -23,10 +23,10 @@ pnpm add react-fine-grained-signals alien-signals
 プリミティブとフックは、installした時点で動作します。buildツールやコンパイラの設定は不要です。
 
 ```tsx
-import { useSignal, useSignals } from "react-fine-grained-signals";
+import { useSignal, useSignalTracking } from "react-fine-grained-signals";
 
 function Counter() {
-  useSignals();
+  useSignalTracking();
   const count = useSignal(0);
 
   return <button onClick={() => count.value++}>{count.value}</button>;
@@ -60,9 +60,9 @@ Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側�
 
 このランタイムが対象とするのはネイティブ要素と、意図的に絞ったpropsだけです。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。許可リスト全体と、JSXをBabelで変換するツールチェーン（`tsconfig.json` を読みません）については[JSXのsignal子要素とhost binding](docs/jsx-bindings.ja.md)を参照してください。
 
-### ビルドplugin — `useSignals()` の自動挿入
+### ビルドplugin — `useSignalTracking()` の自動挿入
 
-追跡境界をbuild時に挿入するため、コンポーネント側で `useSignals()` を手書きする必要がなくなります。別packageなので個別にinstallします。
+追跡境界をbuild時に挿入するため、コンポーネント側で `useSignalTracking()` を手書きする必要がなくなります。別packageなので個別にinstallします。
 
 ```sh
 pnpm add -D unplugin-react-fine-grained-signals
@@ -110,4 +110,4 @@ pnpm test:browser
 
 - [alien-signals](https://www.npmjs.com/package/alien-signals) — 本パッケージが基盤とするシグナルエンジン。
 - [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — ベンチマークの比較対象。
-- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](docs/design/use-signals-boundary-design.ja.md#先行事例)を参照。
+- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — 外部API `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](docs/design/use-signals-boundary-design.ja.md#先行事例)を参照。

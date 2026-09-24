@@ -5,7 +5,7 @@ import { StrictMode, act } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx } from "../src/jsx-runtime.js";
-import { computed, signal, useSignal, useSignals } from "../src/index.js";
+import { computed, signal, useSignal, useSignalTracking } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -204,7 +204,7 @@ describe("Direct DOM binding", () => {
     const useB = signal(false);
 
     function Box() {
-      useSignals();
+      useSignalTracking();
       return <div aria-label="rebind style box" style={useB.value ? b : a} />;
     }
 
@@ -297,7 +297,7 @@ describe("Direct DOM binding", () => {
     const bump = signal(0);
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return <input aria-label="field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
@@ -360,7 +360,7 @@ describe("Direct DOM binding", () => {
     const bump = signal(0);
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return (
         <input
@@ -446,7 +446,7 @@ describe("Direct DOM binding", () => {
     const showOptionC = signal(false);
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       return (
         <select aria-label="late choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
           <option value="a">A</option>
@@ -513,7 +513,7 @@ describe("Direct DOM binding", () => {
     const bump = signal(0);
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return (
         <StrictMode>
@@ -564,7 +564,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
 
     function Box() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return <div aria-label="counted box" data-state={state} />;
     }
@@ -597,7 +597,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return (
         <select aria-label="observed choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
@@ -634,7 +634,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     const removeEventListener = vi.spyOn(EventTarget.prototype, "removeEventListener");
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return <input aria-label="listener field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
@@ -656,7 +656,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     const bump = signal(0);
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return <input aria-label="ime churn field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
@@ -699,7 +699,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     };
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       void bump.value;
       return <input aria-label="tracked ref field" ref={trackRef} value={text} />;
     }
@@ -726,7 +726,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     const useSecond = signal(false);
 
     function Box() {
-      useSignals();
+      useSignalTracking();
       return <div aria-label="swapped box" data-state={useSecond.value ? second : first} />;
     }
 
@@ -765,7 +765,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       return (
         <input
           aria-label="mixed field"
@@ -807,7 +807,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     };
 
     function Field() {
-      useSignals();
+      useSignalTracking();
       return <input key={slot.value} aria-label="keyed field" ref={trackRef} value={text} />;
     }
 

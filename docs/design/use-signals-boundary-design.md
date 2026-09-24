@@ -1,20 +1,20 @@
-# Bare `useSignals()` boundary design
+# Bare `useSignalTracking()` boundary design
 
 [English](use-signals-boundary-design.md) | [日本語](use-signals-boundary-design.ja.md)
 
-Status: design investigation; no API or implementation decision has been made on the core question below — whether/how to give bare, non-managed `useSignals()` a strict boundary contract by default. One narrower option considered here (option 3, the manual scope handle) has since been documented and adopted for plugin-free manual usage; see "Current recommendation" at the end of this document.
+Status: design investigation; no API or implementation decision has been made on the core question below — whether/how to give bare, non-managed `useSignalTracking()` a strict boundary contract by default. One narrower option considered here (option 3, the manual scope handle) has since been documented and adopted for plugin-free manual usage; see "Current recommendation" at the end of this document.
 
 ## Context
 
-Calling bare `useSignals()` opens a render collector that records subsequent synchronous signal reads. React does not expose a callback at the end of an ordinary function-component invocation, so the runtime closes the collector at the earliest of three edges:
+Calling bare `useSignalTracking()` opens a render collector that records subsequent synchronous signal reads. React does not expose a callback at the end of an ordinary function-component invocation, so the runtime closes the collector at the earliest of three edges:
 
-- the next `useSignals()` call: a bare collector never survives another call, and a bare call closes even an open managed scope, while managed scopes nest within each other;
+- the next `useSignalTracking()` call: a bare collector never survives another call, and a bare call closes even an open managed scope, while managed scopes nest within each other;
 - the commit-phase layout effect that follows the render pass; in a synchronous render this runs before the scheduled microtask;
 - a microtask scheduled when a bare collector opens, which runs after the current synchronous execution completes and before the next macrotask.
 
-This preserves the desired explicit, plugin-free API, but none of these edges coincides with the end of the owning component's invocation. An earlier component's collector can still be open while a sibling or descendant that did not call `useSignals()` reads a signal. That read can be assigned to the wrong component. Updating the signal may rerender the collector owner while leaving the component that displayed the value stale. Render passes are also not atomic: under time-sliced rendering (for example inside `startTransition`), React may yield between components, so the scheduled microtask can close a collector part-way through a render pass. Suspense-aborted renders, nested server rendering during render, and multiple concurrent roots create related ownership ambiguity.
+This preserves the desired explicit, plugin-free API, but none of these edges coincides with the end of the owning component's invocation. An earlier component's collector can still be open while a sibling or descendant that did not call `useSignalTracking()` reads a signal. That read can be assigned to the wrong component. Updating the signal may rerender the collector owner while leaving the component that displayed the value stale. Render passes are also not atomic: under time-sliced rendering (for example inside `startTransition`), React may yield between components, so the scheduled microtask can close a collector part-way through a render pass. Suspense-aborted renders, nested server rendering during render, and multiple concurrent roots create related ownership ambiguity.
 
-The current behavior is therefore **best-effort**, not a strict component boundary. Every component that reads a signal during render must call `useSignals()` itself. The existing managed transform can provide an exact lexical `try` / `finally` boundary when build-time transformation is acceptable.
+The current behavior is therefore **best-effort**, not a strict component boundary. Every component that reads a signal during render must call `useSignalTracking()` itself. The existing managed transform can provide an exact lexical `try` / `finally` boundary when build-time transformation is acceptable.
 
 ## Prior art
 
@@ -22,7 +22,7 @@ The current behavior is therefore **best-effort**, not a strict component bounda
 
 ## Goals for a future decision
 
-- Preserve the `useSignals()`-first authoring style that motivated this library.
+- Preserve the `useSignalTracking()`-first authoring style that motivated this library.
 - Prevent signal reads from being silently attributed to the wrong component.
 - Remain correct under React 19 Strict Mode, Suspense interruption, SSR, hydration, concurrent roots, and time-sliced renders.
 - Stay compatible with the React Compiler's assumptions about render purity and memoization.
@@ -38,7 +38,7 @@ The current behavior is therefore **best-effort**, not a strict component bounda
 
 ## Options to evaluate
 
-### 1. Keep bare `useSignals()` best-effort
+### 1. Keep bare `useSignalTracking()` best-effort
 
 Retain the current runtime behavior and documentation. The managed transform remains the strict option.
 
@@ -48,7 +48,7 @@ Advantages: no build requirement, no API change, and the desired explicit call r
 
 **Status: adopted for the plugin path.** The `unplugin-react-fine-grained-signals` build plugin defaults to this option, implementing an exact `try` / `finally` boundary via the `transform: "managed"` setting.
 
-Keep the source-level `useSignals()` call but transform opted-in components to an exact `try` / `finally` scope. The transform could remain optional for users who knowingly accept best-effort behavior.
+Keep the source-level `useSignalTracking()` call but transform opted-in components to an exact `try` / `finally` scope. The transform could remain optional for users who knowingly accept best-effort behavior.
 
 Advantages: preserves source ergonomics and gives lexical ownership. Disadvantages: requires build integration, must handle every component form safely, and increases transform maintenance.
 
@@ -80,7 +80,7 @@ Advantages: low cost, orthogonal to every other option, and directly addresses t
 
 ### 7. Narrow or replace the bare API
 
-Deprecate strict claims for bare `useSignals()` and direct users who require correctness toward explicit leaf subscriptions, JSX host bindings, or managed transformation.
+Deprecate strict claims for bare `useSignalTracking()` and direct users who require correctness toward explicit leaf subscriptions, JSX host bindings, or managed transformation.
 
 Advantages: makes guarantees honest and reduces ambiguous machinery. Disadvantages: weakens the live-library experience — the authoring style where reading `.value` during render is by itself enough to keep the view live — and is a significant product/API decision.
 
@@ -88,7 +88,7 @@ Advantages: makes guarantees honest and reduces ambiguous machinery. Disadvantag
 
 Any selected design must have executable tests for:
 
-- adjacent siblings where only one component calls `useSignals()`;
+- adjacent siblings where only one component calls `useSignalTracking()`;
 - nested components and render props with mixed opt-in status;
 - Strict Mode replay and cleanup;
 - a render that suspends or throws before completion;
@@ -107,6 +107,6 @@ The decision should also compare bundle cost, per-render overhead, source-map/de
 
 ## Current recommendation
 
-Until a decision is made on the broader bare-`useSignals()` boundary question, treat bare `useSignals()` and `transform: "inject"` as plugin-free best-effort conveniences for synchronous renders where every signal-reading component opts in. Use `transform: "managed"` when an exact render boundary is required and the build plugin is available. Without the plugin, option 3's manual `react-fine-grained-signals/runtime` scope handle — `const store = useManagedSignals(); try { … } finally { store.finish(); }` — is documented in [the hooks guide](../hooks.md) as the exact-boundary alternative. This statement records the current limitation; it does not close the design issue or redefine the incorrect sibling case as correct behavior.
+Until a decision is made on the broader bare-`useSignalTracking()` boundary question, treat bare `useSignalTracking()` and `transform: "inject"` as plugin-free best-effort conveniences for synchronous renders where every signal-reading component opts in. Use `transform: "managed"` when an exact render boundary is required and the build plugin is available. Without the plugin, option 3's manual `react-fine-grained-signals/runtime` scope handle — `const store = useManagedSignals(); try { … } finally { store.finish(); }` — is documented in [the hooks guide](../hooks.md) as the exact-boundary alternative. This statement records the current limitation; it does not close the design issue or redefine the incorrect sibling case as correct behavior.
 
-`unplugin-react-fine-grained-signals` now defaults to `transform: "managed"`, implementing option 2 above for the bundler-plugin path: `managed` (default) adds an exact try/finally boundary; `inject` adds bare `useSignals()` for best-effort opt-in. Consumers who build with the plugin and do not override `transform` therefore get the exact boundary without any source change; consumers without the plugin can get the equivalent exact boundary manually via option 3, now that it is documented. This narrows, but does not close, the scope of this investigation: bare `useSignals()` called with no build transform at all, and `transform: "inject"` when explicitly selected, remain exactly as best-effort as described above, and the broader question this document is about — whether and how to give the bare hook a strict boundary contract by default — along with the other options and decision criteria in this document, remains unresolved.
+`unplugin-react-fine-grained-signals` now defaults to `transform: "managed"`, implementing option 2 above for the bundler-plugin path: `managed` (default) adds an exact try/finally boundary; `inject` adds bare `useSignalTracking()` for best-effort opt-in. Consumers who build with the plugin and do not override `transform` therefore get the exact boundary without any source change; consumers without the plugin can get the equivalent exact boundary manually via option 3, now that it is documented. This narrows, but does not close, the scope of this investigation: bare `useSignalTracking()` called with no build transform at all, and `transform: "inject"` when explicitly selected, remain exactly as best-effort as described above, and the broader question this document is about — whether and how to give the bare hook a strict boundary contract by default — along with the other options and decision criteria in this document, remains unresolved.

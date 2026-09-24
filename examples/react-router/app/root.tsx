@@ -33,7 +33,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 /**
  * Not the only component here that reads `.value` bare -- DevPanel and
  * LogSettingsForm do too -- but the simplest one: a single top-level read,
- * presentational only, and (unlike LogSettingsForm) no explicit useSignals()
+ * presentational only, and (unlike LogSettingsForm) no explicit useSignalTracking()
  * call nearby to make a reader wonder which mechanism is actually doing the
  * work. The plugin's default `mode: "auto"` picks this up on its own, which
  * is also what exercises react-fine-grained-signals/runtime's managed boundary
