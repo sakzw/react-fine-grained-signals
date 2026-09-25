@@ -18,6 +18,43 @@ function collect(read: () => void): RenderDependency[] {
   return dependencies;
 }
 
+function collectWithVersions(read: () => void): Array<{
+  dependency: RenderDependency;
+  version: number;
+}> {
+  const dependencies: Array<{ dependency: RenderDependency; version: number }> = [];
+  const previous = setActiveRenderCollector({
+    add: (dependency) => dependencies.push({
+      dependency,
+      version: dependency.getRenderVersion(),
+    }),
+  });
+  try {
+    read();
+  } finally {
+    setActiveRenderCollector(previous);
+  }
+  return dependencies;
+}
+
+interface GraphNodeInspection {
+  deps?: GraphLinkInspection;
+  subs?: GraphLinkInspection;
+}
+
+interface GraphLinkInspection {
+  dep: GraphNodeInspection;
+  sub: GraphNodeInspection;
+  nextDep?: GraphLinkInspection;
+  nextSub?: GraphLinkInspection;
+}
+
+function graphNodeOf(readable: object): GraphNodeInspection {
+  const [nodeKey] = Object.getOwnPropertySymbols(readable);
+  if (nodeKey === undefined) throw new Error("Candidate readable has no graph node");
+  return Reflect.get(readable, nodeKey) as GraphNodeInspection;
+}
+
 describe("private low-level runtime spike", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -32,9 +69,13 @@ describe("private low-level runtime spike", () => {
     });
 
     source.value = 0;
+    expect(source.getRenderVersion()).toBe(0);
     source.value = -0;
+    expect(source.getRenderVersion()).toBe(1);
     source.value = Number.NaN;
+    expect(source.getRenderVersion()).toBe(2);
     source.value = Number.NaN;
+    expect(source.getRenderVersion()).toBe(2);
 
     expect(Object.is(source.peek(), Number.NaN)).toBe(true);
     expect(seen).toHaveLength(3);
@@ -134,6 +175,207 @@ describe("private low-level runtime spike", () => {
     expect(order).toEqual(["run:1", "cleanup:1", "run:2", "cleanup:2"]);
   });
 
+  it("self-disposes without collecting later reads and runs returned cleanup once", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    const laterRead = runtime.signal(0);
+    const cleanupRead = runtime.signal(0);
+    const seen: number[] = [];
+    const cleanupValues: number[] = [];
+    let dispose: (() => void) | undefined;
+    dispose = runtime.effect(() => {
+      const value = source.value;
+      seen.push(value);
+      if (value === 1) {
+        dispose?.();
+        laterRead.value;
+      }
+      return () => cleanupValues.push(cleanupRead.value);
+    });
+
+    source.value = 1;
+    expect(seen).toEqual([0, 1]);
+    expect(cleanupValues).toEqual([0, 0]);
+    dispose();
+    dispose();
+    source.value = 2;
+    laterRead.value = 1;
+    cleanupRead.value = 1;
+    expect(seen).toEqual([0, 1]);
+    expect(cleanupValues).toEqual([0, 0]);
+    expect(graphNodeOf(laterRead).subs).toBeUndefined();
+  });
+
+  it("fully detaches old source and computed dependencies when self-disposing before rereads", () => {
+    const runtime = createLowLevelRuntime();
+    const a = runtime.signal(0);
+    const upstream = runtime.signal(1);
+    const b = runtime.computed(() => upstream.value * 2);
+    let runs = 0;
+    let dispose: (() => void) | undefined;
+    dispose = runtime.effect(() => {
+      runs += 1;
+      if (runs === 2) {
+        dispose?.();
+        return;
+      }
+      a.value;
+      b.value;
+    });
+
+    const reaction = graphNodeOf(a).subs?.sub;
+    expect(reaction).toBeDefined();
+    expect(graphNodeOf(b).subs).toBeDefined();
+    expect(graphNodeOf(b).deps).toBeDefined();
+    expect(graphNodeOf(upstream).subs).toBeDefined();
+
+    a.value = 1;
+
+    expect(runs).toBe(2);
+    expect(reaction!.deps).toBeUndefined();
+    expect(graphNodeOf(a).subs).toBeUndefined();
+    expect(graphNodeOf(b).subs).toBeUndefined();
+    expect(graphNodeOf(b).deps).toBeUndefined();
+    expect(graphNodeOf(upstream).subs).toBeUndefined();
+    upstream.value = 2;
+    a.value = 2;
+    expect(runs).toBe(2);
+    dispose?.();
+  });
+
+  it("fully detaches partially retracked dependencies when self-disposing", () => {
+    const runtime = createLowLevelRuntime();
+    const a = runtime.signal(0);
+    const b = runtime.signal(0);
+    const c = runtime.signal(0);
+    let secondRun = false;
+    let runs = 0;
+    let dispose: (() => void) | undefined;
+    dispose = runtime.effect(() => {
+      runs += 1;
+      if (secondRun) {
+        a.value;
+        dispose?.();
+        return;
+      }
+      a.value;
+      b.value;
+      c.value;
+    });
+    const reaction = graphNodeOf(a).subs?.sub;
+    expect(reaction).toBeDefined();
+
+    secondRun = true;
+    a.value = 1;
+
+    expect(runs).toBe(2);
+    expect(reaction!.deps).toBeUndefined();
+    expect(graphNodeOf(a).subs).toBeUndefined();
+    expect(graphNodeOf(b).subs).toBeUndefined();
+    expect(graphNodeOf(c).subs).toBeUndefined();
+    b.value = 1;
+    c.value = 1;
+    expect(runs).toBe(2);
+    dispose?.();
+  });
+
+  it("contains a throwing cleanup returned by a self-disposing effect", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const seen: number[] = [];
+    let dispose: (() => void) | undefined;
+    dispose = runtime.effect(() => {
+      const value = source.value;
+      seen.push(value);
+      if (value === 1) dispose?.();
+      return () => {
+        if (value === 1) throw new Error("self-dispose cleanup failed");
+      };
+    });
+
+    source.value = 1;
+    expect(seen).toEqual([0, 1]);
+    expect(reported).toHaveBeenCalledTimes(1);
+    expect(reported.mock.calls[0]?.[0]).toContain("cleanup callback threw");
+    dispose();
+    source.value = 2;
+    expect(seen).toEqual([0, 1]);
+    expect(reported).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not run a queued reaction after it is disposed", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    const seen: number[] = [];
+    let disposeQueued: (() => void) | undefined;
+    disposeQueued = runtime.effect(() => {
+      seen.push(source.value);
+    });
+    const disposeFirst = runtime.effect(() => {
+      const value = source.value;
+      if (value === 1) disposeQueued?.();
+    });
+
+    runtime.batch(() => {
+      source.value = 1;
+      disposeQueued?.();
+    });
+    source.value = 2;
+    expect(seen).toEqual([0]);
+    disposeFirst();
+    disposeQueued();
+  });
+
+  it("keeps nested candidate effects flat unless their disposer is returned", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    const seen: number[] = [];
+    let disposeInner: (() => void) | undefined;
+    const disposeOuter = runtime.effect(() => {
+      source.value;
+      disposeInner ??= runtime.effect(() => {
+        seen.push(source.value);
+      });
+    });
+
+    disposeOuter();
+    source.value = 1;
+    expect(seen).toEqual([0, 1]);
+    disposeInner?.();
+  });
+
+  it("composes nested effect lifetime through returned cleanup", () => {
+    const runtime = createLowLevelRuntime();
+    const generation = runtime.signal(0);
+    const child = runtime.signal(0);
+    const events: string[] = [];
+    const disposeOuter = runtime.effect(() => {
+      const id = generation.value;
+      events.push(`outer:${id}`);
+      const disposeInner = runtime.effect(() => {
+        const value = child.value;
+        events.push(`inner:${id}:${value}`);
+        return () => events.push(`cleanup:${id}`);
+      });
+      return disposeInner;
+    });
+
+    expect(events).toEqual(["outer:0", "inner:0:0"]);
+    generation.value = 1;
+    expect(events).toEqual(["outer:0", "inner:0:0", "cleanup:0", "outer:1", "inner:1:0"]);
+    child.value = 1;
+    expect(events.at(-1)).toBe("inner:1:1");
+    expect(events.filter((event) => event === "inner:0:1")).toHaveLength(0);
+
+    disposeOuter();
+    expect(events.at(-1)).toBe("cleanup:1");
+    const eventCount = events.length;
+    expect(graphNodeOf(child).subs).toBeUndefined();
+    child.value = 2;
+    expect(events).toHaveLength(eventCount);
+  });
+
   it("coalesces nested batches and restores depth after a thrown callback", () => {
     const runtime = createLowLevelRuntime();
     const left = runtime.signal(1);
@@ -178,6 +420,7 @@ describe("private low-level runtime spike", () => {
       source.value = 0;
     });
     expect(seen).toEqual([0]);
+    expect(source.getRenderVersion()).toBe(3);
 
     runtime.batch(() => {
       source.value = -0;
@@ -204,7 +447,33 @@ describe("private low-level runtime spike", () => {
     });
     expect(nanSeen).toHaveLength(1);
     expect(Number.isNaN(nanSource.peek())).toBe(true);
+    expect(nanSource.getRenderVersion()).toBe(2);
     disposeNan();
+  });
+
+  it("keeps nested computed reads coherent across an intermediate batch revert", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    const first = runtime.computed(() => source.value);
+    const second = runtime.computed(() => first.value * 10);
+    const revisions: number[] = [];
+    const [initial] = collectWithVersions(() => {
+      expect(second.value).toBe(0);
+    });
+    revisions.push(initial!.version);
+
+    runtime.batch(() => {
+      source.value = 1;
+      expect(second.value).toBe(10);
+      expect(second.peek()).toBe(10);
+      revisions.push(second.getRenderVersion());
+      source.value = 0;
+    });
+
+    expect(second.value).toBe(0);
+    expect(second.getRenderVersion()).toBeGreaterThan(revisions[1]!);
+    source.value = 2;
+    expect(second.value).toBe(20);
   });
 
   it("handles writes from inside reactions without corrupting propagation", () => {
@@ -270,6 +539,26 @@ describe("private low-level runtime spike", () => {
     source.value = 3;
     expect(seen).toEqual([4, "error", 4, 6]);
     dispose();
+  });
+
+  it("recovers from a computed self-cycle after a caught cycle error", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    let value: { readonly value: number };
+    value = runtime.computed(() => {
+      if (source.value === 0) {
+        try {
+          return value.value;
+        } catch {
+          return -1;
+        }
+      }
+      return source.value;
+    });
+
+    expect(value.value).toBe(-1);
+    source.value = 1;
+    expect(value.value).toBe(1);
   });
 
   it("contains effect-body failures and continues healthy queued work", () => {
@@ -430,14 +719,154 @@ describe("private low-level runtime spike", () => {
     source.value = 2;
     const versionBeforeCommit = dependency!.getRenderVersion();
     const dispose = dependency!.subscribeRender(listener);
+    expect(listener).not.toHaveBeenCalled();
+    expect(dependency!.getRenderVersion()).toBeGreaterThan(versionBeforeCommit);
+    if (dependency!.getRenderVersion() !== versionBeforeCommit) listener();
     expect(listener).toHaveBeenCalledTimes(1);
-    expect(dependency!.getRenderVersion()).toBe(versionBeforeCommit + 1);
 
     source.value = 4;
     expect(listener).toHaveBeenCalledTimes(1);
     source.value = 5;
     expect(listener).toHaveBeenCalledTimes(2);
     dispose();
+  });
+
+  it("observes computed snapshots before registering the render dependency", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    const value = runtime.computed(() => source.value);
+    let capturedVersion = -1;
+    const previous = setActiveRenderCollector({
+      add: (dependency) => {
+        capturedVersion = dependency.getRenderVersion();
+      },
+    });
+    try {
+      expect(value.value).toBe(0);
+    } finally {
+      setActiveRenderCollector(previous);
+    }
+    expect(capturedVersion).toBe(value.getRenderVersion());
+  });
+
+  it("uses monotonic computed revisions for competing and reverted render attempts", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal("A");
+    const value = runtime.computed(() => source.value);
+    const [renderA] = collectWithVersions(() => {
+      expect(value.value).toBe("A");
+    });
+    expect(renderA).toBeDefined();
+    const revisionA = renderA!.version;
+
+    source.value = "B";
+    const [renderB] = collectWithVersions(() => {
+      expect(value.value).toBe("B");
+    });
+    expect(renderB!.version).toBeGreaterThan(revisionA);
+    const revisionB = value.getRenderVersion();
+
+    source.value = "A";
+    const [renderAfterRevert] = collectWithVersions(() => {
+      expect(value.value).toBe("A");
+    });
+    expect(renderAfterRevert!.version).toBeGreaterThan(revisionB);
+    expect(value.getRenderVersion()).toBeGreaterThan(revisionB);
+
+    const committedListener = vi.fn();
+    const dispose = renderA!.dependency.subscribeRender(committedListener);
+    if (renderA!.dependency.getRenderVersion() !== renderA!.version) {
+      committedListener();
+    }
+    expect(committedListener).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+
+  it("suppresses computed render revision changes when the result is Object.is-equal", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(1);
+    const parity = runtime.computed(() => source.value % 2);
+    const [firstRender] = collectWithVersions(() => {
+      expect(parity.value).toBe(1);
+    });
+    source.value = 3;
+    const [sameResultRender] = collectWithVersions(() => {
+      expect(parity.value).toBe(1);
+    });
+    expect(sameResultRender!.version).toBe(firstRender!.version);
+    expect(parity.getRenderVersion()).toBe(firstRender!.version);
+  });
+
+  it("advances computed observation revision for speculative error transitions", () => {
+    const runtime = createLowLevelRuntime();
+    const shouldThrow = runtime.signal(false);
+    const source = runtime.signal(0);
+    const error = new Error("rendered computed failure");
+    const value = runtime.computed(() => {
+      if (shouldThrow.value) throw error;
+      return source.value;
+    });
+    const [render] = collectWithVersions(() => {
+      expect(value.value).toBe(0);
+    });
+    const initialRevision = render!.version;
+    shouldThrow.value = true;
+    collectWithVersions(() => {
+      expect(() => value.value).toThrow(error);
+    });
+    expect(value.getRenderVersion()).toBeGreaterThan(initialRevision);
+
+    const listener = vi.fn();
+    const dispose = render!.dependency.subscribeRender(listener);
+    if (render!.dependency.getRenderVersion() !== render!.version) listener();
+    expect(listener).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+
+  it("does not subscribe abandoned speculative renders to the graph", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    let getterCalls = 0;
+    const value = runtime.computed(() => {
+      getterCalls += 1;
+      return source.value;
+    });
+    collect(() => {
+      expect(value.value).toBe(0);
+    });
+
+    expect(graphNodeOf(source).subs).toBeUndefined();
+    expect(graphNodeOf(value).deps).toBeUndefined();
+    source.value = 1;
+    expect(getterCalls).toBe(1);
+    expect(value.peek()).toBe(1);
+    expect(getterCalls).toBe(2);
+  });
+
+  it("settles identity-unstable computed render subscriptions after one cache fill", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    let getterCalls = 0;
+    const value = runtime.computed(() => {
+      getterCalls += 1;
+      return { value: source.value };
+    });
+    const [render] = collectWithVersions(() => {
+      expect(value.value).toEqual({ value: 0 });
+    });
+    const listener = vi.fn();
+    const dispose = render!.dependency.subscribeRender(listener);
+    expect(value.getRenderVersion()).toBeGreaterThan(render!.version);
+    expect(graphNodeOf(value).deps).toBeDefined();
+    const settledRevision = value.getRenderVersion();
+    const callsAfterCommit = getterCalls;
+    const [nextRender] = collectWithVersions(() => {
+      expect(value.value).toEqual({ value: 0 });
+    });
+    expect(nextRender!.version).toBe(settledRevision);
+    expect(getterCalls).toBe(callsAfterCommit);
+    dispose();
+    expect(graphNodeOf(value).deps).toBeUndefined();
   });
 
   it("keeps candidate runtime instances independent", () => {

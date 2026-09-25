@@ -1,6 +1,7 @@
 import * as alienSignalsSystem from "alien-signals/system";
 import type { ReactiveNode } from "alien-signals/system";
 import {
+  hasActiveRenderCollector,
   notifyListener,
   trackRenderDependency,
   untrackedRender,
@@ -20,16 +21,19 @@ interface SourceNode<T> extends GraphNode {
   readonly kind: "source";
   currentValue: T;
   pendingValue: T;
-  readonly render: RenderSurface;
+  /** Monotonic write generation; distinct from graph-level value equality. */
+  revision: number;
 }
 
 interface ComputedNode<T> extends GraphNode {
   readonly kind: "computed";
   readonly getter: () => T;
+  /** Cached semantic result used by alien-signals graph dirty checks. */
   result: Result<T> | undefined;
-  render: RenderSurface;
-  lastRenderResult: Result<T> | undefined;
-  renderReaction: (() => void) | undefined;
+  /** Most recent value/error snapshot exposed to render and direct observers. */
+  observedResult: Result<T> | undefined;
+  /** Monotonic observation generation for render-to-commit race detection. */
+  revision: number;
 }
 
 interface ReactionNode extends GraphNode {
@@ -37,6 +41,10 @@ interface ReactionNode extends GraphNode {
   readonly runCallback: () => unknown;
   readonly afterRun: (() => void) | undefined;
   cleanup: (() => void) | undefined;
+  /** Runtime lifecycle state; alien ReactiveFlags remain graph state only. */
+  active: boolean;
+  running: boolean;
+  disposeRequested: boolean;
   disposed: boolean;
   scheduled: boolean;
 }
@@ -72,6 +80,7 @@ export interface LowLevelSignal<T> extends LowLevelReadonlySignal<T> {
 export interface LowLevelRuntime {
   signal<T>(initialValue: T): LowLevelSignal<T>;
   computed<T>(getter: () => T): LowLevelReadonlySignal<T>;
+  /** Creates a flat effect; nested effects are not owned unless returned as cleanup. */
   effect(fn: () => void | (() => void)): () => void;
   batch<T>(callback: () => T): T;
   untracked<T>(callback: () => T): T;
@@ -84,49 +93,21 @@ type NodeBackedReadable<T> = LowLevelReadonlySignal<T> & {
   readonly [READABLE_NODE]: RuntimeNode;
 };
 
-/** Versioned render surface whose derived watcher is graph-native. */
-class RenderSurface implements RenderDependency {
-  readonly #listeners = new Set<() => void>();
-  readonly #onFirst: (() => void) | undefined;
-  readonly #onLast: (() => void) | undefined;
-  #version = 0;
-
-  constructor(onFirst?: () => void, onLast?: () => void) {
-    this.#onFirst = onFirst;
-    this.#onLast = onLast;
-  }
-
-  getRenderVersion(): number {
-    return this.#version;
-  }
-
-  track(): boolean {
-    return trackRenderDependency(this);
-  }
-
-  subscribeRender(listener: () => void): () => void {
-    const wasEmpty = this.#listeners.size === 0;
-    this.#listeners.add(listener);
-    if (wasEmpty) this.#onFirst?.();
-    return () => {
-      if (!this.#listeners.delete(listener)) return;
-      if (this.#listeners.size === 0) this.#onLast?.();
-    };
-  }
-
-  notify(): void {
-    this.#version = (this.#version + 1) | 0;
-    // Snapshot before iteration because listeners may subscribe/unsubscribe synchronously.
-    // oxlint-disable-next-line unicorn/no-useless-spread
-    for (const listener of [...this.#listeners]) notifyListener(listener);
-  }
-}
-
-function resultsEqual<T>(left: Result<T> | undefined, right: Result<T>): boolean {
+/** Value equality cuts propagation; every error reevaluation is a fresh graph result. */
+function graphResultsEqual<T>(left: Result<T> | undefined, right: Result<T>): boolean {
   if (left === undefined || left.kind !== right.kind) return false;
   return left.kind === "value" && right.kind === "value"
     ? Object.is(left.value, right.value)
     : false;
+}
+
+function observedResultsEqual<T>(left: Result<T> | undefined, right: Result<T>): boolean {
+  if (left === undefined || left.kind !== right.kind) return false;
+  return left.kind === "value" && right.kind === "value"
+    ? Object.is(left.value, right.value)
+    : left.kind === "error" && right.kind === "error"
+      ? Object.is(left.error, right.error)
+      : false;
 }
 
 function unwrap<T>(result: Result<T>): T {
@@ -163,6 +144,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
   let queueIndex = 0;
   const queue: Array<ReactionNode | undefined> = [];
   const ownedReadables = new WeakSet<object>();
+  const speculativeStack = new Set<ComputedNode<unknown>>();
 
   const system = createReactiveSystem({
     update(node) {
@@ -189,7 +171,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
   });
 
   function enqueue(reaction: ReactionNode): void {
-    if (reaction.disposed || reaction.scheduled) return;
+    if (!reaction.active || reaction.disposed || reaction.disposeRequested || reaction.scheduled) return;
     reaction.scheduled = true;
     queue.push(reaction);
   }
@@ -210,19 +192,40 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     }
   }
 
-  function purgeDeps(node: GraphNode): void {
+  /** Remove dependencies not visited during the current tracked execution. */
+  function pruneStaleDeps(node: GraphNode): void {
     let link = node.depsTail !== undefined ? node.depsTail.nextDep : node.deps;
     while (link !== undefined) link = system.unlink(link, node);
   }
 
-  function unlinkAllDeps(node: GraphNode): void {
-    let link = node.depsTail;
-    while (link !== undefined) {
-      const previous = link.prevDep;
-      system.unlink(link, node);
-      link = previous;
-    }
+  /** Permanently detach every dependency, including links from prior executions. */
+  function detachAllDeps(node: GraphNode): void {
+    let link = node.deps;
+    while (link !== undefined) link = system.unlink(link, node);
     delete node.depsTail;
+  }
+
+  function linkDependency(node: GraphNode): void {
+    const subscriber = activeSub;
+    if (subscriber === undefined) return;
+    const runtimeSubscriber = subscriber as GraphNode;
+    if (runtimeSubscriber.kind === "reaction") {
+      const reaction = runtimeSubscriber as ReactionNode;
+      if (!reaction.active || reaction.disposed || reaction.disposeRequested) return;
+    }
+    system.link(node, subscriber, cycle);
+  }
+
+  function observeResult<T>(
+    node: ComputedNode<T>,
+    next: Result<T>,
+    reevaluated: boolean,
+  ): void {
+    const errorReevaluated = reevaluated && next.kind === "error";
+    if (errorReevaluated || !observedResultsEqual(node.observedResult, next)) {
+      node.revision += 1;
+    }
+    node.observedResult = next;
   }
 
   function updateComputed<T>(node: ComputedNode<T>): boolean {
@@ -240,17 +243,18 @@ export function createLowLevelRuntime(): LowLevelRuntime {
         next = { kind: "error", error };
       }
       node.result = next;
-      return !resultsEqual(previous, next);
+      observeResult(node, next, true);
+      return !graphResultsEqual(previous, next);
     } finally {
       activeSub = previousSub;
       node.flags &= ~ReactiveFlags.RecursedCheck;
-      purgeDeps(node);
+      pruneStaleDeps(node);
     }
   }
 
   function releaseComputed<T>(node: ComputedNode<T>): void {
     if (node.deps === undefined) return;
-    unlinkAllDeps(node);
+    detachAllDeps(node);
     node.flags = ReactiveFlags.Mutable | ReactiveFlags.Dirty;
   }
 
@@ -268,7 +272,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
         }
       }
     }
-    if (activeSub !== undefined) system.link(node, activeSub, cycle);
+    linkDependency(node);
     return node.pendingValue;
   }
 
@@ -297,7 +301,12 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     }
   }
 
-  function evaluateForRender<T>(node: ComputedNode<T>): Result<T> {
+  function evaluateSpeculatively<T>(node: ComputedNode<T>): Result<T> {
+    const speculativeNode = node as ComputedNode<unknown>;
+    if (speculativeStack.has(speculativeNode)) {
+      throw new Error("Computed cycle detected");
+    }
+    speculativeStack.add(speculativeNode);
     const previousSub = activeSub;
     activeSub = undefined;
     renderReadDepth += 1;
@@ -312,23 +321,30 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     } finally {
       renderReadDepth -= 1;
       activeSub = previousSub;
+      speculativeStack.delete(speculativeNode);
     }
   }
 
-  function readComputedResult<T>(node: ComputedNode<T>, trackRender: boolean): Result<T> {
-    const collectedByRender = trackRender && node.render.track();
-    if (renderReadDepth > 0 || collectedByRender) {
-      const result = evaluateForRender(node);
-      if (collectedByRender) node.lastRenderResult = result;
+  function readComputedResult<T>(node: ComputedNode<T>, speculative: boolean): Result<T> {
+    if (renderReadDepth > 0 || speculative) {
+      const clean =
+        node.result !== undefined &&
+        !(node.flags & (ReactiveFlags.Dirty | ReactiveFlags.Pending));
+      const result = clean ? node.result as Result<T> : evaluateSpeculatively(node);
+      observeResult(node, result, !clean);
       return result;
     }
+    if (node.flags & ReactiveFlags.RecursedCheck) {
+      throw new Error("Computed cycle detected");
+    }
     const result = ensureComputed(node);
-    if (activeSub !== undefined) system.link(node, activeSub, cycle);
+    observeResult(node, result, false);
+    linkDependency(node);
     return result;
   }
 
-  function readComputed<T>(node: ComputedNode<T>, trackRender: boolean): T {
-    return unwrap(readComputedResult(node, trackRender));
+  function readComputed<T>(node: ComputedNode<T>): T {
+    return unwrap(readComputedResult(node, false));
   }
 
   function readNodeResult<T>(node: SourceNode<T> | ComputedNode<T>): Result<T> {
@@ -339,7 +355,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
   }
 
   function runReaction(reaction: ReactionNode, initial: boolean): void {
-    if (reaction.disposed) return;
+    if (!reaction.active || reaction.disposed || reaction.disposeRequested || reaction.running) return;
     reaction.scheduled = false;
     if (!initial) {
       const flags = reaction.flags;
@@ -358,38 +374,40 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       const cleanup = reaction.cleanup;
       reaction.cleanup = undefined;
       try {
-        const previousSub = activeSub;
-        activeSub = undefined;
-        try {
-          cleanup();
-        } finally {
-          activeSub = previousSub;
-        }
+        untracked(cleanup);
       } catch (error) {
         reportFailure("cleanup", error);
       }
+      if (reaction.disposed || reaction.disposeRequested) return;
     }
 
     delete reaction.depsTail;
     reaction.flags = ReactiveFlags.Watching | ReactiveFlags.RecursedCheck;
     const previousSub = activeSub;
     activeSub = reaction;
+    reaction.running = true;
     cycle += 1;
     reactionDepth += 1;
+    let returnedCleanup: unknown;
     try {
-      const cleanup = reaction.runCallback();
-      if (typeof cleanup === "function") reaction.cleanup = cleanup as () => void;
+      returnedCleanup = reaction.runCallback();
     } catch (error) {
       reportFailure("effect", error);
     } finally {
       reactionDepth -= 1;
       activeSub = previousSub;
-      reaction.flags &= ~ReactiveFlags.RecursedCheck;
-      purgeDeps(reaction);
-      if (!reaction.scheduled && !reaction.disposed) {
-        reaction.flags |= ReactiveFlags.Watching;
+      reaction.running = false;
+      if (typeof returnedCleanup === "function") {
+        reaction.cleanup = returnedCleanup as () => void;
       }
-      if (!initial) {
+      if (reaction.disposeRequested) {
+        finalizeReaction(reaction);
+      } else if (!reaction.disposed) {
+        reaction.flags &= ~ReactiveFlags.RecursedCheck;
+        pruneStaleDeps(reaction);
+        if (!reaction.scheduled) reaction.flags |= ReactiveFlags.Watching;
+      }
+      if (!initial && !reaction.disposed) {
         try {
           reaction.afterRun?.();
         } catch (error) {
@@ -409,33 +427,45 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       runCallback,
       afterRun,
       cleanup: undefined,
+      active: true,
+      running: false,
+      disposeRequested: false,
       disposed: false,
       scheduled: false,
       flags: ReactiveFlags.Watching | ReactiveFlags.RecursedCheck,
     };
   }
 
-  function disposeReaction(reaction: ReactionNode): void {
+  function finalizeReaction(reaction: ReactionNode): void {
     if (reaction.disposed) return;
+    reaction.active = false;
     reaction.disposed = true;
+    reaction.disposeRequested = false;
     reaction.scheduled = false;
     reaction.flags = ReactiveFlags.None;
-    unlinkAllDeps(reaction);
+    detachAllDeps(reaction);
     if (reaction.cleanup !== undefined) {
       const cleanup = reaction.cleanup;
       reaction.cleanup = undefined;
       try {
-        const previousSub = activeSub;
-        activeSub = undefined;
-        try {
-          cleanup();
-        } finally {
-          activeSub = previousSub;
-        }
+        untracked(cleanup);
       } catch (error) {
         reportFailure("cleanup", error);
       }
     }
+  }
+
+  function disposeReaction(reaction: ReactionNode): void {
+    if (reaction.disposed || reaction.disposeRequested) return;
+    if (reaction.running) {
+      reaction.active = false;
+      reaction.disposeRequested = true;
+      reaction.scheduled = false;
+      reaction.flags = ReactiveFlags.None;
+      detachAllDeps(reaction);
+      return;
+    }
+    finalizeReaction(reaction);
   }
 
   function subscribeNode<T>(node: SourceNode<T> | ComputedNode<T>, listener: () => void): () => void {
@@ -452,18 +482,24 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       kind: "source",
       currentValue: initialValue,
       pendingValue: initialValue,
-      render: new RenderSurface(),
+      revision: 0,
       flags: ReactiveFlags.Mutable,
     };
     const source: NodeBackedReadable<T> & LowLevelSignal<T> = {
       [READABLE_NODE]: node,
       get value() {
-        if (node.render.track() || renderReadDepth > 0) return node.pendingValue;
+        if (renderReadDepth > 0) return node.pendingValue;
+        if (hasActiveRenderCollector()) {
+          const value = node.pendingValue;
+          trackRenderDependency(source);
+          return value;
+        }
         return readSource(node);
       },
       set value(nextValue: T) {
         if (Object.is(node.pendingValue, nextValue)) return;
         node.pendingValue = nextValue;
+        node.revision += 1;
         node.flags = ReactiveFlags.Mutable | ReactiveFlags.Dirty;
         if (node.subs !== undefined) {
           propagationDepth += 1;
@@ -473,14 +509,13 @@ export function createLowLevelRuntime(): LowLevelRuntime {
             propagationDepth -= 1;
           }
         }
-        node.render.notify();
         flush();
       },
       peek() {
         return untracked(() => node.pendingValue);
       },
-      getRenderVersion: () => node.render.getRenderVersion(),
-      subscribeRender: (listener) => node.render.subscribeRender(listener),
+      getRenderVersion: () => node.revision,
+      subscribeRender: (listener) => subscribeNode(node, listener),
     };
     ownedReadables.add(source);
     return source;
@@ -488,42 +523,29 @@ export function createLowLevelRuntime(): LowLevelRuntime {
 
   function createComputed<T>(getter: () => T): LowLevelReadonlySignal<T> {
     let node: ComputedNode<T>;
-    const render = new RenderSurface(
-      () => {
-        const reaction = createReaction(
-          () => readComputedResult(node, false),
-          () => node.render.notify(),
-        );
-        node.renderReaction = () => disposeReaction(reaction);
-        runReaction(reaction, true);
-        if (!resultsEqual(node.lastRenderResult, node.result as Result<T>)) {
-          node.render.notify();
-        }
-      },
-      () => {
-        node.renderReaction?.();
-        node.renderReaction = undefined;
-      },
-    );
     node = {
       kind: "computed",
       getter,
       result: undefined,
-      render,
-      lastRenderResult: undefined,
-      renderReaction: undefined,
+      observedResult: undefined,
+      revision: 0,
       flags: ReactiveFlags.None,
     };
     const computed: NodeBackedReadable<T> = {
       [READABLE_NODE]: node,
       get value() {
-        return readComputed(node, true);
+        const speculative = renderReadDepth > 0 || hasActiveRenderCollector();
+        const result = readComputedResult(node, speculative);
+        if (renderReadDepth === 0 && hasActiveRenderCollector()) {
+          trackRenderDependency(computed);
+        }
+        return unwrap(result);
       },
       peek() {
-        return untracked(() => readComputed(node, false));
+        return untracked(() => readComputed(node));
       },
-      getRenderVersion: () => node.render.getRenderVersion(),
-      subscribeRender: (listener) => node.render.subscribeRender(listener),
+      getRenderVersion: () => node.revision,
+      subscribeRender: (listener) => subscribeNode(node, listener),
     };
     ownedReadables.add(computed);
     return computed;
