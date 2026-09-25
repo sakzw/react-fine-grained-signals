@@ -5,6 +5,7 @@ import { StrictMode, Suspense, act } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
+import { createLowLevelRuntime } from "../src/core/low-level-runtime.js";
 import {
   computed,
   deepSignal,
@@ -304,6 +305,53 @@ describe("useSignalTracking render tracking", () => {
       source.value = 3;
     });
     expect(screen.getByLabelText("tracked computed").textContent).toBe("second:6");
+  });
+
+  it("preserves the first observed version when a dependency changes between render reads", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(0);
+    const renders = vi.fn();
+    let writeDuringRender = true;
+
+    function Reader() {
+      useSignalTracking();
+      renders();
+      const first = source.value;
+      if (writeDuringRender) {
+        writeDuringRender = false;
+        source.value = 1;
+      }
+      const second = source.value;
+      return <output aria-label="first observed version">{`${first}:${second}`}</output>;
+    }
+
+    render(<Reader />);
+    expect(screen.getByLabelText("first observed version").textContent).toBe("1:1");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("detects a render-to-commit change and revert from its first observed version", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal("same");
+    const renders = vi.fn();
+    let revertDuringRender = true;
+
+    function Reader() {
+      useSignalTracking();
+      renders();
+      const value = source.value;
+      if (revertDuringRender) {
+        revertDuringRender = false;
+        source.value = "temporary";
+        source.value = "same";
+      }
+      return <output aria-label="reverted observed version">{value}</output>;
+    }
+
+    render(<Reader />);
+    expect(screen.getByLabelText("reverted observed version").textContent).toBe("same");
+    expect(source.getRenderVersion()).toBe(2);
+    expect(renders).toHaveBeenCalledTimes(2);
   });
 
   it("does not loop forever reading a computed that returns a fresh array each evaluation", () => {

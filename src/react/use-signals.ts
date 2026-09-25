@@ -5,11 +5,18 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  getForeignRenderDependency,
   notifyListener,
   setActiveRenderCollector,
   type RenderCollector,
   type RenderDependency,
 } from "../core/render-tracking.js";
+import {
+  getSharedInteropContext,
+  pushInteropRenderScope,
+  type InteropRenderScopeV1,
+  type ReadableInteropV1,
+} from "../core/interop.js";
 
 const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
@@ -57,13 +64,26 @@ let finalCleanupScheduled = false;
  * unmanaged — is not a rule-following nesting, so the leftover scope is
  * force-closed before `next` starts.
  */
-function shouldCloseCurrentScope(next: RenderStore, current: RenderStore): boolean {
+function shouldCloseCurrentScope(
+  next: { managed: boolean },
+  current: { managed: boolean },
+): boolean {
   return !next.managed || !current.managed;
+}
+
+function closeDisallowedCurrentStores(next: { managed: boolean }): void {
+  let current = currentStore;
+  while (current !== undefined && shouldCloseCurrentScope(next, current)) {
+    current.finish();
+    const following = currentStore;
+    if (following === current) return;
+    current = following;
+  }
 }
 
 function cleanupTrailingStore(): void {
   finalCleanupScheduled = false;
-  currentStore?.finish();
+  getSharedInteropContext().renderScope?.finish();
 }
 
 function ensureFinalCleanup(): void {
@@ -111,11 +131,16 @@ class RenderStore implements RenderCollector {
 
   readonly getSnapshot = (): number => this.#version;
 
-  add(dependency: RenderDependency): void {
-    this.#pendingDependencies?.set(
-      dependency,
-      dependency.getRenderVersion(),
-    );
+  add(dependency: RenderDependency, observedVersion: number): void;
+  add(protocol: ReadableInteropV1, observedVersion: number): void;
+  add(dependencyOrProtocol: RenderDependency | ReadableInteropV1, observedVersion: number): void {
+    const dependency = "getRevision" in dependencyOrProtocol
+      ? getForeignRenderDependency(dependencyOrProtocol)
+      : dependencyOrProtocol;
+    const pending = this.#pendingDependencies;
+    if (pending !== undefined && !pending.has(dependency)) {
+      pending.set(dependency, observedVersion);
+    }
   }
 
   start(): void {
@@ -134,19 +159,40 @@ class RenderStore implements RenderCollector {
     // page's life.
     if (this.#finishCollection !== undefined) this.finish();
     // See `shouldCloseCurrentScope` above for the nesting rule this enforces.
-    if (currentStore !== undefined && shouldCloseCurrentScope(this, currentStore)) {
-      currentStore.finish();
+    closeDisallowedCurrentStores(this);
+    const sharedContext = getSharedInteropContext();
+    while (
+      sharedContext.renderScope !== undefined &&
+      shouldCloseCurrentScope(this, sharedContext.renderScope)
+    ) {
+      sharedContext.renderScope.finish();
     }
     const previousStore = currentStore;
     this.#pendingDependencies = new Map();
     const previousCollector = setActiveRenderCollector(this);
+    let scopeActive = true;
+    const sharedScope: InteropRenderScopeV1 = {
+      token: {},
+      managed: this.managed,
+      isActive: () => scopeActive,
+      finish: () => this.finish(),
+    };
+    const restoreSharedScope = pushInteropRenderScope(sharedScope, this);
     // Tracks the active collector across the module, not a scoping mistake.
     // oxlint-disable-next-line typescript/no-this-alias
     currentStore = this;
     this.#finishCollection = () => {
+      scopeActive = false;
+      restoreSharedScope();
       setActiveRenderCollector(previousCollector);
-      if (currentStore === this) currentStore = previousStore;
+      if (currentStore === this) {
+        currentStore = previousStore?.isScopeActive() ? previousStore : undefined;
+      }
     };
+  }
+
+  isScopeActive(): boolean {
+    return this.#finishCollection !== undefined;
   }
 
   finish(): void {

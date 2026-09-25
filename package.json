@@ -79,6 +79,7 @@
     "test": "pnpm test:runtime && pnpm test:transform",
     "test:runtime": "vitest run",
     "test:transform": "pnpm --filter unplugin-react-fine-grained-signals test",
+    "test:phase4-duplicate": "node tests/phase4-duplicate-smoke.mjs",
     "test:coverage": "pnpm test:coverage:runtime && pnpm test:coverage:transform",
     "test:coverage:runtime": "vitest run --coverage",
     "test:coverage:transform": "pnpm --filter unplugin-react-fine-grained-signals test:coverage",

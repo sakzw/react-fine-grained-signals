@@ -1,3 +1,9 @@
+import {
+  getReadableInterop,
+  withoutInteropRenderCollector,
+  type ReadableInteropV1,
+} from "./interop.js";
+
 /** Internal dependency contract used by the React render collector. */
 export interface RenderDependency {
   getRenderVersion(): number;
@@ -5,7 +11,37 @@ export interface RenderDependency {
 }
 
 export interface RenderCollector {
-  add(dependency: RenderDependency): void;
+  add(dependency: RenderDependency, observedVersion: number): void;
+}
+
+const foreignRenderDependencies = new WeakMap<ReadableInteropV1, RenderDependency>();
+
+class ForeignRenderDependency implements RenderDependency {
+  constructor(readonly protocol: ReadableInteropV1) {}
+
+  getRenderVersion(): number {
+    return this.protocol.getRevision();
+  }
+
+  subscribeRender(listener: () => void): () => void {
+    return this.protocol.subscribe(() => listener()).unsubscribe;
+  }
+}
+
+/** Reuse one render adapter for each foreign readable protocol. */
+export function getForeignRenderDependency(protocol: ReadableInteropV1): RenderDependency {
+  let dependency = foreignRenderDependencies.get(protocol);
+  if (dependency === undefined) {
+    dependency = new ForeignRenderDependency(protocol);
+    foreignRenderDependencies.set(protocol, dependency);
+  }
+  return dependency;
+}
+
+/** Resolve the private protocol attached to a foreign candidate readable. */
+export function getForeignReadableRenderDependency(readable: object): RenderDependency | undefined {
+  const protocol = getReadableInterop(readable);
+  return protocol === undefined ? undefined : getForeignRenderDependency(protocol);
 }
 
 let activeRenderCollector: RenderCollector | undefined;
@@ -25,9 +61,12 @@ export function setActiveRenderCollector(
 }
 
 /** Records a dependency and reports whether render collection was active. */
-export function trackRenderDependency(dependency: RenderDependency): boolean {
+export function trackRenderDependency(
+  dependency: RenderDependency,
+  observedVersion = dependency.getRenderVersion(),
+): boolean {
   if (activeRenderCollector === undefined) return false;
-  activeRenderCollector.add(dependency);
+  activeRenderCollector.add(dependency, observedVersion);
   return true;
 }
 
@@ -35,7 +74,7 @@ export function trackRenderDependency(dependency: RenderDependency): boolean {
 export function untrackedRender<T>(callback: () => T): T {
   const previous = setActiveRenderCollector();
   try {
-    return callback();
+    return withoutInteropRenderCollector(callback);
   } finally {
     setActiveRenderCollector(previous);
   }

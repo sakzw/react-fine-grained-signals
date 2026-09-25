@@ -1,8 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createLowLevelRuntime } from "../src/core/low-level-runtime.js";
 import {
+  publishInteropGraphRead,
+  READABLE_INTEROP_V1,
+  type ReadableInteropV1,
+  withInteropRenderCollector,
+} from "../src/core/interop.js";
+import {
   setActiveRenderCollector,
   type RenderDependency,
+  untrackedRender,
 } from "../src/core/render-tracking.js";
 
 function collect(read: () => void): RenderDependency[] {
@@ -38,6 +45,11 @@ function collectWithVersions(read: () => void): Array<{
 }
 
 interface GraphNodeInspection {
+  kind?: string;
+  foreignDependent?: boolean;
+  live?: boolean;
+  subscription?: { unsubscribe(): void } | undefined;
+  protocol?: ReadableInteropV1;
   deps?: GraphLinkInspection;
   subs?: GraphLinkInspection;
 }
@@ -869,20 +881,401 @@ describe("private low-level runtime spike", () => {
     expect(graphNodeOf(value).deps).toBeUndefined();
   });
 
-  it("keeps candidate runtime instances independent", () => {
+  it("composes runtime instances through local external nodes", () => {
     const a = createLowLevelRuntime();
     const b = createLowLevelRuntime();
-    const source = a.signal(1);
+    const local = a.signal(1);
+    const source = b.signal(2);
+    const total = a.computed(() => local.value + source.value);
     const seen: number[] = [];
-    const dispose = b.effect(() => {
+    const dispose = a.effect(() => {
+      seen.push(total.value);
+    });
+
+    expect(seen).toEqual([3]);
+    const totalNode = graphNodeOf(total);
+    const dependencyKinds: string[] = [];
+    let link = totalNode.deps;
+    let external: GraphNodeInspection | undefined;
+    while (link !== undefined) {
+      dependencyKinds.push(link.dep.kind ?? "unknown");
+      if (link.dep.kind === "external") external = link.dep;
+      link = link.nextDep;
+    }
+    expect(dependencyKinds).toContain("source");
+    expect(dependencyKinds).toContain("external");
+    expect(external).toBeDefined();
+    expect(external).not.toBe(graphNodeOf(source));
+
+    source.value = 2;
+    expect(seen).toEqual([3]);
+    source.value = 4;
+    expect(seen).toEqual([3, 5]);
+    expect(() => a.subscribe(source, () => undefined)).toThrow(
+      "subscribe() expects a signal or computed from this runtime",
+    );
+    dispose();
+  });
+
+  it("tracks a foreign source directly in a local reaction", () => {
+    const local = createLowLevelRuntime();
+    const foreignRuntime = createLowLevelRuntime();
+    const foreign = foreignRuntime.signal("before");
+    const seen: string[] = [];
+    const dispose = local.effect(() => {
+      seen.push(foreign.value);
+    });
+
+    expect(seen).toEqual(["before"]);
+    foreign.value = "after";
+    expect(seen).toEqual(["before", "after"]);
+    dispose();
+    foreign.value = "disposed";
+    expect(seen).toEqual(["before", "after"]);
+  });
+
+  it("publishes a stable non-enumerable protocol with a unique token per runtime", () => {
+    const a = createLowLevelRuntime();
+    const b = createLowLevelRuntime();
+    const sourceA = a.signal(1);
+    const sourceB = b.signal(1);
+    const protocolA = Reflect.get(sourceA, READABLE_INTEROP_V1) as ReadableInteropV1;
+    const protocolB = Reflect.get(sourceB, READABLE_INTEROP_V1) as ReadableInteropV1;
+
+    expect(protocolA).toBe(Reflect.get(sourceA, READABLE_INTEROP_V1));
+    expect(protocolA.version).toBe(1);
+    expect(protocolA.runtimeToken).not.toBe(protocolB.runtimeToken);
+    expect(Object.keys(sourceA)).not.toContain(String(READABLE_INTEROP_V1));
+    expect(Object.getOwnPropertyDescriptor(sourceA, READABLE_INTEROP_V1)?.enumerable).toBe(false);
+  });
+
+  it("keeps local source and computed reads on the direct graph path", () => {
+    const runtime = createLowLevelRuntime();
+    const source = runtime.signal(2);
+    const derived = runtime.computed(() => source.value * 2);
+    const seen: number[] = [];
+    const dispose = runtime.effect(() => {
+      seen.push(derived.value);
+    });
+
+    expect(seen).toEqual([4]);
+    expect(graphNodeOf(source).subs?.sub.kind).toBe("computed");
+    expect(graphNodeOf(derived).deps?.dep.kind).toBe("source");
+    expect(graphNodeOf(derived).subs?.sub.kind).toBe("reaction");
+    source.value = 3;
+    expect(seen).toEqual([4, 6]);
+    dispose();
+  });
+
+  it("preserves foreign computed equality boundaries and transitive graph shape", () => {
+    const a = createLowLevelRuntime();
+    const b = createLowLevelRuntime();
+    const c = createLowLevelRuntime();
+    const source = c.signal(1);
+    const parity = b.computed(() => source.value % 2);
+    const doubledParity = a.computed(() => parity.value * 2);
+    const seen: number[] = [];
+    const dispose = a.effect(() => {
+      seen.push(doubledParity.value);
+    });
+
+    source.value = 3;
+    expect(seen).toEqual([2]);
+    source.value = 2;
+    expect(seen).toEqual([2, 0]);
+
+    const aNode = graphNodeOf(doubledParity);
+    expect(aNode.deps?.dep.kind).toBe("external");
+    const bNode = graphNodeOf(parity);
+    expect(bNode.deps?.dep.kind).toBe("external");
+    expect(graphNodeOf(source).subs?.sub).not.toBe(aNode.deps?.dep);
+    dispose();
+  });
+
+  it("does not notify foreign subscribers for a reverted semantic batch", () => {
+    const a = createLowLevelRuntime();
+    const b = createLowLevelRuntime();
+    const source = b.signal(0);
+    const seen: number[] = [];
+    const dispose = a.effect(() => {
       seen.push(source.value);
     });
 
-    source.value = 2;
-    expect(seen).toEqual([1]);
-    expect(() => b.subscribe(source, () => undefined)).toThrow(
-      "subscribe() expects a signal or computed from this runtime",
-    );
+    b.batch(() => {
+      source.value = 1;
+      source.value = 0;
+    });
+    expect(source.getRenderVersion()).toBe(2);
+    expect(seen).toEqual([0]);
+    dispose();
+  });
+
+  it("does not subscribe cold foreign-dependent computed chains and pulls fresh values", () => {
+    const a = createLowLevelRuntime();
+    const b = createLowLevelRuntime();
+    const c = createLowLevelRuntime();
+    const source = c.signal(1);
+    const middle = b.computed(() => source.value + 1);
+    const cold = a.computed(() => middle.value * 2);
+
+    expect(cold.value).toBe(4);
+    expect(graphNodeOf(cold).foreignDependent).toBe(true);
+    expect(graphNodeOf(source).subs).toBeUndefined();
+    source.value = 3;
+    expect(cold.value).toBe(8);
+    expect(graphNodeOf(source).subs).toBeUndefined();
+  });
+
+  it("activates and releases foreign subscriptions with live computed demand", () => {
+    const local = createLowLevelRuntime();
+    const foreignRuntime = createLowLevelRuntime();
+    const foreign = foreignRuntime.signal(1);
+    const doubled = local.computed(() => foreign.value * 2);
+
+    expect(doubled.value).toBe(2);
+    const external = graphNodeOf(doubled).deps?.dep;
+    expect(external?.kind).toBe("external");
+    expect(external?.subscription).toBeUndefined();
+    expect(graphNodeOf(foreign).subs).toBeUndefined();
+
+    const seen: number[] = [];
+    const dispose = local.effect(() => {
+      seen.push(doubled.value);
+    });
+    expect(seen).toEqual([2]);
+    expect(graphNodeOf(doubled).live).toBe(true);
+    expect(external?.subscription).toBeDefined();
+    expect(graphNodeOf(foreign).subs).toBeDefined();
+
+    foreign.value = 2;
+    expect(seen).toEqual([2, 4]);
+    dispose();
+    expect(graphNodeOf(doubled).live).toBe(false);
+    expect(external?.subscription).toBeUndefined();
+    expect(graphNodeOf(foreign).subs).toBeUndefined();
+  });
+
+  it("releases stale foreign branches and reuses their inactive ExternalNode", () => {
+    const local = createLowLevelRuntime();
+    const foreignRuntime = createLowLevelRuntime();
+    const chooseLeft = local.signal(true);
+    const left = foreignRuntime.signal("left");
+    const right = foreignRuntime.signal("right");
+    const selected = local.computed(() => chooseLeft.value ? left.value : right.value);
+    const seen: string[] = [];
+    const dispose = local.effect(() => {
+      seen.push(selected.value);
+    });
+
+    const initialExternal = graphNodeOf(selected).deps?.nextDep?.dep;
+    expect(initialExternal?.kind).toBe("external");
+    expect(initialExternal?.subscription).toBeDefined();
+
+    chooseLeft.value = false;
+    const rightExternal = graphNodeOf(selected).deps?.nextDep?.dep;
+    expect(rightExternal?.kind).toBe("external");
+    expect(initialExternal?.subscription).toBeUndefined();
+    expect(rightExternal?.subscription).toBeDefined();
+    left.value = "left ignored";
+    right.value = "right updated";
+    expect(seen).toEqual(["left", "right", "right updated"]);
+
+    chooseLeft.value = true;
+    expect(graphNodeOf(selected).deps?.nextDep?.dep).toBe(initialExternal);
+    expect(initialExternal?.subscription).toBeDefined();
+    dispose();
+  });
+
+  it("turns a read-to-subscribe revision mismatch into a bounded local retry", () => {
+    const runtime = createLowLevelRuntime();
+    const runtimeToken = {};
+    let subscribeCalls = 0;
+    let unsubscribeCalls = 0;
+    let notify: ((revision: number) => void) | undefined;
+    const protocol: ReadableInteropV1 = {
+      version: 1,
+      runtimeToken,
+      getRevision: () => 1,
+      subscribe(listener) {
+        subscribeCalls += 1;
+        notify = listener;
+        return {
+          unsubscribe: () => { unsubscribeCalls += 1; },
+          revision: 1,
+        };
+      },
+    };
+    const observed: number[] = [];
+    const dispose = runtime.effect(() => {
+      observed.push(0);
+      if (observed.length === 1) publishInteropGraphRead(protocol, 0);
+    });
+
+    expect(subscribeCalls).toBe(1);
+    expect(observed).toHaveLength(2);
+    expect(notify).toBeDefined();
+    dispose();
+    expect(unsubscribeCalls).toBe(1);
+  });
+
+  it("keeps foreign reads untracked under untracked but tracked under untrackedRender", () => {
+    const local = createLowLevelRuntime();
+    const foreignRuntime = createLowLevelRuntime();
+    const foreign = foreignRuntime.signal(0);
+    const untrackedRuns = vi.fn();
+    const untrackedDispose = local.effect(() => {
+      local.untracked(() => foreign.value);
+      untrackedRuns();
+    });
+    foreign.value = 1;
+    expect(untrackedRuns).toHaveBeenCalledTimes(1);
+    untrackedDispose();
+
+    const renderUntrackedRuns = vi.fn();
+    const renderUntrackedDispose = local.effect(() => {
+      untrackedRender(() => foreign.value);
+      renderUntrackedRuns();
+    });
+    foreign.value = 2;
+    expect(renderUntrackedRuns).toHaveBeenCalledTimes(2);
+    renderUntrackedDispose();
+  });
+
+  it("keeps speculative foreign computed reads graph-detached and reports its exact revision", () => {
+    const foreignRuntime = createLowLevelRuntime();
+    const source = foreignRuntime.signal(1);
+    const computed = foreignRuntime.computed(() => source.value * 2);
+    const observations: Array<{ protocol: ReadableInteropV1; revision: number }> = [];
+
+    withInteropRenderCollector({
+      add: (protocol, revision) => observations.push({ protocol, revision }),
+    }, () => {
+      expect(computed.value).toBe(2);
+    });
+
+    expect(observations).toHaveLength(1);
+    expect(observations[0]?.protocol).toBe(Reflect.get(computed, READABLE_INTEROP_V1));
+    expect(observations[0]?.revision).toBe(computed.getRenderVersion());
+    expect(graphNodeOf(source).subs).toBeUndefined();
+    expect(graphNodeOf(computed).deps).toBeUndefined();
+  });
+
+  it("keeps foreign error notifications connected through recovery", () => {
+    const local = createLowLevelRuntime();
+    const foreignRuntime = createLowLevelRuntime();
+    const shouldThrow = foreignRuntime.signal(false);
+    const revision = foreignRuntime.signal(0);
+    const reusedError = new Error("foreign computed error");
+    const foreign = foreignRuntime.computed(() => {
+      revision.value;
+      if (shouldThrow.value) throw reusedError;
+      return revision.value;
+    });
+    const localComputed = local.computed(() => foreign.value + 1);
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const seen: string[] = [];
+    const dispose = local.effect(() => {
+      try {
+        seen.push(`value:${localComputed.value}`);
+      } catch (error) {
+        seen.push(`error:${error === reusedError}`);
+      }
+    });
+
+    shouldThrow.value = true;
+    expect(seen).toEqual(["value:1", "error:true"]);
+    expect(reported).not.toHaveBeenCalled();
+    const errorRevision = localComputed.getRenderVersion();
+    revision.value = 1;
+    expect(localComputed.getRenderVersion()).toBeGreaterThan(errorRevision);
+    expect(seen).toEqual(["value:1", "error:true", "error:true"]);
+    shouldThrow.value = false;
+    expect(seen).toEqual(["value:1", "error:true", "error:true", "value:2"]);
+    expect(localComputed.value).toBe(2);
+    dispose();
+  });
+
+  it("does not track foreign reads performed by effect cleanup", () => {
+    const local = createLowLevelRuntime();
+    const foreignRuntime = createLowLevelRuntime();
+    const trigger = local.signal(0);
+    const foreign = foreignRuntime.signal(0);
+    const seen: number[] = [];
+    const dispose = local.effect(() => {
+      seen.push(trigger.value);
+      return () => { foreign.value; };
+    });
+
+    trigger.value = 1;
+    expect(seen).toEqual([0, 1]);
+    foreign.value = 1;
+    expect(seen).toEqual([0, 1]);
+    dispose();
+  });
+
+  it("bounds synchronous two-runtime and three-runtime feedback loops", () => {
+    const a = createLowLevelRuntime();
+    const b = createLowLevelRuntime();
+    const aValue = a.signal(0);
+    const bValue = b.signal(0);
+    const aSeen: number[] = [];
+    const bSeen: number[] = [];
+    const disposeA = a.effect(() => {
+      const value = aValue.value;
+      aSeen.push(value);
+      if (value === 0) bValue.value = 1;
+    });
+    const disposeB = b.effect(() => {
+      const value = bValue.value;
+      bSeen.push(value);
+      if (value === 1) aValue.value = 1;
+    });
+    expect(aSeen).toEqual([0, 1]);
+    expect(bSeen).toEqual([1]);
+    disposeA();
+    disposeB();
+
+    const c = createLowLevelRuntime();
+    const threeA = a.signal(0);
+    const threeB = b.signal(0);
+    const threeC = c.signal(0);
+    const threeRuns: [number, number, number] = [0, 0, 0];
+    const stopA = a.effect(() => {
+      const value = threeA.value;
+      threeRuns[0] += 1;
+      if (value === 0) threeB.value = 1;
+    });
+    const stopB = b.effect(() => {
+      const value = threeB.value;
+      threeRuns[1] += 1;
+      if (value === 1) threeC.value = 1;
+    });
+    const stopC = c.effect(() => {
+      const value = threeC.value;
+      threeRuns[2] += 1;
+      if (value === 1) threeA.value = 1;
+    });
+    expect(threeRuns).toEqual([2, 1, 1]);
+    stopA();
+    stopB();
+    stopC();
+  });
+
+  it("characterizes cross-runtime batches as synchronous and non-atomic", () => {
+    const a = createLowLevelRuntime();
+    const b = createLowLevelRuntime();
+    const local = a.signal(0);
+    const foreign = b.signal(0);
+    const seen: Array<[number, number]> = [];
+    const dispose = a.effect(() => {
+      seen.push([local.value, foreign.value]);
+    });
+
+    b.batch(() => {
+      foreign.value = 1;
+      local.value = 1;
+    });
+    expect(seen).toEqual([[0, 0], [1, 1], [1, 1]]);
     dispose();
   });
 });
