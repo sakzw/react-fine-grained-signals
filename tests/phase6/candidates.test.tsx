@@ -6,12 +6,13 @@ import { useSignalTracking } from "../../src/react/hooks.js";
 import { READABLE_INTEROP_V1 } from "../../src/core/interop.js";
 import { SIGNAL_BRAND } from "../../src/core/signal-brand.js";
 import { computed as productionComputed, signal as productionSignal } from "../../src/index.js";
-import { createCandidateA, createCandidateB, createCandidateC } from "./fixtures/candidates.js";
+import { createCandidateA, createCandidateB, createCandidateC, createCandidateC1 } from "./fixtures/candidates.js";
 
 const candidates = [
   ["A: wrapper control", createCandidateA],
   ["B: direct existing runtime", createCandidateB],
   ["C: hidden node prototype", createCandidateC],
+  ["C1: private-node class + deep liveness", createCandidateC1],
 ] as const;
 
 afterEach(cleanup);
@@ -132,7 +133,7 @@ it("distinguishes C's public readable from B's reflectively exposed node", () =>
 });
 
 it("records the actual public own-key and prototype surfaces for A/B/C", () => {
-  const samples = [createCandidateA(), createCandidateB(), createCandidateC()].map((api) => ({
+  const samples = [createCandidateA(), createCandidateB(), createCandidateC(), createCandidateC1()].map((api) => ({
     signal: summarizeKeys(api.signal(0)),
     computed: summarizeKeys(api.computed(() => 0)),
   }));
@@ -154,4 +155,10 @@ it("records the actual public own-key and prototype surfaces for A/B/C", () => {
   ]);
   expect(samples[2]!.signal.prototypeNames).toContain("constructor");
   expect(samples[2]!.computed.names).toEqual(["value", "peek"]);
+  expect(samples[3]!.signal.keys).toEqual([]);
+  expect(samples[3]!.signal.names).toEqual([]);
+  expect(samples[3]!.signal.symbols).toHaveLength(2);
+  expect(samples[3]!.signal.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
+  expect(samples[3]!.signal.prototypeNames).not.toEqual(expect.arrayContaining(["getRenderVersion", "subscribeRender", "markWatched", "hasSubscribers"]));
+  expect(samples[3]!.computed.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
 });
