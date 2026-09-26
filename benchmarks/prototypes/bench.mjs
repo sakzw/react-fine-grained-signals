@@ -1,6 +1,6 @@
 import { computed as alienComputed, effect as alienEffect, endBatch, signal as alienSignal, startBatch } from "alien-signals";
 import * as current from "../../dist/index.js";
-import { createLeanRuntime } from "../../node_modules/.cache/prototype-a/lean-entry.mjs";
+import { createLeanRuntime } from "../../node_modules/.cache/prototype-a/lean-entry.js";
 import { createHybridRuntime } from "../../node_modules/.cache/phase5-architecture/hybrid-entry.mjs";
 
 const [runtimeName = "lean", caseName = "observed", iterationsArg = "100000"] = process.argv.slice(2);
@@ -12,6 +12,7 @@ function adapter(name) {
   if (name === "lean") {
     const runtime = createLeanRuntime(() => undefined);
     return {
+      createForeignRuntime: () => createLeanRuntime(() => undefined),
       signal(value) { const source = runtime.signal(value); return { get: () => source.value, set: next => { source.value = next; }, subscribe: source.subscribeRender.bind(source) }; },
       computed(getter) { const source = runtime.computed(getter); return { get: () => source.value, subscribe: source.subscribeRender.bind(source) }; },
       effect: runtime.effect,
@@ -52,6 +53,11 @@ const cases = {
   renderObserved(a) { const source = a.signal(0); let runs = 0; const unsubscribe = source.subscribe(() => { runs++; }); return { run(n) { for (let i = 0; i < n; i++) source.set(i + 1); if (runs !== n) throw Error(`bad render watcher runs: ${runs}`); }, dispose: unsubscribe }; },
   renderComputed(a) { const source = a.signal(0), doubled = a.computed(() => source.get() * 2); let runs = 0; const unsubscribe = doubled.subscribe(() => { runs++; }); return { run(n) { for (let i = 0; i < n; i++) source.set(i + 1); if (doubled.get() !== n * 2 || runs !== n) throw Error(`bad computed render watcher: ${runs}`); }, dispose: unsubscribe }; },
   speculative(a) { if (!a.speculate) throw new Error("speculative case requires lean"); const source = a.signal(0), doubled = a.computed(() => source.get() * 2); return { run(n) { let sum = 0; for (let i = 0; i < n; i++) { source.set(i + 1); sum += a.speculate(() => doubled.get()).value; } if (sum !== n * (n + 1)) throw Error("bad speculative read"); } }; },
+  foreignEffect(a) { if (!a.createForeignRuntime) throw new Error("foreign case requires lean"); const foreign = a.createForeignRuntime(), source = foreign.signal(0); let runs = 0; const dispose = a.effect(() => { source.value; runs++; }); return { run(n) { for (let i = 0; i < n; i++) source.value = i + 1; if (runs !== n + 1) throw Error(`bad foreign effect: ${runs}`); }, dispose }; },
+  foreignComputed(a) { if (!a.createForeignRuntime) throw new Error("foreign case requires lean"); const foreign = a.createForeignRuntime(), source = foreign.signal(0), doubled = a.computed(() => source.value * 2); return { run(n) { let sum = 0; for (let i = 0; i < n; i++) { source.value = i + 1; sum += doubled.get(); } if (sum !== n * (n + 1)) throw Error("bad foreign computed"); } }; },
+  foreignEffectComputed(a) { if (!a.createForeignRuntime) throw new Error("foreign case requires lean"); const foreign = a.createForeignRuntime(), source = foreign.signal(0), doubled = foreign.computed(() => source.value * 2); let runs = 0; const dispose = a.effect(() => { doubled.value; runs++; }); return { run(n) { for (let i = 0; i < n; i++) source.value = i + 1; if (runs !== n + 1) throw Error(`bad foreign effect computed: ${runs}`); }, dispose }; },
+  foreignComputedComputed(a) { if (!a.createForeignRuntime) throw new Error("foreign case requires lean"); const foreign = a.createForeignRuntime(), source = foreign.signal(0), doubled = foreign.computed(() => source.value * 2), outer = a.computed(() => doubled.value + 1); return { run(n) { let sum = 0; for (let i = 0; i < n; i++) { source.value = i + 1; sum += outer.get(); } if (sum !== n * n + 2 * n) throw Error("bad nested foreign computed"); } }; },
+  foreignDynamic(a) { if (!a.createForeignRuntime) throw new Error("foreign case requires lean"); const foreignB = a.createForeignRuntime(), foreignC = a.createForeignRuntime(), choose = a.signal(true), left = foreignB.signal(1), right = foreignC.signal(2); let sum = 0; const dispose = a.effect(() => { sum += choose.get() ? left.value : right.value; }); return { run(n) { for (let i = 0; i < n; i++) { choose.set((i & 1) === 0); left.value = i + 3; right.value = i + 4; } if (sum <= 0) throw Error("bad dynamic foreign branch"); }, dispose }; },
 };
 
 const selected = cases[caseName];

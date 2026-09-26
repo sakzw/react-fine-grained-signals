@@ -7,7 +7,19 @@
  */
 import * as alienSystem from "alien-signals/system";
 import type { Link, ReactiveNode } from "alien-signals/system";
-import { activeRenderCollector, hasActiveRenderCollector, notifyListener, untrackedRender } from "../../src/core/render-tracking.js";
+import {
+  attachReadableInterop,
+  getSharedInteropContext,
+  type InteropGraphCollectorV1,
+  type ReadableInteropV1,
+  type SharedInteropContextV1,
+} from "../../src/core/interop.js";
+import {
+  activeRenderCollector,
+  hasActiveRenderCollector,
+  notifyListener,
+  setActiveRenderCollector,
+} from "../../src/core/render-tracking.js";
 
 // alien-signals/system declares these as a const enum, so keep the runtime
 // values local just as alien-signals' high-level entry does.
@@ -20,11 +32,25 @@ const { createReactiveSystem } = alienSystem;
 
 // Hide only the component's outer collector, preserving a computed getter's
 // own speculative dependency map.
-function withoutComponentRenderCollection<T>(callback: () => T): T {
-  return hasActiveRenderCollector() ? untrackedRender(callback) : callback();
+function withoutComponentRenderCollection<T>(
+  callback: () => T,
+  sharedInterop: SharedInteropContextV1,
+): T {
+  if (!hasActiveRenderCollector() && sharedInterop.renderCollector === undefined) return callback();
+  const previousLocal = setActiveRenderCollector();
+  const previousShared = sharedInterop.renderCollector;
+  sharedInterop.renderCollector = undefined;
+  try {
+    return callback();
+  } finally {
+    sharedInterop.renderCollector = previousShared;
+    setActiveRenderCollector(previousLocal);
+  }
 }
 
 type PrototypeNode = Omit<ReactiveNode, "deps" | "depsTail" | "subs" | "subsTail"> & {
+  runtimeToken: object;
+  externalProtocol?: ReadableInteropV1;
   deps: Link | undefined;
   depsTail: Link | undefined;
   subs: Link | undefined;
@@ -32,15 +58,19 @@ type PrototypeNode = Omit<ReactiveNode, "deps" | "depsTail" | "subs" | "subsTail
 };
 
 type SignalNode<T> = PrototypeNode & {
+  interop: ReadableInteropV1;
   currentValue: T;
   pendingValue: T;
   revision: number;
   renderListeners: Set<() => void> | undefined;
   renderWatcher: RenderWatcherNode | undefined;
+  protocolListeners: Set<(revision: number) => void> | undefined;
+  protocolWatcher: RenderWatcherNode | undefined;
 };
 type SourceNode<T> = SignalNode<T>;
 
 type ComputedNode<T> = PrototypeNode & {
+  interop: ReadableInteropV1;
   getter: () => T;
   initialized: boolean;
   hasError: boolean;
@@ -51,9 +81,13 @@ type ComputedNode<T> = PrototypeNode & {
   observedHasError: boolean;
   observedValue: T | undefined;
   speculativeResult: { hasError: boolean; value: T | undefined; error: unknown } | undefined;
-  speculativeDeps: Map<PrototypeNode, number> | undefined;
+  speculativeDeps: Map<PrototypeNode | ReadableInteropV1, number> | undefined;
+  foreignDependent: boolean;
+  live: boolean;
   renderListeners: Set<() => void> | undefined;
   renderWatcher: RenderWatcherNode | undefined;
+  protocolListeners: Set<(revision: number) => void> | undefined;
+  protocolWatcher: RenderWatcherNode | undefined;
 };
 
 type EffectNode = PrototypeNode & {
@@ -69,6 +103,16 @@ type RenderWatcherNode = PrototypeNode & {
   scheduled: boolean;
   active: boolean;
 };
+
+type ExternalNode = PrototypeNode & {
+  externalProtocol: ReadableInteropV1;
+  subscription: { unsubscribe(): void } | undefined;
+  currentEpoch: number;
+  pendingEpoch: number;
+  lastForeignRevision: number;
+};
+
+type SpeculativeDependency = PrototypeNode | ReadableInteropV1;
 
 export interface LeanReadonlySignal<T> {
   readonly value: T;
@@ -93,7 +137,10 @@ export interface LeanRuntime {
 export function createLeanRuntime(
   onEffectError: (error: unknown) => void = reportError,
 ): LeanRuntime {
+  const runtimeToken = {};
+  const sharedInterop = getSharedInteropContext();
   let activeSub: PrototypeNode | undefined;
+  let activeInteropSubscriber: PrototypeNode | undefined;
   let cycle = 0;
   let runDepth = 0;
   let batchDepth = 0;
@@ -101,9 +148,27 @@ export function createLeanRuntime(
   let queuedLength = 0;
   const queue: Array<(EffectNode | RenderWatcherNode) | undefined> = [];
   let activeRenderReads: Map<PrototypeNode, number> | undefined;
-  let speculativeReads: Map<PrototypeNode, number> | undefined;
+  let speculativeReads: Map<SpeculativeDependency, number> | undefined;
   let activeSpeculativeComputed: ComputedNode<unknown> | undefined;
   const renderingComputeds = new Set<PrototypeNode>();
+  const externalNodes = new WeakMap<ReadableInteropV1, ExternalNode>();
+  const graphCollector: InteropGraphCollectorV1 = {
+    runtimeToken,
+    add(protocol, observedRevision) {
+      if (protocol.runtimeToken === runtimeToken) return;
+      if (speculativeReads !== undefined) {
+        speculativeReads.set(protocol, observedRevision);
+        return;
+      }
+      const subscriber = activeInteropSubscriber;
+      if (subscriber === undefined || subscriber.runtimeToken !== runtimeToken) return;
+      if ("fn" in subscriber && !(subscriber as EffectNode).active) return;
+      const external = externalNodeFor(protocol, observedRevision);
+      link(asReactiveNode(external), asReactiveNode(subscriber), cycle);
+      if ("getter" in subscriber) (subscriber as ComputedNode<unknown>).foreignDependent = true;
+      refreshDependencyLiveness(external);
+    },
+  };
   const bumpRenderRevision = (node: SourceNode<unknown> | ComputedNode<unknown>) => {
     node.revision += 1;
   };
@@ -116,7 +181,7 @@ export function createLeanRuntime(
     activeRenderReads = undefined;
     speculativeReads = undefined;
     try {
-      return withoutComponentRenderCollection(callback);
+      return withoutComponentRenderCollection(callback, sharedInterop);
     } finally {
       activeRenderReads = previousRenderReads;
       speculativeReads = previousSpeculativeReads;
@@ -125,6 +190,13 @@ export function createLeanRuntime(
 
   const system = createReactiveSystem({
     update(node) {
+      if ("externalProtocol" in node) {
+        const external = node as ExternalNode;
+        const changed = external.currentEpoch !== external.pendingEpoch;
+        external.currentEpoch = external.pendingEpoch;
+        external.flags = Mutable;
+        return changed;
+      }
       if ("getter" in node) return updateComputed(node as ComputedNode<unknown>);
       if ("currentValue" in node) {
         const source = node as SignalNode<unknown>;
@@ -156,13 +228,19 @@ export function createLeanRuntime(
       }
     },
     unwatched(node) {
-      if (!("getter" in node) || node.depsTail === undefined) return;
+      if ("externalProtocol" in node) {
+        deactivateExternal(node as ExternalNode);
+        return;
+      }
+      if (!("getter" in node)) return;
       const computed = node as ComputedNode<unknown>;
+      setComputedLive(computed, false);
+      if (computed.depsTail === undefined) return;
       computed.flags = Mutable | Dirty;
-      let dependency = computed.depsTail;
+      let dependency: Link | undefined = computed.depsTail;
       while (dependency !== undefined) {
-        const previous = dependency.prevDep;
-        unlink(dependency, asReactiveNode(computed));
+        const previous: Link | undefined = dependency.prevDep;
+        unlinkDependency(dependency, computed);
         dependency = previous;
       }
     },
@@ -170,6 +248,224 @@ export function createLeanRuntime(
 
   const { link, unlink, propagate, checkDirty, shallowPropagate } = system;
   const asReactiveNode = (node: PrototypeNode): ReactiveNode => node as unknown as ReactiveNode;
+
+  function hasLiveConsumer(node: PrototypeNode): boolean {
+    let subscriberLink = node.subs;
+    while (subscriberLink !== undefined) {
+      const subscriber = subscriberLink.sub as PrototypeNode;
+      if ("fn" in subscriber && (subscriber as EffectNode).active) return true;
+      if ("listener" in subscriber && (subscriber as RenderWatcherNode).active) return true;
+      if ("getter" in subscriber && (subscriber as ComputedNode<unknown>).live) return true;
+      subscriberLink = subscriberLink.nextSub;
+    }
+    return false;
+  }
+
+  function refreshDependencyLiveness(node: PrototypeNode): void {
+    if ("externalProtocol" in node) {
+      setExternalLive(node as ExternalNode, hasLiveConsumer(node));
+    } else if ("getter" in node && (node as ComputedNode<unknown>).foreignDependent) {
+      setComputedLive(node as ComputedNode<unknown>, hasLiveConsumer(node));
+    }
+  }
+
+  function setComputedLive(node: ComputedNode<unknown>, live: boolean): void {
+    if (node.live === live) return;
+    node.live = live;
+    let dependencyLink = node.deps;
+    while (dependencyLink !== undefined) {
+      refreshDependencyLiveness(dependencyLink.dep as PrototypeNode);
+      dependencyLink = dependencyLink.nextDep;
+    }
+  }
+
+  function deactivateExternal(node: ExternalNode): void {
+    const subscription = node.subscription;
+    node.subscription = undefined;
+    subscription?.unsubscribe();
+  }
+
+  function receiveExternalRevision(node: ExternalNode, revision: number): void {
+    node.lastForeignRevision = revision;
+    node.pendingEpoch += 1;
+    node.flags |= Dirty;
+    if (node.subs !== undefined) {
+      propagate(node.subs, runDepth > 0);
+      if (batchDepth === 0 && runDepth === 0) flush();
+    }
+  }
+
+  function activateExternal(node: ExternalNode, observedRevision: number): void {
+    node.lastForeignRevision = observedRevision;
+    if (node.subscription !== undefined) return;
+    const subscription = node.externalProtocol.subscribe((revision) => {
+      receiveExternalRevision(node, revision);
+    });
+    node.subscription = subscription;
+    if (subscription.revision !== observedRevision) {
+      node.lastForeignRevision = subscription.revision;
+      node.pendingEpoch += 1;
+      node.flags |= Dirty;
+      if (node.subs !== undefined) {
+        propagate(node.subs, runDepth > 0);
+        if (batchDepth === 0 && runDepth === 0) flush();
+      }
+    }
+  }
+
+  function setExternalLive(node: ExternalNode, live: boolean): void {
+    if (live) activateExternal(node, node.lastForeignRevision);
+    else deactivateExternal(node);
+  }
+
+  function externalNodeFor(
+    protocol: ReadableInteropV1,
+    observedRevision: number,
+  ): ExternalNode {
+    let node = externalNodes.get(protocol);
+    if (node === undefined) {
+      node = {
+        runtimeToken,
+        externalProtocol: protocol,
+        subscription: undefined,
+        currentEpoch: 0,
+        pendingEpoch: 0,
+        lastForeignRevision: observedRevision,
+        deps: undefined,
+        depsTail: undefined,
+        subs: undefined,
+        subsTail: undefined,
+        flags: Mutable,
+      };
+      externalNodes.set(protocol, node);
+    } else {
+      node.lastForeignRevision = observedRevision;
+    }
+    return node;
+  }
+
+  function withTrackedGraph<T>(subscriber: PrototypeNode, callback: () => T): T {
+    const previousSubscriber = activeInteropSubscriber;
+    const previousCollector = sharedInterop.graphCollector;
+    activeInteropSubscriber = subscriber;
+    sharedInterop.graphCollector = graphCollector;
+    try {
+      return callback();
+    } finally {
+      activeInteropSubscriber = previousSubscriber;
+      sharedInterop.graphCollector = previousCollector;
+    }
+  }
+
+  function withoutGraphCollection<T>(callback: () => T): T {
+    const previousCollector = sharedInterop.graphCollector;
+    sharedInterop.graphCollector = undefined;
+    try {
+      return callback();
+    } finally {
+      sharedInterop.graphCollector = previousCollector;
+    }
+  }
+
+  function publishForeignGraphRead(protocol: ReadableInteropV1, revision: number): void {
+    const collector = sharedInterop.graphCollector;
+    if (collector !== undefined && collector.runtimeToken !== protocol.runtimeToken) {
+      collector.add(protocol, revision);
+    }
+  }
+
+  function publishForeignRenderRead(protocol: ReadableInteropV1, revision: number): void {
+    sharedInterop.renderCollector?.add(protocol, revision);
+  }
+
+  function unsubscribeGraphWatcher(watcher: RenderWatcherNode): void {
+    watcher.active = false;
+    watcher.scheduled = false;
+    watcher.flags = 0;
+    let dependency = watcher.depsTail;
+    while (dependency !== undefined) {
+      const previous = dependency.prevDep;
+      unlinkDependency(dependency, watcher);
+      dependency = previous;
+    }
+  }
+
+  function createGraphWatcher(
+    node: SignalNode<unknown> | ComputedNode<unknown>,
+    listener: () => void,
+  ): RenderWatcherNode {
+    const watcher: RenderWatcherNode = {
+      runtimeToken,
+      listener,
+      scheduled: false,
+      active: true,
+      deps: undefined,
+      depsTail: undefined,
+      subs: undefined,
+      subsTail: undefined,
+      flags: Watching | RecursedCheck,
+    };
+    const previousSub = activeSub;
+    activeSub = watcher;
+    try {
+      cycle += 1;
+      try {
+        if ("getter" in node) {
+          promoteSpeculativeCache(node);
+          readComputedCore(node);
+        }
+        else readSignalCore(node);
+      } catch {
+        // A protocol watcher still tracks an errored computed boundary.
+      }
+    } finally {
+      activeSub = previousSub;
+      watcher.flags &= ~RecursedCheck;
+      purgeDeps(watcher);
+      if (watcher.deps !== undefined) watcher.flags |= Watching;
+    }
+    return watcher;
+  }
+
+  function subscribeProtocol(
+    node: SignalNode<unknown> | ComputedNode<unknown>,
+    listener: (revision: number) => void,
+  ): { unsubscribe(): void; revision: number } {
+    const listeners = (node.protocolListeners ??= new Set());
+    const wasEmpty = listeners.size === 0;
+    listeners.add(listener);
+    if (wasEmpty) {
+      node.protocolWatcher = createGraphWatcher(node, () => {
+        const activeListeners = node.protocolListeners;
+        if (activeListeners === undefined) return;
+        for (const callback of Array.from(activeListeners)) {
+          try { callback(node.revision); } catch { /* Keep the graph flush isolated. */ }
+        }
+      });
+    }
+    return {
+      revision: node.revision,
+      unsubscribe() {
+        const current = node.protocolListeners;
+        if (current === undefined || !current.delete(listener) || current.size !== 0) return;
+        node.protocolListeners = undefined;
+        const watcher = node.protocolWatcher;
+        node.protocolWatcher = undefined;
+        if (watcher !== undefined) unsubscribeGraphWatcher(watcher);
+      },
+    };
+  }
+
+  function createReadableProtocol(
+    node: SignalNode<unknown> | ComputedNode<unknown>,
+  ): ReadableInteropV1 {
+    return Object.freeze({
+      version: 1 as const,
+      runtimeToken,
+      getRevision: () => node.revision,
+      subscribe: (listener: (revision: number) => void) => subscribeProtocol(node, listener),
+    });
+  }
 
   function track(node: PrototypeNode): void {
     const subscriber = activeSub;
@@ -179,13 +475,27 @@ export function createLeanRuntime(
       if (!effect.active) return;
     }
     link(asReactiveNode(node), asReactiveNode(subscriber), cycle);
+    if ("externalProtocol" in node) {
+      refreshDependencyLiveness(node);
+      if ("getter" in subscriber) (subscriber as ComputedNode<unknown>).foreignDependent = true;
+    } else if ("getter" in node && (node as ComputedNode<unknown>).foreignDependent && "getter" in subscriber) {
+      (subscriber as ComputedNode<unknown>).foreignDependent = true;
+    }
+    if ("getter" in node && (node as ComputedNode<unknown>).foreignDependent) refreshDependencyLiveness(node);
   }
 
   function purgeDeps(subscriber: PrototypeNode): void {
     let depLink = subscriber.depsTail !== undefined
       ? subscriber.depsTail.nextDep
       : subscriber.deps;
-    while (depLink !== undefined) depLink = unlink(depLink, asReactiveNode(subscriber));
+    while (depLink !== undefined) depLink = unlinkDependency(depLink, subscriber);
+  }
+
+  function unlinkDependency(depLink: Link, subscriber: PrototypeNode): Link | undefined {
+    const dependency = depLink.dep as PrototypeNode;
+    const next = unlink(depLink, asReactiveNode(subscriber));
+    refreshDependencyLiveness(dependency);
+    return next;
   }
 
   function updateComputed<T>(node: ComputedNode<T>): boolean {
@@ -196,12 +506,14 @@ export function createLeanRuntime(
     const oldError = node.error;
     node.depsTail = undefined;
     node.flags = Mutable | RecursedCheck;
+    node.foreignDependent = false;
     const previousSub = activeSub;
     activeSub = node;
     try {
       cycle += 1;
       try {
-        node.value = node.getter();
+        node.value = withTrackedGraph(node, () =>
+          withoutComponentRenderCollection(node.getter, sharedInterop));
         node.error = undefined;
         node.hasError = false;
       } catch (error) {
@@ -216,6 +528,7 @@ export function createLeanRuntime(
     } finally {
       activeSub = previousSub;
       node.flags &= ~RecursedCheck;
+      if (!node.foreignDependent) setComputedLive(node, false);
       purgeDeps(node);
       // Retain these reads to make error->error equality behavior explicit in
       // this prototype: every reevaluation that throws invalidates dependents.
@@ -255,6 +568,7 @@ export function createLeanRuntime(
 
   function readComputedCore<T>(node: ComputedNode<T>): T {
     if (node.flags & RecursedCheck) throw new Error("Computed cycle detected");
+    if (node.foreignDependent && !node.live) node.flags |= Dirty;
     const flags = node.flags;
     if (
       (flags & Dirty) ||
@@ -273,6 +587,19 @@ export function createLeanRuntime(
     const deps = node.speculativeDeps;
     if (node.speculativeResult === undefined || deps === undefined) return false;
     for (const [dependency, revision] of deps) {
+      if ("getRevision" in dependency) {
+        const protocol = dependency as ReadableInteropV1;
+        let subscription: { unsubscribe(): void; revision: number };
+        try {
+          subscription = protocol.subscribe(() => undefined);
+        } catch {
+          return false;
+        }
+        const currentRevision = subscription.revision;
+        subscription.unsubscribe();
+        if (currentRevision !== revision) return false;
+        continue;
+      }
       if ("getter" in dependency) {
         const computed = dependency as ComputedNode<unknown>;
         if (!computedIsCurrent(computed)) return false;
@@ -283,10 +610,11 @@ export function createLeanRuntime(
   }
 
   function computedIsCurrent(node: ComputedNode<unknown>): boolean {
-    if (node.initialized && !(node.flags & (Dirty | Pending))) return true;
+    if (node.initialized && !(node.flags & (Dirty | Pending)) && !(node.foreignDependent && !node.live)) return true;
     if (speculativeDependenciesAreCurrent(node)) return true;
     try { readComputedForRender(node); } catch { /* Errors are represented in the settled cache. */ }
-    return speculativeDependenciesAreCurrent(node) || (node.initialized && !(node.flags & (Dirty | Pending)));
+    return speculativeDependenciesAreCurrent(node) ||
+      (node.initialized && !(node.flags & (Dirty | Pending)) && !(node.foreignDependent && !node.live));
   }
 
   function evaluateSpeculatively<T>(node: ComputedNode<T>): { hasError: boolean; value: T | undefined; error: unknown } {
@@ -296,15 +624,15 @@ export function createLeanRuntime(
     const previousReads = speculativeReads;
     const previousSpeculativeComputed = activeSpeculativeComputed;
     activeSub = undefined;
-    const deps = new Map<PrototypeNode, number>();
+    const deps = new Map<SpeculativeDependency, number>();
     speculativeReads = deps;
     activeSpeculativeComputed = node as ComputedNode<unknown>;
     let result: { hasError: boolean; value: T | undefined; error: unknown };
     try {
-      result = withoutComponentRenderCollection(() => {
+      result = withTrackedGraph(node, () => withoutComponentRenderCollection(() => {
         try { return { hasError: false, value: node.getter(), error: undefined }; }
         catch (error) { return { hasError: true, value: undefined, error }; }
-      });
+      }, sharedInterop));
     } finally {
       speculativeReads = previousReads;
       activeSpeculativeComputed = previousSpeculativeComputed;
@@ -319,7 +647,8 @@ export function createLeanRuntime(
 
   function readComputedForRender<T>(node: ComputedNode<T>): T {
     if (renderingComputeds.has(node)) throw new Error("Computed cycle detected");
-    const cleanGraph = node.initialized && !(node.flags & (Dirty | Pending));
+    const cleanGraph = node.initialized && !(node.flags & (Dirty | Pending)) &&
+      !(node.foreignDependent && !node.live);
     let result: { hasError: boolean; value: T | undefined; error: unknown };
     if (cleanGraph) {
       result = { hasError: node.hasError, value: node.value, error: node.error };
@@ -339,24 +668,40 @@ export function createLeanRuntime(
   }
 
   function promoteSpeculativeCache<T>(node: ComputedNode<T>): boolean {
-    if (node.initialized && !(node.flags & (Dirty | Pending))) return true;
+    if (node.initialized && !(node.flags & (Dirty | Pending)) && !(node.foreignDependent && !node.live)) return true;
     if (!speculativeDependenciesAreCurrent(node)) return false;
     const result = node.speculativeResult as { hasError: boolean; value: T | undefined; error: unknown };
-    const deps = node.speculativeDeps as Map<PrototypeNode, number>;
+    const deps = node.speculativeDeps as Map<SpeculativeDependency, number>;
     for (const dependency of deps.keys()) {
-      if ("getter" in dependency) promoteSpeculativeCache(dependency as ComputedNode<unknown>);
+      if (!("getRevision" in dependency) && "getter" in dependency) {
+        promoteSpeculativeCache(dependency as ComputedNode<unknown>);
+      }
     }
     node.value = result.value;
     node.error = result.error;
     node.hasError = result.hasError;
     node.initialized = true;
+    node.foreignDependent = false;
     node.depsTail = undefined;
     node.flags = Mutable | RecursedCheck;
     const previousSub = activeSub;
     activeSub = node;
     cycle += 1;
     try {
-      for (const dependency of deps.keys()) link(asReactiveNode(dependency), asReactiveNode(node), cycle);
+      for (const [dependency, revision] of deps) {
+        if ("getRevision" in dependency) {
+          const external = externalNodeFor(dependency, revision);
+          link(asReactiveNode(external), asReactiveNode(node), cycle);
+          node.foreignDependent = true;
+          refreshDependencyLiveness(external);
+        } else {
+          link(asReactiveNode(dependency), asReactiveNode(node), cycle);
+          if ("getter" in dependency && (dependency as ComputedNode<unknown>).foreignDependent) node.foreignDependent = true;
+          if ("getter" in dependency && (dependency as ComputedNode<unknown>).foreignDependent) {
+            refreshDependencyLiveness(dependency as ComputedNode<unknown>);
+          }
+        }
+      }
     } finally {
       activeSub = previousSub;
       node.flags &= ~RecursedCheck;
@@ -379,7 +724,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      withoutAllRenderCollection(cleanup);
+      withoutGraphCollection(() => withoutAllRenderCollection(cleanup));
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -408,7 +753,7 @@ export function createLeanRuntime(
       cycle += 1;
       runDepth += 1;
       try {
-        const cleanup = withoutAllRenderCollection(effect.fn);
+        const cleanup = withTrackedGraph(effect, () => withoutAllRenderCollection(effect.fn));
         if (effect.active) effect.cleanup = cleanup || undefined;
         else if (typeof cleanup === "function") runCleanupValue(cleanup);
       } catch (error) {
@@ -445,8 +790,7 @@ export function createLeanRuntime(
     const wasEmpty = listeners.size === 0;
     listeners.add(listener);
     if (wasEmpty) {
-      const watcher: RenderWatcherNode = {
-        listener: () => {
+      node.renderWatcher = createGraphWatcher(node, () => {
           const activeListeners = node.renderListeners;
           if (activeListeners === undefined) return;
           // Snapshot before invoking React so subscriber mutation is safe.
@@ -454,32 +798,7 @@ export function createLeanRuntime(
           for (const renderListener of [...activeListeners]) {
             notifyListener(renderListener);
           }
-        },
-        scheduled: false,
-        active: true,
-        deps: undefined,
-        depsTail: undefined,
-        subs: undefined,
-        subsTail: undefined,
-        flags: Watching | RecursedCheck,
-      };
-      node.renderWatcher = watcher;
-      const previousSub = activeSub;
-      activeSub = watcher;
-      try {
-        cycle += 1;
-        if ("getter" in node) {
-          const computed = node as ComputedNode<unknown>;
-          promoteSpeculativeCache(computed);
-          readComputedCore(computed);
-        }
-        else readSignalCore(node as SignalNode<unknown>);
-      } finally {
-        activeSub = previousSub;
-        watcher.flags &= ~RecursedCheck;
-        purgeDeps(watcher);
-        if (watcher.deps !== undefined) watcher.flags |= Watching;
-      }
+        });
     }
 
     return () => {
@@ -489,24 +808,11 @@ export function createLeanRuntime(
       node.renderListeners = undefined;
       const watcher = node.renderWatcher;
       node.renderWatcher = undefined;
-      if (watcher === undefined) return;
-      watcher.active = false;
-      watcher.scheduled = false;
-      watcher.flags = 0;
-      let dep = watcher.depsTail;
-      while (dep !== undefined) {
-        const previous = dep.prevDep;
-        unlink(dep, asReactiveNode(watcher));
-        dep = previous;
-      }
+      if (watcher !== undefined) unsubscribeGraphWatcher(watcher);
     };
   }
 
   function flush(): void {
-    if (hasActiveRenderCollector()) {
-      untrackedRender(flushQueue);
-      return;
-    }
     flushQueue();
   }
 
@@ -543,7 +849,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      return withoutAllRenderCollection(fn);
+      return withoutGraphCollection(() => withoutAllRenderCollection(fn));
     } finally {
       activeSub = previousSub;
     }
@@ -555,7 +861,7 @@ export function createLeanRuntime(
     activeRenderReads = reads;
     let value: T;
     try {
-      value = withoutComponentRenderCollection(fn);
+      value = withoutComponentRenderCollection(fn, sharedInterop);
     } finally {
       activeRenderReads = previousReads;
     }
@@ -574,7 +880,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      withoutAllRenderCollection(cleanup);
+      withoutGraphCollection(() => withoutAllRenderCollection(cleanup));
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -585,19 +891,25 @@ export function createLeanRuntime(
   return {
     signal<T>(initialValue: T): LeanSignal<T> {
       const node: SignalNode<T> = {
+        runtimeToken,
+        interop: undefined as unknown as ReadableInteropV1,
         currentValue: initialValue,
         pendingValue: initialValue,
         revision: 0,
         renderListeners: undefined,
         renderWatcher: undefined,
+        protocolListeners: undefined,
+        protocolWatcher: undefined,
         deps: undefined,
         depsTail: undefined,
         subs: undefined,
         subsTail: undefined,
         flags: Mutable,
       };
+      node.interop = createReadableProtocol(node) as ReadableInteropV1;
       const source: LeanSignal<T> = {
         get value() {
+          if (activeSub !== undefined) return readSignalCore(node);
           if (speculativeReads !== undefined) {
             if (!speculativeReads.has(node)) speculativeReads.set(node, getRenderVersion(node));
             return node.flags & Dirty ? node.pendingValue : node.currentValue;
@@ -609,10 +921,16 @@ export function createLeanRuntime(
             activeRenderCollector?.add(source, reads.get(node)!);
             return value;
           }
-          if (activeRenderCollector === undefined) return readSignalCore(node);
-          activeRenderCollector.add(source, getRenderVersion(node));
-          const value = node.flags & Dirty ? node.pendingValue : node.currentValue;
-          return value;
+          if (activeRenderCollector !== undefined) {
+            activeRenderCollector.add(source, getRenderVersion(node));
+            return node.flags & Dirty ? node.pendingValue : node.currentValue;
+          }
+          if (sharedInterop.renderCollector !== undefined) {
+            publishForeignRenderRead(node.interop, node.revision);
+            return node.flags & Dirty ? node.pendingValue : node.currentValue;
+          }
+          publishForeignGraphRead(node.interop, node.revision);
+          return readSignalCore(node);
         },
         set value(next: T) {
           if (Object.is(node.pendingValue, next)) return;
@@ -628,10 +946,13 @@ export function createLeanRuntime(
         getRenderVersion() { return getRenderVersion(node); },
         subscribeRender(listener) { return subscribeRenderNode(node, listener); },
       };
+      attachReadableInterop(source, node.interop);
       return source;
     },
     computed<T>(getter: () => T): LeanReadonlySignal<T> {
       const node: ComputedNode<T> = {
+        runtimeToken,
+        interop: undefined as unknown as ReadableInteropV1,
         getter,
         initialized: false,
         hasError: false,
@@ -643,38 +964,54 @@ export function createLeanRuntime(
         observedValue: undefined,
         speculativeResult: undefined,
         speculativeDeps: undefined,
+        foreignDependent: false,
+        live: false,
         renderListeners: undefined,
         renderWatcher: undefined,
+        protocolListeners: undefined,
+        protocolWatcher: undefined,
         deps: undefined,
         depsTail: undefined,
         subs: undefined,
         subsTail: undefined,
         flags: 0,
       };
+      node.interop = createReadableProtocol(node) as ReadableInteropV1;
       const computed: LeanReadonlySignal<T> = {
         get value() {
-          if (activeRenderReads !== undefined || speculativeReads !== undefined || activeRenderCollector !== undefined) {
-            const value = readComputedForRender(node);
-            if (activeRenderReads !== undefined) {
-              const reads = activeRenderReads;
-              if (!reads.has(node)) reads.set(node, getRenderVersion(node));
-              activeRenderCollector?.add(computed, reads.get(node)!);
-            } else if (activeRenderCollector !== undefined) {
-              activeRenderCollector.add(computed, getRenderVersion(node));
-            }
+          if (activeSub !== undefined) return readComputedCore(node);
+          const localRender = activeRenderReads !== undefined || speculativeReads !== undefined ||
+            activeRenderCollector !== undefined;
+          let value: T;
+          try {
+            value = localRender ? readComputedForRender(node) : readComputed(node);
             return value;
+          } finally {
+            if (localRender) {
+              if (activeRenderReads !== undefined && !activeRenderReads.has(node)) {
+                activeRenderReads.set(node, getRenderVersion(node));
+              }
+              if (activeRenderReads !== undefined) {
+                activeRenderCollector?.add(computed, activeRenderReads.get(node)!);
+              } else if (activeRenderCollector !== undefined) {
+                activeRenderCollector.add(computed, getRenderVersion(node));
+              }
+            } else if (sharedInterop.renderCollector !== undefined) {
+              publishForeignRenderRead(node.interop, node.revision);
+            }
+            publishForeignGraphRead(node.interop, node.revision);
           }
-          if (!node.initialized || node.flags & (Dirty | Pending)) promoteSpeculativeCache(node);
-          return readComputedCore(node);
         },
         peek() { return untracked(() => readComputed(node)); },
         getRenderVersion() { return getRenderVersion(node); },
         subscribeRender(listener) { return subscribeRenderNode(node, listener); },
       };
+      attachReadableInterop(computed, node.interop);
       return computed;
     },
     effect(fn) {
       const effect: EffectNode = {
+        runtimeToken,
         fn,
         cleanup: undefined,
         active: true,
@@ -696,9 +1033,7 @@ export function createLeanRuntime(
         effect.flags = 0;
         let dep = effect.depsTail;
         while (dep !== undefined) {
-          const previous = dep.prevDep;
-          unlink(dep, asReactiveNode(effect));
-          dep = previous;
+          dep = unlinkDependency(dep, effect) ?? undefined;
         }
         runCleanup(effect);
       };
@@ -726,7 +1061,7 @@ export function createLeanRuntime(
     runDepth += 1;
     try {
       try {
-        effect.cleanup = withoutAllRenderCollection(effect.fn) || undefined;
+        effect.cleanup = withTrackedGraph(effect, () => withoutAllRenderCollection(effect.fn)) || undefined;
       } catch (error) {
         safelyReport(error);
       }

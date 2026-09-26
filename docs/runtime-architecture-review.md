@@ -33,7 +33,7 @@ The focused suite covers `Object.is` (`0`/`-0`, repeated `NaN`), dynamic effect 
 
 No heap profile was run for this prototype. Structural allocation observations: successful computed reevaluations do not construct the current runtime's value/error union object; effects use a reused queue array; each call to `speculate()` allocates a `Map`; enabling revisions creates one `WeakMap` per runtime and writes numeric entries. This is source inspection, not measured allocation evidence.
 
-At the time of this initial review, the React layer had not yet been implemented. The later “Prototype A — real React layer” section records the actual managed/unmanaged React coverage and staged measurements. Cross-runtime interop remains unimplemented, so its cost is still unknown.
+At this point in the initial review, the React layer had not yet been implemented. The later “Prototype A — real React layer” section records the actual managed/unmanaged React coverage and staged measurements. The subsequent “Prototype A cross-runtime interop” section records the interop implementation and its cost.
 
 ## Prototype B — alien high-level hybrid
 
@@ -47,7 +47,7 @@ The React path has the same structural obstacle: setting the active subscriber a
 
 Prototype A's first local results show that several-fold of the current observed/computed/batch gap can be recovered without dropping the tested local semantics. That gap is therefore not fundamentally required by RFSG semantics. The remaining cost could be from the lean graph algorithm, effect queue and computed checks, revision/render machinery, or a combination; current evidence does not isolate those fully. Alien's substantially higher throughput suggests more implementation-shape room, but local benchmark similarity alone does not prove equivalent behavior.
 
-Prototype A is the preferred architecture to continue studying: retain a compact local graph path and add render and foreign behavior as explicit sidecars. Prototype B is rejected for now. This is not a production replacement recommendation. The next implementation study would need full React invariants, interop/liveness and cold foreign-computed tests, independent runtime/duplicate-package tests, feedback cycles, and sustained benchmarks for each added layer. It must also assess integration with `deepSignal` and quantify whether sidecar costs can be reduced. No production migration scope is approved by this review.
+Prototype A was the preferred architecture to continue studying at this stage: retain a compact local graph path and add render and foreign behavior as explicit sidecars. Prototype B is rejected for now. This was not a production replacement recommendation; later interop results and remaining gaps are recorded below. No production migration scope is approved by this review.
 
 | Dimension | Prototype A | Prototype B | Current Phase 5 |
 | --- | --- | --- | --- |
@@ -166,13 +166,13 @@ No React DOM throughput benchmark was run. The correctness suite uses actual Rea
 
 ### Remaining boundaries and recommendation
 
-Prototype A now has local React/render correctness coverage for the listed local scenarios. Cross-runtime graph interop, foreign liveness, duplicate-runtime behavior, and cross-runtime cycles remain open. Prototype per-key deepSignal versions, proxy metadata, and deep tracking remain open. Production migration remains out of scope.
+Prototype A now has local React/render correctness coverage for the listed local scenarios. Cross-runtime graph interop, foreign liveness, duplicate-runtime behavior, and cross-runtime cycles were still open at that checkpoint and are covered in the later interop section. Prototype per-key deepSignal versions, proxy metadata, and deep tracking remain open. Production migration remains out of scope.
 
-Recommendation: continue to the separately scoped interop milestone. Keep the observed/computed/batch gain and the idle read/write regression visible; do not treat the React result as a production cutover decision.
+Recommendation at that checkpoint: continue to the separately scoped interop milestone. Keep the observed/computed/batch gain and the idle read/write regression visible; do not treat the React result as a production cutover decision.
 
 ### Remaining gaps
 
-The remaining work is cross-runtime interop, foreign liveness, cold foreign computed freshness, duplicate runtime/package validation, bounded cross-runtime cycles, `deepSignal` integration, production migration, and a final React throughput/performance review before cutover. Prototype B remains frozen. Phase 6 remains unstarted.
+At that checkpoint, the remaining work was cross-runtime interop, foreign liveness, cold foreign computed freshness, duplicate runtime/package validation, bounded cross-runtime cycles, `deepSignal` integration, production migration, and a final React throughput/performance review before cutover. Prototype B remains frozen. Phase 6 remains unstarted.
 
 ## Prototype A React suppression hardening (2026-09-26)
 
@@ -181,6 +181,36 @@ The initial React-layer implementation paused only the shared component collecto
 New React regressions cover an untracked source inside a speculative computed, a nested computed read only through `peek()`, an effect and cleanup synchronously triggered during speculative evaluation, nested `untracked()` restoration after a caught throw, and RenderWatcher listener isolation. The effect continues to track its own sources. The complete Prototype A local/React suite passes 51 tests.
 
 An idle local read still reaches `readSignalCore(node)` directly when no React/speculative collector is active. The computed getter takes its direct graph read path after the collector checks. No duplicated getter fast path was added. The only remaining work on the read measurement is variance: the Phase 5 control measured 46.90M / 35.40M reads/s in these two passes; Prototype A before hardening measured 17.34M / 23.64M (selected previous isolated passes); hardened Prototype A measured 36.09M / 38.10M. For unobserved write, observed, computed, and batch, the same two current-control / hardened-A passes measured respectively 8.56M / 8.24M vs 8.96M / 8.17M; 1.44M / 1.04M vs 5.69M / 2.99M; 1.46M / 1.03M vs 3.17M / 4.29M; and 0.51M / 0.48M vs 2.50M / 1.73M ops/s. Observed/computed/batch retain a material advantage, though the short-run results vary. Existing pre-hardening runs also varied materially, particularly for reads and writes.
+
+## Prototype A cross-runtime interop (2026-09-26)
+
+This milestone extends only the private Prototype A runtime and its tests/benchmarks. Production runtime modules and package exports are unchanged. It reuses `src/core/interop.ts` and its V1 readable protocol/shared context without changing protocol semantics. Each `createLeanRuntime()` allocates a unique `runtimeToken`; each source/computed gets one stable frozen protocol attached under the existing non-enumerable `Symbol.for` key. `getRevision()` exposes semantic source/computed revisions. Equal source writes are suppressed with `Object.is`; `0 -> -0` advances the revision, while `NaN -> NaN` does not.
+
+The same-runtime read path remains direct. A foreign read publishes only when a graph collector is active. Each runtime reuses one collector object, filters its own token, and maps a foreign protocol to one local `ExternalNode` through a `WeakMap`. Foreign `ReactiveNode`s never enter another alien-signals graph. No foreign protocol/node/map is allocated by an ordinary local read; the `ExternalNode` appears only on the first actual foreign graph read. React render collection remains a separate channel on the shared context.
+
+The `ExternalNode` stores `currentEpoch` and `pendingEpoch` independently of the readable's semantic revision. Protocol subscriptions are created only while a local effect/computed/render watcher makes the external node live, and multiple consumers in a runtime share the one subscription. Removing the last live consumer unsubscribes it. Foreign-dependent computed liveness propagates through its dependency links. A foreign computed's own protocol watcher evaluates and publishes the computed boundary, so downstream equality is retained; errors remain subscribed and later revisions can recover them. When a foreign-dependent computed has no live consumer, reads use the small cold-pull strategy: force it dirty and recompute on each read. The trade-off is extra cold reads in exchange for avoiding permanent foreign subscriptions and generation maps.
+
+The protocol's `subscribe()` returns the revision observed when subscription became active. If it differs from the revision captured during the read, the ExternalNode advances its epoch and propagates a rerun. A dedicated fixture takes a value/revision snapshot, mutates during subscription, and confirms the consumer sees `[1, 2]`; this closes the read-to-subscribe loss window. Local computed speculative dependency maps accept foreign protocol keys only when speculative evaluation actually occurs. Cache validation briefly subscribes to a foreign protocol, compares its revision, and unsubscribes; promotion restores the foreign computed boundary as an ExternalNode link.
+
+Foreign reads inside `untracked()` and `peek()` are excluded from the graph. Dynamic foreign branches are relinked and stale branches pruned. Each foreign source/computed has one graph-native protocol watcher while subscribed. The instrumented protocol regression confirms two local consumers use one `subscribe()`, the first disposal keeps it, and the last disposal calls `unsubscribe()` once. Protocol revisions, source `Object.is`, batch-revert behavior, computed equality/error recovery, cold nested computed freshness, and bounded A-to-B-to-A computed cycles are covered by focused tests. A three-bundle fixture additionally verifies A computed -> B computed -> C source with B's equality boundary, `+0 -> -0`, and bounded cross-runtime feedback. No shared scheduler, batch depth, or active subscriber was introduced.
+
+The actual duplicate-bundle React smoke builds three independent Prototype A bundles, each with its own bundled alien-signals installation, while keeping React external/shared. It verifies foreign computed equality suppression, identity-unstable computed freshness, first-observed render-to-commit race detection, change/revert detection, and exactly one protocol unsubscribe on unmount. Separate Vitest coverage also exercises React source/computed reads with jsdom. The focused Prototype A local/React/interop suite has 61 passing tests; the duplicate-copy core+React smoke passes.
+
+Latest local run: 100,000 operations, three warmups, nine samples, Node v24.21.0. The private full-interoperability Stage 4 medians were 36.97M read, 5.98M unobserved write, 4.47M observed, 3.63M computed, and 2.11M batch ops/s. Against the Phase 5 control from the accepted hardening run (33.87M / 7.34M / 1.42M / 1.53M / 0.59M), observed, computed, and batch remain materially faster (about 3.1x / 2.4x / 3.6x); read is near the control, while unobserved write is lower. Short isolated samples are noisy; these are directional rather than release budgets.
+
+| Foreign case (A consumes B/C) | M ops/s |
+| --- | ---: |
+| A effect <- B source | 1.67 |
+| A computed <- B source | 3.85 |
+| A effect <- B computed | 1.08 |
+| A computed <- B computed | 2.32 |
+| A effect with dynamic B/C foreign branches | 0.30 |
+
+The foreign cases use 100,000 mutations per sample with three warmups and nine samples; the dynamic B/C case alternates a local selector between sources owned by two foreign runtimes. It is intentionally more work than a single-edge update and is not a release budget. Rebuild the private harness with `pnpm build:prototype-a` before running `node --expose-gc benchmarks/prototypes/bench.mjs lean <case> 100000`.
+
+Final validation for this pass: `pnpm test` passed (320 runtime tests; 221 transform tests, 3 skipped); `pnpm typecheck`, `pnpm lint` (warnings only), `pnpm build`, `pnpm test:consumer`, `pnpm test:phase4-duplicate`, `pnpm test:prototype-a-duplicate`, `pnpm test:browser` (27/27), `pnpm size`, and `git diff --check` passed. Production files and exports are unchanged. The changed implementation/tests remain private to benchmarks and tests, plus this architecture note and npm scripts.
+
+`deepSignal` integration, production runtime migration, and React DOM throughput remain out of scope and unstarted. Do not start Phase 6. The results support continuing with the separately scoped `deepSignal` prototype, not a production cutover decision; production migration should wait for deep tracking validation and another performance review.
 
 The retained `src/core/render-tracking.ts` export of `activeRenderCollector` remains internal and is not re-exported by package entry points. A function accessor would add a call to the ordinary read path; the direct binding keeps that path shorter. `trackRenderDependency()` still delays the default-version lookup until a collector exists. Production test/build/export checks confirm no public API change. No production file was changed in this hardening pass.
 
