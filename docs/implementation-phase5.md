@@ -2,7 +2,7 @@
 
 ## Status
 
-Phase 5 runtime behavior, packaging migration, duplicate-package validation, and cleanup are implemented. The runtime architecture blocker is resolved: speculative computed-cache behavior is now unconditional and identical for the production singleton and independently constructed runtimes. The core is ready; freeze still needs a performance review because the observed-write/computed/batch and JSX benchmark deltas are large.
+Phase 5 runtime behavior, packaging migration, duplicate-package validation, and cleanup are implemented. The runtime architecture blocker is resolved: speculative computed-cache behavior is now unconditional and identical for the production singleton and independently constructed runtimes. The final performance review found large Phase 4-to-Phase 5 core regressions that the code inspection could not attribute quantitatively to specific correctness/interoperability costs. Phase 5 is not ready to freeze.
 
 No Phase 6 work has started. No git history operation was performed.
 
@@ -87,6 +87,51 @@ Final React benchmark (500 rows, 300 updates, 5 samples; median ms): hooks-naive
 
 These measurements are manual diagnostics, not CI thresholds. The large core observed/computed/batch and JSX deltas need a dedicated performance investigation before a release freeze. No Phase 6 optimization was started here.
 
+### Final Phase 4-to-Phase 5 performance review (2026-09-26)
+
+The primary A/B comparison used Phase 4 freeze `c7603dc1d389c08fa62c61a20a1fa4a294ad9715` and Phase 5 `f3f76bdc6bd00edfab584b0930087ada7bfea145`. Both ran on Windows x64 / AMD Ryzen 7 PRO 6850U with pnpm 11.24.0 and the repository's pinned Node runtime v24.20.0. The same benchmark scripts and iteration counts were used: core 100,000 operations, 3 warmups and 9 samples; deepSignal 50,000 operations and 9 samples; React 500 rows, 300 updates and 5 samples. The benchmark scripts did not differ between the revisions. Throughput ratios below are P5/P4; timings are median-derived. This A/B supersedes M0 comparisons for assessing migration impact. The isolated JSX smoke is a separate 200,000-call timing, not an ops/s suite.
+
+Core throughput (ops/s; lower means slower):
+
+| Case | Phase 4 | Phase 5 | P5/P4 | P4 p25–p75 ms | P5 p25–p75 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| signal read | 53.21M | 22.83M | 0.43× | 1.847–1.941 | 4.125–5.228 |
+| unobserved signal write | 41.40M | 27.26M | 0.66× | 2.350–2.536 | 3.032–18.570 |
+| observed signal write | 9.95M | 1.26M | 0.13× | 9.630–10.308 | 72.398–93.891 |
+| computed update/read | 8.01M | 1.35M | 0.17× | 12.388–12.991 | 65.656–78.148 |
+| two observed batch writes | 3.96M | 0.15M | 0.15× | 23.877–29.722 | 166.778–190.593 |
+
+DeepSignal throughput (ops/s; lower means slower):
+
+| Case | Phase 4 | Phase 5 | P5/P4 | P4 p25–p75 ms | P5 p25–p75 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| nested read | 1.79M | 1.34M | 0.75× | 27.449–29.442 | 32.127–38.603 |
+| observed leaf write | 0.77M | 0.37M | 0.48× | 61.547–85.823 | 127.002–150.352 |
+| sibling isolation | 1.57M | 1.38M | 0.88× | 30.456–32.398 | 33.248–37.954 |
+| parent replacement | 0.15M | 0.07M | 0.49× | 324.518–360.444 | 643.500–694.648 |
+| array push | 0.30M | 0.22M | 0.73× | 154.624–170.516 | 224.323–254.169 |
+
+React and JSX medians (ms; lower means faster):
+
+| Case | Phase 4 | Phase 5 | Change | Phase 4 p25–p75 ms | Phase 5 p25–p75 ms |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| hooks-naive control | 2,181.8 | 3,903.9 | +79% | 2,153.4–2,772.9 | 3,509.3–4,130.6 |
+| hooks-memo control | 843.3 | 1,650.6 | +96% | 810.8–1,037.5 | 1,608.1–1,871.1 |
+| signals | 177.5 | 208.6 | +18% | 175.7–178.1 | 200.0–210.6 |
+| signals-managed | 171.5 | 195.8 | +14% | 169.2–173.2 | 186.1–199.8 |
+| JSX component | 3,684.3 | 3,695.8 | +0.3% | 3,273.9–3,974.0 | 3,366.6–4,224.7 |
+| JSX host element | 3,095.0 | 4,608.1 | +49% | 2,621.4–3,212.9 | 4,536.1–4,804.6 |
+
+The plain React controls nearly doubled, so they demonstrate substantial environment/run-to-run noise in the React suite. JSX component time was effectively unchanged while host-element time increased; isolated JSX calls also rose from 638.7 to 726.8 ms for 200k custom-component calls and from 765.8 to 908.4 ms for 200k host calls. The JSX source and benchmark harness did not change. These JSX deltas are therefore inconclusive and are not used as the freeze blocker. The signals and signals-managed differences are smaller than the controls' movement.
+
+The core and deepSignal suites show much more repeatable, workload-specific regressions than the React controls. Source inspection found no repeated whole-graph liveness scan on source-only reads/writes: source dependencies bypass computed liveness scans; liveness scans are gated to computed/external nodes and graph-link changes. Source-only effects also bypass `system.checkDirty()`; computed dirty checking is gated by computed/foreign dependencies. Local dependency reads return before foreign interop publication. Speculative result/dependency capture is entered for render/speculative reads, not ordinary source-only effect updates. These findings rule out the suspected asymptotic whole-graph scan and identify the broad additional work as Phase 5 graph tracking, scheduler/lifecycle, and interop-safe bookkeeping, but do not apportion the measured constant-factor cost among those components.
+
+A temporary private-vs-public microbenchmark measured signal reads at 2.51 ms private vs 2.84 ms public per 100,000 operations (about 13% wrapper cost), and observed writes at 68.08 ms vs 77.34 ms (about 14%); unobserved write samples were too noisy to interpret. The public wrapper is not the explanation for the 7.9× observed-write, 5.9× computed, and 6.7× batch throughput differences. Individual interop collector scope, render-suppression scope, liveness bookkeeping, scheduler, and speculative-cache costs were inspected but not independently instrumented; no separate numerical overhead claim is made for them. A combined local fast-path/context-scope experiment was measured, did not improve any core case, and was fully reverted. No performance optimization remains in the runtime from this review.
+
+Classification: React control/JSX variation is **A, benchmark/environment noise**; wrapper delegation is a measured but modest Phase 5 cost (**C**, avoidable only via the explicitly deferred Phase 6 wrapper work); local scheduler, graph lifecycle, and cross-copy interop bookkeeping are plausible **B, expected Phase 5 correctness/interoperability costs**, but their exact contribution is unproven. The observed/computed/batch/deep deltas are therefore still an **unresolved Phase 5 performance blocker**, rather than being assumed acceptable. Direct subscriptions for `useSignalValue`/JSX, wrapper removal, and deepSignal redesign remain **E, Phase 6 opportunities**, and were not attempted.
+
+The cleanup error-reporting contract was corrected during this review: public effect body and cleanup failures now both report the documented `effect() callback threw` message with `{ cause }`, while retaining guarded error reporting. Public and private cleanup regression tests pin that exact message.
+
 ## Validation
 
 Final commands run on this worktree:
@@ -115,11 +160,11 @@ Packaging, size, examples, and docs: `package.json`, `pnpm-lock.yaml`, `scripts/
 
 ## Remaining work and next action
 
-- **Correctness blocker:** none found by the final test suites.
-- **Architecture blocker:** none. Singleton and independent runtime instances use one option-free implementation; focused, full, consumer, duplicate, build, size, and browser validations pass.
-- **Hardening/performance review:** before freeze, investigate observed writes, computed/batch, deep parent replacement, and JSX render cost. The measured core observed-write rate is about 11.6× lower than alien raw, computed update/read about 16.6× lower, and batch writes about 20.5× lower in the same run. React JSX render timings also regressed materially against M0. Retain `markWatched()` until a separately scoped pruning change proves the render-to-commit window safe.
+- **Correctness blocker:** none found; final focused and full correctness checks pass.
+- **Architecture blocker:** none found; the accepted Phase 5 architecture remains unchanged.
+- **Performance blocker:** same-environment Phase 4-to-Phase 5 observed writes, computed update/read, and batched observed writes remain 7.9×, 5.9×, and 6.7× slower respectively. Inspection excludes the hypothesized repeated whole-graph scans and avoids blaming the modest public wrapper cost, but the remaining constant-factor cost has not been measured by component. Keep Phase 5 open until this gap is either isolated to understood correctness/interoperability work or reduced by a semantics-preserving Phase 5 optimization. Retain `markWatched()` until a separately scoped pruning change proves the render-to-commit window safe.
 - **Future-version idea:** Phase 6 may consider direct private subscriptions for `useSignalValue`/JSX and later wrapper/pruning optimizations.
 
-The next action is a focused performance investigation/review, then a freeze decision. Do not begin Phase 6 until Phase 5 is explicitly frozen.
+The next action is to isolate the Phase 5 core hot-path overhead while preserving semantics, then reassess freeze. Do not begin Phase 6 until Phase 5 is explicitly frozen.
 
-**PHASE 5 CORE READY — PACKAGING/PERFORMANCE REVIEW REQUIRED**
+**PHASE 5 NOT READY — PERFORMANCE BLOCKER**

@@ -507,6 +507,9 @@ describe("computed error propagation", () => {
     // `console.error(message, { cause })` carrying the original error, and
     // contained there rather than re-raised from a microtask.
     expect(errorSpy).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls[0]?.[0]).toBe(
+      "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
+    );
     const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
     expect(reported?.cause).toBeInstanceOf(Error);
     expect((reported?.cause as Error | undefined)?.message).toBe("cleanup boom");

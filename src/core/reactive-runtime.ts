@@ -161,12 +161,10 @@ function unwrap<T>(result: Result<T>): T {
   return result.value;
 }
 
-function reportFailure(kind: "effect" | "cleanup", error: unknown): void {
+function reportFailure(error: unknown): void {
   try {
     console.error(
-      kind === "cleanup"
-        ? "react-fine-grained-signals: an effect cleanup callback threw; the error is contained and reported here so this flush can finish."
-        : "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
+      "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
       { cause: error },
     );
   } catch {
@@ -728,7 +726,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
       try {
         untracked(cleanup);
       } catch (error) {
-        reportFailure("cleanup", error);
+        reportFailure(error);
       }
       if (reaction.disposed || reaction.disposeRequested) return;
     }
@@ -749,7 +747,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
           () => untrackedRender(reaction.runCallback),
         );
     } catch (error) {
-      reportFailure("effect", error);
+      reportFailure(error);
     } finally {
       reactionDepth -= 1;
       activeSub = previousSub;
@@ -768,7 +766,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
         try {
           reaction.afterRun?.();
         } catch (error) {
-          reportFailure("effect", error);
+          reportFailure(error);
         }
       }
       flush();
@@ -810,7 +808,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
       try {
         untracked(cleanup);
       } catch (error) {
-        reportFailure("cleanup", error);
+        reportFailure(error);
       }
     }
   }

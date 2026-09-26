@@ -309,7 +309,9 @@ describe("private reactive runtime", () => {
     source.value = 1;
     expect(seen).toEqual([0, 1]);
     expect(reported).toHaveBeenCalledTimes(1);
-    expect(reported.mock.calls[0]?.[0]).toContain("cleanup callback threw");
+    expect(reported.mock.calls[0]?.[0]).toBe(
+      "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
+    );
     dispose();
     source.value = 2;
     expect(seen).toEqual([0, 1]);
