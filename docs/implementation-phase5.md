@@ -158,7 +158,7 @@ The strongest isolated result is the source-only effect runner path: directly in
 
 The public-vs-private control (100,000 operations, 3 warmups, 9 samples) measured private/public throughput of 37.19M/28.33M read, 9.20M/8.52M unobserved write, 1.55M/1.19M observed write, and 1.38M/1.39M computed update/read ops/s. Public read and observed-write medians were lower, but p25–p75 intervals overlapped or were noisy; this reconfirms that wrapper delegation is not the several-fold dominant cost. This control is diagnostic rather than a precision wrapper estimate.
 
-An allocation/GC signal was also measured at 10,000 operations: V8 emitted 45 GC events for raw alien, 117 for RFSG, and 80 for Preact across the adapter suites. This count includes the harness's explicit per-sample collections and is not a byte-allocation measurement; it indicates greater RFSG allocation/collection pressure but does not identify which allocation site dominates. No heap allocation profile was available in this pass.
+An allocation/GC signal was also measured at 10,000 operations: V8 emitted 45 GC events for raw alien, 117 for RFSG, and 80 for Preact across the adapter suites. This count includes the harness's explicit per-sample collections and is not a byte-allocation measurement; it indicates greater RFSG allocation/collection pressure but does not identify which allocation site dominates. The earlier attribution pass did not include a heap profile; the follow-up below adds sampled allocation call sites.
 
 Alien-signals v3.2.1 high-level source (`esm/index.mjs` and `esm/system.mjs`) handles a simple write by updating a source, propagating through graph links, running `checkDirty` as needed, executing the effect, and relinking/purging dependencies. RFSG uses that same low-level reactive system and adds: (1) public value wrappers — modest measured cost; (2) local/foreign graph collector and render isolation — their ablations did not improve throughput; (3) revision/error/result observation — required for render race detection, Object.is equality, and contained errors; (4) RFSG queue and reaction lifecycle — queue bypass alone did not help, but the broader runner/callback ablation recovered part of the source-only effect path; and (5) cross-copy/liveness state — liveness no-op did not affect these local benchmarks. The computed checkDirty ablation found a measurable computed-only cost, but safely bypassing it on a direct-local-source path needs a correct dependency-change shortcut; the attempted snapshot shortcut did not help.
 
@@ -195,10 +195,45 @@ Packaging, size, examples, and docs: `package.json`, `pnpm-lock.yaml`, `scripts/
 ## Remaining work and next action
 
 - **Correctness blocker:** none found; final focused and full correctness checks pass.
-- **Architecture blocker:** none found; the accepted Phase 5 architecture remains unchanged.
-- **Performance blocker:** final Phase 4-to-Phase 5 comparison shows observed writes, computed update/read, and batched observed writes at 0.16×, 0.19×, and 0.12× Phase 4 throughput. Ablations attribute a substantial part of source-only observed-write cost to the normal reaction runner, but the residual and the computed/batch gaps remain unexplained. Keep Phase 5 open until those costs are isolated to required behavior or reduced by semantics-preserving Phase 5 optimizations. Retain `markWatched()` until a separately scoped pruning change proves the render-to-commit window safe.
+- **Architecture blocker:** the private runtime candidate has been several-fold slower since its first Phase 2 checkpoint. The Phase 5 migration did not create most of this gap, but it promoted that candidate to production.
+- **Performance blocker:** Phase 5 observed, computed, and batch throughput still trails the Phase 4 public implementation by several-fold. Profiling identifies the tracked reaction/dependency and computed dirty-check paths, but current attribution does not show a semantics-preserving local optimization that closes the gap. Request a runtime performance architecture review before further optimization. Retain `markWatched()` until a separately scoped pruning change proves the render-to-commit window safe.
 - **Future-version idea:** Phase 6 may consider direct private subscriptions for `useSignalValue`/JSX and later wrapper/pruning optimizations.
 
-The next action is to isolate the Phase 5 core hot-path overhead while preserving semantics, then reassess freeze. Do not begin Phase 6 until Phase 5 is explicitly frozen.
+## Historical private-runtime comparison and profiling (2026-09-26)
 
-**PHASE 5 NOT READY — PERFORMANCE BLOCKER**
+This follow-up answers whether the Phase 5 migration introduced the main runtime cost. It does not: the Phase 2 low-level candidate already has the same low observed/computed/batch throughput order as Phases 3–5. The candidate architecture introduced the debt when it first appeared in Phase 2; Phase 5 made it the production path. The much faster Phase 4 public API was still using alien-signals' high-level implementation and is not evidence that the Phase 4 private candidate was fast.
+
+Measurements used Windows x64, AMD Ryzen 7 PRO 6850U, Node v24.21.0, pnpm v11.24.0, alien-signals v3.2.1, tsdown v0.22.14, 40,000 operations, three warmups, nine samples, one runtime/case per process, and median ops/s. Historical source snapshots were bundled as test-only entries; no package export changed. The process-separated measurements reduce cross-runtime JIT interference, though the short runs still show noise, especially for unobserved writes.
+
+| Runtime | Read | Unobserved write | Observed write | Computed update/read | Two-source computed batch |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Phase 2 private candidate | 39.8M | 4.0M | 1.42M | 1.06M | 0.67M |
+| Phase 3 private candidate | 46.8M | 4.0M | 1.32M | 1.17M | 0.65M |
+| Phase 4 public API | 51.0M | 42.1M | 8.92M | 8.98M | 3.67M |
+| Phase 4 private candidate | 28.0M | 4.32M | 1.19M | 0.97M | 0.42M |
+| Phase 5 private runtime | 36.9M | 7.08M | 1.00M | 1.12M | 0.45M |
+| Phase 5 public API | 34.9M | 7.00M | 1.00M | 1.01M | 0.34M |
+
+The Phase 2 private candidate was already about 5.5–8.5 times slower on observed, computed, and batch cases than the Phase 4 public implementation. Phase 4 private and Phase 5 private are broadly similar; no Phase 4→5 private-runtime performance cliff appears in these measurements. This puts the production regression in context: Phase 5 migrated to an existing slower candidate rather than creating most of its cost.
+
+CPU profiles ran as separate Node processes for observed source writes, computed write/read, and batch. In observed writes, `flush` and `runReaction` were the largest runtime self-time sites (about 401 ms and 281 ms in the sampled profile); `system.link` and `linkLocalDependency` were also visible (about 128 ms and 64 ms). Computed profiling concentrated in `ensureComputed`, `updateComputed`, `readComputedNormally`/`readComputedResult`, and `system.link`; batch profiling added substantial `checkDirty` and `recordReadableRead` time alongside `flush`, `runReaction`, and computed updates. These are profile attributions, not benchmark timings, and inclusive times overlap.
+
+Heap sampling (1 KiB sampling interval, isolated private-runtime bundle) found runtime allocation stacks in `flush`/`runReaction`, `updateComputed`, `observedResultsEqual`, `promoteSpeculativeCache`, and dependency linking. The sample trees do not reliably identify allocated object classes, and sampled sizes are not exact allocation totals. This profile does not justify attributing the cost to Maps, Sets, arrays, or Results specifically.
+
+V8 `--trace-opt --trace-deopt` showed hot helpers including `runReaction`, `flush`, `ensureComputed`, `updateComputed`, `readComputedResult`, `linkLocalDependency`, and alien `system.link` reaching Maglev/TurboFan. Some later deoptimized on generic property feedback or object-map changes. This diagnostic suggests shape/feedback sensitivity, but does not by itself explain the measured gap or justify a production change.
+
+Runner experiments were attribution-only and reverted. Removing error/cleanup/afterRun handling while preserving graph tracking did not produce a repeatable improvement. Splitting tracked callback execution into a helper while preserving behavior was also neutral within run-to-run noise. Omitting two reaction-state resets did not produce a repeatable gain. The earlier direct-callback bypass recovers source-write throughput only by skipping required runner semantics, so it is not a valid fast path. No specialized reaction type or semantics-preserving source-effect fast path was retained; the evidence points to the combined tracked reaction/dependency path rather than one removable lifecycle clause.
+
+Batch decomposition confirms that the combined benchmark is not measuring `batch()` alone. Phase 4 private versus Phase 5 private medians were about 18.2M versus 158M empty batches, 2.10M versus 2.75M two unobserved writes in a batch, 1.34M versus 1.19M one observed write in a batch, 0.99M versus 0.86M two observed sources to a direct effect, and 0.48M versus 0.44M for the full computed batch. The empty-batch case is tiny relative to propagation cases; adding a computed dependency costs substantially more in both private runtimes. `checkDirty` remains necessary for accepted semantics; no revision shortcut was retained.
+
+No production optimization was retained, no profiler or benchmark harness was kept, and all temporary historical bundles and variants were removed. The core performance debt is present from the first private candidate checkpoint and remains several-fold behind the Phase 4 public baseline. The existing tracked fast-path attribution did not recover that gap while preserving semantics. This meets the escalation condition: request a runtime performance architecture review before deciding on internal redesign. Phase 6 remains deferred, and Phase 5 is not ready to freeze.
+
+Follow-up validation after removing all temporary code: `pnpm test` passed (259 runtime tests; 221 transform tests, 3 skipped); `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test:consumer`, `pnpm test:phase4-duplicate`, `pnpm test:browser` (27/27), `pnpm size`, and `git diff --check` passed. Lint reported existing warnings only; the build reported TypeScript 7's experimental API warning.
+
+**Historical status at this checkpoint: PHASE 5 RUNTIME PERFORMANCE ARCHITECTURE REVIEW REQUIRED**
+
+## Architecture review follow-up (2026-09-26)
+
+The architecture study is recorded in [`runtime-architecture-review.md`](./runtime-architecture-review.md), with isolated local measurements and test-only prototypes in `benchmarks/prototypes/`. Prototype A measured about 2.4–4.5x the current runtime's throughput in observed, computed, and batch cases, while remaining slower than alien-signals high-level. Its optional revision sidecar measured about 10–13% lower throughput in those cases; full React tracking and cross-runtime interop remain unmeasured. Prototype B was stopped early because high-level alien does not expose the last-consumer lifecycle needed for a clean foreign bridge, and its cached computed graph complicates speculative React reads.
+
+This is evidence that runtime implementation shape contributes substantially to the performance debt, not a production cutover decision. Prototype A is the preferred candidate for a separately scoped continuation; production readiness remains inconclusive. Phase 6 was not started.
