@@ -217,7 +217,7 @@ try {
       );
     }
 
-    render(React.createElement(DeepTrackedReader));
+    const deepView = render(React.createElement(DeepTrackedReader));
     assert.equal(screen.getByLabelText("tracked cross-copy deep value").textContent, "Ada");
     const deepRenderCount = deepRenders.length;
     await act(async () => {
@@ -229,6 +229,19 @@ try {
     });
     assert.equal(screen.getByLabelText("tracked cross-copy deep value").textContent, "Grace");
     assert.equal(deepRenders.length, deepRenderCount + 1);
+
+    const previousRoot = trackedState.value;
+    await act(async () => {
+      trackedState.value = { profile: { name: "Lin", age: 20 } };
+    });
+    assert.equal(screen.getByLabelText("tracked cross-copy deep value").textContent, "Lin");
+    assert.equal(deepRenders.length, deepRenderCount + 2, "root replacement notifies the public cross-copy reader");
+    await act(async () => deepView.unmount());
+    await act(async () => {
+      previousRoot.profile.name = "stale";
+      trackedState.value.profile.name = "after unmount";
+    });
+    assert.equal(deepRenders.length, deepRenderCount + 2, "unmount releases the public cross-copy deep subscription");
 
     const computedSource = copyB.signal("before");
     const foreignComputed = copyB.computed(() => computedSource.value.toUpperCase());

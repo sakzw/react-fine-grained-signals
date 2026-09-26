@@ -1,11 +1,6 @@
 import os from "node:os";
 import { JSDOM } from "jsdom";
 import { appendFileSync } from "node:fs";
-import {
-  createLeanRuntime,
-  useManagedSignals as useLeanManagedSignals,
-  useSignalTracking as useLeanSignalTracking,
-} from "../node_modules/.cache/prototype-a/lean-entry.js";
 
 // A plain `node` process has no DOM. Stand one up with jsdom before anything
 // that touches `window`/`document` is imported (dynamic `import()` is used
@@ -32,7 +27,7 @@ const { signal, computed, useSignalTracking } = await import("../dist/index.js")
 // The bundler plugin's shipped default (`transform: "managed"`, since commit
 // 57f824e) never calls the bare `useSignalTracking()` above -- it rewrites call
 // sites to this runtime entry point's managed boundary instead. Imported
-// under an alias so both variants can be benchmarked side by side.
+// the production runtime entry point's managed boundary.
 const { useManagedSignals } = await import("../dist/runtime.js");
 // The JSX pragma a compiled `.tsx` file actually calls -- `jsx`/`jsxs` wrap
 // `react/jsx-runtime`'s own factories with `createJsxWrapper` (src/runtime/jsx.ts),
@@ -71,14 +66,9 @@ const renderCounts = {
   hooksMemo: { counter: 0, siblings: 0 },
   signals: { counter: 0, siblings: 0 },
   signalsManaged: { counter: 0, siblings: 0 },
-  lean: { counter: 0, siblings: 0 },
-  leanManaged: { counter: 0, siblings: 0 },
-  unrelatedCurrent: { counter: 0, siblings: 0 },
-  unrelatedLean: { counter: 0, siblings: 0 },
-  equalityCurrent: { counter: 0, siblings: 0 },
-  equalityLean: { counter: 0, siblings: 0 },
-  manyCurrent: { counter: 0, siblings: 0 },
-  manyLean: { counter: 0, siblings: 0 },
+  unrelatedProduction: { counter: 0, siblings: 0 },
+  equalityProduction: { counter: 0, siblings: 0 },
+  manyProduction: { counter: 0, siblings: 0 },
   jsxComponent: { counter: 0, siblings: 0 },
   jsxHostElement: { counter: 0, siblings: 0 },
 };
@@ -196,39 +186,8 @@ function createManagedSignalsVariant(counts) {
   return { App: ManagedSignalsApp, count };
 }
 
-function createLeanSignalsVariant(counts, managed) {
-  const runtime = createLeanRuntime(() => undefined);
-  const count = runtime.signal(0);
-  function renderCounter() {
-    counts.counter += 1;
-    return React.createElement("li", null, "count:", count.value);
-  }
-  function LeanCounter() {
-    const store = useLeanManagedSignals();
-    try {
-      return renderCounter();
-    } finally {
-      store.finish();
-    }
-  }
-  function UnmanagedLeanCounter() { useLeanSignalTracking(); return renderCounter(); }
-  function LeanSibling(props) {
-    counts.siblings += 1;
-    return React.createElement("li", null, "row ", props.index);
-  }
-  function LeanApp() {
-    return React.createElement("ul", null,
-      React.createElement(managed ? LeanCounter : UnmanagedLeanCounter),
-      ...buildSiblingElements(LeanSibling, rows),
-    );
-  }
-  return { App: LeanApp, count };
-}
-
-function createControlledSignalsVariant(counts, lean, managed, mode) {
-  const runtime = lean ? createLeanRuntime(() => undefined) : { signal, computed };
-  const useManaged = lean ? useLeanManagedSignals : useManagedSignals;
-  const useUnmanaged = lean ? useLeanSignalTracking : useSignalTracking;
+function createControlledSignalsVariant(counts, managed, mode) {
+  const runtime = { signal, computed };
   const displayed = runtime.signal(0);
   const trigger = mode === "unrelated" ? runtime.signal(0) : displayed;
   const value = mode === "equality" ? runtime.computed(() => Math.floor(trigger.value / 10)) : displayed;
@@ -237,14 +196,14 @@ function createControlledSignalsVariant(counts, lean, managed, mode) {
     return React.createElement("li", null, "count:", value.value);
   }
   function Counter() {
-    const store = useManaged();
+    const store = useManagedSignals();
     try {
       return renderCounter();
     } finally {
       store.finish();
     }
   }
-  function UnmanagedCounter() { useUnmanaged(); return renderCounter(); }
+  function UnmanagedCounter() { useSignalTracking(); return renderCounter(); }
   function Sibling(props) {
     counts.siblings += 1;
     return React.createElement("li", null, "row ", props.index);
@@ -260,13 +219,12 @@ function createControlledSignalsVariant(counts, lean, managed, mode) {
   };
 }
 
-function createManySubscriberVariant(counts, lean) {
-  const runtime = lean ? createLeanRuntime(() => undefined) : { signal };
-  const useTracking = lean ? useLeanSignalTracking : useSignalTracking;
+function createManySubscriberVariant(counts) {
+  const runtime = { signal };
   const sources = Array.from({ length: rows }, () => runtime.signal(0));
   const renders = Array(rows).fill(0);
   function Leaf({ index }) {
-    useTracking();
+    useSignalTracking();
     counts.siblings += 1;
     renders[index] += 1;
     return React.createElement("li", null, sources[index].value);
@@ -378,14 +336,9 @@ const { App: HooksMemoApp, handle: hooksMemoHandle } = createHooksVariant(render
 const { App: SignalsApp, count: signalsCount } = createSignalsVariant(renderCounts.signals);
 const { App: ManagedSignalsApp, count: managedSignalsCount } =
   createManagedSignalsVariant(renderCounts.signalsManaged);
-const { App: LeanSignalsApp, count: leanSignalsCount } = createLeanSignalsVariant(renderCounts.lean, false);
-const { App: LeanManagedSignalsApp, count: leanManagedSignalsCount } = createLeanSignalsVariant(renderCounts.leanManaged, true);
-const unrelatedCurrent = createControlledSignalsVariant(renderCounts.unrelatedCurrent, false, false, "unrelated");
-const unrelatedLean = createControlledSignalsVariant(renderCounts.unrelatedLean, true, false, "unrelated");
-const equalityCurrent = createControlledSignalsVariant(renderCounts.equalityCurrent, false, false, "equality");
-const equalityLean = createControlledSignalsVariant(renderCounts.equalityLean, true, false, "equality");
-const manyCurrent = createManySubscriberVariant(renderCounts.manyCurrent, false);
-const manyLean = createManySubscriberVariant(renderCounts.manyLean, true);
+const unrelatedProduction = createControlledSignalsVariant(renderCounts.unrelatedProduction, false, "unrelated");
+const equalityProduction = createControlledSignalsVariant(renderCounts.equalityProduction, false, "equality");
+const manyProduction = createManySubscriberVariant(renderCounts.manyProduction);
 const { App: JsxComponentApp, handle: jsxComponentHandle } = createJsxComponentVariant(renderCounts.jsxComponent);
 const { App: JsxHostApp, handle: jsxHostHandle } = createJsxHostVariant(renderCounts.jsxHostElement);
 
@@ -489,38 +442,23 @@ const allVariants = [
     },
     getStart: () => managedSignalsCount.value,
   }),
-  makeVariant({
-    name: "lean",
-    counts: renderCounts.lean,
-    expectedSiblingRenders: () => rows,
-    App: LeanSignalsApp,
-    increment: () => { leanSignalsCount.value += 1; },
-    getStart: () => leanSignalsCount.value,
-  }),
-  makeVariant({
-    name: "lean-managed",
-    counts: renderCounts.leanManaged,
-    expectedSiblingRenders: () => rows,
-    App: LeanManagedSignalsApp,
-    increment: () => { leanManagedSignalsCount.value += 1; },
-    getStart: () => leanManagedSignalsCount.value,
-  }),
-  ...[ ["unrelated-current", unrelatedCurrent, renderCounts.unrelatedCurrent], ["unrelated-lean", unrelatedLean, renderCounts.unrelatedLean] ].map(([name, instance, counts]) => makeVariant({
-    name, counts, expectedSiblingRenders: () => rows, App: instance.App,
+  ...[["unrelated-production", unrelatedProduction], ["equality-production", equalityProduction]].map(([name, instance]) => makeVariant({
+    name, counts: renderCounts[name === "unrelated-production" ? "unrelatedProduction" : "equalityProduction"],
+    expectedSiblingRenders: () => rows, App: instance.App,
     increment: instance.increment, getStart: instance.getStart,
-    expectedCounterRenders: () => 1, expectedDisplay: (start) => start,
+    expectedCounterRenders: name === "unrelated-production" ? () => 1 : (count) => Math.floor(count / 10) + 1,
+    expectedDisplay: name === "unrelated-production" ? (start) => start : (start, count) => start + Math.floor(count / 10),
   })),
-  ...[ ["equality-current", equalityCurrent, renderCounts.equalityCurrent], ["equality-lean", equalityLean, renderCounts.equalityLean] ].map(([name, instance, counts]) => makeVariant({
-    name, counts, expectedSiblingRenders: () => rows, App: instance.App,
-    increment: instance.increment, getStart: instance.getStart,
-    expectedCounterRenders: (count) => Math.floor(count / 10) + 1,
-    expectedDisplay: (start, count) => start + Math.floor(count / 10),
-  })),
-  ...[ ["many-current", manyCurrent, renderCounts.manyCurrent], ["many-lean", manyLean, renderCounts.manyLean] ].map(([name, instance, counts]) => makeVariant({
-    name, counts, expectedSiblingRenders: (count) => rows * (count + 1),
-    App: instance.App, increment: instance.increment, getStart: instance.getStart,
-    customCheck: instance.customCheck, reset: instance.reset,
-  })),
+  makeVariant({
+    name: "many-production",
+    counts: renderCounts.manyProduction,
+    expectedSiblingRenders: (count) => rows * (count + 1),
+    App: manyProduction.App,
+    increment: manyProduction.increment,
+    getStart: manyProduction.getStart,
+    customCheck: manyProduction.customCheck,
+    reset: manyProduction.reset,
+  }),
   makeVariant({
     name: "jsx-component",
     counts: renderCounts.jsxComponent,

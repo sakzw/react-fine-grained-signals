@@ -64,6 +64,66 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
+  it("isolates an initial effect created by a speculative getter", () => {
+    const state = deepSignal({ user: { name: "Ada" } });
+    const seen: string[] = [];
+    let cleanupRuns = 0;
+    let stop: (() => void) | undefined;
+    const outer = computed(() => {
+      stop ??= effect(() => {
+        seen.push(state.value.user.name);
+        return () => { cleanupRuns += 1; };
+      });
+      return 7;
+    });
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="initial-effect-deep">{outer.value}</output>;
+    }
+
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(<Reader />);
+    expect(seen).toEqual(["Ada"]);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    const renderCount = renders.mock.calls.length;
+
+    act(() => { state.value.user.name = "Grace"; });
+    expect(seen).toEqual(["Ada", "Grace"]);
+    expect(renders).toHaveBeenCalledTimes(renderCount);
+    expect(cleanupRuns).toBe(1);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+
+    stop!();
+    expect(cleanupRuns).toBe(2);
+    act(() => { state.value.user.name = "Lin"; });
+    expect(seen).toEqual(["Ada", "Grace"]);
+  });
+
+  it("keeps a speculative deep computed fresh without looping when it returns a new object", () => {
+    const state = deepSignal({ user: { name: "Ada", age: 36 } });
+    const viewModel = computed(() => ({ label: state.value.user.name }));
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="unstable-deep">{viewModel.value.label}</output>;
+    }
+
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(<Reader />);
+    expect(screen.getByLabelText("unstable-deep").textContent).toBe("Ada");
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBeGreaterThan(epoch);
+    expect(renders.mock.calls.length).toBeLessThan(4);
+
+    act(() => { state.value.user.age = 37; });
+    expect(renders.mock.calls.length).toBeLessThan(4);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(screen.getByLabelText("unstable-deep").textContent).toBe("Grace");
+    expect(renders.mock.calls.length).toBeLessThan(4);
+  });
+
   it("keeps a production nested computed durable through peek without subscribing the outer", () => {
     const state = deepSignal({ user: { name: "Ada" } });
     const evaluateNested = vi.fn(() => state.value.user.name);
