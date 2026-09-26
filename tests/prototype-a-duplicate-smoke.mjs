@@ -59,6 +59,23 @@ try {
   assert.equal(seen.length, 2, "Object.is distinguishes +0 and -0 across bundled runtimes");
   dispose();
 
+  const chooseForeignA = runtimeA.signal(false);
+  const localA = runtimeA.signal(1);
+  const foreignB = runtimeB.signal(10);
+  const selectedA = runtimeA.computed(() => chooseForeignA.value ? foreignB.value : localA.value);
+  const transitionSeen = [];
+  const disposeTransition = runtimeA.effect(() => transitionSeen.push(selectedA.value));
+  assert.deepEqual(transitionSeen, [1]);
+  chooseForeignA.value = true;
+  assert.deepEqual(transitionSeen, [1, 10]);
+  foreignB.value = 11;
+  assert.deepEqual(transitionSeen, [1, 10, 11], "copy A activates copy B after a live computed changes branch");
+  chooseForeignA.value = false;
+  const localTransitionCount = transitionSeen.length;
+  foreignB.value = 12;
+  assert.equal(transitionSeen.length, localTransitionCount, "copy A releases copy B after returning local");
+  disposeTransition();
+
   const enableCycle = runtimeA.signal(false);
   let cyclicA;
   const cyclicB = runtimeB.computed(() => cyclicA.value + 1);

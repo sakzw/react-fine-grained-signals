@@ -279,6 +279,10 @@ export function createLeanRuntime(
     }
   }
 
+  function synchronizeComputedLiveness(node: ComputedNode<unknown>): void {
+    setComputedLive(node, node.foreignDependent && hasLiveConsumer(node));
+  }
+
   function deactivateExternal(node: ExternalNode): void {
     const subscription = node.subscription;
     node.subscription = undefined;
@@ -528,8 +532,8 @@ export function createLeanRuntime(
     } finally {
       activeSub = previousSub;
       node.flags &= ~RecursedCheck;
-      if (!node.foreignDependent) setComputedLive(node, false);
       purgeDeps(node);
+      synchronizeComputedLiveness(node);
       // Retain these reads to make error->error equality behavior explicit in
       // this prototype: every reevaluation that throws invalidates dependents.
       void oldError;
@@ -707,6 +711,7 @@ export function createLeanRuntime(
       node.flags &= ~RecursedCheck;
     }
     purgeDeps(node);
+    synchronizeComputedLiveness(node);
     return true;
   }
 

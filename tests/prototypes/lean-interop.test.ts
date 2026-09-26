@@ -19,6 +19,53 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function instrumentForeignReadable<T>(source: { readonly value: T }, onSubscribe?: () => void) {
+  const sourceProtocol = getReadableInterop(source)!;
+  let subscribeCount = 0;
+  let unsubscribeCount = 0;
+  let listenerCount = 0;
+  const protocol: ReadableInteropV1 = {
+    version: 1,
+    runtimeToken: sourceProtocol.runtimeToken,
+    getRevision: () => sourceProtocol.getRevision(),
+    subscribe(listener) {
+      subscribeCount += 1;
+      listenerCount += 1;
+      const subscription = sourceProtocol.subscribe(listener);
+      onSubscribe?.();
+      return {
+        revision: subscription.revision,
+        unsubscribe() {
+          unsubscribeCount += 1;
+          listenerCount -= 1;
+          subscription.unsubscribe();
+        },
+      };
+    },
+  };
+  const readable = Object.defineProperty({}, "value", { get() {
+    const observedRevision = sourceProtocol.getRevision();
+    const context = getSharedInteropContext();
+    const graphCollector = context.graphCollector;
+    context.graphCollector = undefined;
+    let value: T;
+    try {
+      value = source.value;
+    } finally {
+      context.graphCollector = graphCollector;
+    }
+    graphCollector?.add(protocol, observedRevision);
+    return value;
+  } });
+  attachReadableInterop(readable, protocol);
+  return {
+    readable: readable as { readonly value: T },
+    get subscribeCount() { return subscribeCount; },
+    get unsubscribeCount() { return unsubscribeCount; },
+    get listenerCount() { return listenerCount; },
+  };
+}
+
 describe("Prototype A cross-runtime interop", () => {
   it("attaches one stable non-enumerable V1 protocol per readable and unique runtime tokens", () => {
     const first = createLeanRuntime();
@@ -83,11 +130,14 @@ describe("Prototype A cross-runtime interop", () => {
     const runtimeA = createLeanRuntime(() => undefined);
     const runtimeB = createLeanRuntime(() => undefined);
     const source = runtimeB.signal(1);
-    const inner = runtimeA.computed(() => source.value * 2);
+    const foreign = instrumentForeignReadable(source);
+    const inner = runtimeA.computed(() => foreign.readable.value * 2);
     const outer = runtimeA.computed(() => inner.value + 1);
     expect(outer.value).toBe(3);
+    expect(foreign.subscribeCount).toBe(0);
     source.value = 4;
     expect(outer.value).toBe(9);
+    expect(foreign.subscribeCount).toBe(0);
   });
 
   it("keeps a foreign computed equality boundary", () => {
@@ -243,5 +293,142 @@ describe("Prototype A cross-runtime interop", () => {
     act(() => { source.value = 2; });
     expect(screen.getByLabelText("foreign-react").textContent).toBe("4");
     expect(renders.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it("activates a newly foreign dependency of an already-live computed in React", () => {
+    const runtimeA = createLeanRuntime(() => undefined);
+    const runtimeB = createLeanRuntime(() => undefined);
+    const chooseForeign = runtimeA.signal(false);
+    const local = runtimeA.signal(1);
+    const foreignSource = runtimeB.signal(10);
+    const foreign = instrumentForeignReadable(foreignSource);
+    const selected = runtimeA.computed(() => chooseForeign.value ? foreign.readable.value : local.value);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return React.createElement("output", { "aria-label": "dynamic-foreign" }, selected.value);
+    }
+    render(React.createElement(Reader));
+    expect(screen.getByLabelText("dynamic-foreign").textContent).toBe("1");
+    expect(foreign.subscribeCount).toBe(0);
+    act(() => { chooseForeign.value = true; });
+    expect(screen.getByLabelText("dynamic-foreign").textContent).toBe("10");
+    expect(foreign.subscribeCount).toBe(1);
+    act(() => { foreignSource.value = 11; });
+    expect(screen.getByLabelText("dynamic-foreign").textContent).toBe("11");
+    expect(renders.mock.calls.length).toBeGreaterThan(2);
+  });
+
+  it("activates, releases, and reactivates foreign liveness through a live protocol-watched computed chain", () => {
+    const runtimeA = createLeanRuntime(() => undefined);
+    const runtimeB = createLeanRuntime(() => undefined);
+    const runtimeC = createLeanRuntime(() => undefined);
+    const chooseForeign = runtimeA.signal(false);
+    const local = runtimeA.signal(1);
+    const foreignSource = runtimeB.signal(10);
+    const foreign = instrumentForeignReadable(foreignSource);
+    const inner = runtimeA.computed(() => chooseForeign.value ? foreign.readable.value : local.value);
+    const outer = runtimeA.computed(() => inner.value + 1);
+    const seen: number[] = [];
+    const dispose = runtimeC.effect(() => { seen.push(outer.value); });
+    expect(seen).toEqual([2]);
+    expect(foreign.subscribeCount).toBe(0);
+
+    chooseForeign.value = true;
+    expect(seen).toEqual([2, 11]);
+    expect(foreign.subscribeCount).toBe(1);
+    expect(foreign.listenerCount).toBe(1);
+    foreignSource.value = 11;
+    expect(seen).toEqual([2, 11, 12]);
+
+    chooseForeign.value = false;
+    expect(seen).toEqual([2, 11, 12, 2]);
+    expect(foreign.unsubscribeCount).toBe(1);
+    expect(foreign.listenerCount).toBe(0);
+    const runsAfterLocalBranch = seen.length;
+    foreignSource.value = 12;
+    expect(seen).toHaveLength(runsAfterLocalBranch);
+
+    chooseForeign.value = true;
+    expect(foreign.subscribeCount).toBe(2);
+    foreignSource.value = 13;
+    expect(seen.at(-1)).toBe(14);
+    dispose();
+    expect(foreign.unsubscribeCount).toBe(2);
+    expect(foreign.listenerCount).toBe(0);
+  });
+
+  it("swaps live subscriptions from foreign B to foreign C and prunes the inactive branch", () => {
+    const runtimeA = createLeanRuntime(() => undefined);
+    const runtimeB = createLeanRuntime(() => undefined);
+    const runtimeC = createLeanRuntime(() => undefined);
+    const chooseB = runtimeA.signal(true);
+    const leftSource = runtimeB.signal("B1");
+    const rightSource = runtimeC.signal("C1");
+    const left = instrumentForeignReadable(leftSource);
+    const right = instrumentForeignReadable(rightSource);
+    const selected = runtimeA.computed(() => chooseB.value ? left.readable.value : right.readable.value);
+    const seen: string[] = [];
+    const dispose = runtimeA.effect(() => { seen.push(selected.value); });
+    expect(seen).toEqual(["B1"]);
+    expect([left.subscribeCount, right.subscribeCount]).toEqual([1, 0]);
+
+    chooseB.value = false;
+    expect(seen).toEqual(["B1", "C1"]);
+    expect([left.unsubscribeCount, right.subscribeCount]).toEqual([1, 1]);
+    leftSource.value = "B-stale";
+    expect(seen).toEqual(["B1", "C1"]);
+    rightSource.value = "C2";
+    expect(seen).toEqual(["B1", "C1", "C2"]);
+
+    dispose();
+    expect([left.subscribeCount, left.unsubscribeCount, left.listenerCount]).toEqual([1, 1, 0]);
+    expect([right.subscribeCount, right.unsubscribeCount, right.listenerCount]).toEqual([1, 1, 0]);
+  });
+
+  it("retains read-to-subscribe race invalidation when a live local branch becomes foreign", () => {
+    const runtimeA = createLeanRuntime(() => undefined);
+    const runtimeB = createLeanRuntime(() => undefined);
+    const chooseForeign = runtimeA.signal(false);
+    const local = runtimeA.signal(1);
+    const foreignSource = runtimeB.signal(10);
+    let race = true;
+    const foreign = instrumentForeignReadable(foreignSource, () => {
+      if (race) {
+        race = false;
+        foreignSource.value = 11;
+      }
+    });
+    const selected = runtimeA.computed(() => chooseForeign.value ? foreign.readable.value : local.value);
+    const seen: number[] = [];
+    const dispose = runtimeA.effect(() => { seen.push(selected.value); });
+    chooseForeign.value = true;
+    expect(seen.at(-1)).toBe(11);
+    expect(foreign.subscribeCount).toBe(1);
+    expect(foreign.listenerCount).toBe(1);
+    dispose();
+    expect(foreign.unsubscribeCount).toBe(1);
+    expect(foreign.listenerCount).toBe(0);
+  });
+
+  it("makes speculative foreign dependencies live when the cached graph is promoted", () => {
+    const runtimeA = createLeanRuntime(() => undefined);
+    const runtimeB = createLeanRuntime(() => undefined);
+    const foreignSource = runtimeB.signal(4);
+    const foreign = instrumentForeignReadable(foreignSource);
+    const selected = runtimeA.computed(() => foreign.readable.value * 2);
+    const candidate = runtimeA.speculate(() => selected.value);
+    expect(candidate.value).toBe(8);
+    expect(candidate.isCurrent()).toBe(true);
+    expect(foreign.subscribeCount).toBe(0);
+    const seen: number[] = [];
+    const dispose = runtimeA.effect(() => { seen.push(selected.value); });
+    expect(seen).toEqual([8]);
+    expect(foreign.subscribeCount).toBe(1);
+    foreignSource.value = 5;
+    expect(seen).toEqual([8, 10]);
+    dispose();
+    expect(foreign.unsubscribeCount).toBe(1);
   });
 });
