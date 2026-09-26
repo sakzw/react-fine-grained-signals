@@ -6,7 +6,7 @@
  * cross-runtime support so their costs can be measured separately later.
  */
 import * as alienSystem from "alien-signals/system";
-import type { ReactiveNode } from "alien-signals/system";
+import type { Link, ReactiveNode } from "alien-signals/system";
 
 // alien-signals/system declares these as a const enum, so keep the runtime
 // values local just as alien-signals' high-level entry does.
@@ -17,12 +17,19 @@ const Dirty = 16;
 const Pending = 32;
 const { createReactiveSystem } = alienSystem;
 
-type SignalNode<T> = ReactiveNode & {
+type PrototypeNode = Omit<ReactiveNode, "deps" | "depsTail" | "subs" | "subsTail"> & {
+  deps: Link | undefined;
+  depsTail: Link | undefined;
+  subs: Link | undefined;
+  subsTail: Link | undefined;
+};
+
+type SignalNode<T> = PrototypeNode & {
   currentValue: T;
   pendingValue: T;
 };
 
-type ComputedNode<T> = ReactiveNode & {
+type ComputedNode<T> = PrototypeNode & {
   getter: () => T;
   initialized: boolean;
   hasError: boolean;
@@ -30,7 +37,7 @@ type ComputedNode<T> = ReactiveNode & {
   error: unknown;
 };
 
-type EffectNode = ReactiveNode & {
+type EffectNode = PrototypeNode & {
   fn: () => void | (() => void);
   cleanup: (() => void) | undefined;
   active: boolean;
@@ -61,7 +68,7 @@ export function createLeanRuntime(
   onEffectError: (error: unknown) => void = reportError,
   options: { renderRevisionSidecar?: boolean } = {},
 ): LeanRuntime {
-  let activeSub: ReactiveNode | undefined;
+  let activeSub: PrototypeNode | undefined;
   let cycle = 0;
   let runDepth = 0;
   let batchDepth = 0;
@@ -69,17 +76,17 @@ export function createLeanRuntime(
   let queuedLength = 0;
   const queue: Array<EffectNode | undefined> = [];
   const renderRevisions = options.renderRevisionSidecar
-    ? new WeakMap<ReactiveNode, number>()
+    ? new WeakMap<PrototypeNode, number>()
     : undefined;
-  let activeRenderReads: Map<ReactiveNode, number> | undefined;
-  const renderingComputeds = new Set<ReactiveNode>();
+  let activeRenderReads: Map<PrototypeNode, number> | undefined;
+  const renderingComputeds = new Set<PrototypeNode>();
 
   const bumpRenderRevision = renderRevisions === undefined
-    ? (_node: ReactiveNode) => {}
-    : (node: ReactiveNode) => renderRevisions.set(node, (renderRevisions.get(node) ?? 0) + 1);
+    ? (_node: PrototypeNode) => {}
+    : (node: PrototypeNode) => renderRevisions.set(node, (renderRevisions.get(node) ?? 0) + 1);
   const getRenderVersion = renderRevisions === undefined
-    ? (_node: ReactiveNode) => 0
-    : (node: ReactiveNode) => renderRevisions.get(node) ?? 0;
+    ? (_node: PrototypeNode) => 0
+    : (node: PrototypeNode) => renderRevisions.get(node) ?? 0;
 
   const system = createReactiveSystem({
     update(node) {
@@ -117,26 +124,23 @@ export function createLeanRuntime(
   });
 
   const { link, unlink, propagate, checkDirty, shallowPropagate } = system;
+  const asReactiveNode = (node: PrototypeNode): ReactiveNode => node as unknown as ReactiveNode;
 
-  function track(node: ReactiveNode): void {
+  function track(node: PrototypeNode): void {
     const subscriber = activeSub;
     if (subscriber === undefined || subscriber === node) return;
     if ("fn" in subscriber) {
       const effect = subscriber as EffectNode;
       if (!effect.active) return;
     }
-    link(node, subscriber, cycle);
+    link(asReactiveNode(node), asReactiveNode(subscriber), cycle);
   }
 
-  function purgeDeps(subscriber: ReactiveNode): void {
+  function purgeDeps(subscriber: PrototypeNode): void {
     let depLink = subscriber.depsTail !== undefined
       ? subscriber.depsTail.nextDep
       : subscriber.deps;
-    while (depLink !== undefined) depLink = unlink(depLink, subscriber);
-  }
-
-  function clearDepsTail(node: ReactiveNode): void {
-    Object.assign(node, { depsTail: undefined });
+    while (depLink !== undefined) depLink = unlink(depLink, asReactiveNode(subscriber));
   }
 
   function updateComputed<T>(node: ComputedNode<T>): boolean {
@@ -145,7 +149,7 @@ export function createLeanRuntime(
     const oldHadError = node.hasError;
     const oldValue = node.value;
     const oldError = node.error;
-    clearDepsTail(node);
+    node.depsTail = undefined;
     node.flags = Mutable | RecursedCheck;
     const previousSub = activeSub;
     activeSub = node;
@@ -188,7 +192,7 @@ export function createLeanRuntime(
 
   function readSignalWithRender<T>(node: SignalNode<T>): T {
     if (activeRenderReads !== undefined) {
-      activeRenderReads.set(node, getRenderVersion(node));
+      if (!activeRenderReads.has(node)) activeRenderReads.set(node, getRenderVersion(node));
       return node.flags & Dirty ? node.pendingValue : node.currentValue;
     }
     return readSignalCore(node);
@@ -201,7 +205,7 @@ export function createLeanRuntime(
     const flags = node.flags;
     if (
       (flags & Dirty) ||
-      ((flags & Pending) && node.deps !== undefined && checkDirty(node.deps, node))
+      ((flags & Pending) && node.deps !== undefined && checkDirty(node.deps, asReactiveNode(node)))
     ) {
       if (updateComputed(node) && node.subs !== undefined) shallowPropagate(node.subs);
     } else if (!node.initialized) {
@@ -215,7 +219,7 @@ export function createLeanRuntime(
   function readComputedWithRender<T>(node: ComputedNode<T>): T {
     if (activeRenderReads !== undefined) {
       if (renderingComputeds.has(node)) throw new Error("Computed cycle detected");
-      activeRenderReads.set(node, getRenderVersion(node));
+      if (!activeRenderReads.has(node)) activeRenderReads.set(node, getRenderVersion(node));
       const previousSub = activeSub;
       activeSub = undefined;
       renderingComputeds.add(node);
@@ -249,7 +253,7 @@ export function createLeanRuntime(
   function run(effect: EffectNode): void {
     if (!effect.active || effect.running) return;
     const flags = effect.flags;
-    if (!(flags & Dirty) && (!(flags & Pending) || effect.deps === undefined || !checkDirty(effect.deps, effect))) {
+    if (!(flags & Dirty) && (!(flags & Pending) || effect.deps === undefined || !checkDirty(effect.deps, asReactiveNode(effect)))) {
       if (effect.deps !== undefined) effect.flags = Watching;
       return;
     }
@@ -257,7 +261,7 @@ export function createLeanRuntime(
       runCleanup(effect);
       if (!effect.active) return;
     }
-    clearDepsTail(effect);
+    effect.depsTail = undefined;
     effect.flags = Watching | RecursedCheck;
     effect.scheduled = false;
     effect.running = true;
@@ -323,7 +327,7 @@ export function createLeanRuntime(
     if (renderRevisions === undefined) {
       throw new Error("speculate() requires renderRevisionSidecar");
     }
-    const reads = new Map<ReactiveNode, number>();
+    const reads = new Map<PrototypeNode, number>();
     const previousReads = activeRenderReads;
     activeRenderReads = reads;
     let value: T;
@@ -357,7 +361,7 @@ export function createLeanRuntime(
 
   return {
     signal<T>(initialValue: T): LeanSignal<T> {
-      const node = {
+      const node: SignalNode<T> = {
         currentValue: initialValue,
         pendingValue: initialValue,
         deps: undefined,
@@ -365,7 +369,7 @@ export function createLeanRuntime(
         subs: undefined,
         subsTail: undefined,
         flags: Mutable,
-      } as unknown as SignalNode<T>;
+      };
       return {
         get value() { return readSignal(node); },
         set value(next: T) {
@@ -375,15 +379,15 @@ export function createLeanRuntime(
           node.flags = Mutable | Dirty;
           if (node.subs !== undefined) {
             propagate(node.subs, runDepth > 0);
-            if (batchDepth === 0) flush();
+            if (batchDepth === 0 && runDepth === 0) flush();
           }
         },
-        peek() { return untracked(() => node.currentValue); },
+        peek() { return node.pendingValue; },
         getRenderVersion() { return getRenderVersion(node); },
       };
     },
     computed<T>(getter: () => T): LeanReadonlySignal<T> {
-      const node = {
+      const node: ComputedNode<T> = {
         getter,
         initialized: false,
         hasError: false,
@@ -394,7 +398,7 @@ export function createLeanRuntime(
         subs: undefined,
         subsTail: undefined,
         flags: 0,
-      } as unknown as ComputedNode<T>;
+      };
       return {
         get value() { return readComputed(node); },
         peek() { return untracked(() => readComputed(node)); },
@@ -402,7 +406,7 @@ export function createLeanRuntime(
       };
     },
     effect(fn) {
-      const effect = {
+      const effect: EffectNode = {
         fn,
         cleanup: undefined,
         active: true,
@@ -413,7 +417,7 @@ export function createLeanRuntime(
         subs: undefined,
         subsTail: undefined,
         flags: Watching | RecursedCheck,
-      } as unknown as EffectNode;
+      };
       // Unlike alien effect ownership, nested effects are flat unless the
       // caller explicitly returns their disposer as cleanup.
       effect.flags &= ~RecursedCheck;
@@ -425,7 +429,7 @@ export function createLeanRuntime(
         let dep = effect.depsTail;
         while (dep !== undefined) {
           const previous = dep.prevDep;
-          unlink(dep, effect);
+          unlink(dep, asReactiveNode(effect));
           dep = previous;
         }
         runCleanup(effect);
@@ -437,7 +441,7 @@ export function createLeanRuntime(
         return fn();
       } finally {
         batchDepth -= 1;
-        if (batchDepth === 0) flush();
+        if (batchDepth === 0 && runDepth === 0) flush();
       }
     },
     untracked<T>(fn: () => T): T {
@@ -447,7 +451,7 @@ export function createLeanRuntime(
   };
 
   function runInitial(effect: EffectNode): void {
-    clearDepsTail(effect);
+    effect.depsTail = undefined;
     const previousSub = activeSub;
     activeSub = effect;
     effect.running = true;
@@ -465,6 +469,7 @@ export function createLeanRuntime(
       purgeDeps(effect);
       if (effect.active && !effect.scheduled) effect.flags |= Watching;
     }
+    if (runDepth === 0 && batchDepth === 0) flush();
   }
 }
 

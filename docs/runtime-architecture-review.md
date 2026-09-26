@@ -59,3 +59,64 @@ Prototype A is the preferred architecture to continue studying: retain a compact
 | `deepSignal` fit | Not assessed | Not assessed | Existing behavior |
 
 Phase 5 may continue as a separately scoped internal-runtime replacement study based on Prototype A, but this review is **inconclusive** on production readiness. A larger package/API architecture rethink is not yet supported by evidence. Phase 6 was not started.
+
+## Prototype A local hardening (2026-09-26)
+
+This pass stays in `benchmarks/prototypes/` and `tests/prototypes/`; production `src/core/reactive-runtime.ts`, package exports, and the `dist` output were restored to the committed baseline after a temporary shape diagnostic. The working commit is `07f3f7968f360599f235f7f89b49315fc9dbb60f`.
+
+### Node fields and reset assignment
+
+Prototype A's signal, computed, and effect nodes already initialized `deps`, `depsTail`, `subs`, and `subsTail` on creation. The previous reset helper used `Object.assign(node, { depsTail: undefined })`, which also allocated a one-property helper object on every tracked callback/computed reevaluation. The private node types now model all four mutable graph links as `Link | undefined`, and the hot path uses direct `node.depsTail = undefined`. No V8 deopt trace was needed to decide this experiment; two isolated benchmark passes were more directly useful.
+
+| Case | Before: pass 1 / pass 2 (M ops/s) | After: pass 1 / pass 2 (M ops/s) | p25–p75 per pass, before → after (ms) |
+| --- | ---: | ---: | --- |
+| Read | 33.76 / 49.95 | 39.48 / 54.31 | 2.88–3.06 / 1.97–2.03 → 2.35–2.67 / 1.81–1.87 |
+| Unobserved write | 6.58 / 8.95 | 8.99 / 8.93 | 14.57–16.26 / 10.56–12.56 → 10.43–14.34 / 11.17–11.55 |
+| Observed write | 2.95 / 4.83 | 5.49 / 6.01 | 29.63–40.96 / 20.47–21.05 → 17.70–18.48 / 15.86–16.64 |
+| Computed | 4.68 / 5.00 | 5.04 / 5.42 | 20.76–22.24 / 18.48–23.78 → 19.69–20.83 / 17.23–24.51 |
+| Batch | 1.76 / 2.36 | 2.43 / 2.37 | 49.45–58.10 / 39.08–50.99 → 36.00–49.26 / 40.28–43.38 |
+
+Observed-write medians rose in both passes; computed improved modestly; batch improved in one pass and was effectively unchanged in the other. Read and write results varied substantially across passes, so the exact gain is not stable enough to claim a general node-map effect. The receiver node keys were present before and after; this test primarily isolates direct assignment from `Object.assign` and its temporary object, not absent-versus-present graph fields.
+
+### Semantic gaps found and corrected
+
+- Source `peek()` now returns `pendingValue` without tracking, including before graph commit and inside a batch. Tests cover `0 → -0`, repeated `NaN`, multiple pending writes, `A → B → A` reverts, and the distinction between write revisions and semantic notifications.
+- Computed `peek()` is tested for lazy/cached reads, untracked outer effects, batch coherence, and cached error rethrow.
+- Nested effects remain flat by default. Tests prove outer rerun/disposal leaves children alive; returning the child disposer opts into cleanup ownership.
+- Self-disposal tests cover rereading old and new sources after disposal, detaching prior dependencies, and invoking the returned cleanup exactly once.
+- Writes from an effect to another source synchronously notify its consumer. A write to the same source while the effect is running settles like the current runtime: the effect observes `[0, 1]`, `peek()` sees the final pending `2`, and no asynchronous rerun is introduced. The runner defers nested flushes until the active run boundary.
+- Cleanup transitions cover no-cleanup → cleanup → replacement cleanup → no cleanup → disposal cleanup. Cleanup reads are untracked, failures are contained, and the next body still runs.
+- Error coverage includes body retry, cleanup/reporter failure containment, continuation of other queued effects, cached same-error reads, same-error reevaluation notifying dependents, different error identity, and recovery.
+- Computed coverage includes equality suppression (`1 → 3` does not rerun an effect; `3 → 4` does), dynamic left/right dependencies, nested computed chains, batch revert, error propagation/recovery, direct and indirect cycles, and cycle recovery.
+- Batch callback return, nesting, callback throw with pending writes flushed, and later write recovery are covered. Nested and throwing `untracked()` calls restore dependency tracking.
+- The revision sidecar now preserves the first revision observed for each node in a speculative scope. A read at revision N, write to N+1, then reread still yields an invalid snapshot. `speculate()` remains an architecture sketch: it recomputes computed getters directly and is not React speculative-cache parity.
+
+The focused Prototype A suite passes 26 tests. No tests claim React or cross-runtime parity.
+
+### Hardened local benchmark and current-runtime diagnostic
+
+Final local comparison: two passes of 100,000 operations, three warmups and nine samples per case, one process per runtime/case. Each cell gives the two pass medians in M ops/s; p25–p75 is available in `benchmarks/prototypes/results-local.jsonl`.
+
+| Runtime | Read | Unobserved write | Observed write | Computed | Batch |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| alien high-level | 53.75 / 56.28 | 56.11 / 53.75 | 16.88 / 16.86 | 18.05 / 18.63 | 7.44 / 5.83 |
+| Phase 5 current | 35.52 / 33.87 | 7.72 / 7.34 | 1.56 / 1.42 | 1.16 / 1.53 | 0.51 / 0.59 |
+| Prototype A hardened | 44.78 / 52.48 | 8.94 / 10.22 | 5.40 / 5.48 | 4.55 / 3.82 | 2.21 / 2.81 |
+
+Across these two runs, Prototype A remains about 3.6–3.9x faster than current on observed writes, 2.5–3.3x on computed, and 3.8–4.8x on batch. It does not match alien high-level. Pass-to-pass ranges were 5.40–5.48M observed, 3.82–4.55M computed, and 2.21–2.81M batch for A; current had 1.42–1.56M, 1.16–1.53M, and 0.51–0.59M respectively. The observed result is stable in these passes; computed and batch still vary.
+
+A separate temporary diagnostic changed the production build to initialize all four graph links on source/computed/reaction/external node creation and to use direct `depsTail = undefined` instead of the three hot deletes. It was built and benchmarked twice, then source was restored and the baseline build regenerated. No production edit remains.
+
+| Current runtime case | Baseline pass 1 / 2 | Stable-shape pass 1 / 2 | Direction |
+| --- | ---: | ---: | --- |
+| Observed | 1.56 / 1.42M | 2.04 / 2.89M | Improved, high spread |
+| Computed | 1.16 / 1.53M | 2.99 / 3.05M | Improved about 2x |
+| Batch | 0.51 / 0.59M | 0.83 / 1.28M | Improved, high spread |
+
+The current-runtime variant narrows some of Prototype A's lead, especially on computed, but does not close most of the historical Phase 4-to-Phase 5 gap or eliminate A's advantage. The shape-only diagnostic did not run the full production test matrix, so it is a candidate for a separately reviewed optimization, not an accepted production change. This evidence does not reverse the recommendation to continue Prototype A before React, though it makes the direct assignment and stable graph layout worth preserving as an independent option.
+
+### Remaining gaps
+
+Prototype A still needs first-observation/render-commit tests beyond the sidecar sketch, actual React managed scopes and SSR behavior, speculative computed cache parity, foreign source/computed/effect interop, foreign liveness and cold computed freshness, duplicate runtime tests, bounded cross-runtime cycles, and `deepSignal` integration before production viability can be claimed. Prototype B remains frozen. Phase 6 remains unstarted.
+
+Final repository validation after the hardening changes: `pnpm test` passed (285 runtime tests; 221 transform tests, 3 skipped); `pnpm typecheck`, `pnpm lint` (warnings only), `pnpm build`, `pnpm test:consumer`, `pnpm test:phase4-duplicate`, `pnpm test:browser` (27/27), `pnpm size`, and `git diff --check` passed. The changed-file set is confined to `benchmarks/prototypes/`, `tests/prototypes/`, and `docs/`; production runtime and package exports are unchanged.

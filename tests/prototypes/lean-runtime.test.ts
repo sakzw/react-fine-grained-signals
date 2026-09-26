@@ -241,4 +241,350 @@ describe("Prototype A lean local runtime", () => {
     recursive = runtime.computed(() => recursive.value);
     expect(() => runtime.speculate(() => recursive.value)).toThrow("Computed cycle detected");
   });
+
+  it("keeps first-observed sidecar revisions when a speculative scope rereads after a write", () => {
+    const runtime = createLeanRuntime(() => undefined, { renderRevisionSidecar: true });
+    const source = runtime.signal(0);
+    const snapshot = runtime.speculate(() => {
+      expect(source.value).toBe(0);
+      source.value = 1;
+      return source.value;
+    });
+    expect(snapshot.value).toBe(1);
+    expect(snapshot.isCurrent()).toBe(false);
+  });
+
+  it("peeks pending source values before and during batch commits", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const pending = runtime.signal(0);
+    pending.value = 1;
+    expect(pending.peek()).toBe(1);
+
+    const source = runtime.signal(0);
+    const seen: number[] = [];
+    let peekEffectRuns = 0;
+    runtime.effect(() => { seen.push(source.value); });
+    runtime.effect(() => { source.peek(); peekEffectRuns += 1; });
+    source.value = 1;
+    expect(source.peek()).toBe(1);
+    runtime.batch(() => {
+      source.value = 2;
+      expect(source.peek()).toBe(2);
+      source.value = 3;
+      expect(source.peek()).toBe(3);
+      expect(source.value).toBe(3);
+      source.value = 4;
+      source.value = 3;
+      expect(source.peek()).toBe(3);
+    });
+    expect(source.peek()).toBe(3);
+    expect(source.value).toBe(3);
+    expect(seen).toEqual([0, 1, 3]);
+    expect(peekEffectRuns).toBe(1);
+  });
+
+  it("keeps computed peek lazy, cached, untracked, and coherent across batches", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const source = runtime.signal(1);
+    const trigger = runtime.signal(0);
+    let getterCalls = 0;
+    const doubled = runtime.computed(() => { getterCalls += 1; return source.value * 2; });
+    const outerRuns: number[] = [];
+    runtime.effect(() => { outerRuns.push(trigger.value); doubled.peek(); });
+    expect(getterCalls).toBe(1);
+    source.value = 2;
+    expect(outerRuns).toEqual([0]);
+    expect(doubled.peek()).toBe(4);
+    expect(getterCalls).toBe(2);
+    runtime.batch(() => {
+      source.value = 3;
+      expect(doubled.peek()).toBe(6);
+      source.value = 2;
+      expect(doubled.peek()).toBe(4);
+    });
+    expect(doubled.value).toBe(4);
+    expect(outerRuns).toEqual([0]);
+    trigger.value = 1;
+    expect(outerRuns).toEqual([0, 1]);
+    expect(getterCalls).toBe(4);
+  });
+
+  it("keeps nested effect ownership flat unless the disposer is returned as cleanup", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const outerSource = runtime.signal(0);
+    const childSource = runtime.signal(0);
+    const childRuns: number[] = [];
+    const childDisposers: Array<() => void> = [];
+    const disposeOuter = runtime.effect(() => {
+      outerSource.value;
+      childDisposers.push(runtime.effect(() => { childRuns.push(childSource.value); }));
+    });
+    outerSource.value = 1;
+    expect(childDisposers).toHaveLength(2);
+    expect(childRuns).toEqual([0, 0]);
+    childSource.value = 1;
+    expect(childRuns).toEqual([0, 0, 1, 1]);
+    disposeOuter();
+    childSource.value = 2;
+    expect(childRuns).toEqual([0, 0, 1, 1, 2, 2]);
+
+    const explicitRuns: number[] = [];
+    const parent = runtime.effect(() => {
+      outerSource.value;
+      return runtime.effect(() => { explicitRuns.push(childSource.value); });
+    });
+    outerSource.value = 2;
+    expect(explicitRuns).toEqual([2, 2]);
+    parent();
+    childSource.value = 3;
+    expect(explicitRuns).toEqual([2, 2]);
+  });
+
+  it("self-disposes before rereads without retaining old or new dependencies and runs cleanup once", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const oldSource = runtime.signal(0);
+    const newSource = runtime.signal(0);
+    const cleanups: number[] = [];
+    let dispose = () => {};
+    let runs = 0;
+    dispose = runtime.effect(() => {
+      const current = oldSource.value;
+      runs += 1;
+      if (current === 1) {
+        dispose();
+        oldSource.value;
+        newSource.value;
+        return () => { cleanups.push(current); };
+      }
+      return () => { cleanups.push(current); };
+    });
+    oldSource.value = 1;
+    oldSource.value = 2;
+    newSource.value = 1;
+    dispose();
+    expect(runs).toBe(2);
+    expect(cleanups).toEqual([0, 1]);
+  });
+
+  it("contains synchronous reentrant writes and settles self writes deterministically", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const sourceA = runtime.signal(0);
+    const sourceB = runtime.signal(0);
+    const bSeen: number[] = [];
+    runtime.effect(() => { bSeen.push(sourceB.value); });
+    runtime.effect(() => {
+      if (sourceA.value === 1) sourceB.value = 2;
+    });
+    sourceA.value = 1;
+    expect(bSeen).toEqual([0, 2]);
+
+    const self = runtime.signal(0);
+    const selfSeen: number[] = [];
+    runtime.effect(() => {
+      const value = self.value;
+      selfSeen.push(value);
+      if (value === 1) self.value = 2;
+    });
+    self.value = 1;
+    expect(selfSeen).toEqual([0, 1]);
+    expect(self.peek()).toBe(2);
+  });
+
+  it("handles cleanup transitions, untracked cleanup reads, failures, and later recovery", () => {
+    const errors: unknown[] = [];
+    const runtime = createLeanRuntime((error) => { errors.push(error); });
+    const step = runtime.signal(1);
+    const cleanupDependency = runtime.signal(0);
+    const order: string[] = [];
+    let failCleanup = false;
+    const dispose = runtime.effect(() => {
+      const value = step.value;
+      order.push(`body:${value}`);
+      if (value === 1) return;
+      if (value === 2) return () => { order.push(`cleanup:${cleanupDependency.value}`); };
+      if (value === 3) return () => {
+        order.push(`cleanup:${cleanupDependency.value}`);
+        if (failCleanup) throw new Error("cleanup failed");
+      };
+      if (value === 5) return () => { order.push("cleanup:dispose"); };
+      return;
+    });
+    step.value = 2;
+    step.value = 3;
+    failCleanup = true;
+    step.value = 4;
+    expect(order).toEqual([
+      "body:1", "body:2", "cleanup:0", "body:3", "cleanup:0", "body:4",
+    ]);
+    expect(errors).toHaveLength(1);
+    cleanupDependency.value = 1;
+    expect(order).toHaveLength(6);
+    step.value = 5;
+    dispose();
+    expect(order.at(-1)).toBe("cleanup:dispose");
+    dispose();
+    expect(order.filter((entry) => entry === "cleanup:dispose")).toHaveLength(1);
+  });
+
+  it("retains dynamic dependencies for computed branches", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const chooseLeft = runtime.signal(true);
+    const left = runtime.signal(1);
+    const right = runtime.signal(10);
+    const selected = runtime.computed(() => chooseLeft.value ? left.value : right.value);
+    const seen: number[] = [];
+    runtime.effect(() => { seen.push(selected.value); });
+    chooseLeft.value = false;
+    left.value = 2;
+    right.value = 11;
+    expect(seen).toEqual([1, 10, 11]);
+  });
+
+  it("preserves nested computed equality, batch revert, and error recovery", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const source = runtime.signal(1);
+    const fail = runtime.signal(false);
+    const parity = runtime.computed(() => {
+      if (fail.value) throw new Error("chain error");
+      return source.value % 2;
+    });
+    const label = runtime.computed(() => parity.value ? "odd" : "even");
+    const seen: string[] = [];
+    runtime.effect(() => { seen.push(label.value); });
+    source.value = 3;
+    expect(seen).toEqual(["odd"]);
+    source.value = 4;
+    expect(seen).toEqual(["odd", "even"]);
+    runtime.batch(() => { source.value = 5; source.value = 4; });
+    expect(seen).toEqual(["odd", "even"]);
+    fail.value = true;
+    expect(seen.at(-1)).toBe("even");
+    fail.value = false;
+    source.value = 5;
+    expect(seen.at(-1)).toBe("odd");
+  });
+
+  it("flushes batched writes after callback throws and restores nested batch state", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const source = runtime.signal(0);
+    const seen: number[] = [];
+    runtime.effect(() => { seen.push(source.value); });
+    const failure = new Error("batch callback");
+    expect(() => runtime.batch(() => {
+      source.value = 1;
+      runtime.batch(() => { source.value = 2; });
+      throw failure;
+    })).toThrow(failure);
+    expect(seen).toEqual([0, 2]);
+    source.value = 3;
+    expect(seen).toEqual([0, 2, 3]);
+  });
+
+  it("restores untracked state through nesting and a throwing callback", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const source = runtime.signal(0);
+    const fail = runtime.signal(false);
+    const trackedAfter = runtime.signal(0);
+    const seen: Array<[boolean, number]> = [];
+    const nestedErrors: unknown[] = [];
+    runtime.effect(() => {
+      if (fail.value) {
+        try {
+          runtime.untracked(() => runtime.untracked(() => { throw new Error("nested"); }));
+        } catch (error) {
+          nestedErrors.push(error);
+        }
+      }
+      runtime.untracked(() => source.value);
+      seen.push([fail.value, trackedAfter.value]);
+    });
+    source.value = 1;
+    expect(seen).toEqual([[false, 0]]);
+    fail.value = true;
+    source.value = 2;
+    expect(nestedErrors).toHaveLength(1);
+    expect(nestedErrors[0]).toMatchObject({ message: "nested" });
+    expect(seen).toEqual([[false, 0], [true, 0]]);
+    trackedAfter.value = 1;
+    expect(seen).toEqual([[false, 0], [true, 0], [true, 1]]);
+  });
+
+  it("reevaluates cached computed errors after invalidation and recovers dependents", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const mode = runtime.signal(2);
+    const firstFailure = new Error("first");
+    const secondFailure = new Error("second");
+    let evaluations = 0;
+    const value = runtime.computed(() => {
+      const current = mode.value;
+      evaluations += 1;
+      if (current === 0) throw firstFailure;
+      if (current === 1) throw secondFailure;
+      return 42;
+    });
+    const seen: number[] = [];
+    const errors: unknown[] = [];
+    runtime.effect(() => {
+      try { seen.push(value.value); } catch (error) { errors.push(error); }
+    });
+    expect(seen).toEqual([42]);
+    expect(evaluations).toBe(1);
+    mode.value = 0;
+    expect(evaluations).toBe(2);
+    expect(errors).toEqual([firstFailure]);
+    expect(() => value.value).toThrow(firstFailure);
+    expect(() => value.peek()).toThrow(firstFailure);
+    expect(evaluations).toBe(2);
+    mode.value = 1;
+    expect(errors.at(-1)).toBe(secondFailure);
+    mode.value = 2;
+    expect(seen.at(-1)).toBe(42);
+    expect(errors).toEqual([firstFailure, secondFailure]);
+  });
+
+  it("contains a throwing error reporter without aborting queued effects", () => {
+    const runtime = createLeanRuntime(() => { throw new Error("reporter failed"); });
+    const source = runtime.signal(0);
+    const values: number[] = [];
+    runtime.effect(() => { if (source.value > 0) throw new Error("body failed"); });
+    runtime.effect(() => { values.push(source.value); });
+    source.value = 1;
+    expect(values).toEqual([0, 1]);
+    source.value = 2;
+    expect(values).toEqual([0, 1, 2]);
+  });
+
+  it("contains repeated same-error reevaluations and notifies dependents", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const mode = runtime.signal(0);
+    const failure = new Error("same identity");
+    let computedRuns = 0;
+    let effectRuns = 0;
+    const value = runtime.computed(() => {
+      mode.value;
+      computedRuns += 1;
+      throw failure;
+    });
+    runtime.effect(() => {
+      effectRuns += 1;
+      try { value.value; } catch {}
+    });
+    expect([computedRuns, effectRuns]).toEqual([1, 1]);
+    mode.value = 1;
+    expect([computedRuns, effectRuns]).toEqual([2, 2]);
+  });
+
+  it("bounds an indirect computed cycle and recovers after the cycle is disabled", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const cycleEnabled = runtime.signal(false);
+    let first: ReturnType<typeof runtime.computed<number>>;
+    let second: ReturnType<typeof runtime.computed<number>>;
+    first = runtime.computed(() => cycleEnabled.value ? second.value + 1 : 1);
+    second = runtime.computed(() => first.value + 1);
+    expect(first.value).toBe(1);
+    cycleEnabled.value = true;
+    expect(() => first.value).toThrow("Computed cycle detected");
+    cycleEnabled.value = false;
+    expect(first.value).toBe(1);
+  });
 });
