@@ -334,6 +334,49 @@ describe("Prototype A React render layer", () => {
     expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
+  it("isolates an initial effect created by a speculative getter", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ user: { name: "Ada" } });
+    const seen: string[] = [];
+    let cleanupRuns = 0;
+    let stop: (() => void) | undefined;
+    const evaluateOuter = vi.fn(() => {
+      if (stop === undefined) {
+        stop = runtime.effect(() => {
+          seen.push(state.value.user.name);
+          return () => { cleanupRuns += 1; };
+        });
+      }
+      return 7;
+    });
+    const outer = runtime.computed(evaluateOuter);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="initial-effect-deep">{outer.value}</output>;
+    }
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(<Reader />);
+    expect(seen).toEqual(["Ada"]);
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+
+    act(() => { state.value.user.name = "Grace"; });
+    expect(seen).toEqual(["Ada", "Grace"]);
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+    expect(cleanupRuns).toBe(1);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+
+    stop!();
+    expect(cleanupRuns).toBe(2);
+    act(() => { state.value.user.name = "Lin"; });
+    expect(seen).toEqual(["Ada", "Grace"]);
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+  });
+
   it("keeps nested computed peek durable without making the outer computation depend on it", () => {
     const runtime = createLeanRuntime(() => undefined);
     const state = runtime.deepSignal({ user: { name: "Ada" } });

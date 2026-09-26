@@ -1143,7 +1143,8 @@ export function createLeanRuntime(
     runDepth += 1;
     try {
       try {
-        effect.cleanup = withTrackedGraph(effect, () => withoutAllRenderCollection(effect.fn)) || undefined;
+        effect.cleanup = withoutInteropSpeculativeMode(() =>
+          withTrackedGraph(effect, () => withoutAllRenderCollection(effect.fn))) || undefined;
       } catch (error) {
         safelyReport(error);
       }

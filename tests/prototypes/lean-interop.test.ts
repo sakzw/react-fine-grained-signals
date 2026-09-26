@@ -160,6 +160,42 @@ describe("Prototype A cross-runtime interop", () => {
     expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
+  it("isolates an initial foreign effect created by a speculative getter", () => {
+    const runtimeA = createLeanRuntime(() => undefined);
+    const runtimeB = createLeanRuntime(() => undefined);
+    const state = runtimeB.deepSignal({ user: { name: "Ada" } });
+    const seen: string[] = [];
+    let stop: (() => void) | undefined;
+    const evaluateOuter = vi.fn(() => {
+      if (stop === undefined) stop = runtimeB.effect(() => { seen.push(state.value.user.name); });
+      return 5;
+    });
+    const outer = runtimeA.computed(evaluateOuter);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return React.createElement("output", { "aria-label": "foreign-initial-effect" }, outer.value);
+    }
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(React.createElement(Reader));
+    expect(seen).toEqual(["Ada"]);
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+
+    act(() => { state.value.user.name = "Grace"; });
+    expect(seen).toEqual(["Ada", "Grace"]);
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+
+    stop!();
+    act(() => { state.value.user.name = "Lin"; });
+    expect(seen).toEqual(["Ada", "Grace"]);
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+  });
+
   it("preserves foreign source Object.is and semantic batch notification boundaries", () => {
     const runtimeA = createLeanRuntime(() => undefined);
     const runtimeB = createLeanRuntime(() => undefined);
