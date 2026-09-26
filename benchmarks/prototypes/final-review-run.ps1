@@ -1,6 +1,6 @@
 $ErrorActionPreference = 'Stop'
 $root = Resolve-Path (Join-Path $PSScriptRoot '..\..')
-$results = Join-Path $PSScriptRoot 'results-final-2026-09-26.jsonl'
+$results = if ($env:FINAL_BENCH_OUTPUT) { $env:FINAL_BENCH_OUTPUT } else { Join-Path $PSScriptRoot 'results-final-2026-09-26.jsonl' }
 $rounds = if ($env:FINAL_BENCH_ROUNDS) { [int]$env:FINAL_BENCH_ROUNDS } else { 3 }
 $samples = if ($env:BENCH_SAMPLES) { [int]$env:BENCH_SAMPLES } else { 7 }
 $warmups = if ($env:BENCH_WARMUPS) { [int]$env:BENCH_WARMUPS } else { 2 }
@@ -14,7 +14,8 @@ $deep = @('untrackedRead', 'trackedUpdate', 'siblingUpdate', 'computedUpdate', '
 Remove-Item -LiteralPath $results -Force -ErrorAction SilentlyContinue
 $cpu = 'AMD Ryzen 7 PRO 6850U with Radeon Graphics'
 $meta = [ordered]@{
-  kind = 'environment'; date = '2026-09-26'; commit = '906a0108b212dff2c84ed226c48063a6d096cc40'
+  kind = 'environment'; date = (Get-Date -Format 'yyyy-MM-dd'); commit = (& git -C $root rev-parse HEAD).Trim()
+  workingTree = if ($env:FINAL_BENCH_LABEL) { $env:FINAL_BENCH_LABEL } else { 'M1 cutover under review' }
   node = (& node --version); platform = 'win32'; arch = 'x64'; cpu = $cpu
   alienSignals = '3.2.1'; react = '19.2.8'; rounds = $rounds
   samplesPerProcess = $samples; warmupsPerProcess = $warmups

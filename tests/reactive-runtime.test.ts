@@ -641,6 +641,19 @@ describe("private reactive runtime", () => {
     expect(computedListener).toHaveBeenCalledTimes(1);
   });
 
+  it("ignores non-function effect return values instead of treating them as cleanup", () => {
+    const runtime = createReactiveRuntime();
+    const source = runtime.signal(0);
+    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const values: number[] = [];
+    const dispose = runtime.effect((() => values.push(source.value)) as () => void);
+
+    source.value = 1;
+    dispose();
+    expect(values).toEqual([0, 1]);
+    expect(reported).not.toHaveBeenCalled();
+  });
+
   it("keeps direct computed subscriptions on their dynamically selected branch", () => {
     const runtime = createReactiveRuntime();
     const useLeft = runtime.signal(true);
@@ -1086,6 +1099,43 @@ describe("private reactive runtime", () => {
     expect(graphNodeOf(selected).deps?.nextDep?.dep).toBe(initialExternal);
     expect(initialExternal?.subscription).toBeDefined();
     dispose();
+  });
+
+  it("moves foreign liveness from runtime B to runtime C and releases both on disposal", () => {
+    const local = createReactiveRuntime();
+    const runtimeB = createReactiveRuntime();
+    const runtimeC = createReactiveRuntime();
+    const chooseB = local.signal(true);
+    const sourceB = runtimeB.signal("B");
+    const sourceC = runtimeC.signal("C");
+    const selected = local.computed(() => chooseB.value ? sourceB.value : sourceC.value);
+    const seen: string[] = [];
+    const dispose = local.effect(() => { seen.push(selected.value); });
+
+    const externalNodes = () => {
+      const nodes: GraphNodeInspection[] = [];
+      let link = graphNodeOf(selected).deps;
+      while (link !== undefined) {
+        if (link.dep.kind === "external") nodes.push(link.dep);
+        link = link.nextDep;
+      }
+      return nodes;
+    };
+    const [externalB] = externalNodes();
+    expect(externalB?.subscription).toBeDefined();
+
+    chooseB.value = false;
+    const [externalC] = externalNodes();
+    expect(externalB?.subscription).toBeUndefined();
+    expect(externalC?.subscription).toBeDefined();
+    sourceB.value = "B stale";
+    sourceC.value = "C updated";
+    expect(seen).toEqual(["B", "C", "C updated"]);
+
+    dispose();
+    expect(externalC?.subscription).toBeUndefined();
+    expect(graphNodeOf(sourceB).subs).toBeUndefined();
+    expect(graphNodeOf(sourceC).subs).toBeUndefined();
   });
 
   it("turns a read-to-subscribe revision mismatch into a bounded local retry", () => {

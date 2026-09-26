@@ -89,6 +89,21 @@ try {
   assert.deepEqual(equalitySeen, [1, 2]);
   disposeEquality();
 
+  // Built public deepSignal from copy B retains fine-grained property versions,
+  // sibling isolation, and root replacement across copy A's runtime.
+  const deepState = copyB.deepSignal({ user: { name: "Ada", age: 36 } });
+  const deepSeen = [];
+  const disposeDeep = runtimeA.effect(() => deepSeen.push(deepState.value.user.name));
+  deepState.value.user.age = 37;
+  assert.deepEqual(deepSeen, ["Ada"], "a sibling property update does not notify a foreign name read");
+  deepState.value.user.name = "Grace";
+  assert.deepEqual(deepSeen, ["Ada", "Grace"], "foreign per-key property versions notify the matching dependency");
+  deepState.value = { user: { name: "Lin", age: 20 } };
+  assert.deepEqual(deepSeen, ["Ada", "Grace", "Lin"], "foreign root replacement is observed");
+  disposeDeep();
+  deepState.value.user.name = "stale";
+  assert.deepEqual(deepSeen, ["Ada", "Grace", "Lin"], "disposing releases the foreign deep dependency");
+
   const zeroSource = runtimeB.signal(0);
   const zeroSeen = [];
   const disposeZero = runtimeA.effect(() => zeroSeen.push(zeroSource.value));

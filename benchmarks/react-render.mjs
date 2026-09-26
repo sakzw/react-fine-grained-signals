@@ -602,7 +602,9 @@ const results = variants.map(benchmark);
 console.table(results);
 if (process.env.BENCH_OUTPUT) {
   const metadata = {
-    kind: "react-sample", date: "2026-09-26", commit: "906a0108b212dff2c84ed226c48063a6d096cc40",
+    kind: "react-sample", date: process.env.BENCH_DATE ?? new Date().toISOString().slice(0, 10),
+    commit: process.env.BENCH_COMMIT ?? "working-tree",
+    workingTree: process.env.BENCH_WORKING_TREE ?? undefined,
     node: process.version, platform: process.platform, arch: process.arch,
     cpu: os.cpus()[0]?.model, react: "19.2.8", rows, updates, warmups, samples,
   };

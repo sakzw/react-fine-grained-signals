@@ -6,7 +6,7 @@ import {
   markInteropSpeculativeDeepRead,
 } from "./interop.js";
 import { hasActiveRenderCollector } from "./render-tracking.js";
-import { SIGNAL_BRAND } from "./base.js";
+import { SIGNAL_BRAND } from "./signal-brand.js";
 
 export interface DeepSignalSource<T> {
   value: T;
