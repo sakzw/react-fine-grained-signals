@@ -67,7 +67,7 @@ type RuntimeNode = Omit<ReactiveNode, "deps" | "depsTail" | "subs" | "subsTail">
   subsTail: Link | undefined;
 };
 
-type SignalNode<T> = RuntimeNode & {
+type SignalNode<T> = RuntimeNode & RenderDependency & {
   kind: "source";
   interop: ReadableInteropV1;
   currentValue: T;
@@ -80,7 +80,7 @@ type SignalNode<T> = RuntimeNode & {
 };
 type SourceNode<T> = SignalNode<T>;
 
-type ComputedNode<T> = RuntimeNode & {
+type ComputedNode<T> = RuntimeNode & RenderDependency & {
   kind: "computed";
   interop: ReadableInteropV1;
   getter: () => T;
@@ -130,7 +130,7 @@ type ExternalNode = RuntimeNode & {
 
 type SpeculativeDependency = RuntimeNode | ReadableInteropV1;
 
-export interface RuntimeReadonlySignal<T> extends RenderDependency {
+export interface RuntimeReadonlySignal<T> {
   readonly value: T;
   peek(): T;
 }
@@ -146,16 +146,13 @@ export interface ReactiveRuntime {
   batch<T>(fn: () => T): T;
   untracked<T>(fn: () => T): T;
   subscribe<T>(source: RuntimeReadonlySignal<T>, listener: () => void): () => void;
+  hasSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
   hasActiveSubscriber(): boolean;
   getBatchDepth(): number;
-  hasSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
+  createDeepSignal<T>(initialValue: T): RuntimeSignal<T>;
+  markDeepSignalWatched(readable: RuntimeReadonlySignal<unknown>): void;
+  hasDeepSignalSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
 }
-
-const READABLE_NODE = Symbol("reactive-runtime-readable-node");
-
-type NodeBackedReadable<T> = RuntimeReadonlySignal<T> & {
-  readonly [READABLE_NODE]: SignalNode<T> | ComputedNode<T>;
-};
 
 export function createReactiveRuntime(): ReactiveRuntime {
   const runtimeToken = {};
@@ -173,7 +170,9 @@ export function createReactiveRuntime(): ReactiveRuntime {
   let activeSpeculativeComputed: ComputedNode<unknown> | undefined;
   const renderingComputeds = new Set<RuntimeNode>();
   const externalNodes = new WeakMap<ReadableInteropV1, ExternalNode>();
-  const ownedReadables = new WeakSet<object>();
+  const nodesByReadable = new WeakMap<object, SignalNode<unknown> | ComputedNode<unknown>>();
+  const deepSignalNodes = new WeakSet<SignalNode<unknown>>();
+  const deepWatchedNodes = new WeakSet<SignalNode<unknown>>();
   const graphCollector: InteropGraphCollectorV1 = {
     runtimeToken,
     add(protocol, observedRevision) {
@@ -195,6 +194,14 @@ export function createReactiveRuntime(): ReactiveRuntime {
     node.revision += 1;
   };
   const getRenderVersion = (node: SourceNode<unknown> | ComputedNode<unknown>) => node.revision;
+  const renderNodeMethods: RenderDependency = {
+    getRenderVersion(this: SignalNode<unknown> | ComputedNode<unknown>) {
+      return getRenderVersion(this);
+    },
+    subscribeRender(this: SignalNode<unknown> | ComputedNode<unknown>, listener) {
+      return subscribeRenderNode(this, listener);
+    },
+  };
 // Semantically untracked callbacks pause both runtime collectors as
   // well as the shared React collector, restoring nested scopes in a finally.
   const withoutAllRenderCollection = <T>(callback: () => T): T => {
@@ -914,9 +921,110 @@ export function createReactiveRuntime(): ReactiveRuntime {
     }
   }
 
+  function readSignalValue<T>(node: SignalNode<T>): T {
+    if (activeSub !== undefined && !isInteropSpeculative()) return readSignalCore(node);
+    if (speculativeReads !== undefined) {
+      if (!speculativeReads.has(node)) speculativeReads.set(node, getRenderVersion(node));
+      return node.flags & Dirty ? node.pendingValue : node.currentValue;
+    }
+    if (isInteropSpeculative()) {
+      publishForeignGraphRead(node.interop, node.revision);
+      return node.flags & Dirty ? node.pendingValue : node.currentValue;
+    }
+    if (activeRenderReads !== undefined) {
+      const reads = activeRenderReads;
+      if (!reads.has(node)) reads.set(node, getRenderVersion(node));
+      const value = node.flags & Dirty ? node.pendingValue : node.currentValue;
+      activeRenderCollector?.add(node, reads.get(node)!);
+      return value;
+    }
+    if (activeRenderCollector !== undefined) {
+      activeRenderCollector.add(node, getRenderVersion(node));
+      return node.flags & Dirty ? node.pendingValue : node.currentValue;
+    }
+    if (sharedInterop.renderCollector !== undefined) {
+      publishForeignRenderRead(node.interop, node.revision);
+      return node.flags & Dirty ? node.pendingValue : node.currentValue;
+    }
+    publishForeignGraphRead(node.interop, node.revision);
+    return readSignalCore(node);
+  }
+
+  function writeSignalValue<T>(node: SignalNode<T>, next: T): void {
+    if (deepSignalNodes.has(node as SignalNode<unknown>)) {
+      deepWatchedNodes.delete(node as SignalNode<unknown>);
+    }
+    if (Object.is(node.pendingValue, next)) return;
+    node.pendingValue = next;
+    bumpRenderRevision(node);
+    node.flags = Mutable | Dirty;
+    if (node.subs !== undefined) {
+      propagate(node.subs, runDepth > 0);
+      if (batchDepth === 0 && runDepth === 0) flush();
+    }
+  }
+
+  function readComputedValue<T>(node: ComputedNode<T>): T {
+    if (activeSub !== undefined && !isInteropSpeculative()) return readComputedCore(node);
+    const localRender = activeRenderReads !== undefined || speculativeReads !== undefined ||
+      activeRenderCollector !== undefined || sharedInterop.renderCollector !== undefined ||
+      isInteropSpeculative();
+    let value: T;
+    try {
+      value = localRender ? readComputedForRender(node) : readComputed(node);
+      return value;
+    } finally {
+      if (localRender) {
+        if (activeRenderReads !== undefined && !activeRenderReads.has(node)) {
+          activeRenderReads.set(node, getRenderVersion(node));
+        }
+        if (activeRenderReads !== undefined) {
+          activeRenderCollector?.add(node, activeRenderReads.get(node)!);
+        } else if (activeRenderCollector !== undefined) {
+          activeRenderCollector.add(node, getRenderVersion(node));
+        } else if (sharedInterop.renderCollector !== undefined) {
+          publishForeignRenderRead(node.interop, node.revision);
+        }
+      } else if (sharedInterop.renderCollector !== undefined) {
+        publishForeignRenderRead(node.interop, node.revision);
+      }
+      publishForeignGraphRead(node.interop, node.revision);
+    }
+  }
+
+  class RuntimeSignalReadable<T> implements RuntimeSignal<T> {
+    readonly #node: SignalNode<T>;
+
+    constructor(node: SignalNode<T>) {
+      this.#node = node;
+      attachReadableInterop(this, node.interop);
+      nodesByReadable.set(this, node as SignalNode<unknown>);
+    }
+
+    get value(): T { return readSignalValue(this.#node); }
+    set value(next: T) { writeSignalValue(this.#node, next); }
+    peek(): T { return this.#node.pendingValue; }
+  }
+
+  class RuntimeComputedReadable<T> implements RuntimeReadonlySignal<T> {
+    readonly #node: ComputedNode<T>;
+
+    constructor(node: ComputedNode<T>) {
+      this.#node = node;
+      attachReadableInterop(this, node.interop);
+      nodesByReadable.set(this, node as ComputedNode<unknown>);
+    }
+
+    get value(): T { return readComputedValue(this.#node); }
+    peek(): T {
+      return untracked(() =>
+        withoutInteropSpeculativeMode(() => readComputedCore(this.#node)));
+    }
+  }
+
   const runtime: ReactiveRuntime = {
     signal<T>(initialValue: T): RuntimeSignal<T> {
-      const node: SignalNode<T> = {
+      const node = Object.assign({
         kind: "source",
         runtimeToken,
         interop: undefined as unknown as ReadableInteropV1,
@@ -932,58 +1040,12 @@ export function createReactiveRuntime(): ReactiveRuntime {
         subs: undefined,
         subsTail: undefined,
         flags: Mutable,
-      };
+      }, renderNodeMethods) as SignalNode<T>;
       node.interop = createReadableProtocol(node) as ReadableInteropV1;
-      const source: NodeBackedReadable<T> & RuntimeSignal<T> = {
-        [READABLE_NODE]: node,
-        get value() {
-          if (activeSub !== undefined && !isInteropSpeculative()) return readSignalCore(node);
-          if (speculativeReads !== undefined) {
-            if (!speculativeReads.has(node)) speculativeReads.set(node, getRenderVersion(node));
-            return node.flags & Dirty ? node.pendingValue : node.currentValue;
-          }
-          if (isInteropSpeculative()) {
-            publishForeignGraphRead(node.interop, node.revision);
-            return node.flags & Dirty ? node.pendingValue : node.currentValue;
-          }
-          if (activeRenderReads !== undefined) {
-            const reads = activeRenderReads;
-            if (!reads.has(node)) reads.set(node, getRenderVersion(node));
-            const value = node.flags & Dirty ? node.pendingValue : node.currentValue;
-            activeRenderCollector?.add(source, reads.get(node)!);
-            return value;
-          }
-          if (activeRenderCollector !== undefined) {
-            activeRenderCollector.add(source, getRenderVersion(node));
-            return node.flags & Dirty ? node.pendingValue : node.currentValue;
-          }
-          if (sharedInterop.renderCollector !== undefined) {
-            publishForeignRenderRead(node.interop, node.revision);
-            return node.flags & Dirty ? node.pendingValue : node.currentValue;
-          }
-          publishForeignGraphRead(node.interop, node.revision);
-          return readSignalCore(node);
-        },
-        set value(next: T) {
-          if (Object.is(node.pendingValue, next)) return;
-          node.pendingValue = next;
-          bumpRenderRevision(node);
-          node.flags = Mutable | Dirty;
-          if (node.subs !== undefined) {
-            propagate(node.subs, runDepth > 0);
-            if (batchDepth === 0 && runDepth === 0) flush();
-          }
-        },
-        peek() { return node.pendingValue; },
-        getRenderVersion() { return getRenderVersion(node); },
-        subscribeRender(listener) { return subscribeRenderNode(node, listener); },
-      };
-      attachReadableInterop(source, node.interop);
-      ownedReadables.add(source);
-      return source;
+      return new RuntimeSignalReadable(node);
     },
     computed<T>(getter: () => T): RuntimeReadonlySignal<T> {
-      const node: ComputedNode<T> = {
+      const node = Object.assign({
         kind: "computed",
         runtimeToken,
         interop: undefined as unknown as ReadableInteropV1,
@@ -1010,47 +1072,9 @@ export function createReactiveRuntime(): ReactiveRuntime {
         subs: undefined,
         subsTail: undefined,
         flags: 0,
-      };
+      }, renderNodeMethods) as ComputedNode<T>;
       node.interop = createReadableProtocol(node) as ReadableInteropV1;
-      const computed: NodeBackedReadable<T> = {
-        [READABLE_NODE]: node,
-        get value() {
-          if (activeSub !== undefined && !isInteropSpeculative()) return readComputedCore(node);
-          const localRender = activeRenderReads !== undefined || speculativeReads !== undefined ||
-            activeRenderCollector !== undefined || sharedInterop.renderCollector !== undefined ||
-            isInteropSpeculative();
-          let value: T;
-          try {
-            value = localRender ? readComputedForRender(node) : readComputed(node);
-            return value;
-          } finally {
-            if (localRender) {
-              if (activeRenderReads !== undefined && !activeRenderReads.has(node)) {
-                activeRenderReads.set(node, getRenderVersion(node));
-              }
-              if (activeRenderReads !== undefined) {
-                activeRenderCollector?.add(computed, activeRenderReads.get(node)!);
-              } else if (activeRenderCollector !== undefined) {
-                activeRenderCollector.add(computed, getRenderVersion(node));
-              } else if (sharedInterop.renderCollector !== undefined) {
-                publishForeignRenderRead(node.interop, node.revision);
-              }
-            } else if (sharedInterop.renderCollector !== undefined) {
-              publishForeignRenderRead(node.interop, node.revision);
-            }
-            publishForeignGraphRead(node.interop, node.revision);
-          }
-        },
-        peek() {
-          return untracked(() =>
-            withoutInteropSpeculativeMode(() => readComputedCore(node)));
-        },
-        getRenderVersion() { return getRenderVersion(node); },
-        subscribeRender(listener) { return subscribeRenderNode(node, listener); },
-      };
-      attachReadableInterop(computed, node.interop);
-      ownedReadables.add(computed);
-      return computed;
+      return new RuntimeComputedReadable(node);
     },
     effect(fn) {
       const effect: EffectNode = {
@@ -1095,11 +1119,13 @@ export function createReactiveRuntime(): ReactiveRuntime {
       return untracked(fn);
     },
     subscribe<T>(readable: RuntimeReadonlySignal<T>, listener: () => void): () => void {
-      if (!ownedReadables.has(readable as object)) {
-        throw new TypeError("subscribe() expects a signal or computed from this runtime");
-      }
-      const node = (readable as NodeBackedReadable<T>)[READABLE_NODE];
+      const node = nodesByReadable.get(readable as object);
+      if (node === undefined) throw new TypeError("subscribe() expects a signal or computed from this runtime");
       return subscribeRenderNode(node, () => notifyListener(listener));
+    },
+    hasSubscribers(readable) {
+      const node = nodesByReadable.get(readable as object);
+      return node !== undefined && hasLiveConsumer(node);
     },
     hasActiveSubscriber() {
       return activeSub !== undefined;
@@ -1107,10 +1133,23 @@ export function createReactiveRuntime(): ReactiveRuntime {
     getBatchDepth() {
       return batchDepth;
     },
-    hasSubscribers(readable) {
-      if (!ownedReadables.has(readable as object)) return false;
-      const node = (readable as NodeBackedReadable<unknown>)[READABLE_NODE];
-      return hasLiveConsumer(node);
+    createDeepSignal<T>(initialValue: T) {
+      const readable = runtime.signal(initialValue);
+      const node = nodesByReadable.get(readable as object);
+      if (node === undefined || node.kind !== "source") throw new TypeError("failed to create deep signal source");
+      deepSignalNodes.add(node as SignalNode<unknown>);
+      return readable;
+    },
+    markDeepSignalWatched(readable) {
+      const node = nodesByReadable.get(readable as object);
+      if (node !== undefined && node.kind === "source" && deepSignalNodes.has(node as SignalNode<unknown>)) {
+        deepWatchedNodes.add(node as SignalNode<unknown>);
+      }
+    },
+    hasDeepSignalSubscribers(readable) {
+      const node = nodesByReadable.get(readable as object);
+      if (node === undefined || node.kind !== "source" || !deepSignalNodes.has(node as SignalNode<unknown>)) return false;
+      return deepWatchedNodes.has(node as SignalNode<unknown>) || hasLiveConsumer(node);
     },
   };
   return runtime;

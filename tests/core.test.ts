@@ -252,8 +252,8 @@ describe("core signal primitives", () => {
     const doubled = computed(() => count.value * 2);
 
     expect(Object.keys(count)).toEqual([]);
-    expect(Object.keys(doubled)).toEqual(["value", "peek"]);
-    expect(JSON.stringify({ count, doubled })).toBe('{"count":{},"doubled":{"value":2}}');
+    expect(Object.keys(doubled)).toEqual([]);
+    expect(JSON.stringify({ count, doubled })).toBe('{"count":{},"doubled":{}}');
     expect(Object.getOwnPropertySymbols({ ...count })).toEqual([]);
     expect(Object.getOwnPropertySymbols({ ...doubled })).toEqual([]);
     expect(isSignal({ ...doubled })).toBe(false);

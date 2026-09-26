@@ -5,6 +5,7 @@ import { StrictMode, Suspense, act } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
+import { getReadableInterop } from "../src/core/interop.js";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
   computed,
@@ -350,7 +351,7 @@ describe("useSignalTracking render tracking", () => {
 
     render(<Reader />);
     expect(screen.getByLabelText("reverted observed version").textContent).toBe("same");
-    expect(source.getRenderVersion()).toBe(2);
+    expect(getReadableInterop(source)?.getRevision()).toBe(2);
     expect(renders).toHaveBeenCalledTimes(2);
   });
 

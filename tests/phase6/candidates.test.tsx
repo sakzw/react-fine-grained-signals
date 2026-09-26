@@ -110,29 +110,7 @@ describe.each(candidates)("Phase 6 %s", (_name, create) => {
   });
 });
 
-it("distinguishes C's public readable from B's reflectively exposed node", () => {
-  const b = createCandidateB();
-  const c = createCandidateC();
-  const bSignal = b.signal(1);
-  const cSignal = c.signal(1);
-  const bNodeSymbol = Reflect.ownKeys(bSignal).find((key) => typeof key === "symbol" &&
-    String(key).includes("reactive-runtime-readable-node"));
-
-  expect(bNodeSymbol).toBeDefined();
-  expect((bSignal as unknown as Record<PropertyKey, unknown>)[bNodeSymbol as symbol]).toMatchObject({
-    kind: "source",
-    runtimeToken: expect.any(Object),
-  });
-  expect(Reflect.ownKeys(cSignal)).toEqual(expect.arrayContaining([SIGNAL_BRAND, READABLE_INTEROP_V1]));
-  expect(Reflect.ownKeys(cSignal)).not.toContain(bNodeSymbol);
-  expect(Reflect.ownKeys(cSignal).filter((key) => typeof key === "symbol")).toHaveLength(2);
-  expect(Reflect.ownKeys(Object.getPrototypeOf(cSignal))).toContain("constructor");
-  expect(Reflect.ownKeys(Object.getPrototypeOf(cSignal))).not.toContain("getRenderVersion");
-  expect("getRenderVersion" in cSignal).toBe(false);
-  expect("subscribeRender" in cSignal).toBe(false);
-});
-
-it("records the actual public own-key and prototype surfaces for A/B/C", () => {
+it("records public surfaces for production and retained architecture prototypes", () => {
   const samples = [createCandidateA(), createCandidateB(), createCandidateC(), createCandidateC1()].map((api) => ({
     signal: summarizeKeys(api.signal(0)),
     computed: summarizeKeys(api.computed(() => 0)),
@@ -141,12 +119,16 @@ it("records the actual public own-key and prototype surfaces for A/B/C", () => {
   expect(samples[0]!.signal.keys).toEqual([]);
   expect(samples[0]!.signal.names).toEqual([]);
   expect(samples[0]!.signal.symbols).toHaveLength(2);
-  expect(samples[0]!.signal.prototypeNames).toEqual(expect.arrayContaining(["markWatched", "hasSubscribers", "value", "peek"]));
-  expect(samples[0]!.computed.names).toEqual(["value", "peek"]);
-  expect(samples[1]!.signal.keys).toEqual(expect.arrayContaining(["value", "peek", "getRenderVersion", "subscribeRender"]));
-  expect(samples[1]!.signal.names).toEqual(expect.arrayContaining(["value", "peek", "getRenderVersion", "subscribeRender"]));
-  expect(samples[1]!.signal.symbols.some((symbol) => symbol.includes("reactive-runtime-readable-node"))).toBe(true);
-  expect(samples[1]!.computed.names).toEqual(expect.arrayContaining(["value", "peek", "getRenderVersion", "subscribeRender"]));
+  expect(samples[0]!.signal.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
+  expect(samples[0]!.signal.prototypeNames).not.toEqual(expect.arrayContaining(["markWatched", "hasSubscribers", "getRenderVersion", "subscribeRender"]));
+  expect(samples[0]!.computed.names).toEqual([]);
+  expect(samples[0]!.computed.symbols).toHaveLength(2);
+  expect(samples[1]!.signal.keys).toEqual([]);
+  expect(samples[1]!.signal.names).toEqual([]);
+  expect(samples[1]!.signal.symbols).toHaveLength(2);
+  expect(samples[1]!.signal.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
+  expect(samples[1]!.computed.names).toEqual([]);
+  expect(samples[1]!.computed.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
   expect(samples[2]!.signal.names).toEqual(["value", "peek"]);
   expect(samples[2]!.signal.keys).toEqual(["value", "peek"]);
   expect(samples[2]!.signal.symbols).toEqual([
@@ -161,4 +143,22 @@ it("records the actual public own-key and prototype surfaces for A/B/C", () => {
   expect(samples[3]!.signal.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
   expect(samples[3]!.signal.prototypeNames).not.toEqual(expect.arrayContaining(["getRenderVersion", "subscribeRender", "markWatched", "hasSubscribers"]));
   expect(samples[3]!.computed.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
+});
+
+it("keeps production signal and computed internals behind the readable boundary", () => {
+  const samples = [productionSignal(0), productionComputed(() => 1)].map(summarizeKeys);
+  for (const sample of samples) {
+    expect(sample.keys).toEqual([]);
+    expect(sample.names).toEqual([]);
+    expect(sample.symbols).toEqual(expect.arrayContaining([
+      "Symbol(react-fine-grained-signals.readable-interop.v1)",
+      "Symbol(react-fine-grained-signals.signal)",
+    ]));
+    expect(sample.symbols).toHaveLength(2);
+    expect(sample.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
+    expect(sample.prototypeNames).not.toEqual(expect.arrayContaining([
+      "getRenderVersion", "subscribeRender", "markWatched", "hasSubscribers",
+    ]));
+    expect(sample.prototypeNames.some((name) => /deps|subs|runtimeToken|node/i.test(name))).toBe(false);
+  }
 });

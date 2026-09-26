@@ -11,8 +11,6 @@ import { SIGNAL_BRAND } from "./signal-brand.js";
 export interface DeepSignalSource<T> {
   value: T;
   peek(): T;
-  markWatched(): void;
-  hasSubscribers(): boolean;
 }
 
 export interface DeepSignalLike<T extends object> {
@@ -22,6 +20,8 @@ export interface DeepSignalLike<T extends object> {
 
 export interface DeepSignalRuntimeAdapter {
   createSignal<T>(initial: T): DeepSignalSource<T>;
+  markWatched(source: DeepSignalSource<unknown>): void;
+  hasSubscribers(source: DeepSignalSource<unknown>): boolean;
   batch<T>(callback: () => T): T;
   isSignal(value: unknown): boolean;
   hasActiveSubscriber(): boolean;
@@ -686,7 +686,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     const version = getVersion(versions, key);
     // Records that something reactive depends on this key right now, which is
     // what keeps `sweepPrunedKeys` from dropping it out from under a subscriber.
-    version.markWatched();
+    adapter.markWatched(version);
     version.value;
   };
 
@@ -722,7 +722,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       }
       const property = metadata.properties.get(key);
       const existence = metadata.existence.get(key);
-      if (property?.hasSubscribers() === true || existence?.hasSubscribers() === true) {
+      if ((property !== undefined && adapter.hasSubscribers(property)) ||
+          (existence !== undefined && adapter.hasSubscribers(existence))) {
         continue;
       }
       metadata.properties.delete(key);

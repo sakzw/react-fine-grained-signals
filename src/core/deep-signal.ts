@@ -4,7 +4,6 @@ import {
   batch,
   isSignal,
   registerSignal,
-  SignalImpl,
 } from "./base.js";
 import type { Signal } from "./base.js";
 
@@ -16,8 +15,10 @@ let productionDeepSignals: ReturnType<typeof createDeepSignalFactory> | undefine
 function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
   return productionDeepSignals ??= createDeepSignalFactory({
     createSignal<T>(initial: T) {
-      return registerSignal(new SignalImpl(initial));
+      return registerSignal(coreRuntime.createDeepSignal(initial));
     },
+    markWatched(source) { coreRuntime.markDeepSignalWatched(source); },
+    hasSubscribers(source) { return coreRuntime.hasDeepSignalSubscribers(source); },
     batch,
     isSignal,
     hasActiveSubscriber: () => coreRuntime.hasActiveSubscriber(),

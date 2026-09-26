@@ -17,6 +17,8 @@ const deep = createDeepSignalFactory({
     if (protocol !== undefined) attachReadableInterop(bridge, protocol);
     return bridge;
   },
+  markWatched(source) { (source as unknown as { markWatched(): void }).markWatched(); },
+  hasSubscribers(source) { return (source as unknown as { hasSubscribers(): boolean }).hasSubscribers(); },
   batch: coreRuntime.batch,
   isSignal,
   hasActiveSubscriber: coreRuntime.hasActiveSubscriber,

@@ -34,6 +34,8 @@ export function createCandidateB() {
       if (protocol !== undefined) attachReadableInterop(deepSource, protocol);
       return deepSource;
     },
+    markWatched(source) { (source as unknown as { markWatched(): void }).markWatched(); },
+    hasSubscribers(source) { return (source as unknown as { hasSubscribers(): boolean }).hasSubscribers(); },
     batch: runtime.batch,
     isSignal,
     hasActiveSubscriber: runtime.hasActiveSubscriber,
@@ -72,6 +74,8 @@ export function createCandidateC() {
       if (protocol !== undefined) attachReadableInterop(deepSource, protocol);
       return deepSource;
     },
+    markWatched(source) { (source as unknown as { markWatched(): void }).markWatched(); },
+    hasSubscribers(source) { return (source as unknown as { hasSubscribers(): boolean }).hasSubscribers(); },
     batch: runtime.batch,
     isSignal,
     hasActiveSubscriber: runtime.hasActiveSubscriber,

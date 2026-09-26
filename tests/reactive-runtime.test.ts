@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
   publishInteropGraphRead,
+  getReadableInterop,
   READABLE_INTEROP_V1,
   type ReadableInteropV1,
   withInteropRenderCollector,
@@ -61,10 +62,28 @@ interface GraphLinkInspection {
   nextSub?: GraphLinkInspection;
 }
 
-function graphNodeOf(readable: object): GraphNodeInspection {
-  const [nodeKey] = Object.getOwnPropertySymbols(readable);
-  if (nodeKey === undefined) throw new Error("Candidate readable has no graph node");
-  return Reflect.get(readable, nodeKey) as GraphNodeInspection;
+function runtimeDependencyOf(readable: { readonly value: unknown }): RenderDependency {
+  let dependency: RenderDependency | undefined;
+  const previous = setActiveRenderCollector({
+    add(value) { dependency = value; },
+  });
+  try {
+    void readable.value;
+  } finally {
+    setActiveRenderCollector(previous);
+  }
+  if (dependency === undefined) throw new Error("Readable did not register its runtime render dependency");
+  return dependency;
+}
+
+function graphNodeOf(readable: { readonly value: unknown }): GraphNodeInspection {
+  return runtimeDependencyOf(readable) as GraphNodeInspection;
+}
+
+function renderVersionOf(readable: { readonly value: unknown }): number {
+  const protocol = getReadableInterop(readable as object);
+  if (protocol === undefined) throw new Error("Readable does not expose ReadableInterop V1");
+  return protocol.getRevision();
 }
 
 describe("private reactive runtime", () => {
@@ -81,13 +100,13 @@ describe("private reactive runtime", () => {
     });
 
     source.value = 0;
-    expect(source.getRenderVersion()).toBe(0);
+    expect(renderVersionOf(source)).toBe(0);
     source.value = -0;
-    expect(source.getRenderVersion()).toBe(1);
+    expect(renderVersionOf(source)).toBe(1);
     source.value = Number.NaN;
-    expect(source.getRenderVersion()).toBe(2);
+    expect(renderVersionOf(source)).toBe(2);
     source.value = Number.NaN;
-    expect(source.getRenderVersion()).toBe(2);
+    expect(renderVersionOf(source)).toBe(2);
 
     expect(Object.is(source.peek(), Number.NaN)).toBe(true);
     expect(seen).toHaveLength(3);
@@ -434,7 +453,7 @@ describe("private reactive runtime", () => {
       source.value = 0;
     });
     expect(seen).toEqual([0]);
-    expect(source.getRenderVersion()).toBe(3);
+    expect(renderVersionOf(source)).toBe(3);
 
     runtime.batch(() => {
       source.value = -0;
@@ -461,7 +480,7 @@ describe("private reactive runtime", () => {
     });
     expect(nanSeen).toHaveLength(1);
     expect(Number.isNaN(nanSource.peek())).toBe(true);
-    expect(nanSource.getRenderVersion()).toBe(2);
+    expect(renderVersionOf(nanSource)).toBe(2);
     disposeNan();
   });
 
@@ -480,12 +499,12 @@ describe("private reactive runtime", () => {
       source.value = 1;
       expect(second.value).toBe(10);
       expect(second.peek()).toBe(10);
-      revisions.push(second.getRenderVersion());
+      revisions.push(renderVersionOf(second));
       source.value = 0;
     });
 
     expect(second.value).toBe(0);
-    expect(second.getRenderVersion()).toBeGreaterThan(revisions[1]!);
+    expect(renderVersionOf(second)).toBeGreaterThan(revisions[1]!);
     source.value = 2;
     expect(second.value).toBe(20);
   });
@@ -773,7 +792,7 @@ describe("private reactive runtime", () => {
     } finally {
       setActiveRenderCollector(previous);
     }
-    expect(capturedVersion).toBe(value.getRenderVersion());
+    expect(capturedVersion).toBe(renderVersionOf(value));
   });
 
   it("uses monotonic computed revisions for competing and reverted render attempts", () => {
@@ -791,14 +810,14 @@ describe("private reactive runtime", () => {
       expect(value.value).toBe("B");
     });
     expect(renderB!.version).toBeGreaterThan(revisionA);
-    const revisionB = value.getRenderVersion();
+    const revisionB = renderVersionOf(value);
 
     source.value = "A";
     const [renderAfterRevert] = collectWithVersions(() => {
       expect(value.value).toBe("A");
     });
     expect(renderAfterRevert!.version).toBeGreaterThan(revisionB);
-    expect(value.getRenderVersion()).toBeGreaterThan(revisionB);
+    expect(renderVersionOf(value)).toBeGreaterThan(revisionB);
 
     const committedListener = vi.fn();
     const dispose = renderA!.dependency.subscribeRender(committedListener);
@@ -821,7 +840,7 @@ describe("private reactive runtime", () => {
       expect(parity.value).toBe(1);
     });
     expect(sameResultRender!.version).toBe(firstRender!.version);
-    expect(parity.getRenderVersion()).toBe(firstRender!.version);
+    expect(renderVersionOf(parity)).toBe(firstRender!.version);
   });
 
   it("advances computed observation revision for speculative error transitions", () => {
@@ -841,7 +860,7 @@ describe("private reactive runtime", () => {
     collectWithVersions(() => {
       expect(() => value.value).toThrow(error);
     });
-    expect(value.getRenderVersion()).toBeGreaterThan(initialRevision);
+    expect(renderVersionOf(value)).toBeGreaterThan(initialRevision);
 
     const listener = vi.fn();
     const dispose = render!.dependency.subscribeRender(listener);
@@ -883,7 +902,7 @@ describe("private reactive runtime", () => {
     });
     const listener = vi.fn();
     const dispose = render!.dependency.subscribeRender(listener);
-    expect(value.getRenderVersion()).toBe(render!.version);
+    expect(renderVersionOf(value)).toBe(render!.version);
     expect(graphNodeOf(value).deps).toBeDefined();
     expect(getterCalls).toBe(1);
     expect(listener).not.toHaveBeenCalled();
@@ -1020,7 +1039,7 @@ describe("private reactive runtime", () => {
       source.value = 1;
       source.value = 0;
     });
-    expect(source.getRenderVersion()).toBe(2);
+    expect(renderVersionOf(source)).toBe(2);
     expect(seen).toEqual([0]);
     dispose();
   });
@@ -1207,7 +1226,7 @@ describe("private reactive runtime", () => {
 
     expect(observations).toHaveLength(1);
     expect(observations[0]?.protocol).toBe(Reflect.get(computed, READABLE_INTEROP_V1));
-    expect(observations[0]?.revision).toBe(computed.getRenderVersion());
+    expect(observations[0]?.revision).toBe(renderVersionOf(computed));
     expect(graphNodeOf(source).subs).toBeUndefined();
     expect(graphNodeOf(computed).deps).toBeUndefined();
   });
@@ -1237,9 +1256,9 @@ describe("private reactive runtime", () => {
     shouldThrow.value = true;
     expect(seen).toEqual(["value:1", "error:true"]);
     expect(reported).not.toHaveBeenCalled();
-    const errorRevision = localComputed.getRenderVersion();
+    const errorRevision = renderVersionOf(localComputed);
     revision.value = 1;
-    expect(localComputed.getRenderVersion()).toBeGreaterThan(errorRevision);
+    expect(renderVersionOf(localComputed)).toBeGreaterThan(errorRevision);
     expect(seen).toEqual(["value:1", "error:true", "error:true"]);
     shouldThrow.value = false;
     expect(seen).toEqual(["value:1", "error:true", "error:true", "value:2"]);

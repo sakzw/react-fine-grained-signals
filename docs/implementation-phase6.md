@@ -6,7 +6,9 @@ Phase 5 is complete and frozen. Phase 6 is a separate investigation into whether
 
 **M0 — architecture prototype and measurement** is complete. Candidate B is rejected for production because it exposes runtime internals. Candidate C established architecture feasibility, but its production migration has not been approved. The initial M0 no-go recommendation was provisional: its one-process exploratory timings do not establish that consolidation itself causes the measured regressions.
 
-**M0.1 — targeted performance, deep-liveness, bundle, and duplicate-package hardening** is complete. Candidate C1 passed the focused correctness, encapsulation, cross-copy, and bridge-free deepSignal checks. Its fresh-process measurements and package-faithful sizes support retaining C1 as the production-oriented candidate for a later, separately authorized phase; they do not approve a production migration. M1, M2, and M3 have not started.
+**M0.1 — targeted performance, deep-liveness, bundle, and duplicate-package hardening** is complete. Candidate C1 passed the focused correctness, encapsulation, cross-copy, and bridge-free deepSignal checks. Its fresh-process measurements and package-faithful sizes supported the production migration.
+
+**M1 — core object consolidation** and **M2 — deepSignal adapter/liveness separation** are complete for this implementation pass. Ordinary signals, computeds, and deep version sources use one runtime readable plus one graph node; the raw node and render capabilities remain private. M3 stabilization/freeze has not started. Phase 6 is not frozen.
 
 ## Core question and decision basis
 
@@ -233,3 +235,33 @@ The bundle marker controls passed: deep engine code was absent from `signal-only
 - **Future-version idea:** none added by M0.1.
 
 **M0.1 recommendation:** retain C1 as the candidate design for a future M1 decision, with no production migration now. M0.1 is complete; M1, M2, and M3 remain unstarted. No production source, public API, size budget, or deepSignal behavior changed in this investigation.
+
+### M1/M2 — production consolidation and deepSignal liveness separation
+
+#### Production architecture
+
+- `signal()` and `computed()` now return the runtime readable directly after brand registration. The public forwarding `SignalImpl` and computed wrapper are removed; no temporary M1 compatibility bridge was needed.
+- `RuntimeSignalReadable` and `RuntimeComputedReadable` each own a private JavaScript `#node` reference. Runtime ownership remains in a private `WeakMap`; shared render capability methods are attached to graph nodes, so ordinary readable reflection cannot discover graph nodes or render methods.
+- ReadableInterop V1 remains the protocol for cross-runtime reads/subscriptions. No V2 or public export was added.
+- Public writable signals expose `value`, `peek()`, the signal brand, and V1 protocol; computeds expose readonly `value`, `peek()`, the brand, and V1 protocol. Deep-only liveness methods are not on either readable prototype.
+- `deepSignal` version sources now use the same consolidated runtime readable. The engine adapter owns `markWatched` and `hasSubscribers`; runtime-private WeakSets hold deep-source membership and watched-since-write state. The old `SignalImpl` and forwarding bridge are absent from production.
+- Proxy behavior, normalization, and metadata pruning policy were unchanged.
+
+#### Deep write-path trade-off
+
+The shared signal write path checks private `deepSignalNodes` membership and clears the watched state for deep sources before the existing equality check. This is one WeakSet membership check per write to preserve watched-since-write behavior even for an `Object.is`-equal assignment. A separate deep-specific node/write path would add runtime complexity or allocations, so the simpler C1 mechanism is retained as an acceptable trade-off for later hardening review.
+
+#### Validation
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:phase4-duplicate`, and `pnpm test:consumer` passed. Full tests: runtime 288 passed; transform 221 passed, 3 skipped. Lint completed with warnings only.
+- Runtime reflection, core semantics, React tracking, and Phase 6 candidate checks passed within the full runtime suite. The genuine duplicate-package smoke passed with three independent Alien systems; consumer package smoke passed.
+- `pnpm size` passed all unchanged budgets and tree-shaking checks. Gzip sizes: signal-only 5.87 kB, core 5.92 kB, core+hooks 7.18 kB, deep 10.28 kB, index-full 11.46 kB, jsx-runtime 8.91 kB, utils 7.20 kB.
+- `pnpm bench` and `pnpm bench:deep` passed on Node v24.20.0 / Windows x64 / AMD Ryzen 7 PRO 6850U. The core benchmark's local medians were 39.83M signal reads/s, 19.00M writes/s, 5.10M observed writes/s, 4.86M computed update/reads/s, and 2.75M two-write batches/s. Deep cases ranged from 21.68K array pushes/s to 307.57K nested reads/s. These single-machine measurements are diagnostic, not release guarantees.
+- `pnpm bench:react` also completed with all render-count assertions intact. It covered 500 sibling rows and 300 updates across hook, signal, managed-runtime, production, and JSX paths; this is a smoke/diagnostic run, not a comparable pre-migration performance result.
+- Focused Phase 6/runtime/React/deepSignal tests passed again after M2 (4 files, 112 tests).
+- Build-related checks were run sequentially after an initial concurrent build collision invalidated one benchmark/size attempt; the final build, size check, and core/deep benchmarks all passed.
+
+#### Remaining M3 work
+
+- Repeat stabilization and review the full Phase 6 fixture history before freeze; keep current performance readings directional and investigate the shared deep-source membership check if a simpler representation emerges.
+- Phase 6 remains open. This implementation does not authorize or begin M3, and it does not mark the phase frozen.

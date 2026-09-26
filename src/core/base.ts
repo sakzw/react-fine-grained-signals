@@ -1,7 +1,5 @@
-import { attachReadableInterop, getReadableInterop } from "./interop.js";
 import { coreRuntime } from "./core-runtime.js";
 import { SIGNAL_BRAND } from "./signal-brand.js";
-import type { RuntimeSignal } from "./reactive-runtime.js";
 
 /** A readable reactive value. */
 export interface ReadonlySignal<T> {
@@ -57,73 +55,14 @@ export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
   return typeof (value as ReadonlySignal<unknown>).peek === "function";
 }
 
-/** Internal writable signal implementation shared with deep signals. */
-export class SignalImpl<T> implements Signal<T> {
-  readonly #source: RuntimeSignal<T>;
-  // Liveness bookkeeping for `deepSignal`'s per-key metadata pruning; see
-  // `markWatched`/`hasSubscribers` below. Not maintained on the read path
-  // itself — `deepSignal`'s `track()` already knows whether a subscriber is
-  // active and calls `markWatched()` there, so ordinary reads pay nothing.
-  #watchedSinceWrite = false;
-
-  constructor(initialValue: T) {
-    this.#source = coreRuntime.signal(initialValue);
-    const protocol = getReadableInterop(this.#source);
-    if (protocol !== undefined) attachReadableInterop(this, protocol);
-  }
-
-  /**
-   * Records that this signal was read while some runtime subscriber or React
-   * render collector was active. Cleared by the
-   * next write, so after that write's flush has drained, a still-false flag
-   * means every reactive subscriber has re-run without re-reading this signal
-   * and has therefore been unlinked from it.
-   */
-  markWatched(): void {
-    this.#watchedSinceWrite = true;
-  }
-
-  /**
-   * Conservative "somebody still depends on me" test used to decide whether a
-   * `deepSignal` per-key version signal is safe to drop. Never reports `false`
-   * for a signal that still has a live dependent: the React side is exact
-   * (`coreRuntime.hasSubscribers`), and graph reads are covered by `markWatched`,
-   * whose flag can only be `false` once a write has notified every subscriber
-   * and none of them read this signal again.
-   */
-  hasSubscribers(): boolean {
-    return this.#watchedSinceWrite || coreRuntime.hasSubscribers(this.#source);
-  }
-
-  get value(): T {
-    return this.#source.value;
-  }
-
-  set value(nextValue: T) {
-    this.#watchedSinceWrite = false;
-    this.#source.value = nextValue;
-  }
-
-  peek(): T {
-    return this.#source.peek();
-  }
-}
-
 /** Creates a writable reactive value. */
 export function signal<T>(initialValue: T): Signal<T> {
-  return registerSignal(new SignalImpl(initialValue));
+  return registerSignal(coreRuntime.signal(initialValue));
 }
 
 /** Creates a lazily evaluated reactive value. */
 export function computed<T>(getter: () => T): ReadonlySignal<T> {
-  const source = coreRuntime.computed(getter);
-  const result: ReadonlySignal<T> = {
-    get value(): T { return source.value; },
-    peek(): T { return source.peek(); },
-  };
-  const protocol = getReadableInterop(source);
-  if (protocol !== undefined) attachReadableInterop(result, protocol);
-  return registerSignal(result);
+  return registerSignal(coreRuntime.computed(getter));
 }
 
 /** Runs a reactive side effect and returns a disposer. */
