@@ -7,6 +7,8 @@ import {
   getReadableInterop,
   getSharedInteropContext,
   READABLE_INTEROP_V1,
+  withInteropSpeculativeMode,
+  withoutInteropSpeculativeMode,
   type ReadableInteropV1,
 } from "../../src/core/interop.js";
 import { useSignalTracking } from "../../src/react/use-signals.js";
@@ -67,6 +69,26 @@ function instrumentForeignReadable<T>(source: { readonly value: T }, onSubscribe
 }
 
 describe("Prototype A cross-runtime interop", () => {
+  it("restores nested shared speculative depth when suspended durable work throws", () => {
+    const context = getSharedInteropContext();
+    const baseline = context.speculativeDepth;
+    expect(() => withInteropSpeculativeMode(() => {
+      expect(context.speculativeDepth).toBe(baseline + 1);
+      withInteropSpeculativeMode(() => {
+        expect(context.speculativeDepth).toBe(baseline + 2);
+        expect(() => withoutInteropSpeculativeMode(() => {
+          expect(context.speculativeDepth).toBe(0);
+          withInteropSpeculativeMode(() => {
+            expect(context.speculativeDepth).toBe(1);
+            throw new Error("nested failure");
+          });
+        })).toThrow("nested failure");
+        expect(context.speculativeDepth).toBe(baseline + 2);
+      });
+    })).not.toThrow();
+    expect(context.speculativeDepth).toBe(baseline);
+  });
+
   it("attaches one stable non-enumerable V1 protocol per readable and unique runtime tokens", () => {
     const first = createLeanRuntime();
     const second = createLeanRuntime();
@@ -103,6 +125,39 @@ describe("Prototype A cross-runtime interop", () => {
     right.value = "right-2";
     expect(seen).toEqual(["left", "left-2", "right", "right-2"]);
     dispose();
+  });
+
+  it("suspends a foreign speculative scope while a durable effect tracks deep state", () => {
+    const runtimeA = createLeanRuntime(() => undefined);
+    const runtimeB = createLeanRuntime(() => undefined);
+    const trigger = runtimeB.signal(0);
+    const state = runtimeB.deepSignal({ user: { name: "Ada" } });
+    const seen: Array<[number, string]> = [];
+    runtimeB.effect(() => { seen.push([trigger.value, state.value.user.name]); });
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    let shouldTrigger = true;
+    const evaluate = vi.fn(() => {
+      if (shouldTrigger) {
+        shouldTrigger = false;
+        trigger.value = 1;
+      }
+      return 9;
+    });
+    const outer = runtimeA.computed(evaluate);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return React.createElement("output", { "aria-label": "foreign-deep-scope" }, outer.value);
+    }
+    render(React.createElement(Reader));
+    expect(seen).toEqual([[0, "Ada"], [1, "Ada"]]);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(seen).toEqual([[0, "Ada"], [1, "Ada"], [1, "Grace"]]);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
   it("preserves foreign source Object.is and semantic batch notification boundaries", () => {

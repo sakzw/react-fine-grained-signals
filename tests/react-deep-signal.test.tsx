@@ -6,7 +6,9 @@ import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  computed,
   deepSignal,
+  effect,
   signal,
   useComputed,
   useDeepSignal,
@@ -14,6 +16,7 @@ import {
   useSignalValue,
   useSignalTracking,
 } from "../src/index.js";
+import { getSharedInteropContext } from "../src/core/interop.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -23,6 +26,94 @@ afterEach(() => {
 });
 
 describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
+  it("keeps production effect deep tracking outside an outer speculative render", () => {
+    const trigger = signal(0);
+    const state = deepSignal({ user: { name: "Ada" } });
+    const seen: Array<[number, string]> = [];
+    const cleanups: string[] = [];
+    effect(() => {
+      const value = trigger.value;
+      seen.push([value, state.value.user.name]);
+      return () => { cleanups.push(state.value.user.name); };
+    });
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    let shouldTrigger = true;
+    const evaluate = vi.fn(() => {
+      if (shouldTrigger) {
+        shouldTrigger = false;
+        trigger.value = 1;
+      }
+      return 7;
+    });
+    const outer = computed(evaluate);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="production-deep-effect">{outer.value}</output>;
+    }
+    render(<Reader />);
+    expect(seen).toEqual([[0, "Ada"], [1, "Ada"]]);
+    expect(cleanups).toEqual(["Ada"]);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    const mountedRenders = renders.mock.calls.length;
+    act(() => { state.value.user.name = "Grace"; });
+    expect(seen).toEqual([[0, "Ada"], [1, "Ada"], [1, "Grace"]]);
+    expect(cleanups).toEqual(["Ada", "Grace"]);
+    expect(renders).toHaveBeenCalledTimes(mountedRenders);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+  });
+
+  it("keeps a production nested computed durable through peek without subscribing the outer", () => {
+    const state = deepSignal({ user: { name: "Ada" } });
+    const evaluateNested = vi.fn(() => state.value.user.name);
+    const nested = computed(evaluateNested);
+    const evaluateOuter = vi.fn(() => `${nested.peek()}!`);
+    const outer = computed(evaluateOuter);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="production-nested-peek">{outer.value}</output>;
+    }
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(<Reader />);
+    expect(screen.getByLabelText("production-nested-peek").textContent).toBe("Ada!");
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    const renderCount = renders.mock.calls.length;
+    const outerCount = evaluateOuter.mock.calls.length;
+    act(() => { state.value.user.name = "Grace"; });
+    expect(renders).toHaveBeenCalledTimes(renderCount);
+    expect(evaluateOuter).toHaveBeenCalledTimes(outerCount);
+    expect(nested.peek()).toBe("Grace");
+    expect(evaluateNested).toHaveBeenCalledTimes(2);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+  });
+
+  it("keeps production nested computed deep reads behind a tracked computed boundary", () => {
+    const state = deepSignal({ user: { name: "Ada" } });
+    const evaluateNested = vi.fn(() => state.value.user.name);
+    const nested = computed(evaluateNested);
+    const evaluateOuter = vi.fn(() => `${nested.value}!`);
+    const outer = computed(evaluateOuter);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="production-nested-value">{outer.value}</output>;
+    }
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(<Reader />);
+    expect(screen.getByLabelText("production-nested-value").textContent).toBe("Ada!");
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(screen.getByLabelText("production-nested-value").textContent).toBe("Grace!");
+    expect(evaluateNested).toHaveBeenCalledTimes(2);
+    expect(evaluateOuter).toHaveBeenCalledTimes(2);
+    expect(renders).toHaveBeenCalledTimes(2);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+  });
+
   it("does not add a selected deep leaf to an ancestor useSignalTracking scope", () => {
     const parentSource = signal("parent");
     const state = deepSignal({ user: { name: "Ada" } });

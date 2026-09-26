@@ -8,6 +8,7 @@ import {
   publishInteropRenderRead,
   withInteropGraphCollector,
   withInteropSpeculativeMode,
+  withoutInteropSpeculativeMode,
   withoutInteropGraphCollector,
   withoutInteropRenderCollector,
   type InteropGraphCollectorV1,
@@ -204,6 +205,16 @@ export function createReactiveRuntime(): ReactiveRuntime {
   const localNodesByProtocol = new WeakMap<ReadableInteropV1, SourceNode<unknown> | ComputedNode<unknown>>();
   const graphCollectors = new WeakMap<GraphNode, InteropGraphCollectorV1>();
   const speculativeStack = new Set<ComputedNode<unknown>>();
+
+  function withoutInheritedSpeculativeMode<T>(callback: () => T): T {
+    const previousRenderReadDepth = renderReadDepth;
+    renderReadDepth = 0;
+    try {
+      return withoutInteropSpeculativeMode(callback);
+    } finally {
+      renderReadDepth = previousRenderReadDepth;
+    }
+  }
 
   const system = createReactiveSystem({
     update(node) {
@@ -508,7 +519,8 @@ export function createReactiveRuntime(): ReactiveRuntime {
       try {
         next = {
           kind: "value",
-          value: withTrackedGraph(node, () => untrackedRender(node.getter)),
+          value: withoutInheritedSpeculativeMode(() =>
+            withTrackedGraph(node, () => untrackedRender(node.getter))),
         };
       } catch (error) {
         next = { kind: "error", error };
@@ -630,6 +642,9 @@ export function createReactiveRuntime(): ReactiveRuntime {
   function readComputedResult<T>(node: ComputedNode<T>, speculative: boolean): Result<T> {
     const shared = getSharedInteropContext();
     const inRender = hasActiveRenderCollector() || shared.renderCollector !== undefined;
+    if (speculativeStack.size > 0 && !speculativeStack.has(node)) {
+      return withoutInheritedSpeculativeMode(() => readComputedNormally(node));
+    }
     if (renderReadDepth > 0 || speculative || isInteropSpeculative() || inRender) {
       const graphCacheIsCurrent =
         node.result !== undefined &&
@@ -691,10 +706,6 @@ export function createReactiveRuntime(): ReactiveRuntime {
     }
   }
 
-  function readComputed<T>(node: ComputedNode<T>): T {
-    return unwrap(readComputedResult(node, false));
-  }
-
   function readNodeResult<T>(node: SourceNode<T> | ComputedNode<T>): Result<T> {
     if (node.kind === "source") {
       return { kind: "value", value: readSource(node) };
@@ -724,7 +735,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
       const cleanup = reaction.cleanup;
       reaction.cleanup = undefined;
       try {
-        untracked(cleanup);
+        withoutInheritedSpeculativeMode(() => untracked(cleanup));
       } catch (error) {
         reportFailure(error);
       }
@@ -742,10 +753,10 @@ export function createReactiveRuntime(): ReactiveRuntime {
     reactionDepth += 1;
     let returnedCleanup: unknown;
     try {
-        returnedCleanup = withTrackedGraph(
+        returnedCleanup = withoutInheritedSpeculativeMode(() => withTrackedGraph(
           reaction,
           () => untrackedRender(reaction.runCallback),
-        );
+        ));
     } catch (error) {
       reportFailure(error);
     } finally {
@@ -806,7 +817,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
       const cleanup = reaction.cleanup;
       reaction.cleanup = undefined;
       try {
-        untracked(cleanup);
+        withoutInheritedSpeculativeMode(() => untracked(cleanup));
       } catch (error) {
         reportFailure(error);
       }
@@ -951,7 +962,8 @@ export function createReactiveRuntime(): ReactiveRuntime {
         return unwrap(result);
       },
       peek() {
-        return untracked(() => readComputed(node));
+        return untracked(() =>
+          withoutInheritedSpeculativeMode(() => unwrap(readComputedNormally(node))));
       },
       getRenderVersion: () => node.revision,
       subscribeRender: (listener) => subscribeNode(node, listener),

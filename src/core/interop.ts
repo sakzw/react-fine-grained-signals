@@ -190,6 +190,18 @@ export function withInteropSpeculativeMode<T>(callback: () => T): T {
   }
 }
 
+/** Run durable graph work without inheriting an outer speculative callback. */
+export function withoutInteropSpeculativeMode<T>(callback: () => T): T {
+  const context = getSharedInteropContext();
+  const previousDepth = context.speculativeDepth;
+  context.speculativeDepth = 0;
+  try {
+    return callback();
+  } finally {
+    context.speculativeDepth = previousDepth;
+  }
+}
+
 export function isInteropSpeculative(): boolean {
   return getSharedInteropContext().speculativeDepth > 0;
 }

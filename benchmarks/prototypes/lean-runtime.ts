@@ -12,6 +12,7 @@ import {
   getReadableInterop,
   getSharedInteropContext,
   withInteropSpeculativeMode,
+  withoutInteropSpeculativeMode,
   type InteropGraphCollectorV1,
   type ReadableInteropV1,
   type SharedInteropContextV1,
@@ -428,11 +429,13 @@ export function createLeanRuntime(
     try {
       cycle += 1;
       try {
-        if ("getter" in node) {
-          promoteSpeculativeCache(node);
-          readComputedCore(node);
-        }
-        else readSignalCore(node);
+        withoutInteropSpeculativeMode(() => {
+          if ("getter" in node) {
+            promoteSpeculativeCache(node);
+            readComputedCore(node);
+          }
+          else readSignalCore(node);
+        });
       } catch {
         // A protocol watcher still tracks an errored computed boundary.
       }
@@ -530,8 +533,8 @@ export function createLeanRuntime(
     try {
       cycle += 1;
       try {
-        node.value = withTrackedGraph(node, () =>
-          withoutComponentRenderCollection(node.getter, sharedInterop));
+        node.value = withoutInteropSpeculativeMode(() => withTrackedGraph(node, () =>
+          withoutComponentRenderCollection(node.getter, sharedInterop)));
         node.error = undefined;
         node.hasError = false;
       } catch (error) {
@@ -672,7 +675,16 @@ export function createLeanRuntime(
     const cleanGraph = node.initialized && !(node.flags & (Dirty | Pending)) &&
       !(node.foreignDependent && !node.live);
     let result: { hasError: boolean; value: T | undefined; error: unknown };
-    if (cleanGraph) {
+    if (speculativeReads !== undefined && node !== activeSpeculativeComputed) {
+      result = withoutInteropSpeculativeMode(() => {
+        try {
+          readComputedCore(node);
+          return { hasError: node.hasError, value: node.value, error: node.error };
+        } catch (error) {
+          return { hasError: true, value: undefined, error };
+        }
+      });
+    } else if (cleanGraph) {
       result = { hasError: node.hasError, value: node.value, error: node.error };
     } else if (speculativeDependenciesAreCurrent(node)) {
       result = node.speculativeResult as { hasError: boolean; value: T | undefined; error: unknown };
@@ -747,7 +759,8 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      withoutGraphCollection(() => withoutAllRenderCollection(cleanup));
+      withoutInteropSpeculativeMode(() =>
+        withoutGraphCollection(() => withoutAllRenderCollection(cleanup)));
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -776,7 +789,8 @@ export function createLeanRuntime(
       cycle += 1;
       runDepth += 1;
       try {
-        const cleanup = withTrackedGraph(effect, () => withoutAllRenderCollection(effect.fn));
+        const cleanup = withoutInteropSpeculativeMode(() =>
+          withTrackedGraph(effect, () => withoutAllRenderCollection(effect.fn)));
         if (effect.active) effect.cleanup = cleanup || undefined;
         else if (typeof cleanup === "function") runCleanupValue(cleanup);
       } catch (error) {
@@ -903,7 +917,8 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      withoutGraphCollection(() => withoutAllRenderCollection(cleanup));
+      withoutInteropSpeculativeMode(() =>
+        withoutGraphCollection(() => withoutAllRenderCollection(cleanup)));
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -1029,7 +1044,10 @@ export function createLeanRuntime(
             publishForeignGraphRead(node.interop, node.revision);
           }
         },
-        peek() { return untracked(() => readComputed(node)); },
+        peek() {
+          return untracked(() =>
+            withoutInteropSpeculativeMode(() => readComputedCore(node)));
+        },
         getRenderVersion() { return getRenderVersion(node); },
         subscribeRender(listener) { return subscribeRenderNode(node, listener); },
       };

@@ -41,6 +41,16 @@ try {
   const [a, b, c] = copies;
   assert.notEqual(a.createLeanRuntime, b.createLeanRuntime);
   assert.equal(a.getSharedInteropContext(), b.getSharedInteropContext());
+  a.withInteropSpeculativeMode(() => {
+    b.withInteropSpeculativeMode(() => {
+      assert.equal(a.getSharedInteropContext().speculativeDepth, 2);
+      b.withoutInteropSpeculativeMode(() => {
+        assert.equal(a.getSharedInteropContext().speculativeDepth, 0);
+      });
+      assert.equal(a.getSharedInteropContext().speculativeDepth, 2);
+    });
+  });
+  assert.equal(a.getSharedInteropContext().speculativeDepth, 0);
   const runtimeA = a.createLeanRuntime(() => undefined);
   const runtimeB = b.createLeanRuntime(() => undefined);
   const runtimeC = c.createLeanRuntime(() => undefined);

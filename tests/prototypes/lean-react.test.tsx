@@ -5,6 +5,7 @@ import { StrictMode, Suspense, act, useInsertionEffect, type ReactNode } from "r
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasActiveRenderCollector } from "../../src/core/render-tracking.js";
+import { getSharedInteropContext } from "../../src/core/interop.js";
 import { useManagedSignals, useSignalTracking } from "../../src/react/use-signals.js";
 import { createLeanRuntime } from "../../benchmarks/prototypes/lean-runtime.js";
 
@@ -292,6 +293,97 @@ describe("Prototype A React render layer", () => {
     expect(renders).toHaveBeenCalledTimes(1);
   });
 
+  it("keeps a durable effect's deep dependency through a speculative trigger and cleanup", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const trigger = runtime.signal(0);
+    const state = runtime.deepSignal({ user: { name: "Ada" } });
+    const seen: Array<[number, string]> = [];
+    const cleanups: string[] = [];
+    runtime.effect(() => {
+      const value = trigger.value;
+      seen.push([value, state.value.user.name]);
+      return () => { cleanups.push(state.value.user.name); };
+    });
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    let shouldTrigger = true;
+    const evaluate = vi.fn(() => {
+      if (shouldTrigger) {
+        shouldTrigger = false;
+        trigger.value = 1;
+      }
+      return 7;
+    });
+    const outer = runtime.computed(evaluate);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="deep-effect-speculation">{outer.value}</output>;
+    }
+    render(<Reader />);
+    expect(seen).toEqual([[0, "Ada"], [1, "Ada"]]);
+    expect(cleanups).toEqual(["Ada"]);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    expect(outer.peek()).toBe(7);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(seen).toEqual([[0, "Ada"], [1, "Ada"], [1, "Grace"]]);
+    expect(cleanups).toEqual(["Ada", "Grace"]);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+  });
+
+  it("keeps nested computed peek durable without making the outer computation depend on it", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ user: { name: "Ada" } });
+    const evaluateNested = vi.fn(() => state.value.user.name);
+    const nested = runtime.computed(evaluateNested);
+    const evaluateOuter = vi.fn(() => `${nested.peek()}!`);
+    const outer = runtime.computed(evaluateOuter);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="nested-peek-deep">{outer.value}</output>;
+    }
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(<Reader />);
+    expect(screen.getByLabelText("nested-peek-deep").textContent).toBe("Ada!");
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(renders).toHaveBeenCalledTimes(1);
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(nested.peek()).toBe("Grace");
+    expect(evaluateNested).toHaveBeenCalledTimes(2);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+  });
+
+  it("tracks nested computed boundaries while their own deep dependencies stay durable", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ user: { name: "Ada" } });
+    const evaluateNested = vi.fn(() => state.value.user.name);
+    const nested = runtime.computed(evaluateNested);
+    const evaluateOuter = vi.fn(() => `${nested.value}!`);
+    const outer = runtime.computed(evaluateOuter);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="nested-tracked-deep">{outer.value}</output>;
+    }
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
+    render(<Reader />);
+    expect(screen.getByLabelText("nested-tracked-deep").textContent).toBe("Ada!");
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(screen.getByLabelText("nested-tracked-deep").textContent).toBe("Grace!");
+    expect(evaluateNested).toHaveBeenCalledTimes(2);
+    expect(evaluateOuter).toHaveBeenCalledTimes(2);
+    expect(renders).toHaveBeenCalledTimes(2);
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
+  });
+
   it("restores nested untracked collectors after a caught throw inside a speculative getter", () => {
     const runtime = createLeanRuntime(() => undefined);
     const tracked = runtime.signal(1);
@@ -535,6 +627,7 @@ describe("Prototype A React render layer", () => {
     const runtime = createLeanRuntime(() => undefined);
     const state = runtime.deepSignal({ user: { name: "Ada", age: 36 } });
     const derived = runtime.computed(() => state.value.user.name.toUpperCase());
+    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
     const renders = vi.fn();
     function Reader() {
       useSignalTracking();
@@ -543,6 +636,7 @@ describe("Prototype A React render layer", () => {
     }
     render(<Reader />);
     expect(screen.getByLabelText("deep-prototype").textContent).toBe("ADA");
+    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBeGreaterThan(epoch);
     act(() => { state.value.user.age = 37; });
     expect(renders).toHaveBeenCalledTimes(1);
     act(() => { state.value.user.name = "Grace"; });
