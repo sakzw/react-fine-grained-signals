@@ -23,7 +23,7 @@ const vite = await createViteServer({
   },
   plugins: [signals({ mode: "auto" })],
   resolve: {
-    dedupe: ["alien-signals", "react", "react-dom"],
+    dedupe: ["react", "react-dom"],
     alias: [
       {
         find: /^react-fine-grained-signals\/runtime$/,

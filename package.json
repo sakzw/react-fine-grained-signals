@@ -60,6 +60,9 @@
   "files": [
     "dist"
   ],
+  "dependencies": {
+    "alien-signals": "^3.2.1"
+  },
   "scripts": {
     "bench": "pnpm build:runtime && node --expose-gc benchmarks/core.mjs",
     "bench:deep": "pnpm build:runtime && node --expose-gc benchmarks/deep-signal.mjs",
@@ -90,7 +93,6 @@
     "size:update": "pnpm build:runtime && node scripts/check-size.mjs --update"
   },
   "peerDependencies": {
-    "alien-signals": "^3.2.1",
     "react": ">=19.0.0"
   },
   "devDependencies": {
@@ -101,7 +103,6 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
     "@vitest/coverage-v8": "4.1.11",
-    "alien-signals": "^3.2.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "jsdom": "^30.0.1",
     "oxlint": "^1.80.0",

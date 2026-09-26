@@ -33,7 +33,7 @@ export default defineConfig({
     reactRouter(),
   ],
   resolve: {
-    dedupe: ["alien-signals", "react", "react-dom"],
+    dedupe: ["react", "react-dom"],
     alias: [
       {
         find: /^react-fine-grained-signals\/utils$/,

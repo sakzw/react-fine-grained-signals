@@ -13,10 +13,8 @@ See [`docs/README.md`](docs/README.md) for guides on using the library, design i
 ## Installation
 
 ```sh
-pnpm add react-fine-grained-signals alien-signals
+pnpm add react-fine-grained-signals
 ```
-
-`alien-signals` is a peer dependency, so install it alongside this package.
 
 ## Setup
 

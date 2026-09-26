@@ -5,7 +5,7 @@ import { StrictMode, Suspense, act } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
-import { createLowLevelRuntime } from "../src/core/low-level-runtime.js";
+import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
   computed,
   deepSignal,
@@ -308,7 +308,7 @@ describe("useSignalTracking render tracking", () => {
   });
 
   it("preserves the first observed version when a dependency changes between render reads", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const renders = vi.fn();
     let writeDuringRender = true;
@@ -331,7 +331,7 @@ describe("useSignalTracking render tracking", () => {
   });
 
   it("detects a render-to-commit change and revert from its first observed version", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal("same");
     const renders = vi.fn();
     let revertDuringRender = true;

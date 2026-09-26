@@ -51,15 +51,15 @@ try {
   }
 
   const [copyA, copyB, copyC] = copies;
-  assert.notEqual(copyA.createLowLevelRuntime, copyB.createLowLevelRuntime);
-  assert.notEqual(copyB.createLowLevelRuntime, copyC.createLowLevelRuntime);
+  assert.notEqual(copyA.createReactiveRuntime, copyB.createReactiveRuntime);
+  assert.notEqual(copyB.createReactiveRuntime, copyC.createReactiveRuntime);
   assert.equal(copyA.getSharedInteropContext(), copyB.getSharedInteropContext());
   assert.equal(copyB.getSharedInteropContext(), copyC.getSharedInteropContext());
   assert.equal(copyA.READABLE_INTEROP_V1, copyB.READABLE_INTEROP_V1);
 
   // Runtime A -> B source, including dynamic edges and Object.is behavior.
-  const runtimeA = copyA.createLowLevelRuntime();
-  const runtimeB = copyB.createLowLevelRuntime();
+  const runtimeA = copyA.createReactiveRuntime();
+  const runtimeB = copyB.createReactiveRuntime();
   const sourceB = runtimeB.signal(1);
   const chooseB = runtimeB.signal(true);
   const otherB = runtimeB.signal(2);
@@ -97,7 +97,7 @@ try {
   disposeZero();
 
   // Three independently bundled runtimes retain both intermediate boundaries.
-  const runtimeC = copyC.createLowLevelRuntime();
+  const runtimeC = copyC.createReactiveRuntime();
   const sourceC = runtimeC.signal(1);
   const computedB = runtimeB.computed(() => sourceC.value * 2);
   const computedA = runtimeA.computed(() => computedB.value + 1);
@@ -213,7 +213,7 @@ async function verifyDuplicateReactRender(copyA, copyB) {
     const { act } = React;
     const { createRoot } = await import("react-dom/client");
     const { renderToString } = await import("react-dom/server");
-    const foreignRuntime = copyB.createLowLevelRuntime();
+    const foreignRuntime = copyB.createReactiveRuntime();
     const foreign = foreignRuntime.signal("before");
     function Reader() {
       copyA.useSignalTracking();
@@ -229,7 +229,7 @@ async function verifyDuplicateReactRender(copyA, copyB) {
       foreign.value = "after";
     });
     assert.equal(rootElement.textContent, "after", "copy A's React collector subscribes to copy B's readable");
-    const renderRuntime = copyB.createLowLevelRuntime();
+    const renderRuntime = copyB.createReactiveRuntime();
     const renderSource = renderRuntime.signal(10);
     const renderComputed = renderRuntime.computed(() => Math.floor(renderSource.value / 10));
     let renderCount = 0;
@@ -331,7 +331,7 @@ async function verifyDuplicateReactRender(copyA, copyB) {
     // A direct pair of managed hooks exercises managed/managed nesting across
     // copies in one render attempt and ensures finishing the inner store does
     // not lose the outer collector.
-    const managedA = copyA.createLowLevelRuntime().signal("A");
+    const managedA = copyA.createReactiveRuntime().signal("A");
     const managedB = renderRuntime.signal("B");
     function ManagedPair() {
       const outer = copyA.useManagedSignals();
@@ -345,8 +345,8 @@ async function verifyDuplicateReactRender(copyA, copyB) {
     await act(async () => root.render(React.createElement(ManagedPair)));
     assert.equal(rootElement.textContent, "A:B");
 
-    const siblingA = copyA.createLowLevelRuntime().signal("left");
-    const siblingB = copyB.createLowLevelRuntime().signal("right");
+    const siblingA = copyA.createReactiveRuntime().signal("left");
+    const siblingB = copyB.createReactiveRuntime().signal("right");
     let siblingRendersA = 0;
     let siblingRendersB = 0;
     function SiblingA() {

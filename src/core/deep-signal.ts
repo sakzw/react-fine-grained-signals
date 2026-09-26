@@ -1,4 +1,11 @@
-import { getActiveSub, getBatchDepth } from "alien-signals";
+import { coreRuntime } from "./core-runtime.js";
+import {
+  attachReadableInterop,
+  getReadableInterop,
+  getSharedInteropContext,
+  isInteropSpeculative,
+  markInteropSpeculativeDeepRead,
+} from "./interop.js";
 import {
   batch,
   isSignal,
@@ -62,6 +69,20 @@ const readonlyCollectionViewToRaw = new WeakMap<object, Map<unknown, unknown> | 
 // stored. Remember that copy so assigning the same carrier again preserves the
 // same identity and aliases, just like assigning an ordinary raw object does.
 const normalizedProxyCarriers = new WeakMap<object, object>();
+
+function shouldTrackDeepRead(): boolean {
+  if (isInteropSpeculative()) {
+    // No per-key metadata during speculation; the computed's speculative
+    // result must therefore not be promoted as a complete graph cache.
+    markInteropSpeculativeDeepRead();
+    return false;
+  }
+  const shared = getSharedInteropContext();
+  return coreRuntime.hasActiveSubscriber() ||
+    hasActiveRenderCollector() ||
+    shared.graphCollector !== undefined ||
+    shared.renderCollector !== undefined;
+}
 
 /**
  * The realm's built-in prototype objects, rejected deliberately rather than by
@@ -659,7 +680,7 @@ const track = (
   indices: Set<number>,
   key: PropertyKey,
 ): void => {
-  if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
+  if (!shouldTrackDeepRead()) return;
   if (isInheritedPrototypeMember(target, key)) return;
   if (isArrayIndex(key)) indices.add(Number(key));
   const version = getVersion(versions, key);
@@ -703,7 +724,7 @@ const markPrunable = (metadata: PropertyMetadata, key: PropertyKey): void => {
 const sweepPrunedKeys = (metadata: PropertyMetadata, target: object): void => {
   const prunable = metadata.prunable;
   if (prunable === undefined || prunable.size === 0) return;
-  if (getBatchDepth() !== 0) return;
+  if (coreRuntime.getBatchDepth() !== 0) return;
 
   for (const key of prunable) {
     // The key came back (an index was written again, a property re-added):
@@ -731,7 +752,7 @@ const sweepPrunedKeys = (metadata: PropertyMetadata, target: object): void => {
 };
 
 const trackIteration = (metadata: PropertyMetadata): void => {
-  if (getActiveSub() === undefined && !hasActiveRenderCollector()) return;
+  if (!shouldTrackDeepRead()) return;
   metadata.iteration ??= signal(0);
   metadata.iteration.value;
 };
@@ -984,6 +1005,8 @@ class DeepSignalImpl<T extends object> implements DeepSignal<T> {
 
   constructor(initialValue: T) {
     this.#source = new SignalImpl(initialValue);
+    const protocol = getReadableInterop(this.#source);
+    if (protocol !== undefined) attachReadableInterop(this, protocol);
   }
 
   get value(): T {

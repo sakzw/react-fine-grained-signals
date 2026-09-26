@@ -69,7 +69,7 @@ export function useTaskStore(): TaskStore {
 
 **Hot module replacement。** `store.ts` が差し替わると初期値のまま新しいsignalが作られるため、保存のたびに状態がリセットされます。さらに悪いことに、差し替えられなかったコンポーネント側のmoduleは古いsignalへの束縛を保持し続け、書き込みが見えなくなります。リセットを受け入れるか、差し替えをまたいでストアを保持する `import.meta.hot.accept` ハンドラを書いてください。
 
-**ストアを別パッケージに置く場合。** リアクティビティには `alien-signals` のインスタンスが共有されていることが必要です。依存追跡がそのmodule自身のグローバルな状態に置かれているためです。ストアのパッケージが自前のコピーを解決してしまうと、読み取りは正しい値を返したまま、更新の伝播だけが黙って止まります。`alien-signals` をpeer dependencyにしているのはこのためです。[パッケージングの検討docs](design/packaging.ja.md)と[コアプリミティブ](core-primitives.ja.md#issignal)を参照してください。workspaceで重複を排除し、グローバルストアが片方では更新されるのにもう片方では更新されない場合は、まず重複を疑ってください。
+**ストアを別パッケージに置く場合。** RFSGの各package copyは独立したruntimeを持ち、privateなsame-global protocolを通じてリアクティブなreadを連携できるため、consumerと同じ `alien-signals` moduleを解決する必要はありません。copyをまたぐbatchは各runtime内でのみ動作し、atomicにはなりません。`SIGNAL_BRAND` によるidentity判定とreactive interopは別のcontractです。[パッケージングの検討docs](design/packaging.ja.md)と[コアプリミティブ](core-primitives.ja.md#issignal)を参照してください。
 
 **テスト。** Vitestがまっさらなmodule registryを与えるのはテスト*ファイル*ごとであってテストごとではないため、module scopeのsignalは同一ファイル内の次の `it()` へ値を持ち越します。`beforeEach` でリセットするか、テストの内側で状態を作ってください。このリポジトリのテストが各 `it()` の中でsignalを作っているのは、まさにこの理由によるものです。
 

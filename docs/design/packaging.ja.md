@@ -4,9 +4,9 @@
 
 **状態:** 決定済み。このdocsは、パッケージをこの形で配布している理由を記録するものです。以下の判断はいずれも実装済みでcheckによって守られており、未決定の設計課題はありません。
 
-## `alien-signals` をpeer dependencyにしている理由
+## `alien-signals` はruntime dependency
 
-`alien-signals` は直接のdependencyではなく **peer dependency** です。alien-signalsの依存追跡はmodule globalな状態（`getActiveSub` / `setActiveSub`）に置かれているため、1つのアプリケーションに2つのcopyが入るとbytesを無駄にするだけでは済みません。片方のcopyが追跡した読み取りはもう片方から見えず、しかも例外は投げられません。peerとして宣言することでpackage managerが単一instanceに解決し、`pnpm test:consumer` が公開manifestのその状態を検証します。
+RFSGは `alien-signals/system` を使ったリアクティブランタイムをpackage copyごとに1つ所有します。そのため `alien-signals` はruntime dependencyであり、consumerが個別にinstallする必要はありません。独立したRFSGのcopy同士はRFSGのprivateなsame-global readable protocolを通じて連携し、共有されたalien-signals moduleを必要としません。Reactは引き続きpeer dependencyです。copyをまたぐbatchは各copy内でのみ動作し、1つのatomic transactionにはなりません。`pnpm test:consumer` がmanifestを検証し、`pnpm test:phase4-duplicate` が独立したalien-signals system同士の動作を検証します。
 
 ## `"sideEffects": false`
 

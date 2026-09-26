@@ -13,10 +13,8 @@
 ## インストール
 
 ```sh
-pnpm add react-fine-grained-signals alien-signals
+pnpm add react-fine-grained-signals
 ```
-
-`alien-signals` はpeer dependencyなので、上のように併せてinstallしてください。
 
 ## セットアップ
 

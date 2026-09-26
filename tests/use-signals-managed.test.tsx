@@ -4,7 +4,7 @@
 import { StrictMode, Suspense, act, useLayoutEffect } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { computed, deepSignal, signal } from "../src/index.js";
+import { computed, deepSignal, signal, useComputed } from "../src/index.js";
 import { useManagedSignals } from "../src/runtime.js";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
 import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
@@ -258,6 +258,32 @@ describe("managed useManagedSignals render scope", () => {
       source.value = [4, 5];
     });
     expect(screen.getByLabelText("managed array computed").textContent).toBe("8,10");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("tracks deep properties read by a computed during its speculative render", () => {
+    const state = deepSignal({ tasks: [{ done: false }] });
+    const renders = vi.fn();
+
+    function Reader() {
+      const remaining = useComputed(
+        () => state.value.tasks.filter((task) => !task.done).length,
+        [state],
+      );
+      return managed(() => {
+        renders();
+        return <output aria-label="managed deep computed">{remaining.value}</output>;
+      });
+    }
+
+    render(<Reader />);
+    expect(screen.getByLabelText("managed deep computed").textContent).toBe("1");
+
+    act(() => {
+      state.value.tasks[0]!.done = true;
+    });
+
+    expect(screen.getByLabelText("managed deep computed").textContent).toBe("0");
     expect(renders).toHaveBeenCalledTimes(2);
   });
 

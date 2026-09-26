@@ -60,7 +60,7 @@ effect(fn: () => void | (() => void)): () => void
 
 ### エラーの封じ込め
 
-`effect()` のコールバック（本体、またはそれが返したクリーンアップ関数）が例外を投げても、その実行の引き金になった書き込みにエラーは伝播しません。この封じ込めは体裁の問題ではなく必須です。`alien-signals` はeffectが例外を投げるとeffect queueの残りを実行せずに破棄するため、エラーがそのまま抜けると同じflushでキューに並んでいた他のeffectがすべて黙って取り消され、さらにその書き込みを行ったevent handlerまで例外が飛び出してしまいます。実際にはスキップされるのは失敗したeffectだけで、同じflush内の他のeffectは実行され、失敗したeffect自身も以降の書き込みに反応し続けます。クリーンアップが投げた例外も同じように封じ込められ、そのeffectの本体が次に再実行されるのを妨げません。
+`effect()` のコールバック（本体または返されたクリーンアップ関数）が例外を投げても、その実行を引き起こした書き込みには伝播しません。runtimeが例外を封じ込めて報告するため、同じflushでキューに入っている他のeffectを取り消しません。失敗したeffectは後の書き込みにも反応し、クリーンアップの失敗も本体の再実行を妨げません。
 
 エラーは握り潰されず、必ず報告されます。`console.error` に `"react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish."` というメッセージが `{ cause: error }` 付きで記録されます。ホストが [`reportError()`](https://developer.mozilla.org/ja/docs/Web/API/Window/reportError) を実装している環境（ブラウザ、Web Worker、Deno、Bun）では、さらに元のエラーがそこへ渡されて `error` イベントとしてdispatchされるため、`window.onerror` や `addEventListener("error")` のハンドラ、テレメトリSDKからは未捕捉エラーとまったく同じように観測できます（実際に未捕捉の例外が発生するわけではありません）。Nodeにはサポート対象のどのバージョンにも `reportError` グローバルが存在しないため、そちらでは `console.error` が報告手段となります。
 
@@ -128,7 +128,7 @@ isSignal(value: unknown): value is ReadonlySignal<unknown>
 
 そのため判定はpackage instanceをまたいで機能する必要があります。すべてのsignalは `Symbol.for("react-fine-grained-signals.signal")` をキーとする列挙不可のbrandを持ち、その値はプロトコルバージョン（現在は `1`）です。`isSignal` は、サポートされたバージョンのbrandを持ち、かつ `peek()` を公開している値を受け入れます。これにより、packageが二重に解決された場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）や、realmの境界をまたいだsignalも認識されます。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
 
-これが解決するのは判定だけです。リアクティビティにはさらに `alien-signals` のinstanceが共有されていることが必要で、依存追跡がそのmoduleのglobalな状態に置かれているためです。peer dependencyにしている理由は[パッケージングの検討docs](design/packaging.ja.md)を参照してください。認識された外部のsignalは値を正しく読み取れますが、更新が伝播するのは下層のリアクティブコアが共有されている間だけです。
+identityとreactivityは別のcontractを使います。公開signalのshapeを `isSignal()` が認識するための `SIGNAL_BRAND` と、RFSG package copy間でリアクティブなreadを伝えるprivateな `ReadableInteropV1` protocolは別物です。各copyは `alien-signals/system` 上に独自runtimeを持つため、alien-signals moduleの共有は不要です。copyをまたぐbatch呼び出しは1つのatomic transactionにはなりません。詳しくは[パッケージングの検討docs](design/packaging.ja.md)を参照してください。
 
 `deepSignal` の状態にbrandを代入すると例外になります。brandが付いた部分木はsignalとして判定され、リアクティブ化されなくなるためです。
 

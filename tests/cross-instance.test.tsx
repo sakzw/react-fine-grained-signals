@@ -17,8 +17,8 @@ const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal");
  * package: the brand and the `{ value, peek() }` contract are all this instance
  * can see, which is the situation duplicate resolution or a realm boundary
  * actually produces. The reads delegate to a local signal so the JSX runtime
- * has something to react to; a genuine duplicate keeps reactivity only while
- * the alien-signals core underneath is shared.
+ * has something to react to. Genuine independently bundled package copies
+ * are exercised by the cross-copy consumer smoke test.
  */
 function foreignSignal<T>(source: ReadonlySignal<T>): ReadonlySignal<T> {
   const foreign: ReadonlySignal<T> = {

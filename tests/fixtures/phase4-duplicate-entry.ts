@@ -1,6 +1,6 @@
 // Test-only entry. This is built into isolated temporary bundles by the
 // Phase 4 smoke test and is not part of the package's public exports.
-export { createLowLevelRuntime } from "../../src/core/low-level-runtime.js";
+export { createReactiveRuntime } from "../../src/core/reactive-runtime.js";
 export {
   getSharedInteropContext,
   READABLE_INTEROP_V1,

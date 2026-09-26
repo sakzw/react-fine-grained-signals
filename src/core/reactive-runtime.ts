@@ -48,6 +48,9 @@ interface ComputedNode<T> extends GraphNode {
   result: Result<T> | undefined;
   /** Most recent value/error snapshot exposed to render and direct observers. */
   observedResult: Result<T> | undefined;
+  speculativeResult: Result<T> | undefined;
+  speculativeDeps: Map<ReadableInteropV1, number> | undefined;
+  speculativeCachePromotable: boolean;
   /** Monotonic observation generation for render-to-commit race detection. */
   revision: number;
   live: boolean;
@@ -63,6 +66,8 @@ interface ReactionNode extends GraphNode {
   /** Runtime lifecycle state; alien ReactiveFlags remain graph state only. */
   active: boolean;
   running: boolean;
+  hasComputedDependency: boolean;
+  requiresDirtyCheck: boolean;
   disposeRequested: boolean;
   disposed: boolean;
   scheduled: boolean;
@@ -99,41 +104,50 @@ const ReactiveFlags = (alienSignalsSystem as unknown as {
   };
 }).ReactiveFlags;
 
-export interface LowLevelReadonlySignal<T> extends RenderDependency {
+export interface RuntimeReadonlySignal<T> extends RenderDependency {
   readonly value: T;
   peek(): T;
   subscribeRender(listener: () => void): () => void;
 }
 
-export interface LowLevelSignal<T> extends LowLevelReadonlySignal<T> {
+export interface RuntimeSignal<T> extends RuntimeReadonlySignal<T> {
   value: T;
 }
 
-export interface LowLevelRuntime {
-  signal<T>(initialValue: T): LowLevelSignal<T>;
-  computed<T>(getter: () => T): LowLevelReadonlySignal<T>;
+export interface ReactiveRuntime {
+  signal<T>(initialValue: T): RuntimeSignal<T>;
+  computed<T>(getter: () => T): RuntimeReadonlySignal<T>;
   /** Creates a flat effect; nested effects are not owned unless returned as cleanup. */
   effect(fn: () => void | (() => void)): () => void;
   batch<T>(callback: () => T): T;
   untracked<T>(callback: () => T): T;
-  subscribe<T>(source: LowLevelReadonlySignal<T>, listener: () => void): () => void;
+  subscribe<T>(source: RuntimeReadonlySignal<T>, listener: () => void): () => void;
+  hasActiveSubscriber(): boolean;
+  getBatchDepth(): number;
+  hasSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
 }
 
-const READABLE_NODE = Symbol("low-level-readable-node");
+const READABLE_NODE = Symbol("reactive-runtime-readable-node");
 
-type NodeBackedReadable<T> = LowLevelReadonlySignal<T> & {
+type NodeBackedReadable<T> = RuntimeReadonlySignal<T> & {
   readonly [READABLE_NODE]: RuntimeNode;
 };
 
 /** Value equality cuts propagation; every error reevaluation is a fresh graph result. */
-function graphResultsEqual<T>(left: Result<T> | undefined, right: Result<T>): boolean {
+function graphResultsEqual<T>(
+  left: Result<T> | undefined,
+  right: Result<T>,
+): boolean {
   if (left === undefined || left.kind !== right.kind) return false;
   return left.kind === "value" && right.kind === "value"
     ? Object.is(left.value, right.value)
     : false;
 }
 
-function observedResultsEqual<T>(left: Result<T> | undefined, right: Result<T>): boolean {
+function observedResultsEqual<T>(
+  left: Result<T> | undefined,
+  right: Result<T>,
+): boolean {
   if (left === undefined || left.kind !== right.kind) return false;
   return left.kind === "value" && right.kind === "value"
     ? Object.is(left.value, right.value)
@@ -150,7 +164,9 @@ function unwrap<T>(result: Result<T>): T {
 function reportFailure(kind: "effect" | "cleanup", error: unknown): void {
   try {
     console.error(
-      `react-fine-grained-signals low-level spike: an ${kind} callback threw; the error was contained so the graph can continue.`,
+      kind === "cleanup"
+        ? "react-fine-grained-signals: an effect cleanup callback threw; the error is contained and reported here so this flush can finish."
+        : "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
       { cause: error },
     );
   } catch {
@@ -170,8 +186,8 @@ function deactivateExternal(node: ExternalNode): void {
   subscription?.unsubscribe();
 }
 
-/** Creates an isolated experimental graph using only alien-signals/system. */
-export function createLowLevelRuntime(): LowLevelRuntime {
+/** Creates an isolated reactive graph using only alien-signals/system. */
+export function createReactiveRuntime(): ReactiveRuntime {
   const runtimeToken = {};
   let activeSub: ReactiveNode | undefined;
   let cycle = 0;
@@ -187,6 +203,8 @@ export function createLowLevelRuntime(): LowLevelRuntime {
   const queue: Array<ReactionNode | undefined> = [];
   const ownedReadables = new WeakSet<object>();
   const externalNodes = new WeakMap<ReadableInteropV1, ExternalNode>();
+  const localNodesByProtocol = new WeakMap<ReadableInteropV1, SourceNode<unknown> | ComputedNode<unknown>>();
+  const graphCollectors = new WeakMap<GraphNode, InteropGraphCollectorV1>();
   const speculativeStack = new Set<ComputedNode<unknown>>();
 
   const system = createReactiveSystem({
@@ -212,6 +230,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     notify(node) {
       const reaction = node as ReactionNode;
       reaction.flags &= ~ReactiveFlags.Watching;
+      if (batchDepth > 0) reaction.requiresDirtyCheck = true;
       enqueue(reaction);
     },
     unwatched(node) {
@@ -229,6 +248,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
 
   function flush(): void {
     if (flushing || batchDepth > 0 || reactionDepth > 0 || propagationDepth > 0) return;
+    if (queueIndex >= queue.length) return;
     flushing = true;
     try {
       while (queueIndex < queue.length) {
@@ -373,7 +393,9 @@ export function createLowLevelRuntime(): LowLevelRuntime {
   }
 
   function graphCollectorFor(subscriber: GraphNode): InteropGraphCollectorV1 {
-    return {
+    let collector = graphCollectors.get(subscriber);
+    if (collector !== undefined) return collector;
+    collector = {
       runtimeToken,
       add(protocol, observedRevision) {
         if (
@@ -385,6 +407,9 @@ export function createLowLevelRuntime(): LowLevelRuntime {
           if (!reaction.active || reaction.disposed || reaction.disposeRequested) return;
         }
         const external = externalNodeFor(protocol, observedRevision);
+        if (subscriber.kind === "reaction") {
+          (subscriber as ReactionNode).requiresDirtyCheck = true;
+        }
         system.link(external, subscriber, cycle);
         if (subscriber.kind === "computed") {
           (subscriber as ComputedNode<unknown>).foreignDependent = true;
@@ -392,6 +417,8 @@ export function createLowLevelRuntime(): LowLevelRuntime {
         refreshDependencyLiveness(external);
       },
     };
+    graphCollectors.set(subscriber, collector);
+    return collector;
   }
 
   function withTrackedGraph<T>(subscriber: GraphNode, callback: () => T): T {
@@ -412,12 +439,17 @@ export function createLowLevelRuntime(): LowLevelRuntime {
         node.kind === "external" ||
         (node.kind === "computed" && (node as ComputedNode<unknown>).foreignDependent)
       ) computed.foreignDependent = true;
+    } else if (node.kind === "computed") {
+      (subscriber as ReactionNode).hasComputedDependency = true;
     }
     refreshDependencyLiveness(node);
   }
 
   function recordReadableRead(node: SourceNode<unknown> | ComputedNode<unknown>): void {
-    if (node.runtimeToken === runtimeToken) linkLocalDependency(node);
+    if (node.runtimeToken === runtimeToken) {
+      linkLocalDependency(node);
+      if (activeSub !== undefined) return;
+    }
     publishInteropGraphRead(node.interop, node.revision);
   }
 
@@ -476,7 +508,10 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     let next: Result<T>;
     try {
       try {
-        next = { kind: "value", value: withTrackedGraph(node, node.getter) };
+        next = {
+          kind: "value",
+          value: withTrackedGraph(node, () => untrackedRender(node.getter)),
+        };
       } catch (error) {
         next = { kind: "error", error };
       }
@@ -561,16 +596,32 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     const previousSub = activeSub;
     activeSub = undefined;
     renderReadDepth += 1;
+    const speculativeDeepReadEpoch = getSharedInteropContext().speculativeDeepReadEpoch ?? 0;
+    const dependencies = new Map<ReadableInteropV1, number>();
+    const collector: InteropGraphCollectorV1 = {
+      runtimeToken: {},
+      add(protocol, observedRevision) {
+        dependencies.set(protocol, observedRevision);
+      },
+    };
     try {
-      return withoutInteropGraphCollector(() => withoutInteropRenderCollector(() =>
-        withInteropSpeculativeMode(() => untrackedRender(() => {
-          try {
-            return { kind: "value", value: node.getter() };
-          } catch (error) {
-            return { kind: "error", error };
-          }
-        })),
-      ));
+      const result = withInteropGraphCollector(
+        collector,
+        () => withoutInteropRenderCollector(() =>
+          withInteropSpeculativeMode(() => untrackedRender(() => {
+            try {
+              return { kind: "value", value: node.getter() } as Result<T>;
+            } catch (error) {
+              return { kind: "error", error } as Result<T>;
+            }
+          })),
+        ),
+      );
+      node.speculativeResult = result;
+      node.speculativeDeps = dependencies;
+      node.speculativeCachePromotable =
+        (getSharedInteropContext().speculativeDeepReadEpoch ?? 0) === speculativeDeepReadEpoch;
+      return result;
     } finally {
       renderReadDepth -= 1;
       activeSub = previousSub;
@@ -582,11 +633,18 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     const shared = getSharedInteropContext();
     const inRender = hasActiveRenderCollector() || shared.renderCollector !== undefined;
     if (renderReadDepth > 0 || speculative || isInteropSpeculative() || inRender) {
-      const clean =
+      const graphCacheIsCurrent =
         node.result !== undefined &&
         !(node.flags & (ReactiveFlags.Dirty | ReactiveFlags.Pending)) &&
         !(!node.live && node.foreignDependent);
-      const result = clean ? node.result as Result<T> : evaluateSpeculatively(node);
+      const speculativeCacheIsCurrent = node.speculativeResult !== undefined &&
+        speculativeDependenciesAreCurrent(node);
+      const result = graphCacheIsCurrent
+        ? node.result as Result<T>
+        : speculativeCacheIsCurrent
+          ? node.speculativeResult as Result<T>
+          : evaluateSpeculatively(node);
+      const clean = graphCacheIsCurrent || speculativeCacheIsCurrent;
       observeResult(node, result, !clean);
       return result;
     }
@@ -594,6 +652,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
   }
 
   function readComputedNormally<T>(node: ComputedNode<T>): Result<T> {
+    promoteSpeculativeCache(node);
     if (node.flags & ReactiveFlags.RecursedCheck) {
       throw new Error("Computed cycle detected");
     }
@@ -601,6 +660,37 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     observeResult(node, result, false);
     recordReadableRead(node as ComputedNode<unknown>);
     return result;
+  }
+
+  function speculativeDependenciesAreCurrent<T>(node: ComputedNode<T>): boolean {
+    if (!node.speculativeCachePromotable) return false;
+    const dependencies = node.speculativeDeps;
+    if (dependencies === undefined) return false;
+    for (const [protocol, revision] of dependencies) {
+      const local = localNodesByProtocol.get(protocol);
+      if (local === undefined) return false;
+      if (local.kind === "computed") ensureComputed(local);
+      if (protocol.getRevision() !== revision) return false;
+    }
+    return true;
+  }
+
+  function promoteSpeculativeCache<T>(node: ComputedNode<T>): void {
+    if (node.result !== undefined || node.speculativeResult === undefined) return;
+    const dependencies = node.speculativeDeps;
+    if (!speculativeDependenciesAreCurrent(node) || dependencies === undefined || dependencies.size === 0) {
+      return;
+    }
+    node.result = node.speculativeResult;
+    node.flags = ReactiveFlags.Mutable;
+    node.foreignDependent = false;
+    cycle += 1;
+    for (const [protocol] of dependencies) {
+      const local = localNodesByProtocol.get(protocol) as SourceNode<unknown> | ComputedNode<unknown>;
+      system.link(local, node, cycle);
+      if (local.kind === "computed" && local.foreignDependent) node.foreignDependent = true;
+      refreshDependencyLiveness(local);
+    }
   }
 
   function readComputed<T>(node: ComputedNode<T>): T {
@@ -623,7 +713,9 @@ export function createLowLevelRuntime(): LowLevelRuntime {
         !!(flags & ReactiveFlags.Dirty) ||
         (!!(flags & ReactiveFlags.Pending) &&
           reaction.deps !== undefined &&
-          system.checkDirty(reaction.deps, reaction));
+          (reaction.hasComputedDependency || reaction.requiresDirtyCheck
+            ? system.checkDirty(reaction.deps, reaction)
+            : true));
       if (!isDirty) {
         reaction.flags = ReactiveFlags.Watching;
         return;
@@ -646,11 +738,16 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     const previousSub = activeSub;
     activeSub = reaction;
     reaction.running = true;
+    reaction.hasComputedDependency = false;
+    reaction.requiresDirtyCheck = false;
     cycle += 1;
     reactionDepth += 1;
     let returnedCleanup: unknown;
     try {
-      returnedCleanup = withTrackedGraph(reaction, reaction.runCallback);
+        returnedCleanup = withTrackedGraph(
+          reaction,
+          () => untrackedRender(reaction.runCallback),
+        );
     } catch (error) {
       reportFailure("effect", error);
     } finally {
@@ -690,6 +787,8 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       cleanup: undefined,
       active: true,
       running: false,
+      hasComputedDependency: false,
+      requiresDirtyCheck: false,
       disposeRequested: false,
       disposed: false,
       scheduled: false,
@@ -752,7 +851,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     });
   }
 
-  function createSource<T>(initialValue: T): LowLevelSignal<T> {
+  function createSource<T>(initialValue: T): RuntimeSignal<T> {
     const node: SourceNode<T> = {
       kind: "source",
       runtimeToken,
@@ -763,10 +862,14 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       flags: ReactiveFlags.Mutable,
     };
     (node as { interop: ReadableInteropV1 }).interop = createReadableProtocol(node);
-    const source: NodeBackedReadable<T> & LowLevelSignal<T> = {
+    localNodesByProtocol.set(node.interop, node as SourceNode<unknown>);
+    const source: NodeBackedReadable<T> & RuntimeSignal<T> = {
       [READABLE_NODE]: node,
       get value() {
-        if (renderReadDepth > 0 || isInteropSpeculative()) return node.pendingValue;
+        if (renderReadDepth > 0 || isInteropSpeculative()) {
+          publishInteropGraphRead(node.interop, node.revision);
+          return node.pendingValue;
+        }
         if (hasActiveRenderCollector()) {
           const value = node.pendingValue;
           trackRenderDependency(source, node.revision);
@@ -783,14 +886,17 @@ export function createLowLevelRuntime(): LowLevelRuntime {
         if (Object.is(node.pendingValue, nextValue)) return;
         node.pendingValue = nextValue;
         node.revision += 1;
+        if (node.subs === undefined) {
+          node.currentValue = nextValue;
+          node.flags = ReactiveFlags.Mutable;
+          return;
+        }
         node.flags = ReactiveFlags.Mutable | ReactiveFlags.Dirty;
-        if (node.subs !== undefined) {
-          propagationDepth += 1;
-          try {
-            system.propagate(node.subs, reactionDepth > 0);
-          } finally {
-            propagationDepth -= 1;
-          }
+        propagationDepth += 1;
+        try {
+          system.propagate(node.subs, reactionDepth > 0);
+        } finally {
+          propagationDepth -= 1;
         }
         flush();
       },
@@ -805,7 +911,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
     return source;
   }
 
-  function createComputed<T>(getter: () => T): LowLevelReadonlySignal<T> {
+  function createComputed<T>(getter: () => T): RuntimeReadonlySignal<T> {
     let node: ComputedNode<T>;
     node = {
       kind: "computed",
@@ -814,6 +920,9 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       getter,
       result: undefined,
       observedResult: undefined,
+      speculativeResult: undefined,
+      speculativeDeps: undefined,
+      speculativeCachePromotable: false,
       revision: 0,
       live: false,
       foreignDependent: false,
@@ -821,6 +930,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       flags: ReactiveFlags.None,
     };
     (node as { interop: ReadableInteropV1 }).interop = createReadableProtocol(node);
+    localNodesByProtocol.set(node.interop, node as ComputedNode<unknown>);
     const computed: NodeBackedReadable<T> = {
       [READABLE_NODE]: node,
       get value() {
@@ -830,6 +940,9 @@ export function createLowLevelRuntime(): LowLevelRuntime {
           sharedRenderActive ||
           isInteropSpeculative();
         const result = readComputedResult(node, speculative);
+        if (renderReadDepth > 0 || isInteropSpeculative()) {
+          publishInteropGraphRead(node.interop, node.revision);
+        }
         if (renderReadDepth === 0 && !isInteropSpeculative()) {
           if (hasActiveRenderCollector()) {
             trackRenderDependency(computed, node.revision);
@@ -880,7 +993,7 @@ export function createLowLevelRuntime(): LowLevelRuntime {
       }
     },
     untracked,
-    subscribe<T>(source: LowLevelReadonlySignal<T>, listener: () => void): () => void {
+    subscribe<T>(source: RuntimeReadonlySignal<T>, listener: () => void): () => void {
       if (!ownedReadables.has(source as object)) {
         throw new TypeError("subscribe() expects a signal or computed from this runtime");
       }
@@ -889,6 +1002,17 @@ export function createLowLevelRuntime(): LowLevelRuntime {
         throw new TypeError("subscribe() expects a signal or computed from this runtime");
       }
       return subscribeNode(node, listener);
+    },
+    hasActiveSubscriber(): boolean {
+      return activeSub !== undefined;
+    },
+    getBatchDepth(): number {
+      return batchDepth;
+    },
+    hasSubscribers(readable): boolean {
+      if (!ownedReadables.has(readable as object)) return false;
+      const node = (readable as NodeBackedReadable<unknown>)[READABLE_NODE];
+      return node !== undefined && node.kind !== "reaction" && node.subs !== undefined;
     },
   };
 }

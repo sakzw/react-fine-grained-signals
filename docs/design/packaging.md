@@ -4,9 +4,9 @@
 
 **Status:** Settled. This note records why the package is shipped the way it is. Every decision below is implemented and guarded by a check; nothing here is open design work.
 
-## `alien-signals` is a peer dependency
+## `alien-signals` is a runtime dependency
 
-`alien-signals` is a **peer dependency**, not a direct dependency. Its dependency tracking lives in module-global state (`getActiveSub` / `setActiveSub`), so two copies in one application do not merely waste bytes: reads tracked by one copy are invisible to the other, and nothing throws. Declaring it as a peer makes the package manager resolve a single instance, and `pnpm test:consumer` asserts the published manifest keeps it that way.
+RFSG owns one private reactive runtime per package copy, built on `alien-signals/system`. `alien-signals` is therefore a runtime dependency and consumers do not need to install it separately. Independent RFSG copies interoperate through RFSG's private same-global readable protocol; they do not need to resolve one shared alien-signals module. React remains a peer dependency. Cross-runtime batches are local to each copy and are not one atomic transaction. `pnpm test:consumer` checks the manifest and `pnpm test:phase4-duplicate` exercises separate alien-signals systems.
 
 ## `"sideEffects": false`
 

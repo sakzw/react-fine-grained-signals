@@ -7,9 +7,8 @@
 // entry points free of top-level side effects. Both are easy to break by
 // accident, and neither fails a type check or a unit test.
 //
-// `alien-signals` is bundled rather than externalized: it is a peer dependency
-// that ships in the consumer's bundle, so it is part of what this library
-// actually costs them.
+// `alien-signals` remains in these representative application bundles through
+// the package's runtime dependency graph, so its contribution is measured.
 
 import { gzipSync, brotliCompressSync, constants } from "node:zlib";
 import {

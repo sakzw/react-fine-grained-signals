@@ -60,7 +60,7 @@ Runs `fn` immediately, then again whenever a signal it read changes. Returns a d
 
 ### Error containment
 
-If an `effect()` callback throws — either its body or the cleanup function it returned — the error does not propagate to the write that triggered the run. The containment is required rather than cosmetic: `alien-signals` abandons the rest of its effect queue once an effect throws, so an escaping error would silently cancel every effect still queued behind it in that flush and then surface out of whatever event handler performed the write. Instead only the failing effect is skipped; every other effect in that flush still runs, and the failing effect keeps reacting to later writes. A cleanup that throws is contained the same way and does not prevent the effect's body from re-running.
+If an `effect()` callback throws — either its body or the cleanup function it returned — the error does not propagate to the write that triggered the run. The runtime contains and reports that failure so it cannot cancel unrelated effects already queued in the same flush. The failing effect keeps reacting to later writes, and a cleanup failure does not prevent its body from re-running.
 
 The error is always reported, never swallowed. `console.error` receives `"react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish."` with `{ cause: error }`. Where the host implements [`reportError()`](https://developer.mozilla.org/en-US/docs/Web/API/Window/reportError) — browsers, Web Workers, Deno, and Bun — the original error is additionally passed to it, which dispatches an `error` event, so `window.onerror`, an `addEventListener("error")` handler, and telemetry SDKs observe it exactly as they would an uncaught error, without it being an actual uncaught throw. Node defines no `reportError` global at any supported version, so there the `console.error` is the report.
 
@@ -128,7 +128,7 @@ Reports whether a value came from `signal`, `computed`, or `deepSignal`. The cus
 
 Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
 
-This fixes identification only. Reactivity additionally requires a shared `alien-signals` instance, because dependency tracking lives in that module's global state; see [the packaging note](design/packaging.md) for why it is a peer dependency. A recognized foreign signal reads correctly, but it propagates updates only while the reactive core underneath is shared.
+Identity and reactivity use separate contracts. RFSG's `SIGNAL_BRAND` lets `isSignal()` recognize a public signal shape; the private `ReadableInteropV1` protocol carries reactive reads between RFSG package copies in the same global environment. Each copy owns its own runtime on `alien-signals/system`, so copies do not need one shared alien-signals module. Cross-copy batch calls are not one atomic transaction; see [the packaging note](design/packaging.md).
 
 Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
 

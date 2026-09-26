@@ -3,7 +3,6 @@
   "private": true,
   "type": "module",
   "dependencies": {
-    "alien-signals": "3.2.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
     "react-fine-grained-signals": "file:__ROOT_TARBALL__",

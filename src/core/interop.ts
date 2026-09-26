@@ -31,6 +31,7 @@ export interface SharedInteropContextV1 {
   renderCollector?: InteropRenderCollectorV1 | undefined;
   renderScope?: InteropRenderScopeV1 | undefined;
   speculativeDepth: number;
+  speculativeDeepReadEpoch: number;
 }
 
 export const READABLE_INTEROP_V1 = Symbol.for(
@@ -60,6 +61,7 @@ export function getSharedInteropContext(): SharedInteropContextV1 {
   const context: SharedInteropContextV1 = {
     version: 1,
     speculativeDepth: 0,
+    speculativeDeepReadEpoch: 0,
   };
   Object.defineProperty(globalObject, SHARED_CONTEXT_V1, {
     value: context,
@@ -190,4 +192,10 @@ export function withInteropSpeculativeMode<T>(callback: () => T): T {
 
 export function isInteropSpeculative(): boolean {
   return getSharedInteropContext().speculativeDepth > 0;
+}
+
+/** Marks speculative deep reads whose per-key dependencies were not collected. */
+export function markInteropSpeculativeDeepRead(): void {
+  const context = getSharedInteropContext();
+  context.speculativeDeepReadEpoch = (context.speculativeDeepReadEpoch ?? 0) + 1;
 }

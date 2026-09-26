@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createLowLevelRuntime } from "../src/core/low-level-runtime.js";
+import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
   publishInteropGraphRead,
   READABLE_INTEROP_V1,
@@ -67,13 +67,13 @@ function graphNodeOf(readable: object): GraphNodeInspection {
   return Reflect.get(readable, nodeKey) as GraphNodeInspection;
 }
 
-describe("private low-level runtime spike", () => {
+describe("private reactive runtime", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   it("implements writable source reads, peeks, and Object.is changes natively", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const seen: number[] = [];
     const dispose = runtime.effect(() => {
@@ -98,7 +98,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("evaluates computeds lazily, caches them, and composes derived nodes", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(2);
     let firstCalls = 0;
     let secondCalls = 0;
@@ -121,7 +121,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("switches computed and effect dependencies and unlinks the old branch", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const chooseLeft = runtime.signal(true);
     const left = runtime.signal("left");
     const right = runtime.signal("right");
@@ -141,7 +141,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("propagates a diamond graph once and supports nested computed reads", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const left = runtime.computed(() => source.value + 1);
     const right = runtime.computed(() => source.value * 2);
@@ -157,7 +157,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("runs effects synchronously, reruns on writes, and disposes idempotently", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const seen: number[] = [];
     const dispose = runtime.effect(() => {
@@ -173,7 +173,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("runs and disposes effect cleanups before the next body", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const order: string[] = [];
     const dispose = runtime.effect(() => {
@@ -188,7 +188,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("self-disposes without collecting later reads and runs returned cleanup once", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const laterRead = runtime.signal(0);
     const cleanupRead = runtime.signal(0);
@@ -219,7 +219,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("fully detaches old source and computed dependencies when self-disposing before rereads", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const a = runtime.signal(0);
     const upstream = runtime.signal(1);
     const b = runtime.computed(() => upstream.value * 2);
@@ -256,7 +256,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("fully detaches partially retracked dependencies when self-disposing", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const a = runtime.signal(0);
     const b = runtime.signal(0);
     const c = runtime.signal(0);
@@ -292,7 +292,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("contains a throwing cleanup returned by a self-disposing effect", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const seen: number[] = [];
@@ -317,7 +317,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("does not run a queued reaction after it is disposed", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const seen: number[] = [];
     let disposeQueued: (() => void) | undefined;
@@ -340,7 +340,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("keeps nested candidate effects flat unless their disposer is returned", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const seen: number[] = [];
     let disposeInner: (() => void) | undefined;
@@ -358,7 +358,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("composes nested effect lifetime through returned cleanup", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const generation = runtime.signal(0);
     const child = runtime.signal(0);
     const events: string[] = [];
@@ -389,7 +389,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("coalesces nested batches and restores depth after a thrown callback", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const left = runtime.signal(1);
     const right = runtime.signal(2);
     const total = runtime.computed(() => left.value + right.value);
@@ -416,7 +416,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("compares batched final source values with Object.is", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const seen: number[] = [];
     const dispose = runtime.effect(() => {
@@ -447,7 +447,7 @@ describe("private low-level runtime spike", () => {
     expect(Object.is(seen[2], 0)).toBe(true);
     dispose();
 
-    const nanRuntime = createLowLevelRuntime();
+    const nanRuntime = createReactiveRuntime();
     const nanSource = nanRuntime.signal(Number.NaN);
     const nanSeen: number[] = [];
     const disposeNan = nanRuntime.effect(() => {
@@ -464,7 +464,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("keeps nested computed reads coherent across an intermediate batch revert", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const first = runtime.computed(() => source.value);
     const second = runtime.computed(() => first.value * 10);
@@ -489,7 +489,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("handles writes from inside reactions without corrupting propagation", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const trigger = runtime.signal(0);
     const output = runtime.signal(0);
     const seen: number[] = [];
@@ -509,7 +509,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("supports untracked reads and restores tracking after errors", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const other = runtime.signal(2);
     const seen: number[] = [];
@@ -529,7 +529,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("caches computed errors, rethrows on reads, and recovers downstream", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const shouldThrow = runtime.signal(false);
     const source = runtime.signal(2);
     const derived = runtime.computed(() => {
@@ -554,7 +554,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("recovers from a computed self-cycle after a caught cycle error", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     let value: { readonly value: number };
     value = runtime.computed(() => {
@@ -574,7 +574,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("contains effect-body failures and continues healthy queued work", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const failing = runtime.effect(() => {
@@ -596,7 +596,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("contains cleanup failures before rerun and during disposal", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const values: number[] = [];
@@ -618,7 +618,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("subscribes directly to source and computed nodes without effect bridges", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
     const sourceListener = vi.fn();
@@ -640,7 +640,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("keeps direct computed subscriptions on their dynamically selected branch", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const useLeft = runtime.signal(true);
     const left = runtime.signal("left");
     const right = runtime.signal("right");
@@ -657,7 +657,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("notifies direct computed subscribers for value-error-error-value transitions", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const shouldThrow = runtime.signal(false);
     const revision = runtime.signal(0);
     const reusedError = new Error("computed failed");
@@ -688,7 +688,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("exposes source and computed nodes to render collection with coherent versions", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
     const [sourceDependency] = collect(() => source.value);
@@ -719,7 +719,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("defers computed graph subscription until render commit and catches render-to-commit changes", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
     const [dependency] = collect(() => {
@@ -744,7 +744,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("observes computed snapshots before registering the render dependency", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     const value = runtime.computed(() => source.value);
     let capturedVersion = -1;
@@ -762,7 +762,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("uses monotonic computed revisions for competing and reverted render attempts", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal("A");
     const value = runtime.computed(() => source.value);
     const [renderA] = collectWithVersions(() => {
@@ -795,7 +795,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("suppresses computed render revision changes when the result is Object.is-equal", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
     const [firstRender] = collectWithVersions(() => {
@@ -810,7 +810,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("advances computed observation revision for speculative error transitions", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const shouldThrow = runtime.signal(false);
     const source = runtime.signal(0);
     const error = new Error("rendered computed failure");
@@ -836,7 +836,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("does not subscribe abandoned speculative renders to the graph", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     let getterCalls = 0;
     const value = runtime.computed(() => {
@@ -855,8 +855,8 @@ describe("private low-level runtime spike", () => {
     expect(getterCalls).toBe(2);
   });
 
-  it("settles identity-unstable computed render subscriptions after one cache fill", () => {
-    const runtime = createLowLevelRuntime();
+  it("promotes a current speculative computed cache without reevaluation", () => {
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
     let getterCalls = 0;
     const value = runtime.computed(() => {
@@ -868,22 +868,22 @@ describe("private low-level runtime spike", () => {
     });
     const listener = vi.fn();
     const dispose = render!.dependency.subscribeRender(listener);
-    expect(value.getRenderVersion()).toBeGreaterThan(render!.version);
+    expect(value.getRenderVersion()).toBe(render!.version);
     expect(graphNodeOf(value).deps).toBeDefined();
-    const settledRevision = value.getRenderVersion();
-    const callsAfterCommit = getterCalls;
+    expect(getterCalls).toBe(1);
+    expect(listener).not.toHaveBeenCalled();
     const [nextRender] = collectWithVersions(() => {
       expect(value.value).toEqual({ value: 0 });
     });
-    expect(nextRender!.version).toBe(settledRevision);
-    expect(getterCalls).toBe(callsAfterCommit);
+    expect(nextRender!.version).toBe(render!.version);
+    expect(getterCalls).toBe(1);
     dispose();
     expect(graphNodeOf(value).deps).toBeUndefined();
   });
 
   it("composes runtime instances through local external nodes", () => {
-    const a = createLowLevelRuntime();
-    const b = createLowLevelRuntime();
+    const a = createReactiveRuntime();
+    const b = createReactiveRuntime();
     const local = a.signal(1);
     const source = b.signal(2);
     const total = a.computed(() => local.value + source.value);
@@ -918,8 +918,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("tracks a foreign source directly in a local reaction", () => {
-    const local = createLowLevelRuntime();
-    const foreignRuntime = createLowLevelRuntime();
+    const local = createReactiveRuntime();
+    const foreignRuntime = createReactiveRuntime();
     const foreign = foreignRuntime.signal("before");
     const seen: string[] = [];
     const dispose = local.effect(() => {
@@ -935,8 +935,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("publishes a stable non-enumerable protocol with a unique token per runtime", () => {
-    const a = createLowLevelRuntime();
-    const b = createLowLevelRuntime();
+    const a = createReactiveRuntime();
+    const b = createReactiveRuntime();
     const sourceA = a.signal(1);
     const sourceB = b.signal(1);
     const protocolA = Reflect.get(sourceA, READABLE_INTEROP_V1) as ReadableInteropV1;
@@ -950,7 +950,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("keeps local source and computed reads on the direct graph path", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const source = runtime.signal(2);
     const derived = runtime.computed(() => source.value * 2);
     const seen: number[] = [];
@@ -968,9 +968,9 @@ describe("private low-level runtime spike", () => {
   });
 
   it("preserves foreign computed equality boundaries and transitive graph shape", () => {
-    const a = createLowLevelRuntime();
-    const b = createLowLevelRuntime();
-    const c = createLowLevelRuntime();
+    const a = createReactiveRuntime();
+    const b = createReactiveRuntime();
+    const c = createReactiveRuntime();
     const source = c.signal(1);
     const parity = b.computed(() => source.value % 2);
     const doubledParity = a.computed(() => parity.value * 2);
@@ -993,8 +993,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("does not notify foreign subscribers for a reverted semantic batch", () => {
-    const a = createLowLevelRuntime();
-    const b = createLowLevelRuntime();
+    const a = createReactiveRuntime();
+    const b = createReactiveRuntime();
     const source = b.signal(0);
     const seen: number[] = [];
     const dispose = a.effect(() => {
@@ -1011,9 +1011,9 @@ describe("private low-level runtime spike", () => {
   });
 
   it("does not subscribe cold foreign-dependent computed chains and pulls fresh values", () => {
-    const a = createLowLevelRuntime();
-    const b = createLowLevelRuntime();
-    const c = createLowLevelRuntime();
+    const a = createReactiveRuntime();
+    const b = createReactiveRuntime();
+    const c = createReactiveRuntime();
     const source = c.signal(1);
     const middle = b.computed(() => source.value + 1);
     const cold = a.computed(() => middle.value * 2);
@@ -1027,8 +1027,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("activates and releases foreign subscriptions with live computed demand", () => {
-    const local = createLowLevelRuntime();
-    const foreignRuntime = createLowLevelRuntime();
+    const local = createReactiveRuntime();
+    const foreignRuntime = createReactiveRuntime();
     const foreign = foreignRuntime.signal(1);
     const doubled = local.computed(() => foreign.value * 2);
 
@@ -1056,8 +1056,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("releases stale foreign branches and reuses their inactive ExternalNode", () => {
-    const local = createLowLevelRuntime();
-    const foreignRuntime = createLowLevelRuntime();
+    const local = createReactiveRuntime();
+    const foreignRuntime = createReactiveRuntime();
     const chooseLeft = local.signal(true);
     const left = foreignRuntime.signal("left");
     const right = foreignRuntime.signal("right");
@@ -1087,7 +1087,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("turns a read-to-subscribe revision mismatch into a bounded local retry", () => {
-    const runtime = createLowLevelRuntime();
+    const runtime = createReactiveRuntime();
     const runtimeToken = {};
     let subscribeCalls = 0;
     let unsubscribeCalls = 0;
@@ -1119,8 +1119,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("keeps foreign reads untracked under untracked but tracked under untrackedRender", () => {
-    const local = createLowLevelRuntime();
-    const foreignRuntime = createLowLevelRuntime();
+    const local = createReactiveRuntime();
+    const foreignRuntime = createReactiveRuntime();
     const foreign = foreignRuntime.signal(0);
     const untrackedRuns = vi.fn();
     const untrackedDispose = local.effect(() => {
@@ -1142,7 +1142,7 @@ describe("private low-level runtime spike", () => {
   });
 
   it("keeps speculative foreign computed reads graph-detached and reports its exact revision", () => {
-    const foreignRuntime = createLowLevelRuntime();
+    const foreignRuntime = createReactiveRuntime();
     const source = foreignRuntime.signal(1);
     const computed = foreignRuntime.computed(() => source.value * 2);
     const observations: Array<{ protocol: ReadableInteropV1; revision: number }> = [];
@@ -1161,8 +1161,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("keeps foreign error notifications connected through recovery", () => {
-    const local = createLowLevelRuntime();
-    const foreignRuntime = createLowLevelRuntime();
+    const local = createReactiveRuntime();
+    const foreignRuntime = createReactiveRuntime();
     const shouldThrow = foreignRuntime.signal(false);
     const revision = foreignRuntime.signal(0);
     const reusedError = new Error("foreign computed error");
@@ -1196,8 +1196,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("does not track foreign reads performed by effect cleanup", () => {
-    const local = createLowLevelRuntime();
-    const foreignRuntime = createLowLevelRuntime();
+    const local = createReactiveRuntime();
+    const foreignRuntime = createReactiveRuntime();
     const trigger = local.signal(0);
     const foreign = foreignRuntime.signal(0);
     const seen: number[] = [];
@@ -1214,8 +1214,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("bounds synchronous two-runtime and three-runtime feedback loops", () => {
-    const a = createLowLevelRuntime();
-    const b = createLowLevelRuntime();
+    const a = createReactiveRuntime();
+    const b = createReactiveRuntime();
     const aValue = a.signal(0);
     const bValue = b.signal(0);
     const aSeen: number[] = [];
@@ -1235,7 +1235,7 @@ describe("private low-level runtime spike", () => {
     disposeA();
     disposeB();
 
-    const c = createLowLevelRuntime();
+    const c = createReactiveRuntime();
     const threeA = a.signal(0);
     const threeB = b.signal(0);
     const threeC = c.signal(0);
@@ -1262,8 +1262,8 @@ describe("private low-level runtime spike", () => {
   });
 
   it("characterizes cross-runtime batches as synchronous and non-atomic", () => {
-    const a = createLowLevelRuntime();
-    const b = createLowLevelRuntime();
+    const a = createReactiveRuntime();
+    const b = createReactiveRuntime();
     const local = a.signal(0);
     const foreign = b.signal(0);
     const seen: Array<[number, number]> = [];

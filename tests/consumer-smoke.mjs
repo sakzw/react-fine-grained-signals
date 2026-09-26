@@ -1,8 +1,8 @@
 import { execFile } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, join } from "node:path";
+import { basename, delimiter, dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
@@ -10,6 +10,67 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const pluginRoot = join(repositoryRoot, "packages", "unplugin-react-fine-grained-signals");
 const fixtureRoot = join(repositoryRoot, "tests", "fixtures", "consumer-vite");
+
+function resolvePnpmInvocation() {
+  const packageManagerScript = process.env.npm_execpath;
+  if (packageManagerScript !== undefined && /pnpm/i.test(basename(packageManagerScript))) {
+    if (/\.(?:cjs|mjs|js)$/i.test(packageManagerScript)) {
+      return { command: process.execPath, prefixArguments: [packageManagerScript] };
+    }
+    if (/\.exe$/i.test(packageManagerScript) && existsSync(packageManagerScript)) {
+      return { command: packageManagerScript, prefixArguments: [] };
+    }
+  }
+
+  if (process.platform === "win32") {
+    for (const pathEntry of (process.env.PATH ?? "").split(delimiter)) {
+      if (pathEntry.length === 0) continue;
+
+      const executable = join(pathEntry, "pnpm.exe");
+      if (existsSync(executable)) {
+        return { command: executable, prefixArguments: [] };
+      }
+
+      const commandShim = join(pathEntry, "pnpm.cmd");
+      if (!existsSync(commandShim)) continue;
+
+      const shimDirectory = dirname(commandShim);
+      const shim = readFileSync(commandShim, "utf8");
+      const launchLine = shim.split(/\r?\n/).find((line) => /%\*/.test(line));
+      const launchArguments = launchLine?.match(/"([^"]+)"(?:\s+"([^"]+)")?.*%\*/i);
+      if (launchArguments === undefined || launchArguments === null) continue;
+
+      const expandShimPath = (value) => resolve(
+        value.replace(/%~dp0/ig, `${shimDirectory}\\`),
+      );
+      const launcher = expandShimPath(launchArguments[1]);
+      const cliScript = launchArguments[2] === undefined
+        ? undefined
+        : expandShimPath(launchArguments[2]);
+
+      if (/\.exe$/i.test(launcher) && existsSync(launcher)) {
+        const adjacentCli = [
+          join(dirname(launcher), "pnpm.mjs"),
+          join(dirname(launcher), "bin", "pnpm.mjs"),
+        ].find((candidate) => existsSync(candidate));
+        if (adjacentCli !== undefined) {
+          return { command: process.execPath, prefixArguments: [adjacentCli] };
+        }
+        return {
+          command: launcher,
+          prefixArguments: cliScript === undefined ? [] : [cliScript],
+        };
+      }
+      if (cliScript !== undefined && existsSync(cliScript)) {
+        return { command: process.execPath, prefixArguments: [cliScript] };
+      }
+    }
+  }
+
+  return { command: "pnpm", prefixArguments: [] };
+}
+
+const pnpmInvocation = resolvePnpmInvocation();
 
 // `pnpm pack` below tars up whatever `dist` already holds -- neither package
 // declares a `prepack` script -- so a missing build surfaces as a confusing tsc
@@ -43,7 +104,11 @@ async function run(command, arguments_, cwd) {
 }
 
 async function pack(packageRoot, destination) {
-  await run("pnpm", ["pack", "--pack-destination", destination], packageRoot);
+  await run(
+    pnpmInvocation.command,
+    [...pnpmInvocation.prefixArguments, "pack", "--pack-destination", destination],
+    packageRoot,
+  );
   const tarballs = (await readdir(destination))
     .filter((entry) => entry.endsWith(".tgz"))
     .map((entry) => join(destination, entry));
@@ -66,30 +131,43 @@ try {
   packageJson.dependencies["unplugin-react-fine-grained-signals"] = pathToFileURL(pluginTarball).href;
   await writeFile(packageJsonPath, `${JSON.stringify(packageJson, null, 2)}\n`);
 
-  await run("pnpm", ["install", "--ignore-workspace", "--no-frozen-lockfile"], consumerRoot);
+  await run(
+    pnpmInvocation.command,
+    [...pnpmInvocation.prefixArguments, "install", "--ignore-workspace", "--no-frozen-lockfile"],
+    consumerRoot,
+  );
 
-  // Packaging guarantees that nothing else in the suite can observe. alien-signals
-  // keeps its dependency tracking in module-global state (getActiveSub /
-  // setActiveSub), so a second copy in a consumer's graph silently stops tracking
-  // reads instead of failing loudly; only the peer declaration forces one copy.
+  // Validate the package's current manifest separately from the actual runtime
+  // composition checks in the private duplicate-copy smoke test.
   const installedManifest = JSON.parse(
     await readFile(
       join(consumerRoot, "node_modules", "react-fine-grained-signals", "package.json"),
       "utf8",
     ),
   );
-  if (installedManifest.dependencies?.["alien-signals"] !== undefined) {
-    throw new Error("alien-signals must not be published as a hard dependency");
+  if (installedManifest.dependencies?.["alien-signals"] === undefined) {
+    throw new Error("alien-signals must be published as a runtime dependency");
   }
-  if (installedManifest.peerDependencies?.["alien-signals"] === undefined) {
-    throw new Error("alien-signals must be published as a peer dependency");
+  if (installedManifest.peerDependencies?.["alien-signals"] !== undefined) {
+    throw new Error("alien-signals must not be required as a peer dependency");
+  }
+  if (installedManifest.peerDependencies?.react === undefined) {
+    throw new Error("React must remain a peer dependency");
   }
   if (installedManifest.sideEffects !== false) {
     throw new Error('The published manifest must keep "sideEffects": false for tree-shaking');
   }
 
-  await run("pnpm", ["exec", "tsc", "--noEmit"], consumerRoot);
-  await run("pnpm", ["exec", "vite", "build"], consumerRoot);
+  await run(
+    pnpmInvocation.command,
+    [...pnpmInvocation.prefixArguments, "exec", "tsc", "--noEmit"],
+    consumerRoot,
+  );
+  await run(
+    pnpmInvocation.command,
+    [...pnpmInvocation.prefixArguments, "exec", "vite", "build"],
+    consumerRoot,
+  );
 
   const output = await readFile(join(consumerRoot, "dist", "consumer.js"), "utf8");
   for (const entry of [
