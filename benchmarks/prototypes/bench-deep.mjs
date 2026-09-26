@@ -3,8 +3,8 @@ import { createLeanRuntime } from "../../node_modules/.cache/prototype-a/lean-en
 
 const [runtimeName = "lean", caseName = "tracked-update", iterationsArg = "10000"] = process.argv.slice(2);
 const iterations = Number(iterationsArg);
-const samples = 9;
-const warmups = 3;
+const samples = Number(process.env.BENCH_SAMPLES ?? 9);
+const warmups = Number(process.env.BENCH_WARMUPS ?? 3);
 
 function adapter(name) {
   if (name === "lean") {
@@ -48,7 +48,7 @@ const cases = {
 };
 
 const selected = cases[caseName];
-if (!selected || !Number.isSafeInteger(iterations) || iterations < 1) throw new Error("Invalid benchmark arguments");
+if (!selected || !Number.isSafeInteger(iterations) || iterations < 1 || !Number.isSafeInteger(samples) || samples < 3 || !Number.isSafeInteger(warmups) || warmups < 1) throw new Error("Invalid benchmark arguments");
 const a = adapter(runtimeName);
 for (let i = 0; i < warmups; i += 1) { const state = selected(a); state.run(iterations); state.dispose?.(); }
 const times = [];
@@ -60,5 +60,10 @@ for (let i = 0; i < samples; i += 1) {
   state.dispose?.();
 }
 times.sort((left, right) => left - right);
-const median = times[4];
-console.log(JSON.stringify({ runtime: runtimeName, case: caseName, iterations, warmups, samples, node: process.version, ops_s: Math.round(iterations / (median / 1000)), p25_ms: +times[2].toFixed(2), p75_ms: +times[6].toFixed(2) }));
+const quantile = ratio => {
+  const position = (times.length - 1) * ratio;
+  const low = Math.floor(position), high = Math.ceil(position);
+  return times[low] + (times[high] - times[low]) * (position - low);
+};
+const median = quantile(0.5);
+console.log(JSON.stringify({ runtime: runtimeName, case: caseName, iterations, warmups, samples, node: process.version, platform: process.platform, arch: process.arch, cpu: (await import("node:os")).cpus()[0]?.model, ops_s: Math.round(iterations / (median / 1000)), p25_ms: +times[Math.floor((samples - 1) * 0.25)].toFixed(2), p75_ms: +times[Math.ceil((samples - 1) * 0.75)].toFixed(2) }));

@@ -1,5 +1,11 @@
 import os from "node:os";
 import { JSDOM } from "jsdom";
+import { appendFileSync } from "node:fs";
+import {
+  createLeanRuntime,
+  useManagedSignals as useLeanManagedSignals,
+  useSignalTracking as useLeanSignalTracking,
+} from "../node_modules/.cache/prototype-a/lean-entry.js";
 
 // A plain `node` process has no DOM. Stand one up with jsdom before anything
 // that touches `window`/`document` is imported (dynamic `import()` is used
@@ -22,7 +28,7 @@ const ReactModule = await import("react");
 const React = ReactModule;
 const { useState, act } = ReactModule;
 const { createRoot } = await import("react-dom/client");
-const { signal, useSignalTracking } = await import("../dist/index.js");
+const { signal, computed, useSignalTracking } = await import("../dist/index.js");
 // The bundler plugin's shipped default (`transform: "managed"`, since commit
 // 57f824e) never calls the bare `useSignalTracking()` above -- it rewrites call
 // sites to this runtime entry point's managed boundary instead. Imported
@@ -38,8 +44,8 @@ const { jsx: signalsJsx, jsxs: signalsJsxs } = await import("../dist/jsx-runtime
 
 const rows = Number.parseInt(process.argv[2] ?? process.env.BENCH_ROWS ?? "500", 10);
 const updates = Number.parseInt(process.argv[3] ?? process.env.BENCH_UPDATES ?? "300", 10);
-const warmups = 2;
-const samples = 5;
+const warmups = Number(process.env.BENCH_WARMUPS ?? 2);
+const samples = Number(process.env.BENCH_SAMPLES ?? 5);
 if (!Number.isSafeInteger(rows) || rows < 1) throw new Error("BENCH_ROWS must be a positive integer");
 if (!Number.isSafeInteger(updates) || updates < 1) throw new Error("BENCH_UPDATES must be a positive integer");
 
@@ -65,6 +71,14 @@ const renderCounts = {
   hooksMemo: { counter: 0, siblings: 0 },
   signals: { counter: 0, siblings: 0 },
   signalsManaged: { counter: 0, siblings: 0 },
+  lean: { counter: 0, siblings: 0 },
+  leanManaged: { counter: 0, siblings: 0 },
+  unrelatedCurrent: { counter: 0, siblings: 0 },
+  unrelatedLean: { counter: 0, siblings: 0 },
+  equalityCurrent: { counter: 0, siblings: 0 },
+  equalityLean: { counter: 0, siblings: 0 },
+  manyCurrent: { counter: 0, siblings: 0 },
+  manyLean: { counter: 0, siblings: 0 },
   jsxComponent: { counter: 0, siblings: 0 },
   jsxHostElement: { counter: 0, siblings: 0 },
 };
@@ -182,6 +196,97 @@ function createManagedSignalsVariant(counts) {
   return { App: ManagedSignalsApp, count };
 }
 
+function createLeanSignalsVariant(counts, managed) {
+  const runtime = createLeanRuntime(() => undefined);
+  const count = runtime.signal(0);
+  function renderCounter() {
+    counts.counter += 1;
+    return React.createElement("li", null, "count:", count.value);
+  }
+  function LeanCounter() {
+    const store = useLeanManagedSignals();
+    try {
+      return renderCounter();
+    } finally {
+      store.finish();
+    }
+  }
+  function UnmanagedLeanCounter() { useLeanSignalTracking(); return renderCounter(); }
+  function LeanSibling(props) {
+    counts.siblings += 1;
+    return React.createElement("li", null, "row ", props.index);
+  }
+  function LeanApp() {
+    return React.createElement("ul", null,
+      React.createElement(managed ? LeanCounter : UnmanagedLeanCounter),
+      ...buildSiblingElements(LeanSibling, rows),
+    );
+  }
+  return { App: LeanApp, count };
+}
+
+function createControlledSignalsVariant(counts, lean, managed, mode) {
+  const runtime = lean ? createLeanRuntime(() => undefined) : { signal, computed };
+  const useManaged = lean ? useLeanManagedSignals : useManagedSignals;
+  const useUnmanaged = lean ? useLeanSignalTracking : useSignalTracking;
+  const displayed = runtime.signal(0);
+  const trigger = mode === "unrelated" ? runtime.signal(0) : displayed;
+  const value = mode === "equality" ? runtime.computed(() => Math.floor(trigger.value / 10)) : displayed;
+  function renderCounter() {
+    counts.counter += 1;
+    return React.createElement("li", null, "count:", value.value);
+  }
+  function Counter() {
+    const store = useManaged();
+    try {
+      return renderCounter();
+    } finally {
+      store.finish();
+    }
+  }
+  function UnmanagedCounter() { useUnmanaged(); return renderCounter(); }
+  function Sibling(props) {
+    counts.siblings += 1;
+    return React.createElement("li", null, "row ", props.index);
+  }
+  function App() {
+    return React.createElement("ul", null, React.createElement(managed ? Counter : UnmanagedCounter), ...buildSiblingElements(Sibling, rows));
+  }
+  return {
+    App,
+    displayed,
+    increment: () => { trigger.value += 1; },
+    getStart: () => mode === "equality" ? Math.floor(trigger.value / 10) : displayed.value,
+  };
+}
+
+function createManySubscriberVariant(counts, lean) {
+  const runtime = lean ? createLeanRuntime(() => undefined) : { signal };
+  const useTracking = lean ? useLeanSignalTracking : useSignalTracking;
+  const sources = Array.from({ length: rows }, () => runtime.signal(0));
+  const renders = Array(rows).fill(0);
+  function Leaf({ index }) {
+    useTracking();
+    counts.siblings += 1;
+    renders[index] += 1;
+    return React.createElement("li", null, sources[index].value);
+  }
+  function App() {
+    return React.createElement("ul", null, ...sources.map((_, index) => React.createElement(Leaf, { key: index, index })));
+  }
+  return {
+    App,
+    getStart: () => 0,
+    reset() { for (const source of sources) source.value = 0; renders.fill(0); },
+    increment() { for (const source of sources) source.value += 1; },
+    customCheck(state, updateCount) {
+      if (renders.some((count) => count !== updateCount + 1)) throw new Error("many subscribers: a leaf missed or duplicated updates");
+      const values = Array.from(state.container.querySelectorAll("li"), (element) => Number(element.textContent));
+      if (values.length !== rows || values.some((value) => value !== updateCount)) throw new Error(`many subscribers: wrong final values ${JSON.stringify(values)} (wanted ${updateCount})`);
+    },
+  };
+}
+
 /**
  * Builds the JSX-pragma variant for a non-reactive custom function component:
  * `rows` `PlainPropsRow`s, each created via `signalsJsx(PlainPropsRow, props,
@@ -273,6 +378,14 @@ const { App: HooksMemoApp, handle: hooksMemoHandle } = createHooksVariant(render
 const { App: SignalsApp, count: signalsCount } = createSignalsVariant(renderCounts.signals);
 const { App: ManagedSignalsApp, count: managedSignalsCount } =
   createManagedSignalsVariant(renderCounts.signalsManaged);
+const { App: LeanSignalsApp, count: leanSignalsCount } = createLeanSignalsVariant(renderCounts.lean, false);
+const { App: LeanManagedSignalsApp, count: leanManagedSignalsCount } = createLeanSignalsVariant(renderCounts.leanManaged, true);
+const unrelatedCurrent = createControlledSignalsVariant(renderCounts.unrelatedCurrent, false, false, "unrelated");
+const unrelatedLean = createControlledSignalsVariant(renderCounts.unrelatedLean, true, false, "unrelated");
+const equalityCurrent = createControlledSignalsVariant(renderCounts.equalityCurrent, false, false, "equality");
+const equalityLean = createControlledSignalsVariant(renderCounts.equalityLean, true, false, "equality");
+const manyCurrent = createManySubscriberVariant(renderCounts.manyCurrent, false);
+const manyLean = createManySubscriberVariant(renderCounts.manyLean, true);
 const { App: JsxComponentApp, handle: jsxComponentHandle } = createJsxComponentVariant(renderCounts.jsxComponent);
 const { App: JsxHostApp, handle: jsxHostHandle } = createJsxHostVariant(renderCounts.jsxHostElement);
 
@@ -283,13 +396,14 @@ const { App: JsxHostApp, handle: jsxHostHandle } = createJsxHostVariant(renderCo
  * mount's updates run, so `signals` (whose backing signal is never reset)
  * and the hooks variants (which always start at 0) share one assertion.
  */
-function makeVariant({ name, counts, expectedSiblingRenders, App, increment, getStart }) {
+function makeVariant({ name, counts, expectedSiblingRenders, App, increment, getStart, expectedCounterRenders, expectedDisplay, customCheck, reset }) {
   return {
     name,
     counts,
     create() {
       counts.counter = 0;
       counts.siblings = 0;
+      reset?.();
       const startCount = getStart();
       const container = document.createElement("div");
       document.body.append(container);
@@ -307,7 +421,11 @@ function makeVariant({ name, counts, expectedSiblingRenders, App, increment, get
       }
     },
     check(state, updateCount) {
-      const expectedCounter = updateCount + 1;
+      if (customCheck) {
+        customCheck(state, updateCount);
+        return;
+      }
+      const expectedCounter = expectedCounterRenders ? expectedCounterRenders(updateCount) : updateCount + 1;
       assert(
         counts.counter === expectedCounter,
         `${name}: expected ${expectedCounter} counter renders, got ${counts.counter}`,
@@ -317,7 +435,7 @@ function makeVariant({ name, counts, expectedSiblingRenders, App, increment, get
         counts.siblings === expectedSiblings,
         `${name}: expected ${expectedSiblings} sibling renders, got ${counts.siblings}`,
       );
-      const expectedFinal = state.startCount + updateCount;
+      const expectedFinal = expectedDisplay ? expectedDisplay(state.startCount, updateCount) : state.startCount + updateCount;
       const counterNode = state.container.querySelector("li");
       const expectedText = `count:${expectedFinal}`;
       assert(
@@ -334,7 +452,7 @@ function makeVariant({ name, counts, expectedSiblingRenders, App, increment, get
   };
 }
 
-const variants = [
+const allVariants = [
   makeVariant({
     name: "hooks-naive",
     counts: renderCounts.hooksNaive,
@@ -372,6 +490,38 @@ const variants = [
     getStart: () => managedSignalsCount.value,
   }),
   makeVariant({
+    name: "lean",
+    counts: renderCounts.lean,
+    expectedSiblingRenders: () => rows,
+    App: LeanSignalsApp,
+    increment: () => { leanSignalsCount.value += 1; },
+    getStart: () => leanSignalsCount.value,
+  }),
+  makeVariant({
+    name: "lean-managed",
+    counts: renderCounts.leanManaged,
+    expectedSiblingRenders: () => rows,
+    App: LeanManagedSignalsApp,
+    increment: () => { leanManagedSignalsCount.value += 1; },
+    getStart: () => leanManagedSignalsCount.value,
+  }),
+  ...[ ["unrelated-current", unrelatedCurrent, renderCounts.unrelatedCurrent], ["unrelated-lean", unrelatedLean, renderCounts.unrelatedLean] ].map(([name, instance, counts]) => makeVariant({
+    name, counts, expectedSiblingRenders: () => rows, App: instance.App,
+    increment: instance.increment, getStart: instance.getStart,
+    expectedCounterRenders: () => 1, expectedDisplay: (start) => start,
+  })),
+  ...[ ["equality-current", equalityCurrent, renderCounts.equalityCurrent], ["equality-lean", equalityLean, renderCounts.equalityLean] ].map(([name, instance, counts]) => makeVariant({
+    name, counts, expectedSiblingRenders: () => rows, App: instance.App,
+    increment: instance.increment, getStart: instance.getStart,
+    expectedCounterRenders: (count) => Math.floor(count / 10) + 1,
+    expectedDisplay: (start, count) => start + Math.floor(count / 10),
+  })),
+  ...[ ["many-current", manyCurrent, renderCounts.manyCurrent], ["many-lean", manyLean, renderCounts.manyLean] ].map(([name, instance, counts]) => makeVariant({
+    name, counts, expectedSiblingRenders: (count) => rows * (count + 1),
+    App: instance.App, increment: instance.increment, getStart: instance.getStart,
+    customCheck: instance.customCheck, reset: instance.reset,
+  })),
+  makeVariant({
     name: "jsx-component",
     counts: renderCounts.jsxComponent,
     expectedSiblingRenders: (updateCount) => rows * (updateCount + 1),
@@ -397,6 +547,16 @@ function benchmark(variant) {
   variant.check(smoke, updates);
   variant.dispose(smoke);
 
+  const mountTimings = [];
+  for (let sample = 0; sample < samples; sample += 1) {
+    global.gc?.();
+    const start = process.hrtime.bigint();
+    const state = variant.create();
+    mountTimings.push(Number(process.hrtime.bigint() - start) / 1e9);
+    variant.dispose(state);
+  }
+  mountTimings.sort((left, right) => left - right);
+
   for (let round = 0; round < warmups; round += 1) {
     const state = variant.create();
     variant.run(state, updates);
@@ -421,6 +581,8 @@ function benchmark(variant) {
     variant: variant.name,
     "counter renders": variant.counts.counter,
     "sibling renders (total)": variant.counts.siblings,
+    "mount median ms": (percentile(mountTimings, 0.5) * 1e3).toFixed(3),
+    "mount p25–p75 ms": `${(percentile(mountTimings, 0.25) * 1e3).toFixed(3)}–${(percentile(mountTimings, 0.75) * 1e3).toFixed(3)}`,
     "median ms": (median * 1e3).toFixed(3),
     "p25 ms": (percentile(timings, 0.25) * 1e3).toFixed(3),
     "p75 ms": (percentile(timings, 0.75) * 1e3).toFixed(3),
@@ -433,7 +595,20 @@ console.log(
 );
 console.log(`${os.platform()} ${os.arch()}; ${os.cpus()[0]?.model ?? "unknown CPU"}`);
 console.log("Manual diagnostics only: compare results only on identical Node versions and hardware.");
-console.table(variants.map(benchmark));
+const requestedVariant = process.env.BENCH_VARIANT;
+const variants = requestedVariant ? allVariants.filter((variant) => variant.name === requestedVariant) : allVariants;
+if (requestedVariant && variants.length === 0) throw new Error(`Unknown BENCH_VARIANT: ${requestedVariant}`);
+const results = variants.map(benchmark);
+console.table(results);
+if (process.env.BENCH_OUTPUT) {
+  const metadata = {
+    kind: "react-sample", date: "2026-09-26", commit: "906a0108b212dff2c84ed226c48063a6d096cc40",
+    node: process.version, platform: process.platform, arch: process.arch,
+    cpu: os.cpus()[0]?.model, react: "19.2.8", rows, updates, warmups, samples,
+  };
+  for (const result of results) appendFileSync(process.env.BENCH_OUTPUT, `${JSON.stringify({ ...metadata, ...result })}\n`);
+}
+if (requestedVariant) process.exit(0);
 
 /**
  * The React-render harness above wraps every `jsx`/`jsxs` call in `act()`,

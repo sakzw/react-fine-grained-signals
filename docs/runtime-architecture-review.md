@@ -257,3 +257,7 @@ Remaining migration-review topics are the `Object.keys()` descriptor/property tr
 ### Initial-effect scope follow-up (2026-09-26)
 
 Prototype A `runInitial()` was the final uncovered durable callback path. Initial effect bodies now use the same inherited-speculation isolation as reruns, while keeping graph tracking on and render/speculative collection off. Same-runtime and cross-runtime regressions confirm deep updates rerun the effect without advancing the epoch, reevaluating the outer computed, or rerendering its component; disposal releases the dependency. Production initial effects already enter through `runReaction(..., true)` and its existing isolation, so production code was unchanged. The benchmark pass completed, but both normal and deep cases measured substantially below prior local runs (including read/write controls); these results are environment-sensitive and should be rechecked in the next performance review.
+
+## Production migration review (2026-09-26)
+
+The controlled comparison, parity matrix, tree-shaking/brand gates, and staged cutover plan are in [runtime-production-migration-review.md](./runtime-production-migration-review.md). Recommendation: proceed to a reversible runtime cutover behind the current private interface; retain wrappers and preserve lazy deep-engine loading. Controlled results are in `benchmarks/prototypes/results-final-2026-09-26.jsonl`.
