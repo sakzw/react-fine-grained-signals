@@ -132,6 +132,40 @@ Classification: React control/JSX variation is **A, benchmark/environment noise*
 
 The cleanup error-reporting contract was corrected during this review: public effect body and cleanup failures now both report the documented `effect() callback threw` message with `{ cause }`, while retaining guarded error reporting. Public and private cleanup regression tests pin that exact message.
 
+### Core hot-path attribution
+
+Attribution ran from clean `main` commit `8e7af9688d3078cb53f827fc5a303e47be986dbc` on Windows x64, AMD Ryzen 7 PRO 6850U, Node v24.20.0 (pnpm-managed), pnpm 11.24.0, alien-signals 3.2.1. Initial exploration used the same harness at 30,000 operations, 3 warmups, 9 samples; each source ablation was built, run, then reverted before the next. A fresh 100,000-operation/3-warmup/9-sample run was used for the final Phase 5 numbers below. Short-run raw alien controls moved substantially, so small ablation deltas are treated as inconclusive. No temporary ablation remains in the source.
+
+The 30,000-op Phase 5 baseline was 1.53M observed writes/s, 1.32M computed update/read/s, and 0.55M two-observed-write batches/s. Ratios below are each ablation divided by that baseline; they are directional short-harness measurements, not additive cost shares.
+
+| Temporary ablation | Observed | Computed | Batch | Reading |
+| --- | ---: | ---: | ---: | --- |
+| no shared graph collector scope | 0.80× | 0.83× | 0.96× | no recovery |
+| no render suppression | 0.95× | 1.06× | 1.06× | no measurable change |
+| both scopes removed | 0.87× | 1.01× | 1.07× | no recovery |
+| liveness refresh no-op | 1.06× | 0.97× | 1.01× | no recovery; source node refresh already exits by kind |
+| skip stale dependency pruning | 0.86× | 0.96× | 1.08× | no recovery on the fixed one-dependency effect |
+| remove runReaction entry guards only | 0.95× | 0.89× | 1.08× | no clear change |
+| dispatch directly to runReaction (bypass queue) | 0.88× | 0.97× | 1.01× | queue/flush alone is not dominant |
+| shortest local active-subscriber source read | 0.80× | 1.08× | 1.04× | no recovery |
+| skip normal computed observed-result refresh | 0.70× | 1.17× | 1.00× | noisy; did not improve computed throughput |
+| cold-pull generation no-op | 0.78× | 0.91× | 1.09× | no consistent improvement |
+| unconditional Pending computed update (skip `checkDirty`) | 0.88× | 1.28× | 1.08× | about 22% less computed time in this run, but changes redundant reevaluation behavior; not retained |
+| direct-source revision fast-path candidate | 0.91× | 1.01× | 1.06× | no benefit; reverted |
+| direct callback instead of `runReaction` | 2.64× / 2.72× | 1.07× / 0.90× | 0.99× / 1.03× | observed-write recovery repeated; omits runner lifecycle/error/cleanup/disposal guarantees, so attribution only |
+
+The strongest isolated result is the source-only effect runner path: directly invoking the tracked callback, while bypassing `runReaction`, raised short-harness observed-write throughput from 1.53M to 4.05M and 4.17M ops/s on two runs. Calling `runReaction` directly instead of enqueueing it did not help. This localizes a substantial share of observed-write cost to work surrounding callback invocation in the reaction runner, beyond queue insertion/flush. Computed and batch cases did not improve under that callback ablation, so this does not explain their regressions or the full remaining gap. Removing only entry guards did not help; exact per-field shares within the runner were not isolated. This fast path intentionally violates cleanup, disposal, and error handling and is not eligible as a production change.
+
+The public-vs-private control (100,000 operations, 3 warmups, 9 samples) measured private/public throughput of 37.19M/28.33M read, 9.20M/8.52M unobserved write, 1.55M/1.19M observed write, and 1.38M/1.39M computed update/read ops/s. Public read and observed-write medians were lower, but p25–p75 intervals overlapped or were noisy; this reconfirms that wrapper delegation is not the several-fold dominant cost. This control is diagnostic rather than a precision wrapper estimate.
+
+An allocation/GC signal was also measured at 10,000 operations: V8 emitted 45 GC events for raw alien, 117 for RFSG, and 80 for Preact across the adapter suites. This count includes the harness's explicit per-sample collections and is not a byte-allocation measurement; it indicates greater RFSG allocation/collection pressure but does not identify which allocation site dominates. No heap allocation profile was available in this pass.
+
+Alien-signals v3.2.1 high-level source (`esm/index.mjs` and `esm/system.mjs`) handles a simple write by updating a source, propagating through graph links, running `checkDirty` as needed, executing the effect, and relinking/purging dependencies. RFSG uses that same low-level reactive system and adds: (1) public value wrappers — modest measured cost; (2) local/foreign graph collector and render isolation — their ablations did not improve throughput; (3) revision/error/result observation — required for render race detection, Object.is equality, and contained errors; (4) RFSG queue and reaction lifecycle — queue bypass alone did not help, but the broader runner/callback ablation recovered part of the source-only effect path; and (5) cross-copy/liveness state — liveness no-op did not affect these local benchmarks. The computed checkDirty ablation found a measurable computed-only cost, but safely bypassing it on a direct-local-source path needs a correct dependency-change shortcut; the attempted snapshot shortcut did not help.
+
+The fresh final Phase 5 full core run measured 43.19M read, 24.75M unobserved write, 1.63M observed write, 1.50M computed update/read, and 0.46M batch ops/s. Against the recorded Phase 4 baseline, the ratios were 0.81×, 0.60×, 0.16×, 0.19×, and 0.12× respectively. The same fresh run's raw alien control measured 57.92M, 54.27M, 13.68M, 11.88M, and 3.81M ops/s. P5 p25–p75 times were 2.308–2.337, 3.765–22.513, 60.750–74.603, 64.045–81.785, and 188.303–287.713 ms. The broad write/batch ranges reflect machine/run variation; observed, computed, and batch remained far below both Phase 4 and same-run alien.
+
+No production hot-path optimization was retained: scope, liveness, prune, lifecycle-guard, local-read, and direct-source candidates did not measurably improve the core suite; unconditional dirty-check removal was not semantics-preserving; the direct-callback recovery omits required lifecycle behavior. `useSignalValue` effect bridging, JSX subscriptions, public wrapper removal, and deepSignal Proxy changes remain deferred to Phase 6. No Phase 6 work began. The remaining observed/computed/batch gaps are not quantitatively explained by accepted Phase 5 requirements, so the performance blocker remains.
+
 ## Validation
 
 Final commands run on this worktree:
@@ -145,7 +179,7 @@ Final commands run on this worktree:
 - `pnpm test:phase4-duplicate`: passed; three independent bundles.
 - `pnpm test:browser`: passed, 27/27, including React Router and production-build cases.
 - `pnpm size`: all budgets and structural checks passed.
-- `pnpm bench`, `pnpm bench:deep`, `pnpm bench:react`: completed; results above.
+- `pnpm bench`, `pnpm bench:deep`, `pnpm bench:react`: completed during the prior Phase 5 review; this pass reran the final full `pnpm bench` and the focused attribution harness.
 - `git diff --check`: passed after the implementation and checkpoint edits.
 
 Intentional unsupported/unchanged behavior: Phase 3 nested-effect conformance cases #209/#210 remain unsupported; cross-runtime batch operations remain non-atomic. The effect-backed `useSignalValue`, generic JSX binding effect, deepSignal Proxy architecture, and `markWatched()` remain unchanged for Phase 5.
@@ -162,7 +196,7 @@ Packaging, size, examples, and docs: `package.json`, `pnpm-lock.yaml`, `scripts/
 
 - **Correctness blocker:** none found; final focused and full correctness checks pass.
 - **Architecture blocker:** none found; the accepted Phase 5 architecture remains unchanged.
-- **Performance blocker:** same-environment Phase 4-to-Phase 5 observed writes, computed update/read, and batched observed writes remain 7.9×, 5.9×, and 6.7× slower respectively. Inspection excludes the hypothesized repeated whole-graph scans and avoids blaming the modest public wrapper cost, but the remaining constant-factor cost has not been measured by component. Keep Phase 5 open until this gap is either isolated to understood correctness/interoperability work or reduced by a semantics-preserving Phase 5 optimization. Retain `markWatched()` until a separately scoped pruning change proves the render-to-commit window safe.
+- **Performance blocker:** final Phase 4-to-Phase 5 comparison shows observed writes, computed update/read, and batched observed writes at 0.16×, 0.19×, and 0.12× Phase 4 throughput. Ablations attribute a substantial part of source-only observed-write cost to the normal reaction runner, but the residual and the computed/batch gaps remain unexplained. Keep Phase 5 open until those costs are isolated to required behavior or reduced by semantics-preserving Phase 5 optimizations. Retain `markWatched()` until a separately scoped pruning change proves the render-to-commit window safe.
 - **Future-version idea:** Phase 6 may consider direct private subscriptions for `useSignalValue`/JSX and later wrapper/pruning optimizations.
 
 The next action is to isolate the Phase 5 core hot-path overhead while preserving semantics, then reassess freeze. Do not begin Phase 6 until Phase 5 is explicitly frozen.
