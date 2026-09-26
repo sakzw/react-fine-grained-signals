@@ -18,6 +18,12 @@ const Dirty = 16;
 const Pending = 32;
 const { createReactiveSystem } = alienSystem;
 
+// Hide only the component's outer collector, preserving a computed getter's
+// own speculative dependency map.
+function withoutComponentRenderCollection<T>(callback: () => T): T {
+  return hasActiveRenderCollector() ? untrackedRender(callback) : callback();
+}
+
 type PrototypeNode = Omit<ReactiveNode, "deps" | "depsTail" | "subs" | "subsTail"> & {
   deps: Link | undefined;
   depsTail: Link | undefined;
@@ -102,8 +108,20 @@ export function createLeanRuntime(
     node.revision += 1;
   };
   const getRenderVersion = (node: SourceNode<unknown> | ComputedNode<unknown>) => node.revision;
-  const withoutRenderCollection = <T>(callback: () => T): T =>
-    hasActiveRenderCollector() ? untrackedRender(callback) : callback();
+  // Semantically untracked callbacks must pause both Prototype A collectors as
+  // well as the shared React collector, restoring nested scopes in a finally.
+  const withoutAllRenderCollection = <T>(callback: () => T): T => {
+    const previousRenderReads = activeRenderReads;
+    const previousSpeculativeReads = speculativeReads;
+    activeRenderReads = undefined;
+    speculativeReads = undefined;
+    try {
+      return withoutComponentRenderCollection(callback);
+    } finally {
+      activeRenderReads = previousRenderReads;
+      speculativeReads = previousSpeculativeReads;
+    }
+  };
 
   const system = createReactiveSystem({
     update(node) {
@@ -283,7 +301,7 @@ export function createLeanRuntime(
     activeSpeculativeComputed = node as ComputedNode<unknown>;
     let result: { hasError: boolean; value: T | undefined; error: unknown };
     try {
-      result = withoutRenderCollection(() => {
+      result = withoutComponentRenderCollection(() => {
         try { return { hasError: false, value: node.getter(), error: undefined }; }
         catch (error) { return { hasError: true, value: undefined, error }; }
       });
@@ -361,7 +379,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      withoutRenderCollection(cleanup);
+      withoutAllRenderCollection(cleanup);
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -390,7 +408,7 @@ export function createLeanRuntime(
       cycle += 1;
       runDepth += 1;
       try {
-        const cleanup = effect.fn();
+        const cleanup = withoutAllRenderCollection(effect.fn);
         if (effect.active) effect.cleanup = cleanup || undefined;
         else if (typeof cleanup === "function") runCleanupValue(cleanup);
       } catch (error) {
@@ -415,7 +433,7 @@ export function createLeanRuntime(
       return;
     }
     watcher.flags = Watching;
-    if (watcher.listener !== undefined) withoutRenderCollection(watcher.listener);
+    if (watcher.listener !== undefined) withoutAllRenderCollection(watcher.listener);
     if (watcher.scheduled) watcher.flags &= ~Watching;
   }
 
@@ -525,7 +543,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      return withoutRenderCollection(fn);
+      return withoutAllRenderCollection(fn);
     } finally {
       activeSub = previousSub;
     }
@@ -537,7 +555,7 @@ export function createLeanRuntime(
     activeRenderReads = reads;
     let value: T;
     try {
-      value = withoutRenderCollection(fn);
+      value = withoutComponentRenderCollection(fn);
     } finally {
       activeRenderReads = previousReads;
     }
@@ -556,7 +574,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      withoutRenderCollection(cleanup);
+      withoutAllRenderCollection(cleanup);
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -708,7 +726,7 @@ export function createLeanRuntime(
     runDepth += 1;
     try {
       try {
-        effect.cleanup = withoutRenderCollection(effect.fn) || undefined;
+        effect.cleanup = withoutAllRenderCollection(effect.fn) || undefined;
       } catch (error) {
         safelyReport(error);
       }

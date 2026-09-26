@@ -206,6 +206,153 @@ describe("Prototype A React render layer", () => {
     expect(renders).toHaveBeenCalledTimes(2);
   });
 
+  it("keeps untracked sources out of speculative computed dependencies", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const tracked = runtime.signal(1);
+    const ignored = runtime.signal(10);
+    const evaluate = vi.fn(() => tracked.value + runtime.untracked(() => ignored.value));
+    const derived = runtime.computed(evaluate);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="spec-untracked">{derived.value}</output>;
+    }
+    render(<Reader />);
+    expect(screen.getByLabelText("spec-untracked").textContent).toBe("11");
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    act(() => { ignored.value = 20; });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => { tracked.value = 2; });
+    expect(screen.getByLabelText("spec-untracked").textContent).toBe("22");
+    expect(evaluate).toHaveBeenCalledTimes(2);
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not collect a nested computed evaluated only through peek", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const nestedSource = runtime.signal(1);
+    const nested = runtime.computed(() => nestedSource.value * 2);
+    const evaluateOuter = vi.fn(() => nested.peek() + 1);
+    const outer = runtime.computed(evaluateOuter);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="peek-boundary">{outer.value}</output>;
+    }
+    render(<Reader />);
+    expect(screen.getByLabelText("peek-boundary").textContent).toBe("3");
+    act(() => { nestedSource.value = 2; });
+    expect(evaluateOuter).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+  });
+
+  it("isolates effects and cleanups triggered during speculative computed evaluation", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const trigger = runtime.signal(0);
+    const effectOnly = runtime.signal(0);
+    const cleanupOnly = runtime.signal(0);
+    let effectRuns = 0;
+    let cleanupRuns = 0;
+    runtime.effect(() => {
+      trigger.value;
+      effectOnly.value;
+      effectRuns += 1;
+      return () => { cleanupOnly.value; cleanupRuns += 1; };
+    });
+    let shouldTrigger = true;
+    const evaluate = vi.fn(() => {
+      if (shouldTrigger) {
+        shouldTrigger = false;
+        trigger.value = 1;
+      }
+      return 7;
+    });
+    const outer = runtime.computed(evaluate);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="effect-spec-isolation">{outer.value}</output>;
+    }
+    render(<Reader />);
+    expect(effectRuns).toBe(2);
+    expect(cleanupRuns).toBe(1);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    act(() => { effectOnly.value = 1; });
+    expect(effectRuns).toBe(3);
+    expect(cleanupRuns).toBe(2);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => { cleanupOnly.value = 1; });
+    expect(effectRuns).toBe(3);
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+  });
+
+  it("restores nested untracked collectors after a caught throw inside a speculative getter", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const tracked = runtime.signal(1);
+    const ignored = runtime.signal(10);
+    const failure = new Error("nested untracked failure");
+    let caught: unknown;
+    const derived = runtime.computed(() => {
+      try {
+        runtime.untracked(() => runtime.untracked(() => {
+          ignored.value;
+          throw failure;
+        }));
+      } catch (error) {
+        caught = error;
+      }
+      return tracked.value;
+    });
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="nested-untracked">{derived.value}</output>;
+    }
+    render(<Reader />);
+    expect(caught).toBe(failure);
+    expect(hasActiveRenderCollector()).toBe(false);
+    act(() => { ignored.value = 11; });
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => { tracked.value = 2; });
+    expect(screen.getByLabelText("nested-untracked").textContent).toBe("2");
+    expect(renders).toHaveBeenCalledTimes(2);
+    expect(hasActiveRenderCollector()).toBe(false);
+  });
+
+  it("isolates RenderWatcher listeners from active speculative computed reads", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const trigger = runtime.signal(0);
+    const listenerOnly = runtime.signal(0);
+    const unsubscribe = trigger.subscribeRender(() => { listenerOnly.value; });
+    let shouldTrigger = true;
+    const evaluate = vi.fn(() => {
+      if (shouldTrigger) {
+        shouldTrigger = false;
+        trigger.value = 1;
+      }
+      return 3;
+    });
+    const outer = runtime.computed(evaluate);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="watcher-spec-isolation">{outer.value}</output>;
+    }
+    render(<Reader />);
+    act(() => { listenerOnly.value = 1; });
+    expect(evaluate).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(1);
+    unsubscribe();
+  });
+
   it("does not leak ordinary effect reads into an open render scope", () => {
     const runtime = createLeanRuntime(() => undefined);
     const trigger = runtime.signal(0);
