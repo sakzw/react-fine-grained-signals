@@ -188,8 +188,8 @@ describe("Prototype A lean local runtime", () => {
     expect(calls).toBe(2);
   });
 
-  it("tracks source writes and computed semantic changes in the optional revision sidecar", () => {
-    const runtime = createLeanRuntime(() => undefined, { renderRevisionSidecar: true });
+  it("tracks source writes and computed semantic generations in inline revisions", () => {
+    const runtime = createLeanRuntime(() => undefined);
     const source = runtime.signal(0);
     const parity = runtime.computed(() => source.value % 2);
 
@@ -214,8 +214,33 @@ describe("Prototype A lean local runtime", () => {
     expect(parity.getRenderVersion()).toBe(1);
   });
 
+  it("advances computed revisions for value/error/repeated-error/recovery transitions", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const version = runtime.signal(0);
+    const shouldThrow = runtime.signal(false);
+    const failure = new Error("revision failure");
+    const value = runtime.computed(() => {
+      version.value;
+      if (shouldThrow.value) throw failure;
+      return 1;
+    });
+    expect(value.value).toBe(1);
+    expect(value.getRenderVersion()).toBe(0);
+    shouldThrow.value = true;
+    expect(() => value.value).toThrow(failure);
+    expect(value.getRenderVersion()).toBe(1);
+    version.value = 1;
+    expect(() => value.value).toThrow(failure);
+    expect(value.getRenderVersion()).toBe(2);
+    shouldThrow.value = false;
+    expect(value.value).toBe(1);
+    expect(value.getRenderVersion()).toBe(3);
+    expect(value.value).toBe(1);
+    expect(value.getRenderVersion()).toBe(3);
+  });
+
   it("isolates speculative reads from graph/cache state and detects render-to-commit races", () => {
-    const runtime = createLeanRuntime(() => undefined, { renderRevisionSidecar: true });
+    const runtime = createLeanRuntime(() => undefined);
     const source = runtime.signal(1);
     let getterCalls = 0;
     const doubled = runtime.computed(() => { getterCalls += 1; return source.value * 2; });
@@ -227,7 +252,7 @@ describe("Prototype A lean local runtime", () => {
     const committedCandidate = runtime.speculate(() => doubled.value);
     expect(abandoned.value).toBe(2);
     expect(committedCandidate.value).toBe(2);
-    expect(getterCalls).toBe(3);
+    expect(getterCalls).toBe(1);
     expect(effectRuns).toBe(1);
     expect(abandoned.isCurrent()).toBe(true);
     expect(committedCandidate.isCurrent()).toBe(true);
@@ -242,8 +267,8 @@ describe("Prototype A lean local runtime", () => {
     expect(() => runtime.speculate(() => recursive.value)).toThrow("Computed cycle detected");
   });
 
-  it("keeps first-observed sidecar revisions when a speculative scope rereads after a write", () => {
-    const runtime = createLeanRuntime(() => undefined, { renderRevisionSidecar: true });
+  it("keeps first-observed revisions when a speculative scope rereads after a write", () => {
+    const runtime = createLeanRuntime(() => undefined);
     const source = runtime.signal(0);
     const snapshot = runtime.speculate(() => {
       expect(source.value).toBe(0);

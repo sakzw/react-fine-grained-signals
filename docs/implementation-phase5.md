@@ -238,4 +238,6 @@ The architecture study is recorded in [`runtime-architecture-review.md`](./runti
 
 This is evidence that runtime implementation shape contributes substantially to the performance debt, not a production cutover decision. Prototype A is the preferred candidate for a separately scoped continuation; production readiness remains inconclusive. Phase 6 was not started.
 
+Prototype A now has a private real-React layer with local-only render correctness coverage. See the “Prototype A — real React layer” section in runtime-architecture-review.md for revision storage, watcher/cache design, benchmarks, and remaining interop/deepSignal gaps. This does not freeze Phase 5 or start the next milestone.
+
 Prototype A's local-hardening follow-up, including shape-only measurements, corrected pending `peek()` behavior, reentrant-write parity, the expanded local semantics suite, and a temporary current-runtime graph-shape diagnostic, is recorded in [`runtime-architecture-review.md`](./runtime-architecture-review.md#prototype-a-local-hardening). The hardened local core retains a clear observed/computed/batch advantage over current Phase 5. Full React and interop parity remain open; Phase 5 is not frozen.

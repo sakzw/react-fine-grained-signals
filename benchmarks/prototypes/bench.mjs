@@ -1,6 +1,6 @@
 import { computed as alienComputed, effect as alienEffect, endBatch, signal as alienSignal, startBatch } from "alien-signals";
 import * as current from "../../dist/index.js";
-import { createLeanRuntime } from "../../node_modules/.cache/phase5-architecture/lean-entry.mjs";
+import { createLeanRuntime } from "../../node_modules/.cache/prototype-a/lean-entry.mjs";
 import { createHybridRuntime } from "../../node_modules/.cache/phase5-architecture/hybrid-entry.mjs";
 
 const [runtimeName = "lean", caseName = "observed", iterationsArg = "100000"] = process.argv.slice(2);
@@ -9,11 +9,11 @@ const samples = 9;
 const warmups = 3;
 
 function adapter(name) {
-  if (name === "lean" || name === "lean-revision") {
-    const runtime = createLeanRuntime(() => undefined, { renderRevisionSidecar: name === "lean-revision" });
+  if (name === "lean") {
+    const runtime = createLeanRuntime(() => undefined);
     return {
-      signal(value) { const source = runtime.signal(value); return { get: () => source.value, set: next => { source.value = next; } }; },
-      computed(getter) { const source = runtime.computed(getter); return { get: () => source.value }; },
+      signal(value) { const source = runtime.signal(value); return { get: () => source.value, set: next => { source.value = next; }, subscribe: source.subscribeRender.bind(source) }; },
+      computed(getter) { const source = runtime.computed(getter); return { get: () => source.value, subscribe: source.subscribeRender.bind(source) }; },
       effect: runtime.effect,
       batch: runtime.batch,
       speculate: runtime.speculate,
@@ -49,7 +49,9 @@ const cases = {
   observed(a) { const source = a.signal(0); let runs = 0; const dispose = a.effect(() => { source.get(); runs++; }); return { run(n) { for (let i = 0; i < n; i++) source.set(i + 1); if (runs !== n + 1) throw Error(`bad observed runs: ${runs}`); }, dispose }; },
   computed(a) { const source = a.signal(0), doubled = a.computed(() => source.get() * 2); return { run(n) { let sum = 0; for (let i = 0; i < n; i++) { source.set(i + 1); sum += doubled.get(); } if (sum !== n * (n + 1)) throw Error("bad computed"); } }; },
   batch(a) { const left = a.signal(0), right = a.signal(0), total = a.computed(() => left.get() + right.get()); let runs = 0; const dispose = a.effect(() => { total.get(); runs++; }); return { run(n) { for (let i = 0; i < n; i++) a.batch(() => { left.set(i + 1); right.set(i + 1); }); if (total.get() !== 2 * n || runs !== n + 1) throw Error("bad batch"); }, dispose }; },
-  speculative(a) { if (!a.speculate) throw new Error("speculative case requires lean-revision"); const source = a.signal(0), doubled = a.computed(() => source.get() * 2); return { run(n) { let sum = 0; for (let i = 0; i < n; i++) { source.set(i + 1); sum += a.speculate(() => doubled.get()).value; } if (sum !== n * (n + 1)) throw Error("bad speculative read"); } }; },
+  renderObserved(a) { const source = a.signal(0); let runs = 0; const unsubscribe = source.subscribe(() => { runs++; }); return { run(n) { for (let i = 0; i < n; i++) source.set(i + 1); if (runs !== n) throw Error(`bad render watcher runs: ${runs}`); }, dispose: unsubscribe }; },
+  renderComputed(a) { const source = a.signal(0), doubled = a.computed(() => source.get() * 2); let runs = 0; const unsubscribe = doubled.subscribe(() => { runs++; }); return { run(n) { for (let i = 0; i < n; i++) source.set(i + 1); if (doubled.get() !== n * 2 || runs !== n) throw Error(`bad computed render watcher: ${runs}`); }, dispose: unsubscribe }; },
+  speculative(a) { if (!a.speculate) throw new Error("speculative case requires lean"); const source = a.signal(0), doubled = a.computed(() => source.get() * 2); return { run(n) { let sum = 0; for (let i = 0; i < n; i++) { source.set(i + 1); sum += a.speculate(() => doubled.get()).value; } if (sum !== n * (n + 1)) throw Error("bad speculative read"); } }; },
 };
 
 const selected = cases[caseName];

@@ -7,6 +7,7 @@
  */
 import * as alienSystem from "alien-signals/system";
 import type { Link, ReactiveNode } from "alien-signals/system";
+import { activeRenderCollector, hasActiveRenderCollector, notifyListener, untrackedRender } from "../../src/core/render-tracking.js";
 
 // alien-signals/system declares these as a const enum, so keep the runtime
 // values local just as alien-signals' high-level entry does.
@@ -27,7 +28,11 @@ type PrototypeNode = Omit<ReactiveNode, "deps" | "depsTail" | "subs" | "subsTail
 type SignalNode<T> = PrototypeNode & {
   currentValue: T;
   pendingValue: T;
+  revision: number;
+  renderListeners: Set<() => void> | undefined;
+  renderWatcher: RenderWatcherNode | undefined;
 };
+type SourceNode<T> = SignalNode<T>;
 
 type ComputedNode<T> = PrototypeNode & {
   getter: () => T;
@@ -35,6 +40,14 @@ type ComputedNode<T> = PrototypeNode & {
   hasError: boolean;
   value: T | undefined;
   error: unknown;
+  revision: number;
+  observedInitialized: boolean;
+  observedHasError: boolean;
+  observedValue: T | undefined;
+  speculativeResult: { hasError: boolean; value: T | undefined; error: unknown } | undefined;
+  speculativeDeps: Map<PrototypeNode, number> | undefined;
+  renderListeners: Set<() => void> | undefined;
+  renderWatcher: RenderWatcherNode | undefined;
 };
 
 type EffectNode = PrototypeNode & {
@@ -45,10 +58,17 @@ type EffectNode = PrototypeNode & {
   scheduled: boolean;
 };
 
+type RenderWatcherNode = PrototypeNode & {
+  listener: () => void;
+  scheduled: boolean;
+  active: boolean;
+};
+
 export interface LeanReadonlySignal<T> {
   readonly value: T;
   peek(): T;
   getRenderVersion(): number;
+  subscribeRender(listener: () => void): () => void;
 }
 
 export interface LeanSignal<T> extends LeanReadonlySignal<T> {
@@ -66,7 +86,6 @@ export interface LeanRuntime {
 
 export function createLeanRuntime(
   onEffectError: (error: unknown) => void = reportError,
-  options: { renderRevisionSidecar?: boolean } = {},
 ): LeanRuntime {
   let activeSub: PrototypeNode | undefined;
   let cycle = 0;
@@ -74,19 +93,17 @@ export function createLeanRuntime(
   let batchDepth = 0;
   let notifyIndex = 0;
   let queuedLength = 0;
-  const queue: Array<EffectNode | undefined> = [];
-  const renderRevisions = options.renderRevisionSidecar
-    ? new WeakMap<PrototypeNode, number>()
-    : undefined;
+  const queue: Array<(EffectNode | RenderWatcherNode) | undefined> = [];
   let activeRenderReads: Map<PrototypeNode, number> | undefined;
+  let speculativeReads: Map<PrototypeNode, number> | undefined;
+  let activeSpeculativeComputed: ComputedNode<unknown> | undefined;
   const renderingComputeds = new Set<PrototypeNode>();
-
-  const bumpRenderRevision = renderRevisions === undefined
-    ? (_node: PrototypeNode) => {}
-    : (node: PrototypeNode) => renderRevisions.set(node, (renderRevisions.get(node) ?? 0) + 1);
-  const getRenderVersion = renderRevisions === undefined
-    ? (_node: PrototypeNode) => 0
-    : (node: PrototypeNode) => renderRevisions.get(node) ?? 0;
+  const bumpRenderRevision = (node: SourceNode<unknown> | ComputedNode<unknown>) => {
+    node.revision += 1;
+  };
+  const getRenderVersion = (node: SourceNode<unknown> | ComputedNode<unknown>) => node.revision;
+  const withoutRenderCollection = <T>(callback: () => T): T =>
+    hasActiveRenderCollector() ? untrackedRender(callback) : callback();
 
   const system = createReactiveSystem({
     update(node) {
@@ -102,14 +119,14 @@ export function createLeanRuntime(
       return true;
     },
     notify(node) {
-      let effect = node as EffectNode;
+      let effect = node as EffectNode | RenderWatcherNode;
       let writeIndex = queuedLength;
       let firstWrite = writeIndex;
       for (;;) {
         effect.scheduled = true;
         queue[writeIndex++] = effect;
         effect.flags &= ~Watching;
-        const next = effect.subs?.sub as EffectNode | undefined;
+        const next = effect.subs?.sub as (EffectNode | RenderWatcherNode) | undefined;
         if (next === undefined || !(next.flags & Watching)) break;
         effect = next;
       }
@@ -120,7 +137,17 @@ export function createLeanRuntime(
         queue[writeIndex] = left;
       }
     },
-    unwatched() {},
+    unwatched(node) {
+      if (!("getter" in node) || node.depsTail === undefined) return;
+      const computed = node as ComputedNode<unknown>;
+      computed.flags = Mutable | Dirty;
+      let dependency = computed.depsTail;
+      while (dependency !== undefined) {
+        const previous = dependency.prevDep;
+        unlink(dependency, asReactiveNode(computed));
+        dependency = previous;
+      }
+    },
   });
 
   const { link, unlink, propagate, checkDirty, shallowPropagate } = system;
@@ -165,9 +192,8 @@ export function createLeanRuntime(
         node.hasError = true;
       }
       node.initialized = true;
-      if (!hadResult) return true;
-      const changed = node.hasError || oldHadError || !Object.is(oldValue, node.value);
-      if (changed) bumpRenderRevision(node);
+      const changed = !hadResult || node.hasError || oldHadError || !Object.is(oldValue, node.value);
+      settleComputedRevision(node, node.hasError, node.value, node.error, hadResult && (node.hasError || oldHadError));
       return changed;
     } finally {
       activeSub = previousSub;
@@ -177,6 +203,25 @@ export function createLeanRuntime(
       // this prototype: every reevaluation that throws invalidates dependents.
       void oldError;
     }
+  }
+
+  function settleComputedRevision<T>(
+    node: ComputedNode<T>,
+    hasError: boolean,
+    value: T | undefined,
+    error: unknown,
+    repeatedErrorIsChange = false,
+  ): void {
+    if (node.observedInitialized) {
+      const changed = repeatedErrorIsChange ||
+        node.observedHasError !== hasError ||
+        (!hasError && !Object.is(node.observedValue, value));
+      if (changed) bumpRenderRevision(node as ComputedNode<unknown>);
+    }
+    node.observedInitialized = true;
+    node.observedHasError = hasError;
+    node.observedValue = value;
+    void error;
   }
 
   function readSignalCore<T>(node: SignalNode<T>): T {
@@ -189,16 +234,6 @@ export function createLeanRuntime(
     track(node);
     return node.currentValue;
   }
-
-  function readSignalWithRender<T>(node: SignalNode<T>): T {
-    if (activeRenderReads !== undefined) {
-      if (!activeRenderReads.has(node)) activeRenderReads.set(node, getRenderVersion(node));
-      return node.flags & Dirty ? node.pendingValue : node.currentValue;
-    }
-    return readSignalCore(node);
-  }
-
-  const readSignal = renderRevisions === undefined ? readSignalCore : readSignalWithRender;
 
   function readComputedCore<T>(node: ComputedNode<T>): T {
     if (node.flags & RecursedCheck) throw new Error("Computed cycle detected");
@@ -216,24 +251,108 @@ export function createLeanRuntime(
     return node.value as T;
   }
 
-  function readComputedWithRender<T>(node: ComputedNode<T>): T {
-    if (activeRenderReads !== undefined) {
-      if (renderingComputeds.has(node)) throw new Error("Computed cycle detected");
-      if (!activeRenderReads.has(node)) activeRenderReads.set(node, getRenderVersion(node));
-      const previousSub = activeSub;
-      activeSub = undefined;
-      renderingComputeds.add(node);
-      try {
-        return node.getter();
-      } finally {
-        renderingComputeds.delete(node);
-        activeSub = previousSub;
+  function speculativeDependenciesAreCurrent(node: ComputedNode<unknown>): boolean {
+    const deps = node.speculativeDeps;
+    if (node.speculativeResult === undefined || deps === undefined) return false;
+    for (const [dependency, revision] of deps) {
+      if ("getter" in dependency) {
+        const computed = dependency as ComputedNode<unknown>;
+        if (!computedIsCurrent(computed)) return false;
       }
+      if (getRenderVersion(dependency as SourceNode<unknown> | ComputedNode<unknown>) !== revision) return false;
     }
-    return readComputedCore(node);
+    return true;
   }
 
-  const readComputed = renderRevisions === undefined ? readComputedCore : readComputedWithRender;
+  function computedIsCurrent(node: ComputedNode<unknown>): boolean {
+    if (node.initialized && !(node.flags & (Dirty | Pending))) return true;
+    if (speculativeDependenciesAreCurrent(node)) return true;
+    try { readComputedForRender(node); } catch { /* Errors are represented in the settled cache. */ }
+    return speculativeDependenciesAreCurrent(node) || (node.initialized && !(node.flags & (Dirty | Pending)));
+  }
+
+  function evaluateSpeculatively<T>(node: ComputedNode<T>): { hasError: boolean; value: T | undefined; error: unknown } {
+    if (renderingComputeds.has(node)) throw new Error("Computed cycle detected");
+    renderingComputeds.add(node);
+    const previousSub = activeSub;
+    const previousReads = speculativeReads;
+    const previousSpeculativeComputed = activeSpeculativeComputed;
+    activeSub = undefined;
+    const deps = new Map<PrototypeNode, number>();
+    speculativeReads = deps;
+    activeSpeculativeComputed = node as ComputedNode<unknown>;
+    let result: { hasError: boolean; value: T | undefined; error: unknown };
+    try {
+      result = withoutRenderCollection(() => {
+        try { return { hasError: false, value: node.getter(), error: undefined }; }
+        catch (error) { return { hasError: true, value: undefined, error }; }
+      });
+    } finally {
+      speculativeReads = previousReads;
+      activeSpeculativeComputed = previousSpeculativeComputed;
+      activeSub = previousSub;
+      renderingComputeds.delete(node);
+    }
+    node.speculativeResult = result;
+    node.speculativeDeps = deps;
+    settleComputedRevision(node, result.hasError, result.value, result.error, result.hasError);
+    return result;
+  }
+
+  function readComputedForRender<T>(node: ComputedNode<T>): T {
+    if (renderingComputeds.has(node)) throw new Error("Computed cycle detected");
+    const cleanGraph = node.initialized && !(node.flags & (Dirty | Pending));
+    let result: { hasError: boolean; value: T | undefined; error: unknown };
+    if (cleanGraph) {
+      result = { hasError: node.hasError, value: node.value, error: node.error };
+    } else if (speculativeDependenciesAreCurrent(node)) {
+      result = node.speculativeResult as { hasError: boolean; value: T | undefined; error: unknown };
+    } else {
+      result = evaluateSpeculatively(node);
+    }
+    if (activeRenderReads !== undefined && !activeRenderReads.has(node)) {
+      activeRenderReads.set(node, getRenderVersion(node));
+    }
+    if (speculativeReads !== undefined && node !== activeSpeculativeComputed && !speculativeReads.has(node)) {
+      speculativeReads.set(node, getRenderVersion(node));
+    }
+    if (result.hasError) throw result.error;
+    return result.value as T;
+  }
+
+  function promoteSpeculativeCache<T>(node: ComputedNode<T>): boolean {
+    if (node.initialized && !(node.flags & (Dirty | Pending))) return true;
+    if (!speculativeDependenciesAreCurrent(node)) return false;
+    const result = node.speculativeResult as { hasError: boolean; value: T | undefined; error: unknown };
+    const deps = node.speculativeDeps as Map<PrototypeNode, number>;
+    for (const dependency of deps.keys()) {
+      if ("getter" in dependency) promoteSpeculativeCache(dependency as ComputedNode<unknown>);
+    }
+    node.value = result.value;
+    node.error = result.error;
+    node.hasError = result.hasError;
+    node.initialized = true;
+    node.depsTail = undefined;
+    node.flags = Mutable | RecursedCheck;
+    const previousSub = activeSub;
+    activeSub = node;
+    cycle += 1;
+    try {
+      for (const dependency of deps.keys()) link(asReactiveNode(dependency), asReactiveNode(node), cycle);
+    } finally {
+      activeSub = previousSub;
+      node.flags &= ~RecursedCheck;
+    }
+    purgeDeps(node);
+    return true;
+  }
+
+  function readComputed<T>(node: ComputedNode<T>): T {
+    if (activeRenderReads !== undefined || hasActiveRenderCollector()) return readComputedForRender(node);
+    if (speculativeReads !== undefined) return readComputedForRender(node);
+    if (!node.initialized || node.flags & (Dirty | Pending)) promoteSpeculativeCache(node);
+    return readComputedCore(node);
+  }
 
   function runCleanup(effect: EffectNode): void {
     const cleanup = effect.cleanup;
@@ -242,7 +361,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      cleanup();
+      withoutRenderCollection(cleanup);
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -287,12 +406,101 @@ export function createLeanRuntime(
     }
   }
 
+  function runRenderWatcher(watcher: RenderWatcherNode): void {
+    if (!watcher.active || !watcher.scheduled) return;
+    watcher.scheduled = false;
+    const flags = watcher.flags;
+    if (!(flags & Dirty) && (!(flags & Pending) || watcher.deps === undefined || !checkDirty(watcher.deps, asReactiveNode(watcher)))) {
+      if (watcher.deps !== undefined) watcher.flags = Watching;
+      return;
+    }
+    watcher.flags = Watching;
+    if (watcher.listener !== undefined) withoutRenderCollection(watcher.listener);
+    if (watcher.scheduled) watcher.flags &= ~Watching;
+  }
+
+  function subscribeRenderNode(
+    node: SignalNode<unknown> | ComputedNode<unknown>,
+    listener: () => void,
+  ): () => void {
+    const listeners = (node.renderListeners ??= new Set());
+    const wasEmpty = listeners.size === 0;
+    listeners.add(listener);
+    if (wasEmpty) {
+      const watcher: RenderWatcherNode = {
+        listener: () => {
+          const activeListeners = node.renderListeners;
+          if (activeListeners === undefined) return;
+          // Snapshot before invoking React so subscriber mutation is safe.
+          // oxlint-disable-next-line unicorn/no-useless-spread
+          for (const renderListener of [...activeListeners]) {
+            notifyListener(renderListener);
+          }
+        },
+        scheduled: false,
+        active: true,
+        deps: undefined,
+        depsTail: undefined,
+        subs: undefined,
+        subsTail: undefined,
+        flags: Watching | RecursedCheck,
+      };
+      node.renderWatcher = watcher;
+      const previousSub = activeSub;
+      activeSub = watcher;
+      try {
+        cycle += 1;
+        if ("getter" in node) {
+          const computed = node as ComputedNode<unknown>;
+          promoteSpeculativeCache(computed);
+          readComputedCore(computed);
+        }
+        else readSignalCore(node as SignalNode<unknown>);
+      } finally {
+        activeSub = previousSub;
+        watcher.flags &= ~RecursedCheck;
+        purgeDeps(watcher);
+        if (watcher.deps !== undefined) watcher.flags |= Watching;
+      }
+    }
+
+    return () => {
+      const current = node.renderListeners;
+      if (current === undefined || !current.delete(listener)) return;
+      if (current.size !== 0) return;
+      node.renderListeners = undefined;
+      const watcher = node.renderWatcher;
+      node.renderWatcher = undefined;
+      if (watcher === undefined) return;
+      watcher.active = false;
+      watcher.scheduled = false;
+      watcher.flags = 0;
+      let dep = watcher.depsTail;
+      while (dep !== undefined) {
+        const previous = dep.prevDep;
+        unlink(dep, asReactiveNode(watcher));
+        dep = previous;
+      }
+    };
+  }
+
   function flush(): void {
+    if (hasActiveRenderCollector()) {
+      untrackedRender(flushQueue);
+      return;
+    }
+    flushQueue();
+  }
+
+  function flushQueue(): void {
     try {
       while (notifyIndex < queuedLength) {
         const effect = queue[notifyIndex];
         queue[notifyIndex++] = undefined;
-        if (effect !== undefined) run(effect);
+        if (effect !== undefined) {
+          if ("fn" in effect) run(effect);
+          else runRenderWatcher(effect);
+        }
       }
     } finally {
       while (notifyIndex < queuedLength) {
@@ -317,22 +525,19 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      return fn();
+      return withoutRenderCollection(fn);
     } finally {
       activeSub = previousSub;
     }
   }
 
   function speculate<T>(fn: () => T): { value: T; isCurrent(): boolean } {
-    if (renderRevisions === undefined) {
-      throw new Error("speculate() requires renderRevisionSidecar");
-    }
     const reads = new Map<PrototypeNode, number>();
     const previousReads = activeRenderReads;
     activeRenderReads = reads;
     let value: T;
     try {
-      value = fn();
+      value = withoutRenderCollection(fn);
     } finally {
       activeRenderReads = previousReads;
     }
@@ -340,7 +545,7 @@ export function createLeanRuntime(
       value,
       isCurrent() {
         for (const [node, version] of reads) {
-          if (getRenderVersion(node) !== version) return false;
+          if (getRenderVersion(node as SourceNode<unknown> | ComputedNode<unknown>) !== version) return false;
         }
         return true;
       },
@@ -351,7 +556,7 @@ export function createLeanRuntime(
     const previousSub = activeSub;
     activeSub = undefined;
     try {
-      cleanup();
+      withoutRenderCollection(cleanup);
     } catch (error) {
       safelyReport(error);
     } finally {
@@ -364,14 +569,33 @@ export function createLeanRuntime(
       const node: SignalNode<T> = {
         currentValue: initialValue,
         pendingValue: initialValue,
+        revision: 0,
+        renderListeners: undefined,
+        renderWatcher: undefined,
         deps: undefined,
         depsTail: undefined,
         subs: undefined,
         subsTail: undefined,
         flags: Mutable,
       };
-      return {
-        get value() { return readSignal(node); },
+      const source: LeanSignal<T> = {
+        get value() {
+          if (speculativeReads !== undefined) {
+            if (!speculativeReads.has(node)) speculativeReads.set(node, getRenderVersion(node));
+            return node.flags & Dirty ? node.pendingValue : node.currentValue;
+          }
+          if (activeRenderReads !== undefined) {
+            const reads = activeRenderReads;
+            if (!reads.has(node)) reads.set(node, getRenderVersion(node));
+            const value = node.flags & Dirty ? node.pendingValue : node.currentValue;
+            activeRenderCollector?.add(source, reads.get(node)!);
+            return value;
+          }
+          if (activeRenderCollector === undefined) return readSignalCore(node);
+          activeRenderCollector.add(source, getRenderVersion(node));
+          const value = node.flags & Dirty ? node.pendingValue : node.currentValue;
+          return value;
+        },
         set value(next: T) {
           if (Object.is(node.pendingValue, next)) return;
           node.pendingValue = next;
@@ -384,7 +608,9 @@ export function createLeanRuntime(
         },
         peek() { return node.pendingValue; },
         getRenderVersion() { return getRenderVersion(node); },
+        subscribeRender(listener) { return subscribeRenderNode(node, listener); },
       };
+      return source;
     },
     computed<T>(getter: () => T): LeanReadonlySignal<T> {
       const node: ComputedNode<T> = {
@@ -393,17 +619,41 @@ export function createLeanRuntime(
         hasError: false,
         value: undefined,
         error: undefined,
+        revision: 0,
+        observedInitialized: false,
+        observedHasError: false,
+        observedValue: undefined,
+        speculativeResult: undefined,
+        speculativeDeps: undefined,
+        renderListeners: undefined,
+        renderWatcher: undefined,
         deps: undefined,
         depsTail: undefined,
         subs: undefined,
         subsTail: undefined,
         flags: 0,
       };
-      return {
-        get value() { return readComputed(node); },
+      const computed: LeanReadonlySignal<T> = {
+        get value() {
+          if (activeRenderReads !== undefined || speculativeReads !== undefined || activeRenderCollector !== undefined) {
+            const value = readComputedForRender(node);
+            if (activeRenderReads !== undefined) {
+              const reads = activeRenderReads;
+              if (!reads.has(node)) reads.set(node, getRenderVersion(node));
+              activeRenderCollector?.add(computed, reads.get(node)!);
+            } else if (activeRenderCollector !== undefined) {
+              activeRenderCollector.add(computed, getRenderVersion(node));
+            }
+            return value;
+          }
+          if (!node.initialized || node.flags & (Dirty | Pending)) promoteSpeculativeCache(node);
+          return readComputedCore(node);
+        },
         peek() { return untracked(() => readComputed(node)); },
         getRenderVersion() { return getRenderVersion(node); },
+        subscribeRender(listener) { return subscribeRenderNode(node, listener); },
       };
+      return computed;
     },
     effect(fn) {
       const effect: EffectNode = {
@@ -458,7 +708,7 @@ export function createLeanRuntime(
     runDepth += 1;
     try {
       try {
-        effect.cleanup = effect.fn() || undefined;
+        effect.cleanup = withoutRenderCollection(effect.fn) || undefined;
       } catch (error) {
         safelyReport(error);
       }

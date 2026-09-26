@@ -115,6 +115,61 @@ A separate temporary diagnostic changed the production build to initialize all f
 
 The current-runtime variant narrows some of Prototype A's lead, especially on computed, but does not close most of the historical Phase 4-to-Phase 5 gap or eliminate A's advantage. The shape-only diagnostic did not run the full production test matrix, so it is a candidate for a separately reviewed optimization, not an accepted production change. This evidence does not reverse the recommendation to continue Prototype A before React, though it makes the direct assignment and stable graph layout worth preserving as an independent option.
 
+## Prototype A — real React layer (2026-09-26)
+
+This follow-up starts from commit 5a8e59d4d335ee227c637701610186f5ed2dd241 on Windows x64, AMD Ryzen 7 PRO 6850U, Node v24.21.0, alien-signals v3.2.1. It stays private to benchmarks/prototypes/ and tests/prototypes/; it does not migrate production to Prototype A or add interop/deepSignal support.
+
+### M1 — revision storage
+
+The A/B used 100,000 operations, three warmups and nine samples per isolated process. It compared a WeakMap sidecar with an inline revision initialized on source/computed creation. Each cell is pass 1 / pass 2 in M ops/s:
+
+| Storage | Read | Unobserved write | Observed write | Computed | Batch |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| WeakMap sidecar | 14.52 / 31.56 | 4.18 / 4.89 | 3.05 / 3.74 | 2.18 / 2.58 | 1.10 / 1.24 |
+| Inline revision | 27.80 / 19.28 | 5.10 / 3.28 | 4.01 / 4.12 | 3.19 / 3.32 | 1.50 / 1.64 |
+
+Read and unobserved-write rankings moved between passes. Inline fields won observed, computed and batch in both passes, keep a fixed source/computed node shape, and avoid a sidecar allocation and lookup path. Prototype A retains only inline revisions. The benchmark variants were removed after the comparison.
+
+Source revisions advance on each Object.is-distinct write. Computed revisions advance when an evaluated result changes semantically, when value/error state changes, and on a genuine error reevaluation even when the same error object is thrown. Reading a clean result does not advance a revision.
+
+### M2 — render dependency and watcher
+
+Prototype A readables implement the internal RenderDependency surface: getRenderVersion() and subscribeRender(listener). Source reads return the pending render value and add the source at its current revision. Computed reads first obtain a settled render result, then add the computed at the revision for that result. RenderStore remains the component boundary and performs subscribe-then-compare at commit, retaining the first version for duplicate reads in one render.
+
+Each source/computed owns one lazily created graph-native RenderWatcherNode while its render subscription surface is active. Additional React listeners share its listener set. The watcher has no effect cleanup or effect error channel; source updates notify only after semantic graph checks, and computed equality suppresses equal outputs. When the last watcher link is removed, alien-signals marks a computed dirty and the unwatched callback releases its dependency links. RenderStore defers its last React-listener cleanup to a microtask to preserve StrictMode replay; the graph watcher is released after that cleanup. The focused lifecycle test confirms that a computed stops evaluating after deferred unmount cleanup.
+
+An idle local microbenchmark measured about 3.14M source-to-RenderWatcher notifications/s and 2.39M computed-to-RenderWatcher notifications/s. These cases exclude React reconciliation. The ordinary effect observed-write control varied from 2.12M to 3.35M across nearby runs; treat this comparison as directional.
+
+### M3 — speculative computed state
+
+Render-time computed evaluation uses a separate per-node result/error cache and a private dependency map. While a getter runs, the component collector and graph subscriber are hidden. Source reads capture source revisions; nested computed reads capture the nested computed boundary instead of flattening its sources. A cached result is reused only after recursively checking that each captured dependency is current. A normal graph read or first watcher activation promotes a valid speculative result and links the recorded dependencies, so identity-producing getters are not immediately reevaluated at commit.
+
+Abandoned or throwing renders may leave inert speculative cache data, but no graph links or active subscriptions. A stale cache is reevaluated on the next read. Computed errors are thrown through React; error-to-value recovery works after a source update.
+
+The activeRenderCollector binding is exported only from the internal src/core/render-tracking.ts module so Prototype A can inspect it without a helper call on every idle source read. It is not re-exported by package entry points. trackRenderDependency now reads the default revision only after finding a collector; its result is unchanged while collector-free calls avoid an unnecessary version read. These are behavior-preserving internal changes, not package API changes.
+
+### M4 — React correctness and staged performance
+
+The actual jsdom suite exercises useSignalTracking() and useManagedSignals() with React 19. It covers source updates, dynamic dependencies, unrelated reads, StrictMode replay, siblings and independent roots, first-observed revisions, render-time change/revert, insertion-effect render-to-commit races, semantic batch-revert suppression, computed equality, nested and identity-unstable computed caches, untracked() and peek(), graph-effect isolation, managed finish/throw, managed Suspense with a source and computed, unmanaged abandoned-scope cleanup, SSR, computed error recovery, and subscription cleanup. All 46 prototype local/React tests pass; production package exports are unchanged.
+
+| Stage | Read | Unobserved write | Observed | Computed | Batch |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Stage 0 — hardened local core (prior two passes) | 44.78 / 52.48 | 8.94 / 10.22 | 5.40 / 5.48 | 4.55 / 3.82 | 2.21 / 2.81 |
+| Stage 1 — inline revision A/B, no render subscriber | 27.80 / 19.28 | 5.10 / 3.28 | 4.01 / 4.12 | 3.19 / 3.32 | 1.50 / 1.64 |
+| Stage 2 — dedicated watcher | — | — | 2.79–3.14* | 2.39–3.39* | — |
+| Stage 3 — speculative computed read | — | — | — | 0.56–1.59* | — |
+| Stage 4 — full local React layer, idle graph path | 17.34 / 23.64 / 34.33 | 3.76 / 7.36 / 7.36 | 3.32 / 3.35 / 3.22 | 4.28 / 4.28 / 3.50 | 1.57 / 1.49 / 1.36 |
+
+All operation cells are M ops/s, three passes where shown; * is an isolated nine-sample median with the observed pass-to-pass range shown. Stage 2 isolates a mounted-style graph watcher without DOM work; Stage 3 uses the speculative computed microcase. The idle Stage 4 numbers were measured with no active React collector/subscriber. Compared with the Phase 5 baseline from the accepted hardening run (33.87M read, 7.34M unobserved write, 1.42M observed, 1.53M computed, 0.59M batch), Prototype A Stage 4 median remains about 2.3x faster on observed writes, 2.8x on computed updates, and 2.5x on batch. Read and unobserved-write results are close to or below that Phase 5 control, so those paths remain a performance concern. Short-process measurements vary materially; per-run data is in benchmarks/prototypes/results-local.jsonl.
+
+No React DOM throughput benchmark was run. The correctness suite uses actual React/jsdom, and the graph watcher microbenchmark isolates notification overhead. A React benchmark remains useful before any production migration. No interop or deepSignal work was started.
+
+### Remaining boundaries and recommendation
+
+Prototype A now has local React/render correctness coverage for the listed local scenarios. Cross-runtime graph interop, foreign liveness, duplicate-runtime behavior, and cross-runtime cycles remain open. Prototype per-key deepSignal versions, proxy metadata, and deep tracking remain open. Production migration remains out of scope.
+
+Recommendation: continue to the separately scoped interop milestone. Keep the observed/computed/batch gain and the idle read/write regression visible; do not treat the React result as a production cutover decision.
+
 ### Remaining gaps
 
 Prototype A still needs first-observation/render-commit tests beyond the sidecar sketch, actual React managed scopes and SSR behavior, speculative computed cache parity, foreign source/computed/effect interop, foreign liveness and cold computed freshness, duplicate runtime tests, bounded cross-runtime cycles, and `deepSignal` integration before production viability can be claimed. Prototype B remains frozen. Phase 6 remains unstarted.

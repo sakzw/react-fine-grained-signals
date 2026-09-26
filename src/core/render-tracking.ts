@@ -44,7 +44,7 @@ export function getForeignReadableRenderDependency(readable: object): RenderDepe
   return protocol === undefined ? undefined : getForeignRenderDependency(protocol);
 }
 
-let activeRenderCollector: RenderCollector | undefined;
+export let activeRenderCollector: RenderCollector | undefined;
 
 /** Returns whether a React render is currently collecting signal reads. */
 export function hasActiveRenderCollector(): boolean {
@@ -63,10 +63,10 @@ export function setActiveRenderCollector(
 /** Records a dependency and reports whether render collection was active. */
 export function trackRenderDependency(
   dependency: RenderDependency,
-  observedVersion = dependency.getRenderVersion(),
+  observedVersion?: number,
 ): boolean {
   if (activeRenderCollector === undefined) return false;
-  activeRenderCollector.add(dependency, observedVersion);
+  activeRenderCollector.add(dependency, observedVersion ?? dependency.getRenderVersion());
   return true;
 }
 
