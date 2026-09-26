@@ -1,4 +1,4 @@
-/** Private reactive graph used by the package's existing public wrappers. */
+/** Private reactive graph behind the package's consolidated public readables. */
 import * as alienSignalsSystem from "alien-signals/system";
 import type { Link, ReactiveNode } from "alien-signals/system";
 import {

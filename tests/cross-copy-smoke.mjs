@@ -48,6 +48,13 @@ try {
   );
   const [copyA, copyB, copyC] = copies;
   assert.notEqual(copyA.signal, copyB.signal, "the package runtime modules must be distinct");
+  assert.equal(copyA.isSignal(copyA.signal(1)), true, "a package recognizes its local signal");
+  assert.equal(copyA.isSignal(copyB.signal(1)), true, "a package recognizes a foreign signal brand");
+  assert.equal(copyA.isSignal(copyC.computed(() => 1)), true, "a package recognizes a foreign computed brand");
+
+  const brandedDeepSignal = copyB.deepSignal({ nested: { value: 1 } });
+  assert.equal(copyA.isSignal(brandedDeepSignal), true, "a package recognizes a foreign public deep signal");
+  assert.equal(copyA.isSignal(brandedDeepSignal.value), false, "deep state remains unbranded data");
 
   {
     const source = copyB.signal(1);
@@ -86,6 +93,17 @@ try {
     });
     source.value = 2;
     assert.deepEqual(seen, [1, 2]);
+    dispose();
+  }
+
+  {
+    const source = copyA.signal(1);
+    const seen = [];
+    const dispose = copyB.effect(() => {
+      seen.push(source.value);
+    });
+    source.value = 2;
+    assert.deepEqual(seen, [1, 2], "foreign graph dependencies update in the opposite copy direction");
     dispose();
   }
 
@@ -164,6 +182,7 @@ try {
       fromA.value = 1;
       fromB.value = 1;
     });
+    assert.deepEqual(seen, [0, 2], "copies keep independent batch schedulers");
     console.log(`Observed cross-copy batch effect values: ${JSON.stringify(seen)}`);
     dispose();
   }

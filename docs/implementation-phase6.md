@@ -4,57 +4,68 @@
 
 Phase 5 is complete and frozen. Phase 6 is a separate investigation into whether the public API firewall can remain stable without allocating a second public wrapper object for each signal and computed.
 
-**M0 — architecture prototype and measurement** is complete. Candidate B is rejected for production because it exposes runtime internals. Candidate C established architecture feasibility, but its production migration has not been approved. The initial M0 no-go recommendation was provisional: its one-process exploratory timings do not establish that consolidation itself causes the measured regressions.
+**M0 — architecture prototype and measurement** is complete. Its historical candidate B is rejected because it exposes runtime internals. The initial M0 no-go recommendation was provisional; M0.1 supplied the additional evidence used to approve the C1-style production migration.
 
 **M0.1 — targeted performance, deep-liveness, bundle, and duplicate-package hardening** is complete. Candidate C1 passed the focused correctness, encapsulation, cross-copy, and bridge-free deepSignal checks. Its fresh-process measurements and package-faithful sizes supported the production migration.
 
-**M1 — core object consolidation** and **M2 — deepSignal adapter/liveness separation** are complete for this implementation pass. Ordinary signals, computeds, and deep version sources use one runtime readable plus one graph node; the raw node and render capabilities remain private. M3 stabilization/freeze has not started. Phase 6 is not frozen.
+**M1 — core object consolidation**, **M2 — deepSignal adapter/liveness separation**, and **M3 — stabilization, cleanup, and freeze** are complete. Phase 6 is frozen at the production architecture and validation described below.
 
-## Core question and decision basis
+## Phase 6 investigation question and decision basis
 
-Can the public API firewall remain stable without requiring a second public wrapper object?
+M0/M0.1 investigated whether the public API firewall could remain stable without requiring a second public wrapper object.
 
 Phase 6 is not synonymous with wrapper removal. The decision must weigh throughput, creation cost, allocation and retained memory, bundle size and tree-shaking, API exposure and encapsulation, deepSignal coupling, interop and brand complexity, cross-copy behavior, test and maintenance cost, and future runtime replacement flexibility. A small throughput gain may justify consolidation if it materially reduces object, forwarding, bundle, or maintenance costs. A fast design that exposes graph internals is unacceptable.
 
-## Current architecture
+## Current production architecture
 
-Writable signals currently follow approximately:
-
-```text
-signal() → SignalImpl → RuntimeSignal → SignalNode → alien-signals/system
-```
-
-Computeds currently follow approximately:
+Writable signals and computeds use one public/runtime readable, one graph node, and the existing V1 protocol:
 
 ```text
-computed() → public readonly wrapper → RuntimeReadonlySignal → ComputedNode → alien-signals/system
+signal() / computed()
+    → branded RuntimeSignalReadable / RuntimeComputedReadable
+        → private #node
+            → local graph node
+                → alien-signals/system
 ```
 
-The runtime readable owns the reactive behavior and currently has `value`, `peek()`, `getRenderVersion()`, `subscribeRender()`, `READABLE_INTEROP_V1`, and a private readable-to-node association. That association uses a non-exported symbol, but JavaScript reflection can discover the symbol and retrieve the node.
+The public/runtime readable owns `value`, `peek()`, `SIGNAL_BRAND`, and `READABLE_INTEROP_V1`. A runtime-private `WeakMap<readable, node>` supports operations that start from a readable; hot reads use the private `#node` directly. Render methods are attached to internal graph nodes and are passed to React render collection as `RenderDependency` values. Reflection of the readable does not expose graph state, render methods, or deep liveness.
 
-`SignalImpl` forwards `value` and `peek()`, forwards the V1 interop protocol, carries `SIGNAL_BRAND`, and has `#watchedSinceWrite`, `markWatched()`, and `hasSubscribers()` for deepSignal version-source pruning. Those last responsibilities are specifically deepSignal liveness needs and need not belong to every ordinary public signal. Computed uses a separate public wrapper and forwards the V1 protocol and brand.
+```text
+DeepSignalImpl / Proxy facade
+    → consolidated internal runtime source
+        → private graph node
 
-React render collection currently relies on readable methods `getRenderVersion()` and `subscribeRender()`. Phase 6 may move these to runtime-private capabilities, but it must not change React tracking semantics. `deepSignal` uses per-property version sources and a conservative watched flag plus exact runtime liveness; Phase 6 may separate that capability from ordinary signals but must preserve Proxy behavior and pruning policy.
+deep per-key version source
+    → consolidated internal runtime source
+        → private graph node
 
-## Candidates
+deep liveness
+    → runtime-private adapter operations and WeakSets
+```
 
-### A — current wrapper architecture (control)
+`DeepSignalImpl` remains because it represents the public deep Proxy/value abstraction. It is not a generic forwarding layer between a public signal and a runtime readable. Public deep signals retain their brand and V1 protocol; their internal root and per-key sources do not need the public signal brand.
+
+## Historical M0 candidates
+
+The following candidates and A/B/C labels describe the M0 investigation only. They are not the current production architecture and their executable implementations have been retired after M3.
+
+### A — wrapper architecture (historical control)
 
 ```text
 public SignalImpl / computed wrapper → runtime readable → runtime node
 ```
 
-This is the accepted Phase 5 production architecture and the behavioral, performance, allocation, size, and exposure baseline. Its main advantage is the API firewall: graph representation and render capabilities remain behind the public wrapper. Its costs include an extra public object, forwarding, duplicate interop/brand plumbing, and deep-only liveness members on writable signals.
+This was the Phase 5 production architecture and the M0 behavioral, performance, allocation, size, and exposure baseline. Its main advantage was the API firewall: graph representation and render capabilities remained behind the public wrapper. Its costs included an extra public object, forwarding, duplicate interop/brand plumbing, and deep-only liveness members on writable signals.
 
-### B — direct existing runtime readable (diagnostic)
+### B — direct existing runtime readable (historical diagnostic)
 
 ```text
 signal() → existing RuntimeSignal object
 ```
 
-This diagnostic control estimates the simplest wrapper-free throughput and allocation ceiling. It is not the production recommendation by default. The existing runtime readable exposes render methods and a reflectively discoverable symbol that leads to the raw node and graph metadata. Any such exposure is a known API-firewall failure.
+This diagnostic control estimated a simple wrapper-free throughput and allocation ceiling. It was rejected for production: that version exposed render methods and a reflectively discoverable symbol leading to the raw node and graph metadata.
 
-### C — consolidated public readable with hidden capability (production-oriented candidate)
+### C/C1 — consolidated public readable with hidden capability (historical candidate; C1 migrated to production)
 
 ```text
 public readable object
@@ -63,18 +74,18 @@ public readable object
 internal RuntimeNode → alien-signals/system
 ```
 
-The target public JavaScript surface is approximately:
+The candidate's target public JavaScript surface was approximately:
 
 ```text
 Writable signal: value, peek(), SIGNAL_BRAND, READABLE_INTEROP_V1
 Computed:        readonly value, peek(), SIGNAL_BRAND, READABLE_INTEROP_V1
 ```
 
-The raw node must not be discoverable through own keys, symbols, prototype methods, or public properties. Closures and a runtime-private `WeakMap<readable, node>` are acceptable. Prefer hot `value` accessors that close directly over the node; use a WeakMap only where an operation starts from a public readable, such as ownership checks. Do not replace `SignalImpl` with another per-signal wrapper/capability object that defeats consolidation. Evaluate runtime-private alternatives for React render methods and deepSignal liveness without changing their semantics.
+The raw node had to remain undiscoverable through own keys, symbols, prototype methods, or public properties. C1 established the private-node class, runtime ownership map, and node render methods that now underpin production. Candidate C and C1 executable copies have since been removed; recorded measurements and conclusions remain below.
 
 ## deepSignal boundary
 
-The current deep engine requests version sources with `value`, `peek()`, `markWatched()`, and `hasSubscribers()`. The investigation should test the smallest separation that lets ordinary public signals remain lean while deepSignal version sources retain the liveness needed by current pruning. Prefer a deep-specific internal operation or capability rather than adding deep-only methods to every signal. Do not change Proxy traps, property/iteration semantics, array/Map/Set behavior, normalization, or pruning policy.
+The production deep engine reads version sources through `value` and `peek()`, while its runtime adapter owns `markWatched()` and `hasSubscribers()` operations. This keeps deep-only liveness off ordinary public readables. Proxy traps, property/iteration semantics, array/Map/Set behavior, normalization, and pruning policy remain unchanged.
 
 ## Milestones
 
@@ -82,23 +93,23 @@ The current deep engine requests version sources with `value`, `peek()`, `markWa
 
 Compare A/B/C in isolated `benchmarks/phase6/` and `tests/phase6/` work. Do not alter production `signal()`/`computed()` behavior, add a selector or feature flag, or add package exports. Measure identical workloads and environments across candidates: core throughput, creation, structural and measured allocation/retained heap, consumer bundle scenarios, tree-shaking, and reflective public object shape. Add focused correctness evidence for semantics, branding, cross-copy behavior, V1 interop, React render collection, and deepSignal adaptation/liveness. End with a documented go/no-go decision for C; do not force it to win.
 
-### M1 — core object consolidation (planned only)
+### M1 — core object consolidation (complete)
 
-If C passes M0, consider consolidating signal and computed public/runtime identity, removing `SignalImpl` and the computed forwarding wrapper, placing `SIGNAL_BRAND` directly on the public readable, eliminating V1 forwarding, and storing runtime node/render capabilities privately. M1 must retain the API firewall and existing runtime semantics.
+Signals and computeds now use their branded runtime readables directly. `SignalImpl` and the computed forwarding wrapper are removed; V1 is attached to each readable and node/render capabilities remain private.
 
-### M2 — deepSignal adapter/liveness separation (planned only)
+### M2 — deepSignal adapter/liveness separation (complete)
 
-If M1 validates, consider removing deepSignal-only liveness responsibilities from ordinary signals and supplying a narrow internal deep version-source capability. Preserve deepSignal root semantics and metadata pruning behavior. M1 and M2 may later be executed in one work session only if M1 validation is green.
+The narrow runtime adapter owns deep-source liveness and the same consolidated readable backs roots and per-key sources. The Proxy and pruning behavior are preserved.
 
-### M3 — stabilization and freeze (planned only)
+### M3 — stabilization and freeze (complete)
 
-Run full correctness, duplicate-package and cross-runtime, React, deepSignal pruning, tree-shaking, size, allocation, and performance validation; remove obsolete prototype infrastructure; synchronize documentation; and decide whether Phase 6 can be frozen.
+Production regression tests replaced the candidate comparison suite; duplicate runtime/engine copies and their one-off benchmark harnesses are retired. The docs are synchronized with production, full validation passed, and Phase 6 is frozen.
 
 ## Non-goals
 
 Phase 6 does not include React subscription consolidation, direct runtime subscriptions for `useSignalValue`, removal of the JSX effect bridge, deepSignal Proxy or pruning redesign, ReadableInterop V2, a shared cross-runtime graph/scheduler or atomic batch, a redesign of bare `useSignalTracking()` or the managed transform, high-level alien-signals as the production core, Svelte-style API changes, or RSC-specific work. If M0 shows one is required, record a blocker or future dependency instead of expanding scope.
 
-## M0 decision gate
+## Historical M0 decision gate
 
 Candidate C may be recommended for a later M1 only if its raw runtime node is not reflectively reachable; it avoids a replacement per-signal wrapper allocation; signal/read-only signal semantics, `Object.is`, branding and cross-copy `isSignal()`, and ReadableInterop V1 remain intact; React tracking and deepSignal semantics need no redesign; allocation/maintenance/API-structure benefits are credible; and measured regressions do not outweigh those benefits. The report must compare A/B/C explicitly and classify findings as **blocker**, **acceptable trade-off**, **hardening later**, or **future idea**. A failure at this gate is a valid M0 outcome.
 
@@ -167,7 +178,7 @@ Treat these as relative source-harness comparisons, not release bundle numbers: 
 - **Hardening later:** do not proceed to production migration yet. Stabilize/replicate performance comparisons; compare candidate-specific builds across the seven consumer profiles; test candidate C with an actual duplicate package build; and remove the deep-source bridge without changing the Proxy or pruning algorithm. C currently shows a retained-heap advantage but no dependable throughput advantage, with material slowdowns in some measured cases.
 - **Future idea:** if a narrow deep-liveness capability proves necessary, keep it exclusive to deep version sources rather than restoring liveness methods to ordinary signals.
 
-**Initial recommendation:** Candidate C was **not yet suitable to proceed to production migration** based on the single-process exploratory measurements. This was a cautious provisional no-go, not a final architecture rejection; M0.1 is intended to test its basis. No production architecture, public export, size budget, or deepSignal behavior changed in M0.
+**Initial M0 recommendation (superseded):** Candidate C was **not yet suitable to proceed to production migration** based on the single-process exploratory measurements. This was a cautious provisional no-go, not a final architecture rejection. M0.1 supplied the additional evidence, and M1/M2 later migrated the accepted C1 design to production.
 
 ### M0.1 — targeted hardening findings
 
@@ -234,9 +245,9 @@ The bundle marker controls passed: deep engine code was absent from `signal-only
 - **Hardening later:** repeat targeted performance checks on another supported Node/runtime environment before release, and evaluate application-level workloads. Treat the local timing deltas as directional because several cases have broad distributions. Keep package size budgets in force; C1 currently has approximately flat bundle size rather than a size win.
 - **Future-version idea:** none added by M0.1.
 
-**M0.1 recommendation:** retain C1 as the candidate design for a future M1 decision, with no production migration now. M0.1 is complete; M1, M2, and M3 remain unstarted. No production source, public API, size budget, or deepSignal behavior changed in this investigation.
+**M0.1 recommendation at the time:** retain C1 as the production-oriented candidate for a later migration decision. M1 and M2 have since completed, and M3 has frozen the migrated production architecture; this historical recommendation is superseded.
 
-### M1/M2 — production consolidation and deepSignal liveness separation
+### M1/M2 implementation validation history (pre-M3)
 
 #### Production architecture
 
@@ -261,7 +272,50 @@ The shared signal write path checks private `deepSignalNodes` membership and cle
 - Focused Phase 6/runtime/React/deepSignal tests passed again after M2 (4 files, 112 tests).
 - Build-related checks were run sequentially after an initial concurrent build collision invalidated one benchmark/size attempt; the final build, size check, and core/deep benchmarks all passed.
 
-#### Remaining M3 work
+### M3 — stabilization and freeze
 
-- Repeat stabilization and review the full Phase 6 fixture history before freeze; keep current performance readings directional and investigate the shared deep-source membership check if a simpler representation emerges.
-- Phase 6 remains open. This implementation does not authorize or begin M3, and it does not mark the phase frozen.
+#### Prototype classification and cleanup
+
+| Files / infrastructure | Classification | M3 decision |
+| --- | --- | --- |
+| `candidate-b-*`, `candidate-c-*`, `candidate-c1-*`, `candidate-deep-signal-engine.ts`, `candidates.ts` | Obsolete duplicate implementation | Deleted after migrating C1 to production. |
+| `candidates.test.tsx` | Historical comparison plus production-surface assertions | Replaced by `tests/runtime-surface.test.ts` against the shipped production API. |
+| `build-candidates.mjs`, `bundle-size.mjs`, `package-bundle-size.mjs`, `run.mjs`, `run-isolated.ps1`, `worker.mjs`, `benchmark-entry.ts` | Reusable only for candidate-comparison benchmark infrastructure | Deleted; normal production benchmarks remain in `benchmarks/`. |
+| `results-m0.1.jsonl` | Historical raw measurement evidence | Removed after keeping summarized results and methodology in this document. |
+| `tests/phase6/duplicate-copy-smoke.mjs` | Candidate-specific duplicate smoke | Deleted; production cross-copy coverage remains in `tests/cross-copy-smoke.mjs` and `pnpm test:phase4-duplicate`. |
+| Core, runtime, React, deepSignal and cross-copy production tests | Production regression coverage | Retained. Added reflection/render-capability/internal-source tests and strengthened real-package cross-copy assertions. |
+
+The genuine production cross-copy smoke and existing three-system runtime duplicate smoke remain. Historical measurements and conclusions remain in this document; future production code no longer has to synchronize four alternative runtime implementations.
+
+#### Internal deep-source brand decision
+
+Internal root and per-key runtime sources are held behind `DeepSignalImpl` and the engine's private metadata maps. The production deep engine does not call `isSignal()` on those sources; it calls the predicate only when classifying values from user state. Cross-copy consumers only receive the separately branded public `DeepSignalImpl`, which owns the same V1 protocol as its internal root. Branding internal sources was therefore redundant identity work. `createDeepSignal()` sources remain runtime-owned and V1-readable without `SIGNAL_BRAND`; the public deep signal remains branded and `isSignal()` compatible. Production tests verify both public identity and internal-source unbranded V1 behavior.
+
+#### Final trade-offs and freeze decision
+
+- Retained the private `deepSignalNodes.has(node)` check on the shared source-write path. It clears watched state before the equality check, including equal writes, and avoids another wrapper or a more complex write path.
+- Runtime ownership remains a `WeakMap<readable, node>` for operations beginning at a readable. `deepSignalNodes` separates deep sources from ordinary sources; `deepWatchedNodes` retains watched-since-write state. Each structure serves a distinct operation and remains.
+- ReadableInterop V1 is unchanged. There is no public graph node, `runtimeToken`, graph links, render capability, or deep liveness member on the public readable.
+- No Phase 7 work is included. Any later cross-Node or application workload benchmarking is outside the Phase 6 freeze and is not a release claim from these local microbenchmarks.
+
+#### Validation after M3 cleanup
+
+- `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:phase4-duplicate`, `pnpm test:consumer`, and `pnpm size` passed. Lint exited successfully with existing scoping/React-hook warnings only. Tests: runtime 269 passed; transform 221 passed, 3 skipped.
+- `tests/runtime-surface.test.ts` passed the actual production reflection checks and verified React receives a private graph dependency. Deep-source tests verified an internal runtime source remains unbranded, V1-readable, and reactive, while public `DeepSignal` remains branded.
+- The genuine production cross-copy smoke built three independent package copies. It passed local/foreign signal, computed and public deepSignal brand checks; foreign signal/computed dependencies; signal updates in both copy directions; deep property updates/disposal; and the existing local-batch semantics (`[0, 2]`). The separate three-system duplicate-runtime smoke also passed.
+- `pnpm size` passed all unchanged gzip budgets and marker controls. Gzip results: signal-only 5.87 kB; core 5.92 kB; core+hooks 7.18 kB; deep 10.29 kB; index-full 11.46 kB; jsx-runtime 8.91 kB; utils 7.20 kB. Deep engine and React code were absent/present in the expected profiles.
+- `pnpm bench`, `pnpm bench:deep`, and `pnpm bench:react` completed on Node v24.20.0 / Windows x64 / AMD Ryzen 7 PRO 6850U. The latest core medians were 59.86M reads/s, 37.81M writes/s, 6.20M observed writes/s, 4.54M computed update/reads/s, and 2.43M two-write batches/s. The repeated deep run measured 1.54M nested reads/s, 475K observed leaf writes/s, 1.48M sibling-isolation writes/s, 69K parent replacements/s, and 22K array pushes/s. The React benchmark preserved all render-count assertions (for example, 301 counter renders and 500 sibling renders for both signals and managed signals across 300 updates). These local measurements varied between runs; they are directional and showed no clear regression attributable to M3 cleanup.
+- A transient slower array-push and core sample was not repeatable: the same Node 24.20 deep benchmark returned to 22K array pushes/s, in line with the previous M1/M2 run, and the second core run had computed/batch values close to that earlier run. No benchmark budget or threshold was changed.
+
+#### Final Phase 6 status
+
+| Milestone | Status |
+| --- | --- |
+| M0 | Complete |
+| M0.1 | Complete |
+| M1 | Complete |
+| M2 | Complete |
+| M3 | Complete |
+| Phase 6 | Frozen |
+
+The final architecture is the production design in [Current production architecture](#current-production-architecture). Historical candidate measurements above remain context only; production tests and benchmarks now exercise the shipped implementation.

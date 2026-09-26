@@ -15,7 +15,7 @@ let productionDeepSignals: ReturnType<typeof createDeepSignalFactory> | undefine
 function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
   return productionDeepSignals ??= createDeepSignalFactory({
     createSignal<T>(initial: T) {
-      return registerSignal(coreRuntime.createDeepSignal(initial));
+      return coreRuntime.createDeepSignal(initial);
     },
     markWatched(source) { coreRuntime.markDeepSignalWatched(source); },
     hasSubscribers(source) { return coreRuntime.hasDeepSignalSubscribers(source); },
