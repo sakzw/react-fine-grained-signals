@@ -431,4 +431,70 @@ describe("Prototype A cross-runtime interop", () => {
     dispose();
     expect(foreign.unsubscribeCount).toBe(1);
   });
+
+  it("tracks foreign deep properties through the shared per-key protocol", () => {
+    const localRuntime = createLeanRuntime(() => undefined);
+    const foreignRuntime = createLeanRuntime(() => undefined);
+    const state = foreignRuntime.deepSignal({ user: { name: "Ada", age: 1 } });
+    const rootProtocol = getReadableInterop(state)!;
+    const initialRootRevision = rootProtocol.getRevision();
+    const seen: string[] = [];
+    const dispose = localRuntime.effect(() => { seen.push(state.value.user.name); });
+    state.value.user.age = 2;
+    state.value.user.name = "Grace";
+    expect(rootProtocol.getRevision()).toBe(initialRootRevision);
+    expect(seen).toEqual(["Ada", "Grace"]);
+    state.value = { user: { name: "Lin", age: 3 } };
+    expect(rootProtocol.getRevision()).toBeGreaterThan(initialRootRevision);
+    expect(seen).toEqual(["Ada", "Grace", "Lin"]);
+    dispose();
+    state.value.user.name = "stale";
+    expect(seen).toHaveLength(3);
+  });
+
+  it("tracks foreign existence and iteration through their own version protocols", () => {
+    const localRuntime = createLeanRuntime(() => undefined);
+    const foreignRuntime = createLeanRuntime(() => undefined);
+    const state = foreignRuntime.deepSignal({ value: 0 });
+    const existence: boolean[] = [];
+    const keys: string[][] = [];
+    localRuntime.effect(() => { existence.push("optional" in state.value); });
+    localRuntime.effect(() => { keys.push(Reflect.ownKeys(state.value).map(String)); });
+    (state.value as Record<string, unknown>).optional = 1;
+    (state.value as Record<string, unknown>).optional = 2;
+    delete (state.value as Record<string, unknown>).optional;
+    expect(existence).toEqual([false, true, false]);
+    expect(keys).toEqual([["value"], ["value", "optional"], ["value"]]);
+  });
+
+  it("keeps foreign deep untracked and peek reads outside local dependencies", () => {
+    const localRuntime = createLeanRuntime(() => undefined);
+    const foreignRuntime = createLeanRuntime(() => undefined);
+    const state = foreignRuntime.deepSignal({ user: { name: "Ada" } });
+    let runs = 0;
+    localRuntime.effect(() => {
+      localRuntime.untracked(() => state.value.user.name);
+      state.peek().user.name;
+      runs += 1;
+    });
+    state.value.user.name = "Grace";
+    expect(runs).toBe(1);
+  });
+
+  it("tracks foreign deep properties in Prototype A React renders", () => {
+    const localRuntime = createLeanRuntime(() => undefined);
+    const foreignRuntime = createLeanRuntime(() => undefined);
+    const state = foreignRuntime.deepSignal({ user: { name: "Ada" } });
+    const computed = localRuntime.computed(() => state.value.user.name);
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return React.createElement("output", { "aria-label": "foreign-deep" }, computed.value);
+    }
+    render(React.createElement(Reader));
+    act(() => { state.value.user.name = "Grace"; });
+    expect(screen.getByLabelText("foreign-deep").textContent).toBe("Grace");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
 });

@@ -9,11 +9,15 @@ import * as alienSystem from "alien-signals/system";
 import type { Link, ReactiveNode } from "alien-signals/system";
 import {
   attachReadableInterop,
+  getReadableInterop,
   getSharedInteropContext,
+  withInteropSpeculativeMode,
   type InteropGraphCollectorV1,
   type ReadableInteropV1,
   type SharedInteropContextV1,
 } from "../../src/core/interop.js";
+import { createDeepSignalFactory } from "../../src/core/deep-signal-engine.js";
+import type { DeepSignalLike, DeepSignalSource } from "../../src/core/deep-signal-engine.js";
 import {
   activeRenderCollector,
   hasActiveRenderCollector,
@@ -82,6 +86,7 @@ type ComputedNode<T> = PrototypeNode & {
   observedValue: T | undefined;
   speculativeResult: { hasError: boolean; value: T | undefined; error: unknown } | undefined;
   speculativeDeps: Map<PrototypeNode | ReadableInteropV1, number> | undefined;
+  speculativeCachePromotable: boolean;
   foreignDependent: boolean;
   live: boolean;
   renderListeners: Set<() => void> | undefined;
@@ -127,6 +132,13 @@ export interface LeanSignal<T> extends LeanReadonlySignal<T> {
 
 export interface LeanRuntime {
   signal<T>(value: T): LeanSignal<T>;
+  deepSignal<T extends object>(value: T): DeepSignalLike<T>;
+  inspectDeepSignalMetadata(value: object): {
+    properties: PropertyKey[];
+    existence: PropertyKey[];
+    propertyIndices: number[];
+    existenceIndices: number[];
+  } | undefined;
   computed<T>(getter: () => T): LeanReadonlySignal<T>;
   effect(fn: () => void | (() => void)): () => void;
   batch<T>(fn: () => T): T;
@@ -152,6 +164,8 @@ export function createLeanRuntime(
   let activeSpeculativeComputed: ComputedNode<unknown> | undefined;
   const renderingComputeds = new Set<PrototypeNode>();
   const externalNodes = new WeakMap<ReadableInteropV1, ExternalNode>();
+  const sourceNodes = new WeakMap<object, PrototypeNode>();
+  const signals = new WeakSet<object>();
   const graphCollector: InteropGraphCollectorV1 = {
     runtimeToken,
     add(protocol, observedRevision) {
@@ -588,6 +602,7 @@ export function createLeanRuntime(
   }
 
   function speculativeDependenciesAreCurrent(node: ComputedNode<unknown>): boolean {
+    if (!node.speculativeCachePromotable) return false;
     const deps = node.speculativeDeps;
     if (node.speculativeResult === undefined || deps === undefined) return false;
     for (const [dependency, revision] of deps) {
@@ -631,12 +646,13 @@ export function createLeanRuntime(
     const deps = new Map<SpeculativeDependency, number>();
     speculativeReads = deps;
     activeSpeculativeComputed = node as ComputedNode<unknown>;
+    const speculativeDeepReadEpoch = sharedInterop.speculativeDeepReadEpoch ?? 0;
     let result: { hasError: boolean; value: T | undefined; error: unknown };
     try {
-      result = withTrackedGraph(node, () => withoutComponentRenderCollection(() => {
+      result = withInteropSpeculativeMode(() => withTrackedGraph(node, () => withoutComponentRenderCollection(() => {
         try { return { hasError: false, value: node.getter(), error: undefined }; }
         catch (error) { return { hasError: true, value: undefined, error }; }
-      }, sharedInterop));
+      }, sharedInterop)));
     } finally {
       speculativeReads = previousReads;
       activeSpeculativeComputed = previousSpeculativeComputed;
@@ -645,6 +661,8 @@ export function createLeanRuntime(
     }
     node.speculativeResult = result;
     node.speculativeDeps = deps;
+    node.speculativeCachePromotable =
+      (sharedInterop.speculativeDeepReadEpoch ?? 0) === speculativeDeepReadEpoch;
     settleComputedRevision(node, result.hasError, result.value, result.error, result.hasError);
     return result;
   }
@@ -893,7 +911,8 @@ export function createLeanRuntime(
     }
   }
 
-  return {
+  let deepSignalFactory!: ReturnType<typeof createDeepSignalFactory>;
+  const runtime: LeanRuntime = {
     signal<T>(initialValue: T): LeanSignal<T> {
       const node: SignalNode<T> = {
         runtimeToken,
@@ -952,6 +971,8 @@ export function createLeanRuntime(
         subscribeRender(listener) { return subscribeRenderNode(node, listener); },
       };
       attachReadableInterop(source, node.interop);
+      sourceNodes.set(source, node);
+      signals.add(source);
       return source;
     },
     computed<T>(getter: () => T): LeanReadonlySignal<T> {
@@ -969,6 +990,7 @@ export function createLeanRuntime(
         observedValue: undefined,
         speculativeResult: undefined,
         speculativeDeps: undefined,
+        speculativeCachePromotable: false,
         foreignDependent: false,
         live: false,
         renderListeners: undefined,
@@ -1012,6 +1034,7 @@ export function createLeanRuntime(
         subscribeRender(listener) { return subscribeRenderNode(node, listener); },
       };
       attachReadableInterop(computed, node.interop);
+      signals.add(computed);
       return computed;
     },
     effect(fn) {
@@ -1056,7 +1079,43 @@ export function createLeanRuntime(
       return untracked(fn);
     },
     speculate,
+    deepSignal<T extends object>(initialValue: T): DeepSignalLike<T> {
+      return deepSignalFactory.deepSignal(initialValue);
+    },
+    inspectDeepSignalMetadata(value: object) {
+      return deepSignalFactory.inspectDeepSignalMetadata(value);
+    },
   };
+
+  deepSignalFactory = createDeepSignalFactory({
+    createSignal<T>(initialValue: T): DeepSignalSource<T> {
+      const source = runtime.signal(initialValue);
+      let watchedSinceWrite = false;
+      const version: DeepSignalSource<T> = {
+        get value() { return source.value; },
+        set value(nextValue: T) {
+          watchedSinceWrite = false;
+          source.value = nextValue;
+        },
+        peek: () => source.peek(),
+        markWatched() { watchedSinceWrite = true; },
+        hasSubscribers() {
+          const node = sourceNodes.get(source);
+          return watchedSinceWrite || (node !== undefined && hasLiveConsumer(node));
+        },
+      };
+      const protocol = getReadableInterop(source);
+      if (protocol !== undefined) attachReadableInterop(version, protocol);
+      return version;
+    },
+    batch: (callback) => runtime.batch(callback),
+    isSignal: (value) => typeof value === "object" && value !== null &&
+      (signals.has(value) || getReadableInterop(value) !== undefined),
+    hasActiveSubscriber: () => activeSub !== undefined,
+    getBatchDepth: () => batchDepth,
+    registerDeepSignal(value) { signals.add(value); },
+  });
+  return runtime;
 
   function runInitial(effect: EffectNode): void {
     effect.depsTail = undefined;

@@ -59,6 +59,18 @@ try {
   assert.equal(seen.length, 2, "Object.is distinguishes +0 and -0 across bundled runtimes");
   dispose();
 
+  const deepForeign = runtimeB.deepSignal({ user: { name: "Ada", age: 36 } });
+  const deepSeen = [];
+  const disposeDeep = runtimeA.effect(() => deepSeen.push(deepForeign.value.user.name));
+  deepForeign.value.user.age = 37;
+  deepForeign.value.user.name = "Grace";
+  assert.deepEqual(deepSeen, ["Ada", "Grace"], "duplicate bundles exchange fine-grained deep property versions");
+  deepForeign.value = { user: { name: "Lin", age: 20 } };
+  assert.deepEqual(deepSeen, ["Ada", "Grace", "Lin"], "deep root replacement uses the exact foreign root protocol");
+  disposeDeep();
+  deepForeign.value.user.name = "stale";
+  assert.equal(deepSeen.length, 3, "deep foreign dependency is released after disposal");
+
   const chooseForeignA = runtimeA.signal(false);
   const localA = runtimeA.signal(1);
   const foreignB = runtimeB.signal(10);

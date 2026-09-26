@@ -530,4 +530,95 @@ describe("Prototype A React render layer", () => {
     expect(subscribe).not.toHaveBeenCalled();
     expect(hasActiveRenderCollector()).toBe(false);
   });
+
+  it("retracks deep properties after speculative React evaluation and ignores unrelated keys", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ user: { name: "Ada", age: 36 } });
+    const derived = runtime.computed(() => state.value.user.name.toUpperCase());
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="deep-prototype">{derived.value}</output>;
+    }
+    render(<Reader />);
+    expect(screen.getByLabelText("deep-prototype").textContent).toBe("ADA");
+    act(() => { state.value.user.age = 37; });
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(screen.getByLabelText("deep-prototype").textContent).toBe("GRACE");
+    expect(renders).toHaveBeenCalledTimes(2);
+    act(() => { state.value = { user: { name: "Lin", age: 20 } }; });
+    expect(screen.getByLabelText("deep-prototype").textContent).toBe("LIN");
+    expect(renders).toHaveBeenCalledTimes(3);
+  });
+
+  it("tracks deep existence and own-key reads in React renders", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ value: 1 });
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="deep-shape">{String("optional" in state.value)}:{Reflect.ownKeys(state.value).length}</output>;
+    }
+    render(<Reader />);
+    act(() => { state.value.value = 2; });
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => { (state.value as Record<string, unknown>).optional = true; });
+    expect(screen.getByLabelText("deep-shape").textContent).toBe("true:2");
+    act(() => { delete (state.value as Record<string, unknown>).optional; });
+    expect(screen.getByLabelText("deep-shape").textContent).toBe("false:1");
+    expect(renders).toHaveBeenCalledTimes(3);
+  });
+
+  it("does not loop when a speculative deep computed returns a fresh object", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ user: { name: "Ada" } });
+    const viewModel = runtime.computed(() => ({ label: state.value.user.name }));
+    const renders = vi.fn();
+    function Reader() {
+      useSignalTracking();
+      renders();
+      return <output aria-label="unstable-deep">{viewModel.value.label}</output>;
+    }
+    render(<Reader />);
+    act(() => { state.value.user.name = "Grace"; });
+    expect(screen.getByLabelText("unstable-deep").textContent).toBe("Grace");
+    expect(renders.mock.calls.length).toBeLessThan(4);
+  });
+
+  it("retains removed deep-key metadata while a React render depends on the missing key", () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ user: { name: "Ada" } });
+    function Reader() {
+      useSignalTracking();
+      return <output aria-label="pruned-deep">{state.value.user.name ?? "missing"}</output>;
+    }
+    const view = render(<Reader />);
+    act(() => { delete (state.value.user as Record<string, unknown>).name; });
+    expect(screen.getByLabelText("pruned-deep").textContent).toBe("missing");
+    expect(runtime.inspectDeepSignalMetadata(state.peek().user)?.properties).toContain("name");
+    view.unmount();
+  });
+
+  it("releases abandoned Suspense deep reads without retaining a React dependency", async () => {
+    const runtime = createLeanRuntime(() => undefined);
+    const state = runtime.deepSignal({ user: { name: "Ada" } });
+    const pending = new Promise<void>(() => {});
+    let attempts = 0;
+    function Reader(): ReactNode {
+      useSignalTracking();
+      attempts += 1;
+      state.value.user.name;
+      throw pending;
+    }
+    render(<Suspense fallback={<span>deep waiting</span>}><Reader /></Suspense>);
+    await act(async () => { await Promise.resolve(); });
+    expect(screen.getByText("deep waiting")).toBeTruthy();
+    const suspendedAttempts = attempts;
+    act(() => { state.value.user.name = "Grace"; });
+    expect(attempts).toBe(suspendedAttempts);
+    expect(hasActiveRenderCollector()).toBe(false);
+  });
 });
