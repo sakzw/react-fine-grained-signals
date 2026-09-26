@@ -2,9 +2,11 @@
 
 ## Status
 
-Phase 5 runtime behavior, packaging migration, duplicate-package validation, and cleanup are implemented. The runtime architecture blocker is resolved: speculative computed-cache behavior is now unconditional and identical for the production singleton and independently constructed runtimes. The final performance review found large Phase 4-to-Phase 5 core regressions that the code inspection could not attribute quantitatively to specific correctness/interoperability costs. Phase 5 is not ready to freeze.
+Phase 5 is complete and frozen. Correctness, packaging, low-level runtime, cross-copy interoperability, deepSignal integration, production migration, and M2 stabilization are complete. The performance blocker recorded later was resolved through the Runtime Architecture Review and M0/M1 production cutover. The accepted production runtime is the lean local-graph implementation in `src/core/reactive-runtime.ts`.
 
-No Phase 6 work has started. No git history operation was performed.
+Phase 6 has not started.
+
+The performance investigation and blocker sections below are retained as the historical record that led to the runtime architecture review. Their “not ready to freeze” conclusions describe the pre-redesign Phase 5 runtime and have been superseded by the accepted production runtime migration.
 
 ## M0–M5
 
@@ -85,9 +87,9 @@ Final deep benchmark (50,000 operations, same host): nested read 0.99M ops/s; ob
 
 Final React benchmark (500 rows, 300 updates, 5 samples; median ms): hooks-naive 5471.949; hooks-memo 1926.864; signals 381.111; signals-managed 368.649; JSX component 5794.779; JSX host element 5998.414. M0 medians were 3931.308, 1011.125, 398.754, 325.169, 3394.622, and 3965.151. Signals paths are similar/slower by about 5–14%; JSX render paths are materially slower in this run. Isolated JSX pragma calls measured 874.953 ms per 200k custom-component calls and 1082.454 ms per 200k host-element calls.
 
-These measurements are manual diagnostics, not CI thresholds. The large core observed/computed/batch and JSX deltas need a dedicated performance investigation before a release freeze. No Phase 6 optimization was started here.
+These measurements are manual diagnostics, not CI thresholds. At this pre-redesign checkpoint, the large core observed/computed/batch and JSX deltas prompted a dedicated performance investigation before a release freeze. No Phase 6 optimization was started at that checkpoint.
 
-### Final Phase 4-to-Phase 5 performance review (2026-09-26)
+### Historical final Phase 4-to-Phase 5 performance review (2026-09-26)
 
 The primary A/B comparison used Phase 4 freeze `c7603dc1d389c08fa62c61a20a1fa4a294ad9715` and Phase 5 `f3f76bdc6bd00edfab584b0930087ada7bfea145`. Both ran on Windows x64 / AMD Ryzen 7 PRO 6850U with pnpm 11.24.0 and the repository's pinned Node runtime v24.20.0. The same benchmark scripts and iteration counts were used: core 100,000 operations, 3 warmups and 9 samples; deepSignal 50,000 operations and 9 samples; React 500 rows, 300 updates and 5 samples. The benchmark scripts did not differ between the revisions. Throughput ratios below are P5/P4; timings are median-derived. This A/B supersedes M0 comparisons for assessing migration impact. The isolated JSX smoke is a separate 200,000-call timing, not an ops/s suite.
 
@@ -128,11 +130,11 @@ The core and deepSignal suites show much more repeatable, workload-specific regr
 
 A temporary private-vs-public microbenchmark measured signal reads at 2.51 ms private vs 2.84 ms public per 100,000 operations (about 13% wrapper cost), and observed writes at 68.08 ms vs 77.34 ms (about 14%); unobserved write samples were too noisy to interpret. The public wrapper is not the explanation for the 7.9× observed-write, 5.9× computed, and 6.7× batch throughput differences. Individual interop collector scope, render-suppression scope, liveness bookkeeping, scheduler, and speculative-cache costs were inspected but not independently instrumented; no separate numerical overhead claim is made for them. A combined local fast-path/context-scope experiment was measured, did not improve any core case, and was fully reverted. No performance optimization remains in the runtime from this review.
 
-Classification: React control/JSX variation is **A, benchmark/environment noise**; wrapper delegation is a measured but modest Phase 5 cost (**C**, avoidable only via the explicitly deferred Phase 6 wrapper work); local scheduler, graph lifecycle, and cross-copy interop bookkeeping are plausible **B, expected Phase 5 correctness/interoperability costs**, but their exact contribution is unproven. The observed/computed/batch/deep deltas are therefore still an **unresolved Phase 5 performance blocker**, rather than being assumed acceptable. Direct subscriptions for `useSignalValue`/JSX, wrapper removal, and deepSignal redesign remain **E, Phase 6 opportunities**, and were not attempted.
+Historical classification at this checkpoint: React control/JSX variation is **A, benchmark/environment noise**; wrapper delegation is a measured but modest Phase 5 cost (**C**, avoidable only via the explicitly deferred Phase 6 wrapper work); local scheduler, graph lifecycle, and cross-copy interop bookkeeping are plausible **B, expected Phase 5 correctness/interoperability costs**, but their exact contribution is unproven. The observed/computed/batch/deep deltas were therefore an **unresolved Phase 5 performance blocker** at that checkpoint. Direct subscriptions for `useSignalValue`/JSX, wrapper removal, and deepSignal redesign remained **E, Phase 6 opportunities**, and were not attempted.
 
 The cleanup error-reporting contract was corrected during this review: public effect body and cleanup failures now both report the documented `effect() callback threw` message with `{ cause }`, while retaining guarded error reporting. Public and private cleanup regression tests pin that exact message.
 
-### Core hot-path attribution
+### Historical core hot-path attribution
 
 Attribution ran from clean `main` commit `8e7af9688d3078cb53f827fc5a303e47be986dbc` on Windows x64, AMD Ryzen 7 PRO 6850U, Node v24.20.0 (pnpm-managed), pnpm 11.24.0, alien-signals 3.2.1. Initial exploration used the same harness at 30,000 operations, 3 warmups, 9 samples; each source ablation was built, run, then reverted before the next. A fresh 100,000-operation/3-warmup/9-sample run was used for the final Phase 5 numbers below. Short-run raw alien controls moved substantially, so small ablation deltas are treated as inconclusive. No temporary ablation remains in the source.
 
@@ -164,7 +166,7 @@ Alien-signals v3.2.1 high-level source (`esm/index.mjs` and `esm/system.mjs`) ha
 
 The fresh final Phase 5 full core run measured 43.19M read, 24.75M unobserved write, 1.63M observed write, 1.50M computed update/read, and 0.46M batch ops/s. Against the recorded Phase 4 baseline, the ratios were 0.81×, 0.60×, 0.16×, 0.19×, and 0.12× respectively. The same fresh run's raw alien control measured 57.92M, 54.27M, 13.68M, 11.88M, and 3.81M ops/s. P5 p25–p75 times were 2.308–2.337, 3.765–22.513, 60.750–74.603, 64.045–81.785, and 188.303–287.713 ms. The broad write/batch ranges reflect machine/run variation; observed, computed, and batch remained far below both Phase 4 and same-run alien.
 
-No production hot-path optimization was retained: scope, liveness, prune, lifecycle-guard, local-read, and direct-source candidates did not measurably improve the core suite; unconditional dirty-check removal was not semantics-preserving; the direct-callback recovery omits required lifecycle behavior. `useSignalValue` effect bridging, JSX subscriptions, public wrapper removal, and deepSignal Proxy changes remain deferred to Phase 6. No Phase 6 work began. The remaining observed/computed/batch gaps are not quantitatively explained by accepted Phase 5 requirements, so the performance blocker remains.
+No production hot-path optimization was retained at this checkpoint: scope, liveness, prune, lifecycle-guard, local-read, and direct-source candidates did not measurably improve the core suite; unconditional dirty-check removal was not semantics-preserving; the direct-callback recovery omits required lifecycle behavior. `useSignalValue` effect bridging, JSX subscriptions, public wrapper removal, and deepSignal Proxy changes were deferred to Phase 6. Phase 6 had not begun. The remaining observed/computed/batch gaps were not quantitatively explained by the then-current Phase 5 implementation, so the performance blocker remained open pending the architecture review.
 
 ## Validation
 
@@ -192,12 +194,14 @@ Tests and fixtures: `tests/consumer-smoke.mjs`, `tests/cross-copy-smoke.mjs`, `t
 
 Packaging, size, examples, and docs: `package.json`, `pnpm-lock.yaml`, `scripts/check-size.mjs`, `scripts/size-budget.json`, `examples/browser/server.mjs`, `examples/browser/vite.config.ts`, `examples/react-router/vite.config.ts`, `README.md`, `README.ja.md`, `docs/core-primitives.md`, `docs/core-primitives.ja.md`, `docs/design/packaging.md`, `docs/design/packaging.ja.md`, `docs/global-state.md`, `docs/global-state.ja.md`, and this checkpoint.
 
-## Remaining work and next action
+## Historical remaining work at the pre-architecture-review checkpoint
 
 - **Correctness blocker:** none found; final focused and full correctness checks pass.
 - **Architecture blocker:** the private runtime candidate has been several-fold slower since its first Phase 2 checkpoint. The Phase 5 migration did not create most of this gap, but it promoted that candidate to production.
-- **Performance blocker:** Phase 5 observed, computed, and batch throughput still trails the Phase 4 public implementation by several-fold. Profiling identifies the tracked reaction/dependency and computed dirty-check paths, but current attribution does not show a semantics-preserving local optimization that closes the gap. Request a runtime performance architecture review before further optimization. Retain `markWatched()` until a separately scoped pruning change proves the render-to-commit window safe.
+- **Performance blocker:** At that checkpoint, Phase 5 observed, computed, and batch throughput trailed the Phase 4 public implementation by several-fold. Profiling identified the tracked reaction/dependency and computed dirty-check paths, but attribution did not show a semantics-preserving local optimization that closed the gap. The next action then was to request a runtime performance architecture review and retain `markWatched()` until a separately scoped pruning change proved the render-to-commit window safe.
 - **Future-version idea:** Phase 6 may consider direct private subscriptions for `useSignalValue`/JSX and later wrapper/pruning optimizations.
+
+Resolution: the architecture/performance blocker above was addressed by the Runtime Architecture Review and the subsequent production runtime migration. See [runtime-architecture-review.md](./runtime-architecture-review.md) and [runtime-production-migration-review.md](./runtime-production-migration-review.md).
 
 ## Historical private-runtime comparison and profiling (2026-09-26)
 
@@ -226,18 +230,34 @@ Runner experiments were attribution-only and reverted. Removing error/cleanup/af
 
 Batch decomposition confirms that the combined benchmark is not measuring `batch()` alone. Phase 4 private versus Phase 5 private medians were about 18.2M versus 158M empty batches, 2.10M versus 2.75M two unobserved writes in a batch, 1.34M versus 1.19M one observed write in a batch, 0.99M versus 0.86M two observed sources to a direct effect, and 0.48M versus 0.44M for the full computed batch. The empty-batch case is tiny relative to propagation cases; adding a computed dependency costs substantially more in both private runtimes. `checkDirty` remains necessary for accepted semantics; no revision shortcut was retained.
 
-No production optimization was retained, no profiler or benchmark harness was kept, and all temporary historical bundles and variants were removed. The core performance debt is present from the first private candidate checkpoint and remains several-fold behind the Phase 4 public baseline. The existing tracked fast-path attribution did not recover that gap while preserving semantics. This meets the escalation condition: request a runtime performance architecture review before deciding on internal redesign. Phase 6 remains deferred, and Phase 5 is not ready to freeze.
+At this pre-architecture-review checkpoint, no production optimization was retained, no profiler or benchmark harness was kept, and all temporary historical bundles and variants had been removed. The measured core performance debt was present from the first private candidate checkpoint and remained several-fold behind the Phase 4 public baseline. The tracked fast-path attribution had not recovered that gap while preserving semantics. At that time this met the escalation condition and called for a runtime performance architecture review before internal redesign. Phase 6 remained deferred, and the Phase 5 freeze was blocked.
 
 Follow-up validation after removing all temporary code: `pnpm test` passed (259 runtime tests; 221 transform tests, 3 skipped); `pnpm typecheck`, `pnpm lint`, `pnpm build`, `pnpm test:consumer`, `pnpm test:phase4-duplicate`, `pnpm test:browser` (27/27), `pnpm size`, and `git diff --check` passed. Lint reported existing warnings only; the build reported TypeScript 7's experimental API warning.
 
 **Historical status at this checkpoint: PHASE 5 RUNTIME PERFORMANCE ARCHITECTURE REVIEW REQUIRED**
 
+Resolution: completed by the Runtime Architecture Review, M0/M1 production cutover, and M2 stabilization. Phase 5 is now frozen.
+
 ## Architecture review follow-up (2026-09-26)
 
 The architecture study is recorded in [`runtime-architecture-review.md`](./runtime-architecture-review.md), with isolated local measurements and test-only prototypes in `benchmarks/prototypes/`. Prototype A measured about 2.4–4.5x the current runtime's throughput in observed, computed, and batch cases, while remaining slower than alien-signals high-level. Its optional revision sidecar measured about 10–13% lower throughput in those cases; full React tracking and cross-runtime interop remain unmeasured. Prototype B was stopped early because high-level alien does not expose the last-consumer lifecycle needed for a clean foreign bridge, and its cached computed graph complicates speculative React reads.
 
-This is evidence that runtime implementation shape contributes substantially to the performance debt, not a production cutover decision. Prototype A is the preferred candidate for a separately scoped continuation; production readiness remains inconclusive. Phase 6 was not started.
+At this checkpoint, this was evidence that runtime implementation shape contributed substantially to the performance debt, not a production cutover decision. Prototype A was the preferred candidate for a separately scoped continuation; production readiness remained inconclusive. Phase 6 had not started.
 
-Prototype A now has a private real-React layer with local-only render correctness coverage. See the “Prototype A — real React layer” section in runtime-architecture-review.md for revision storage, watcher/cache design, benchmarks, and remaining interop/deepSignal gaps. This does not freeze Phase 5 or start the next milestone.
+At this checkpoint, Prototype A had a private real-React layer with local-only render correctness coverage. See the “Prototype A — real React layer” section in runtime-architecture-review.md for revision storage, watcher/cache design, benchmarks, and remaining interop/deepSignal gaps. This had not frozen Phase 5 or started the next milestone.
 
-Prototype A's local-hardening follow-up, including shape-only measurements, corrected pending `peek()` behavior, reentrant-write parity, the expanded local semantics suite, and a temporary current-runtime graph-shape diagnostic, is recorded in [`runtime-architecture-review.md`](./runtime-architecture-review.md#prototype-a-local-hardening). The hardened local core retains a clear observed/computed/batch advantage over current Phase 5. Full React and interop parity remain open; Phase 5 is not frozen.
+Prototype A's local-hardening follow-up, including shape-only measurements, corrected pending `peek()` behavior, reentrant-write parity, the expanded local semantics suite, and a temporary current-runtime graph-shape diagnostic, is recorded in [`runtime-architecture-review.md`](./runtime-architecture-review.md#prototype-a-local-hardening). At that checkpoint, the hardened local core retained a clear observed/computed/batch advantage over the then-current Phase 5 implementation, while full React and interop parity remained open and Phase 5 was not frozen.
+
+## Phase 5 closure (2026-09-27)
+
+The original low-level/private runtime architecture was several-fold slower than the Phase 4 public high-level Alien path for observed writes, computed updates, and batch propagation. The historical comparison showed that most of this debt already existed in the private runtime architecture from Phase 2; Phase 5 exposed it by promoting that architecture to production.
+
+The Runtime Architecture Review produced Prototype A: a lean local graph with explicit source/computed/effect nodes, `alien-signals/system` graph mechanics, an RFSG-owned scheduler and lifecycle, render/speculative behavior, cross-runtime `ExternalNode` interop, and deepSignal integration. Prototype A showed that a substantial part of the performance loss came from implementation shape rather than an unavoidable RFSG semantic cost.
+
+Production resolution followed in three steps: **M0** mechanically extracted the signal brand; **M1** replaced the existing production `ReactiveRuntime` internals with the accepted lean graph architecture; **M2** consolidated coverage, promoted production suites as authoritative, and retired Prototype A executable infrastructure. Final M2 hardening promoted the cross-copy speculative-deep initial-effect regression into the public duplicate-package smoke. The detailed records are [runtime-architecture-review.md](./runtime-architecture-review.md) and [runtime-production-migration-review.md](./runtime-production-migration-review.md).
+
+The old-to-M1 production comparison (M ops/s; historical, directional measurements) records raw reads at 22.44→24.05, unobserved writes at 6.62→6.03, observed writes at 0.72→3.21, computed update/read at 0.71→1.76, batch at 0.24→1.01, dynamic dependencies at 0.34→0.70, effect create/dispose at 0.24→4.53, and hot computed reads at 7.06→13.50. These results materially recovered tracked-graph performance while preserving the required React, interop, deepSignal, duplicate-package, lifecycle, and error semantics. They do not claim parity with or superiority to every Phase 4 high-level Alien baseline.
+
+`src/core/reactive-runtime.ts` is the single production runtime. There is no second Prototype A runtime, old runtime selector, or production runtime feature flag. Public wrappers remain; the deep Proxy architecture and Interop V1 remain; cross-runtime batching remains intentionally non-atomic. Phase 3 nested-effect conformance cases #209/#210 remain intentionally unsupported.
+
+The Phase 5 freeze did not require public `SignalImpl`/`computed` wrapper removal, direct private subscriptions for `useSignalValue` or JSX, a deepSignal Proxy redesign, `markWatched()`/pruning redesign, a bare `useSignalTracking` boundary redesign, or Phase 6 API/internal consolidation. Those are separately scoped future topics, not unresolved Phase 5 blockers. Phase 6 has not started.
