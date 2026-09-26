@@ -32,6 +32,20 @@ try {
     }
     copies.push(await import(pathToFileURL(join(outDir, "index.js")).href));
   }
+  const interopTestOutDir = join(temporaryRoot, "interop-test");
+  await build({
+    config: false,
+    entry: { index: join(repositoryRoot, "tests/fixtures/cross-copy-interop-entry.ts") },
+    outDir: interopTestOutDir,
+    format: "esm",
+    platform: "neutral",
+    dts: false,
+    sourcemap: false,
+    clean: true,
+  });
+  const { getSharedInteropContext } = await import(
+    pathToFileURL(join(interopTestOutDir, "index.js")).href
+  );
   const [copyA, copyB, copyC] = copies;
   assert.notEqual(copyA.signal, copyB.signal, "the package runtime modules must be distinct");
 
@@ -260,6 +274,66 @@ try {
       computedSource.value = "after";
     });
     assert.equal(screen.getByLabelText("tracked cross-copy computed").textContent, "AFTER");
+
+    const speculativeState = copyB.deepSignal({ user: { name: "Ada" } });
+    const effectValues = [];
+    let disposeEffect;
+    let effectRuns = 0;
+    let outerEvaluations = 0;
+    const outer = copyA.computed(() => {
+      outerEvaluations += 1;
+      if (disposeEffect === undefined) {
+        disposeEffect = copyB.effect(() => {
+          effectRuns += 1;
+          effectValues.push(speculativeState.value.user.name);
+        });
+      }
+      return "outer-ready";
+    });
+    const speculativeRenders = [];
+    function SpeculativeReader() {
+      copyA.useSignalTracking();
+      speculativeRenders.push(1);
+      return React.createElement(
+        "output",
+        { "aria-label": "cross-copy speculative deep effect" },
+        outer.value,
+      );
+    }
+
+    const sharedInteropContext = getSharedInteropContext();
+    const speculativeDepth = sharedInteropContext.speculativeDepth;
+    const speculativeEpoch = sharedInteropContext.speculativeDeepReadEpoch;
+    render(React.createElement(SpeculativeReader));
+    assert.equal(screen.getByLabelText("cross-copy speculative deep effect").textContent, "outer-ready");
+    assert.deepEqual(effectValues, ["Ada"], "the B effect performs its initial durable read during A's speculative getter");
+    assert.equal(effectRuns, 1);
+    assert.equal(outerEvaluations, 1);
+    const speculativeRenderCount = speculativeRenders.length;
+    assert.equal(
+      sharedInteropContext.speculativeDeepReadEpoch,
+      speculativeEpoch,
+      "the durable B effect's deep read does not advance A's speculative deep-read epoch",
+    );
+    assert.equal(sharedInteropContext.speculativeDepth, speculativeDepth, "A's speculative scope is restored after render");
+
+    await act(async () => {
+      speculativeState.value.user.name = "Grace";
+    });
+    assert.deepEqual(effectValues, ["Ada", "Grace"], "the B effect retains its durable fine-grained deep dependency");
+    assert.equal(outerEvaluations, 1, "the B deep dependency does not leak into A's speculative computed");
+    assert.equal(speculativeRenders.length, speculativeRenderCount, "the B deep dependency does not rerender A's component");
+    assert.equal(sharedInteropContext.speculativeDeepReadEpoch, speculativeEpoch);
+    assert.equal(sharedInteropContext.speculativeDepth, speculativeDepth);
+
+    disposeEffect();
+    await act(async () => {
+      speculativeState.value.user.name = "Lin";
+    });
+    assert.deepEqual(effectValues, ["Ada", "Grace"], "disposing B's effect releases its deep dependency");
+    assert.equal(outerEvaluations, 1);
+    assert.equal(speculativeRenders.length, speculativeRenderCount);
+    assert.equal(sharedInteropContext.speculativeDepth, speculativeDepth);
   } finally {
     cleanup();
     dom.window.close();

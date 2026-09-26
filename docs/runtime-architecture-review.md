@@ -266,4 +266,4 @@ The controlled comparison, parity matrix, tree-shaking/brand gates, and staged c
 
 ## Study disposition (2026-09-27)
 
-Prototype A is no longer a separate implementation: its accepted local-graph architecture is the production implementation in `src/core/reactive-runtime.ts`. M2 promoted the remaining deep speculative React contracts to production tests, removed the duplicate Prototype A runtime test suites and executable runtime/harness sources, and kept the historical JSONL results. The current package has one production runtime and no Prototype A selection script. M3 wrapper simplification remains optional and has not started.
+Prototype A is no longer a separate implementation: its accepted local-graph architecture is the production implementation in `src/core/reactive-runtime.ts`. M2 stabilization is frozen. Prototype A executable/test infrastructure is retired, and production regression coverage now includes the former cross-runtime speculative deep case. Historical JSONL results remain. The current package has one production runtime and no Prototype A selection script. M3 wrapper simplification remains optional and has not started.

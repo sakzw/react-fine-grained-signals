@@ -236,6 +236,8 @@ M2 validation passed: `pnpm test` (266 runtime; 221 transform, 3 skipped), `pnpm
 
 The focused post-cleanup sanity pass covered raw read, observed write, computed, batch, managed React updates, and tracked deep updates. It is a regression check, not a new performance study. M3 wrapper removal is optional and current measurements do not establish enough need to open it; retaining the accepted wrappers is the default. No Phase 6 work began. No correctness or architecture blocker remains. Follow-up performance hardening is limited to repeated measurement of the noisy deep untracked-read case if stabilization profiling gives it product significance.
 
+Before freezing M2, the final cross-runtime speculative deep regression was promoted into the public duplicate-copy smoke. It covers an initial effect created by copy B inside copy A's speculative React computed, durable deep updates, speculative/render isolation, epoch restoration, and dependency release on disposal. The runtime migration is now frozen with that contract covered. The remaining sections below are historical pre-cutover review and migration planning notes.
+
 ## Runtime-private interface and adapter gaps
 
 Keep `ReactiveRuntime` as the clean private boundary: `signal`, `computed`, `effect`, `batch`, `untracked`, `subscribe`, `hasActiveSubscriber`, `getBatchDepth`, `hasSubscribers`. Readables continue to provide `value`, `peek`, `getRenderVersion`, and `subscribeRender`, and V1 interop remains on wrappers.
