@@ -1,4 +1,6 @@
-import { effect, isSignal } from "../core/index.js";
+import { effect, isSignal, untracked } from "../core/index.js";
+import { subscribeReadableV1 } from "../core/readable-subscription.js";
+import { notifyListener } from "../core/render-tracking.js";
 import type { ReadonlySignal } from "../core/index.js";
 import { useSignalValue } from "../react/hooks.js";
 import { createElement, Fragment, useLayoutEffect, useRef } from "react";
@@ -217,8 +219,9 @@ function applyBoundSignal<T>(
 }
 
 /**
- * The common case built on `applyBoundSignal`: subscribe to `source.value`
- * inside an `effect()` and re-run `apply` whenever it changes. Centralizes
+ * The common case built on `applyBoundSignal`: subscribe to a readable and
+ * re-run `apply` whenever it changes. V1 readables use a direct protocol
+ * subscription; structural readables retain the effect bridge. Centralizes
  * the pattern that used to be hand-rolled at each binding site — declare an
  * `episode`, then `effect(() => { const read = readBoundSignal(...); if
  * (!read.ok) return; <apply the value> })` — so the read-and-skip contract
@@ -226,12 +229,19 @@ function applyBoundSignal<T>(
  * failure latch with a sibling read site (see `bindSelectValue`); otherwise
  * each binding gets its own.
  */
-function createBindingEffect<T>(
+function createBindingSubscription<T>(
   source: ReadonlySignal<T>,
   apply: (value: T) => void,
   episode: FailureEpisode = { hasReported: false },
 ): () => void {
-  return effect(() => applyBoundSignal(() => source.value, apply, episode));
+  const update = () => applyBoundSignal(() => source.value, apply, episode);
+  const unsubscribe = subscribeReadableV1(source, update);
+  if (unsubscribe !== undefined) {
+    // Subscribe before the initial read/apply so setup cannot miss an update.
+    untracked(() => notifyListener(update));
+    return unsubscribe;
+  }
+  return effect(update);
 }
 
 function setAttribute(node: Element, name: string, value: unknown): void {
@@ -344,7 +354,7 @@ function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unkno
   // erroring, so they report as one episode, not two.
   const episode: FailureEpisode = { hasReported: false };
   const apply = (value: unknown) => setControlledProp(select, "value", value);
-  const stopEffect = createBindingEffect(source, apply, episode);
+  const stopEffect = createBindingSubscription(source, apply, episode);
   const observer = new MutationObserver(() => {
     applyBoundSignal(() => source.peek(), apply, episode);
   });
@@ -386,9 +396,9 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
   node.addEventListener("compositionend", onCompositionEnd);
 
   // A failed read must bail out before this touches `pending`/`hasPending` —
-  // a stale or garbage value must never latch in. `createBindingEffect`
+  // a stale or garbage value must never latch in. `createBindingSubscription`
   // already skips `apply` on a failed read, so that guard lives there once.
-  const stopEffect = createBindingEffect(source, (next) => {
+  const stopEffect = createBindingSubscription(source, (next) => {
     if (composing) {
       hasPending = true;
       pending = next;
@@ -503,7 +513,7 @@ function subscribeBinding(
   switch (kind) {
     case "style": {
       let previousKeys: readonly string[] = initialStyleKeys ?? [];
-      const dispose = createBindingEffect(source, (value) => {
+      const dispose = createBindingSubscription(source, (value) => {
         previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
       });
       return { dispose, getStyleKeys: () => previousKeys };
@@ -513,9 +523,9 @@ function subscribeBinding(
     case "text-value":
       return { dispose: bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source), getStyleKeys: undefined };
     case "checked":
-      return { dispose: createBindingEffect(source, (value) => setControlledProp(node, name, value)), getStyleKeys: undefined };
+      return { dispose: createBindingSubscription(source, (value) => setControlledProp(node, name, value)), getStyleKeys: undefined };
     case "prop":
-      return { dispose: createBindingEffect(source, (value) => setDomProp(node, name, value)), getStyleKeys: undefined };
+      return { dispose: createBindingSubscription(source, (value) => setDomProp(node, name, value)), getStyleKeys: undefined };
   }
 }
 

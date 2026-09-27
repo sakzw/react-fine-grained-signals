@@ -13,7 +13,10 @@ try {
     const outDir = join(temporaryRoot, name);
     await build({
       config: false,
-      entry: { index: join(repositoryRoot, "src/index.ts") },
+      entry: {
+        index: join(repositoryRoot, "src/index.ts"),
+        "jsx-runtime": join(repositoryRoot, "src/jsx-runtime.ts"),
+      },
       outDir,
       format: "esm",
       platform: "neutral",
@@ -30,7 +33,10 @@ try {
       const contents = await readFile(join(outDir, file), "utf8");
       assert.doesNotMatch(contents, /from\s*["']alien-signals(?:\/|["'])/);
     }
-    copies.push(await import(pathToFileURL(join(outDir, "index.js")).href));
+    copies.push({
+      api: await import(pathToFileURL(join(outDir, "index.js")).href),
+      jsx: await import(pathToFileURL(join(outDir, "jsx-runtime.js")).href),
+    });
   }
   const interopTestOutDir = join(temporaryRoot, "interop-test");
   await build({
@@ -46,7 +52,8 @@ try {
   const { getSharedInteropContext } = await import(
     pathToFileURL(join(interopTestOutDir, "index.js")).href
   );
-  const [copyA, copyB, copyC] = copies;
+  const [copyA, copyB, copyC] = copies.map((copy) => copy.api);
+  const [jsxA] = copies.map((copy) => copy.jsx);
   assert.notEqual(copyA.signal, copyB.signal, "the package runtime modules must be distinct");
   assert.equal(copyA.isSignal(copyA.signal(1)), true, "a package recognizes its local signal");
   assert.equal(copyA.isSignal(copyB.signal(1)), true, "a package recognizes a foreign signal brand");
@@ -220,6 +227,30 @@ try {
       source.value = "after";
     });
     assert.equal(screen.getByLabelText("cross-copy value").textContent, "after");
+
+    const computedInput = copyB.signal("computed before");
+    const foreignComputedLeaf = copyB.computed(() => computedInput.value.toUpperCase());
+    function ComputedLeafReader() {
+      return React.createElement(
+        "output",
+        { "aria-label": "cross-copy computed leaf" },
+        copyA.useSignalValue(foreignComputedLeaf),
+      );
+    }
+    render(React.createElement(ComputedLeafReader));
+    assert.equal(screen.getByLabelText("cross-copy computed leaf").textContent, "COMPUTED BEFORE");
+    await act(async () => {
+      computedInput.value = "computed after";
+    });
+    assert.equal(screen.getByLabelText("cross-copy computed leaf").textContent, "COMPUTED AFTER");
+
+    const foreignTitle = copyB.signal("foreign title before");
+    render(jsxA.jsx("input", { "aria-label": "cross-copy jsx binding", title: foreignTitle }));
+    assert.equal(screen.getByLabelText("cross-copy jsx binding").title, "foreign title before");
+    await act(async () => {
+      foreignTitle.value = "foreign title after";
+    });
+    assert.equal(screen.getByLabelText("cross-copy jsx binding").title, "foreign title after");
 
     const state = copyB.deepSignal({ profile: { name: "Ada" } });
     function DeepReader() {

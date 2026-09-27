@@ -6,7 +6,7 @@ Phase 5 is complete and frozen. Phase 6 is a separate investigation into whether
 
 **M0 — architecture prototype and measurement** is complete. Its historical candidate B is rejected because it exposes runtime internals. The initial M0 no-go recommendation was provisional; M0.1 supplied the additional evidence used to approve the C1-style production migration.
 
-**M0.1 — targeted performance, deep-liveness, bundle, and duplicate-package hardening** is complete. Candidate C1 passed the focused correctness, encapsulation, cross-copy, and bridge-free deepSignal checks. Its fresh-process measurements and package-faithful sizes supported the production migration.
+**M0.1 — targeted performance, deep-liveness, bundle, and duplicate-package hardening** completed before production migration. Candidate C1 passed the focused correctness, encapsulation, cross-copy, and bridge-free deepSignal checks. Its fresh-process measurements and package-faithful sizes supported the production migration.
 
 **M1 — core object consolidation**, **M2 — deepSignal adapter/liveness separation**, and **M3 — stabilization, cleanup, and freeze** are complete. Phase 6 is frozen at the production architecture and validation described below.
 
@@ -81,7 +81,7 @@ Writable signal: value, peek(), SIGNAL_BRAND, READABLE_INTEROP_V1
 Computed:        readonly value, peek(), SIGNAL_BRAND, READABLE_INTEROP_V1
 ```
 
-The raw node had to remain undiscoverable through own keys, symbols, prototype methods, or public properties. C1 established the private-node class, runtime ownership map, and node render methods that now underpin production. Candidate C and C1 executable copies have since been removed; recorded measurements and conclusions remain below.
+The raw node had to remain undiscoverable through own keys, symbols, prototype methods, or public properties. C1 established the private-node class, runtime ownership map, and node render methods that now underpin production. Candidate C and C1 executable copies were removed during M3; recorded measurements and conclusions remain below.
 
 ## deepSignal boundary
 
@@ -178,16 +178,16 @@ Treat these as relative source-harness comparisons, not release bundle numbers: 
 - **Hardening later:** do not proceed to production migration yet. Stabilize/replicate performance comparisons; compare candidate-specific builds across the seven consumer profiles; test candidate C with an actual duplicate package build; and remove the deep-source bridge without changing the Proxy or pruning algorithm. C currently shows a retained-heap advantage but no dependable throughput advantage, with material slowdowns in some measured cases.
 - **Future idea:** if a narrow deep-liveness capability proves necessary, keep it exclusive to deep version sources rather than restoring liveness methods to ordinary signals.
 
-**Initial M0 recommendation (superseded):** Candidate C was **not yet suitable to proceed to production migration** based on the single-process exploratory measurements. This was a cautious provisional no-go, not a final architecture rejection. M0.1 supplied the additional evidence, and M1/M2 later migrated the accepted C1 design to production.
+**Initial M0 recommendation (superseded):** Candidate C was **not considered suitable to proceed to production migration** based on the single-process exploratory measurements. This was a cautious provisional no-go, not a final architecture rejection. M0.1 supplied the additional evidence, and M1/M2 later migrated the accepted C1 design to production.
 
 ### M0.1 — targeted hardening findings
 
-#### Scope and environment
+#### Scope and environment (historical M0.1 record)
 
 - Compared A (production wrapper control), B (direct readable diagnostic), C0 (M0 prototype), and C1 (shared-class readable with private `#node`, runtime-private WeakMap ownership, and node-local copies of shared render method references). C1 was added only as a test/benchmark fixture; production source and exports remain unchanged.
 - Node `v24.21.0`, Windows `win32/x64`, AMD64 Family 25 Model 68 Stepping 1 (AuthenticAMD).
 - `benchmarks/phase6/run-isolated.ps1` starts a fresh Node process for each candidate/case, rotates candidate order deterministically over three rounds, and collects three timed samples per process after three warmups. This yields nine timed samples per candidate/case. Each timed sample targets at least 120 ms; calibration may overshoot. Heap samples use 50,000 retained signal/computed instances, three samples per process and three processes (nine points per candidate/type), with explicit GC.
-- Raw process/sample records are in `benchmarks/phase6/results-m0.1.jsonl`. Rates below are medians of the nine per-sample rates; ranges show P25–P75. These are local measurements, not a release benchmark. Some distributions are wide, so small differences should not be treated as meaningful.
+- Raw process/sample records were originally stored in `benchmarks/phase6/results-m0.1.jsonl`; that temporary raw file was removed during M3. Rates below are medians of the nine per-sample rates; ranges show P25–P75. These were local measurements, not a release benchmark. Some distributions were wide, so small differences should not be treated as meaningful.
 
 #### Fresh-process throughput
 

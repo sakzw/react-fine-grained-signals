@@ -12,6 +12,7 @@ import type {
   Signal,
 } from "../core/index.js";
 import { untrackedRender } from "../core/render-tracking.js";
+import { subscribeReadableV1 } from "../core/readable-subscription.js";
 import type { DependencyList } from "react";
 export { useSignalTracking } from "./use-signals.js";
 
@@ -43,23 +44,17 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
 }
 
 /**
- * Shared `useSyncExternalStore` subscription wiring for a signal-backed
- * store. On `subscribe`, starts an `effect()` that reruns `onEvaluate` on
- * every relevant signal write and notifies React exactly when it reports a
- * change; returns that effect's own dispose as the unsubscribe. The very
- * first synchronous run — made while `subscribe` itself is still
- * establishing the effect — never notifies, matching how each caller here
- * already behaved: `useSyncExternalStore` performs its own "did the
- * snapshot change since render" check independently of anything a `notify`
- * call does, so a store's own subscribe-time run does not need to report on
- * that window too.
+ * Shared `useSyncExternalStore` subscription wiring for the selector store
+ * and structural-readable fallback. On `subscribe`, starts an `effect()`
+ * that reruns `onEvaluate` on every relevant signal write and notifies React
+ * exactly when it reports a change; returns that effect's disposer.
  *
  * `getSnapshot` is intentionally not this helper's concern — the caller
  * wires its own, whether that means recomputing fresh each call
  * (`useSignalValue`) or returning a cached result (the deep-selector store).
  *
  * An exception thrown by `onEvaluate` is swallowed here and treated as a
- * change worth notifying about. This mirrors `useSignalValue`'s prior
+ * change worth notifying about. This mirrors the legacy `useSignalValue` bridge
  * inline behavior: a computed that starts failing must still trigger a
  * re-render so `getSnapshot`'s own unguarded read can rethrow into an Error
  * Boundary, rather than leaving this background effect's throw to escape
@@ -292,28 +287,25 @@ export function useSignalEffect(
 }
 
 /**
- * Reads a signal and subscribes the component to subsequent changes.
+ * Reads a signal and subscribes the component to subsequent changes through
+ * ReadableInterop V1 when available.
  *
- * The immediate run made by the public `effect` API establishes dependency
- * tracking only. It intentionally does not notify React: `useSyncExternalStore`
- * owns the initial consistency check after subscribing. See `createSignalStore`
- * for the shared subscribe/notify wiring, including why a read that throws
- * (a computed whose cached error `.value` rethrows) is swallowed in the
- * background effect and left for `getSnapshot` to rethrow instead.
+ * `useSyncExternalStore` owns the initial consistency check after subscribing.
+ * For V1 readables, its watcher tracks revisions without an EffectNode. A
+ * read that throws (a computed whose cached error `.value` rethrows) remains
+ * for the render-time `getSnapshot` to surface to an Error Boundary; only the
+ * structural-readable fallback needs an effect to contain background errors.
  */
 export function useSignalValue<T>(source: ReadonlySignal<T>): T {
-  const subscribe = useMemo(
-    () =>
-      createSignalStore(() => {
-        // The read (not its result) is what registers the alien-signals
-        // dependency link, so it still happens even though the return value
-        // here is constant: every non-initial run of this effect is reported
-        // as a change, exactly as before.
-        source.value;
-        return true;
-      }),
-    [source],
-  );
+  const subscribe = useCallback((notify: () => void) => {
+    const unsubscribe = subscribeReadableV1(source, notify);
+    if (unsubscribe !== undefined) return unsubscribe;
+    // Preserve the legacy bridge for structural readables without V1.
+    return createSignalStore(() => {
+      source.value;
+      return true;
+    })(notify);
+  }, [source]);
 
   // A leaf subscription owns this read. An unmanaged useSignalTracking() scope may
   // still be open for an ancestor or earlier sibling until React commits, so

@@ -145,7 +145,6 @@ export interface ReactiveRuntime {
   effect(fn: () => void | (() => void)): () => void;
   batch<T>(fn: () => T): T;
   untracked<T>(fn: () => T): T;
-  subscribe<T>(source: RuntimeReadonlySignal<T>, listener: () => void): () => void;
   hasSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
   hasActiveSubscriber(): boolean;
   getBatchDepth(): number;
@@ -1117,11 +1116,6 @@ export function createReactiveRuntime(): ReactiveRuntime {
     },
     untracked<T>(fn: () => T): T {
       return untracked(fn);
-    },
-    subscribe<T>(readable: RuntimeReadonlySignal<T>, listener: () => void): () => void {
-      const node = nodesByReadable.get(readable as object);
-      if (node === undefined) throw new TypeError("subscribe() expects a signal or computed from this runtime");
-      return subscribeRenderNode(node, () => notifyListener(listener));
     },
     hasSubscribers(readable) {
       const node = nodesByReadable.get(readable as object);

@@ -638,28 +638,6 @@ describe("private reactive runtime", () => {
     expect(values).toEqual([0, 1]);
   });
 
-  it("subscribes directly to source and computed nodes without effect bridges", () => {
-    const runtime = createReactiveRuntime();
-    const source = runtime.signal(1);
-    const parity = runtime.computed(() => source.value % 2);
-    const sourceListener = vi.fn();
-    const computedListener = vi.fn();
-    const disposeSource = runtime.subscribe(source, sourceListener);
-    const disposeComputed = runtime.subscribe(parity, computedListener);
-
-    source.value = 3;
-    expect(sourceListener).toHaveBeenCalledTimes(1);
-    expect(computedListener).not.toHaveBeenCalled();
-    source.value = 4;
-    expect(sourceListener).toHaveBeenCalledTimes(2);
-    expect(computedListener).toHaveBeenCalledTimes(1);
-    disposeComputed();
-    disposeSource();
-    source.value = 5;
-    expect(sourceListener).toHaveBeenCalledTimes(2);
-    expect(computedListener).toHaveBeenCalledTimes(1);
-  });
-
   it("ignores non-function effect return values instead of treating them as cleanup", () => {
     const runtime = createReactiveRuntime();
     const source = runtime.signal(0);
@@ -671,54 +649,6 @@ describe("private reactive runtime", () => {
     dispose();
     expect(values).toEqual([0, 1]);
     expect(reported).not.toHaveBeenCalled();
-  });
-
-  it("keeps direct computed subscriptions on their dynamically selected branch", () => {
-    const runtime = createReactiveRuntime();
-    const useLeft = runtime.signal(true);
-    const left = runtime.signal("left");
-    const right = runtime.signal("right");
-    const selected = runtime.computed(() => useLeft.value ? left.value : right.value);
-    const listener = vi.fn();
-    const dispose = runtime.subscribe(selected, listener);
-
-    left.value = "left updated";
-    useLeft.value = false;
-    left.value = "left ignored";
-    right.value = "right updated";
-    expect(listener).toHaveBeenCalledTimes(3);
-    dispose();
-  });
-
-  it("notifies direct computed subscribers for value-error-error-value transitions", () => {
-    const runtime = createReactiveRuntime();
-    const shouldThrow = runtime.signal(false);
-    const revision = runtime.signal(0);
-    const reusedError = new Error("computed failed");
-    const derived = runtime.computed(() => {
-      revision.value;
-      if (shouldThrow.value) throw reusedError;
-      return revision.value;
-    });
-    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const listener = vi.fn();
-    const dispose = runtime.subscribe(derived, listener);
-
-    shouldThrow.value = true;
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(reported).not.toHaveBeenCalled();
-    expect(() => derived.value).toThrow(reusedError);
-
-    revision.value = 1;
-    expect(listener).toHaveBeenCalledTimes(2);
-    expect(reported).not.toHaveBeenCalled();
-    expect(() => derived.value).toThrow(reusedError);
-
-    shouldThrow.value = false;
-    expect(listener).toHaveBeenCalledTimes(3);
-    expect(reported).not.toHaveBeenCalled();
-    expect(derived.value).toBe(1);
-    dispose();
   });
 
   it("exposes source and computed nodes to render collection with coherent versions", () => {
@@ -945,9 +875,6 @@ describe("private reactive runtime", () => {
     expect(seen).toEqual([3]);
     source.value = 4;
     expect(seen).toEqual([3, 5]);
-    expect(() => a.subscribe(source, () => undefined)).toThrow(
-      "subscribe() expects a signal or computed from this runtime",
-    );
     dispose();
   });
 
