@@ -101,3 +101,20 @@ These fresh-process paired diagnostics compare one temporary change at a time ag
 | Same candidate | source/unobserved-write@1 | 1.054 (0.996–1.090) | 3/4 | Partial signal only; the target read did not improve repeatably. [Raw](m131-inline-foreign-check-unobserved-write.json) |
 
 The queue-leaf and track-classification variants did not improve fanout at 16/64. The two source/read variants did not produce a repeatable target gain; the clean-read bypass also regressed write-read. No production change passed the paired evidence gate, so the full M1.3 matrix was not rerun. See [`../../../docs/implementation-phase9-m1.3.1.md`](../../../docs/implementation-phase9-m1.3.1.md) for the path maps and closure decision.
+
+## M1.4 structural prototypes
+
+These fresh-process diagnostics compare each temporary variant against unchanged current at `091b4ac5a4e71156db5c2e22836de64e9d21df75`. Workers used the exact M1b iterations, three warmups, seven samples, and alternating process order. The stored ratio is **duration variant/control** (`<1` means faster). Selected noisy/promising candidates were extended beyond the initial four pairs. These are attribution records, not M1.4 release statistics.
+
+| Prototype and case | Pairs | Median (Q1–Q3) | Faster | Raw record |
+| --- | ---: | ---: | ---: | --- |
+| Ordinary computed dispatch — create@1 | 8 | 0.852 (0.477–1.011) | 6/8 | [first](m14-computed.json), [repeat](m14-computed-repeat.json) |
+| Same — dirty-read@1 | 16 | 0.943 (0.724–1.039) | 11/16 | [first](m14-computed.json), [repeat](m14-computed-repeat.json), [extended](m14-computed-repeat2.json), [final](m14-computed-repeat3.json) |
+| Same — dirty-unread@1 | 8 | 1.021 (0.857–1.060) | 3/8 | [first](m14-computed.json), [repeat](m14-computed-repeat.json) |
+| Same — equality-suppression@1 | 16 | 0.852 (0.777–1.003) | 12/16 | [first](m14-computed.json), [repeat](m14-computed-repeat.json), [extended](m14-computed-repeat2.json), [final](m14-computed-repeat3.json) |
+| Consolidated effect callback context — observed-write@1 | 16 | 0.791 (0.660–0.960) | 13/16 | [first](m14-effect.json), [repeat](m14-effect-repeat.json), [extended](m14-effect-repeat2.json), [final](m14-effect-repeat3.json) |
+| Same — fanout@1 | 8 | 0.936 (0.823–1.003) | 6/8 | [first](m14-effect.json), [repeat](m14-effect-repeat.json) |
+| Same — fanout@16 | 16 | 0.974 (0.786–1.112) | 10/16 | [first](m14-effect.json), [repeat](m14-effect-repeat.json), [extended](m14-effect-repeat2.json), [final](m14-effect-repeat3.json) |
+| Same — fanout@64 | 16 | 0.905 (0.843–1.036) | 11/16 | [first](m14-effect.json), [repeat](m14-effect-repeat.json), [extended](m14-effect-repeat2.json), [final](m14-effect-repeat3.json) |
+
+The computed path rewrite did not show a stable dirty-read/equality result. The effect helper had a promising observed-write signal, but its signal-only and deep gzip entries exceeded the existing size budgets; the clean baseline passed those budgets. It was reverted. No full M1.4 matrix was run. `m14-paired-diagnostic.mjs` reproduces the serial, four-pair blocks using the frozen iterations file and worker; multiple `m14-*-repeat*.json` blocks provide the 8–16 pair totals above.
