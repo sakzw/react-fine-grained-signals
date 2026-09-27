@@ -584,6 +584,42 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(renders).toHaveBeenCalledTimes(3);
   });
 
+  it("isolates selector evaluation to mount and selected writes, then releases it on unmount", () => {
+    const state = deepSignal({ user: { name: "Ada", age: 36 } });
+    const selectorCalls = vi.fn();
+    const renders = vi.fn();
+
+    function Selected({ parentVersion }: { parentVersion: number }) {
+      const name = useDeepSignalValue(state, (value) => {
+        selectorCalls();
+        return value.user.name;
+      }, []);
+      renders();
+      return <output aria-label="memoized selector">{`${parentVersion}:${name}`}</output>;
+    }
+
+    const view = render(<Selected parentVersion={1} />);
+    // Current store construction and effect establishment each read once.
+    // These counts are benchmark evidence, not a public API guarantee.
+    expect(selectorCalls).toHaveBeenCalledTimes(2);
+
+    view.rerender(<Selected parentVersion={2} />);
+    expect(screen.getByLabelText("memoized selector").textContent).toBe("2:Ada");
+    expect(selectorCalls).toHaveBeenCalledTimes(2);
+
+    act(() => { state.value.user.age = 37; });
+    expect(selectorCalls).toHaveBeenCalledTimes(2);
+    expect(renders).toHaveBeenCalledTimes(2);
+
+    act(() => { state.value.user.name = "Grace"; });
+    expect(screen.getByLabelText("memoized selector").textContent).toBe("2:Grace");
+    expect(selectorCalls).toHaveBeenCalledTimes(3);
+
+    view.unmount();
+    act(() => { state.value.user.name = "Lin"; });
+    expect(selectorCalls).toHaveBeenCalledTimes(3);
+  });
+
   it("keeps subscribing after selector dependencies change", () => {
     const state = deepSignal({ count: 1 });
 

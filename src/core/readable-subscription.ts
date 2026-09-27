@@ -8,5 +8,6 @@ export function subscribeReadableV1(
 ): (() => void) | undefined {
   const protocol = getReadableInterop(readable);
   if (protocol === undefined) return undefined;
-  return protocol.subscribe(() => notifyListener(listener)).unsubscribe;
+  const subscription = protocol.subscribe(() => notifyListener(listener));
+  return () => subscription.unsubscribe();
 }

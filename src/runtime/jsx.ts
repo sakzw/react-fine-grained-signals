@@ -349,18 +349,18 @@ function setMultiSelectValue(select: HTMLSelectElement, value: unknown): void {
  * that gap without requiring the signal to change too.
  */
 function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unknown>): () => void {
-  // Shared by both read sites below: an effect-triggered failure and a
+  // Shared by both read sites below: a subscription-triggered failure and a
   // MutationObserver-triggered failure are the same underlying computed
   // erroring, so they report as one episode, not two.
   const episode: FailureEpisode = { hasReported: false };
   const apply = (value: unknown) => setControlledProp(select, "value", value);
-  const stopEffect = createBindingSubscription(source, apply, episode);
+  const unsubscribe = createBindingSubscription(source, apply, episode);
   const observer = new MutationObserver(() => {
     applyBoundSignal(() => source.peek(), apply, episode);
   });
   observer.observe(select, { childList: true, subtree: true });
   return () => {
-    stopEffect();
+    unsubscribe();
     observer.disconnect();
   };
 }
@@ -398,7 +398,7 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
   // A failed read must bail out before this touches `pending`/`hasPending` —
   // a stale or garbage value must never latch in. `createBindingSubscription`
   // already skips `apply` on a failed read, so that guard lives there once.
-  const stopEffect = createBindingSubscription(source, (next) => {
+  const unsubscribe = createBindingSubscription(source, (next) => {
     if (composing) {
       hasPending = true;
       pending = next;
@@ -408,7 +408,7 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
   }, episode);
 
   return () => {
-    stopEffect();
+    unsubscribe();
     node.removeEventListener("compositionstart", onCompositionStart);
     node.removeEventListener("compositionend", onCompositionEnd);
   };

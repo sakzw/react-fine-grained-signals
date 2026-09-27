@@ -197,7 +197,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(evaluate).toHaveBeenCalledTimes(evaluationsAtMount);
   });
 
-  it("keeps a single useSignalValue effect subscription across unrelated re-renders", () => {
+  it("keeps a single useSignalValue subscription across unrelated re-renders", () => {
     const source = signal(1);
     const evaluate = vi.fn((value: number) => value * 2);
     const doubled = computed(() => evaluate(source.value));
@@ -211,10 +211,8 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(evaluate).toHaveBeenCalledTimes(1);
 
     // Re-rendering with an unrelated prop change must not tear down and
-    // recreate the underlying effect subscription: `subscribe` is memoized on
-    // `source` alone (via useMemo, mirroring useDeepSignalValue's store
-    // construction), so an unchanged `source` should keep the same effect
-    // running instead of resubscribing on every render.
+    // recreate the underlying subscription: `subscribe` is memoized on
+    // `source` alone, so an unchanged source keeps the same watcher.
     view.rerender(<Leaf tick={1} />);
     view.rerender(<Leaf tick={2} />);
     expect(evaluate).toHaveBeenCalledTimes(1);

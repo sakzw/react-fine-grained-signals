@@ -54,13 +54,9 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
  * (`useSignalValue`) or returning a cached result (the deep-selector store).
  *
  * An exception thrown by `onEvaluate` is swallowed here and treated as a
- * change worth notifying about. This mirrors the legacy `useSignalValue` bridge
- * inline behavior: a computed that starts failing must still trigger a
- * re-render so `getSnapshot`'s own unguarded read can rethrow into an Error
- * Boundary, rather than leaving this background effect's throw to escape
- * into whatever write triggered the re-run. Callers whose `onEvaluate`
- * already captures errors into its own return value (the deep-selector
- * store) never hit this path.
+ * change worth notifying about. That leaves the next render-time snapshot
+ * read to surface the error to an Error Boundary rather than letting the
+ * background effect's exception escape through the signal writer.
  */
 function createSignalStore(onEvaluate: () => boolean): (notify: () => void) => () => void {
   return (notify: () => void): (() => void) => {
@@ -82,13 +78,11 @@ function createSignalStore(onEvaluate: () => boolean): (notify: () => void) => (
 }
 
 /**
- * Holds a selector result outside the reactive graph. In particular, a
- * selector error must not escape from the signal write that caused a reactive
- * re-evaluation: React needs to observe it during its next render so an Error
- * Boundary can handle it. Unlike `useSignalValue`, errors are modeled as an
- * explicit `SelectorResult` union rather than swallowed and re-thrown from a
- * fresh read: `getSnapshot` below must return the same cached result the
- * subscribed effect last settled on, not re-run `selector` on every render.
+ * Holds a selector result outside the reactive graph. A selector error must
+ * not escape from the signal write that caused a reactive re-evaluation:
+ * React needs to observe it during its next render so an Error Boundary can
+ * handle it. The cached result also avoids rerunning the selector on every
+ * render.
  */
 function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   source: DeepSignal<T>,
@@ -116,11 +110,8 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   };
 
   return {
-    // Layers Object.is diffing on top of the shared subscribe/notify core:
-    // an update to the deep signal reruns `selector`, but only a result that
-    // actually differs from the last one (by Object.is, same rule the
-    // `getSnapshot`-level comparison in `useSyncExternalStore` itself uses)
-    // is worth a React re-render.
+    // Notify only when the primitive result or error identity changes; this
+    // is the same Object.is rule used by useSyncExternalStore snapshots.
     subscribe: createSignalStore(() => {
       const next = evaluate();
       if (!hasChanged(next)) return false;

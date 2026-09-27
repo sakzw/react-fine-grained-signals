@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, effect, signal } from "../src/core/index.js";
-import { getReadableInterop } from "../src/core/interop.js";
+import { attachReadableInterop, getReadableInterop } from "../src/core/interop.js";
+import { subscribeReadableV1 } from "../src/core/readable-subscription.js";
+import type { ReadableInteropV1 } from "../src/core/interop.js";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -80,5 +82,25 @@ describe("ReadableInterop V1 subscription path", () => {
     right.value = "right updated";
     expect(notify).toHaveBeenCalledTimes(3);
     subscription.unsubscribe();
+  });
+
+  it("preserves the subscription receiver while returning its disposer", () => {
+    const readable = { value: 0, peek: () => 0 };
+    const subscription = {
+      revision: 0,
+      unsubscribeCount: 0,
+      unsubscribe() { this.unsubscribeCount += 1; },
+    };
+    const protocol: ReadableInteropV1 = {
+      version: 1,
+      runtimeToken: {},
+      getRevision: () => 0,
+      subscribe: () => subscription,
+    };
+    attachReadableInterop(readable, protocol);
+
+    const unsubscribe = subscribeReadableV1(readable, vi.fn());
+    unsubscribe?.();
+    expect(subscription.unsubscribeCount).toBe(1);
   });
 });
