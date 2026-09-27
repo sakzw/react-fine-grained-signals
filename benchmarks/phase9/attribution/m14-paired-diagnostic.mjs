@@ -2,9 +2,15 @@ import { spawnSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const [controlRootArg, variantRootArg, outputArg, ...caseArgs] = process.argv.slice(2);
+const [controlRootArg, variantRootArg, outputArg, ...args] = process.argv.slice(2);
+const pairCountOption = args.find((argument) => argument.startsWith("--pairs="));
+const pairedProcessRounds = pairCountOption === undefined ? 4 : Number(pairCountOption.slice(8));
+const caseArgs = args.filter((argument) => !argument.startsWith("--"));
 if (!controlRootArg || !variantRootArg || !outputArg || caseArgs.length === 0) {
-  throw new Error("usage: node m14-paired-diagnostic.mjs <control-root> <variant-root> <output.json> <kind@size>...");
+  throw new Error("usage: node m14-paired-diagnostic.mjs <control-root> <variant-root> <output.json> <kind@size>... [--pairs=N]");
+}
+if (!Number.isSafeInteger(pairedProcessRounds) || pairedProcessRounds <= 0) {
+  throw new Error("--pairs must be a positive integer");
 }
 const controlRoot = resolve(controlRootArg);
 const variantRoot = resolve(variantRootArg);
@@ -17,8 +23,11 @@ const frozenCase = (kind) => ({
   "computed-dirty-read": "computed/dirty-read",
   "computed-dirty-unread": "computed/dirty-unread",
   "computed-equality": "computed/equality-suppression",
+  "computed-fanout": "computed/source-to-many",
   "effect-observed-write": "effect/observed-write",
   "effect-fanout": "effect/fanout",
+  "effect-dynamic": "effect/dynamic-dependencies",
+  "batch-two-writes": "batch/two-writes-one-reaction",
   "source-create": "source/create",
   "source-read": "source/read",
   "source-unobserved-write": "source/unobserved-write",
@@ -48,6 +57,7 @@ function runWorker(root, definition) {
     encoding: "utf8",
     windowsHide: true,
   });
+  if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`${definition.key} worker failed in ${root}: ${result.stderr}`);
   const parsed = JSON.parse(result.stdout);
   if (parsed.status !== "ok" || parsed.preflight !== "passed" || parsed.samples.length !== 7) {
@@ -59,7 +69,7 @@ function runWorker(root, definition) {
 
 const records = [];
 for (const definition of cases) {
-  for (let pair = 0; pair < 4; pair += 1) {
+  for (let pair = 0; pair < pairedProcessRounds; pair += 1) {
     const order = pair % 2 === 0 ? ["control", "variant"] : ["variant", "control"];
     const paired = {};
     for (const side of order) {
@@ -79,7 +89,7 @@ for (const definition of cases) {
   }
 }
 await writeFile(outputPath, `${JSON.stringify({
-  method: "four paired fresh-process diagnostics; three warmups and seven samples per process; frozen M1b iterations",
+  method: `${pairedProcessRounds} paired fresh-process diagnostics; three warmups and seven samples per process; frozen M1b iterations`,
   node: process.version,
   controlRoot,
   variantRoot,

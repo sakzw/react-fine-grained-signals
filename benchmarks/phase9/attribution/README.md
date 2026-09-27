@@ -118,3 +118,19 @@ These fresh-process diagnostics compare each temporary variant against unchanged
 | Same — fanout@64 | 16 | 0.905 (0.843–1.036) | 11/16 | [first](m14-effect.json), [repeat](m14-effect-repeat.json), [extended](m14-effect-repeat2.json), [final](m14-effect-repeat3.json) |
 
 The computed path rewrite did not show a stable dirty-read/equality result. The effect helper had a promising observed-write signal, but its signal-only and deep gzip entries exceeded the existing size budgets; the clean baseline passed those budgets. It was reverted. No full M1.4 matrix was run. `m14-paired-diagnostic.mjs` reproduces the serial, four-pair blocks using the frozen iterations file and worker; multiple `m14-*-repeat*.json` blocks provide the 8–16 pair totals above.
+
+## M1.4.1 promising candidate refinement
+
+These diagnostics compare the M1.4 effect helper and computed-dispatch candidates against unchanged current at `234634aedca02d30578126c49bb229464675f915`. Every process used the frozen `m1b-iterations.json`, three warmups, seven samples, and alternating control/variant order. The runner now accepts `--pairs=N` to extend the independent process-pair count; it retains the individual samples and each process median in the raw JSON. Ratios are **duration variant/control** (`<1` is faster), and throughput equivalent is the inverse of the median duration ratio. Do not pool worker samples across processes.
+
+The smallest effect code shape was the reconstructed named context helper. Its 24-pair primary and 8-pair secondary results are in [primary](m141-effect-helper-primary-24.json) and [secondary](m141-effect-helper-secondary-8.json). The initial four-pair reconstruction check is [here](m141-effect-reconstructed.json). An alternative that integrates isolation into `withTrackedGraph` has separate [primary](m141-effect-primary-24.json) and [secondary](m141-effect-secondary-8.json) records; it was slightly larger and was not the selected size shape. The computed-dispatch candidate's [24-pair primary](m141-computed-primary-24.json) and [8-pair secondary](m141-computed-secondary-8.json) records include dirty-read/equality and the dirty-unread/create/fanout guard workloads.
+
+Reproduce or extend one diagnostic serially:
+
+```sh
+node benchmarks/phase9/attribution/m14-paired-diagnostic.mjs \
+  . <candidate-root> benchmarks/phase9/attribution/local.json \
+  effect-observed-write@1 effect-fanout@16 effect-fanout@64 --pairs=24
+```
+
+The helper records raw paired durations, not an authoritative M1b comparison. M1.4.1 selected neither candidate; no combined candidate or final Phase 9 matrix was run. See [`implementation-phase9-m1.4.1.md`](../../../docs/implementation-phase9-m1.4.1.md) for the bundle-byte comparison and decision.

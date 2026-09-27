@@ -168,6 +168,7 @@ if (newestModification(join(repositoryRoot, "src")) > newestModification(distDir
 }
 
 const shouldUpdate = process.argv.includes("--update");
+const showExact = process.argv.includes("--exact");
 const outputRoot = mkdtempSync(join(tmpdir(), "ras-size-"));
 const budget = shouldUpdate
   ? {}
@@ -215,6 +216,7 @@ try {
     console.log(
       `${scenario.name.padEnd(12)} ${formatBytes(measured.gzip).padStart(9)} gzip  ${formatBytes(measured.brotli).padStart(9)} br  ${formatBytes(measured.raw).padStart(9)} raw${status}`,
     );
+    if (showExact) console.log(`${"".padEnd(12)} exact gzip: ${measured.gzip} bytes`);
     console.log(`${"".padEnd(12)} ${scenario.description}`);
   }
 

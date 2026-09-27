@@ -4,7 +4,7 @@
 
 Phase 9 determines whether the current implementation is ready for v0.2.0 and whether its performance is acceptable relative to the released v0.1.1 package, Alien Signals, and a pinned Vue reactivity implementation. It must distinguish release blockers, costs required by RFSG semantics, and opportunities for later optimization. npm publication is outside the completion gate; it may follow the frozen release candidate and additional dogfooding.
 
-Latest M1 status and the M1.3.1 causal-closure report are documented in [implementation-phase9-m1.3.1.md](implementation-phase9-m1.3.1.md). M1b, M1.2, and M1.3 artifacts remain frozen historical records.
+Latest M1 status is documented in [implementation-phase9-m1.4.1.md](implementation-phase9-m1.4.1.md), with the preceding investigation in [implementation-phase9-m1.3.1.md](implementation-phase9-m1.3.1.md). M1b, M1.2, and M1.3 artifacts remain frozen historical records.
 
 Phase 5 through Phase 8 remain frozen. Phase 9 is not a feature phase. During M0, make no production behavior changes and do not redesign `deepSignal`, scheduling, bare tracking, `ReadableInterop`, or cross-runtime semantics. Production continues to depend on `alien-signals/system`, not Alien Signals' high-level root API.
 
@@ -357,4 +357,4 @@ M1.2 selected the lower-risk split wrapper/node representation after the integra
 
 M1.3 preserved the public/runtime semantics and accepted one narrow computed-cache promotion fast path after isolated paired comparisons. It did not resolve every M1b regression: effect fan-out, equality suppression, source access, and some React paths remain below or near v0.1.1 parity. The full M1.3 results and remaining investigation areas are in [implementation-phase9-m1.3.md](implementation-phase9-m1.3.md); raw data are under `benchmarks/phase9/results/m1.3-2026-09-27-promotion-helper/`.
 
-M1.3.1 found no accepted narrow runtime optimization. M1.4 then tested computed-dispatch and effect-context structural candidates; the effect candidate failed the existing size budgets, and the computed/source designs did not meet the paired-evidence gate. No M1.4 production change was accepted and no final M1.4 matrix was run. A safe shared ordinary-read mode remains open; M2 is not ready. See [implementation-phase9-m1.4.md](implementation-phase9-m1.4.md) and the [M1.4 paired records](../benchmarks/phase9/attribution/README.md#m14-structural-prototypes).
+M1.4.1 refined the computed-dispatch and consolidated effect-context candidates, but neither met the repeatability gate. No production change was accepted and no final matrix was run. The source/read gap remains open for M1.4.2; do not begin M2 yet. See [implementation-phase9-m1.4.1.md](implementation-phase9-m1.4.1.md) and the [paired records](../benchmarks/phase9/attribution/README.md#m141-promising-candidate-refinement).
