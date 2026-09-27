@@ -280,6 +280,20 @@ function runtimeSummaries(table, definition) {
     const rounds = Array.from({ length: 8 }, (_, index) => (
       getRate(table, definition, runtime, index + 1)
     ));
-    return { runtime, summary: summarize(rounds) };
+    return { runtime, summary: summarizeAbsolute(rounds) };
   });
+}
+
+function summarizeAbsolute(values) {
+  const q1 = quantile(values, 0.25);
+  const q3 = quantile(values, 0.75);
+  return {
+    median: median(values),
+    q1,
+    q3,
+    iqr: q3 - q1,
+    min: Math.min(...values),
+    max: Math.max(...values),
+    values,
+  };
 }

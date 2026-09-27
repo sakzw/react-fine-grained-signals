@@ -103,23 +103,30 @@ if (kind === "one-source-many-effects") {
 
 if (kind === "deep-watched-leaves") {
   if (typeof api.deepSignal !== "function") throw new Error(`${runtimeId} does not provide RFSG deepSignal.`);
-  collect();
-  const heapBeforeBytes = process.memoryUsage().heapUsed;
-  let state = api.deepSignal({ leaves: Array.from({ length: count }, () => ({ value: 0 })) });
-  let runs = 0;
-  let stops = Array.from({ length: count }, (_, index) => api.effect(() => {
-    state.value.leaves[index].value;
-    runs += 1;
-  }));
-  collect();
-  const heapLiveBytes = process.memoryUsage().heapUsed;
-  if (runs !== count) throw new Error(`Expected ${count} watched leaf effects, got ${runs}.`);
+  const measurement = await (async () => {
+    collect();
+    const heapBeforeBytes = process.memoryUsage().heapUsed;
+    let state = api.deepSignal({ leaves: Array.from({ length: count }, () => ({ value: 0 })) });
+    let runs = 0;
+    let stops = Array.from({ length: count }, (_, index) => api.effect(() => {
+      state.value.leaves[index].value;
+      runs += 1;
+    }));
+    collect();
+    const heapLiveBytes = process.memoryUsage().heapUsed;
+    if (runs !== count) throw new Error(`Expected ${count} watched leaf effects, got ${runs}.`);
 
-  for (const stop of stops) api.dispose(stop);
-  state.value.leaves[0].value = 1;
-  if (runs !== count) throw new Error("Disposed watched-leaf effects still reacted to a leaf write.");
-  stops = null;
-  state = null;
+    for (const stop of stops) api.dispose(stop);
+    state.value.leaves[0].value = 1;
+    if (runs !== count) throw new Error("Disposed watched-leaf effects still reacted to a leaf write.");
+    stops = null;
+    state = null;
+    return { heapBeforeBytes, heapLiveBytes };
+  })();
+
+  // Leave the setup/disposal activation before measuring. V8 can keep dead
+  // locals from this hot scope alive until its frame returns, which otherwise
+  // makes the result depend on the runtime's proxy and closure layout.
   collect();
   const heapAfterDisposeBytes = process.memoryUsage().heapUsed;
   await writeJson({
@@ -135,11 +142,11 @@ if (kind === "deep-watched-leaves") {
       watchedLeaves: count,
       subscribersToSingleSource: 0,
     },
-    heapBeforeBytes,
-    heapLiveBytes,
+    heapBeforeBytes: measurement.heapBeforeBytes,
+    heapLiveBytes: measurement.heapLiveBytes,
     heapAfterDisposeBytes,
-    liveDeltaBytes: heapLiveBytes - heapBeforeBytes,
-    retainedDeltaBytes: heapAfterDisposeBytes - heapBeforeBytes,
+    liveDeltaBytes: measurement.heapLiveBytes - measurement.heapBeforeBytes,
+    retainedDeltaBytes: heapAfterDisposeBytes - measurement.heapBeforeBytes,
     disposedEffectsStopped: true,
     gcExposed: true,
   });
