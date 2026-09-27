@@ -24,7 +24,8 @@ class ForeignRenderDependency implements RenderDependency {
   }
 
   subscribeRender(listener: () => void): () => void {
-    return this.protocol.subscribe(() => listener()).unsubscribe;
+    const subscription = this.protocol.subscribe(() => listener());
+    return () => subscription.unsubscribe();
   }
 }
 

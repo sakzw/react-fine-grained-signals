@@ -411,6 +411,19 @@ export function createReactiveRuntime(): ReactiveRuntime {
     sharedInterop.renderCollector?.add(protocol, revision);
   }
 
+  function collectComponentRenderDependency(
+    node: SignalNode<unknown> | ComputedNode<unknown>,
+    revision: number,
+  ): void {
+    const localCollector = activeRenderCollector;
+    const sharedCollector = sharedInterop.renderCollector;
+    if (sharedCollector !== undefined && (sharedCollector as unknown) !== localCollector) {
+      publishForeignRenderRead(node.interop, revision);
+    } else {
+      localCollector?.add(node, revision);
+    }
+  }
+
   function unsubscribeGraphWatcher(watcher: RenderWatcherNode): void {
     watcher.active = false;
     watcher.scheduled = false;
@@ -934,15 +947,11 @@ export function createReactiveRuntime(): ReactiveRuntime {
       const reads = activeRenderReads;
       if (!reads.has(node)) reads.set(node, getRenderVersion(node));
       const value = node.flags & Dirty ? node.pendingValue : node.currentValue;
-      activeRenderCollector?.add(node, reads.get(node)!);
+      collectComponentRenderDependency(node, reads.get(node)!);
       return value;
     }
-    if (activeRenderCollector !== undefined) {
-      activeRenderCollector.add(node, getRenderVersion(node));
-      return node.flags & Dirty ? node.pendingValue : node.currentValue;
-    }
-    if (sharedInterop.renderCollector !== undefined) {
-      publishForeignRenderRead(node.interop, node.revision);
+    if (activeRenderCollector !== undefined || sharedInterop.renderCollector !== undefined) {
+      collectComponentRenderDependency(node, getRenderVersion(node));
       return node.flags & Dirty ? node.pendingValue : node.currentValue;
     }
     publishForeignGraphRead(node.interop, node.revision);
@@ -977,15 +986,10 @@ export function createReactiveRuntime(): ReactiveRuntime {
         if (activeRenderReads !== undefined && !activeRenderReads.has(node)) {
           activeRenderReads.set(node, getRenderVersion(node));
         }
-        if (activeRenderReads !== undefined) {
-          activeRenderCollector?.add(node, activeRenderReads.get(node)!);
-        } else if (activeRenderCollector !== undefined) {
-          activeRenderCollector.add(node, getRenderVersion(node));
-        } else if (sharedInterop.renderCollector !== undefined) {
-          publishForeignRenderRead(node.interop, node.revision);
-        }
-      } else if (sharedInterop.renderCollector !== undefined) {
-        publishForeignRenderRead(node.interop, node.revision);
+        collectComponentRenderDependency(
+          node,
+          activeRenderReads?.get(node) ?? getRenderVersion(node),
+        );
       }
       publishForeignGraphRead(node.interop, node.revision);
     }

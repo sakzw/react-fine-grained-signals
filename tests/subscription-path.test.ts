@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, effect, signal } from "../src/core/index.js";
 import { attachReadableInterop, getReadableInterop } from "../src/core/interop.js";
 import { subscribeReadableV1 } from "../src/core/readable-subscription.js";
+import { getForeignRenderDependency } from "../src/core/render-tracking.js";
 import type { ReadableInteropV1 } from "../src/core/interop.js";
 
 afterEach(() => vi.restoreAllMocks());
@@ -102,5 +103,28 @@ describe("ReadableInterop V1 subscription path", () => {
     const unsubscribe = subscribeReadableV1(readable, vi.fn());
     unsubscribe?.();
     expect(subscription.unsubscribeCount).toBe(1);
+  });
+
+  it("preserves the foreign render subscription receiver while returning its disposer", () => {
+    const subscriptions: Array<{ unsubscribeCount: number; unsubscribe(): void }> = [];
+    const protocol: ReadableInteropV1 = {
+      version: 1,
+      runtimeToken: {},
+      getRevision: () => 0,
+      subscribe: () => {
+        const subscription = {
+          unsubscribeCount: 0,
+          unsubscribe() { this.unsubscribeCount += 1; },
+          revision: 0,
+        };
+        subscriptions.push(subscription);
+        return subscription;
+      },
+    };
+    const foreignDependency = getForeignRenderDependency(protocol);
+
+    const unsubscribe = foreignDependency.subscribeRender(() => undefined);
+    unsubscribe();
+    expect(subscriptions[0]?.unsubscribeCount).toBe(1);
   });
 });

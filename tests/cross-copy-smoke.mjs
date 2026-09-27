@@ -354,11 +354,15 @@ try {
     const managedInner = copyB.signal("B inner");
     const managedOuterAfter = copyA.signal("A after");
     const managedCrossCopyRenders = [];
+    let managedOuterStore;
+    let managedInnerStore;
     function NestedManagedReader() {
       const outerScope = copies[0].runtime.useManagedSignals();
+      managedOuterStore = outerScope;
       try {
         const before = managedOuterBefore.value;
         const innerScope = copies[1].runtime.useManagedSignals();
+        managedInnerStore = innerScope;
         let inner;
         try {
           inner = managedInner.value;
@@ -379,16 +383,140 @@ try {
 
     render(React.createElement(NestedManagedReader));
     assert.equal(screen.getByLabelText("nested cross-copy managed").textContent, "A before/B inner/A after");
+    const outerVersionBeforeInnerWrite = managedOuterStore.getSnapshot();
+    const innerVersionBeforeInnerWrite = managedInnerStore.getSnapshot();
     await act(async () => {
       managedInner.value = "B updated";
     });
     assert.equal(screen.getByLabelText("nested cross-copy managed").textContent, "A before/B updated/A after");
     assert.equal(managedCrossCopyRenders.length, 2, "copy B's managed scope subscribes its foreign readable");
+    assert.equal(managedOuterStore.getSnapshot(), outerVersionBeforeInnerWrite, "copy A does not own copy B's inner readable");
+    assert.equal(managedInnerStore.getSnapshot(), innerVersionBeforeInnerWrite + 1);
+    const outerVersionBeforeRestoredRead = managedOuterStore.getSnapshot();
+    const innerVersionBeforeRestoredRead = managedInnerStore.getSnapshot();
     await act(async () => {
       managedOuterAfter.value = "A after updated";
     });
     assert.equal(screen.getByLabelText("nested cross-copy managed").textContent, "A before/B updated/A after updated");
     assert.equal(managedCrossCopyRenders.length, 3, "copy A's collector is restored after copy B finishes");
+    assert.equal(managedOuterStore.getSnapshot(), outerVersionBeforeRestoredRead + 1);
+    assert.equal(managedInnerStore.getSnapshot(), innerVersionBeforeRestoredRead, "copy B no longer owns reads after its scope finishes");
+
+    const aSignalInsideB = copyA.signal("A inside B before");
+    const cSignalInsideB = copyC.signal("C inside B before");
+    let aStoreForNestedRead;
+    let bStoreForNestedRead;
+    function NestedForeignOwnerReader() {
+      const outerScope = copies[0].runtime.useManagedSignals();
+      aStoreForNestedRead = outerScope;
+      try {
+        const innerScope = copies[1].runtime.useManagedSignals();
+        bStoreForNestedRead = innerScope;
+        let value;
+        try {
+          value = `${aSignalInsideB.value}/${cSignalInsideB.value}`;
+        } finally {
+          innerScope.finish();
+        }
+        return React.createElement("output", { "aria-label": "A readable inside B scope" }, value);
+      } finally {
+        outerScope.finish();
+      }
+    }
+
+    render(React.createElement(NestedForeignOwnerReader));
+    assert.equal(screen.getByLabelText("A readable inside B scope").textContent, "A inside B before/C inside B before");
+    const aStoreVersionBefore = aStoreForNestedRead.getSnapshot();
+    const bStoreVersionBefore = bStoreForNestedRead.getSnapshot();
+    await act(async () => {
+      aSignalInsideB.value = "A inside B after";
+    });
+    assert.equal(screen.getByLabelText("A readable inside B scope").textContent, "A inside B after/C inside B before");
+    assert.equal(aStoreForNestedRead.getSnapshot(), aStoreVersionBefore, "the outer A store does not own a read inside B's lexical scope");
+    assert.equal(bStoreForNestedRead.getSnapshot(), bStoreVersionBefore + 1, "the inner B store owns A's readable inside B's lexical scope");
+    const aVersionBeforeCWrite = aStoreForNestedRead.getSnapshot();
+    const bVersionBeforeCWrite = bStoreForNestedRead.getSnapshot();
+    await act(async () => {
+      cSignalInsideB.value = "C inside B after";
+    });
+    assert.equal(screen.getByLabelText("A readable inside B scope").textContent, "A inside B after/C inside B after");
+    assert.equal(aStoreForNestedRead.getSnapshot(), aVersionBeforeCWrite, "the outer A store does not own copy C's read inside B");
+    assert.equal(bStoreForNestedRead.getSnapshot(), bVersionBeforeCWrite + 1, "the lexical B scope owns copy C's readable too");
+
+    const computedSourceA = copyA.signal(1);
+    const computedA = copyA.computed(() => computedSourceA.value % 2);
+    let computedAStore;
+    let computedBStore;
+    function NestedComputedOwnerReader() {
+      const outerScope = copies[0].runtime.useManagedSignals();
+      computedAStore = outerScope;
+      try {
+        const innerScope = copies[1].runtime.useManagedSignals();
+        computedBStore = innerScope;
+        let value;
+        try {
+          value = computedA.value;
+        } finally {
+          innerScope.finish();
+        }
+        return React.createElement("output", { "aria-label": "A computed inside B scope" }, value);
+      } finally {
+        outerScope.finish();
+      }
+    }
+
+    render(React.createElement(NestedComputedOwnerReader));
+    assert.equal(screen.getByLabelText("A computed inside B scope").textContent, "1");
+    const computedAVersionBeforeEqualWrite = computedAStore.getSnapshot();
+    const computedBVersionBeforeEqualWrite = computedBStore.getSnapshot();
+    await act(async () => {
+      computedSourceA.value = 3;
+    });
+    assert.equal(computedAStore.getSnapshot(), computedAVersionBeforeEqualWrite, "computed internal source reads do not leak to A's outer store");
+    assert.equal(computedBStore.getSnapshot(), computedBVersionBeforeEqualWrite, "B subscribes to the computed boundary and keeps Object.is equality suppression");
+    await act(async () => {
+      computedSourceA.value = 4;
+    });
+    assert.equal(screen.getByLabelText("A computed inside B scope").textContent, "0");
+    assert.equal(computedAStore.getSnapshot(), computedAVersionBeforeEqualWrite);
+    assert.equal(computedBStore.getSnapshot(), computedBVersionBeforeEqualWrite + 1, "the B store owns the A computed boundary");
+
+    const deepStateA = copyA.deepSignal({ user: { name: "Ada", age: 36 } });
+    let deepAStore;
+    let deepBStore;
+    function NestedDeepOwnerReader() {
+      const outerScope = copies[0].runtime.useManagedSignals();
+      deepAStore = outerScope;
+      try {
+        const innerScope = copies[1].runtime.useManagedSignals();
+        deepBStore = innerScope;
+        let name;
+        try {
+          name = deepStateA.value.user.name;
+        } finally {
+          innerScope.finish();
+        }
+        return React.createElement("output", { "aria-label": "A deep leaf inside B scope" }, name);
+      } finally {
+        outerScope.finish();
+      }
+    }
+
+    render(React.createElement(NestedDeepOwnerReader));
+    assert.equal(screen.getByLabelText("A deep leaf inside B scope").textContent, "Ada");
+    const deepAVersionBeforeSiblingWrite = deepAStore.getSnapshot();
+    const deepBVersionBeforeSiblingWrite = deepBStore.getSnapshot();
+    await act(async () => {
+      deepStateA.value.user.age = 37;
+    });
+    assert.equal(deepAStore.getSnapshot(), deepAVersionBeforeSiblingWrite);
+    assert.equal(deepBStore.getSnapshot(), deepBVersionBeforeSiblingWrite, "unread sibling deep properties stay isolated");
+    await act(async () => {
+      deepStateA.value.user.name = "Grace";
+    });
+    assert.equal(screen.getByLabelText("A deep leaf inside B scope").textContent, "Grace");
+    assert.equal(deepAStore.getSnapshot(), deepAVersionBeforeSiblingWrite);
+    assert.equal(deepBStore.getSnapshot(), deepBVersionBeforeSiblingWrite + 1, "the B store owns the A deep-property dependency");
 
     const computedSource = copyB.signal("before");
     const foreignComputed = copyB.computed(() => computedSource.value.toUpperCase());

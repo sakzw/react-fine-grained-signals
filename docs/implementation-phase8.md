@@ -202,3 +202,39 @@ After the runtime build, `node --expose-gc benchmarks/react-render.mjs 20 10` co
 **Outcome S confirmed.** The shared stack replaced the duplicated local pointer and close loop, `RenderStore` no longer stores policy, one store implementation remains, exact local collector restoration remains separate from the cross-copy channel, and actual nested cross-copy managed React use passed. Managed layout no longer performs bare recovery. Size is neutral/slightly smaller and the directional benchmark shows no meaningful regression. The M0 contract tests and all required validation remain green.
 
 Phase 8 is **not frozen**. M1 is complete; M2 has not started. No next milestone is undertaken by this result.
+
+## M2 — cross-copy render ownership hardening
+
+M2 keeps the accepted M0 public boundary contract and M1 scope architecture. `SharedInteropContextV1.renderScope` remains the single arbitration authority; this change only routes a render dependency to the collector owned by the lexically active shared scope.
+
+### Reproduction and ownership evidence
+
+- Added a genuine duplicate-package React case using separately bundled copies A, B, and C with the same external React installation. It opens A's managed scope, opens B's managed scope, and reads both an A signal and a C signal inside B.
+- Before changing production code, the A-signal ownership assertion failed: after writing the A signal, A's store snapshot revision advanced by one while B's did not. This reproduced the suspected routing bug directly, independent of DOM rerender counts.
+- The gap predates M1. The same `readSignalValue()` collector precedence is present in the M0 baseline (`0727e54`), and M1 did not change `src/core/reactive-runtime.ts`; M1's stronger nested-scope test exposed the missing ownership case rather than introducing it.
+- After the fix, a write to the A signal read in B's scope leaves A's store revision unchanged and advances B's by one. A C signal read in that same scope also notifies B only. The existing B-readable-inside-B case remains green.
+- After B finishes, a subsequent A read is again owned by A: the A store advances for that read and the B store does not.
+
+### Routing rule and coverage
+
+- Added the private `collectComponentRenderDependency()` decision point. If the shared collector differs from this copy's local collector, the lexical top scope owns the read through ReadableInterop V1. Otherwise the local collector receives the `RenderDependency` directly. With no collector, existing graph-read behavior is unchanged.
+- Same-copy reads still use the direct local dependency path. The identity check adds no read-time allocation or protocol subscription to that path; protocol adaptation occurs only when the foreign lexical collector receives a read.
+- Signals are routed to B when an A signal is read inside B. A-local computeds are routed as a single computed boundary: an equal computed result does not notify either store, a changed result notifies B once, and the A outer store never subscribes to the computed's internal source reads.
+- Deep-signal property reads follow the same generic version-signal route. B owns the A deep `user.name` dependency; changing `age` does not notify it, while changing `name` notifies B once.
+- Existing foreign signal/computed/deepSignal, JSX host binding, `useSignalValue`, and cross-copy runtime coverage remains green. Existing same-copy three-level nesting, mixed managed/bare, `untracked()`/`peek()`, computed speculative/error/equality behavior, concurrent, and leaf-isolation tests also remain green.
+- Hardened `ForeignRenderDependency.subscribeRender()` to close over the subscription and call `subscription.unsubscribe()`, matching the existing direct V1 helper. A focused test verifies the method receiver is preserved.
+
+### Size and performance sanity
+
+`pnpm size` passed without budget changes. Compared with M1, signal-only changed 5.83 → 5.82 kB gzip, core 5.87 → 5.86 kB, core+hooks remained 7.19 kB, deep changed 10.25 → 10.24 kB, index-full 11.41 → 11.40 kB, JSX runtime 8.98 → 8.97 kB, and utils 7.12 → 7.11 kB. No substantial bundle increase occurred.
+
+After the runtime build, `node --expose-gc benchmarks/react-render.mjs 20 10` completed its render-count assertions on Node v24.21.0 / Windows x64 / AMD Ryzen 7 PRO 6850U. `signals` measured 4,625 updates/s (2.162 ms median); `signals-managed` measured 4,537 updates/s (2.204 ms median), compared with M1's 4,221 and 3,703 updates/s. This small benchmark has run variance and is only a sanity check; it shows no material same-copy regression and does not establish an improvement.
+
+### M2 validation and decision
+
+- The focused runtime set (subscription path, runtime, managed/render tracking, deep signal, computed errors, concurrent, SSR) passed: 9 files / 167 tests.
+- Genuine `node tests/cross-copy-smoke.mjs` passed with actual independently bundled A/B/C package copies, direct store ownership assertions, foreign-readable behavior, and React hooks.
+- `pnpm typecheck`, `pnpm lint`, `pnpm test` (runtime 20 files / 280 tests; transform 3 files / 221 passed, 3 skipped), `pnpm build`, `pnpm test:phase4-duplicate`, `pnpm test:consumer`, `pnpm size`, and `pnpm test:browser` all passed. Browser suite: 27 passed across Chromium, Firefox, WebKit, production build, and React Router. Lint reported the repository's existing non-fatal warnings; no warning was added for the routing helper or new tests.
+- The M1 architecture remains intact: `currentStore`, `closeDisallowedCurrentStores()`, and `RenderStore.managed` were not restored; graph collection order and ReadableInterop V1 were not redesigned; no public API or deep-signal-specific ownership state was added.
+
+**M2 is complete. Phase 8 is ready for final stabilization/freeze.** This records readiness only; no subsequent phase is started here.
