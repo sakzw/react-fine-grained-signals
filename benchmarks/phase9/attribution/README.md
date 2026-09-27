@@ -80,3 +80,24 @@ These are fresh-process paired diagnostics against unchanged current at `b4fc12a
 | Same helper change | `computed/source-to-many@64` | 1.200; 1.077–1.335; 6/8 faster | Repeatable improvement at this size. [First](m13-promotion-helper-fanout-64.json), [repeat](m13-promotion-helper-repeat-fanout-64.json) |
 
 The depth-zero guard preserves graph/render isolation but did not recover fan-out. The caller-only promotion guard gave a dirty-read gain but harmed equality, so it was discarded. The accepted helper change removes a redundant eligibility check only after that check has already succeeded; revision validation is unchanged. Wide spreads in other computed workloads remain visible in the raw values and are not converted into a causal percentage. The final full M1.3 matrix is stored independently in [`../results/m1.3-2026-09-27-promotion-helper/`](../results/m1.3-2026-09-27-promotion-helper/).
+
+## M1.3.1 hot-path closure
+
+These fresh-process paired diagnostics compare one temporary change at a time against unchanged current at `fb14d01ad990d56cf920e8350c015175ce3897a4`. Every worker used the frozen M1b iteration count, three warmups, seven samples, and four serial process pairs in alternating order. Ratios are variant/control throughput. All worker preflights and workload assertions passed. The temporary runtime changes were confined to a disposable worktree and none was retained.
+
+| Temporary candidate | Workload | Median ratio (Q1–Q3) | Faster pairs | Decision |
+| --- | --- | ---: | ---: | --- |
+| Enqueue leaf effects directly, bypassing the general notification loop | effect/fanout@1 | 1.071 (1.001–1.149) | 3/4 | Inconclusive; spread is broad. [Raw](m131-notify-leaf-1.json) |
+| Same candidate | effect/fanout@16 | 1.017 (0.942–1.087) | 2/4 | Rejected; no repeatable gain. [Raw](m131-notify-leaf-16.json) |
+| Same candidate | effect/fanout@64 | 1.041 (0.980–1.122) | 2/4 | Rejected; no repeatable gain. [Raw](m131-notify-leaf-64.json) |
+| Return after linking a source dependency, skipping remaining computed/external classification checks | effect/fanout@1 | 1.046 (0.952–1.116) | 2/4 | Inconclusive. [Raw](m131-track-source-1.json) |
+| Same candidate | effect/fanout@16 | 0.959 (0.940–0.979) | 1/4 | Rejected; slower direction. [Raw](m131-track-source-16.json) |
+| Same candidate | effect/fanout@64 | 0.966 (0.904–1.131) | 2/4 | Rejected; no supported gain. [Raw](m131-track-source-64.json) |
+| Return a clean ordinary read after foreign graph publication, avoiding `readSignalCore`/`track` | source/read@1 | 1.024 (0.979–1.087) | 2/4 | Rejected; no repeatable read gain. [Raw](m131-clean-read-read.json) |
+| Same candidate | source/write-read@1 | 0.932 (0.903–0.983) | 1/4 | Rejected; slower direction. [Raw](m131-clean-read-write-read.json) |
+| Same candidate | source/unobserved-write@1 | 0.989 (0.929–1.004) | 1/4 | No supported adjacent-workload gain. [Raw](m131-clean-read-unobserved-write.json) |
+| Inline foreign graph collector lookup/publication at the ordinary-read caller | source/read@1 | 1.013 (0.955–1.062) | 2/4 | Rejected; no repeatable read gain. [Raw](m131-inline-foreign-check-read.json) |
+| Same candidate | source/write-read@1 | 0.992 (0.926–1.012) | 2/4 | No directional change. [Raw](m131-inline-foreign-check-write-read.json) |
+| Same candidate | source/unobserved-write@1 | 1.054 (0.996–1.090) | 3/4 | Partial signal only; the target read did not improve repeatably. [Raw](m131-inline-foreign-check-unobserved-write.json) |
+
+The queue-leaf and track-classification variants did not improve fanout at 16/64. The two source/read variants did not produce a repeatable target gain; the clean-read bypass also regressed write-read. No production change passed the paired evidence gate, so the full M1.3 matrix was not rerun. See [`../../../docs/implementation-phase9-m1.3.1.md`](../../../docs/implementation-phase9-m1.3.1.md) for the path maps and closure decision.

@@ -46,7 +46,7 @@ The primary ratio is the median of paired per-round process medians (`current / 
 | Case | M1b ratio | M1.2 ratio | M1.2 faster rounds | M1.2 IQR | Reading |
 | --- | ---: | ---: | ---: | ---: | --- |
 | `source/create@1` | 0.198 | 0.606 | 1/8 | 0.065 | Recovered about 3.1× relative throughput; still 39% below v0.1.1. |
-| `source/read@1` | 0.698 | 0.645 | 1/8 | 0.067 | Small recovery; still 35% below. |
+| `source/read@1` | 0.698 | 0.645 | 1/8 | 0.067 | Candidate C itself was neutral in its paired current-control diagnostic (1.004×, 3/4 faster); the final M1.2 ratio remained materially below parity. The change from M1b is not attributable to Candidate C. |
 | `source/unobserved-write@1` | 0.807 | 0.879 | 2/8 | 0.078 | Improved relative to M1b; remains below parity. |
 | `source/write-read@1` | 0.751 | 0.886 | 3/8 | 0.389 | Improved relative to M1b; spread is wide and it remains below parity. |
 | `computed/create@1` | 0.581 | 1.624 | 7/8 | 0.619 | Large recovery; improvement direction is repeatable, magnitude varies. |

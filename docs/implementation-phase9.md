@@ -4,7 +4,7 @@
 
 Phase 9 determines whether the current implementation is ready for v0.2.0 and whether its performance is acceptable relative to the released v0.1.1 package, Alien Signals, and a pinned Vue reactivity implementation. It must distinguish release blockers, costs required by RFSG semantics, and opportunities for later optimization. npm publication is outside the completion gate; it may follow the frozen release candidate and additional dogfooding.
 
-Latest M1 status and the M1.3 causal/measurement report are documented in [implementation-phase9-m1.3.md](implementation-phase9-m1.3.md). M1b and M1.2 artifacts remain frozen historical records.
+Latest M1 status and the M1.3.1 causal-closure report are documented in [implementation-phase9-m1.3.1.md](implementation-phase9-m1.3.1.md). M1b, M1.2, and M1.3 artifacts remain frozen historical records.
 
 Phase 5 through Phase 8 remain frozen. Phase 9 is not a feature phase. During M0, make no production behavior changes and do not redesign `deepSignal`, scheduling, bare tracking, `ReadableInterop`, or cross-runtime semantics. Production continues to depend on `alien-signals/system`, not Alien Signals' high-level root API.
 
@@ -340,10 +340,10 @@ The corrected `deep-watched-leaves` worker returned the expected one-root/1,000-
 | P1 — must fix before v0.2 | No semantics-preserving performance patch has been proven necessary as a release gate. `source/create` remains a severe open performance risk with proven expensive registration work; M1b ratios alone do not force a release block. | No P1 runtime patch is assigned. Keep the risk visible for release decisions. |
 | P2 — targeted hardening | Worker-frame retention and analyzer presentation were tooling defects; M1.1 fixed them. This milestone adds reproducible paired diagnostic records and closes their causal interpretation. | Keep raw M1b immutable; preserve the corrected allocation scope and diagnostic artifact. |
 | P3 — accepted semantic requirements | Identity/brand, node resolution, foreign graph capture, render/speculative isolation, revision safety, lazy computed and equality behavior, cleanup, and synchronous effect semantics are required. The full throughput gaps are not classified as required costs. | Preserve behavior; test any implementation replacement against the listed contracts. |
-| P4 — M2 optimization | One guarded `withoutAllRenderCollection` fast path is admitted for implementation and paired measurement. Remaining source creation and computed findings are research targets only; no source/read/write or computed patch is admitted. | Implement only the exact guard above, then benchmark and run the required focused regressions. Do not redesign deepSignal or replace Alien's shared edges. |
+| P4 — future optimization | M1.3.1 did not find a narrow, repeatably beneficial fan-out or source/read change. Further performance work is optional and should start only with a new, concrete hypothesis; no runtime patch is admitted. | Proceed with M2 release hardening. Preserve the remaining performance gaps as risks; do not treat them as proven unavoidable semantic costs. |
 | P5 — measurement-only | Original deepSignal retained-heap result was contaminated by setup-frame locals; corrected worker no longer reproduces it. | Treat as a measurement artifact, not a product leak or threshold. |
 
-M1.1b is closed. The single M2 admission is recorded above; implementation is outside this milestone.
+M1.1b is closed. M1.3.1 closes the focused hot-path investigation without a production runtime patch; M2 implementation remains a separate milestone.
 
 #### M1.2-0 — Reference architecture study
 
@@ -351,10 +351,10 @@ The read-only comparison of Alien Signals 3.2.1, the pinned Vue 3.6 reactivity i
 
 ### M1.2 — Runtime representation optimization
 
-M1.2 selected the lower-risk split wrapper/node representation after the integrated Candidate A failed existing runtime-surface checks. Candidate C removed the readable-to-node `WeakMap` and per-readable protocol closures while preserving the public wrapper, node, frozen protocol object, and `WeakSet` signal identity. Its final eight-round run materially improved source creation and computed creation; source reads recovered slightly, computed dirty-unread remained faster than v0.1.1, and effect fan-out at 16/64 remains a repeatable regression requiring focused M2 investigation. No effect-scope fast path passed its paired benefit gate. The full experiment, validation, allocation and bundle results, and per-case M1b comparison are in [`implementation-phase9-m1.2.md`](implementation-phase9-m1.2.md). M1.2 does not start M2.
+M1.2 selected the lower-risk split wrapper/node representation after the integrated Candidate A failed existing runtime-surface checks. Candidate C removed the readable-to-node `WeakMap` and per-readable protocol closures while preserving the public wrapper, node, frozen protocol object, and `WeakSet` signal identity. Its final eight-round run materially improved source creation and computed creation; the source/read movement was not attributable to Candidate C, whose paired candidate/control result was neutral. Computed dirty-unread remained faster than v0.1.1, and effect fan-out at 16/64 remained a repeatable regression. M1.3.1 later tested narrow queue and source-read hypotheses but found no repeatably beneficial safe change. The full M1.2 experiment, validation, allocation and bundle results, and per-case M1b comparison are in [`implementation-phase9-m1.2.md`](implementation-phase9-m1.2.md).
 
 ### M1.3 — Targeted hot-path validation
 
 M1.3 preserved the public/runtime semantics and accepted one narrow computed-cache promotion fast path after isolated paired comparisons. It did not resolve every M1b regression: effect fan-out, equality suppression, source access, and some React paths remain below or near v0.1.1 parity. The full M1.3 results and remaining investigation areas are in [implementation-phase9-m1.3.md](implementation-phase9-m1.3.md); raw data are under `benchmarks/phase9/results/m1.3-2026-09-27-promotion-helper/`.
 
-M1.3 is complete and does not start M2.
+M1.3.1 is complete with no production runtime changes. It recommends proceeding to M2 release hardening; see [implementation-phase9-m1.3.1.md](implementation-phase9-m1.3.1.md).
