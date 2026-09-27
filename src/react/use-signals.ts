@@ -22,42 +22,15 @@ const useIsomorphicLayoutEffect =
   typeof window === "undefined" ? useEffect : useLayoutEffect;
 const resolvedPromise = Promise.resolve();
 
-/**
- * Module-global state backing the managed/best-effort render-scope
- * boundary. At most one `RenderStore` is "current" at a time: a component's
- * `.start()` (called at the top of `useSignalTrackingImplementation`, before it
- * reads any signals) opens it, and closing it is what stops later `.value`
- * reads from being attributed to it — every read after a close belongs to
- * whichever scope opens next, not a leftover one from earlier in the render
- * pass.
- *
- * A scope is closed by whichever of these three paths reaches it first:
- *
- *  1. `start()`'s own pre-emptive close (see `shouldCloseCurrentScope`
- *     below) — the next component's `start()` finds a still-open scope
- *     that isn't a legitimate managed/managed nesting and force-closes it
- *     before opening its own, so a scope that outlives its owner's render
- *     can't leak reads into a sibling or the next component down.
- *  2. The commit-phase layout effect (`useIsomorphicLayoutEffect` in
- *     `useSignalTrackingImplementation`) — the normal, on-time close: the owning
- *     component's own scope, if nothing already closed it, is finished
- *     right before `store.commit()` subscribes to whatever it read.
- *  3. The microtask scheduled by `ensureFinalCleanup` — the fallback for an
- *     unmanaged (`useSignalTracking()`) scope that reaches neither path above, for
- *     example a component that reads signals during render but then
- *     throws, suspends, or is otherwise abandoned before committing.
- *     Managed scopes (`useManagedSignals()`) opt out of this fallback (see
- *     the `!managed` guard in `useSignalTrackingImplementation`) because their
- *     owner is contractually responsible for calling `finish()`
- *     itself, synchronously, before returning.
- */
-let currentStore: RenderStore | undefined;
+/** Coalesces only the bare hook's best-effort trailing cleanup microtask. */
 let finalCleanupScheduled = false;
 
+type RenderScopePolicy = "managed" | "bare";
+
 /**
- * The nesting rule for path 1 above: a still-open scope is left alone only
- * when both it and the incoming `next` scope are managed. A managed scope's
- * owner is contractually responsible for closing it itself, so two managed
+ * A still-open scope is left alone only when both it and the incoming `next`
+ * scope are managed. A managed scope's owner is contractually responsible
+ * for closing it itself, so two managed
  * scopes overlapping is tolerated as a transient nesting rather than treated
  * as one of them having been abandoned. Anything else overlapping a
  * still-open scope — `next` is unmanaged, or the still-open scope itself is
@@ -65,35 +38,27 @@ let finalCleanupScheduled = false;
  * force-closed before `next` starts.
  */
 function shouldCloseCurrentScope(
-  next: { managed: boolean },
+  next: RenderScopePolicy,
   current: { managed: boolean },
 ): boolean {
-  return !next.managed || !current.managed;
+  return next === "bare" || !current.managed;
 }
 
-function closeDisallowedCurrentStores(next: { managed: boolean }): void {
-  let current = currentStore;
-  while (current !== undefined && shouldCloseCurrentScope(next, current)) {
-    current.finish();
-    const following = currentStore;
-    if (following === current) return;
-    current = following;
-  }
-}
-
-function cleanupTrailingStore(): void {
+/** Close only a bare top scope; managed scopes own a synchronous `finish()`. */
+function cleanupTrailingBareScope(): void {
   finalCleanupScheduled = false;
-  getSharedInteropContext().renderScope?.finish();
+  const scope = getSharedInteropContext().renderScope;
+  if (scope !== undefined && !scope.managed) scope.finish();
 }
 
 function ensureFinalCleanup(): void {
   if (finalCleanupScheduled) return;
   finalCleanupScheduled = true;
-  void resolvedPromise.then(cleanupTrailingStore);
+  // Unlike subscribe()'s disposal microtask, this closes abandoned bare scopes.
+  void resolvedPromise.then(cleanupTrailingBareScope);
 }
 
 class RenderStore implements RenderCollector {
-  readonly managed: boolean;
   readonly #reactListeners = new Set<() => void>();
   #dependencySubscriptions = new Map<RenderDependency, () => void>();
   // Both are cleared back to `undefined` rather than left absent — that is how
@@ -104,10 +69,6 @@ class RenderStore implements RenderCollector {
   #disposeGeneration = 0;
   #version = 0;
 
-  constructor(managed: boolean) {
-    this.managed = managed;
-  }
-
   readonly subscribe = (listener: () => void): (() => void) => {
     this.#disposeGeneration += 1;
     this.#reactListeners.add(listener);
@@ -117,6 +78,8 @@ class RenderStore implements RenderCollector {
       if (this.#reactListeners.size !== 0) return;
 
       const generation = ++this.#disposeGeneration;
+      // This only preserves dependencies across React's
+      // unsubscribe/resubscribe replay; bare-scope recovery is separate.
       void resolvedPromise.then(() => {
         if (
           generation === this.#disposeGeneration &&
@@ -143,51 +106,35 @@ class RenderStore implements RenderCollector {
     }
   }
 
-  start(): void {
-    // Close this store's own still-open scope first. `shouldCloseCurrentScope`
-    // deliberately tolerates managed/managed overlap as legitimate nesting,
-    // but legitimate nesting is always between *distinct* store instances —
-    // each component owns its own `useRef` slot, so a store can never nest
-    // inside itself. A self-overlap therefore always means the previous scope
-    // was abandoned (e.g. the commit-phase layout effect threw between two
-    // `start()` calls, reachable in dev on a hook-order violation). Without
-    // this, `previousCollector`/`previousStore` would both capture `this`, and
-    // the eventual `finish()` would restore the collector *to this store* —
-    // leaving `activeRenderCollector` permanently non-undefined, so
-    // `deepSignal`'s `track()` stops short-circuiting and allocates a version
-    // signal for every property read anywhere in the app for the rest of the
-    // page's life.
+  start(policy: RenderScopePolicy): void {
+    // A store must never restore its own collector as its parent. Managed
+    // nesting is only valid between distinct component/custom-hook stores.
     if (this.#finishCollection !== undefined) this.finish();
-    // See `shouldCloseCurrentScope` above for the nesting rule this enforces.
-    closeDisallowedCurrentStores(this);
+
+    // The shared interop scope is the single arbitration authority for both
+    // same-copy and duplicate-package boundaries.
     const sharedContext = getSharedInteropContext();
     while (
       sharedContext.renderScope !== undefined &&
-      shouldCloseCurrentScope(this, sharedContext.renderScope)
+      shouldCloseCurrentScope(policy, sharedContext.renderScope)
     ) {
       sharedContext.renderScope.finish();
     }
-    const previousStore = currentStore;
+
     this.#pendingDependencies = new Map();
     const previousCollector = setActiveRenderCollector(this);
     let scopeActive = true;
     const sharedScope: InteropRenderScopeV1 = {
       token: {},
-      managed: this.managed,
+      managed: policy === "managed",
       isActive: () => scopeActive,
       finish: () => this.finish(),
     };
     const restoreSharedScope = pushInteropRenderScope(sharedScope, this);
-    // Tracks the active collector across the module, not a scoping mistake.
-    // oxlint-disable-next-line typescript/no-this-alias
-    currentStore = this;
     this.#finishCollection = () => {
       scopeActive = false;
       restoreSharedScope();
       setActiveRenderCollector(previousCollector);
-      if (currentStore === this) {
-        currentStore = previousStore?.isScopeActive() ? previousStore : undefined;
-      }
     };
   }
 
@@ -260,16 +207,22 @@ class RenderStore implements RenderCollector {
  * Makes the component reactive to signals whose `.value` is read during render.
  * Call this as the component's first hook and before those reads.
  */
-function useSignalTrackingImplementation(managed: boolean): RenderStore {
-  if (!managed) ensureFinalCleanup();
+function useSignalTrackingImplementation(policy: RenderScopePolicy): RenderStore {
+  if (policy === "bare") ensureFinalCleanup();
   const storeRef = useRef<RenderStore | undefined>(undefined);
-  if (storeRef.current === undefined) storeRef.current = new RenderStore(managed);
+  if (storeRef.current === undefined) storeRef.current = new RenderStore();
   const store = storeRef.current;
 
   useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-  store.start();
+  store.start(policy);
   useIsomorphicLayoutEffect(() => {
-    cleanupTrailingStore();
+    if (policy === "bare") {
+      cleanupTrailingBareScope();
+    } else if (store.isScopeActive()) {
+      // The synchronous finally is the managed contract. Close only this
+      // store as a last-resort guard if a manual caller forgot to finish().
+      store.finish();
+    }
     store.commit();
   });
   return store;
@@ -289,7 +242,7 @@ function useSignalTrackingImplementation(managed: boolean): RenderStore {
  * docs/design/use-signals-boundary-design.md.
  */
 export function useSignalTracking(): void {
-  useSignalTrackingImplementation(false);
+  useSignalTrackingImplementation("bare");
 }
 
 /** The render-scope handle consumed by the source transform runtime. */
@@ -299,5 +252,5 @@ export interface ManagedSignalsStore {
 
 /** Starts a managed render scope that must be closed synchronously with `finish()`. */
 export function useManagedSignals(): ManagedSignalsStore {
-  return useSignalTrackingImplementation(true);
+  return useSignalTrackingImplementation("managed");
 }

@@ -15,6 +15,7 @@ try {
       config: false,
       entry: {
         index: join(repositoryRoot, "src/index.ts"),
+        runtime: join(repositoryRoot, "src/runtime.ts"),
         "jsx-runtime": join(repositoryRoot, "src/jsx-runtime.ts"),
         "interop-test": join(repositoryRoot, "tests/fixtures/cross-copy-interop-entry.ts"),
       },
@@ -36,6 +37,7 @@ try {
     }
     copies.push({
       api: await import(pathToFileURL(join(outDir, "index.js")).href),
+      runtime: await import(pathToFileURL(join(outDir, "runtime.js")).href),
       jsx: await import(pathToFileURL(join(outDir, "jsx-runtime.js")).href),
       interop: await import(pathToFileURL(join(outDir, "interop-test.js")).href),
     });
@@ -347,6 +349,46 @@ try {
       trackedState.value.profile.name = "after unmount";
     });
     assert.equal(deepRenders.length, deepRenderCount + 2, "unmount releases the public cross-copy deep subscription");
+
+    const managedOuterBefore = copyA.signal("A before");
+    const managedInner = copyB.signal("B inner");
+    const managedOuterAfter = copyA.signal("A after");
+    const managedCrossCopyRenders = [];
+    function NestedManagedReader() {
+      const outerScope = copies[0].runtime.useManagedSignals();
+      try {
+        const before = managedOuterBefore.value;
+        const innerScope = copies[1].runtime.useManagedSignals();
+        let inner;
+        try {
+          inner = managedInner.value;
+        } finally {
+          innerScope.finish();
+        }
+        const after = managedOuterAfter.value;
+        managedCrossCopyRenders.push(1);
+        return React.createElement(
+          "output",
+          { "aria-label": "nested cross-copy managed" },
+          `${before}/${inner}/${after}`,
+        );
+      } finally {
+        outerScope.finish();
+      }
+    }
+
+    render(React.createElement(NestedManagedReader));
+    assert.equal(screen.getByLabelText("nested cross-copy managed").textContent, "A before/B inner/A after");
+    await act(async () => {
+      managedInner.value = "B updated";
+    });
+    assert.equal(screen.getByLabelText("nested cross-copy managed").textContent, "A before/B updated/A after");
+    assert.equal(managedCrossCopyRenders.length, 2, "copy B's managed scope subscribes its foreign readable");
+    await act(async () => {
+      managedOuterAfter.value = "A after updated";
+    });
+    assert.equal(screen.getByLabelText("nested cross-copy managed").textContent, "A before/B updated/A after updated");
+    assert.equal(managedCrossCopyRenders.length, 3, "copy A's collector is restored after copy B finishes");
 
     const computedSource = copyB.signal("before");
     const foreignComputed = copyB.computed(() => computedSource.value.toUpperCase());

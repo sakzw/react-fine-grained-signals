@@ -142,3 +142,63 @@ M0 validates the boundary contract and recommends Outcome S: a narrowly scoped M
 Final M0 result is **Outcome S**: prototype one shared scope stack and two internal policy entry paths in a separate M1; do not start that production change here. No production M1 code has been changed. The exact known bare limitation and all evidence are recorded above.
 
 Repository inputs requested by the M0 brief but absent from this checkout: `AGENTS.md`, `CLAUDE.md`, `docs/agent-execution-policy.md`, and `docs/adversarial-review-checklist.md`.
+
+## M1 — production scope-policy separation
+
+M1 evaluated Candidate S in the real runtime. The settled M0 public contract and ReadableInterop V1/render-graph behavior are unchanged.
+
+### Production candidate shape
+
+- Removed the module-local `currentStore` pointer and `closeDisallowedCurrentStores()` loop. `SharedInteropContextV1.renderScope` is now the sole active-scope arbitration stack for same-copy and duplicate-package scopes; it routes `finish()` to the owning store and restores only an active parent.
+- Removed `RenderStore.managed`. There remains one `RenderStore` for both modes. `RenderScopePolicy` (`"managed" | "bare"`) is passed at `start()` and only the existing shared scope carries the `managed` bit needed by cross-copy arbitration.
+- `RenderStore` still saves/restores the module-local collector with `setActiveRenderCollector()`. Local reads do not depend on the shared collector. The store-local self-overlap guard still finishes the same store before it could capture itself as a parent.
+- `useSignalTrackingImplementation(policy)` makes the paths explicit without another store, subclass, policy object, or wrapper allocation. Bare opens schedule the coalesced microtask and bare layout commits close a bare shared top. Managed opens do not schedule or run bare recovery. Their layout effect only finishes that same store if it is still active (last-resort protection for a manual caller that omitted `finish()`), then commits dependencies. Correct managed callers already finish synchronously in `finally` before layout.
+- Renamed/refined shared cleanup as `cleanupTrailingBareScope()`: it only finishes an unmanaged shared top. The `finalCleanupScheduled` bit and its fallback microtask belong only to bare tracking.
+- The `RenderStore.subscribe()` last-listener microtask remains unchanged and separately commented: it defers dependency disposal so StrictMode can resubscribe. It is not bare-scope cleanup.
+
+### M1 behavior evidence
+
+- Three-level same-copy managed nesting and managed custom-hook tracking pass; inner finish restores the exact outer local collector and subsequent outer reads remain subscribed.
+- The same-store self-overlap regression passes with the managed policy explicitly supplied. The store closes its abandoned prior attempt, avoids restoring itself as collector, and tracks later writes without a leaked active collector.
+- Focused mixed-mode tests inspect the actual collector identities/read calls, in addition to checking updates. **managed → bare:** the managed collector owns the read before bare starts; bare start closes it; the bare collector owns reads inside and after it (one managed read, two bare reads). **bare → managed:** bare owns reads before managed starts; managed start closes bare; managed owns its read; after synchronous managed finish the old bare parent is not restored and the following read is untracked. Updates to the two subscribed values rerender, while the post-managed untracked value does not. The established M0 semantics are preserved.
+- Bare throw/Suspense fallback, managed throw/Suspense `finally`, StrictMode subscription replay, dynamic dependencies, commit-race detection, SSR/hydration, multiple roots, siblings, and concurrent tests all remain green.
+- The genuine cross-copy consumer smoke now includes a React component using A's and B's actual `useManagedSignals()` implementations in one render with the same external React. B's foreign readable updates the component; after B finishes, A's subsequent read remains tracked and also updates the component. The M0 direct protocol test and three-runtime alien-signals duplicate smoke remain green.
+- Managed layout no longer invokes bare trailing cleanup. Its same-store active-scope finish is only a last-resort guard against an omitted manual `finish()`; normal managed finally is synchronous. No supported managed scenario needed the bare cleanup from the managed layout effect. The bare layout still closes the bare top before commit. Mixed-mode tests cover that policy split.
+
+### Structural and size results
+
+| Measure | M0 baseline | M1 candidate | Result |
+| --- | ---: | ---: | ---: |
+| Module-global mutable scope fields | 2 (`currentStore`, `finalCleanupScheduled`) | 1 (`finalCleanupScheduled`) | one less |
+| Scope-arbitration loops | 2 (local and shared) | 1 (shared) | duplicate local loop removed |
+| `RenderStore.managed` fields | 1 | 0 | removed; policy passed to `start()` |
+| RenderStore implementations | 1 | 1 | unchanged |
+| Managed bare-recovery scheduling / calls | 0 scheduled; shared layout cleanup also ran | 0 scheduled; no bare cleanup call; own-store forgotten-finish guard only | responsibilities separated |
+| `src/react/use-signals.ts` lines | 276 | 228 | −48 lines |
+
+No second active-store pointer, policy object, store wrapper, subclass, graph change, or public API was introduced. The existing `InteropRenderScopeV1` object/restore closure per open scope remains; Candidate S adds no per-render allocation beyond baseline. Managed/bare arbitration remains necessary for mixed use and is centralized in the shared stack rather than copied into a second loop.
+
+`pnpm size` passed all unchanged budgets. Against M0, core+hooks gzip changed 7.23 → 7.19 kB (−0.04 kB), index-full 11.46 → 11.41 kB (−0.05 kB); signal-only 5.82 → 5.83 kB (+0.01 kB), core 5.87 → 5.87 kB, deep 10.25 → 10.25 kB, JSX runtime 8.98 → 8.98 kB, utils 7.15 → 7.12 kB. This is neutral to slightly smaller within the existing size profiles; no budgets were changed.
+
+### Performance sanity
+
+After the runtime build, `node --expose-gc benchmarks/react-render.mjs 20 10` completed all render-count assertions on Node v24.21.0 / Windows x64 / AMD Ryzen 7 PRO 6850U. M1 measured `signals` at 4,221 updates/s (2.369 ms median) and `signals-managed` at 3,703 updates/s (2.700 ms median). M0's directional run was 2,603 and 2,720 updates/s respectively. These small runs vary materially; this sample shows no meaningful candidate regression, but does not establish an improvement or a release performance claim.
+
+### M1 validation
+
+- Focused Phase 8 boundary, mixed-mode, concurrent, and SSR tests: 4 files, 46 passed.
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with existing non-fatal React-hook and consistent-function-scoping warnings; no new candidate warning was emitted.
+- `pnpm test`: runtime 20 files / 279 passed; transform 3 files / 221 passed, 3 skipped. This includes React Compiler transform tests.
+- `pnpm build` passed for runtime and unplugin.
+- `pnpm test:phase4-duplicate` passed with three independent Alien systems.
+- `pnpm test:consumer` passed, including the genuine duplicate-package React managed-nesting test and foreign-readable tests.
+- `pnpm size` passed all seven unchanged gzip budgets and tree-shaking checks.
+- `pnpm test:browser` passed all 27 Chromium, Firefox, WebKit, production-build, and React Router tests.
+- React still cannot be made to yield deterministically between component invocations while a bare-cleanup microtask is pending in this harness; no time-slicing guarantee is claimed.
+
+### M1 decision
+
+**Outcome S confirmed.** The shared stack replaced the duplicated local pointer and close loop, `RenderStore` no longer stores policy, one store implementation remains, exact local collector restoration remains separate from the cross-copy channel, and actual nested cross-copy managed React use passed. Managed layout no longer performs bare recovery. Size is neutral/slightly smaller and the directional benchmark shows no meaningful regression. The M0 contract tests and all required validation remain green.
+
+Phase 8 is **not frozen**. M1 is complete; M2 has not started. No next milestone is undertaken by this result.
