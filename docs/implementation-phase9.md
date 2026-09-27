@@ -186,6 +186,71 @@ No finding from this audit requires post-v0.2.0 work. Missing Changesets or an a
 - `pnpm test:consumer`: passed. This command builds both packages, packs and installs the tarballs into a temporary fixture, checks the runtime dependency/React peer/`sideEffects` metadata, runs `tsc` and a Vite build, checks managed boundaries, and runs the separate cross-copy smoke. It does not test every public entry point.
 - `git diff --check`: run after this document is added.
 
-## Proposed next step: M1
+## M1b — Authoritative controlled measurement (2026-09-27)
 
-M1a harness work and M1b-0 interpretation rules are complete. The next milestone is M1b: run the controlled procedure above and review raw-record completeness before applying the frozen interpretation contract. Enter M1.1 only when the M1b-0 criteria call for attribution.
+### Run identity and validity
+
+- Starting main and remote origin/main: 01ce5517dc7281cd3b19e1cf86afe9c046f2ff3e (fix: balance Phase 9 runtime order); the starting worktree was clean.
+- Frozen production runtime baseline: c5d1796cfa2063db7eecb99e537209de185a530c.
+- Environment: Node v24.21.0, pnpm 12.6.0, Windows 10.0.26340.0, win32/x64, AMD Ryzen 7 PRO 6850U with Radeon Graphics.
+- Fixture installation from the frozen lockfile, pnpm build:runtime, runtime identity guard, dependency pin verification, and balanced-order verification passed before calibration.
+- Calibration pilot 2026-09-27T06-48-22-857Z-31244 completed all 116 tasks with no failures. It was used only to set iteration counts, targeting 25 ms for the fastest applicable runtime/adapter variant and retaining every configured minimum.
+- Confirmation calibration 2026-09-27T06-51-24-089Z-36784 completed all 116 tasks: 321 successful sample rows, 13 expected N/A rows, and zero failures. All 107 process/runtime/variant medians exceeded 2 ms; semantic assertions and iteration coverage passed.
+- Frozen shared iteration configuration: [benchmarks/phase9/m1b-iterations.json](../benchmarks/phase9/m1b-iterations.json), SHA-256 fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056. It contains all 29 selected case/size keys; compared runtimes share the same count.
+- Authoritative result directory: benchmarks/phase9/results/m1b-2026-09-27 (run ID 2026-09-27T06-53-37-041Z-32896). The measured dist artifact SHA-256 is 360375039e6b9550f6dbefec3f677becc05fc8f444245daa855e6c767a015266.
+- The run completed all 958/958 planned tasks: 6,096 raw sample rows (5,992 successful and 104 expected N/A), 30 allocation rows with shapeVerified true, all disposal checks passed, and failures.jsonl is empty. The manifest matches the frozen runtime baseline, dependency pins, dist hash, and iteration-file SHA.
+- The exact round1RuntimeOrder through round8RuntimeOrder arrays match the frozen schedule, forming two complete balance cycles. The manifest's descriptive deterministicOrder string still said “runtime index rotated” when the run was recorded; that label did not control execution, and the per-round order fields are the checked evidence. The harness label has since been corrected for future runs.
+
+The deterministic analyzer is [benchmarks/phase9/analyze.mjs](../benchmarks/phase9/analyze.mjs). It requires one explicit authoritative result directory, verifies completeness and iteration-file identity, then emits the full per-round summaries as JSON. It uses each process's median of seven sample throughputs, pairs the current/v0.1.1 round values, and summarizes the eight ratios. Quartiles use linear interpolation (R-7). The full JSON summary is retained as analysis.json beside the raw results.
+
+### Current RFSG versus v0.1.1
+
+Each row reports median paired ratio, IQR, range, then slower/faster/tied round counts. Sizes are independent. Labels and actions apply the frozen M1b-0 contract; no aggregate score was calculated.
+
+| Class | Case / size | Median ratio (IQR) | Range | Direction | Classification | Action |
+| --- | --- | ---: | ---: | ---: | --- | --- |
+| A | source/read@1 | 0.698 (0.153) | 0.485–0.882 | 8/0/0 | material regression candidate | M1.1 required for attribution |
+| A | source/unobserved-write@1 | 0.807 (0.272) | 0.690–1.263 | 6/2/0 | unstable / inconclusive | measurement investigation required before attribution |
+| A | source/write-read@1 | 0.751 (0.225) | 0.567–0.926 | 8/0/0 | material regression candidate | M1.1 required for attribution |
+| A | effect/observed-write@1 | 0.764 (0.238) | 0.587–1.065 | 7/1/0 | unstable / inconclusive | measurement investigation required before attribution |
+| A | effect/dynamic-dependencies@1 | 0.875 (0.230) | 0.700–1.155 | 5/3/0 | unstable / inconclusive | measurement investigation required before attribution |
+| A | computed/dirty-read@1 | 0.654 (0.237) | 0.475–0.963 | 8/0/0 | material regression candidate | M1.1 required for attribution |
+| A | computed/dirty-unread@1 | 1.388 (0.477) | 1.122–1.939 | 0/8/0 | improvement | M1.1 not required |
+| A | computed/equality-suppression@1 | 0.781 (0.133) | 0.492–0.909 | 8/0/0 | material regression candidate | M1.1 required for attribution |
+| A | batch/two-writes-one-reaction@1 | 0.794 (0.468) | 0.592–1.242 | 5/3/0 | unstable / inconclusive | measurement investigation required before attribution |
+| B | source/create@1 | 0.198 (0.058) | 0.115–0.320 | 8/0/0 | severe regression candidate | M1.1 required for attribution |
+| B | effect/create@1 | 0.967 (0.316) | 0.836–1.440 | 5/3/0 | small unstable difference | M1.1 not required |
+| B | effect/create-dispose@1 | 1.104 (0.196) | 0.767–1.266 | 1/7/0 | unstable / inconclusive | M1.1 not required |
+| B | effect/fanout@1 | 0.678 (0.229) | 0.496–1.136 | 7/1/0 | unstable / inconclusive | measurement investigation required before attribution |
+| B | effect/fanout@16 | 0.826 (0.149) | 0.682–0.975 | 8/0/0 | material regression candidate | M1.1 required for attribution |
+| B | effect/fanout@64 | 0.721 (0.083) | 0.483–0.779 | 8/0/0 | severe regression candidate | M1.1 required for attribution |
+| B | computed/create@1 | 0.581 (0.258) | 0.412–0.857 | 8/0/0 | severe regression candidate | M1.1 required for attribution |
+| B | computed/source-to-many@1 | 0.694 (0.228) | 0.461–1.221 | 7/1/0 | unstable / inconclusive | measurement investigation required before attribution |
+| B | computed/source-to-many@16 | 0.732 (0.180) | 0.614–1.088 | 7/1/0 | unstable / inconclusive | measurement investigation required before attribution |
+| B | computed/source-to-many@64 | 0.869 (0.106) | 0.642–1.091 | 7/1/0 | unstable / inconclusive | measurement investigation required before attribution |
+| B | computed/many-to-one@1 | 0.628 (0.242) | 0.288–1.129 | 7/1/0 | unstable / inconclusive | measurement investigation required before attribution |
+| B | computed/many-to-one@16 | 0.836 (0.288) | 0.619–1.771 | 5/3/0 | unstable / inconclusive | measurement investigation required before attribution |
+| B | computed/many-to-one@64 | 0.843 (0.230) | 0.542–1.131 | 6/2/0 | unstable / inconclusive | measurement investigation required before attribution |
+
+### RFSG-specific, React, and diagnostic evidence
+
+| Case | Median ratio (IQR) | Range | Direction | Classification | Action |
+| --- | ---: | ---: | ---: | --- | --- |
+| rfsg/deepSignal-read@1 | 1.222 (0.245) | 0.954–1.301 | 1/7/0 | unstable / inconclusive | M1.1 not required |
+| rfsg/deepSignal-watched-leaf-write@1 | 0.875 (0.224) | 0.617–1.153 | 6/2/0 | unstable / inconclusive | measurement investigation required before attribution |
+| rfsg/react-bare-tracking@1 | 1.015 (0.139) | 0.679–1.359 | 4/4/0 | small unstable difference | M1.1 not required |
+| rfsg/react-managed-tracking@1 | 1.008 (0.180) | 0.872–1.562 | 3/5/0 | small unstable difference | M1.1 not required |
+| rfsg/react-useSignalValue@1 | 0.988 (0.537) | 0.607–2.062 | 4/4/0 | small unstable difference | M1.1 not required |
+| rfsg/react-jsx-direct-binding@1 | 1.129 (0.178) | 0.678–1.619 | 2/6/0 | unstable / inconclusive | M1.1 not required |
+
+The adapter diagnostic was analyzed separately. The normalized adapter path had median time overhead relative to a direct native call of 24.3% for v0.1.1 and 61.6% for current RFSG. This is large enough to qualify cross-library read comparisons as adapter-inclusive. It does not isolate the adapter's share of a product workload, and no synthetic overhead was subtracted.
+
+Allocation rows were shape-verified and passed disposal checks. For the graph workload, current retained heap was about 0.331 MB versus 0.207 MB for v0.1.1; for one source with 1,000 effects it was about 0.109 MB versus 0.086 MB, with noisier current live-heap results. For 1,000 deep watched leaves, current retained heap was about 3.657 MB versus 0.715 MB (about 5.1×), with the same direction in all three rounds. These are coarse heap-use deltas, not object counts or an allocation-rate score. The deep-leaf retention is a red flag that aligns with the mostly slower watched-leaf throughput direction, but does not establish cause.
+
+Alien and Vue remain contextual baselines. Alien is much faster for source/computed creation, while the source-read gap versus Alien predates this current implementation: v0.1.1/Alien was 1.832 and current/Alien was 1.289. Current/Vue source-read was 0.581 versus 0.827 for v0.1.1/Vue. Effects and computed paths vary by case; Vue is close to RFSG on effect creation but not on observed writes. Vue batch remains N/A. Full case-specific round-aware ratios are in analysis.json; these comparisons do not set release thresholds or rank runtimes.
+
+### M1b decision and next milestone
+
+**Decision B — M1.1 required for attribution.** The repeatable Class A candidates are source/read, source/write-read, computed/dirty-read, and computed/equality-suppression. Class B attribution targets are source/create, computed/create, effect/fanout@16, and effect/fanout@64. The deep watched-leaf allocation delta is also a targeted red flag to examine alongside rfsg/deepSignal-watched-leaf-write. This decision does not make any result a release failure.
+
+M1.1 is the next milestone. Attribute only these named paths and related subsystem behavior; do not optimize them during this measurement milestone. Investigate the unstable rows separately before drawing runtime conclusions. Stop here: do not start M2 or change production runtime behavior.

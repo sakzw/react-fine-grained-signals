@@ -72,3 +72,11 @@ Use fresh processes/rounds as the independent units. For each runtime/case/size 
 3. Derive case-specific ratios from the runtime medians. Do not pool all samples across rounds, rank runtimes globally, or create an overall score. Keep diagnostic, RFSG-only, React, and allocation records separate from common-core comparisons.
 
 For the primary current/v0.1.1 comparison, pair the two process medians within each round and take the median of the eight `current / v0.1.1` ratios; report IQR, min/max, and direction counts. The balanced order makes the pair's run-before/run-after relationship equal over each four-round cycle. Treat `0.95–1.05` inclusive as the normal symmetric rough-parity region, subject to noise/spread. Above `1.05`, require the same repeatability before calling an improvement; noisy apparent gains remain rough parity or unstable/inconclusive. Improvements have no separate release gate.
+
+Generate a deterministic summary only from one explicitly named authoritative result directory:
+
+```sh
+node benchmarks/phase9/analyze.mjs benchmarks/phase9/results/<run-id>
+```
+
+The analyzer rejects non-measure, incomplete, failed, or identity-mismatched runs, including an iterations-file SHA mismatch. It verifies sample coverage and the recorded eight-round schedule before printing JSON. Per-round quantiles use linear interpolation (R-7); allocation diagnostics remain separate and have no release threshold.

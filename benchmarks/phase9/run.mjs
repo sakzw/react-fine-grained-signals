@@ -142,7 +142,7 @@ const manifest = {
   cpu,
   configurations: { rounds, warmups, samples, iterationOverride: iterationOverride ?? null, sizeOverride: sizeOverride ?? null, graphCount },
   gc: { workerFlag: "--expose-gc", requestedBeforeWarmupsAndSamples: true },
-  deterministicOrder: "runtime index rotated by round number; serial child execution",
+  deterministicOrder: "frozen balanced four-round runtime schedule; serial child execution",
   packageLockSha256: await sha256File(resolve(harnessDir, "pnpm-lock.yaml")),
   harnessSha256: await harnessHash(),
   outputDir,

@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "mode": "calibration",
+  "createdAt": "2026-09-27T06:48:22.857Z",
+  "runId": "2026-09-27T06-48-22-857Z-31244",
+  "gitHead": "01ce5517dc7281cd3b19e1cf86afe9c046f2ff3e",
+  "worktreeDirty": false,
+  "dirtyPaths": [],
+  "phase9RuntimeBaselineSha": "c5d1796cfa2063db7eecb99e537209de185a530c",
+  "v0_1_1": {
+    "tag": "v0.1.1",
+    "commit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+    "packageVersion": "0.1.1",
+    "alienSignals": "3.2.1"
+  },
+  "currentRfsg": {
+    "packageVersion": "0.1.1",
+    "runtimeBaselineSha": "c5d1796cfa2063db7eecb99e537209de185a530c"
+  },
+  "alienSignals": {
+    "packageVersion": "3.2.1"
+  },
+  "vue": {
+    "packageVersion": "3.6.0-rc.9",
+    "vueCoreCommit": "5be279570a844b953dd44b56bdc2426f7421aecd"
+  },
+  "verifiedPins": {
+    "v0_1_1": {
+      "version": "0.1.1",
+      "tarballSource": "npm registry package installed by the pinned fixture lockfile"
+    },
+    "oldAlien": "3.2.1",
+    "currentAlien": "3.2.1",
+    "vue": "3.6.0-rc.9",
+    "pinnedArtifactIntegrity": {
+      "rfsgV011": "sha512-S5azA4ENEJ/LpH29v4AnO3ctvacqHmi0lV8u3ettbQ61JSWCQkKr1c2Nk3t3n2PIP3FTVMnILUlYOfb23yrUbg==",
+      "alienSignals": "sha512-I8FjmltrfnDFoZedi5CG8DghVYNhzb/Ijluz7tCSJH0xpd0484Kowhbb1XDYOxfJpU1p5wnM2X54dA+IfGyD1g==",
+      "vueReactivity": "sha512-PBNUnlLzHSmmIqJ0aDDp2Jf8Iox3CSCLUCnUc/96wk2fBba+s6+qlMQ4mkVOIMUv2HGJ1aoTUyiciBSrkwUWQw=="
+    }
+  },
+  "harnessHead": "01ce5517dc7281cd3b19e1cf86afe9c046f2ff3e",
+  "node": "v24.21.0",
+  "packageManagerUserAgent": "pnpm/12.6.0 npm/? node/? win32 x64",
+  "platform": "win32",
+  "arch": "x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "configurations": {
+    "rounds": 1,
+    "warmups": 1,
+    "samples": 3,
+    "iterationOverride": null,
+    "sizeOverride": null,
+    "graphCount": 1000,
+    "includeAllocations": false,
+    "allocationRounds": 0,
+    "includeDeepAllocation": false,
+    "iterationsFile": null
+  },
+  "gc": {
+    "workerFlag": "--expose-gc",
+    "requestedBeforeWarmupsAndSamples": true
+  },
+  "deterministicOrder": "runtime index rotated by round number; serial child execution",
+  "packageLockSha256": "6ffceab2cb498cabc9bd5932cbdc49ac2ce171657600345d373a37413cbd3c03",
+  "harnessSha256": "b39eb8272e872b1e7ccaed088cdbad6040c869fe24679b6ab82b851c2b8d4dc1",
+  "outputDir": "C:\\Users\\catro\\Documents\\Git\\Github\\react-alien-signals\\benchmarks\\phase9\\calibration\\2026-09-27T06-48-22-857Z-31244",
+  "status": "completed",
+  "completedTasks": 116,
+  "plannedTasks": 116,
+  "currentRuntimeArtifact": {
+    "sha256": "360375039e6b9550f6dbefec3f677becc05fc8f444245daa855e6c767a015266",
+    "fileCount": 26,
+    "requiredEntries": [
+      "index.js",
+      "jsx-runtime.js",
+      "jsx-dev-runtime.js",
+      "runtime.js",
+      "utils.js"
+    ],
+    "identityGuard": "production-inputs-match-baseline",
+    "guardedBaselineSha": "c5d1796cfa2063db7eecb99e537209de185a530c"
+  },
+  "round1RuntimeOrder": [
+    "rfsg-v0.1.1",
+    "rfsg-current",
+    "vue-reactivity",
+    "alien-signals"
+  ],
+  "finishedAt": "2026-09-27T06:49:01.396Z"
+}
