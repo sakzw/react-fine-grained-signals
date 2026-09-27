@@ -62,25 +62,54 @@ export async function hashCurrentRuntimeArtifact() {
   return { sha256: hash.digest("hex"), fileCount: files.length, requiredEntries: requiredRuntimeEntries };
 }
 
-export async function verifyCurrentRuntimeIdentity() {
-  await gitOutput(["cat-file", "-e", `${RUNTIME_BASELINE_SHA}^{commit}`]);
-  const changedTracked = await gitOutput(["diff", "--name-only", RUNTIME_BASELINE_SHA, "--", ...runtimeRelevantPaths]);
-  const addedUntracked = await gitOutput(["ls-files", "--others", "--", "src", "scripts/strip-dts-sourcemap-comments.mjs"]);
-  const divergence = [
-    ...changedTracked.split(/\r?\n/).filter(Boolean),
-    ...addedUntracked.split(/\r?\n/).filter(Boolean),
-  ];
-  if (divergence.length > 0) {
-    throw new Error([
-      `Current runtime sources do not match Phase 9 baseline ${RUNTIME_BASELINE_SHA}.`,
-      `Changed production-relevant paths: ${[...new Set(divergence)].join(", ")}`,
-      "Restore the recorded baseline before running measurement or calibration mode.",
-    ].join(" "));
+export async function hashCurrentRuntimeInputs() {
+  const { stdout } = await execFileAsync("git", [
+    "ls-files", "--cached", "--others", "--exclude-standard", "-z", "--", ...runtimeRelevantPaths,
+  ], { cwd: repoRoot, windowsHide: true });
+  const paths = [...new Set(stdout.split("\0").filter(Boolean))].toSorted();
+  const hash = createHash("sha256");
+  for (const path of paths) {
+    hash.update(path.split(sep).join("/"));
+    hash.update("\0");
+    hash.update(await readFile(resolve(repoRoot, path)));
+    hash.update("\0");
+  }
+  return hash.digest("hex");
+}
+
+export async function verifyCurrentRuntimeIdentity({ expectedRuntimeInputsSha256 } = {}) {
+  const runtimeInputsSha256 = await hashCurrentRuntimeInputs();
+  let identityGuard = "production-inputs-match-baseline";
+  if (expectedRuntimeInputsSha256 !== undefined) {
+    if (!/^[a-f0-9]{64}$/.test(expectedRuntimeInputsSha256)) {
+      throw new Error("--runtime-inputs-sha256 must be a lowercase 64-character SHA-256.");
+    }
+    if (runtimeInputsSha256 !== expectedRuntimeInputsSha256) {
+      throw new Error(`Runtime input SHA-256 mismatch: expected ${expectedRuntimeInputsSha256}, found ${runtimeInputsSha256}.`);
+    }
+    identityGuard = "explicit-runtime-inputs-sha256";
+  } else {
+    await gitOutput(["cat-file", "-e", `${RUNTIME_BASELINE_SHA}^{commit}`]);
+    const changedTracked = await gitOutput(["diff", "--name-only", RUNTIME_BASELINE_SHA, "--", ...runtimeRelevantPaths]);
+    const addedUntracked = await gitOutput(["ls-files", "--others", "--", "src", "scripts/strip-dts-sourcemap-comments.mjs"]);
+    const divergence = [
+      ...changedTracked.split(/\r?\n/).filter(Boolean),
+      ...addedUntracked.split(/\r?\n/).filter(Boolean),
+    ];
+    if (divergence.length > 0) {
+      throw new Error([
+        `Current runtime sources do not match Phase 9 baseline ${RUNTIME_BASELINE_SHA}.`,
+        `Changed production-relevant paths: ${[...new Set(divergence)].join(", ")}`,
+        "Restore the recorded baseline or provide --runtime-inputs-sha256 for an explicitly identified M1.2 implementation.",
+      ].join(" "));
+    }
   }
 
   return {
     baselineSha: RUNTIME_BASELINE_SHA,
     guardedPaths: runtimeRelevantPaths,
+    runtimeInputsSha256,
+    identityGuard,
     artifact: await hashCurrentRuntimeArtifact(),
   };
 }

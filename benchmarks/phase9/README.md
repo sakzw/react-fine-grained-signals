@@ -21,6 +21,14 @@ Smoke uses low iteration counts, writes to the OS temporary directory, and is la
 
 `measure` and `calibrate` require production-relevant files to match baseline `c5d1796cfa2063db7eecb99e537209de185a530c`. The guard includes `src/**`, package and lock/workspace manifests, TypeScript and tsdown configuration, and the runtime declaration post-processing script. It permits benchmark and documentation changes. Each manifest also records a deterministic SHA-256 over the sorted relative paths and contents of the built `dist` files, along with the baseline guard result. The historical v0.1.1 artifact is never rebuilt.
 
+For an explicitly identified M1.2 candidate only, `measure` also accepts `--runtime-inputs-sha256 <sha256>`. This compares the supplied hash with the deterministic SHA-256 of the current production input tree and records both the hash and `identityGuard: "explicit-runtime-inputs-sha256"` in the manifest. It does not relax calibration or silently redefine the M1b baseline. The analyzer rechecks the recorded input-tree hash and built-dist SHA-256. Compute the candidate hash with:
+
+```sh
+node --input-type=module -e "import { hashCurrentRuntimeInputs } from './benchmarks/phase9/runtime-identity.mjs'; console.log(await hashCurrentRuntimeInputs())"
+```
+
+Use this explicit guard only for the final M1.2 measurement after implementation and correctness validation; retain the normal baseline guard for M1b.
+
 ## M1b calibration (pilot only)
 
 Do not start authoritative M1b until calibration is complete. Calibration runs are fresh-process pilots, stored separately under `benchmarks/phase9/calibration/` by default and labeled `calibration`; they are not performance evidence and must never be copied into M1b results.

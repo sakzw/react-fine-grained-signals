@@ -169,9 +169,25 @@ export function createReactiveRuntime(): ReactiveRuntime {
   let activeSpeculativeComputed: ComputedNode<unknown> | undefined;
   const renderingComputeds = new Set<RuntimeNode>();
   const externalNodes = new WeakMap<ReadableInteropV1, ExternalNode>();
-  const nodesByReadable = new WeakMap<object, SignalNode<unknown> | ComputedNode<unknown>>();
   const deepSignalNodes = new WeakSet<SignalNode<unknown>>();
   const deepWatchedNodes = new WeakSet<SignalNode<unknown>>();
+
+  // Keep the frozen, per-readable protocol identity while sharing its methods.
+  // The old object literal allocated two closures for every source/computed.
+  class RuntimeReadableInterop implements ReadableInteropV1 {
+    readonly version = 1 as const;
+    readonly runtimeToken: object;
+    readonly #node: SignalNode<unknown> | ComputedNode<unknown>;
+
+    constructor(node: SignalNode<unknown> | ComputedNode<unknown>) {
+      this.#node = node;
+      this.runtimeToken = runtimeToken;
+      Object.freeze(this);
+    }
+
+    getRevision(): number { return this.#node.revision; }
+    subscribe(listener: (revision: number) => void) { return subscribeProtocol(this.#node, listener); }
+  }
   const graphCollector: InteropGraphCollectorV1 = {
     runtimeToken,
     add(protocol, observedRevision) {
@@ -504,17 +520,6 @@ export function createReactiveRuntime(): ReactiveRuntime {
         if (watcher !== undefined) unsubscribeGraphWatcher(watcher);
       },
     };
-  }
-
-  function createReadableProtocol(
-    node: SignalNode<unknown> | ComputedNode<unknown>,
-  ): ReadableInteropV1 {
-    return Object.freeze({
-      version: 1 as const,
-      runtimeToken,
-      getRevision: () => node.revision,
-      subscribe: (listener: (revision: number) => void) => subscribeProtocol(node, listener),
-    });
   }
 
   function track(node: RuntimeNode): void {
@@ -1001,13 +1006,18 @@ export function createReactiveRuntime(): ReactiveRuntime {
 
     constructor(node: SignalNode<T>) {
       this.#node = node;
+      node.interop = new RuntimeReadableInterop(node);
       attachReadableInterop(this, node.interop);
-      nodesByReadable.set(this, node as SignalNode<unknown>);
     }
 
     get value(): T { return readSignalValue(this.#node); }
     set value(next: T) { writeSignalValue(this.#node, next); }
     peek(): T { return this.#node.pendingValue; }
+
+    static nodeOf(readable: object): SignalNode<unknown> | undefined {
+      const candidate = readable as RuntimeSignalReadable<unknown>;
+      return #node in candidate ? candidate.#node as SignalNode<unknown> : undefined;
+    }
   }
 
   class RuntimeComputedReadable<T> implements RuntimeReadonlySignal<T> {
@@ -1015,8 +1025,8 @@ export function createReactiveRuntime(): ReactiveRuntime {
 
     constructor(node: ComputedNode<T>) {
       this.#node = node;
+      node.interop = new RuntimeReadableInterop(node);
       attachReadableInterop(this, node.interop);
-      nodesByReadable.set(this, node as ComputedNode<unknown>);
     }
 
     get value(): T { return readComputedValue(this.#node); }
@@ -1024,6 +1034,18 @@ export function createReactiveRuntime(): ReactiveRuntime {
       return untracked(() =>
         withoutInteropSpeculativeMode(() => readComputedCore(this.#node)));
     }
+
+    static nodeOf(readable: object): ComputedNode<unknown> | undefined {
+      const candidate = readable as RuntimeComputedReadable<unknown>;
+      return #node in candidate ? candidate.#node as ComputedNode<unknown> : undefined;
+    }
+  }
+
+  function nodeForReadable(readable: unknown): SignalNode<unknown> | ComputedNode<unknown> | undefined {
+    if (readable === null || (typeof readable !== "object" && typeof readable !== "function")) {
+      return undefined;
+    }
+    return RuntimeSignalReadable.nodeOf(readable) ?? RuntimeComputedReadable.nodeOf(readable);
   }
 
   const runtime: ReactiveRuntime = {
@@ -1045,7 +1067,6 @@ export function createReactiveRuntime(): ReactiveRuntime {
         subsTail: undefined,
         flags: Mutable,
       }, renderNodeMethods) as SignalNode<T>;
-      node.interop = createReadableProtocol(node) as ReadableInteropV1;
       return new RuntimeSignalReadable(node);
     },
     computed<T>(getter: () => T): RuntimeReadonlySignal<T> {
@@ -1077,7 +1098,6 @@ export function createReactiveRuntime(): ReactiveRuntime {
         subsTail: undefined,
         flags: 0,
       }, renderNodeMethods) as ComputedNode<T>;
-      node.interop = createReadableProtocol(node) as ReadableInteropV1;
       return new RuntimeComputedReadable(node);
     },
     effect(fn) {
@@ -1123,7 +1143,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
       return untracked(fn);
     },
     hasSubscribers(readable) {
-      const node = nodesByReadable.get(readable as object);
+      const node = nodeForReadable(readable);
       return node !== undefined && hasLiveConsumer(node);
     },
     hasActiveSubscriber() {
@@ -1134,19 +1154,19 @@ export function createReactiveRuntime(): ReactiveRuntime {
     },
     createDeepSignal<T>(initialValue: T) {
       const readable = runtime.signal(initialValue);
-      const node = nodesByReadable.get(readable as object);
+      const node = RuntimeSignalReadable.nodeOf(readable as object);
       if (node === undefined || node.kind !== "source") throw new TypeError("failed to create deep signal source");
       deepSignalNodes.add(node as SignalNode<unknown>);
       return readable;
     },
     markDeepSignalWatched(readable) {
-      const node = nodesByReadable.get(readable as object);
+      const node = nodeForReadable(readable);
       if (node !== undefined && node.kind === "source" && deepSignalNodes.has(node as SignalNode<unknown>)) {
         deepWatchedNodes.add(node as SignalNode<unknown>);
       }
     },
     hasDeepSignalSubscribers(readable) {
-      const node = nodesByReadable.get(readable as object);
+      const node = nodeForReadable(readable);
       if (node === undefined || node.kind !== "source" || !deepSignalNodes.has(node as SignalNode<unknown>)) return false;
       return deepWatchedNodes.has(node as SignalNode<unknown>) || hasLiveConsumer(node);
     },

@@ -435,6 +435,49 @@ describe("useSignalTracking render tracking", () => {
     expect(renders).toHaveBeenCalledTimes(2);
   });
 
+  it("restores active render and speculative reads when untracked callbacks throw", () => {
+    const source = signal(0);
+    const ignored = signal(0);
+    const renders = vi.fn();
+    const derived = computed(() => {
+      try {
+        untracked(() => {
+          ignored.value;
+          throw new Error("untracked computed read failed");
+        });
+      } catch {
+        // The computed should resume collecting its own speculative reads.
+      }
+      return source.value;
+    });
+
+    function Value() {
+      useSignalTracking();
+      renders();
+      try {
+        untracked(() => {
+          ignored.value;
+          throw new Error("untracked render read failed");
+        });
+      } catch {
+        // The component should resume collecting its active render reads.
+      }
+      return <output aria-label="restored untracked reads">{derived.value}</output>;
+    }
+
+    render(<Value />);
+    act(() => {
+      ignored.value = 1;
+    });
+    expect(renders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      source.value = 1;
+    });
+    expect(screen.getByLabelText("restored untracked reads").textContent).toBe("1");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
   it("keeps direct host effects isolated from a trailing render collector", () => {
     const value = signal("component");
     const title = signal("before");

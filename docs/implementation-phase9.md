@@ -346,3 +346,7 @@ M1.1b is closed. The single M2 admission is recorded above; implementation is ou
 #### M1.2-0 — Reference architecture study
 
 The read-only comparison of Alien Signals 3.2.1, the pinned Vue 3.6 reactivity implementation, and current RFSG is recorded in [`implementation-phase9-m1.2-reference.md`](implementation-phase9-m1.2-reference.md). It recommends competing integrated public/node and lower-risk registration prototypes for M1.2-1; no prototype or runtime change is included here.
+
+### M1.2 — Runtime representation optimization
+
+M1.2 selected the lower-risk split wrapper/node representation after the integrated Candidate A failed existing runtime-surface checks. Candidate C removed the readable-to-node `WeakMap` and per-readable protocol closures while preserving the public wrapper, node, frozen protocol object, and `WeakSet` signal identity. Its final eight-round run materially improved source creation and computed creation; source reads recovered slightly, computed dirty-unread remained faster than v0.1.1, and effect fan-out at 16/64 remains a repeatable regression requiring focused M2 investigation. No effect-scope fast path passed its paired benefit gate. The full experiment, validation, allocation and bundle results, and per-case M1b comparison are in [`implementation-phase9-m1.2.md`](implementation-phase9-m1.2.md). M1.2 does not start M2.

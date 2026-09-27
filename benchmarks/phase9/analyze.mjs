@@ -13,6 +13,7 @@ import {
   runtimes,
   runtimeOrderForRound,
 } from "./config.mjs";
+import { hashCurrentRuntimeArtifact, hashCurrentRuntimeInputs } from "./runtime-identity.mjs";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
@@ -40,14 +41,29 @@ assert.equal(manifest.configurations.rounds, 8, "Authoritative M1b uses eight pa
 assert.equal(manifest.configurations.samples, 7);
 assert.equal(manifest.configurations.includeAllocations, true);
 assert.equal(manifest.configurations.allocationRounds, 3);
-assert.equal(manifest.currentRuntimeArtifact.identityGuard, "production-inputs-match-baseline");
+assert(["production-inputs-match-baseline", "explicit-runtime-inputs-sha256"].includes(manifest.currentRuntimeArtifact.identityGuard));
 assert.equal(manifest.currentRuntimeArtifact.guardedBaselineSha, RUNTIME_BASELINE_SHA);
 assert.match(manifest.currentRuntimeArtifact.sha256, /^[a-f0-9]{64}$/);
+if (manifest.currentRuntimeArtifact.runtimeInputsSha256 !== undefined) {
+  assert.match(manifest.currentRuntimeArtifact.runtimeInputsSha256, /^[a-f0-9]{64}$/);
+  assert.equal(await hashCurrentRuntimeInputs(), manifest.currentRuntimeArtifact.runtimeInputsSha256,
+    "The current production input tree must match the hash recorded at measurement time.");
+} else {
+  assert.equal(manifest.currentRuntimeArtifact.identityGuard, "production-inputs-match-baseline",
+    "Only historical baseline runs may omit the runtime input hash.");
+}
+if (manifest.currentRuntimeArtifact.identityGuard === "explicit-runtime-inputs-sha256") {
+  assert.match(manifest.currentRuntimeArtifact.runtimeInputsSha256, /^[a-f0-9]{64}$/);
+}
 assert.equal(manifest.verifiedPins.oldAlien, ALIEN_VERSION);
 assert.equal(manifest.verifiedPins.currentAlien, ALIEN_VERSION);
 assert.equal(manifest.verifiedPins.vue, VUE_PACKAGE_VERSION);
 assert.equal(manifest.verifiedPins.v0_1_1.version, "0.1.1");
 assert.equal(failures.length, 0, "Authoritative runs with failures cannot be analyzed.");
+if (manifest.currentRuntimeArtifact.identityGuard === "explicit-runtime-inputs-sha256") {
+  assert.equal((await hashCurrentRuntimeArtifact()).sha256, manifest.currentRuntimeArtifact.sha256,
+    "The built runtime artifact must match the SHA-256 recorded at measurement time.");
+}
 
 const iterationFile = manifest.configurations.iterationsFile;
 assert(iterationFile?.path && iterationFile.sha256, "The manifest must identify the frozen iterations file.");

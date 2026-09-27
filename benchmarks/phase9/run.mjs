@@ -52,6 +52,7 @@ const warmups = smoke ? 1 : positiveInt("--warmups", calibration ? 1 : 3);
 const samples = smoke ? 1 : positiveInt("--samples", calibration ? 3 : 7);
 const iterationOverride = smoke ? 12 : (cli.includes("--iterations") ? positiveInt("--iterations", 1) : undefined);
 const iterationsFileOption = getOption("--iterations-file", undefined);
+const runtimeInputsSha256Option = getOption("--runtime-inputs-sha256", undefined);
 if (mode === "measure" && iterationsFileOption === undefined) {
   throw new Error("M1b measurement requires --iterations-file with a frozen calibration result. Run calibration first; no benchmark workers were started.");
 }
@@ -74,7 +75,12 @@ const outputDir = outputOption === undefined
     ? resolve(tmpdir(), `rfsg-phase9-${runId}`)
     : resolve(harnessDir, calibration ? "calibration" : "results", runId))
   : resolve(repoRoot, outputOption);
-const runtimeIdentity = mode === "smoke_validation" ? null : await verifyCurrentRuntimeIdentity();
+if (runtimeInputsSha256Option !== undefined && mode !== "measure") {
+  throw new Error("--runtime-inputs-sha256 is only valid for an explicitly identified measure run.");
+}
+const runtimeIdentity = mode === "smoke_validation" ? null : await verifyCurrentRuntimeIdentity({
+  expectedRuntimeInputsSha256: runtimeInputsSha256Option,
+});
 const currentRuntimeArtifact = runtimeIdentity?.artifact ?? await hashCurrentRuntimeArtifact();
 const samplesPath = resolve(outputDir, "samples.jsonl");
 const failuresPath = resolve(outputDir, "failures.jsonl");
@@ -201,7 +207,8 @@ manifest.configurations.iterationsFile = iterationsFileOption === undefined ? nu
 };
 manifest.currentRuntimeArtifact = {
   ...currentRuntimeArtifact,
-  identityGuard: runtimeIdentity === null ? "not-run-for-smoke" : "production-inputs-match-baseline",
+  identityGuard: runtimeIdentity?.identityGuard ?? "not-run-for-smoke",
+  runtimeInputsSha256: runtimeIdentity?.runtimeInputsSha256 ?? null,
   guardedBaselineSha: RUNTIME_BASELINE_SHA,
 };
 const allocationTasksPerRound = allocationWorkloadIds.reduce((total, kind) => total + (
