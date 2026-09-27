@@ -304,12 +304,11 @@ export function useSignalValue<T>(source: ReadonlySignal<T>): T {
   // A leaf subscription owns this read. An unmanaged useSignalTracking() scope may
   // still be open for an ancestor or earlier sibling until React commits, so
   // do not also register the source with that component's render collector.
-  // `untracked` rather than `untrackedRender`: the latter clears only this
-  // package's render collector, leaving alien-signals' own `activeSub` in
-  // place, so a `getSnapshot` reached while some effect or computed is
-  // evaluating would silently graft this source onto that subscriber's
-  // dependency list. `computed()` and `peek()` already use `untracked` for
-  // exactly this reason.
+  // `untrackedRender()` clears only render dependency collection.
+  // `untracked()` also suppresses dependency collection in RFSG's runtime,
+  // whose runtime-local `activeSub` is owned by `createReactiveRuntime()`.
+  // A snapshot read during an RFSG effect or computed evaluation must use
+  // `untracked()` so it cannot graft this source onto that subscriber.
   const getSnapshot = useCallback(
     () => untracked(() => source.value),
     [source],

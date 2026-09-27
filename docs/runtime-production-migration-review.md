@@ -14,25 +14,25 @@ Proceed to a narrowly scoped M1 cutover behind the existing private `ReactiveRun
 
 The candidate is not a smaller codebase today: `reactive-runtime.ts` is 1,028 lines and Prototype A is 1,174 lines. The architectural gain is explicit local graph ownership and simpler hot paths; the cost is that RFSG would own and maintain more of the graph scheduler. The move is justified by measured common-path gains and existing parity coverage, provided the migration remains reversible and all M1 gates pass.
 
-## Current production runtime inventory
+## Current production runtime inventory after migration
 
-Production construction is `core-runtime.ts` → `createReactiveRuntime()` → `alien-signals/system`. The package's public shallow `signal()` and `computed()` in `base.ts` wrap private runtime readables; public `effect`, `batch`, and `untracked` forward to the singleton. The supported dependency is `alien-signals` 3.2.1, and production imports its low-level `alien-signals/system` entry, not the high-level root API.
+The public `signal()`, `computed()`, `effect()`, `batch()`, and `untracked()` APIs in `base.ts` delegate to `coreRuntime`; signal and computed readables are registered for RFSG's public signal identity. `core-runtime.ts` creates the singleton with `createReactiveRuntime()` from `reactive-runtime.ts`. That runtime owns RFSG's graph, scheduler, lifecycle, and subscriber state, and imports only the low-level `alien-signals/system` substrate. Phase 6 removed the public forwarding `SignalImpl` and computed wrapper layer; public signal and computed APIs now brand runtime-created readables.
 
-`deepSignal()` in `deep-signal.ts` lazily creates the shared `deep-signal-engine.ts` factory. Its adapter creates `SignalImpl` version sources and passes public `isSignal`, batching, active-subscriber state, and batch depth. This lazy boundary is why a signal-only consumer can omit the deep Proxy engine.
+`deepSignal()` in `deep-signal.ts` lazily creates the shared `deep-signal-engine.ts` factory. Its adapter routes source creation through `coreRuntime.createDeepSignal()`, watched-state updates through `coreRuntime.markDeepSignalWatched()`, and subscriber checks through `coreRuntime.hasDeepSignalSubscribers()`. Active-subscriber and batch-depth checks use `coreRuntime.hasActiveSubscriber()` and `coreRuntime.getBatchDepth()`; the adapter also retains the shared engine's public signal identity and batching hooks. This lazy boundary lets signal-only consumers omit the deep Proxy engine.
 
 Runtime consumers found in `src/`:
 
 | Consumer | Runtime contract used |
 | --- | --- |
-| `base.ts` public wrappers | `signal`, `computed`, `effect`, `batch`, `untracked` |
-| `deep-signal.ts` adapter | `batch`, `hasActiveSubscriber`, `getBatchDepth`, runtime source liveness, public `isSignal` |
+| `base.ts` public API | `signal`, `computed`, `effect`, `batch`, `untracked` |
+| `deep-signal.ts` adapter | `coreRuntime` deep-source creation, watched state, subscriber/liveness queries, active-subscriber and batch-depth state; shared public identity and batching hooks |
 | React `use-signals.ts` and `hooks.ts` | render dependency versions/subscriptions, effects, computed and untracked reads, render/commit validation |
 | JSX/runtime bindings | public signals and effects; direct host bindings subscribe through ordinary effect lifecycle |
 | interop protocol | `ReadableInteropV1`, graph/render collectors, revisions, shared speculative scope and duplicate-copy context |
 | transform runtime | managed render boundary (`useManagedSignals`) from `/runtime`; transform implementation itself is not a runtime-core consumer |
 | tests, consumer fixtures, duplicate-copy fixtures | public behavior, runtime-private render/liveness contract, duplicate package interop |
 
-The runtime-level `subscribe()` method exists on the current private interface but has no production call site outside the runtime/test surface; the readables themselves provide `subscribeRender()` to the React layer. Preserve the private interface for M1 compatibility, then remove an unused method only in a separate cleanup after consumer search and tests.
+The runtime-level `subscribe()` method remains on the private interface but has no production call site outside the runtime/test surface; the readables provide `subscribeRender()` to the React layer.
 
 ## Prototype A inventory and architecture delta
 
