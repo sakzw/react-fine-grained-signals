@@ -194,7 +194,7 @@ describe("Direct DOM binding", () => {
     // renders) reset the fresh binding's memory of "keys currently on the
     // node" to `[]`, instead of inheriting what the disposed binding had
     // actually applied. `a` is written to *between* renders — through this
-    // library's own reactive effect, which React's render never sees — so by
+    // library's own reactive subscription, which React's render never sees — so by
     // the time the binding rebuilds onto `b`, the node carries CSS
     // properties neither the disposed binding's own starting value nor the
     // new binding's value ever mentioned, and only the disposed binding's
@@ -306,7 +306,7 @@ describe("Direct DOM binding", () => {
     const input = screen.getByLabelText("field") as HTMLInputElement;
 
     // Write from outside a React commit, the way another part of the app
-    // (or this same effect on a prior keystroke) would.
+    // (or this same binding update after a prior keystroke) would.
     act(() => {
       text.value = "xyz";
     });
@@ -549,7 +549,7 @@ describe("Direct DOM binding", () => {
 // *any* re-render of the owning component, for any reason at all, tore every
 // binding on that element down and built it back up: a `MutationObserver`
 // disconnected and recreated, composition listeners removed and re-added
-// together with the `composing`/`pending` state they guard, every `effect()`
+// together with the `composing`/`pending` state they guard, every subscription
 // resubscribed, and the user's own ref called with `null` and then the
 // identical node again. The tests below pin each of those, plus the cases the
 // identity churn was legitimately covering (a changed source, a changed key)
@@ -558,7 +558,7 @@ describe("Direct DOM binding: ref identity stability", () => {
   it("does not resubscribe a direct prop binding when its owner re-renders for an unrelated reason", () => {
     const state = signal("initial-state");
     const bump = signal(0);
-    // Every resubscribe re-runs the binding's effect body immediately, which
+    // Every resubscribe immediately applies the current value, which
     // for a `data-*` binding is exactly one `setAttribute` — so counting those
     // counts subscriptions, without reaching into the reactive graph.
     const setAttribute = vi.spyOn(Element.prototype, "setAttribute");
@@ -669,7 +669,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     // The browser renders composing IME candidates straight into `.value`.
     input.value = "こんに";
 
-    // Rebuilding the binding here would resubscribe its effect and immediately
+    // Rebuilding the binding here would resubscribe and immediately update
     // write the signal's current value over the composing text, on top of
     // losing the `composing` flag that defers later writes.
     act(() => {
@@ -829,7 +829,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     });
     expect(secondNode.value).toBe("second");
     // The replaced node's subscription is disposed, not just detached from the
-    // document — a live effect would still be writing into it.
+    // document — a live subscription would still be writing into it.
     expect(firstNode.value).toBe("first");
   });
 });

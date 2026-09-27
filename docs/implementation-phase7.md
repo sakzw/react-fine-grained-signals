@@ -1,64 +1,71 @@
-# Phase 7 — Subscription Path Consolidation
+# Phase 7 — Subscription Path Consolidation (frozen)
 
-Phase 7 consolidates managed subscriptions while preserving the React external-store contract, the public ReadableInterop V1 boundary, and existing rendering and DOM behavior. M0 and M1 are complete. M2 evaluated a computed-based selector path and retained the existing selector store because the candidate materially increased retained heap. Phase 7 remains open; M3 is not started.
+Phase 7 is complete. M0, M1, M2, and M3 are complete; the production subscription paths and accepted trade-offs below are the final Phase 7 record.
 
-## Current paths and target
+## Final production architecture
 
-- `useSignalValue` uses `useSyncExternalStore` and a private ReadableInterop V1 subscription for package readables. The structural-readable fallback retains its effect bridge.
-- Direct JSX bindings use a private V1 subscription for package readables, with the effect bridge retained for structural readables.
-- `useDeepSignalValue` retains its selector-specific effect store. It preserves dynamic deep-property dependencies, Object.is equality, cached selector errors, and source/dependency replacement.
-- ReadableInterop V1 is already attached to local and foreign public readables. Its private protocol provides `getRevision()` and `subscribe(listener)`, with an unsubscribe handle and initial revision. It does not expose graph nodes.
+- **`useSignalValue` with a package readable:** `useSyncExternalStore` → private `ReadableInterop` V1 subscription → private runtime watcher. Snapshots remain untracked. The normal path does not allocate an `EffectNode`.
+- **Direct JSX DOM binding with a package readable:** `ReadableInterop` V1 subscription → binding-local protected read → DOM update. It subscribes before the initial read/apply, does not allocate an `EffectNode`, and preserves per-binding error episodes and recovery.
+- **`useDeepSignalValue`:** a selector-specific effect-backed store, retained intentionally after the M2 memory comparison. It dynamically tracks deep dependencies and caches primitive values or errors.
+- **`useSignalEffect`:** `effect()` remains the API's purpose.
+- **Structural `useSignalValue` readable without valid V1:** the effect-backed compatibility fallback remains supported.
+- **Structural JSX readable without valid V1:** the existing effect-backed binding fallback remains.
 
-M1 selected a private helper that subscribes through a valid V1 protocol directly. Objects without a valid V1 protocol retain a compatibility fallback to the effect bridge; malformed or structural inputs do not silently lose their existing read behavior. No public API, V2 protocol, raw-node access, shared graph, or scheduler was added.
+The private `subscribeReadableV1()` disposer closes over its subscription object. The helper is not public, does not expose graph nodes, and does not introduce ReadableInterop V2. No shared cross-runtime graph or scheduler was added.
 
-## M0 — prototype and architecture gate
+## Completed milestones
 
-Compare the current effect bridge with direct V1 subscriptions for signals and computeds. The focused comparison covers subscribe/dispose, notifications, equality suppression, many listeners, computed success-to-error and error-to-success transitions, and the rule that a source write must not synchronously throw a computed failure. Include a small subscription-path benchmark or isolated prototype; do not duplicate the runtime.
+### M0 — direct-subscription feasibility (complete)
 
-The direct protocol watcher creates a graph watcher rather than an EffectNode, tracks the readable's dependency boundary, catches computed evaluation failures while checking dirty state, and reports revisions to listeners after graph updates. This is the required error-containment shape: the write completes, listeners are notified, and `useSignalValue` surfaces the failure from its render-time snapshot read. Confirm this behavior in tests before production migration.
+Focused tests covered signal and computed notifications/disposal, computed equality suppression, dynamic dependencies, many independent listeners, success/error/different-error/recovery transitions, and writes that must not synchronously throw computed failures. The V1 watcher contains dirty-check failures so render-time reads can deliver them to React Error Boundaries.
 
-M0 gate: preserve `useSyncExternalStore`, untracked snapshots, SSR snapshots, concurrent and StrictMode behavior, equality semantics, foreign V1 subscriptions, and unmount disposal. For JSX, preserve immediate mount application, error episode logging and recovery, and all existing special cases. Test both local and duplicate-copy readables through V1. For inputs without V1, retaining the effect bridge is the compatibility fallback.
+The historical local 20,000-subscription subscribe/write/dispose comparison recorded 401,673 operations/s for the effect bridge and 1,221,024 operations/s for V1. These are directional measurements from that machine, not release-performance claims.
 
-**M0 result: pass.** Focused protocol tests verified signal/computed equality suppression, dynamic computed dependencies, many listeners and independent disposal, success/error/different-error/recovery transitions, and that writes do not throw. The direct watcher catches computed failures during dirty checking and notifies after the graph update; render-time `useSignalValue` reads still surface errors to Error Boundaries. Structural comparison confirms direct subscriptions allocate a graph watcher rather than an EffectNode. A local 20,000-subscription subscribe/write/dispose benchmark reported 401,673 operations/s for the effect bridge and 1,221,024 operations/s for V1. These are directional measurements from this machine, not a release-performance claim.
+### M1 — single-readable production migration (complete)
 
-`ReactiveRuntime.subscribe()` had no production call sites after migration and duplicated the V1 watcher API. Its interface and implementation were removed. The runtime-specific tests were replaced by focused V1 protocol tests, including parity against the effect bridge for notifications and disposal.
+`useSignalValue` and direct JSX bindings for package readables moved to the private V1 path while preserving `useSyncExternalStore`, server snapshots, initial JSX binding application, and established React/DOM behavior. Cross-copy tests cover foreign signal and computed reads plus foreign JSX bindings.
 
-The post-M1 audit found no production call sites for `ReactiveRuntime.subscribe()` beyond V1 and no distinct contract to retain. Its interface and implementation were removed as recorded above.
+### M2 — dynamic selector decision (complete; computed candidate rejected)
 
-## M1 — single-readable production migration (complete)
+The computed + V1 candidate passed behavioral prototypes but retained about 1,646 B/store versus about 780 B/store for the selector effect store in the directional 3,000-live-store comparison (about 2.1×). The measurement is an approximate process heap delta, not shallow-object sizing. The computed design was rejected for this phase; `useDeepSignalValue` intentionally keeps its selector-specific effect store. No generic observer was introduced.
 
-M1 routed `useSignalValue` and direct JSX bindings through the private V1 subscription helper. It retained `useSyncExternalStore` and the server snapshot path. JSX subscribes before its initial read/apply. Existing error latches, select MutationObserver/multiple behavior, IME composition, controlled checked/value properties, style diffing, SVG/HTML property handling, and stable ref replacement/disposal behavior remain intact.
+The candidate also reduced repeated mount selector evaluations and generally did well in selected updates, unrelated sibling writes, and branch switches, with mixed timing results. The exact counts and timings are implementation evidence, not API guarantees.
 
-Cross-copy checks exercise `useSignalValue` with foreign signals and computeds, and JSX direct bindings with a foreign readable; these do not imply a shared graph.
+### M3 — stabilization, cleanup, and freeze (complete)
 
-## M2 — dynamic selector subscription consolidation (complete; computed candidate rejected)
+Phase 7-touched effect-era comments were synchronized with V1 watchers, live subscriptions, binding updates, and the remaining real effect-backed paths. `createSignalStore` was renamed `createEffectBackedStoreSubscription` and its comment now limits it to the deep-selector store and structural-readable compatibility fallback; package-readable `useSignalValue` uses V1.
 
-### Alternatives
+An explicit production regression test constructs a structural `ReadonlySignal` without V1, verifies initial rendering and backing-signal updates through `useSignalValue`, rerenders with an unrelated prop, and confirms that unmount releases the fallback subscription.
 
-The preferred prototype wrapped `selector(source.value)` and `assertSignalSnapshot()` in a memoized internal `computed()`, then reused `useSignalValue()` and V1. This would delegate dynamic dependency switching, root replacement, Object.is value suppression, error caching/recovery, and repeated-error invalidation to the existing computed runtime. The memo dependencies remain `[source, ...dependencies]`; selector function identity alone is intentionally not a dependency, and the fixed dependency-length guard remains before the memo. The other option was to retain the effect-backed selector store, which has only one runtime effect node per selector and keeps its cached value/error result locally.
+Focused production coverage still exercises V1 notification/disposal, computed `Object.is` suppression and dynamic dependencies, success/error/error-change/recovery, non-throwing writes, independent listeners, and cross-copy signals, computeds, and JSX. Deep selector tests continue to cover sibling isolation, branch switching, root/source/dependency replacement, primitive snapshots, selector errors, StrictMode cleanup, SSR/hydration, and no evaluations after unmount. JSX tests continue to cover binding ordering/disposal/error recovery, select and multiple-select behavior, IME, controlled value/checked, style key removal, SVG/HTML, stable ref identity, and binding diff/reuse.
 
-### Findings and decision
+## Phase 7-only benchmark files retired
 
-The computed prototype passed focused behavioral checks: property-level sibling isolation, dynamic branch switching, parent/root/source replacement, prop dependency replacement, primitive snapshot rejection, selector error recovery and latest-error delivery, Error Boundary propagation without synchronous writer errors, SSR/hydration, StrictMode, concurrent reads, and disposal. A focused React test records the current path's two selector evaluations during mount (store construction and initial effect run), no evaluation on an unrelated parent render or sibling write, one per selected write, and none after unmount. These exact counts are evidence, not a public contract.
+Neither comparison script was wired to normal benchmark scripts, and both had completed their architecture-evidence role. Their results and methodology are recorded above, so keeping the rejected alternative executable would add maintenance without ongoing production value.
 
-The focused benchmark compared the current effect-store shape with computed + V1 over 5,000 operations per case. Timings varied by run: computed + V1 reduced repeated mount selector evaluations from 10,000 to 5,000 and generally performed well on selected updates, unrelated sibling writes, and branch switches, with some mixed results. The retained-heap comparison was stable across two fresh processes with 3,000 live stores: effect store was about 780 B/store; computed + V1 was about 1,646 B/store (about 2.1×). This is an approximate process heap delta, not shallow-object sizing. Structurally, the effect path has one EffectNode per selector; the candidate has a computed graph node plus a V1 graph watcher per selector. The simpler error/equality machinery does not offset this material retained-memory increase for this milestone.
+- `benchmarks/subscription-path.mjs` — retired; its M0 directional comparison is preserved above.
+- `benchmarks/deep-selector-subscription.mjs` — retired; its M2 behavioral, retained-heap, and timing findings are preserved above, including the rejected computed + V1 candidate.
 
-**M2 decision: do not adopt computed + V1.** Keep `createDeepSelectorStore` and its effect subscription so normal `useDeepSignalValue` does not incur the measured additional per-subscriber graph node and retained heap. No new generic observer abstraction was added. The focused benchmark is in `benchmarks/deep-selector-subscription.mjs`.
+## Final validation
 
-The M1 protocol disposer now closes over its owning subscription object (`() => subscription.unsubscribe()`), rather than returning an extracted method. JSX cleanup names were updated locally to use subscription terminology.
+All checks below passed on Node v24.21.0; no Node 22-specific validation was performed.
 
-Required validation: focused hook, computed-error, concurrent/external-store, StrictMode, cross-copy, JSX binding, IME, select, style, and error-recovery tests; `pnpm typecheck`, `pnpm lint`, `pnpm test`, `pnpm build`, `pnpm test:phase4-duplicate`, `pnpm test:consumer`, and `pnpm size`. Run relevant benchmark/smoke paths when available. Do not weaken tests or claim Node 22-specific validation.
+- `pnpm typecheck` — passed (runtime and unplugin).
+- `pnpm lint` — passed with existing non-fatal warnings: `consistent-function-scoping` and one React hooks warning; no M3 lint errors.
+- `pnpm test` — runtime: 20 files, 273 passed; unplugin: 3 files, 221 passed, 3 skipped.
+- `pnpm build` — passed (runtime and unplugin build smoke).
+- `pnpm test:phase4-duplicate` — passed with three independent Alien systems.
+- `pnpm test:consumer` — passed, including package tarball resolution, consumer build, and genuine duplicate-package smoke.
+- `pnpm size` — passed all seven existing gzip budgets and tree-shaking presence/absence checks without changing budgets. Measured gzip sizes: signal-only 5.82 kB, core 5.87 kB, core+hooks 7.23 kB, deep 10.25 kB, index-full 11.46 kB, JSX runtime 8.98 kB, and utils 7.15 kB.
+- `pnpm test:browser` — passed, 27 tests across Chromium, Firefox, WebKit, production build, and React Router.
+- `node --expose-gc benchmarks/react-render.mjs 20 10` — completed as a lightweight production sanity run. On Node v24.21.0 / Windows x64 / AMD Ryzen 7 PRO 6850U, the small run reported 4,355 updates/s for `signals`, 4,315 for `signals-managed`, 632,911 for `unrelated-production`, 24,331 for `equality-production`, and 901 for `many-production`. Treat these small-run timings as smoke evidence only, not comparative release claims.
 
-## Phase status and scope boundary
+## Final status and scope boundary
 
-- M0: complete; gate passed as recorded above.
-- M1: complete; `useSignalValue` and direct JSX bindings subscribe through V1, and retain the effect bridge only for inputs without valid V1.
-- M2: complete; computed + V1 was evaluated and rejected based on the retained-heap gate above.
-- M3: not started; do not freeze Phase 7 in this pass.
-- Phase 7 remains open after M2.
+- M0 — complete
+- M1 — complete
+- M2 — complete
+- M3 — complete
+- **Phase 7 — frozen**
 
-M0/M1 validation completed at commit `76bc6b1`: `pnpm typecheck`, `pnpm lint`, `pnpm test` (runtime: 270 passed; transform: 221 passed, 3 skipped), `pnpm build`, `pnpm test:phase4-duplicate`, `pnpm test:consumer`, and `pnpm size` all passed. React benchmark default workload was stopped after several minutes; its low-load smoke completed.
-
-On the retained-effect final state, `pnpm typecheck`, `pnpm lint`, `pnpm test` (runtime: 272 passed; transform: 221 passed, 3 skipped), `pnpm build`, `pnpm test:phase4-duplicate`, `pnpm test:consumer`, and `pnpm size` all passed. Focused deep-selector, hook, computed-error, concurrent, SSR/hydration, and subscription tests passed (62 tests). The focused M2 selector benchmark completed in multiple fresh Node 24.21.0 processes.
-
-Remaining classification: no correctness blocker found. **Hardening later:** if revisiting computed-based selector subscriptions, first reduce their per-subscriber retained memory; the current computed candidate failed that gate. No architecture blocker or future-version idea was found. M2 is complete as a no-adoption decision; M3 is not started and Phase 7 remains open.
+No correctness blocker or architecture blocker remains. **Hardening later:** only if a future phase revisits computed-based selector subscriptions, first address the candidate's additional retained memory. No separate future-version idea was opened by this freeze. Phase 8 is outside this record.

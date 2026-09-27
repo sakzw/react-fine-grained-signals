@@ -90,7 +90,7 @@ A number bound to a CSS property is written with a `px` suffix unless the proper
 
 ## value and checked
 
-`value` and `checked` are two-way bound, so they take a different strategy than the rest of the allowlist: the JSX runtime substitutes `defaultValue`/`defaultChecked` for the controlled prop, seeded from `.peek()`, so React only applies it once at mount and never re-applies it on a later re-render — the direct-binding effect owns the DOM property from then on, `onChange` is untouched, and each write is skipped when the DOM already holds that exact value so an unrelated re-render or a same-value echo from `onChange` does not disturb an in-progress edit.
+`value` and `checked` are two-way bound, so they take a different strategy than the rest of the allowlist: the JSX runtime substitutes `defaultValue`/`defaultChecked` for the controlled prop, seeded from `.peek()`, so React only applies it once at mount and never re-applies it on a later re-render — the direct-binding subscription owns the DOM property from then on, `onChange` is untouched, and each write is skipped when the DOM already holds that exact value so an unrelated re-render or a same-value echo from `onChange` does not disturb an in-progress edit.
 
 - A *derived* value bound to `value` (for example a signal that trims or upper-cases what the user typed) can still move the caret when the derived string differs from what was typed. That part is not solved here.
 - `value`/`checked` on other elements (`<li value>`, `<option value>`, `<meter value>`, ...) are plain write-only attributes, not two-way bound, so they use the same direct-attribute binding as `title`/`disabled`.

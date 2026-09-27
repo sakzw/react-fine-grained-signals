@@ -12,6 +12,7 @@ import {
   useSignalValue,
   useSignalTracking,
 } from "../src/index.js";
+import type { ReadonlySignal } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -75,11 +76,10 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(leafRenders).toHaveBeenCalledTimes(2);
   });
 
-  // These four pin useSignalValue's per-component-effect contract: alien-signals
+  // These tests cover useSignalValue's per-component V1 subscription path. alien-signals
   // already dedupes a shared computed's evaluation across subscribers
-  // (checkDirty/shallowPropagate), so sharing one effect across leaves would
-  // only trim effect-run overhead, not getter evaluations. See the design
-  // discussion that measured this before deciding not to share subscriptions.
+  // (checkDirty/shallowPropagate), so sharing one watcher across leaves would
+  // only trim notification overhead, not getter evaluations.
   it("evaluates a shared computed once for one write, regardless of leaf count", () => {
     const source = signal(1);
     const evaluate = vi.fn((value: number) => value * 2);
@@ -187,10 +187,9 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
 
     view.unmount();
 
-    // alien-signals effects are eager: a live subscriber would rerun `doubled`
-    // synchronously on this write even with nothing left to read its value. An
-    // unchanged call count is therefore evidence the effect was disposed, not
-    // just evidence nothing rendered.
+    // A live V1 watcher would dirty-check the computed synchronously on this
+    // write even with nothing left to read its value. The unchanged call count
+    // confirms the subscription was released.
     act(() => {
       source.value = 2;
     });
@@ -222,6 +221,43 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     });
     expect(screen.getByLabelText("stable subscription").textContent).toBe("2:10");
     expect(evaluate).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps structural readables on the compatibility subscription and releases it on unmount", () => {
+    const backing = signal("before");
+    const reads = vi.fn();
+    const structural: ReadonlySignal<string> = {
+      get value() {
+        reads();
+        return backing.value;
+      },
+      peek() {
+        return backing.peek();
+      },
+    };
+
+    function Reader({ version }: { version: number }) {
+      return <output aria-label="structural readable">{`${version}:${useSignalValue(structural)}`}</output>;
+    }
+
+    const view = render(<Reader version={1} />);
+    expect(screen.getByLabelText("structural readable").textContent).toBe("1:before");
+    expect(reads).toHaveBeenCalled();
+
+    act(() => {
+      backing.value = "after";
+    });
+    expect(screen.getByLabelText("structural readable").textContent).toBe("1:after");
+
+    view.rerender(<Reader version={2} />);
+    expect(screen.getByLabelText("structural readable").textContent).toBe("2:after");
+
+    view.unmount();
+    const readsAfterUnmount = reads.mock.calls.length;
+    act(() => {
+      backing.value = "ignored";
+    });
+    expect(reads).toHaveBeenCalledTimes(readsAfterUnmount);
   });
 
   it("exposes useComputed to an explicit leaf hook", () => {

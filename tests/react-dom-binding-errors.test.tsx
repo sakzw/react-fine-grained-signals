@@ -18,7 +18,7 @@ describe("Direct DOM binding: error handling", () => {
     const shouldFail = signal(false);
     const raw = signal("red");
     // Reading both signals unconditionally keeps them both dependencies even
-    // while throwing, so a write to either re-triggers the binding's effect.
+    // while throwing, so a write to either re-triggers the binding update.
     const styleColor = computed(() => {
       const value = raw.value;
       if (shouldFail.value) throw new Error(`style boom: ${value}`);
@@ -96,9 +96,8 @@ describe("Direct DOM binding: error handling", () => {
     expect(styled.style.color).toBe("red");
     expect(labeled.dataset.state).toBe("first");
 
-    // Without a local catch, the throwing effect would propagate out of
-    // `flush()` and its `finally` would drop the still-queued sibling effect
-    // for this cycle — silently, not by throwing on it directly.
+    // The failing binding update must stay local so the sibling subscriber
+    // still applies its value during the same batched write.
     expect(() => {
       act(() => {
         batch(() => {
@@ -144,7 +143,7 @@ describe("Direct DOM binding: error handling", () => {
     // own JSX/props are never re-evaluated) so only the MutationObserver
     // reacts. Its own `source.peek()` hits the same cached error and must not
     // crash, and — sharing this binding's single episode latch with the
-    // effect above — must not log a second time.
+    // subscription update above — must not log a second time.
     const option = document.createElement("option");
     option.value = "c";
     option.textContent = "C";
@@ -158,7 +157,7 @@ describe("Direct DOM binding: error handling", () => {
     // above already pins.
     expect(select.value).toBe("a");
 
-    // Recovery: the tracked effect re-reads successfully and applies the
+    // Recovery: the live subscription re-reads successfully and applies the
     // selection (the now-existing <option value="c"> makes it stick).
     act(() => {
       shouldFail.value = false;

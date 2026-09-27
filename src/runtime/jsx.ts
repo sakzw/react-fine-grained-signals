@@ -55,7 +55,7 @@ function isTwoWayBindingKind(kind: BindingKind): boolean {
 
 // The uncontrolled counterpart React reads only at mount, used in place of the
 // controlled prop so React's own input reconciliation never re-asserts a stale
-// signal snapshot over what the direct-binding effect just wrote.
+// signal snapshot over what the direct-binding subscription just wrote.
 const UNCONTROLLED_PROP_NAMES: Record<string, string> = {
   value: "defaultValue",
   checked: "defaultChecked",
@@ -152,19 +152,15 @@ type FailureEpisode = { hasReported: boolean };
 
 /**
  * Reads a signal on behalf of one of this module's direct DOM bindings (see
- * the module doc: these write straight to the DOM from an `effect()` installed
+ * the module doc: these write straight to the DOM from a subscription mounted
  * alongside the element's ref, bypassing React's render, so the owning
  * component never re-renders). A `computed()` whose getter throws caches and
  * rethrows that error on every read (see `computed()` in src/core/base.ts) —
  * if `source` is such a computed and it starts failing after the binding is
- * already mounted, an unguarded read here would throw synchronously out of
- * `effect()`'s callback body. Since 41c77ea that no longer escapes the flush —
- * `effect()` catches it and routes it through `reportEffectError`
- * (src/core/base.ts), so the write that triggered it still completes and the
- * rest of the effect queue still runs. But that containment is whole-callback:
- * it abandons the remainder of this binding's callback for the cycle and
- * reports a generic "an effect() callback threw", with no idea which binding
- * failed or that the DOM was left mid-update.
+ * already mounted, an unguarded read here could throw from the subscription's
+ * update callback while processing the write. The direct V1 watcher contains
+ * computed dirty-check errors, but this binding read is a separate operation;
+ * catching it here also keeps the structural-readable effect fallback local.
  *
  * Catching here keeps a failure local to this one binding: the DOM write for
  * this cycle is skipped (the DOM is left at its last successful value) and
@@ -205,7 +201,7 @@ function readBoundSignal<T>(
  * Reads via `readBoundSignal` and, on success, hands the value to `apply`; a
  * failed read is already reported by `readBoundSignal`, so this just skips
  * the write. Shared by every read-and-apply call site below, including the
- * one that isn't itself an `effect()` — the MutationObserver-triggered
+ * one that isn't itself a subscription callback — the MutationObserver-triggered
  * re-apply in `bindSelectValue`, which reads outside the reactive graph via
  * `.peek()`.
  */
@@ -298,10 +294,10 @@ function setDomProp(node: Element, name: string, value: unknown): void {
 
 /**
  * Writes `value`/`checked` on a controlled-two-way element, skipping the DOM
- * write when it already holds the value being written. Effects re-run on
- * every keystroke (the signal changed because `onChange` just wrote it), so
- * without this guard every keystroke would re-set a property the DOM already
- * has, moving the caret and disrupting IME composition for no reason.
+ * write when it already holds the value being written. A binding update
+ * follows signal writes, including keystrokes written by `onChange`, so without
+ * this guard every keystroke would re-set a property the DOM already has,
+ * moving the caret and disrupting IME composition for no reason.
  */
 function setControlledProp(node: Element, name: string, value: unknown): void {
   if (name === "value") {
@@ -342,8 +338,8 @@ function setMultiSelectValue(select: HTMLSelectElement, value: unknown): void {
  * the options themselves are rendered from a signal or other state, mounted
  * after this one) silently ends up with nothing selected: the DOM neither
  * errors nor retroactively applies `.value`/`.selected` once a matching
- * `<option>` is later added. The per-value effect below only reruns when the
- * bound signal itself changes, so it cannot see that the option list changed
+ * `<option>` is later added. The value subscription below only updates when
+ * the bound signal itself changes, so it cannot see that the option list changed
  * out from under it. A MutationObserver on the select's subtree re-applies
  * the signal's current value whenever its `<option>` list changes, closing
  * that gap without requiring the signal to change too.
@@ -472,7 +468,7 @@ function applyRef(ref: SupportedRef, node: Element | null): RefCleanup {
  * actually applied to the node so far. `undefined` for every other kind.
  *
  * This is a getter, not a one-time snapshot, because a style binding's own
- * `previousKeys` keeps changing across its lifetime as its effect re-runs; a
+ * `previousKeys` keeps changing across its lifetime as its subscription updates; a
  * rebuild reads it just before disposing the binding, so it sees whatever the
  * binding last actually wrote, not what it started with. See `syncBindings`.
  */
@@ -558,7 +554,7 @@ type ReactiveHostBinder = {
  * `bindTextValue`'s composition listeners *along with the closure-local
  * `composing`/`pending` state they guard* — resetting `composing` to `false`
  * mid-composition and letting the next write stomp in-flight IME input —
- * resubscribed every binding's `effect()`, and called the user's own ref with
+ * recreated every binding subscription, and called the user's own ref with
  * `null` and then the identical node again.
  *
  * Pinning the identity moves that reconciliation here: `sync` runs from

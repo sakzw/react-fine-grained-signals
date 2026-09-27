@@ -6,10 +6,10 @@
 
 ## 実装済み(出荷済み)
 
-JSX runtimeは、allowlistに含まれるnative host propに渡されたsignalをdirect bindingします。mount時に `.peek()` からDOMを初期化し、その後の変更はrefが設置する `effect()` を通じて書き込み、そのpropについてはReactの再レンダーを経由しません(`src/runtime/jsx.ts` の `transformHostProps` / `ReactiveHost`。allowlist全体は[JSXのsignal子要素とhost binding](../jsx-bindings.ja.md)を参照してください)。
+JSX runtimeは、allowlistに含まれるnative host propに渡されたsignalをdirect bindingします。mount時に `.peek()` からDOMを初期化し、その後の変更はrefが設置する ReadableInterop V1 subscriptionを通じて書き込み、そのpropについてはReactの再レンダーを経由しません(`src/runtime/jsx.ts` の `transformHostProps` / `ReactiveHost`。V1を持たないstructural readableはeffect-based compatibility fallbackを使います。allowlist全体は[JSXのsignal子要素とhost binding](../jsx-bindings.ja.md)を参照してください)。
 
 - **`value`/`checked`。** `isControlledTwoWayProp` と `setControlledProp` が、Reactが実際にcontrolledとして扱うtag ―― `value` は `input`/`textarea`/`select`、`checked` は `input` ―― に双方向の扱いを限定します。controlled propは `.peek()` から得た値で `defaultValue`/`defaultChecked` に置き換えられるためReactは再diffせず、DOMが既に同じ値を持っている場合は書き込みを省略します。`<select multiple>` は `setMultiSelectValue`(`String(value)` ではなく各 `<option>.selected` を切り替え)を通ります。それ以外の `value`/`checked` を持つ要素(`<li value>`、`<option value>`、`<meter value>` など)は、通常のpeek-and-substitute経路のままです。
-- **`<select>` の再同期。** `bindSelectValue` が通常のper-value effectに加えて、selectのsubtreeへ `MutationObserver` を設置します。これにより、mount後に追加された(例えばoption自体がsignalから描画される場合の)マッチする `<option>` も正しく選択されます。以前はbindingされたsignalだけを監視し、DOMの `<option>` listの変化には反応しなかったため、選択状態が空のまま固まっていました。
+- **`<select>` の再同期。** `bindSelectValue` が値のsubscriptionに加えて、selectのsubtreeへ `MutationObserver` を設置します。これにより、mount後に追加された(例えばoption自体がsignalから描画される場合の)マッチする `<option>` も正しく選択されます。以前はbindingされたsignalだけを監視し、DOMの `<option>` listの変化には反応しなかったため、選択状態が空のまま固まっていました。
 - **IME compositionの安全性。** `bindTextValue` が、componentが独自のcomposition handlerを宣言しているかどうかに関係なく、`compositionstart`/`compositionend` をnode自身で直接追跡します。composition中に要求された `value` の書き込み ―― inputの `onChange` からではなく、同じsignalの別の購読者から発生したものも含む ―― は、即座に適用されず composition終了まで遅延されるため、進行中のcompositionを中断できなくなりました。
 - **`style`(粗い、object全体の形)。** `applyStyle` が解決済みのobjectを代入し、unit必須の数値propertyには `px` を付け、`--custom-property` entryは `setProperty` で書き込み、前回にはあり今回にはないkeyをclearします。scopeはHTML hostのみです。
 - `tests/react-dom-binding.test.tsx`(`<select>` の再同期、IME composition、独立した `computed` に支えられたradio groupの兄弟unchecking、`value` bindingをStrict Modeで包んだdouble-invoke testを含む)、`tests/ssr.test.tsx`、`tests/jsx-types.tsx` でtest済みです。

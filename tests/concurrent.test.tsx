@@ -33,7 +33,7 @@ afterEach(() => {
 
 describe("concurrent rendering", () => {
   it("schedules a signal write made inside startTransition at transition priority", () => {
-    // If the signal's synchronous, effect-based notify forced a synchronous
+    // If the signal's synchronous V1 notification forced a synchronous
     // commit instead of the scheduled one, React would never render an
     // intermediate isPending=true frame; it would jump straight from `false`
     // to `false` in one render. Capturing isPending during render (rather

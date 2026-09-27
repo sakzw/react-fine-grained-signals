@@ -44,10 +44,11 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
 }
 
 /**
- * Shared `useSyncExternalStore` subscription wiring for the selector store
- * and structural-readable fallback. On `subscribe`, starts an `effect()`
- * that reruns `onEvaluate` on every relevant signal write and notifies React
- * exactly when it reports a change; returns that effect's disposer.
+ * Shared `useSyncExternalStore` wiring for effect-backed subscriptions only:
+ * the dynamic deep-selector store and structural-readable compatibility
+ * fallback. Package readables with ReadableInterop V1 use a direct watcher.
+ * On `subscribe`, starts an `effect()` that reruns `onEvaluate` on relevant
+ * writes and notifies React when it reports a change.
  *
  * `getSnapshot` is intentionally not this helper's concern — the caller
  * wires its own, whether that means recomputing fresh each call
@@ -58,7 +59,9 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
  * read to surface the error to an Error Boundary rather than letting the
  * background effect's exception escape through the signal writer.
  */
-function createSignalStore(onEvaluate: () => boolean): (notify: () => void) => () => void {
+function createEffectBackedStoreSubscription(
+  onEvaluate: () => boolean,
+): (notify: () => void) => () => void {
   return (notify: () => void): (() => void) => {
     let isInitialRun = true;
     return effect(() => {
@@ -112,7 +115,7 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   return {
     // Notify only when the primitive result or error identity changes; this
     // is the same Object.is rule used by useSyncExternalStore snapshots.
-    subscribe: createSignalStore(() => {
+    subscribe: createEffectBackedStoreSubscription(() => {
       const next = evaluate();
       if (!hasChanged(next)) return false;
       result = next;
@@ -292,7 +295,7 @@ export function useSignalValue<T>(source: ReadonlySignal<T>): T {
     const unsubscribe = subscribeReadableV1(source, notify);
     if (unsubscribe !== undefined) return unsubscribe;
     // Preserve the legacy bridge for structural readables without V1.
-    return createSignalStore(() => {
+    return createEffectBackedStoreSubscription(() => {
       source.value;
       return true;
     })(notify);

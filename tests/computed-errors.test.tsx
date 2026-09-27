@@ -60,11 +60,10 @@ describe("computed error propagation (React)", () => {
   });
 
   it("does not throw synchronously out of a write that makes an already-mounted useSignalValue leaf's computed start erroring", () => {
-    // useSignalValue's own subscribe effect reads `source.value` in the
-    // background, outside any React render -- a separate read from the one
-    // `computed()`'s box/unbox fix protects internally. Before that read was
-    // also guarded, a background write transitioning a mounted leaf's
-    // computed into erroring threw synchronously here, at the write, instead
+    // useSignalValue's V1 watcher contains dirty-check failures, and its
+    // render-time snapshot read remains responsible for delivering the error
+    // to React. Before the computed's box/unbox path contained errors, a write
+    // transitioning a mounted leaf's computed into an error threw here instead
     // of surfacing through the next render's getSnapshot call.
     const source = signal(1);
     const broken = computed(() => {
