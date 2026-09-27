@@ -60,3 +60,23 @@ Both scopes repeat per effect callback. Their unguarded removal gives a causal u
 ## Corrected deep allocation check
 
 The corrected worker returned `status: ok`, the expected 1-root/1,000-watched-leaf shape, and `disposedEffectsStopped: true` for both runtimes. Current retained delta was 477,744 bytes; v0.1.1 was 297,544 bytes (about 1.61×, not the original 5.1×). This was a focused directional validation, not a release threshold. It supports closing the old 3.657 MB vs 0.715 MB claim as **P5 — measurement artifact**.
+
+## M1.3 focused attribution
+
+These are fresh-process paired diagnostics against unchanged current at `b4fc12a48b25266dcdd62ef0fb171e760a7d98ed`, with the M1b frozen iteration count, three warmups, seven samples, and alternating control/variant process order. Each first pass used four pairs; selected computed candidates were repeated and combined as eight pairs. Ratios are variant/control throughput. They are separate from the full M1.3 current/v0.1.1 matrix.
+
+| Hypothesis / single change | Workload | Median ratio; Q1–Q3; direction | Conclusion |
+| --- | --- | --- | --- |
+| Return without saving/resetting/restoring speculative depth when current depth is zero | `effect/fanout@1` | 0.941; 0.903–0.998; 1/4 faster | Rejected; slower direction. [Raw](m13-spec-depth-fanout-1.json) |
+| Same change | `effect/fanout@16` | 0.988; 0.873–1.037; 2/4 faster | Rejected; no supported gain. [Raw](m13-spec-depth-fanout-16.json) |
+| Same change | `effect/fanout@64` | 1.002; 0.945–1.037; 2/4 faster | Rejected; no supported gain. [Raw](m13-spec-depth-fanout-64.json) |
+| Skip promotion helper in caller when the cache flag is false | `computed/dirty-read@1` | 1.127; 1.055–1.177; 7/8 faster | Rejected because the equality control regressed. [First](m13-promotion-guard-computed-dirty-read.json), [repeat](m13-promotion-guard-repeat-computed-dirty-read.json) |
+| Same caller change | `computed/equality@1` | 0.933; 0.835–0.993; 1/8 faster | Repeatable regression. [First](m13-promotion-guard-computed-equality.json), [repeat](m13-promotion-guard-repeat-computed-equality.json) |
+| Check promotability once in `promoteSpeculativeCache` and pass the known fact to dependency validation | `computed/dirty-read@1` | 1.352; 1.236–1.629; 7/8 faster | Accepted narrow optimization. [First](m13-promotion-helper-computed-dirty-read.json), [repeat](m13-promotion-helper-repeat-computed-dirty-read.json) |
+| Same helper change | `computed/equality@1` | 0.997; 0.809–1.080; 4/8 faster | Rough parity; no direction. [First](m13-promotion-helper-computed-equality.json), [repeat](m13-promotion-helper-repeat-computed-equality.json) |
+| Same helper change | `computed/dirty-unread@1` | 1.059; 0.914–1.145; 5/8 faster | No directional change; lazy positive control. [First](m13-promotion-helper-computed-dirty-unread.json), [repeat](m13-promotion-helper-dirty-unread-repeat.json) |
+| Same helper change | `computed/source-to-many@1` | 0.985; 0.874–1.755; 4/8 faster | Inconclusive. [First](m13-promotion-helper-fanout-1.json), [repeat](m13-promotion-helper-repeat-fanout-1.json) |
+| Same helper change | `computed/source-to-many@16` | 1.111; 0.899–1.545; 5/8 faster | Inconclusive. [First](m13-promotion-helper-fanout-16.json), [repeat](m13-promotion-helper-repeat-fanout-16.json) |
+| Same helper change | `computed/source-to-many@64` | 1.200; 1.077–1.335; 6/8 faster | Repeatable improvement at this size. [First](m13-promotion-helper-fanout-64.json), [repeat](m13-promotion-helper-repeat-fanout-64.json) |
+
+The depth-zero guard preserves graph/render isolation but did not recover fan-out. The caller-only promotion guard gave a dirty-read gain but harmed equality, so it was discarded. The accepted helper change removes a redundant eligibility check only after that check has already succeeded; revision validation is unchanged. Wide spreads in other computed workloads remain visible in the raw values and are not converted into a causal percentage. The final full M1.3 matrix is stored independently in [`../results/m1.3-2026-09-27-promotion-helper/`](../results/m1.3-2026-09-27-promotion-helper/).

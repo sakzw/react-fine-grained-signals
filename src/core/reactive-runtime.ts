@@ -638,8 +638,11 @@ export function createReactiveRuntime(): ReactiveRuntime {
     return node.value as T;
   }
 
-  function speculativeDependenciesAreCurrent(node: ComputedNode<unknown>): boolean {
-    if (!node.speculativeCachePromotable) return false;
+  function speculativeDependenciesAreCurrent(
+    node: ComputedNode<unknown>,
+    knownPromotable = false,
+  ): boolean {
+    if (!knownPromotable && !node.speculativeCachePromotable) return false;
     const deps = node.speculativeDeps;
     if (node.speculativeResult === undefined || deps === undefined) return false;
     for (const [dependency, revision] of deps) {
@@ -737,7 +740,8 @@ export function createReactiveRuntime(): ReactiveRuntime {
 
   function promoteSpeculativeCache<T>(node: ComputedNode<T>): boolean {
     if (node.initialized && !(node.flags & (Dirty | Pending)) && !(node.foreignDependent && !node.live)) return true;
-    if (!speculativeDependenciesAreCurrent(node)) return false;
+    if (!node.speculativeCachePromotable) return false;
+    if (!speculativeDependenciesAreCurrent(node, true)) return false;
     const result = node.speculativeResult as { hasError: boolean; value: T | undefined; error: unknown };
     const deps = node.speculativeDeps as Map<SpeculativeDependency, number>;
     for (const dependency of deps.keys()) {

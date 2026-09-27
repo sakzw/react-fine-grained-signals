@@ -4,6 +4,8 @@
 
 Phase 9 determines whether the current implementation is ready for v0.2.0 and whether its performance is acceptable relative to the released v0.1.1 package, Alien Signals, and a pinned Vue reactivity implementation. It must distinguish release blockers, costs required by RFSG semantics, and opportunities for later optimization. npm publication is outside the completion gate; it may follow the frozen release candidate and additional dogfooding.
 
+Latest M1 status and the M1.3 causal/measurement report are documented in [implementation-phase9-m1.3.md](implementation-phase9-m1.3.md). M1b and M1.2 artifacts remain frozen historical records.
+
 Phase 5 through Phase 8 remain frozen. Phase 9 is not a feature phase. During M0, make no production behavior changes and do not redesign `deepSignal`, scheduling, bare tracking, `ReadableInterop`, or cross-runtime semantics. Production continues to depend on `alien-signals/system`, not Alien Signals' high-level root API.
 
 The starting production boundary is:
@@ -350,3 +352,9 @@ The read-only comparison of Alien Signals 3.2.1, the pinned Vue 3.6 reactivity i
 ### M1.2 — Runtime representation optimization
 
 M1.2 selected the lower-risk split wrapper/node representation after the integrated Candidate A failed existing runtime-surface checks. Candidate C removed the readable-to-node `WeakMap` and per-readable protocol closures while preserving the public wrapper, node, frozen protocol object, and `WeakSet` signal identity. Its final eight-round run materially improved source creation and computed creation; source reads recovered slightly, computed dirty-unread remained faster than v0.1.1, and effect fan-out at 16/64 remains a repeatable regression requiring focused M2 investigation. No effect-scope fast path passed its paired benefit gate. The full experiment, validation, allocation and bundle results, and per-case M1b comparison are in [`implementation-phase9-m1.2.md`](implementation-phase9-m1.2.md). M1.2 does not start M2.
+
+### M1.3 — Targeted hot-path validation
+
+M1.3 preserved the public/runtime semantics and accepted one narrow computed-cache promotion fast path after isolated paired comparisons. It did not resolve every M1b regression: effect fan-out, equality suppression, source access, and some React paths remain below or near v0.1.1 parity. The full M1.3 results and remaining investigation areas are in [implementation-phase9-m1.3.md](implementation-phase9-m1.3.md); raw data are under `benchmarks/phase9/results/m1.3-2026-09-27-promotion-helper/`.
+
+M1.3 is complete and does not start M2.

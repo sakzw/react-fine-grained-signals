@@ -21,13 +21,13 @@ Smoke uses low iteration counts, writes to the OS temporary directory, and is la
 
 `measure` and `calibrate` require production-relevant files to match baseline `c5d1796cfa2063db7eecb99e537209de185a530c`. The guard includes `src/**`, package and lock/workspace manifests, TypeScript and tsdown configuration, and the runtime declaration post-processing script. It permits benchmark and documentation changes. Each manifest also records a deterministic SHA-256 over the sorted relative paths and contents of the built `dist` files, along with the baseline guard result. The historical v0.1.1 artifact is never rebuilt.
 
-For an explicitly identified M1.2 candidate only, `measure` also accepts `--runtime-inputs-sha256 <sha256>`. This compares the supplied hash with the deterministic SHA-256 of the current production input tree and records both the hash and `identityGuard: "explicit-runtime-inputs-sha256"` in the manifest. It does not relax calibration or silently redefine the M1b baseline. The analyzer rechecks the recorded input-tree hash and built-dist SHA-256. Compute the candidate hash with:
+For an explicitly identified post-M1b candidate such as M1.2 or M1.3, `measure` also accepts `--runtime-inputs-sha256 <sha256>`. This compares the supplied hash with the deterministic SHA-256 of the current production input tree and records both the hash and `identityGuard: "explicit-runtime-inputs-sha256"` in the manifest. It does not relax calibration or silently redefine the M1b baseline. The analyzer rechecks the recorded input-tree hash and built-dist SHA-256. Compute the candidate hash with:
 
 ```sh
 node --input-type=module -e "import { hashCurrentRuntimeInputs } from './benchmarks/phase9/runtime-identity.mjs'; console.log(await hashCurrentRuntimeInputs())"
 ```
 
-Use this explicit guard only for the final M1.2 measurement after implementation and correctness validation; retain the normal baseline guard for M1b.
+Use this explicit guard only for a named candidate measurement after implementation and correctness validation; retain the normal baseline guard for M1b. Capture the repository's dirty state before the runner creates its manifest and JSONL outputs, so `worktreeDirty` and `dirtyPaths` describe the state at run start. Prior calibration output can still be pre-existing dirty state.
 
 ## M1b calibration (pilot only)
 
@@ -88,6 +88,8 @@ node benchmarks/phase9/analyze.mjs benchmarks/phase9/results/<run-id>
 ```
 
 The analyzer rejects non-measure, incomplete, failed, or identity-mismatched runs, including an iterations-file SHA mismatch. It verifies sample coverage and the recorded eight-round schedule before printing JSON. Per-round quantiles use linear interpolation (R-7); allocation diagnostics remain separate and have no release threshold.
+
+Post-M1b candidate measurements must use a distinct output directory and the frozen iterations file. M1.3's completed full matrix is `results/m1.3-2026-09-27-promotion-helper/`; it does not overwrite M1b or M1.2 evidence.
 
 ## M1.1b causal attribution
 
