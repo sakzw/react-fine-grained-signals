@@ -45,11 +45,15 @@ const positiveInt = (name, fallback) => {
 const mode = smoke ? "smoke_validation" : (requestedMode ?? "measure");
 if (!["measure", "smoke_validation", "calibration"].includes(mode)) throw new Error(`Unsupported mode: ${mode}`);
 const calibration = mode === "calibration";
+const preflightOnly = cli.includes("--preflight-only");
 const rounds = smoke ? 1 : positiveInt("--rounds", calibration ? 1 : 8);
 const warmups = smoke ? 1 : positiveInt("--warmups", calibration ? 1 : 3);
 const samples = smoke ? 1 : positiveInt("--samples", calibration ? 3 : 7);
 const iterationOverride = smoke ? 12 : (cli.includes("--iterations") ? positiveInt("--iterations", 1) : undefined);
 const iterationsFileOption = getOption("--iterations-file", undefined);
+if (mode === "measure" && iterationsFileOption === undefined) {
+  throw new Error("M1b measurement requires --iterations-file with a frozen calibration result. Run calibration first; no benchmark workers were started.");
+}
 if (iterationOverride !== undefined && iterationsFileOption !== undefined) {
   throw new Error("Use either --iterations or --iterations-file, not both.");
 }
@@ -71,14 +75,9 @@ const outputDir = outputOption === undefined
   : resolve(repoRoot, outputOption);
 const runtimeIdentity = mode === "smoke_validation" ? null : await verifyCurrentRuntimeIdentity();
 const currentRuntimeArtifact = runtimeIdentity?.artifact ?? await hashCurrentRuntimeArtifact();
-await mkdir(dirname(outputDir), { recursive: true });
-await mkdir(outputDir, { recursive: false });
 const samplesPath = resolve(outputDir, "samples.jsonl");
 const failuresPath = resolve(outputDir, "failures.jsonl");
 const allocationPath = resolve(outputDir, "allocations.jsonl");
-await writeFile(samplesPath, "", "utf8");
-await writeFile(failuresPath, "", "utf8");
-await writeFile(allocationPath, "", "utf8");
 
 async function gitOutput(args) {
   try {
@@ -88,6 +87,11 @@ async function gitOutput(args) {
     return "unavailable";
   }
 }
+
+// Capture the repository state before this run creates any output files.
+const gitHead = await gitOutput(["rev-parse", "HEAD"]);
+const dirtyPathsText = await gitOutput(["status", "--porcelain"]);
+const dirtyPaths = dirtyPathsText === "" ? [] : dirtyPathsText.split(/\r?\n/);
 
 async function sha256File(path) {
   try { return createHash("sha256").update(await readFile(path)).digest("hex"); }
@@ -115,9 +119,6 @@ async function harnessHash() {
 }
 
 const cpu = (await import("node:os")).cpus()[0]?.model ?? "unknown";
-const gitHead = await gitOutput(["rev-parse", "HEAD"]);
-const dirtyPathsText = await gitOutput(["status", "--porcelain"]);
-const dirtyPaths = dirtyPathsText === "" ? [] : dirtyPathsText.split(/\r?\n/);
 const manifest = {
   schemaVersion: 1,
   mode,
@@ -183,6 +184,9 @@ expandedCases = expandedCases.map((definition) => ({
     ?? iterationOverride
     ?? (smoke ? 12 : definition.iterations),
 }));
+if (mode === "measure" && frozenIterationCounts === null) {
+  throw new Error("M1b measurement requires a complete frozen iterations file; no benchmark workers were started.");
+}
 const includeAllocations = smoke || cli.includes("--allocations");
 const allocationRounds = smoke ? 1 : (includeAllocations ? positiveInt("--allocation-rounds", 3) : 0);
 const includeDeepAllocation = includeAllocations;
@@ -206,6 +210,15 @@ const allocationTasksPerRound = allocationWorkloadIds.reduce((total, kind) => to
 ), 0);
 manifest.plannedTasks = expandedCases.length * runtimes.length * rounds
   + (includeAllocations ? allocationTasksPerRound * allocationRounds : 0);
+if (preflightOnly) {
+  process.stdout.write(`Preflight passed for mode=${mode}; no output directory was created and no benchmark workers were started.\n`);
+  process.exit(0);
+}
+await mkdir(dirname(outputDir), { recursive: true });
+await mkdir(outputDir, { recursive: false });
+await writeFile(samplesPath, "", "utf8");
+await writeFile(failuresPath, "", "utf8");
+await writeFile(allocationPath, "", "utf8");
 await writeFile(resolve(outputDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
 async function executeChild(payload, script = workerPath) {

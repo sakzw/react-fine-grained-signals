@@ -40,6 +40,15 @@ pnpm --dir benchmarks/phase9 calibrate -- --iterations-file benchmarks/phase9/m1
 
 The calibration runner defaults to one process round, one warmup, and three samples. A frozen iteration file must cover every selected case/size exactly; the runner records its SHA-256 and the resolved counts in the manifest and each raw row. Calibration output remains separate from `results/`.
 
+`mode=measure` refuses to start unless `--iterations-file` is provided. Use `--preflight-only` to validate a calibration file and runtime identity without creating output files or starting workers:
+
+```sh
+pnpm --dir benchmarks/phase9 calibrate -- --preflight-only
+pnpm --dir benchmarks/phase9 measure -- --iterations-file benchmarks/phase9/m1b-iterations.json --preflight-only
+```
+
+The first command is an initial calibration preflight and does not need an iterations file. The second checks that the frozen file is a valid JSON object with complete case/size coverage and positive integer counts. `measure` without a file exits before starting workers and explains that a frozen calibration result is required.
+
 ## Controlled M1b run
 
 Use a quiet, fixed machine and exact Node runtime. Build the runtime before starting; do not run other builds, tests, or CPU-heavy work during the matrix. After calibration, freeze the iteration file and run:
