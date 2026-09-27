@@ -14,12 +14,14 @@ import {
   RUNTIME_BASELINE_SHA,
   VUE_CORE_COMMIT,
   VUE_PACKAGE_VERSION,
+  allocationWorkloadIds,
   commonCases,
   rfsgCases,
   runtimes,
   smokeCases,
 } from "./config.mjs";
 import { verifiedPins } from "./verify-pins.mjs";
+import { hashCurrentRuntimeArtifact, verifyCurrentRuntimeIdentity } from "./runtime-identity.mjs";
 
 const execFileAsync = promisify(execFile);
 const harnessDir = dirname(fileURLToPath(import.meta.url));
@@ -41,11 +43,16 @@ const positiveInt = (name, fallback) => {
 };
 
 const mode = smoke ? "smoke_validation" : (requestedMode ?? "measure");
-if (mode !== "measure" && mode !== "smoke_validation") throw new Error(`Unsupported mode: ${mode}`);
-const rounds = smoke ? 1 : positiveInt("--rounds", 8);
-const warmups = smoke ? 1 : positiveInt("--warmups", 3);
-const samples = smoke ? 1 : positiveInt("--samples", 7);
+if (!["measure", "smoke_validation", "calibration"].includes(mode)) throw new Error(`Unsupported mode: ${mode}`);
+const calibration = mode === "calibration";
+const rounds = smoke ? 1 : positiveInt("--rounds", calibration ? 1 : 8);
+const warmups = smoke ? 1 : positiveInt("--warmups", calibration ? 1 : 3);
+const samples = smoke ? 1 : positiveInt("--samples", calibration ? 3 : 7);
 const iterationOverride = smoke ? 12 : (cli.includes("--iterations") ? positiveInt("--iterations", 1) : undefined);
+const iterationsFileOption = getOption("--iterations-file", undefined);
+if (iterationOverride !== undefined && iterationsFileOption !== undefined) {
+  throw new Error("Use either --iterations or --iterations-file, not both.");
+}
 const graphCount = smoke ? 12 : positiveInt("--graph-count", 1_000);
 const sizeOverride = smoke ? [4] : (cli.includes("--sizes")
   ? getOption("--sizes", "").split(",").map((part) => Number(part))
@@ -58,8 +65,12 @@ const timestamp = new Date().toISOString();
 const runId = `${timestamp.replaceAll(/[:.]/g, "-")}-${process.pid}`;
 const outputOption = getOption("--output", undefined);
 const outputDir = outputOption === undefined
-  ? (smoke ? resolve(tmpdir(), `rfsg-phase9-${runId}`) : resolve(harnessDir, "results", runId))
+  ? (smoke
+    ? resolve(tmpdir(), `rfsg-phase9-${runId}`)
+    : resolve(harnessDir, calibration ? "calibration" : "results", runId))
   : resolve(repoRoot, outputOption);
+const runtimeIdentity = mode === "smoke_validation" ? null : await verifyCurrentRuntimeIdentity();
+const currentRuntimeArtifact = runtimeIdentity?.artifact ?? await hashCurrentRuntimeArtifact();
 await mkdir(dirname(outputDir), { recursive: true });
 await mkdir(outputDir, { recursive: false });
 const samplesPath = resolve(outputDir, "samples.jsonl");
@@ -87,7 +98,7 @@ async function harnessHash() {
   const files = [];
   async function visit(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
-      if (entry.name === "node_modules" || entry.name === "results") continue;
+      if (["node_modules", "results", "calibration"].includes(entry.name)) continue;
       const path = resolve(directory, entry.name);
       if (entry.isDirectory()) await visit(path);
       else files.push(path);
@@ -139,19 +150,62 @@ const manifest = {
 };
 
 const selectedCases = [...commonCases, ...rfsgCases].filter((definition) => !smoke || smokeCases.has(definition.id));
-const expandedCases = selectedCases.flatMap((definition) => {
+let expandedCases = selectedCases.flatMap((definition) => {
   const sizes = definition.sizes ? (sizeOverride ?? definition.sizes) : [definition.size ?? 1];
-  return sizes.map((size) => ({ ...definition, size, iterations: iterationOverride ?? (smoke ? 12 : definition.iterations) }));
+  return sizes.map((size) => ({ ...definition, size }));
 });
+let frozenIterationCounts = null;
+let iterationsFileSha256 = null;
+if (iterationsFileOption !== undefined) {
+  if (smoke) throw new Error("--iterations-file is not used by smoke validation.");
+  const iterationsFilePath = resolve(repoRoot, iterationsFileOption);
+  const iterationsContent = await readFile(iterationsFilePath);
+  const parsedIterationCounts = JSON.parse(iterationsContent.toString("utf8"));
+  if (!parsedIterationCounts || Array.isArray(parsedIterationCounts) || typeof parsedIterationCounts !== "object") {
+    throw new Error("The iterations file must be a JSON object keyed by '<caseId>@<size>'.");
+  }
+  const expectedIterationKeys = expandedCases.map(({ id, size }) => `${id}@${size}`);
+  const suppliedIterationKeys = Object.keys(parsedIterationCounts);
+  const missingKeys = expectedIterationKeys.filter((key) => !(key in parsedIterationCounts));
+  const unexpectedKeys = suppliedIterationKeys.filter((key) => !expectedIterationKeys.includes(key));
+  if (missingKeys.length > 0 || unexpectedKeys.length > 0) {
+    throw new Error(`Iteration file coverage mismatch. Missing: ${missingKeys.join(", ") || "none"}; unexpected: ${unexpectedKeys.join(", ") || "none"}.`);
+  }
+  for (const [key, value] of Object.entries(parsedIterationCounts)) {
+    if (!Number.isSafeInteger(value) || value < 1) throw new Error(`Iteration count for ${key} must be a positive integer.`);
+  }
+  frozenIterationCounts = parsedIterationCounts;
+  iterationsFileSha256 = createHash("sha256").update(iterationsContent).digest("hex");
+}
+expandedCases = expandedCases.map((definition) => ({
+  ...definition,
+  iterations: frozenIterationCounts?.[`${definition.id}@${definition.size}`]
+    ?? iterationOverride
+    ?? (smoke ? 12 : definition.iterations),
+}));
 const includeAllocations = smoke || cli.includes("--allocations");
 const allocationRounds = smoke ? 1 : (includeAllocations ? positiveInt("--allocation-rounds", 3) : 0);
 const includeDeepAllocation = includeAllocations;
 manifest.configurations.includeAllocations = includeAllocations;
 manifest.configurations.allocationRounds = allocationRounds;
 manifest.configurations.includeDeepAllocation = includeDeepAllocation;
+manifest.configurations.iterationsFile = iterationsFileOption === undefined ? null : {
+  path: iterationsFileOption,
+  sha256: iterationsFileSha256,
+  counts: frozenIterationCounts,
+};
+manifest.currentRuntimeArtifact = {
+  ...currentRuntimeArtifact,
+  identityGuard: runtimeIdentity === null ? "not-run-for-smoke" : "production-inputs-match-baseline",
+  guardedBaselineSha: RUNTIME_BASELINE_SHA,
+};
+const allocationTasksPerRound = allocationWorkloadIds.reduce((total, kind) => total + (
+  kind === "deep-watched-leaves"
+    ? runtimes.filter((runtime) => runtime.id.startsWith("rfsg-")).length
+    : runtimes.length
+), 0);
 manifest.plannedTasks = expandedCases.length * runtimes.length * rounds
-  + (includeAllocations ? runtimes.length * allocationRounds * 2 : 0)
-  + (includeDeepAllocation ? 2 * allocationRounds : 0);
+  + (includeAllocations ? allocationTasksPerRound * allocationRounds : 0);
 await writeFile(resolve(outputDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 
 async function executeChild(payload, script = workerPath) {
@@ -213,12 +267,27 @@ async function runAllocation(kind, runtime, round, orderPosition) {
   let parsed;
   try { parsed = JSON.parse(result.stdout); }
   catch { parsed = { status: "invalid_output" }; }
-  if (!result.ok || parsed.status === "invalid_output") {
+  const expectedGraphShape = kind === "signal-computed-effect-graph"
+    ? { sourceSignals: graphCount, computedSignals: graphCount, effects: graphCount, deepSignalRoots: 0, watchedLeaves: 0, subscribersToSingleSource: 0 }
+    : kind === "one-source-many-effects"
+      ? { sourceSignals: 1, computedSignals: 0, effects: graphCount, deepSignalRoots: 0, watchedLeaves: 0, subscribersToSingleSource: graphCount }
+      : { sourceSignals: 0, computedSignals: 0, effects: graphCount, deepSignalRoots: 1, watchedLeaves: graphCount, subscribersToSingleSource: 0 };
+  const shapeMatches = JSON.stringify(parsed.graphShape) === JSON.stringify(expectedGraphShape);
+  if (!result.ok || parsed.status !== "ok" || parsed.kind !== kind || !shapeMatches || parsed.disposedEffectsStopped !== true) {
     failed = true;
-    await appendFile(failuresPath, `${JSON.stringify({ ...rowBase, status: "failed", exitCode: result.exitCode, stderr: result.stderr, stdout: result.stdout })}\n`);
+    await appendFile(failuresPath, `${JSON.stringify({
+      ...rowBase,
+      status: "failed",
+      exitCode: result.exitCode,
+      stderr: result.stderr,
+      stdout: result.stdout,
+      reason: `Allocation result did not prove the expected ${kind} graph shape.`,
+      expectedGraphShape,
+      actualGraphShape: parsed.graphShape ?? null,
+    })}\n`);
     return;
   }
-  await appendFile(allocationPath, `${JSON.stringify({ ...rowBase, ...parsed })}\n`);
+  await appendFile(allocationPath, `${JSON.stringify({ ...rowBase, ...parsed, shapeVerified: true })}\n`);
 }
 
 let failed = false;
@@ -340,19 +409,12 @@ try {
     const runtimeOrder = runtimes.map((_, index) => runtimes[(index + rotation) % runtimes.length]);
     for (let orderPosition = 0; orderPosition < runtimeOrder.length; orderPosition += 1) {
       const runtime = runtimeOrder[orderPosition];
-      await runAllocation("signal-computed-effect-graph", runtime, round + 1, orderPosition + 1);
-      if (failed) break;
-      await runAllocation("one-source-many-effects", runtime, round + 1, orderPosition + 1);
-      if (failed) break;
-    }
-  }
-  if (includeDeepAllocation && !failed) {
-    const deepRuntimeOrder = runtimes.filter((runtime) => runtime.id.startsWith("rfsg-"));
-    for (let round = 0; round < allocationRounds && !failed; round += 1) {
-      for (let orderPosition = 0; orderPosition < deepRuntimeOrder.length; orderPosition += 1) {
-        await runAllocation("deep-watched-leaves", deepRuntimeOrder[orderPosition], round + 1, orderPosition + 1);
+      for (const kind of allocationWorkloadIds) {
+        if (kind === "deep-watched-leaves" && !runtime.id.startsWith("rfsg-")) continue;
+        await runAllocation(kind, runtime, round + 1, orderPosition + 1);
         if (failed) break;
       }
+      if (failed) break;
     }
   }
 } catch (error) {
@@ -365,5 +427,6 @@ try {
   await writeFile(resolve(outputDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 
-process.stdout.write(`Run status: ${manifest.status}\nMode: ${mode === "smoke_validation" ? "SMOKE / HARNESS VALIDATION ONLY" : "measurement requested"}\nResults: ${outputDir}\n`);
+const modeLabel = mode === "smoke_validation" ? "SMOKE / HARNESS VALIDATION ONLY" : (calibration ? "CALIBRATION PILOT / NOT AUTHORITATIVE" : "measurement requested");
+process.stdout.write(`Run status: ${manifest.status}\nMode: ${modeLabel}\nResults: ${outputDir}\n`);
 if (failed) process.exitCode = 1;

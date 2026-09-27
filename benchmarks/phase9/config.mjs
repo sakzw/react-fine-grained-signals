@@ -67,3 +67,9 @@ export const smokeCases = new Set([
   "rfsg/react-useSignalValue",
   "rfsg/react-jsx-direct-binding",
 ]);
+
+export const allocationWorkloadIds = [
+  "signal-computed-effect-graph",
+  "one-source-many-effects",
+  "deep-watched-leaves",
+];
