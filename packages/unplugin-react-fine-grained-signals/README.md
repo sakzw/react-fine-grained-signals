@@ -60,12 +60,13 @@ export default {
     callbacks are collected by their owning component but are never transform
     targets themselves.
 - `transform`:
-  - `"managed"` (default): adds an exact `try` / `finally` boundary, importing
+  - `"managed"` (default and recommended): adds an exact `try` / `finally` boundary, importing
     from the package's `/runtime` entry and closing the render-tracking
     window synchronously at the point the component function returns.
-  - `"inject"`: adds bare `useSignalTracking()` for best-effort opt-in. It inserts a
-    normal `useSignalTracking()` call without rewriting control flow, so it has the
-    same best-effort tracking boundary as a handwritten call — see
+  - `"inject"` (supported advanced/compatibility mode): adds bare
+    `useSignalTracking()` for best-effort opt-in. It inserts a normal
+    `useSignalTracking()` call without rewriting control flow, so it has the same
+    best-effort tracking boundary as a handwritten call — see
     [the boundary design investigation](../../docs/design/use-signals-boundary-design.md)
     for the known sibling-misattribution limitation this mode can expose.
 - `reactCompiler`:

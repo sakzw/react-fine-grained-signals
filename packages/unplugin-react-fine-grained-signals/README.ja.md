@@ -58,12 +58,13 @@ export default {
   - `"all"`: さらにすべての名前付きJSX componentを変換します。ネストした
     callbackの読み取りは親componentが収集しますが、callback自体は変換しません。
 - `transform`
-  - `"managed"`（既定）: 厳密な `try` / `finally` 境界を追加します。
+  - `"managed"`（既定・推奨）: 厳密な `try` / `finally` 境界を追加します。
     `/runtime` からimportし、componentの関数がreturnする時点でrender
     tracking windowを同期的に閉じます。
-  - `"inject"`: best-effortなopt-in向けに変換なしの `useSignalTracking()` を
-    追加します。制御フローを書き換えず、通常の `useSignalTracking()` を先頭hook
-    として挿入するため、手書きと同じbest-effort境界になります。この
+  - `"inject"`（サポートされた高度・互換性向けmode）: best-effortなopt-in向けに
+    変換なしの `useSignalTracking()` を追加します。制御フローを書き換えず、通常の
+    `useSignalTracking()` を先頭hookとして挿入するため、手書きと同じbest-effort
+    境界になります。この
     modeが露呈し得るsibling誤帰属の既知の制約については、
     [境界設計の検討docs](../../docs/design/use-signals-boundary-design.ja.md)
     を参照してください。

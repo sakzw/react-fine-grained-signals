@@ -238,3 +238,67 @@ After the runtime build, `node --expose-gc benchmarks/react-render.mjs 20 10` co
 - The M1 architecture remains intact: `currentStore`, `closeDisallowedCurrentStores()`, and `RenderStore.managed` were not restored; graph collection order and ReadableInterop V1 were not redesigned; no public API or deep-signal-specific ownership state was added.
 
 **M2 is complete. Phase 8 is ready for final stabilization/freeze.** This records readiness only; no subsequent phase is started here.
+
+## M3 — final stabilization and freeze
+
+The final audit found no correctness blocker requiring production changes. Documentation now describes the accepted public contract and architecture consistently in English and Japanese. M3 makes no runtime behavior or public API change.
+
+### Final architecture
+
+**Public boundary contract**
+
+- Bare `useSignalTracking()` is supported and best-effort; each signal-reading component must open its own boundary.
+- `transform: "managed"` is the exact lexical `try` / `finally` boundary and the plugin's default and recommended whole-render mode.
+- Manual `useManagedSignals()` with synchronous `try` / `finally` is the exact plugin-free boundary.
+- `transform: "inject"` remains a supported advanced/compatibility mode with the bare hook's best-effort semantics.
+- `useSignalValue()` and JSX direct signal binding remain exact targeted leaf/host subscriptions.
+
+**Scope lifecycle**
+
+- One `RenderStore` implementation owns React listeners, render dependency state, versioning, commit/diff, notifications, and disposal.
+- `SharedInteropContextV1.renderScope` is the single active-scope arbitration authority across same-copy and duplicate-package nesting.
+- The module-local `activeRenderCollector` remains the direct local collector channel and is saved/restored lexically.
+- Managed scope policy finishes synchronously and does not use bare recovery. Bare policy retains commit-edge cleanup and trailing microtask recovery.
+- `currentStore`, `closeDisallowedCurrentStores()`, and `RenderStore.managed` remain removed.
+
+**Cross-copy ownership**
+
+- The lexical top render scope owns a read regardless of which package created its readable.
+- When local and shared collectors are identical, same-copy reads use the direct local `RenderDependency` path.
+- When a different shared collector is active, render dependencies are published through ReadableInterop V1 to that lexical owner. No ordinary local read is routed through the protocol.
+- Signals, computed boundaries, and deep-property version sources follow this rule. Computed speculative/graph collection semantics remain unchanged.
+- Both V1 subscription paths close over their owning subscription object when calling `unsubscribe()`.
+
+### Documentation and regression audit
+
+The English/Japanese boundary design notes now state the final contract and mark M1/M2 outcomes complete. Rendering optimization docs no longer describe the public boundary contract as unresolved and still explain the bare limitation. Hook guides already matched the contract and were left unchanged. Plugin READMEs explicitly label managed as recommended/default and inject as supported advanced/compatibility best-effort mode. React Compiler compatibility guidance was audited and remains accurate.
+
+Existing tests retain explicit coverage for bare sibling/memoized-child misattribution, managed parent isolation, three-level nesting, mixed managed/bare ownership, self-overlap recovery, bare throw/Suspense cleanup, managed throw/Suspense behavior, duplicate-copy nesting/restoration, A/C readable ownership inside B, computed/deep ownership, foreign readable subscriptions, JSX/useSignalValue integrations, computed equality, deep sibling isolation, untracked/peek isolation, and both V1 disposer receiver cases. Assertions for nested ownership inspect the actual RenderStore snapshot revisions, not only DOM output.
+
+The `benchmarks/prototypes/` result files are existing Phase 5 runtime-architecture study records referenced by `docs/runtime-architecture-review.md` and `docs/implementation-phase5.md`; they are not Phase 8 candidate implementations or a new Phase 8 benchmark harness. No Phase 8-only prototype artifact required removal. Normal `benchmarks/react-render.mjs` remains the benchmark used for Phase 8 sanity checks.
+
+### Final size and performance sanity
+
+`pnpm size` passed all unchanged budgets. Final gzip sizes: signal-only 5.82 kB, core 5.86 kB, core+hooks 7.19 kB, deep 10.24 kB, index-full 11.41 kB, JSX runtime 8.97 kB, and utils 7.12 kB.
+
+After the runtime build, `node --expose-gc benchmarks/react-render.mjs 20 10` completed on Node v24.21.0 / Windows x64 / AMD Ryzen 7 PRO 6850U. The final sample measured `signals` at 4,228 updates/s (2.365 ms median) and `signals-managed` at 4,790 updates/s (2.088 ms median). This is a directional sanity check only; it does not establish a performance improvement or change the architecture decision.
+
+### Final validation and accepted limitations
+
+- `pnpm typecheck` passed.
+- `pnpm lint` passed with the repository's existing non-fatal warnings.
+- `pnpm test` passed: runtime 20 files / 280 tests; transform 3 files / 221 passed, 3 skipped. This includes the React Compiler transform suite.
+- `pnpm build`, `pnpm test:phase4-duplicate`, `pnpm test:consumer`, and direct `node tests/cross-copy-smoke.mjs` passed.
+- `pnpm size` passed without budget changes.
+- `pnpm test:browser` passed all 27 tests across Chromium, Firefox, WebKit, production build, and React Router.
+- `git diff --check` passed. No public API change, ReadableInterop V2, graph-collection precedence change, deepSignal-specific ownership state, or runtime redesign was introduced.
+- Accepted limitations: bare `useSignalTracking()` can misattribute reads from components that do not open their own boundary; the current harness cannot deterministically force React to time-slice between component invocations while bare cleanup is pending; cross-copy batches remain local rather than globally atomic. These are documented contract limits, not unfinished Phase 8 work.
+
+### Freeze decision
+
+- M0 — complete
+- M1 — complete
+- M2 — complete
+- M3 — complete
+
+**Phase 8 — frozen.** No Phase 9 work is included in this milestone.

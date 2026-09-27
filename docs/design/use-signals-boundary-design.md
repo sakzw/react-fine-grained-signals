@@ -2,7 +2,7 @@
 
 [English](use-signals-boundary-design.md) | [日本語](use-signals-boundary-design.ja.md)
 
-Status: Phase 8 M0 decision recorded. The public boundary contract is settled: bare `useSignalTracking()` remains best-effort; managed transform is the recommended/default exact path; manual `useManagedSignals()` is the exact plugin-free path; `inject` remains best-effort. The remaining M0 architecture recommendation is a narrowly scoped evaluation of shared-scope ownership, recorded in [implementation-phase8.md](../implementation-phase8.md). No production migration is implied.
+Status: Phase 8 is complete and frozen (M0–M3). Bare `useSignalTracking()` remains best-effort; `transform: "managed"` is the recommended/default exact path; manual `useManagedSignals()` with `try` / `finally` is the exact plugin-free path; `transform: "inject"` remains a supported best-effort advanced/compatibility mode; `useSignalValue()` and JSX direct signal bindings are exact targeted subscriptions. Scope-policy separation is adopted: `SharedInteropContextV1.renderScope` is the single active-scope arbitration stack, with `activeRenderCollector` retained as the direct local collector channel. Cross-copy readable dependencies follow lexical render ownership. See [implementation-phase8.md](../implementation-phase8.md) for the milestone record.
 
 ## Context
 
@@ -20,7 +20,7 @@ The current behavior is therefore **best-effort**, not a strict component bounda
 
 `@preact/signals-react` worked through this exact problem. Its 1.x releases patched React internals (`ReactCurrentDispatcher`) to track reads automatically; that approach broke across React versions and frameworks and was abandoned. Current releases pair an explicit `useSignals()` hook with an optional Babel transform (`@preact/signals-react-transform`) that wraps opted-in components in `try` / `finally` around an effect-store handle. The managed runtime in this library mirrors that store protocol and exposes `finish()` to close the scope. This history is direct evidence against internals-based tracking and a calibration point for the transform-based options below.
 
-## Goals for a future decision
+## Goals for the original contract decision
 
 - Preserve the `useSignalTracking()`-first authoring style that motivated this library.
 - Prevent signal reads from being silently attributed to the wrong component.
@@ -36,7 +36,7 @@ The current behavior is therefore **best-effort**, not a strict component bounda
 - Automatically unwrapping arbitrary component props or children.
 - Choosing an implementation in this document before correctness and compatibility tests exist.
 
-## Options to evaluate
+## Options considered during the original investigation
 
 ### 1. Keep bare `useSignalTracking()` best-effort
 
@@ -90,7 +90,7 @@ Advantages: low cost, orthogonal to every other option, and directly addresses t
 
 Advantages: makes guarantees honest and reduces ambiguous machinery. Disadvantages: weakens the live-library experience — the authoring style where reading `.value` during render is by itself enough to keep the view live — and is a significant product/API decision.
 
-## Decision criteria
+## Criteria used for the original decision
 
 Any selected design must have executable tests for:
 
@@ -111,8 +111,8 @@ Any selected design must have executable tests for:
 
 The decision should also compare bundle cost, per-render overhead, source-map/debugging quality, bundler coverage, and migration complexity. A solution is not acceptable if it merely moves silent misattribution to a rarer code path.
 
-## Current recommendation
+## Final contract and outcome
 
-The M0 contract decision is final for the current API: bare `useSignalTracking()` remains best-effort; `transform: "managed"` is the exact, recommended/default automatic path; `transform: "inject"` remains supported as an advanced best-effort mode; and manual `useManagedSignals()` with synchronous `try` / `finally` is the exact plugin-free path. Keep `useSignalValue()` and JSX direct bindings as exact targeted subscriptions. Do not pursue a strict bare-hook mechanism, wrapper API, or heuristic runtime warnings.
+The final contract keeps bare `useSignalTracking()` best-effort; `transform: "managed"` as the exact, recommended/default automatic path; `transform: "inject"` as a supported advanced/compatibility best-effort mode; manual `useManagedSignals()` with synchronous `try` / `finally` as the exact plugin-free path; and `useSignalValue()` plus JSX direct bindings as exact targeted subscriptions. Strict bare tracking, wrapper APIs, and runtime component-identity heuristics remain out of scope.
 
-The source design alternatives above are preserved as historical investigation, not as an open decision list. Phase 8 M0 recommends only a separately scoped M1 evaluation of whether the shared interop scope stack can replace duplicated `currentStore` arbitration. That recommendation does not approve or start a production change; see [implementation-phase8.md](../implementation-phase8.md) for evidence and scope.
+The alternatives above are historical investigation, not an open decision list. M1 confirmed shared-scope consolidation and removed `currentStore` and the duplicate local arbitration loop. M2 then hardened cross-copy reads so the lexical render scope owns each render dependency. Phase 8 is complete and frozen; see [implementation-phase8.md](../implementation-phase8.md) for evidence and validation.

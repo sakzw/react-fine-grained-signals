@@ -201,8 +201,8 @@ export function createReactiveRuntime(): ReactiveRuntime {
       return subscribeRenderNode(this, listener);
     },
   };
-// Semantically untracked callbacks pause both runtime collectors as
-  // well as the shared React collector, restoring nested scopes in a finally.
+  // Semantically untracked callbacks pause both runtime collectors as well as
+  // the shared React collector, restoring nested scopes in a finally.
   const withoutAllRenderCollection = <T>(callback: () => T): T => {
     const previousRenderReads = activeRenderReads;
     const previousSpeculativeReads = speculativeReads;
@@ -411,6 +411,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
     sharedInterop.renderCollector?.add(protocol, revision);
   }
 
+  // The lexical shared scope owns the read; keep same-copy dependencies direct.
   function collectComponentRenderDependency(
     node: SignalNode<unknown> | ComputedNode<unknown>,
     revision: number,

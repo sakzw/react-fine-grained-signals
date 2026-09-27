@@ -30,8 +30,8 @@ type RenderScopePolicy = "managed" | "bare";
 /**
  * A still-open scope is left alone only when both it and the incoming `next`
  * scope are managed. A managed scope's owner is contractually responsible
- * for closing it itself, so two managed
- * scopes overlapping is tolerated as a transient nesting rather than treated
+ * for closing it itself, so overlapping managed scopes are tolerated as a
+ * transient nesting rather than treated
  * as one of them having been abandoned. Anything else overlapping a
  * still-open scope — `next` is unmanaged, or the still-open scope itself is
  * unmanaged — is not a rule-following nesting, so the leftover scope is

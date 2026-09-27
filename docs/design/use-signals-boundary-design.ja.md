@@ -2,7 +2,7 @@
 
 [English](use-signals-boundary-design.md) | [日本語](use-signals-boundary-design.ja.md)
 
-状態: Phase 8 M0の判断を記録済みです。公開する境界契約を確定しました。bare `useSignalTracking()` はbest-effortのまま維持します。managed transformを推奨かつdefaultの厳密な経路とし、手動の `useManagedSignals()` をplugin不要の厳密な経路として維持します。`inject` はbest-effortとして維持します。残るM0のarchitecture提案は、共有scope所有権を限定的に評価することです。根拠は[implementation-phase8.md](../implementation-phase8.md)に記載しています。production移行を承認するものではありません。
+状態: Phase 8 は完了し、freeze済みです（M0〜M3）。bare `useSignalTracking()` はbest-effort、`transform: "managed"` は推奨かつdefaultの厳密な経路、`useManagedSignals()` と `try` / `finally` はplugin不要の厳密な経路です。`transform: "inject"` はサポートされた高度・互換性向けのbest-effort modeです。`useSignalValue()` とJSX direct bindingは対象を絞った厳密な購読です。scope policyの分離を採用し、`SharedInteropContextV1.renderScope` を唯一のactive scope調停stackとし、`activeRenderCollector` は同一コピー内の直接collector経路として維持しています。重複package間のread依存は字句的に最上位のrender scopeが所有します。各milestoneの記録は[implementation-phase8.md](../implementation-phase8.md)を参照してください。
 
 ## 背景
 
@@ -20,7 +20,7 @@
 
 `@preact/signals-react` は、まさにこの問題に取り組んできました。1.x はReact internals(`ReactCurrentDispatcher`)にpatchを当てて読み取りを自動追跡しましたが、Reactのversionやframeworkをまたいで壊れ、放棄されました。現在のreleaseは、明示的な `useSignals()` hookと、opt-inしたcomponentをeffect store handleの `try` / `finally` で包む任意のBabel transform(`@preact/signals-react-transform`)を組み合わせています。このライブラリのmanaged runtimeはそのstore protocolを踏襲し、scopeを閉じる `finish()` methodを公開しています。この経緯は、internalsに依存する追跡を退ける直接の根拠であり、後述のtransformベースの選択肢を評価する際の基準点になります。
 
-## 将来の判断で達成したいこと
+## 当初の境界契約の検討で目指したこと
 
 - このライブラリを作る動機になった、先頭で `useSignalTracking()` を呼ぶ書き味を維持する。
 - signal読み取りが誤ったcomponentへ静かに紐付くことを防ぐ。
@@ -36,7 +36,7 @@
 - 任意のcomponent propsやchildrenを自動的にunwrapすること。
 - 正確性と互換性のtestを用意する前に、このdocsだけで実装を決定すること。
 
-## 評価する選択肢
+## 当初の調査で検討した選択肢
 
 ### 1. 変換なしの `useSignalTracking()` をbest-effortのまま維持する
 
@@ -94,7 +94,7 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 利点は、保証内容が正確になり、曖昧な仕組みを減らせることです。欠点は、ライブライブラリとしての体験(render中に `.value` を読むだけで表示が追従する書き味)を弱める、大きなproduct/API判断になることです。
 
-## 判断基準
+## 当初の判断で使った基準
 
 採用する設計には、少なくとも次の実行可能なtestが必要です。
 
@@ -115,8 +115,8 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 さらに、bundle size、renderごとのoverhead、source mapとdebugging品質、bundler対応範囲、migrationコストを比較します。静かな誤帰属を単に発生頻度の低い経路へ移すだけの解決策は採用しません。
 
-## 現在の推奨
+## 最終契約と結果
 
-M0で現行APIの契約を確定しました。bare `useSignalTracking()` はbest-effortのまま維持します。`transform: "managed"` は厳密な境界を持つ推奨かつdefaultの自動経路です。`transform: "inject"` は高度な用途・互換性向けのbest-effort modeとして維持します。手動の `useManagedSignals()` と同期的な `try` / `finally` はplugin不要の厳密な経路です。`useSignalValue()` とJSX direct bindingは対象を絞った厳密な購読として維持します。strict bare hook、wrapper API、heuristicなruntime警告は追求しません。
+最終契約では、bare `useSignalTracking()` はbest-effort、`transform: "managed"` は推奨かつdefaultの厳密な自動経路、`transform: "inject"` はサポートされた高度・互換性向けのbest-effort mode、手動の `useManagedSignals()` と同期的な `try` / `finally` はplugin不要の厳密な経路です。`useSignalValue()` とJSX direct bindingは対象を絞った厳密な購読です。strict bare hook、wrapper API、heuristicなruntime警告は対象外です。
 
-上記の設計選択肢は過去の検討記録として残しており、未決定の選択肢一覧ではありません。Phase 8 M0が提案するのは、`currentStore` の重複した調停処理を共有interop scope stackで置き換えられるかを、別途許可されたM1で評価することだけです。この提案はproduction変更を承認または開始するものではありません。根拠と範囲は[implementation-phase8.md](../implementation-phase8.md)を参照してください。
+上記の選択肢は過去の検討記録であり、未決定の選択肢一覧ではありません。M1で共有scopeへの集約が確認され、`currentStore` と重複したローカル調停loopを削除しました。M2では重複package間のreadを字句的なrender scopeが所有するようにしました。Phase 8 は完了しfreeze済みです。根拠と検証結果は[implementation-phase8.md](../implementation-phase8.md)を参照してください。
