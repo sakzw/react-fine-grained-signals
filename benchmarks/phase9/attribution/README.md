@@ -134,3 +134,35 @@ node benchmarks/phase9/attribution/m14-paired-diagnostic.mjs \
 ```
 
 The helper records raw paired durations, not an authoritative M1b comparison. M1.4.1 selected neither candidate; no combined candidate or final Phase 9 matrix was run. See [`implementation-phase9-m1.4.1.md`](../../../docs/implementation-phase9-m1.4.1.md) for the bundle-byte comparison and decision.
+
+## M1.4.2 cross-copy-aware source fast path
+
+This isolated prototype compared starting HEAD `978e710a3e03f35c666b10f7eed1ce4e8832ca5f` against an accessor-backed activity index on the same `SharedInteropContextV1` object. It used Node v24.21.0, the frozen M1b iteration file, three warmups, seven samples per fresh process, and alternating serial control/candidate process order. Ratios are **duration candidate/control** (`<1` is faster). Raw paired process samples are preserved in [source primary](m142-source-primary-24.json), [adjacent workloads](m142-source-adjacent-8.json), and [React workloads](m142-source-react-4.json).
+
+| Workload | Pairs | Median duration ratio (Q1–Q3) | Candidate faster |
+| --- | ---: | ---: | ---: |
+| source/read@1 | 24 | 1.888 (1.708–2.204) | 0/24 |
+| source/write-read@1 | 24 | 1.144 (0.932–1.474) | 9/24 |
+| source/create@1 | 8 | 0.986 (0.973–1.025) | 5/8 |
+| source/unobserved-write@1 | 8 | 1.035 (0.988–1.113) | 3/8 |
+| computed/dirty-read@1 | 8 | 3.618 (2.999–3.869) | 0/8 |
+| computed/equality-suppression@1 | 8 | 3.094 (2.824–3.303) | 0/8 |
+| effect/observed-write@1 | 8 | 4.349 (3.691–4.641) | 0/8 |
+| effect/dynamic-dependencies@1 | 8 | 3.340 (3.051–3.716) | 0/8 |
+| effect/fanout@16 | 8 | 13.545 (11.410–14.633) | 0/8 |
+| effect/fanout@64 | 8 | 9.171 (8.626–9.524) | 0/8 |
+| batch/two-writes-one-reaction@1 | 8 | 4.143 (3.557–4.181) | 0/8 |
+| React bare tracking@1 | 4 | 1.033 (0.983–1.048) | 1/4 |
+| React managed tracking@1 | 4 | 1.004 (0.973–1.088) | 2/4 |
+| React useSignalValue@1 | 4 | 0.970 (0.955–1.013) | 3/4 |
+| React JSX direct binding@1 | 4 | 0.877 (0.836–0.932) | 4/4 |
+
+`m14-paired-diagnostic.mjs` accepts `react-bare-tracking`, `react-managed-tracking`, `react-useSignalValue`, and `react-jsx-direct-binding` aliases and runs them with the React worker. Example:
+
+```sh
+node benchmarks/phase9/attribution/m14-paired-diagnostic.mjs \
+  <control-root> <candidate-root> benchmarks/phase9/attribution/local-react.json \
+  react-bare-tracking@1 react-managed-tracking@1 react-useSignalValue@1 react-jsx-direct-binding@1
+```
+
+The context upgrade itself worked in old-first and candidate-first mixed-copy smoke checks, but the candidate made source/read markedly slower and imposed severe graph-scope costs. Exact gzip grew by 359–399 bytes depending on entry and six existing entry budgets failed. The runtime candidate was discarded; these are diagnostic records, not an accepted change or M1b result. See [`implementation-phase9-m1.4.2.md`](../../../docs/implementation-phase9-m1.4.2.md) for the design, correctness, exact bundle sizes, and closure decision.

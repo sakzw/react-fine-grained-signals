@@ -34,12 +34,18 @@ const frozenCase = (kind) => ({
   "source-write-read": "source/write-read",
 })[kind] ?? kind.replace(/^(batch)-/, "$1/");
 const cases = caseArgs.map((key) => {
-  const [kind, sizeText] = key.split("@");
+  const [requestedKind, sizeText] = key.split("@");
   const size = Number(sizeText);
-  const frozenKey = `${frozenCase(kind)}@${size}`;
+  const reactKind = ({
+    "react-bare-tracking": "bare",
+    "react-managed-tracking": "managed",
+    "react-useSignalValue": "useSignalValue",
+    "react-jsx-direct-binding": "jsx-binding",
+  })[requestedKind];
+  const frozenKey = `${reactKind === undefined ? frozenCase(requestedKind) : `rfsg/${requestedKind}`}@${size}`;
   const count = iterations[frozenKey];
   if (!Number.isSafeInteger(count) || count <= 0) throw new Error(`Missing frozen iterations for ${frozenKey}`);
-  return { key, kind, size, iterations: count };
+  return { key, kind: reactKind ?? requestedKind, react: reactKind !== undefined, size, iterations: count };
 });
 
 function runWorker(root, definition) {
@@ -51,7 +57,7 @@ function runWorker(root, definition) {
     warmups: 3,
     samples: 7,
   });
-  const workerPath = resolve(root, "benchmarks/phase9/worker.mjs");
+  const workerPath = resolve(root, "benchmarks/phase9", definition.react ? "react-worker.mjs" : "worker.mjs");
   const result = spawnSync(process.execPath, ["--expose-gc", workerPath, payload], {
     cwd: root,
     encoding: "utf8",
@@ -77,6 +83,7 @@ for (const definition of cases) {
     }
     records.push({
       case: definition.key,
+      worker: definition.react ? "react-worker" : "core-worker",
       iterations: definition.iterations,
       pair: pair + 1,
       order,

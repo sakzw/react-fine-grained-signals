@@ -1,0 +1,1624 @@
+{
+  "method": "4 paired fresh-process diagnostics; three warmups and seven samples per process; frozen M1b iterations",
+  "node": "v24.21.0",
+  "controlRoot": "C:\\Users\\catro\\.codex\\worktrees\\m142-source-control\\react-alien-signals",
+  "variantRoot": "C:\\Users\\catro\\.codex\\worktrees\\m142-source-fastpath\\react-alien-signals",
+  "records": [
+    {
+      "case": "react-bare-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 1,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 61886700,
+      "variantMedianNs": 54233100,
+      "ratio": 0.8763288396375958,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 83058500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 58342900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 56686600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 59109600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 74900000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 63418200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 61886700,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 54233100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 48921100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 46201300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 62262900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 55277700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 71118500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 49743700,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-bare-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 2,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 49136200,
+      "variantMedianNs": 51470700,
+      "ratio": 1.0475107965206916,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 47053100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 48207000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 46932000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 49730600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 49136200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 49900300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 49603600,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 54501200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 50414600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 56455000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 51470700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 51427500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 55846200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 47255100,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-bare-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 3,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 46854500,
+      "variantMedianNs": 49152400,
+      "ratio": 1.0490433149430685,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 51811100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 45536500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 43189300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 47425300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 45265000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 46854500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 51045300,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 47378300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 44803700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 48678900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 51995400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 49152400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 52770500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 57040200,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-bare-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 4,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 47419400,
+      "variantMedianNs": 48307000,
+      "ratio": 1.018718077411355,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 46054800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 43865400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 46669900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 47651900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 50152000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 52826000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 47419400,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 52474800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 47855300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 48307000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 45657300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 44556900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 55706900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 53523300,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-managed-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 1,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 56437000,
+      "variantMedianNs": 52442300,
+      "ratio": 0.9292184205397168,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 58858700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 56437000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 58430900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 62881300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 49401900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 51281900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 48720400,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 47008200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 47267700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 49688000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 94058600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 66828700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 56049200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 52442300,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-managed-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 2,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 46855700,
+      "variantMedianNs": 46280900,
+      "ratio": 0.9877325490815418,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 54097700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 46671400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 45549900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 53333200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 47870800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 45676400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 46855700,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 58555100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 46280900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 48229100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 47819900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 46230600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 46135000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 46277700,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-managed-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 3,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 47700100,
+      "variantMedianNs": 61509400,
+      "ratio": 1.289502537730529,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 49053700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 47274800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 46569900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 51324400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 47700100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 47096200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 54820500,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 47640100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 62889800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 62817400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 61509400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 59864200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 61667100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 59907500,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-managed-tracking@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 4,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 50409900,
+      "variantMedianNs": 51471500,
+      "ratio": 1.0210593554043947,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 46449000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 51791900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 56060500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 51445800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 49646000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 48976400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 50409900,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 53888700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 46777400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 49910900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 53596700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 49738800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 51471500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 60873400,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-useSignalValue@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 1,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 51108200,
+      "variantMedianNs": 48993300,
+      "ratio": 0.9586191648306925,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 50384100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 52342400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 54309500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 54773200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 51108200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 43622900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 48253300,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 62757400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 57001200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 63200200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 48993300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 48229600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 44911900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 47337600,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-useSignalValue@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 2,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 54097100,
+      "variantMedianNs": 51000900,
+      "ratio": 0.942765878392742,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 48764600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 54097100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 51399200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 57581400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 58641500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 59089200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 53082400,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 46313800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 45884800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 44753500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 51000900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 54268600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 66751800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 51983700,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-useSignalValue@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 3,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 52980700,
+      "variantMedianNs": 52025600,
+      "ratio": 0.9819726806176589,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 44474300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 47687300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 52980700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 46269800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 55114400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 54614000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 58842600,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 46499400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 45870800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 45550400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 52821000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 56241600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 52025600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 60436800,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-useSignalValue@1",
+      "worker": "react-worker",
+      "iterations": 250,
+      "pair": 4,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 47317600,
+      "variantMedianNs": 52365100,
+      "ratio": 1.1066727813752177,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 68911400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 51372800,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 60943300,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 45720500,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 44045200,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 47317600,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 46513600,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 44638700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 1,
+          "durationNs": 47795900,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 2,
+          "durationNs": 48944400,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 3,
+          "durationNs": 52496700,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 4,
+          "durationNs": 52365100,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 5,
+          "durationNs": 54175000,
+          "renders": 251,
+          "domValue": "250"
+        },
+        {
+          "sample": 6,
+          "durationNs": 54106900,
+          "renders": 251,
+          "domValue": "250"
+        }
+      ]
+    },
+    {
+      "case": "react-jsx-direct-binding@1",
+      "worker": "react-worker",
+      "iterations": 1679,
+      "pair": 1,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 23624300,
+      "variantMedianNs": 21630700,
+      "ratio": 0.9156123144389463,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 41459500,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 31953700,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 30728100,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 23624300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 22228300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 20653200,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 20245000,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 22479900,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 22397300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 24586200,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 18740800,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 20162600,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 21630700,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 21258800,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ]
+    },
+    {
+      "case": "react-jsx-direct-binding@1",
+      "worker": "react-worker",
+      "iterations": 1679,
+      "pair": 2,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 24897600,
+      "variantMedianNs": 20573200,
+      "ratio": 0.8263125763125763,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 30909200,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 26937700,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 28510300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 20266000,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 22372900,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 23415900,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 24897600,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 22405700,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 22964000,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 23327400,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 18685400,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 19004300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 20492600,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 20573200,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ]
+    },
+    {
+      "case": "react-jsx-direct-binding@1",
+      "worker": "react-worker",
+      "iterations": 1679,
+      "pair": 3,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlMedianNs": 23966500,
+      "variantMedianNs": 20111400,
+      "ratio": 0.8391463083887927,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 26073000,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 24022700,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 23966500,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 19476300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 19318300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 21775300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 24311700,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 21548000,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 21523600,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 23571700,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 20071100,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 19626300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 19906900,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 20111400,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ]
+    },
+    {
+      "case": "react-jsx-direct-binding@1",
+      "worker": "react-worker",
+      "iterations": 1679,
+      "pair": 4,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlMedianNs": 23676500,
+      "variantMedianNs": 23201000,
+      "ratio": 0.979916795134416,
+      "controlSamples": [
+        {
+          "sample": 0,
+          "durationNs": 23676500,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 22868500,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 22837600,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 19756300,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 37617500,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 38877700,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 39198000,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 24435600,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 1,
+          "durationNs": 23201000,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 2,
+          "durationNs": 26548500,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 3,
+          "durationNs": 22273000,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 4,
+          "durationNs": 23452400,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 5,
+          "durationNs": 22462500,
+          "renders": 1,
+          "domValue": "1679"
+        },
+        {
+          "sample": 6,
+          "durationNs": 21902700,
+          "renders": 1,
+          "domValue": "1679"
+        }
+      ]
+    }
+  ]
+}
