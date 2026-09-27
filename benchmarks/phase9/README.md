@@ -59,6 +59,8 @@ pnpm --dir benchmarks/phase9 measure -- --iterations-file benchmarks/phase9/m1b-
 
 The measurement-mode source guard must pass before workers start. The explicit `--allocations --allocation-rounds 3` flags collect the coarse retained-heap diagnostics; these are not allocation rates or a release score.
 
+Runtime order follows a deterministic four-round balanced cycle (`A=rfsg-v0.1.1`, `B=rfsg-current`, `C=alien-signals`, `D=vue-reactivity`): `A B D C`, `B C A D`, `C D B A`, `D A C B`. Each runtime occupies every position once, and each pair runs before/after one another twice per cycle. The authoritative eight throughput rounds repeat this cycle twice, balancing order around the paired current/v0.1.1 ratio. Custom round counts use the schedule's deterministic prefix; only complete four-round cycles claim pairwise balance. Allocation diagnostics use their separately configured three rounds and are not paired throughput evidence. The manifest records exact throughput and allocation order for every round. `node benchmarks/phase9/verify-runtime-order.mjs` checks position balance, pairwise order, and the eight-round repetition without running benchmarks.
+
 Each run directory contains `manifest.json`, raw `samples.jsonl`, `allocations.jsonl`, and `failures.jsonl`. Durations and heap sizes are numeric. Abnormal exits, timeouts, assertion failures, and shape mismatches are failures, never zero-duration samples.
 
 ## M1b aggregation rule
@@ -68,3 +70,5 @@ Use fresh processes/rounds as the independent units. For each runtime/case/size 
 1. Take the median of that process's samples within each round.
 2. Across the eight round medians, report the median and spread/IQR.
 3. Derive case-specific ratios from the runtime medians. Do not pool all samples across rounds, rank runtimes globally, or create an overall score. Keep diagnostic, RFSG-only, React, and allocation records separate from common-core comparisons.
+
+For the primary current/v0.1.1 comparison, pair the two process medians within each round and take the median of the eight `current / v0.1.1` ratios; report IQR, min/max, and direction counts. The balanced order makes the pair's run-before/run-after relationship equal over each four-round cycle. Treat `0.95–1.05` inclusive as the normal symmetric rough-parity region, subject to noise/spread. Above `1.05`, require the same repeatability before calling an improvement; noisy apparent gains remain rough parity or unstable/inconclusive. Improvements have no separate release gate.

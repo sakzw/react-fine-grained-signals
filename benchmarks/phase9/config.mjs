@@ -13,6 +13,27 @@ export const runtimes = [
   { id: "vue-reactivity", version: VUE_PACKAGE_VERSION, package: "@vue/reactivity@3.6.0-rc.9" },
 ];
 
+const balancedRuntimeOrderIds = [
+  ["rfsg-v0.1.1", "rfsg-current", "vue-reactivity", "alien-signals"],
+  ["rfsg-current", "alien-signals", "rfsg-v0.1.1", "vue-reactivity"],
+  ["alien-signals", "vue-reactivity", "rfsg-current", "rfsg-v0.1.1"],
+  ["vue-reactivity", "rfsg-v0.1.1", "alien-signals", "rfsg-current"],
+];
+
+const runtimesById = new Map(runtimes.map((runtime) => [runtime.id, runtime]));
+
+export function runtimeOrderForRound(roundNumber) {
+  if (!Number.isSafeInteger(roundNumber) || roundNumber < 1) {
+    throw new Error("roundNumber must be a positive integer.");
+  }
+  const scheduledIds = balancedRuntimeOrderIds[(roundNumber - 1) % balancedRuntimeOrderIds.length];
+  return scheduledIds.map((id) => {
+    const runtime = runtimesById.get(id);
+    if (!runtime) throw new Error(`Balanced runtime schedule references unknown runtime: ${id}`);
+    return runtime;
+  });
+}
+
 export const commonCases = [
   { id: "source/create", kind: "source-create", iterations: 20_000 },
   { id: "source/read", kind: "source-read", iterations: 100_000 },

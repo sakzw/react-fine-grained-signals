@@ -18,6 +18,7 @@ import {
   commonCases,
   rfsgCases,
   runtimes,
+  runtimeOrderForRound,
   smokeCases,
 } from "./config.mjs";
 import { verifiedPins } from "./verify-pins.mjs";
@@ -306,8 +307,7 @@ async function runAllocation(kind, runtime, round, orderPosition) {
 let failed = false;
 try {
   for (let round = 0; round < rounds && !failed; round += 1) {
-    const rotation = round % runtimes.length;
-    const runtimeOrder = runtimes.map((_, index) => runtimes[(index + rotation) % runtimes.length]);
+    const runtimeOrder = runtimeOrderForRound(round + 1);
     manifest[`round${round + 1}RuntimeOrder`] = runtimeOrder.map((runtime) => runtime.id);
     for (const definition of expandedCases) {
       for (let orderPosition = 0; orderPosition < runtimeOrder.length; orderPosition += 1) {
@@ -418,8 +418,8 @@ try {
     }
   }
   for (let round = 0; round < allocationRounds && !failed; round += 1) {
-    const rotation = round % runtimes.length;
-    const runtimeOrder = runtimes.map((_, index) => runtimes[(index + rotation) % runtimes.length]);
+    const runtimeOrder = runtimeOrderForRound(round + 1);
+    manifest[`allocationRound${round + 1}RuntimeOrder`] = runtimeOrder.map((runtime) => runtime.id);
     for (let orderPosition = 0; orderPosition < runtimeOrder.length; orderPosition += 1) {
       const runtime = runtimeOrder[orderPosition];
       for (const kind of allocationWorkloadIds) {
