@@ -342,3 +342,7 @@ The corrected `deep-watched-leaves` worker returned the expected one-root/1,000-
 | P5 — measurement-only | Original deepSignal retained-heap result was contaminated by setup-frame locals; corrected worker no longer reproduces it. | Treat as a measurement artifact, not a product leak or threshold. |
 
 M1.1b is closed. The single M2 admission is recorded above; implementation is outside this milestone.
+
+#### M1.2-0 — Reference architecture study
+
+The read-only comparison of Alien Signals 3.2.1, the pinned Vue 3.6 reactivity implementation, and current RFSG is recorded in [`implementation-phase9-m1.2-reference.md`](implementation-phase9-m1.2-reference.md). It recommends competing integrated public/node and lower-risk registration prototypes for M1.2-1; no prototype or runtime change is included here.
