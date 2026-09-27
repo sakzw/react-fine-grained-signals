@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { StrictMode, Suspense, act } from "react";
+import { StrictMode, Suspense, act, memo } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
@@ -289,6 +289,38 @@ describe("useSignalTracking render tracking", () => {
     expect(screen.getByLabelText("guarded sibling").textContent).toBe("X2");
     expect(guardedRenders).toHaveBeenCalledTimes(3);
     expect(unguardedRenders).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the best-effort bare boundary misattributing a memoized child's read", () => {
+    const parentState = signal(0);
+    const childState = signal("A");
+    const parentRenders = vi.fn();
+    const childRenders = vi.fn();
+
+    const Child = memo(function Child() {
+      childRenders();
+      return <output aria-label="memoized bare child">{childState.value}</output>;
+    });
+
+    function Parent() {
+      useSignalTracking();
+      parentRenders();
+      void parentState.value;
+      return <Child />;
+    }
+
+    render(<Parent />);
+    expect(screen.getByLabelText("memoized bare child").textContent).toBe("A");
+
+    act(() => {
+      childState.value = "B";
+    });
+
+    // The Child read was captured by the still-open bare Parent scope. It
+    // schedules Parent, but memo skips Child because its props did not change.
+    expect(parentRenders).toHaveBeenCalledTimes(2);
+    expect(childRenders).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("memoized bare child").textContent).toBe("A");
   });
 
   it("keeps a cached computed live across unrelated parent rerenders", () => {

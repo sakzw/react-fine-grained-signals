@@ -2,7 +2,7 @@
 
 [English](use-signals-boundary-design.md) | [日本語](use-signals-boundary-design.ja.md)
 
-Status: design investigation; no API or implementation decision has been made on the core question below — whether/how to give bare, non-managed `useSignalTracking()` a strict boundary contract by default. One narrower option considered here (option 3, the manual scope handle) has since been documented and adopted for plugin-free manual usage; see "Current recommendation" at the end of this document.
+Status: Phase 8 M0 decision recorded. The public boundary contract is settled: bare `useSignalTracking()` remains best-effort; managed transform is the recommended/default exact path; manual `useManagedSignals()` is the exact plugin-free path; `inject` remains best-effort. The remaining M0 architecture recommendation is a narrowly scoped evaluation of shared-scope ownership, recorded in [implementation-phase8.md](../implementation-phase8.md). No production migration is implied.
 
 ## Context
 
@@ -40,13 +40,15 @@ The current behavior is therefore **best-effort**, not a strict component bounda
 
 ### 1. Keep bare `useSignalTracking()` best-effort
 
+**Status: selected.** It remains a supported convenience API with an explicit best-effort contract; do not describe it as an exact component boundary.
+
 Retain the current runtime behavior and documentation. The managed transform remains the strict option.
 
 Advantages: no build requirement, no API change, and the desired explicit call remains available. Disadvantages: incorrect ownership remains possible when any rendering code reads a signal without opening its own boundary; documentation cannot prevent third-party or forgotten reads.
 
 ### 2. Make managed transformation the recommended strict path
 
-**Status: adopted for the plugin path.** The `unplugin-react-fine-grained-signals` build plugin defaults to this option, implementing an exact `try` / `finally` boundary via the `transform: "managed"` setting.
+**Status: selected as the recommended/default whole-render path.** The `unplugin-react-fine-grained-signals` build plugin defaults to this option, implementing an exact `try` / `finally` boundary via `transform: "managed"`.
 
 Keep the source-level `useSignalTracking()` call but transform opted-in components to an exact `try` / `finally` scope. The transform could remain optional for users who knowingly accept best-effort behavior.
 
@@ -54,7 +56,7 @@ Advantages: preserves source ergonomics and gives lexical ownership. Disadvantag
 
 ### 3. Document the manual runtime-import boundary
 
-**Status: adopted, for this narrower use case.** `transform: "managed"` remains the primary/recommended path when the build plugin is available; the manual runtime-import boundary is the documented option for an exact boundary without a build transform.
+**Status: selected as the exact plugin-free manual path.** `transform: "managed"` remains the primary/recommended path when the build plugin is available; the manual runtime-import boundary provides an exact boundary without a build transform.
 
 The managed runtime ships an exact boundary that needs no compiler: `react-fine-grained-signals/runtime` exports `useManagedSignals`, which returns a scope handle closed with `finish()`. `const store = useManagedSignals(); try { … } finally { store.finish(); }` is documented as a public pattern in [the hooks guide](../hooks.md) ("Tracking boundary"), offering strict ownership with no build integration and no wrapper. [The React Compiler compatibility note](react-compiler-compatibility.md#the-manual-runtime-import-boundary-behaves-like-managed-output) separately measures this manual runtime-import boundary under `babel-plugin-react-compiler`.
 
@@ -62,11 +64,13 @@ Advantages: exact lexical ownership from a mechanism that already exists, with n
 
 ### 4. Introduce an explicit component wrapper
 
-Provide an API such as `withSignals(Component)` that owns a boundary around the component invocation through a wrapper controlled by the library.
+**Status: rejected.** A wrapper returning `<Component {...props} />` creates an element and cannot lexically surround React's later invocation. Calling `Component(props)` directly is not an acceptable React component model.
 
 Advantages: no compiler is required and the boundary can be explicit. Disadvantages: changes authoring style, affects component identity and typings, and must be tested with refs, memoization, display names, server components, and static properties.
 
 ### 5. Integrate through a React-supported external contract
+
+**Status: no current stable contract identified; private internals are rejected.** Revisit only if React exposes a supported component render-lifetime API.
 
 Investigate whether a current or future React API can expose component-scoped render lifetime without transformation or wrappers.
 
@@ -74,13 +78,15 @@ Advantages: could offer strict ownership with less custom control flow. Disadvan
 
 ### 6. Add development-time misattribution diagnostics
 
+**Status: deferred/rejected as a primary candidate.** The runtime lacks reliable component identity; a warning based only on an open collector would be noisy because that is intended bare-hook behavior.
+
 Keep the runtime best-effort but make misattribution loud in development builds where it can be detected. This does not fix ownership — detection is heuristic, can miss cases, and must not be presented as a guarantee — but it converts silent misattribution into an actionable warning and composes with option 1. The concrete detection mechanism is itself part of the investigation; candidates include development-only sentinels around the collector lifecycle.
 
 Advantages: low cost, orthogonal to every other option, and directly addresses the "silently" part of the goals. Disadvantages: heuristics can misfire or stay quiet, so the documented contract remains best-effort even with the warnings in place.
 
 ### 7. Narrow or replace the bare API
 
-Deprecate strict claims for bare `useSignalTracking()` and direct users who require correctness toward explicit leaf subscriptions, JSX host bindings, or managed transformation.
+**Status: not selected.** Keep the bare hook as a supported best-effort convenience and direct users who need exactness toward explicit leaf subscriptions, JSX host bindings, managed transformation, or the manual managed handle.
 
 Advantages: makes guarantees honest and reduces ambiguous machinery. Disadvantages: weakens the live-library experience — the authoring style where reading `.value` during render is by itself enough to keep the view live — and is a significant product/API decision.
 
@@ -107,6 +113,6 @@ The decision should also compare bundle cost, per-render overhead, source-map/de
 
 ## Current recommendation
 
-Until a decision is made on the broader bare-`useSignalTracking()` boundary question, treat bare `useSignalTracking()` and `transform: "inject"` as plugin-free best-effort conveniences for synchronous renders where every signal-reading component opts in. Use `transform: "managed"` when an exact render boundary is required and the build plugin is available. Without the plugin, option 3's manual `react-fine-grained-signals/runtime` scope handle — `const store = useManagedSignals(); try { … } finally { store.finish(); }` — is documented in [the hooks guide](../hooks.md) as the exact-boundary alternative. This statement records the current limitation; it does not close the design issue or redefine the incorrect sibling case as correct behavior.
+The M0 contract decision is final for the current API: bare `useSignalTracking()` remains best-effort; `transform: "managed"` is the exact, recommended/default automatic path; `transform: "inject"` remains supported as an advanced best-effort mode; and manual `useManagedSignals()` with synchronous `try` / `finally` is the exact plugin-free path. Keep `useSignalValue()` and JSX direct bindings as exact targeted subscriptions. Do not pursue a strict bare-hook mechanism, wrapper API, or heuristic runtime warnings.
 
-`unplugin-react-fine-grained-signals` now defaults to `transform: "managed"`, implementing option 2 above for the bundler-plugin path: `managed` (default) adds an exact try/finally boundary; `inject` adds bare `useSignalTracking()` for best-effort opt-in. Consumers who build with the plugin and do not override `transform` therefore get the exact boundary without any source change; consumers without the plugin can get the equivalent exact boundary manually via option 3, now that it is documented. This narrows, but does not close, the scope of this investigation: bare `useSignalTracking()` called with no build transform at all, and `transform: "inject"` when explicitly selected, remain exactly as best-effort as described above, and the broader question this document is about — whether and how to give the bare hook a strict boundary contract by default — along with the other options and decision criteria in this document, remains unresolved.
+The source design alternatives above are preserved as historical investigation, not as an open decision list. Phase 8 M0 recommends only a separately scoped M1 evaluation of whether the shared interop scope stack can replace duplicated `currentStore` arbitration. That recommendation does not approve or start a production change; see [implementation-phase8.md](../implementation-phase8.md) for evidence and scope.

@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { StrictMode, Suspense, act, useLayoutEffect } from "react";
+import { StrictMode, Suspense, act, memo, useLayoutEffect } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, deepSignal, signal, useComputed } from "../src/index.js";
@@ -306,6 +306,88 @@ describe("managed useManagedSignals render scope", () => {
     });
 
     expect(screen.getByLabelText("managed custom hook").textContent).toBe("after");
+  });
+
+  it("restores the outer collector across three nested managed scopes", () => {
+    const outer = signal("outer-0");
+    const middle = signal("middle-0");
+    const inner = signal("inner-0");
+    const renders = vi.fn();
+
+    function useInnerValue() {
+      return managed(() => inner.value);
+    }
+
+    function useMiddleValues() {
+      return managed(() => `${middle.value}/${useInnerValue()}`);
+    }
+
+    function Reader() {
+      return managed(() => {
+        renders();
+        const beforeNestedScope = outer.value;
+        const nestedValues = useMiddleValues();
+        const afterNestedScope = outer.value;
+        return (
+          <output aria-label="three nested scopes">
+            {`${beforeNestedScope}/${nestedValues}/${afterNestedScope}`}
+          </output>
+        );
+      });
+    }
+
+    render(<Reader />);
+    expect(screen.getByLabelText("three nested scopes").textContent)
+      .toBe("outer-0/middle-0/inner-0/outer-0");
+    expect(hasActiveRenderCollector()).toBe(false);
+
+    for (const [source, next] of [
+      [outer, "outer-1"],
+      [middle, "middle-1"],
+      [inner, "inner-1"],
+    ] as const) {
+      act(() => {
+        source.value = next;
+      });
+      expect(screen.getByLabelText("three nested scopes").textContent)
+        .toContain(next);
+      expect(hasActiveRenderCollector()).toBe(false);
+    }
+    expect(renders).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not absorb a memoized child's read into its finished managed parent scope", () => {
+    const parentState = signal(0);
+    const childState = signal("A");
+    const parentRenders = vi.fn();
+    const childRenders = vi.fn();
+
+    const Child = memo(function Child() {
+      childRenders();
+      return <output aria-label="memoized managed child">{childState.value}</output>;
+    });
+
+    function Parent() {
+      return managed(() => {
+        parentRenders();
+        void parentState.value;
+        return <Child />;
+      });
+    }
+
+    render(<Parent />);
+    expect(screen.getByLabelText("memoized managed child").textContent).toBe("A");
+
+    act(() => {
+      childState.value = "B";
+    });
+
+    // The managed parent finished before React invoked Child. Its untracked
+    // read must not schedule Parent; this asserts isolation, not an implicit
+    // subscription for a child that did not open its own scope.
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+    expect(childRenders).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText("memoized managed child").textContent).toBe("A");
   });
 
   it("recovers the global collector when a store re-opens its own scope", () => {

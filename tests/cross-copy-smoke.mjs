@@ -16,6 +16,7 @@ try {
       entry: {
         index: join(repositoryRoot, "src/index.ts"),
         "jsx-runtime": join(repositoryRoot, "src/jsx-runtime.ts"),
+        "interop-test": join(repositoryRoot, "tests/fixtures/cross-copy-interop-entry.ts"),
       },
       outDir,
       format: "esm",
@@ -36,28 +37,68 @@ try {
     copies.push({
       api: await import(pathToFileURL(join(outDir, "index.js")).href),
       jsx: await import(pathToFileURL(join(outDir, "jsx-runtime.js")).href),
+      interop: await import(pathToFileURL(join(outDir, "interop-test.js")).href),
     });
   }
-  const interopTestOutDir = join(temporaryRoot, "interop-test");
-  await build({
-    config: false,
-    entry: { index: join(repositoryRoot, "tests/fixtures/cross-copy-interop-entry.ts") },
-    outDir: interopTestOutDir,
-    format: "esm",
-    platform: "neutral",
-    dts: false,
-    sourcemap: false,
-    clean: true,
-  });
-  const { getSharedInteropContext } = await import(
-    pathToFileURL(join(interopTestOutDir, "index.js")).href
-  );
   const [copyA, copyB, copyC] = copies.map((copy) => copy.api);
   const [jsxA] = copies.map((copy) => copy.jsx);
+  const [interopA, interopB, interopC] = copies.map((copy) => copy.interop);
   assert.notEqual(copyA.signal, copyB.signal, "the package runtime modules must be distinct");
   assert.equal(copyA.isSignal(copyA.signal(1)), true, "a package recognizes its local signal");
   assert.equal(copyA.isSignal(copyB.signal(1)), true, "a package recognizes a foreign signal brand");
   assert.equal(copyA.isSignal(copyC.computed(() => 1)), true, "a package recognizes a foreign computed brand");
+
+  // Separate bundled copies must restore a still-active managed parent scope
+  // when a nested managed scope owned by another copy finishes.
+  {
+    const context = interopA.getSharedInteropContext();
+    assert.equal(context, interopB.getSharedInteropContext());
+    assert.equal(context, interopC.getSharedInteropContext());
+    const readsA = [];
+    const readsB = [];
+    const collectorA = { add: (protocol, revision) => readsA.push([protocol, revision]) };
+    const collectorB = { add: (protocol, revision) => readsB.push([protocol, revision]) };
+    let activeA = true;
+    let activeB = true;
+    let restoreA;
+    let restoreB;
+    const scopeA = {
+      token: {},
+      managed: true,
+      isActive: () => activeA,
+      finish() {
+        if (!activeA) return;
+        activeA = false;
+        restoreA();
+      },
+    };
+    const scopeB = {
+      token: {},
+      managed: true,
+      isActive: () => activeB,
+      finish() {
+        if (!activeB) return;
+        activeB = false;
+        restoreB();
+      },
+    };
+    restoreA = interopA.pushInteropRenderScope(scopeA, collectorA);
+    restoreB = interopB.pushInteropRenderScope(scopeB, collectorB);
+    const readable = copyC.signal("cross-copy scope read");
+    interopC.publishInteropRenderRead(readable[Symbol.for("react-fine-grained-signals.readable-interop.v1")], 0);
+    assert.equal(readsA.length, 0);
+    assert.equal(readsB.length, 1, "the innermost B collector owns reads while B is active");
+
+    scopeB.finish();
+    assert.equal(context.renderScope, scopeA, "finishing B restores the still-active A scope");
+    assert.equal(context.renderCollector, collectorA);
+    interopC.publishInteropRenderRead(readable[Symbol.for("react-fine-grained-signals.readable-interop.v1")], 0);
+    assert.equal(readsA.length, 1, "reads return to A after B finishes");
+
+    scopeA.finish();
+    assert.equal(context.renderScope, undefined);
+    assert.equal(context.renderCollector, undefined);
+  }
 
   const brandedDeepSignal = copyB.deepSignal({ nested: { value: 1 } });
   assert.equal(copyA.isSignal(brandedDeepSignal), true, "a package recognizes a foreign public deep signal");
@@ -351,7 +392,7 @@ try {
       );
     }
 
-    const sharedInteropContext = getSharedInteropContext();
+    const sharedInteropContext = interopA.getSharedInteropContext();
     const speculativeDepth = sharedInteropContext.speculativeDepth;
     const speculativeEpoch = sharedInteropContext.speculativeDeepReadEpoch;
     render(React.createElement(SpeculativeReader));

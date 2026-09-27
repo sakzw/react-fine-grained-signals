@@ -2,7 +2,7 @@
 
 [English](use-signals-boundary-design.md) | [日本語](use-signals-boundary-design.ja.md)
 
-状態: 設計検討中。以下の中心的な問い ── 変換なしの `useSignalTracking()` に既定でどのような厳密な境界契約を与えるか(あるいは与えないか) ── については、APIや実装方針をまだ決定していません。ただし、ここで検討した選択肢のうち範囲の狭いもの(選択肢3、手動のscope handle)は、その後文書化され、pluginを使わない手動利用向けとして採用済みです。文末の「現在の推奨」を参照してください。
+状態: Phase 8 M0の判断を記録済みです。公開する境界契約を確定しました。bare `useSignalTracking()` はbest-effortのまま維持します。managed transformを推奨かつdefaultの厳密な経路とし、手動の `useManagedSignals()` をplugin不要の厳密な経路として維持します。`inject` はbest-effortとして維持します。残るM0のarchitecture提案は、共有scope所有権を限定的に評価することです。根拠は[implementation-phase8.md](../implementation-phase8.md)に記載しています。production移行を承認するものではありません。
 
 ## 背景
 
@@ -40,13 +40,15 @@
 
 ### 1. 変換なしの `useSignalTracking()` をbest-effortのまま維持する
 
+**状態: 採用。** 明示的にbest-effortの契約を持つ便利APIとして維持します。厳密なcomponent境界とは説明しません。
+
 現行runtimeと説明を維持し、厳密な動作にはmanaged transformを使います。
 
 利点は、buildが不要でAPI変更もなく、明示的な呼び出しを残せることです。欠点は、`useSignalTracking()` を呼ばないrender処理がsignalを読むと、誤った所有者へ紐付く可能性が残ることです。第三者componentや呼び忘れを文書だけで防ぐことはできません。
 
 ### 2. managed transformを推奨する厳密な経路にする
 
-**状態: plugin経路では採用済みです。** `unplugin-react-fine-grained-signals` build pluginはこの選択肢をdefaultにしており、`transform: "managed"` 設定で厳密な `try` / `finally` 境界を実装しています。
+**状態: 推奨かつdefaultのrender全体向け経路として採用。** `unplugin-react-fine-grained-signals` build pluginは `transform: "managed"` 設定で厳密な `try` / `finally` 境界を実装しています。
 
 source上の `useSignalTracking()` 呼び出しは維持しながら、opt-inしたcomponentを厳密な `try` / `finally` scopeへ変換します。危険性を理解した利用者向けに、best-effort動作を任意で残すこともできます。
 
@@ -54,7 +56,7 @@ source上の `useSignalTracking()` 呼び出しは維持しながら、opt-inし
 
 ### 3. 手動ランタイムインポート境界を文書化する
 
-**状態: この範囲の狭い用途については採用済みです。** build pluginを利用できる場合は `transform: "managed"` が引き続き主要な推奨経路であり、手動ランタイムインポート境界はbuild変換なしに厳密な境界を得るための文書化された選択肢です。
+**状態: pluginを使わない場合の厳密な手動経路として採用。** build pluginを利用できる場合は `transform: "managed"` が主要な推奨経路であり、手動ランタイムインポート境界はbuild変換なしに厳密な境界を提供します。
 
 managed runtimeは、compilerなしでも厳密な境界を備えています。`react-fine-grained-signals/runtime` は `useManagedSignals` をexportし、`finish()` で閉じるscope handleを返します。`const store = useManagedSignals(); try { … } finally { store.finish(); }` は、公開patternとして[hooksのdocs](../hooks.ja.md)(「追跡境界について」)に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](react-compiler-compatibility.ja.md#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、この手動ランタイムインポート境界の `babel-plugin-react-compiler` 下での挙動を別途計測しています。
 
@@ -62,11 +64,15 @@ managed runtimeは、compilerなしでも厳密な境界を備えています。
 
 ### 4. 明示的なcomponent wrapperを導入する
 
+**状態: 不採用。** `<Component {...props} />` を返すwrapperはelementを作るだけで、Reactが後から行うcomponent呼び出しを字句的に囲めません。`Component(props)` を直接呼ぶのも適切なReact componentモデルではありません。
+
 `withSignals(Component)` のようなAPIを提供し、ライブラリが制御するwrapperからcomponent呼び出しの境界を所有します。
 
 利点はcompilerが不要で、境界が明示的になることです。欠点は書き方が変わり、component identityや型に影響することです。ref、memo化、display name、server component、static propertyも検証する必要があります。
 
 ### 5. Reactが公式に提供する外部契約を利用する
+
+**状態: 現時点で安定した契約は未確認。private internalsは不採用。** Reactがcomponent render期間を公開APIとして提供した場合に限り再検討します。
 
 変換やwrapperを使わずにcomponent単位のrender期間を取得できる、現在または将来のReact APIがあるか調査します。
 
@@ -74,11 +80,15 @@ managed runtimeは、compilerなしでも厳密な境界を備えています。
 
 ### 6. 開発時の誤帰属診断を追加する
 
+**状態: 主要候補としては保留・不採用。** runtimeには信頼できるcomponent identityがありません。collectorが開いたままという条件だけの警告は、bare hook本来の動作に対して過剰になります。
+
 runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤帰属を警告します。所有権を修正するものではありません。検出はheuristicで見逃しもあり得るため、保証として提示してはいけません。それでも、静かな誤帰属を対処可能な警告に変えられ、選択肢1と組み合わせられます。具体的な検出機構自体も検討対象で、collector lifecycleを囲むdevelopment専用のsentinelなどが候補です。
 
 利点は、低コストで他のすべての選択肢と直交し、目標の「静かに」の部分へ直接対処できることです。欠点は、heuristicには誤発火や見逃しがあり得るため、警告を入れても文書上の契約はbest-effortのままであることです。
 
 ### 7. 変換なしのAPIを限定または置換する
+
+**状態: 不採用。** bare hookはbest-effortの便利APIとして残し、厳密性が必要な利用者にはleaf購読、JSX host binding、managed transform、または手動managed handleを案内します。
 
 変換なしの `useSignalTracking()` に対する厳密性の主張を廃止し、正確性が必要な利用者を、明示的なleaf購読、JSX host binding、またはmanaged transformへ案内します。
 
@@ -107,6 +117,6 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 ## 現在の推奨
 
-変換なしの `useSignalTracking()` に関するより広い境界の問いについて方針を決定するまでは、変換なしの `useSignalTracking()` と `transform: "inject"` を、signalを読むすべてのcomponentがopt-inする同期render向けの、plugin不要なbest-effort機能として扱います。build pluginを利用できて厳密なrender境界が必要な場合は `transform: "managed"` を使います。pluginを使わない場合は、選択肢3の手動 `react-fine-grained-signals/runtime` scope handle ── `const store = useManagedSignals(); try { … } finally { store.finish(); }` ── が、[hooksのdocs](../hooks.ja.md)に厳密な境界の代替として文書化されています。この説明は現在の制約を記録するものであり、設計課題を終了させたり、兄弟componentの誤帰属を正しい動作として再定義したりするものではありません。
+M0で現行APIの契約を確定しました。bare `useSignalTracking()` はbest-effortのまま維持します。`transform: "managed"` は厳密な境界を持つ推奨かつdefaultの自動経路です。`transform: "inject"` は高度な用途・互換性向けのbest-effort modeとして維持します。手動の `useManagedSignals()` と同期的な `try` / `finally` はplugin不要の厳密な経路です。`useSignalValue()` とJSX direct bindingは対象を絞った厳密な購読として維持します。strict bare hook、wrapper API、heuristicなruntime警告は追求しません。
 
-`unplugin-react-fine-grained-signals` は現在、bundler pluginの経路について上記の選択肢2を実装する形で `transform: "managed"` をdefaultにしています。`managed`(default)は厳密なtry/finally境界を追加し、`inject` はbest-effortなopt-in向けに変換なしの `useSignalTracking()` を追加します。pluginでbuildし `transform` を上書きしない利用者は、source側の変更なしにこの厳密な境界を得られます。pluginを使わない利用者も、文書化された選択肢3を手動で使うことで同等の厳密な境界を得られます。この変更はこの設計検討の範囲を狭めますが、終了させるものではありません。build変換を一切使わない変換なしの `useSignalTracking()` と、明示的に選択した `transform: "inject"` は、上記の説明どおりbest-effortのままであり、本文書が扱う中心的な問い(変換なしのhookに既定でどのような厳密な境界契約を与えるか)を含め、本文書のその他の選択肢と判断基準は依然として未解決のままです。
+上記の設計選択肢は過去の検討記録として残しており、未決定の選択肢一覧ではありません。Phase 8 M0が提案するのは、`currentStore` の重複した調停処理を共有interop scope stackで置き換えられるかを、別途許可されたM1で評価することだけです。この提案はproduction変更を承認または開始するものではありません。根拠と範囲は[implementation-phase8.md](../implementation-phase8.md)を参照してください。
