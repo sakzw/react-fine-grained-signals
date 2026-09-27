@@ -80,3 +80,7 @@ node benchmarks/phase9/analyze.mjs benchmarks/phase9/results/<run-id>
 ```
 
 The analyzer rejects non-measure, incomplete, failed, or identity-mismatched runs, including an iterations-file SHA mismatch. It verifies sample coverage and the recorded eight-round schedule before printing JSON. Per-round quantiles use linear interpolation (R-7); allocation diagnostics remain separate and have no release threshold.
+
+## M1.1b causal attribution
+
+M1.1b uses one-variable temporary runtime ablations paired with unchanged-current control processes; it does not alter or reaggregate the authoritative M1b samples. The per-round raw diagnostic records, conclusions, semantic differences, and corrected deep-allocation check are indexed in [`attribution/README.md`](attribution/README.md). No temporary runtime variant is part of the accepted checkout.

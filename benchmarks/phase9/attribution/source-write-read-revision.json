@@ -1,0 +1,141 @@
+{
+  "schemaVersion": 1,
+  "name": "skip-source-render-revision-bump",
+  "kind": "source-write-read",
+  "runtimeId": "rfsg-current",
+  "iterations": 636392,
+  "size": 1,
+  "warmupsPerProcess": 3,
+  "samplesPerProcess": 7,
+  "pairedProcessRounds": 4,
+  "node": "v24.21.0",
+  "platform": "win32",
+  "arch": "x64",
+  "controlRoot": "C:\\Users\\catro\\Documents\\Git\\Github\\react-alien-signals",
+  "variantRoot": "C:\\Users\\catro\\.codex\\worktrees\\m11b-source\\react-alien-signals",
+  "rounds": [
+    {
+      "round": 1,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlSamplesNs": [
+        23176300,
+        22457900,
+        22586000,
+        25367200,
+        23611700,
+        24156300,
+        25908700
+      ],
+      "variantSamplesNs": [
+        43063300,
+        36264100,
+        28096800,
+        27539100,
+        22901200,
+        22371100,
+        21231300
+      ],
+      "controlMedianNs": 23611700,
+      "variantMedianNs": 27539100,
+      "variantOverControlThroughput": 0.8573882225635551
+    },
+    {
+      "round": 2,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlSamplesNs": [
+        23738500,
+        24216000,
+        21479800,
+        23598100,
+        21308100,
+        20318300,
+        26633800
+      ],
+      "variantSamplesNs": [
+        17503300,
+        19443300,
+        18191700,
+        19116900,
+        17922300,
+        20573200,
+        33179800
+      ],
+      "controlMedianNs": 23598100,
+      "variantMedianNs": 19116900,
+      "variantOverControlThroughput": 1.2344103908060406
+    },
+    {
+      "round": 3,
+      "order": [
+        "control",
+        "variant"
+      ],
+      "controlSamplesNs": [
+        19840500,
+        21222500,
+        22670300,
+        26314500,
+        24537100,
+        23926800,
+        24412200
+      ],
+      "variantSamplesNs": [
+        19457900,
+        20560300,
+        19675700,
+        19979100,
+        19255100,
+        20618100,
+        21097300
+      ],
+      "controlMedianNs": 23926800,
+      "variantMedianNs": 19979100,
+      "variantOverControlThroughput": 1.1975914830998393
+    },
+    {
+      "round": 4,
+      "order": [
+        "variant",
+        "control"
+      ],
+      "controlSamplesNs": [
+        18600300,
+        19146600,
+        18986500,
+        19366500,
+        15914800,
+        16005100,
+        17594700
+      ],
+      "variantSamplesNs": [
+        24890500,
+        22800100,
+        21619400,
+        22725100,
+        21179500,
+        19723700,
+        20616700
+      ],
+      "controlMedianNs": 18600300,
+      "variantMedianNs": 21619400,
+      "variantOverControlThroughput": 0.8603522761963792
+    }
+  ],
+  "summary": {
+    "medianPairedThroughputRatio": 1.0289718796481093,
+    "min": 0.8573882225635551,
+    "max": 1.2344103908060406,
+    "iqr": 0.34718494723821647,
+    "roundsFaster": 2,
+    "roundsSlower": 2,
+    "ties": 0,
+    "q1": 0.8596112627881731,
+    "q3": 1.2067962100263896
+  }
+}
