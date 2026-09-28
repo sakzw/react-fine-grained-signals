@@ -1,0 +1,86 @@
+{
+  "purpose": "M1.5.3 source getter fast-path follow-up; fresh-process paired duration diagnostics, not an M1b release matrix",
+  "gitHead": "c72bacd03bc4b156dc382a972e97521f04539462",
+  "worktreeDirtyAtStart": true,
+  "dirtyPathsAtStart": [
+    "benchmarks/phase9/adapters.mjs  M benchmarks/phase9/react-worker.mjs  M benchmarks/phase9/run.mjs  M benchmarks/phase9/runtime-identity.mjs  M docs/implementation-phase9-m1.5.2.md  M scripts/check-size.mjs  M scripts/size-budget.json  D src/core/alien-derived-runtime-core.d.mts  D src/core/alien-derived-runtime-core.mjs  M src/core/execution-owner.ts  D src/core/foreign-readable-v1.mjs  D src/core/interop-context.mjs  M src/core/reactive-runtime.ts  D src/core/render-runtime.d.mts  D src/core/render-runtime.mjs  M src/core/render-tracking.ts  D src/react/react-adapter.d.mts  D src/react/react-adapter.mjs  M tests/alien-runtime-boundary.test.ts  M tests/cross-copy-smoke.mjs  M tests/fixtures/cross-copy-interop-entry.ts  M tests/reactive-runtime.test.ts  M tests/ssr.test.tsx  M tests/use-signals-managed.test.tsx  M tsconfig.json ?? benchmarks/phase9/m15/m153-allocation-screen.mjs ?? benchmarks/phase9/m15/m153-diagnostic-screen.mjs ?? benchmarks/phase9/m15/m153-owner-primitives.mjs ?? benchmarks/phase9/m15/m153-react-screen.mjs ?? benchmarks/phase9/m15/results/m153-allocation-results.json ?? benchmarks/phase9/m15/results/m153-authoritative-summary.json ?? benchmarks/phase9/m15/results/m153-diagnostic-results.json ?? benchmarks/phase9/m15/results/m153-diagnostic-summary.json ?? benchmarks/phase9/m15/results/m153-owner-primitives.json ?? benchmarks/phase9/m15/results/m153-react-results.json ?? benchmarks/phase9/m15/results/m153-react-summary.json ?? benchmarks/phase9/m15/summarize-m153.mjs ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final-rerun/ ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final/ ?? src/core/alien-derived-runtime-core.mts ?? src/core/alien-derived-types.ts ?? src/core/foreign-readable-v1.mts ?? src/core/interop-context.mts ?? src/core/render-runtime.mts ?? src/react/react-adapter.mts"
+  ],
+  "rounds": 24,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+  "cases": [
+    {
+      "caseId": "source/read@1",
+      "iterations": 1693079,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.0638703984423747,
+          "q1": 0.9028094104818857,
+          "q3": 1.2290301391166476,
+          "min": 0.652222705402107,
+          "max": 1.6346666958271368,
+          "numeratorFasterRounds": 10,
+          "numeratorSlowerRounds": 14
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.287888906759775,
+          "q1": 1.1666532007297246,
+          "q3": 1.4050521726775056,
+          "min": 0.7824330684875691,
+          "max": 1.8553932044021797,
+          "numeratorFasterRounds": 2,
+          "numeratorSlowerRounds": 22
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.7586075703877406,
+          "q1": 0.7000159742382598,
+          "q3": 0.9479064479753274,
+          "min": 0.4732226152288113,
+          "max": 1.179263299153534,
+          "numeratorFasterRounds": 19,
+          "numeratorSlowerRounds": 5
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "iterations": 636392,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.4083405761791412,
+          "q1": 1.363526699298657,
+          "q3": 1.6507575787098396,
+          "min": 0.5712064175382369,
+          "max": 2.5400382734424833,
+          "numeratorFasterRounds": 3,
+          "numeratorSlowerRounds": 21
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.0228633774386768,
+          "q1": 0.9362547651403068,
+          "q3": 1.1767032984551915,
+          "min": 0.6495806697554396,
+          "max": 2.0859344210609283,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.8228067866323182,
+          "q1": 0.7280613848830338,
+          "q3": 0.9330964720426651,
+          "min": 0.5949573393948374,
+          "max": 1.5235375951497183,
+          "numeratorFasterRounds": 19,
+          "numeratorSlowerRounds": 5
+        }
+      }
+    }
+  ]
+}

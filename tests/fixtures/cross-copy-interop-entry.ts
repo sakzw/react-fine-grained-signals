@@ -5,3 +5,5 @@ export {
   publishInteropRenderRead,
   pushInteropRenderScope,
 } from "../../src/core/interop.js";
+export { createReactiveRuntime } from "../../src/core/reactive-runtime.js";
+export { executionContext } from "../../src/core/execution-owner.js";

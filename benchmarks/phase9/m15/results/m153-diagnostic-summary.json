@@ -1,0 +1,446 @@
+{
+  "purpose": "M1.5.3 pre-freeze diagnostic; fresh-process paired duration measurements, not an M1b release matrix",
+  "gitHead": "c72bacd03bc4b156dc382a972e97521f04539462",
+  "worktreeDirtyAtStart": true,
+  "dirtyPathsAtStart": [
+    "benchmarks/phase9/adapters.mjs  M benchmarks/phase9/react-worker.mjs  M benchmarks/phase9/run.mjs  M benchmarks/phase9/runtime-identity.mjs  M docs/implementation-phase9-m1.5.2.md  M scripts/check-size.mjs  M scripts/size-budget.json  D src/core/alien-derived-runtime-core.d.mts  D src/core/alien-derived-runtime-core.mjs  M src/core/execution-owner.ts  D src/core/foreign-readable-v1.mjs  D src/core/interop-context.mjs  M src/core/reactive-runtime.ts  D src/core/render-runtime.d.mts  D src/core/render-runtime.mjs  M src/core/render-tracking.ts  D src/react/react-adapter.d.mts  D src/react/react-adapter.mjs  M tests/alien-runtime-boundary.test.ts  M tests/cross-copy-smoke.mjs  M tests/fixtures/cross-copy-interop-entry.ts  M tests/reactive-runtime.test.ts  M tests/ssr.test.tsx  M tests/use-signals-managed.test.tsx  M tsconfig.json ?? benchmarks/phase9/m15/m153-allocation-screen.mjs ?? benchmarks/phase9/m15/m153-diagnostic-screen.mjs ?? benchmarks/phase9/m15/m153-owner-primitives.mjs ?? benchmarks/phase9/m15/m153-react-screen.mjs ?? benchmarks/phase9/m15/results/m153-allocation-results.json ?? benchmarks/phase9/m15/results/m153-authoritative-summary.json ?? benchmarks/phase9/m15/results/m153-diagnostic-results.json ?? benchmarks/phase9/m15/results/m153-diagnostic-summary.json ?? benchmarks/phase9/m15/results/m153-owner-primitives.json ?? benchmarks/phase9/m15/results/m153-react-results.json ?? benchmarks/phase9/m15/results/m153-react-summary.json ?? benchmarks/phase9/m15/results/m153-source-fast-path-results.json ?? benchmarks/phase9/m15/results/m153-source-fast-path-summary.json ?? benchmarks/phase9/m15/summarize-m153.mjs ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final-rerun/ ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final/ ?? src/core/alien-derived-runtime-core.mts ?? src/core/alien-derived-types.ts ?? src/core/foreign-readable-v1.mts ?? src/core/interop-context.mts ?? src/core/render-runtime.mts ?? src/react/react-adapter.mts"
+  ],
+  "rounds": 24,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+  "cases": [
+    {
+      "caseId": "source/read@1",
+      "iterations": 1693079,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.060601848023519,
+          "q1": 0.9014487169273935,
+          "q3": 1.2803511755448587,
+          "min": 0.42792019718053415,
+          "max": 1.9485590396386097,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.1191227134875952,
+          "q1": 0.8510514941356915,
+          "q3": 1.5357074801266328,
+          "min": 0.697638755087195,
+          "max": 2.58706810215323,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.7920317798160972,
+          "q1": 0.6826805241081849,
+          "q3": 0.9645929774988413,
+          "min": 0.4439232015631329,
+          "max": 1.7936855809916459,
+          "numeratorFasterRounds": 18,
+          "numeratorSlowerRounds": 6
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "iterations": 636392,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.4814511975652267,
+          "q1": 1.28375043547651,
+          "q3": 1.7708915175124362,
+          "min": 0.5945383637352146,
+          "max": 4.683518911946583,
+          "numeratorFasterRounds": 2,
+          "numeratorSlowerRounds": 22
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.1587354289641538,
+          "q1": 0.9166671099351276,
+          "q3": 1.47974163637502,
+          "min": 0.5553267462922903,
+          "max": 7.076285394932936,
+          "numeratorFasterRounds": 7,
+          "numeratorSlowerRounds": 17
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.8543900594055092,
+          "q1": 0.752895637386515,
+          "q3": 0.9583068953503706,
+          "min": 0.40167319867350015,
+          "max": 2.2512901990462555,
+          "numeratorFasterRounds": 18,
+          "numeratorSlowerRounds": 6
+        }
+      }
+    },
+    {
+      "caseId": "effect/create@1",
+      "iterations": 85858,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.0906967308219846,
+          "q1": 0.9498258390929094,
+          "q3": 1.2231986965192942,
+          "min": 0.5680039834969413,
+          "max": 1.9011824139215816,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.3558522954186074,
+          "q1": 1.1194654396649386,
+          "q3": 1.6084572599801104,
+          "min": 0.8982336827369276,
+          "max": 1.9876210825394824,
+          "numeratorFasterRounds": 2,
+          "numeratorSlowerRounds": 22
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 1.3445492218211519,
+          "q1": 1.1806184331847267,
+          "q3": 1.6076423489440068,
+          "min": 0.6218952205167478,
+          "max": 2.001188429929634,
+          "numeratorFasterRounds": 3,
+          "numeratorSlowerRounds": 21
+        }
+      }
+    },
+    {
+      "caseId": "effect/create-dispose@1",
+      "iterations": 78528,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.0461980453026087,
+          "q1": 0.833039304419148,
+          "q3": 1.2344685841800587,
+          "min": 0.7158601545005234,
+          "max": 1.5948889819857561,
+          "numeratorFasterRounds": 11,
+          "numeratorSlowerRounds": 13
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.1523015210247802,
+          "q1": 1.0013140447544813,
+          "q3": 1.558115854840735,
+          "min": 0.9175708982701875,
+          "max": 2.2626047024861093,
+          "numeratorFasterRounds": 6,
+          "numeratorSlowerRounds": 18
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 1.0736406026318217,
+          "q1": 0.9690976583346042,
+          "q3": 1.2466134126321404,
+          "min": 0.5954393032207579,
+          "max": 1.8837883660853014,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        }
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "iterations": 106279,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 0.997578511107491,
+          "q1": 0.8170111954478567,
+          "q3": 1.1220152365424914,
+          "min": 0.5844059796744252,
+          "max": 2.227617230874356,
+          "numeratorFasterRounds": 13,
+          "numeratorSlowerRounds": 11
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 0.8012787002099878,
+          "q1": 0.6344197447080049,
+          "q3": 0.9496117054374487,
+          "min": 0.4270747588118542,
+          "max": 1.745039700240878,
+          "numeratorFasterRounds": 20,
+          "numeratorSlowerRounds": 4
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.6157415972491798,
+          "q1": 0.519890932904195,
+          "q3": 0.787794048501195,
+          "min": 0.4736530172413793,
+          "max": 1.6224276507328241,
+          "numeratorFasterRounds": 22,
+          "numeratorSlowerRounds": 2
+        }
+      }
+    },
+    {
+      "caseId": "effect/dynamic-dependencies@1",
+      "iterations": 57379,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.114574126224732,
+          "q1": 0.8521307530996041,
+          "q3": 1.2784436441328584,
+          "min": 0.6420369215523796,
+          "max": 2.3353275450493274,
+          "numeratorFasterRounds": 8,
+          "numeratorSlowerRounds": 16
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.021656181170812,
+          "q1": 0.8434662647922034,
+          "q3": 1.2691499058015094,
+          "min": 0.556563278110706,
+          "max": 1.9187598827249968,
+          "numeratorFasterRounds": 12,
+          "numeratorSlowerRounds": 12
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 1.0664972607523326,
+          "q1": 0.8708908530664062,
+          "q3": 1.3109790328099327,
+          "min": 0.5637300699528166,
+          "max": 1.5960506936119199,
+          "numeratorFasterRounds": 11,
+          "numeratorSlowerRounds": 13
+        }
+      }
+    },
+    {
+      "caseId": "effect/fanout@1",
+      "iterations": 131407,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 0.9201464734299023,
+          "q1": 0.861966927434745,
+          "q3": 1.3167115090416373,
+          "min": 0.5695896953027202,
+          "max": 2.8789429101220514,
+          "numeratorFasterRounds": 14,
+          "numeratorSlowerRounds": 10
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.0523994042448666,
+          "q1": 0.8859843488146026,
+          "q3": 1.269561318920371,
+          "min": 0.6143524371257728,
+          "max": 2.51690403511307,
+          "numeratorFasterRounds": 10,
+          "numeratorSlowerRounds": 14
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.8087185149475797,
+          "q1": 0.7000755220081634,
+          "q3": 0.9929954153547705,
+          "min": 0.39143008966874593,
+          "max": 2.1298892608217166,
+          "numeratorFasterRounds": 18,
+          "numeratorSlowerRounds": 6
+        }
+      }
+    },
+    {
+      "caseId": "effect/fanout@16",
+      "iterations": 35830,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 0.9950568936012518,
+          "q1": 0.8888963378617531,
+          "q3": 1.237476222019899,
+          "min": 0.5266656242902615,
+          "max": 2.04232419538542,
+          "numeratorFasterRounds": 12,
+          "numeratorSlowerRounds": 12
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 0.9792074373761109,
+          "q1": 0.8310364456267981,
+          "q3": 1.067097776052453,
+          "min": 0.5985930789610061,
+          "max": 1.4391153983244331,
+          "numeratorFasterRounds": 12,
+          "numeratorSlowerRounds": 12
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.8392975623635428,
+          "q1": 0.7362515576318006,
+          "q3": 0.9422629270987196,
+          "min": 0.49056555420504633,
+          "max": 1.1736891863933607,
+          "numeratorFasterRounds": 22,
+          "numeratorSlowerRounds": 2
+        }
+      }
+    },
+    {
+      "caseId": "effect/fanout@64",
+      "iterations": 8680,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 0.9424688188463899,
+          "q1": 0.8268458267846873,
+          "q3": 1.140643514452643,
+          "min": 0.25681049882283,
+          "max": 2.3231018869034057,
+          "numeratorFasterRounds": 13,
+          "numeratorSlowerRounds": 11
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 0.8123438801987304,
+          "q1": 0.7024130140824012,
+          "q3": 1.0031364950521935,
+          "min": 0.4010875670470888,
+          "max": 3.5031965216523813,
+          "numeratorFasterRounds": 18,
+          "numeratorSlowerRounds": 6
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.7468093846964641,
+          "q1": 0.5479299767596977,
+          "q3": 0.8715363998253683,
+          "min": 0.1871705054371562,
+          "max": 1.891652837777781,
+          "numeratorFasterRounds": 22,
+          "numeratorSlowerRounds": 2
+        }
+      }
+    },
+    {
+      "caseId": "computed/dirty-read@1",
+      "iterations": 93142,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.2191451394338497,
+          "q1": 0.9149610380444259,
+          "q3": 1.4751310167378484,
+          "min": 0.5602980083846184,
+          "max": 2.132353634725851,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.162253537451271,
+          "q1": 0.9921717858089769,
+          "q3": 1.4620797182758838,
+          "min": 0.5844335992871896,
+          "max": 2.421266272886466,
+          "numeratorFasterRounds": 7,
+          "numeratorSlowerRounds": 17
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.8512713692074438,
+          "q1": 0.723127091773422,
+          "q3": 1.0556403963982366,
+          "min": 0.5746174867606416,
+          "max": 1.9198285080095476,
+          "numeratorFasterRounds": 16,
+          "numeratorSlowerRounds": 8
+        }
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.270437025055418,
+          "q1": 1.1205565308164724,
+          "q3": 1.396586083699939,
+          "min": 0.5321845653475343,
+          "max": 1.6488018563095006,
+          "numeratorFasterRounds": 3,
+          "numeratorSlowerRounds": 21
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.0229561230108146,
+          "q1": 0.8379469227543392,
+          "q3": 1.1593953681147813,
+          "min": 0.486871726321147,
+          "max": 1.6347583522120668,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.7402677935741397,
+          "q1": 0.6107229842452935,
+          "q3": 0.9157810517598303,
+          "min": 0.5326142223451694,
+          "max": 1.5069747205761008,
+          "numeratorFasterRounds": 19,
+          "numeratorSlowerRounds": 5
+        }
+      }
+    },
+    {
+      "caseId": "batch/two-writes-one-reaction@1",
+      "iterations": 28057,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 1.1158249806105673,
+          "q1": 0.8941439696520879,
+          "q3": 1.2245858023875928,
+          "min": 0.5944098027506585,
+          "max": 1.6096544741829133,
+          "numeratorFasterRounds": 9,
+          "numeratorSlowerRounds": 15
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 0.8793020118815092,
+          "q1": 0.740574439748495,
+          "q3": 1.0415534818421381,
+          "min": 0.4762212653560964,
+          "max": 2.796090192960902,
+          "numeratorFasterRounds": 16,
+          "numeratorSlowerRounds": 8
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.9240079271973699,
+          "q1": 0.7483935440828011,
+          "q3": 1.058371622610032,
+          "min": 0.5482860616043747,
+          "max": 2.095742375819295,
+          "numeratorFasterRounds": 16,
+          "numeratorSlowerRounds": 8
+        }
+      }
+    }
+  ]
+}

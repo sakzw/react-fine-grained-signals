@@ -243,7 +243,9 @@ async function executeChild(payload, script = workerPath) {
     let stdout = "";
     let stderr = "";
     let settled = false;
-    const timeoutMs = smoke ? 60_000 : 180_000;
+    // The frozen computed/create count constructs over 600k nodes per sample;
+    // its three warmups plus seven samples can exceed the general worker cap.
+    const timeoutMs = smoke ? 60_000 : (payload.workload === "computed-create" ? 600_000 : 180_000);
     const timeout = setTimeout(() => {
       if (settled) return;
       settled = true;

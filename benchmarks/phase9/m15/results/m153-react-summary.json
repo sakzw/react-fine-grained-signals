@@ -1,0 +1,83 @@
+{
+  "purpose": "M1.5.3 React integration paired diagnostics; not an M1b release matrix",
+  "gitHead": "c72bacd03bc4b156dc382a972e97521f04539462",
+  "worktreeDirtyAtStart": true,
+  "dirtyPathsAtStart": [
+    "benchmarks/phase9/adapters.mjs  M benchmarks/phase9/react-worker.mjs  M benchmarks/phase9/run.mjs  M benchmarks/phase9/runtime-identity.mjs  M docs/implementation-phase9-m1.5.2.md  M scripts/check-size.mjs  M scripts/size-budget.json  D src/core/alien-derived-runtime-core.d.mts  D src/core/alien-derived-runtime-core.mjs  M src/core/execution-owner.ts  D src/core/foreign-readable-v1.mjs  D src/core/interop-context.mjs  M src/core/reactive-runtime.ts  D src/core/render-runtime.d.mts  D src/core/render-runtime.mjs  M src/core/render-tracking.ts  D src/react/react-adapter.d.mts  D src/react/react-adapter.mjs  M tests/alien-runtime-boundary.test.ts  M tests/cross-copy-smoke.mjs  M tests/fixtures/cross-copy-interop-entry.ts  M tests/reactive-runtime.test.ts  M tests/ssr.test.tsx  M tests/use-signals-managed.test.tsx  M tsconfig.json ?? benchmarks/phase9/m15/m153-allocation-screen.mjs ?? benchmarks/phase9/m15/m153-diagnostic-screen.mjs ?? benchmarks/phase9/m15/m153-owner-primitives.mjs ?? benchmarks/phase9/m15/m153-react-screen.mjs ?? benchmarks/phase9/m15/results/m153-allocation-results.json ?? benchmarks/phase9/m15/results/m153-authoritative-summary.json ?? benchmarks/phase9/m15/results/m153-diagnostic-results.json ?? benchmarks/phase9/m15/results/m153-diagnostic-summary.json ?? benchmarks/phase9/m15/results/m153-owner-primitives.json ?? benchmarks/phase9/m15/results/m153-react-results.json ?? benchmarks/phase9/m15/results/m153-react-summary.json ?? benchmarks/phase9/m15/results/m153-source-fast-path-results.json ?? benchmarks/phase9/m15/results/m153-source-fast-path-summary.json ?? benchmarks/phase9/m15/summarize-m153.mjs ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final-rerun/ ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final/ ?? src/core/alien-derived-runtime-core.mts ?? src/core/alien-derived-types.ts ?? src/core/foreign-readable-v1.mts ?? src/core/interop-context.mts ?? src/core/render-runtime.mts ?? src/react/react-adapter.mts"
+  ],
+  "rounds": 8,
+  "warmups": 3,
+  "samples": 7,
+  "cases": [
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "iterations": 250,
+      "currentOverV011Duration": {
+        "pairedRounds": 8,
+        "median": 1.1048809713260859,
+        "q1": 1.0750742579026629,
+        "q3": 1.2663028945100097,
+        "min": 1.0166960137050007,
+        "max": 1.4816287958335084,
+        "numeratorFasterRounds": 0,
+        "numeratorSlowerRounds": 8
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "iterations": 250,
+      "currentOverV011Duration": {
+        "pairedRounds": 8,
+        "median": 1.0661528240899312,
+        "q1": 0.9888553454793895,
+        "q3": 1.1092585177047136,
+        "min": 0.8885955545008701,
+        "max": 1.3199205756567782,
+        "numeratorFasterRounds": 3,
+        "numeratorSlowerRounds": 5
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "iterations": 250,
+      "currentOverV011Duration": {
+        "pairedRounds": 8,
+        "median": 0.9145285005167163,
+        "q1": 0.8875370244586187,
+        "q3": 1.0133382551626768,
+        "min": 0.8294025528351494,
+        "max": 1.19949138650059,
+        "numeratorFasterRounds": 6,
+        "numeratorSlowerRounds": 2
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "iterations": 1679,
+      "currentOverV011Duration": {
+        "pairedRounds": 8,
+        "median": 0.9285296776126262,
+        "q1": 0.866447938924311,
+        "q3": 1.006030695234379,
+        "min": 0.8092575930956769,
+        "max": 1.1911641832613842,
+        "numeratorFasterRounds": 5,
+        "numeratorSlowerRounds": 3
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "iterations": 250,
+      "currentOverV011Duration": {
+        "pairedRounds": 8,
+        "median": 1.0305141259748114,
+        "q1": 0.9808750275268091,
+        "q3": 1.067589123396257,
+        "min": 0.9025332484846147,
+        "max": 1.10701461954156,
+        "numeratorFasterRounds": 3,
+        "numeratorSlowerRounds": 5
+      }
+    }
+  ]
+}

@@ -21,11 +21,11 @@ Public signal / React / DeepSignal APIs
 
 | Responsibility | Production files |
 | --- | --- |
-| Alien-derived graph and public signal/computed objects | `src/core/alien-derived-runtime-core.mjs`, `src/core/alien-derived-runtime-core.d.mts` |
+| Alien-derived graph and public signal/computed objects | `src/core/alien-derived-runtime-core.mts`, `src/core/alien-derived-types.ts` |
 | Lexical shared execution owner | `src/core/execution-owner.ts` |
-| Readable V1 bridge and owner context | `src/core/foreign-readable-v1.mjs`, `src/core/interop-context.mjs` |
-| Attempt-local render/speculative state | `src/core/render-runtime.mjs`, `src/core/render-runtime.d.mts`, `src/core/render-tracking.ts` |
-| React hooks and adapter | `src/react/react-adapter.mjs`, `src/react/react-adapter.d.mts`, `src/react/use-signals.ts` |
+| Readable V1 bridge and owner context | `src/core/foreign-readable-v1.mts`, `src/core/interop-context.mts` |
+| Attempt-local render/speculative state | `src/core/render-runtime.mts`, `src/core/render-tracking.ts` |
+| React hooks and adapter | `src/react/react-adapter.mts`, `src/react/use-signals.ts` |
 | DeepSignal adapter integration | `src/core/deep-signal.ts`, `src/core/base.ts` |
 
 The graph core is derived from Alien Signals 3.2.1 (`8734d386d925025d0e99419bd9161c17b112c5ee`), imports only `alien-signals/system`, and is distributed with `LICENSE-ALIEN-SIGNALS.txt`. It retains Alien-style dependency links, cleanup/reuse, lazy computed invalidation, queue/flush, and pending/current values, with RFSG `Object.is`, error recovery/containment, and cleanup behavior. A public signal/computed stays one object plus a private graph node; graph fields are not exposed as enumerable public state.
@@ -66,39 +66,39 @@ Raw diagnostic records and summaries are in `benchmarks/phase9/m15/m152-*-audit-
 
 ## Final authoritative matrix
 
-The final run is [`m1.5.2-2026-09-28-production-alien-derived-final`](../benchmarks/phase9/results/m1.5.2-2026-09-28-production-alien-derived-final/). It used eight balanced rounds, three warmups, seven samples, the frozen M1b iterations, and three allocation rounds. The manifest records the runtime hash and exact order. There were 958/958 tasks completed, 6,096 sample rows (5,992 successful and 104 expected N/A), 30 allocation rows, and zero failures. The primary values below are **paired throughput ratios M1.5.2 / v0.1.1**: `1.00` is parity, greater than one is faster, less than one is slower. Each M1.5.1 research column is its recorded paired throughput ratio against v0.1.1; old production is the earlier M1b ratio against v0.1.1. Size-specific fan-in/fan-out rows are shown independently.
+The final run is [`m1.5.2-2026-09-28-production-alien-derived-final`](../benchmarks/phase9/results/m1.5.2-2026-09-28-production-alien-derived-final/). It used eight balanced rounds, three warmups, seven samples, the frozen M1b iterations, and three allocation rounds. The manifest records the runtime hash and exact order. There were 958/958 tasks completed, 6,096 sample rows (5,992 successful and 104 expected N/A), 30 allocation rows, and zero failures. The primary values below are **paired throughput ratios / v0.1.1**: `1.00` is parity, greater than one is faster, less than one is slower. M1.5.2 values come from its final authoritative run. M1.5.1 values are reciprocals of the recorded M1.5.1 duration ratios against v0.1.1; they are not production-vs-M1.5.1 ratios. Old production values come from the earlier M1b throughput matrix. M1.5.1 did not include React cases, so those values are unavailable. Size-specific fan-in/fan-out rows are shown independently.
 
 | Workload | Old production | M1.5.1 research | M1.5.2 production | Interpretation |
 | --- | ---: | ---: | ---: | --- |
-| source/create | 0.198 | 0.845 | 0.692 | Faster than old; slower than v0.1.1 |
-| source/read | 0.698 | 0.755 | 0.761 | Similar to M1.5.1; stable gap to v0.1.1 |
-| source/unobserved-write | 0.807 | 0.477 | 0.859 | Faster than old; parity gap remains |
-| source/write-read | 0.751 | 0.598 | 0.768 | Similar to old |
-| computed/create | 0.581 | 2.083 | 0.950 | Near parity; large improvement over old |
-| computed/dirty-read | 0.654 | 0.951 | 0.571 | Material stable regression; follow-up |
-| computed/dirty-unread | 1.388 | 0.726 | 1.153 | Noisy improvement; do not over-claim |
-| computed/equality-suppression | 0.781 | 0.608 | 0.623 | Material stable regression; follow-up |
-| effect/create | 0.967 | 1.174 | 0.738 | Slower than v0.1.1, faster than old |
-| effect/observed-write | 0.764 | 0.671 | 0.687 | Similar to M1.5.1 and old |
-| effect/dynamic-dependencies | 0.875 | 0.831 | 0.786 | Stable moderate regression |
-| effect/fanout@1 | 0.678 | 0.730 | 0.575 | Material regression |
-| effect/fanout@16 | 0.826 | 0.752 | 0.648 | Material regression; follow-up |
-| effect/fanout@64 | 0.721 | 0.689 | 0.669 | Material regression; follow-up |
-| batch/two-writes-one-reaction | 0.794 | 0.951 | 0.599 | Material regression |
-| DeepSignal read | 1.222 | 0.995 | 0.955 | Near parity; M1.5.2 improves over M1.5.1 |
-| DeepSignal watched leaf write | 0.875 | 0.916 | 0.929 | Near parity |
-| React bare | 1.015 | 1.067 | 0.990 | Rough parity |
-| React managed | 1.008 | 1.215 | 0.960 | Rough parity; wide spread |
-| useSignalValue | 0.988 | 1.045 | 0.923 | Rough parity |
-| JSX direct | 1.129 | 1.059 | 0.930 | Rough parity / small regression |
-| computed/source-to-many@1 | 0.694 | 0.839 | 0.658 | Material regression |
-| computed/source-to-many@16 | 0.732 | 0.634 | 0.808 | Improvement over M1.5.1 |
-| computed/source-to-many@64 | 0.869 | 0.714 | 1.003 | Rough parity |
-| computed/many-to-one@1 | 0.628 | 0.596 | 0.997 | Near parity |
-| computed/many-to-one@16 | 0.836 | 0.856 | 0.926 | Small regression / broad spread |
-| computed/many-to-one@64 | 0.843 | 0.880 | 1.233 | Noisy apparent improvement; broad spread |
+| source/create | 0.198 | 0.719 | 0.692 | Faster than old; slower than v0.1.1 |
+| source/read | 0.698 | 0.706 | 0.761 | Similar to M1.5.1; stable gap to v0.1.1 |
+| source/unobserved-write | 0.807 | 1.877 | 0.859 | Faster than old; parity gap remains |
+| source/write-read | 0.751 | 1.330 | 0.768 | Similar to old |
+| computed/create | 0.581 | 0.794 | 0.950 | Near parity; large improvement over old |
+| computed/dirty-read | 0.654 | 1.033 | 0.571 | Material stable regression; follow-up |
+| computed/dirty-unread | 1.388 | 1.728 | 1.153 | Noisy improvement; do not over-claim |
+| computed/equality-suppression | 0.781 | 1.243 | 0.623 | Material stable regression; follow-up |
+| effect/create | 0.967 | 0.883 | 0.738 | Slower than v0.1.1, faster than old |
+| effect/observed-write | 0.764 | 1.194 | 0.687 | Similar to M1.5.1 and old |
+| effect/dynamic-dependencies | 0.875 | 1.032 | 0.786 | Stable moderate regression |
+| effect/fanout@1 | 0.678 | 0.988 | 0.575 | Material regression |
+| effect/fanout@16 | 0.826 | 1.011 | 0.648 | Material regression; follow-up |
+| effect/fanout@64 | 0.721 | 0.929 | 0.669 | Material regression; follow-up |
+| batch/two-writes-one-reaction | 0.794 | 1.060 | 0.599 | Material regression |
+| DeepSignal read | 1.222 | 1.172 | 0.955 | Near parity; M1.5.2 improves over M1.5.1 |
+| DeepSignal watched leaf write | 0.875 | 0.969 | 0.929 | Near parity |
+| React bare | 1.015 | n/a | 0.990 | Rough parity |
+| React managed | 1.008 | n/a | 0.960 | Rough parity; wide spread |
+| useSignalValue | 0.988 | n/a | 0.923 | Rough parity |
+| JSX direct | 1.129 | n/a | 0.930 | Rough parity / small regression |
+| computed/source-to-many@1 | 0.694 | 0.962 | 0.658 | Material regression |
+| computed/source-to-many@16 | 0.732 | 1.150 | 0.808 | Improvement over M1.5.1 |
+| computed/source-to-many@64 | 0.869 | 1.488 | 1.003 | Rough parity |
+| computed/many-to-one@1 | 0.628 | 1.420 | 0.997 | Near parity |
+| computed/many-to-one@16 | 0.836 | 0.932 | 0.926 | Small regression / broad spread |
+| computed/many-to-one@64 | 0.843 | 0.935 | 1.233 | Noisy apparent improvement; broad spread |
 
-The candidate is clearly better than old production in source creation, computed creation, DeepSignal reads, and several scaling cases; React remains around parity. It also retains material and repeatable deficits in ordinary computed propagation and effect fan-out/batching. The M1.5.1 research candidate is stronger on several of these paths, which points to production integration cost rather than a reason to discard the selected graph core. Full round distributions and contextual Alien/Vue comparisons are in `analysis.json`; this table does not combine workloads into a score.
+The candidate is clearly better than old production in source creation, computed creation, DeepSignal reads, and several scaling cases; React remains around parity. It also retains material and repeatable deficits in ordinary computed propagation and effect fan-out/batching. The corrected M1.5.1 normalized ratios suggest stronger computed dirty-read/equality and some fan-out paths, but those are separate runs rather than direct paired M1.5.1-to-M1.5.2 comparisons. That comparison motivated the focused follow-up while retaining the selected graph core. Full round distributions and contextual Alien/Vue comparisons are in `analysis.json`; this table does not combine workloads into a score.
 
 ## Compatibility, validation, and next step
 

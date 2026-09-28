@@ -52,6 +52,24 @@ export async function loadAdapter(runtimeId) {
         deepSignal: (value) => api.deepSignal(value),
       };
     }
+    case "rfsg-pre-m15": {
+      const api = await import("./m15/current-dist/index.js");
+      return {
+        runtimeId,
+        signal: (value) => api.signal(value),
+        read: (source) => source.value,
+        write: (source, value) => { source.value = value; },
+        computed: (fn) => api.computed(fn),
+        readComputed: (value) => value.value,
+        effect: (fn) => api.effect(fn),
+        dispose: (stop) => stop(),
+        batch: api.batch,
+        supportsBatch: true,
+        directReadLoop,
+        adapterReadLoop: (source, count) => adapterReadLoop(source, count, (value) => value.value),
+        deepSignal: (value) => api.deepSignal(value),
+      };
+    }
     case "rfsg-m151-owner": {
       const api = await import("./m15/bundled/candidate/m15-candidate.js");
       return {

@@ -1,5 +1,6 @@
 import { createAlienDerivedRuntime } from "./alien-derived-runtime-core.mjs";
 import { createAlienDerivedRenderAdapter } from "./render-runtime.mjs";
+import type { AlienDerivedRenderAdapter, RuntimeNode } from "./alien-derived-types.js";
 
 export interface RuntimeReadonlySignal<T> {
   readonly value: T;
@@ -17,14 +18,8 @@ export interface ReactiveRuntime {
     readonly runtimeToken: object;
     add(protocol: object, revision: number): void;
   };
-  getNodeForReadable(readable: RuntimeReadonlySignal<unknown>): any;
-  readonly renderAdapter: {
-    createRenderAttempt(): any;
-    withRenderScope<T>(attempt: any, callback: () => T): T;
-    promoteRenderAttempt(attempt: any): boolean;
-    settleRenderAttempt(attempt: any): boolean;
-    subscribeReadables(readables: readonly RuntimeReadonlySignal<unknown>[], notify: () => void): () => void;
-  };
+  getNodeForReadable(readable: RuntimeReadonlySignal<unknown>): RuntimeNode | undefined;
+  readonly renderAdapter: AlienDerivedRenderAdapter;
   signal<T>(value: T): RuntimeSignal<T>;
   computed<T>(getter: () => T): RuntimeReadonlySignal<T>;
   effect(fn: () => void | (() => void)): () => void;

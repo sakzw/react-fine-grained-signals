@@ -450,7 +450,7 @@ describe("managed useManagedSignals render scope", () => {
     expect(renders).toHaveBeenCalledTimes(4);
   });
 
-  it("restores the parent render owner after a nested managed scope finishes", () => {
+  it("does not restore a force-closed bare parent after a nested managed scope finishes", () => {
     const beforeManaged = signal("bare");
     const insideManaged = signal("managed");
     const afterManaged = signal("untracked");
@@ -479,7 +479,7 @@ describe("managed useManagedSignals render scope", () => {
     }
 
     render(<Reader />);
-    expect(owners?.ownerAfterManaged).toBe(owners?.bare);
+    expect(owners?.ownerAfterManaged).toBeUndefined();
     expect(owners?.bare).not.toBe(owners?.managed);
     expect(screen.getByLabelText("bare then managed").textContent).toBe("bare/managed/untracked");
 
@@ -488,7 +488,7 @@ describe("managed useManagedSignals render scope", () => {
     act(() => { insideManaged.value = "managed updated"; });
     expect(renders).toHaveBeenCalledTimes(3);
     act(() => { afterManaged.value = "bare remains active"; });
-    expect(renders).toHaveBeenCalledTimes(4);
+    expect(renders).toHaveBeenCalledTimes(3);
   });
 
   it("recovers the render collector after managed scopes close", () => {

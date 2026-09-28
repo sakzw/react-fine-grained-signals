@@ -50,6 +50,61 @@ try {
   assert.equal(copyA.isSignal(copyB.signal(1)), true, "a package recognizes a foreign signal brand");
   assert.equal(copyA.isSignal(copyC.computed(() => 1)), true, "a package recognizes a foreign computed brand");
 
+  // Render ownership follows the frozen Phase 8 mixed-scope policy even when
+  // the nested scope is created by a separately bundled package copy.
+  {
+    const runtimeA = interopA.createReactiveRuntime();
+    const runtimeB = interopB.createReactiveRuntime();
+    const context = interopA.executionContext;
+    assert.equal(context, interopB.executionContext);
+    const before = runtimeA.signal("before");
+    const managedRead = runtimeB.signal("managed");
+    const after = runtimeA.signal("after");
+
+    const outerManaged = runtimeA.renderAdapter.createRenderAttempt();
+    runtimeA.renderAdapter.withRenderScope(outerManaged, () => {
+      before.value;
+      const innerManaged = runtimeB.renderAdapter.createRenderAttempt();
+      runtimeB.renderAdapter.withRenderScope(innerManaged, () => { managedRead.value; }, "managed");
+      assert.equal(context.owner?.runtimeToken, runtimeA.runtimeToken, "managed/managed restores the outer copy");
+      after.value;
+    }, "managed");
+    assert.equal(outerManaged.dependencies.has(before), true);
+    assert.equal(outerManaged.dependencies.has(after), true);
+
+    const outerBare = runtimeA.renderAdapter.createRenderAttempt();
+    runtimeA.renderAdapter.withRenderScope(outerBare, () => {
+      before.value;
+      const innerManaged = runtimeB.renderAdapter.createRenderAttempt();
+      runtimeB.renderAdapter.withRenderScope(innerManaged, () => { managedRead.value; }, "managed");
+      assert.equal(context.owner, undefined, "bare/managed does not restore the bare parent");
+      after.value;
+    }, "bare");
+    assert.equal(outerBare.dependencies.has(before), true);
+    assert.equal(outerBare.dependencies.has(after), false);
+
+    const managedOuter = runtimeA.renderAdapter.createRenderAttempt();
+    runtimeA.renderAdapter.withRenderScope(managedOuter, () => {
+      before.value;
+      const innerBare = runtimeB.renderAdapter.createRenderAttempt();
+      runtimeB.renderAdapter.withRenderScope(innerBare, () => {
+        managedRead.value;
+        assert.equal(context.owner?.runtimeToken, runtimeB.runtimeToken, "managed/bare keeps the inner bare scope active until it closes");
+      }, "bare");
+      assert.equal(context.owner, undefined, "managed/bare does not resume the closed managed parent");
+    }, "managed");
+
+    const bareOuter = runtimeA.renderAdapter.createRenderAttempt();
+    runtimeA.renderAdapter.withRenderScope(bareOuter, () => {
+      before.value;
+      const innerBare = runtimeB.renderAdapter.createRenderAttempt();
+      runtimeB.renderAdapter.withRenderScope(innerBare, () => { managedRead.value; }, "bare");
+      assert.equal(context.owner, undefined, "bare/bare does not restore the outer bare scope");
+      after.value;
+    }, "bare");
+    assert.equal(bareOuter.dependencies.has(after), false);
+  }
+
   // Separate bundled copies must restore a still-active managed parent scope
   // when a nested managed scope owned by another copy finishes.
   {

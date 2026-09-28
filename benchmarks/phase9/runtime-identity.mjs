@@ -69,9 +69,17 @@ export async function hashCurrentRuntimeInputs() {
   const paths = [...new Set(stdout.split("\0").filter(Boolean))].toSorted();
   const hash = createHash("sha256");
   for (const path of paths) {
+    let content;
+    try { content = await readFile(resolve(repoRoot, path)); }
+    catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      // A deleted tracked runtime input is absent from this worktree. Omitting
+      // it from the path/content stream makes the deletion part of the digest.
+      continue;
+    }
     hash.update(path.split(sep).join("/"));
     hash.update("\0");
-    hash.update(await readFile(resolve(repoRoot, path)));
+    hash.update(content);
     hash.update("\0");
   }
   return hash.digest("hex");

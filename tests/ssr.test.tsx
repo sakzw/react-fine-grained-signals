@@ -102,8 +102,9 @@ describe("SSR and hydration", () => {
     expect(firstHtml).toBe(secondHtml);
     expect(firstHtml).toContain("SERVER:Ada");
 
-    // A server render must not leave an effect/subscription that evaluates this
-    // computed after the request has completed.
+    // Each server render uses an isolated speculative attempt that is never
+    // promoted into the shared graph cache. Re-evaluation keeps requests
+    // detached from one another; neither attempt leaves a subscription behind.
     expect(derivedRuns).toHaveBeenCalledTimes(2);
     source.value = "changed without a client";
     expect(derivedRuns).toHaveBeenCalledTimes(2);

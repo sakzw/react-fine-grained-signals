@@ -75,6 +75,13 @@ function buildApp(state) {
       return createElement("output", { "data-value": value }, String(value));
     };
   }
+  if (kind === "deep-selector") {
+    return function DeepSelectorApp() {
+      const value = api.useDeepSignalValue(state.source, (snapshot) => snapshot.user.name, []);
+      state.renders += 1;
+      return createElement("output", { "data-value": value }, String(value));
+    };
+  }
   if (kind === "jsx-binding") {
     return function JsxBindingApp() {
       state.renders += 1;
@@ -85,7 +92,12 @@ function buildApp(state) {
 }
 
 async function runOne(timed) {
-  const state = { source: api.signal(0), renders: 0 };
+  const state = {
+    source: kind === "deep-selector"
+      ? api.deepSignal({ user: { name: "0", age: 36 } })
+      : api.signal(0),
+    renders: 0,
+  };
   const App = buildApp(state);
   const container = document.createElement("div");
   document.body.appendChild(container);
@@ -95,7 +107,10 @@ async function runOne(timed) {
     await act(() => root.render(createElement(App)));
     const startedAt = performance.now();
     for (let index = 0; index < iterations; index += 1) {
-      await act(() => { state.source.value = index + 1; });
+      await act(() => {
+        if (kind === "deep-selector") state.source.value.user.name = String(index + 1);
+        else state.source.value = index + 1;
+      });
     }
     if (timed) durationNs = Math.round((performance.now() - startedAt) * 1e6);
 

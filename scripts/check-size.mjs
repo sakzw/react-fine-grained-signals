@@ -235,12 +235,11 @@ try {
     if (fatal.length > 0) {
       console.error("\nRefusing to rewrite budgets while a guarantee is broken.");
     } else {
-      // Budgets are the measured size plus headroom, so ordinary changes do not
-      // churn this file and only a real regression trips it.
+      // Keep a small, explicit 5% headroom over measured application bundles.
       const updated = Object.fromEntries(
         Object.entries(results).map(([name, sizes]) => [
           name,
-          { gzip: Math.ceil((sizes.gzip * 1.1) / 64) * 64 },
+          { gzip: Math.ceil((sizes.gzip * 1.05) / 64) * 64 },
         ]),
       );
       writeFileSync(budgetPath, `${JSON.stringify(updated, null, 2)}\n`);

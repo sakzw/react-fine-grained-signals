@@ -1,0 +1,1244 @@
+{
+  "purpose": "M1.5.3 React integration paired diagnostics; not an M1b release matrix",
+  "gitHead": "c72bacd03bc4b156dc382a972e97521f04539462",
+  "worktreeDirtyAtStart": true,
+  "dirtyPathsAtStart": [
+    "benchmarks/phase9/adapters.mjs  M benchmarks/phase9/react-worker.mjs  M benchmarks/phase9/run.mjs  M benchmarks/phase9/runtime-identity.mjs  M docs/implementation-phase9-m1.5.2.md  M scripts/check-size.mjs  M scripts/size-budget.json  D src/core/alien-derived-runtime-core.d.mts  D src/core/alien-derived-runtime-core.mjs  M src/core/execution-owner.ts  D src/core/foreign-readable-v1.mjs  D src/core/interop-context.mjs  M src/core/reactive-runtime.ts  D src/core/render-runtime.d.mts  D src/core/render-runtime.mjs  M src/core/render-tracking.ts  D src/react/react-adapter.d.mts  D src/react/react-adapter.mjs  M tests/alien-runtime-boundary.test.ts  M tests/cross-copy-smoke.mjs  M tests/fixtures/cross-copy-interop-entry.ts  M tests/reactive-runtime.test.ts  M tests/ssr.test.tsx  M tests/use-signals-managed.test.tsx  M tsconfig.json ?? benchmarks/phase9/m15/m153-allocation-screen.mjs ?? benchmarks/phase9/m15/m153-diagnostic-screen.mjs ?? benchmarks/phase9/m15/m153-owner-primitives.mjs ?? benchmarks/phase9/m15/m153-react-screen.mjs ?? benchmarks/phase9/m15/results/m153-allocation-results.json ?? benchmarks/phase9/m15/results/m153-authoritative-summary.json ?? benchmarks/phase9/m15/results/m153-diagnostic-results.json ?? benchmarks/phase9/m15/results/m153-diagnostic-summary.json ?? benchmarks/phase9/m15/results/m153-owner-primitives.json ?? benchmarks/phase9/m15/results/m153-react-results.json ?? benchmarks/phase9/m15/results/m153-react-summary.json ?? benchmarks/phase9/m15/results/m153-source-fast-path-results.json ?? benchmarks/phase9/m15/results/m153-source-fast-path-summary.json ?? benchmarks/phase9/m15/summarize-m153.mjs ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final-rerun/ ?? benchmarks/phase9/results/m1.5.3-2026-09-28-hot-path-recovery-final/ ?? src/core/alien-derived-runtime-core.mts ?? src/core/alien-derived-types.ts ?? src/core/foreign-readable-v1.mts ?? src/core/interop-context.mts ?? src/core/render-runtime.mts ?? src/react/react-adapter.mts"
+  ],
+  "rounds": 8,
+  "warmups": 3,
+  "samples": 7,
+  "runtimes": [
+    "rfsg-v0.1.1",
+    "rfsg-current"
+  ],
+  "cases": [
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250
+    }
+  ],
+  "measurements": [
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          54989800,
+          51963800,
+          51500500,
+          51635600,
+          85852600,
+          73050700,
+          91537700
+        ],
+        "rfsg-current": [
+          73823500,
+          75128900,
+          108393000,
+          84186500,
+          79935700,
+          86640500,
+          73473900
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 2,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          78604000,
+          129928600,
+          63623300,
+          70552200,
+          58608900,
+          77641200,
+          54988600
+        ],
+        "rfsg-v0.1.1": [
+          51381100,
+          47371300,
+          47717800,
+          45005900,
+          48287100,
+          45981100,
+          47618000
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          59328500,
+          53283200,
+          56622300,
+          46775500,
+          45537500,
+          49564100,
+          48793500
+        ],
+        "rfsg-current": [
+          48594500,
+          50246600,
+          59668000,
+          57693900,
+          61261100,
+          61767100,
+          62872900
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          48181700,
+          51281200,
+          53556600,
+          60980600,
+          51670900,
+          60036300,
+          58466100
+        ],
+        "rfsg-v0.1.1": [
+          77150000,
+          55662900,
+          49023400,
+          51707100,
+          45342800,
+          47219000,
+          52815700
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 5,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          70166500,
+          53088600,
+          49446600,
+          48643000,
+          50506300,
+          48069700,
+          44655900
+        ],
+        "rfsg-current": [
+          45204100,
+          49022000,
+          54418000,
+          62976000,
+          63612900,
+          58239700,
+          53449100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 6,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          45035300,
+          52424600,
+          50068200,
+          51157500,
+          49557400,
+          57749800,
+          74992200
+        ],
+        "rfsg-v0.1.1": [
+          50342900,
+          53926000,
+          48560200,
+          50309200,
+          46251300,
+          50317400,
+          54342500
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          44600000,
+          48209300,
+          59295000,
+          68545700,
+          49025300,
+          55095200,
+          48445800
+        ],
+        "rfsg-current": [
+          48822200,
+          59307100,
+          71132000,
+          51148600,
+          54379900,
+          61044400,
+          54315100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-bare-tracking",
+      "kind": "bare",
+      "iterations": 250,
+      "round": 8,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          35999300,
+          37300900,
+          51934600,
+          54105900,
+          49784700,
+          46917800,
+          45973700
+        ],
+        "rfsg-v0.1.1": [
+          43116000,
+          42819900,
+          43376600,
+          44569800,
+          39792600,
+          44426200,
+          41722200
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          41199000,
+          40642900,
+          42244200,
+          43885500,
+          41544300,
+          46636400,
+          48104800
+        ],
+        "rfsg-current": [
+          40361900,
+          48905400,
+          49118100,
+          50764100,
+          47209800,
+          50432400,
+          47496100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 2,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          35915500,
+          44004800,
+          44343600,
+          62601300,
+          55187500,
+          46502600,
+          49287800
+        ],
+        "rfsg-v0.1.1": [
+          35048600,
+          41226100,
+          44245700,
+          51808000,
+          46539200,
+          61764800,
+          61444700
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          42029900,
+          48897000,
+          56012900,
+          47131500,
+          41406200,
+          41223900,
+          42703400
+        ],
+        "rfsg-current": [
+          43066600,
+          42540600,
+          47150200,
+          47897900,
+          45013600,
+          45280200,
+          48409400
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          39020000,
+          44171600,
+          41600900,
+          50080400,
+          46180200,
+          44410300,
+          43945100
+        ],
+        "rfsg-v0.1.1": [
+          38608000,
+          40239000,
+          44362300,
+          47941800,
+          47682400,
+          51071500,
+          46118700
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 5,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          58008800,
+          89169100,
+          47263900,
+          50395500,
+          51213000,
+          56496700,
+          54351000
+        ],
+        "rfsg-current": [
+          55273200,
+          55031100,
+          56535700,
+          59412000,
+          69793500,
+          69909100,
+          80749100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 6,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          62096700,
+          49907300,
+          54363400,
+          54442500,
+          53069400,
+          61496400,
+          61066800
+        ],
+        "rfsg-v0.1.1": [
+          41125400,
+          41246800,
+          38715200,
+          44592400,
+          44627100,
+          41536500,
+          37305500
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          39655900,
+          41906000,
+          46050900,
+          46081300,
+          45350100,
+          46787300,
+          53235700
+        ],
+        "rfsg-current": [
+          34262000,
+          42111500,
+          50273800,
+          56118200,
+          48035800,
+          49364900,
+          49415900
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-managed-tracking",
+      "kind": "managed",
+      "iterations": 250,
+      "round": 8,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          42150200,
+          43201200,
+          44240100,
+          50456100,
+          47133200,
+          44934500,
+          48549100
+        ],
+        "rfsg-v0.1.1": [
+          39112500,
+          44530600,
+          44944000,
+          56986100,
+          56930700,
+          50568000,
+          51634700
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          43379500,
+          51764500,
+          43441900,
+          40417800,
+          39178000,
+          39414000,
+          41366400
+        ],
+        "rfsg-current": [
+          31760800,
+          41019100,
+          39285800,
+          42532300,
+          40631000,
+          39678500,
+          41893100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 2,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          31379300,
+          38872500,
+          40410400,
+          44289000,
+          41442900,
+          38461300,
+          41052500
+        ],
+        "rfsg-v0.1.1": [
+          31281000,
+          38267600,
+          42548300,
+          48722300,
+          61129700,
+          65915800,
+          50088000
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          41790800,
+          44709300,
+          39794400,
+          40609700,
+          40655700,
+          45176900,
+          51180000
+        ],
+        "rfsg-current": [
+          40033900,
+          44252900,
+          46249300,
+          48321400,
+          43894600,
+          50999200,
+          55973100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          42907600,
+          44238000,
+          51665700,
+          46086100,
+          50655700,
+          50636000,
+          49902800
+        ],
+        "rfsg-v0.1.1": [
+          41366600,
+          47868900,
+          41603300,
+          40634600,
+          41476100,
+          43706500,
+          44156700
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 5,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          36717500,
+          38642200,
+          41745100,
+          44357500,
+          49297100,
+          75689700,
+          65264400
+        ],
+        "rfsg-current": [
+          31260800,
+          34786600,
+          38657100,
+          40052300,
+          43499700,
+          42337800,
+          39420300
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 6,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          32613400,
+          34415400,
+          39280000,
+          44769000,
+          47272000,
+          40865200,
+          39288700
+        ],
+        "rfsg-v0.1.1": [
+          33521900,
+          39404500,
+          38402500,
+          43873700,
+          46810700,
+          45657800,
+          49120900
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          36565900,
+          39477400,
+          50478100,
+          57775400,
+          42766300,
+          44013300,
+          48304200
+        ],
+        "rfsg-current": [
+          35367800,
+          35731000,
+          38910500,
+          41882700,
+          46271800,
+          38781900,
+          45792100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 8,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          33144700,
+          35786900,
+          38094900,
+          42550100,
+          45746100,
+          42733600,
+          39875400
+        ],
+        "rfsg-v0.1.1": [
+          36458900,
+          44563900,
+          48252700,
+          47581300,
+          42713200,
+          37529000,
+          41557600
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          19653600,
+          18663500,
+          17655100,
+          17489300,
+          21469200,
+          19652200,
+          18402800
+        ],
+        "rfsg-current": [
+          18803700,
+          18773600,
+          18722700,
+          16449700,
+          16058600,
+          19047400,
+          19922000
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 2,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          17761600,
+          18528600,
+          19313600,
+          17341100,
+          18405100,
+          18732000,
+          18814100
+        ],
+        "rfsg-v0.1.1": [
+          26348000,
+          24243200,
+          23679900,
+          18414700,
+          22895800,
+          20745800,
+          18832900
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          21756200,
+          25595600,
+          20427600,
+          15448100,
+          19639800,
+          17399800,
+          17080500
+        ],
+        "rfsg-current": [
+          16240800,
+          16588800,
+          17393400,
+          14853700,
+          15077600,
+          16712700,
+          18398300
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          15582500,
+          15733800,
+          17173800,
+          14875100,
+          15077900,
+          13743400,
+          16587500
+        ],
+        "rfsg-v0.1.1": [
+          17834800,
+          16887300,
+          16295800,
+          14845700,
+          17970300,
+          18830600,
+          20075600
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 5,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          15450800,
+          15497600,
+          16715600,
+          13772400,
+          17539600,
+          17309000,
+          17103900
+        ],
+        "rfsg-current": [
+          17225400,
+          16823000,
+          17704100,
+          15236700,
+          16164600,
+          16268500,
+          20162100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 6,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          16437700,
+          16202300,
+          16729200,
+          15142900,
+          15830500,
+          15092200,
+          18062600
+        ],
+        "rfsg-v0.1.1": [
+          16736400,
+          16380400,
+          20794200,
+          16105900,
+          19188200,
+          19010300,
+          17095900
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          16761100,
+          17730000,
+          22248100,
+          19667700,
+          19796000,
+          18312400,
+          18239300
+        ],
+        "rfsg-current": [
+          16652000,
+          16928000,
+          19017100,
+          15233200,
+          15142600,
+          16368700,
+          21526200
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-jsx-direct-binding",
+      "kind": "jsx-binding",
+      "iterations": 1679,
+      "round": 8,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          20693500,
+          20529000,
+          23784300,
+          20407400,
+          22658200,
+          19201600,
+          19767800
+        ],
+        "rfsg-v0.1.1": [
+          15284700,
+          15628700,
+          17234400,
+          16022200,
+          20390100,
+          20455300,
+          20029900
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          50224800,
+          49422400,
+          58269700,
+          51049800,
+          53065500,
+          55966000,
+          52834600
+        ],
+        "rfsg-current": [
+          49366300,
+          46007500,
+          51971300,
+          65843800,
+          66022900,
+          59425100,
+          54619000
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 2,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          51358200,
+          60915600,
+          50573300,
+          51826900,
+          57324900,
+          53718400,
+          52022600
+        ],
+        "rfsg-v0.1.1": [
+          46844800,
+          49125900,
+          47711300,
+          48519700,
+          50990800,
+          54170900,
+          49021700
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          39489500,
+          46671300,
+          52316100,
+          55671800,
+          45429000,
+          44338900,
+          46961000
+        ],
+        "rfsg-current": [
+          34065000,
+          41496900,
+          42122400,
+          46624300,
+          43002000,
+          41957500,
+          44890600
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          35034000,
+          41173300,
+          43470600,
+          48624400,
+          46494100,
+          45140500,
+          54532200
+        ],
+        "rfsg-v0.1.1": [
+          40518800,
+          46763000,
+          51106700,
+          56865200,
+          46964400,
+          44707300,
+          45995600
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 5,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          40666700,
+          45509400,
+          44163700,
+          45822100,
+          52259400,
+          46327700,
+          46998100
+        ],
+        "rfsg-current": [
+          34100000,
+          43906000,
+          44205800,
+          58114700,
+          49795300,
+          51643100,
+          55219800
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 6,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          35720100,
+          40318500,
+          50501100,
+          62529700,
+          55020800,
+          45119700,
+          46645900
+        ],
+        "rfsg-v0.1.1": [
+          41074300,
+          43595200,
+          46655400,
+          53393400,
+          45408300,
+          40633900,
+          49890000
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          38152800,
+          43432800,
+          53854500,
+          47094500,
+          47282900,
+          40011000,
+          52641600
+        ],
+        "rfsg-current": [
+          37863000,
+          43253100,
+          52525700,
+          57076400,
+          53517100,
+          50269800,
+          52134300
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 8,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          42019200,
+          54691500,
+          48551500,
+          76641900,
+          52096500,
+          47638700,
+          52127900
+        ],
+        "rfsg-v0.1.1": [
+          52291100,
+          51869700,
+          53452700,
+          60261800,
+          53681000,
+          52832700,
+          50783400
+        ]
+      }
+    }
+  ]
+}

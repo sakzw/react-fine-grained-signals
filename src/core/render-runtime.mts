@@ -1,13 +1,17 @@
 /* Attempt-local render and speculative adapter for the production graph. */
-import { executionContext, pushExecutionOwner } from "./execution-owner.js";
+import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
+import type { RenderExecutionOwnerV2 } from "./execution-owner.js";
 import { activeRenderCollector, setActiveRenderCollector } from "./render-tracking.js";
+import type { RenderCollector } from "./render-tracking.js";
+import type { AlienDerivedGraphRuntime, RenderAttempt, RenderReadableDependency, RuntimeComputed, RuntimeNode, RuntimeReadable, RuntimeSource, SpeculativeComputedEntry } from "./alien-derived-types.js";
 
-export function createAlienDerivedRenderAdapter(core) {let activeSpeculativeComputed;
-const readablesByNode = new WeakMap();
-const collectorFrames = [];
-let baseRenderCollector;
+export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) {
+let activeSpeculativeComputed: SpeculativeComputedEntry | undefined;
+const readablesByNode = new WeakMap<RuntimeNode, object>();
+const collectorFrames: Array<{ collector: RenderCollector; active: boolean }> = [];
+let baseRenderCollector: RenderCollector | undefined;
 
-function addDependency(attempt, dependency, revision) {
+function addDependency(attempt: RenderAttempt, dependency: object, revision: number): void {
   const node = core.getNodeForReadable(dependency);
   if (node !== undefined) readablesByNode.set(node, dependency);
   if (activeSpeculativeComputed !== undefined) {
@@ -17,15 +21,15 @@ function addDependency(attempt, dependency, revision) {
   }
 }
 
-function readSource(readable, node, attempt) {
+function readSource(readable: object, node: RuntimeSource, attempt: RenderAttempt): unknown {
   addDependency(attempt, readable, node.renderRevision);
   return node.pendingValue;
 }
 
-function readComputed(readable, node, attempt) {
-  if (activeSpeculativeComputed !== undefined && activeSpeculativeComputed !== node) {
+function readComputed(readable: object, node: RuntimeComputed, attempt: RenderAttempt): unknown {
+  if (activeSpeculativeComputed !== undefined) {
     const restoreAttempt = core.pushRenderAttempt(undefined);
-    try { return readable.value; }
+    try { return (readable as RuntimeReadable).value; }
     finally {
       addDependency(attempt, readable, node.renderRevision);
       restoreAttempt();
@@ -69,7 +73,7 @@ function readComputed(readable, node, attempt) {
 
 core.configureRenderAdapter({ readSource, readComputed });
 
-function createRenderAttempt() {
+function createRenderAttempt(): RenderAttempt {
   return {
     dependencies: new Map(),
     computedCache: new Map(),
@@ -81,10 +85,11 @@ function createRenderAttempt() {
   };
 }
 
-function createRenderOwner(attempt) {
+function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bare" = "managed"): RenderExecutionOwnerV2 {
   return {
-    version: 2,
-    kind: "render",
+    version: 2 as const,
+    kind: "render" as const,
+    scopePolicy,
     runtimeToken: core.runtimeToken,
     add(protocol, revision) { addDependency(attempt, protocol, revision); },
     isSpeculative() { return activeSpeculativeComputed !== undefined; },
@@ -92,17 +97,21 @@ function createRenderOwner(attempt) {
   };
 }
 
-function pushRenderScope(attempt) {
+function pushRenderScope(attempt: RenderAttempt, scopePolicy: "managed" | "bare" = "managed"): () => void {
+  const parent = executionContext.owner;
+  if (isRenderExecutionOwner(parent) && !(parent.scopePolicy === "managed" && scopePolicy === "managed")) {
+    parent.closeScope?.();
+  }
   const restoreAttempt = core.pushRenderAttempt(attempt);
-  const owner = createRenderOwner(attempt);
+  const owner = createRenderOwner(attempt, scopePolicy);
   const restoreOwner = pushExecutionOwner(owner);
-  const collector = { add(dependency, revision) { addDependency(attempt, dependency, revision); } };
+  const collector: RenderCollector = { add(dependency: RenderReadableDependency, revision: number) { addDependency(attempt, dependency, revision); } };
   if (collectorFrames.length === 0) baseRenderCollector = activeRenderCollector;
   const frame = { collector, active: true };
   collectorFrames.push(frame);
   setActiveRenderCollector(collector);
   let active = true;
-  return () => {
+  const restoreScope = () => {
     if (!active) return;
     active = false;
     frame.active = false;
@@ -112,15 +121,17 @@ function pushRenderScope(attempt) {
     restoreAttempt();
     restoreOwner();
   };
+  owner.closeScope = restoreScope;
+  return restoreScope;
 }
 
-function withRenderScope(attempt, callback) {
-  const restore = pushRenderScope(attempt);
+function withRenderScope<T>(attempt: RenderAttempt, callback: () => T, scopePolicy: "managed" | "bare" = "managed"): T {
+  const restore = pushRenderScope(attempt, scopePolicy);
   try { return callback(); }
   finally { restore(); }
 }
 
-function promoteRenderAttempt(attempt) {
+function promoteRenderAttempt(attempt: RenderAttempt): boolean {
   for (const [node, entry] of attempt.computedCache) {
     if (!entry.canPromote) continue;
     const readable = readablesByNode.get(node);
@@ -129,14 +140,14 @@ function promoteRenderAttempt(attempt) {
   return true;
 }
 
-function settleRenderAttempt(attempt) {
+function settleRenderAttempt(attempt: RenderAttempt): boolean {
   let stable = true;
   for (const [dependency, revision] of attempt.dependencies) {
     const currentRevision = getRenderVersion(dependency);
     if (currentRevision === revision) continue;
     const node = core.getNodeForReadable(dependency);
     const entry = node === undefined ? undefined : attempt.computedCache.get(node);
-    if (entry === undefined || !node.initialized || entry.hasError !== node.hasError ||
+    if (node === undefined || entry === undefined || node.initialized !== true || entry.hasError !== node.hasError ||
         (!entry.hasError && !Object.is(entry.value, node.value))) {
       stable = false;
       continue;
@@ -146,29 +157,30 @@ function settleRenderAttempt(attempt) {
   return stable;
 }
 
-function getRenderVersion(readable) {
-  if (readable?.version === 1 && typeof readable.getRevision === "function" &&
-      typeof readable.subscribe === "function") return readable.getRevision();
-  if (core.getNodeForReadable(readable) !== undefined || readable?.[Symbol.for("react-fine-grained-signals.readable-interop.v1")] !== undefined) {
+function getRenderVersion(readable: object): number {
+  if (Reflect.get(readable, "version") === 1 && typeof Reflect.get(readable, "getRevision") === "function" &&
+      typeof Reflect.get(readable, "subscribe") === "function") return (Reflect.get(readable, "getRevision") as () => number).call(readable);
+  if (core.getNodeForReadable(readable) !== undefined || Reflect.get(readable, Symbol.for("react-fine-grained-signals.readable-interop.v1")) !== undefined) {
     return core.getReadableRevision(readable);
   }
-  if (typeof readable?.getRenderVersion === "function") return readable.getRenderVersion();
+  const getVersion = Reflect.get(readable, "getRenderVersion");
+  if (typeof getVersion === "function") return getVersion.call(readable) as number;
   throw new TypeError("Unknown render dependency");
 }
-function hasActiveRenderOwner() { return executionContext.owner?.kind === "render"; }
+function hasActiveRenderOwner(): boolean { return isRenderExecutionOwner(executionContext.owner); }
 function isSpeculative() {
   const owner = executionContext.owner;
-  if (owner?.kind === "graph" || owner?.kind === "untracked") return false;
-  return owner?.kind === "render"
+  if (isGraphExecutionOwner(owner) || owner === UNTRACKED_OWNER) return false;
+  return isRenderExecutionOwner(owner)
     && (owner.isSpeculative?.() === true || activeSpeculativeComputed !== undefined);
 }
-function markSpeculativeDeepRead() {
+function markSpeculativeDeepRead(): void {
   const attempt = core.getActiveRenderAttempt();
   if (attempt !== undefined) attempt.markSpeculativeDeepRead();
-  else executionContext.owner?.markSpeculativeDeepRead?.();
+  else if (isRenderExecutionOwner(executionContext.owner)) executionContext.owner.markSpeculativeDeepRead?.();
 }
 
-function subscribeReadables(readables, notify) {
+function subscribeReadables(readables: readonly RuntimeReadable[], notify: () => void): () => void {
   let initial = true;
   return core.effect(() => {
     for (const readable of readables) {
@@ -179,9 +191,9 @@ function subscribeReadables(readables, notify) {
   });
 }
 
-function captureRenderSnapshot(readable) {
+function captureRenderSnapshot(readable: RuntimeReadable): { value: unknown; dependencies: Map<object, number>; attempt: RenderAttempt } {
   const attempt = createRenderAttempt();
-  let value;
+  let value: unknown;
   withRenderScope(attempt, () => { value = readable.value; });
   return { value, dependencies: attempt.dependencies, attempt };
 }

@@ -1,7 +1,21 @@
 import { READABLE_INTEROP_V1 } from "./interop-context.mjs";
-import { UNTRACKED_OWNER, executionContext, withExecutionOwner } from "./execution-owner.js";
+import { UNTRACKED_OWNER, executionContext, withSynchronousExecutionOwner } from "./execution-owner.js";
+import type { ExecutionContextOwnerV2, ReadableProtocolV1 } from "./execution-owner.js";
+import { isGraphExecutionOwner, isRenderExecutionOwner } from "./execution-owner.js";
+import type { ForeignReadableAdapterOptions, RuntimeNode } from "./alien-derived-types.js";
 
-function observeRevision(node) {
+interface CandidateReadable {
+  readonly value: unknown;
+}
+
+function isReadableProtocol(value: unknown): value is ReadableProtocolV1 {
+  return typeof value === "object" && value !== null
+    && Reflect.get(value, "version") === 1
+    && typeof Reflect.get(value, "getRevision") === "function"
+    && typeof Reflect.get(value, "subscribe") === "function";
+}
+
+function observeRevision(node: RuntimeNode): number {
   return node.renderRevision ??= 0;
 }
 
@@ -19,12 +33,12 @@ export function createForeignReadableAdapter({
   isRunning,
   isBatching,
   effect,
-}) {
-  const protocols = new WeakMap();
-  const readableNodes = new WeakMap();
-  const foreignNodes = new WeakMap();
+}: ForeignReadableAdapterOptions) {
+  const protocols = new WeakMap<object, ReadableProtocolV1>();
+  const readableNodes = new WeakMap<object, RuntimeNode>();
+  const foreignNodes = new WeakMap<ReadableProtocolV1, RuntimeNode>();
 
-  function ensureForeignNode(protocol, observedRevision) {
+  function ensureForeignNode(protocol: ReadableProtocolV1, observedRevision: number): RuntimeNode {
     let node = foreignNodes.get(protocol);
     if (node === undefined) {
       node = makeNode("external", mutableFlag, {
@@ -43,10 +57,10 @@ export function createForeignReadableAdapter({
     return node;
   }
 
-  function activateForeignNode(node) {
+  function activateForeignNode(node: RuntimeNode): void {
     if (node.unsubscribe === undefined) {
       const protocol = node.protocol;
-      const subscription = protocol.subscribe((revision) => {
+      const subscription = protocol!.subscribe((revision) => {
         if (revision === node.revision || revision === node.pendingRevision) return;
         node.pendingRevision = revision;
         node.flags = mutableFlag | dirtyFlag;
@@ -68,37 +82,37 @@ export function createForeignReadableAdapter({
   }
 
   const graphOwner = {
-    version: 2,
-    kind: "graph",
+    version: 2 as const,
+    kind: "graph" as const,
     runtimeToken,
-    add(protocol, revision) { ensureForeignNode(protocol, revision); },
+    add(protocol: ReadableProtocolV1, revision: number) { ensureForeignNode(protocol, revision); },
   };
 
-  function withGraphOwner(callback) {
+  function withGraphOwner<T>(callback: () => T): T {
     const owner = executionContext.owner;
-    if (owner?.kind === "graph" && owner.runtimeToken === runtimeToken) return callback();
-    return withExecutionOwner(graphOwner, callback);
+    if (isGraphExecutionOwner(owner) && owner.runtimeToken === runtimeToken) return callback();
+    return withSynchronousExecutionOwner(graphOwner, callback);
   }
 
-  function publishForeignReadable(readable, node, owner) {
-    if (owner === UNTRACKED_OWNER || owner?.runtimeToken === runtimeToken) return;
+  function publishForeignReadable(readable: object, node: RuntimeNode, owner: ExecutionContextOwnerV2 | undefined): void {
+    if (owner === UNTRACKED_OWNER || ((isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken === runtimeToken)) return;
     const protocol = protocols.get(readable);
     if (protocol !== undefined) {
-      if (owner?.kind === "graph" || owner?.kind === "render") owner.add(protocol, observeRevision(node));
+      if (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) owner.add(protocol, observeRevision(node));
     }
   }
 
-  function attachProtocol(readable, node) {
+  function attachProtocol(readable: CandidateReadable, node: RuntimeNode): void {
     readableNodes.set(readable, node);
     const protocol = {
-      version: 1,
+      version: 1 as const,
       runtimeToken,
       getRevision() {
-        try { withExecutionOwner(UNTRACKED_OWNER, () => { readable.value; }); }
+        try { withSynchronousExecutionOwner(UNTRACKED_OWNER, () => readable.value); }
         catch { /* Revisions remain observable while computed read errors are cached. */ }
         return observeRevision(node);
       },
-      subscribe(listener) {
+      subscribe(listener: (revision: number) => void) {
         const revision = observeRevision(node);
         let initial = true;
         const unsubscribe = effect(() => {
@@ -118,13 +132,23 @@ export function createForeignReadableAdapter({
     });
   }
 
-  function getReadableRevision(readable) {
+  function getReadableRevision(readable: object): number {
     const node = readableNodes.get(readable);
     if (node !== undefined) return observeRevision(node);
-    const protocol = readable?.[READABLE_INTEROP_V1];
-    if (protocol?.version === 1 && typeof protocol.getRevision === "function") return protocol.getRevision();
+    const protocolValue: unknown = Reflect.get(readable, READABLE_INTEROP_V1);
+    if (isReadableProtocol(protocolValue)) return protocolValue.getRevision();
     throw new TypeError("Unknown candidate readable");
   }
 
-  return { attachProtocol, ensureForeignNode, activateForeignNode, getNodeForReadable: (value) => readableNodes.get(value), getReadableRevision, observeRevision, publishForeignReadable, graphOwner, withGraphOwner };
+  return {
+    attachProtocol,
+    ensureForeignNode,
+    activateForeignNode,
+    getNodeForReadable: (value: object) => readableNodes.get(value),
+    getReadableRevision,
+    observeRevision,
+    publishForeignReadable,
+    graphOwner,
+    withGraphOwner,
+  };
 }

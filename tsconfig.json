@@ -22,6 +22,7 @@
   "include": [
     "vitest.config.ts",
     "src/**/*.ts",
+    "src/**/*.mts",
     "src/**/*.tsx",
     "tests/**/*.ts",
     "tests/**/*.tsx",

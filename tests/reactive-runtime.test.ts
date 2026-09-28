@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
+import { executionContext } from "../src/core/execution-owner.js";
 import {
   getReadableInterop,
   READABLE_INTEROP_V1,
@@ -91,6 +92,26 @@ function renderVersionOf(readable: { readonly value: unknown }): number {
 }
 
 describe("private reactive runtime", () => {
+  it("does not allocate long-lived owner frames for synchronous graph scopes", () => {
+    const runtime = createReactiveRuntime();
+    const source = runtime.signal(1);
+    const derived = runtime.computed(() => source.value + 1);
+    const framesBefore = executionContext.frames.length;
+    const dispose = runtime.effect(() => { derived.value; });
+    expect(executionContext.frames).toHaveLength(framesBefore);
+
+    const attempt = runtime.renderAdapter.createRenderAttempt();
+    runtime.renderAdapter.withRenderScope(attempt, () => {
+      const framesInRender = executionContext.frames.length;
+      expect(derived.value).toBe(2);
+      const nestedDispose = runtime.effect(() => { derived.value; });
+      expect(executionContext.frames).toHaveLength(framesInRender);
+      nestedDispose();
+    });
+    dispose();
+    expect(executionContext.frames).toHaveLength(framesBefore);
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });
@@ -1048,6 +1069,31 @@ describe("private reactive runtime", () => {
     dispose();
   });
 
+  it("tracks foreign dependency state across local/foreign branch changes", () => {
+    const local = createReactiveRuntime();
+    const foreignRuntime = createReactiveRuntime();
+    const chooseForeign = local.signal(true);
+    const localSource = local.signal(1);
+    const foreignSource = foreignRuntime.signal(10);
+    const inner = local.computed(() => chooseForeign.value ? foreignSource.value : localSource.value);
+    const outer = local.computed(() => inner.value + 1);
+
+    expect(outer.value).toBe(11);
+    expect(graphNodeOf(inner).foreignDependent).toBe(true);
+    expect(graphNodeOf(outer).foreignDependent).toBe(true);
+    chooseForeign.value = false;
+    expect(outer.value).toBe(2);
+    expect(graphNodeOf(inner).foreignDependent).toBe(false);
+    expect(graphNodeOf(outer).foreignDependent).toBe(false);
+
+    chooseForeign.value = true;
+    expect(outer.value).toBe(11);
+    expect(graphNodeOf(inner).foreignDependent).toBe(true);
+    expect(graphNodeOf(outer).foreignDependent).toBe(true);
+    foreignSource.value = 20;
+    expect(outer.value).toBe(21);
+  });
+
   it("moves foreign liveness from runtime B to runtime C and releases both on disposal", () => {
     const local = createReactiveRuntime();
     const runtimeB = createReactiveRuntime();
@@ -1179,7 +1225,9 @@ describe("private reactive runtime", () => {
     shouldThrow.value = true;
     expect(seen).toEqual(["value:1", "error:true"]);
     expect(reported).not.toHaveBeenCalled();
+    const errorRevision = renderVersionOf(localComputed);
     revision.value = 1;
+    expect(renderVersionOf(localComputed)).toBeGreaterThan(errorRevision);
     expect(seen).toEqual(["value:1", "error:true", "error:true"]);
     shouldThrow.value = false;
     expect(seen).toEqual(["value:1", "error:true", "error:true", "value:2"]);
@@ -1253,7 +1301,7 @@ describe("private reactive runtime", () => {
     stopC();
   });
 
-  it("coalesces cross-runtime reads when a local write pulls the latest foreign value", () => {
+  it("coalesces notifications at the writing runtime's batch boundary", () => {
     const a = createReactiveRuntime();
     const b = createReactiveRuntime();
     const local = a.signal(0);
@@ -1267,6 +1315,8 @@ describe("private reactive runtime", () => {
       foreign.value = 1;
       local.value = 1;
     });
+    // The foreign runtime publishes after its own batch, so the local bridge
+    // observes the final value once; batch schedulers are still per-runtime.
     expect(seen).toEqual([[0, 0], [1, 1]]);
     dispose();
   });
