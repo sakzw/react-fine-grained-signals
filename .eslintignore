@@ -1,0 +1,3 @@
+# M1.5 package-size outputs: generated minified ESM and a copied control dist.
+benchmarks/phase9/m15/bundled/
+benchmarks/phase9/m15/current-dist/

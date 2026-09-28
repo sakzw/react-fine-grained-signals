@@ -1,0 +1,478 @@
+{
+  "purpose": "M1.5 Core Candidate computed-error delta screen",
+  "rounds": 4,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "cases": [
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279
+    }
+  ],
+  "orders": [
+    [
+      "brand-only",
+      "core-errors"
+    ],
+    [
+      "core-errors",
+      "brand-only"
+    ],
+    [
+      "brand-only",
+      "core-errors"
+    ],
+    [
+      "core-errors",
+      "brand-only"
+    ]
+  ],
+  "preflights": [
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "brand-only",
+      "caseId": "computed/dirty-read@1",
+      "iterations": 93142
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "core-errors",
+      "caseId": "computed/dirty-read@1",
+      "iterations": 93142
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "brand-only",
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "core-errors",
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "brand-only",
+      "caseId": "effect/observed-write@1",
+      "iterations": 106279
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "core-errors",
+      "caseId": "effect/observed-write@1",
+      "iterations": 106279
+    }
+  ],
+  "results": [
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 1,
+      "order": [
+        "brand-only",
+        "core-errors"
+      ],
+      "perVariant": {
+        "brand-only": [
+          34825700,
+          20304000,
+          30279700,
+          22003000,
+          24447100,
+          12702100,
+          32756500
+        ],
+        "core-errors": [
+          22192600,
+          30934300,
+          15232600,
+          30976200,
+          15997200,
+          20943000,
+          16054100
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 2,
+      "order": [
+        "core-errors",
+        "brand-only"
+      ],
+      "perVariant": {
+        "core-errors": [
+          8749500,
+          14659600,
+          9653100,
+          15809600,
+          11827100,
+          17171800,
+          10304300
+        ],
+        "brand-only": [
+          17908900,
+          20857700,
+          19050700,
+          32412000,
+          20047200,
+          26872400,
+          15031500
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 3,
+      "order": [
+        "brand-only",
+        "core-errors"
+      ],
+      "perVariant": {
+        "brand-only": [
+          13178400,
+          21040300,
+          19922700,
+          27341200,
+          31123100,
+          17789400,
+          32391200
+        ],
+        "core-errors": [
+          15515700,
+          26320300,
+          13138700,
+          20485000,
+          17746100,
+          32055900,
+          21662500
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 4,
+      "order": [
+        "core-errors",
+        "brand-only"
+      ],
+      "perVariant": {
+        "core-errors": [
+          32150100,
+          25449200,
+          35131800,
+          20463400,
+          29407700,
+          12308300,
+          27000500
+        ],
+        "brand-only": [
+          8791000,
+          27528100,
+          16341600,
+          22418300,
+          11866900,
+          25311800,
+          12367000
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 1,
+      "order": [
+        "brand-only",
+        "core-errors"
+      ],
+      "perVariant": {
+        "brand-only": [
+          33783600,
+          41126800,
+          22300500,
+          24115000,
+          24329000,
+          45144500,
+          25050400
+        ],
+        "core-errors": [
+          28627400,
+          33539700,
+          20108000,
+          26380900,
+          41432500,
+          20528300,
+          39574800
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 2,
+      "order": [
+        "core-errors",
+        "brand-only"
+      ],
+      "perVariant": {
+        "core-errors": [
+          26869400,
+          40767800,
+          25242600,
+          46732800,
+          17052400,
+          37590300,
+          21001500
+        ],
+        "brand-only": [
+          26820400,
+          35600900,
+          22444100,
+          31486000,
+          29162100,
+          45364200,
+          25615700
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 3,
+      "order": [
+        "brand-only",
+        "core-errors"
+      ],
+      "perVariant": {
+        "brand-only": [
+          34209700,
+          45236400,
+          30030800,
+          43248900,
+          28113300,
+          49410600,
+          26043500
+        ],
+        "core-errors": [
+          28374100,
+          45064000,
+          26728300,
+          47318200,
+          15791700,
+          27808400,
+          35346800
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 4,
+      "order": [
+        "core-errors",
+        "brand-only"
+      ],
+      "perVariant": {
+        "core-errors": [
+          19216800,
+          15144700,
+          28641700,
+          23661600,
+          39239700,
+          19539400,
+          40395600
+        ],
+        "brand-only": [
+          24639900,
+          37776300,
+          15363000,
+          38431400,
+          26228500,
+          41852600,
+          16216300
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 1,
+      "order": [
+        "brand-only",
+        "core-errors"
+      ],
+      "perVariant": {
+        "brand-only": [
+          21867400,
+          15175600,
+          22710500,
+          14844300,
+          24560500,
+          16227700,
+          20506400
+        ],
+        "core-errors": [
+          18501300,
+          25856700,
+          20319500,
+          31094000,
+          13231100,
+          25957200,
+          15770500
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 2,
+      "order": [
+        "core-errors",
+        "brand-only"
+      ],
+      "perVariant": {
+        "core-errors": [
+          25718800,
+          36074400,
+          32651100,
+          26850700,
+          15151100,
+          34736500,
+          40721500
+        ],
+        "brand-only": [
+          18142000,
+          33783200,
+          17093400,
+          33830800,
+          24360100,
+          37915700,
+          15195600
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 3,
+      "order": [
+        "brand-only",
+        "core-errors"
+      ],
+      "perVariant": {
+        "brand-only": [
+          33172800,
+          32078400,
+          30101200,
+          23196800,
+          37034800,
+          15928800,
+          26257700
+        ],
+        "core-errors": [
+          26444200,
+          16893600,
+          25686200,
+          15571000,
+          33180600,
+          38324600,
+          34280500
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 4,
+      "order": [
+        "core-errors",
+        "brand-only"
+      ],
+      "perVariant": {
+        "core-errors": [
+          34721300,
+          34443300,
+          36012300,
+          31163400,
+          24546300,
+          38166400,
+          25162600
+        ],
+        "brand-only": [
+          33476700,
+          34378500,
+          36736300,
+          23500600,
+          32341500,
+          31127500,
+          15479000
+        ]
+      }
+    }
+  ]
+}

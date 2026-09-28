@@ -1,0 +1,289 @@
+{
+  "purpose": "M1.5 React/DeepSignal paired diagnostic only",
+  "sourceIterations": "m1b-iterations.json rfsg/react-useSignalValue@1",
+  "rounds": 4,
+  "warmups": 3,
+  "samples": 7,
+  "orderSchedule": [
+    [
+      "m15-control",
+      "m15-candidate"
+    ],
+    [
+      "m15-candidate",
+      "m15-control"
+    ]
+  ],
+  "preflights": [
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "runtimeId": "m15-control",
+      "kind": "useSignalValue",
+      "iterations": 250
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "runtimeId": "m15-candidate",
+      "kind": "useSignalValue",
+      "iterations": 250
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "runtimeId": "m15-control",
+      "kind": "deep-selector",
+      "iterations": 250
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "runtimeId": "m15-candidate",
+      "kind": "deep-selector",
+      "iterations": 250
+    }
+  ],
+  "results": [
+    {
+      "caseId": "rfsg/react-useSignalValue@1",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 1,
+      "order": [
+        "m15-control",
+        "m15-candidate"
+      ],
+      "perRuntime": {
+        "m15-control": [
+          59584700,
+          61340600,
+          50865800,
+          45324400,
+          44421600,
+          44184400,
+          89656700
+        ],
+        "m15-candidate": [
+          45194200,
+          47514900,
+          49441300,
+          77948200,
+          106692500,
+          81708900,
+          62794200
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue@1",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 2,
+      "order": [
+        "m15-candidate",
+        "m15-control"
+      ],
+      "perRuntime": {
+        "m15-candidate": [
+          34243200,
+          34047100,
+          32121500,
+          32441300,
+          32862000,
+          33052200,
+          33967000
+        ],
+        "m15-control": [
+          39209200,
+          44239000,
+          40165200,
+          38109000,
+          36457400,
+          35162900,
+          38004000
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue@1",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 3,
+      "order": [
+        "m15-control",
+        "m15-candidate"
+      ],
+      "perRuntime": {
+        "m15-control": [
+          39225300,
+          39336300,
+          38811300,
+          40132800,
+          42286300,
+          41695100,
+          43455200
+        ],
+        "m15-candidate": [
+          36620200,
+          41233400,
+          40073300,
+          39832900,
+          47974400,
+          92525500,
+          104258700
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-useSignalValue@1",
+      "kind": "useSignalValue",
+      "iterations": 250,
+      "round": 4,
+      "order": [
+        "m15-candidate",
+        "m15-control"
+      ],
+      "perRuntime": {
+        "m15-candidate": [
+          38647300,
+          39645900,
+          40019200,
+          39254300,
+          42224400,
+          41140300,
+          44411300
+        ],
+        "m15-control": [
+          57640900,
+          34359100,
+          30382800,
+          30859700,
+          30945100,
+          30603400,
+          33262500
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector@1",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 1,
+      "order": [
+        "m15-control",
+        "m15-candidate"
+      ],
+      "perRuntime": {
+        "m15-control": [
+          36648100,
+          37348100,
+          33718800,
+          34184500,
+          38084000,
+          37567200,
+          38609500
+        ],
+        "m15-candidate": [
+          52458700,
+          40539900,
+          38832500,
+          39871500,
+          39237100,
+          38982300,
+          48587100
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector@1",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 2,
+      "order": [
+        "m15-candidate",
+        "m15-control"
+      ],
+      "perRuntime": {
+        "m15-candidate": [
+          32962200,
+          38079200,
+          35140300,
+          36571000,
+          35161800,
+          41063900,
+          47301600
+        ],
+        "m15-control": [
+          34757000,
+          36164500,
+          37778800,
+          37367100,
+          34974600,
+          40038600,
+          44334300
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector@1",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 3,
+      "order": [
+        "m15-control",
+        "m15-candidate"
+      ],
+      "perRuntime": {
+        "m15-control": [
+          41698900,
+          37940500,
+          38111900,
+          46541500,
+          47153800,
+          44081000,
+          39733400
+        ],
+        "m15-candidate": [
+          38043700,
+          52509100,
+          51001100,
+          40385200,
+          34104400,
+          36233400,
+          37897200
+        ]
+      }
+    },
+    {
+      "caseId": "rfsg/react-deep-selector@1",
+      "kind": "deep-selector",
+      "iterations": 250,
+      "round": 4,
+      "order": [
+        "m15-candidate",
+        "m15-control"
+      ],
+      "perRuntime": {
+        "m15-candidate": [
+          103150600,
+          70543900,
+          37136200,
+          41904800,
+          46479900,
+          45091200,
+          47879900
+        ],
+        "m15-control": [
+          42687900,
+          47834700,
+          41871800,
+          36530700,
+          84797600,
+          65696900,
+          58953400
+        ]
+      }
+    }
+  ]
+}

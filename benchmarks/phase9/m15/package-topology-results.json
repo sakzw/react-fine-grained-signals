@@ -1,0 +1,20 @@
+[
+  {
+    "id": "candidate",
+    "file": "C:\\Users\\catro\\.codex\\worktrees\\m15-alien-baseline\\react-alien-signals\\benchmarks\\phase9\\m15\\bundled\\candidate\\m15-candidate.js",
+    "rawBytes": 45595,
+    "gzipBytes": 11302,
+    "alienSignalsExternalImport": false,
+    "reactExternalImport": true,
+    "buildShape": "minified ESM; React remains external; other imports bundled"
+  },
+  {
+    "id": "control",
+    "file": "C:\\Users\\catro\\.codex\\worktrees\\m15-alien-baseline\\react-alien-signals\\benchmarks\\phase9\\m15\\bundled\\control\\m15-control.js",
+    "rawBytes": 28215,
+    "gzipBytes": 7542,
+    "alienSignalsExternalImport": false,
+    "reactExternalImport": true,
+    "buildShape": "minified ESM; React remains external; other imports bundled"
+  }
+]

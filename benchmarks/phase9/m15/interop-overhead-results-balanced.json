@@ -1,0 +1,733 @@
+{
+  "purpose": "M1.5 render/interop overhead diagnostic only",
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "rounds": 6,
+  "warmups": 3,
+  "samples": 7,
+  "orderSchedules": {
+    "threeRuntimes": [
+      [
+        "A",
+        "B",
+        "C"
+      ],
+      [
+        "B",
+        "C",
+        "A"
+      ],
+      [
+        "C",
+        "A",
+        "B"
+      ],
+      [
+        "A",
+        "C",
+        "B"
+      ],
+      [
+        "C",
+        "B",
+        "A"
+      ],
+      [
+        "B",
+        "A",
+        "C"
+      ]
+    ],
+    "twoRuntimes": [
+      "forward",
+      "reverse"
+    ]
+  },
+  "preflights": [
+    {
+      "caseId": "source/read@1"
+    },
+    {
+      "caseId": "source/read@1"
+    },
+    {
+      "caseId": "source/read@1"
+    },
+    {
+      "caseId": "effect/observed-write@1"
+    },
+    {
+      "caseId": "effect/observed-write@1"
+    },
+    {
+      "caseId": "effect/observed-write@1"
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1"
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1"
+    }
+  ],
+  "results": [
+    {
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "iterations": 1693079,
+      "round": 1,
+      "order": [
+        "m15-objectis",
+        "m15-render-helper-call",
+        "m15-render-live"
+      ],
+      "perRuntime": {
+        "m15-objectis": [
+          8294500,
+          8441600,
+          7934500,
+          7368900,
+          6957100,
+          6710700,
+          7089500
+        ],
+        "m15-render-helper-call": [
+          10722000,
+          11125500,
+          11276100,
+          10976700,
+          11015200,
+          11198200,
+          11062100
+        ],
+        "m15-render-live": [
+          9387000,
+          8800700,
+          10325000,
+          10532500,
+          9904200,
+          10230200,
+          9894700
+        ]
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "iterations": 1693079,
+      "round": 2,
+      "order": [
+        "m15-render-helper-call",
+        "m15-render-live",
+        "m15-objectis"
+      ],
+      "perRuntime": {
+        "m15-render-helper-call": [
+          10909200,
+          11167200,
+          11311100,
+          12742700,
+          11694000,
+          11222800,
+          11002500
+        ],
+        "m15-render-live": [
+          7297400,
+          7398000,
+          7969000,
+          8025400,
+          8184000,
+          8276700,
+          7989500
+        ],
+        "m15-objectis": [
+          9025800,
+          8623600,
+          8896400,
+          8845600,
+          8645300,
+          8044100,
+          7818800
+        ]
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "iterations": 1693079,
+      "round": 3,
+      "order": [
+        "m15-render-live",
+        "m15-objectis",
+        "m15-render-helper-call"
+      ],
+      "perRuntime": {
+        "m15-render-live": [
+          7635100,
+          7635100,
+          7599400,
+          7320700,
+          7437800,
+          7855300,
+          7523500
+        ],
+        "m15-objectis": [
+          8439400,
+          7134100,
+          7267800,
+          7090400,
+          7032300,
+          6981100,
+          6523400
+        ],
+        "m15-render-helper-call": [
+          12550100,
+          13848600,
+          14638100,
+          13971000,
+          14226500,
+          14460000,
+          13236500
+        ]
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "iterations": 1693079,
+      "round": 4,
+      "order": [
+        "m15-objectis",
+        "m15-render-live",
+        "m15-render-helper-call"
+      ],
+      "perRuntime": {
+        "m15-objectis": [
+          7215100,
+          6999900,
+          7105400,
+          6774700,
+          6618400,
+          6659300,
+          6318100
+        ],
+        "m15-render-live": [
+          7508200,
+          7332300,
+          7220200,
+          7427000,
+          7092500,
+          7279700,
+          7544500
+        ],
+        "m15-render-helper-call": [
+          14158200,
+          13145200,
+          13323600,
+          13382600,
+          12860300,
+          12826300,
+          12779000
+        ]
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "iterations": 1693079,
+      "round": 5,
+      "order": [
+        "m15-render-live",
+        "m15-render-helper-call",
+        "m15-objectis"
+      ],
+      "perRuntime": {
+        "m15-render-live": [
+          8440900,
+          8418800,
+          8427500,
+          8875400,
+          8915200,
+          10064000,
+          10230000
+        ],
+        "m15-render-helper-call": [
+          13364800,
+          12826900,
+          13060500,
+          13070100,
+          12652400,
+          13759100,
+          13746000
+        ],
+        "m15-objectis": [
+          7154300,
+          6750100,
+          6724900,
+          6465000,
+          6828800,
+          6992300,
+          6893500
+        ]
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "iterations": 1693079,
+      "round": 6,
+      "order": [
+        "m15-render-helper-call",
+        "m15-objectis",
+        "m15-render-live"
+      ],
+      "perRuntime": {
+        "m15-render-helper-call": [
+          11465300,
+          11789000,
+          11598400,
+          11404800,
+          11352700,
+          11399800,
+          11217900
+        ],
+        "m15-objectis": [
+          8362900,
+          8419600,
+          9134800,
+          9113400,
+          9714600,
+          11113800,
+          10981400
+        ],
+        "m15-render-live": [
+          7323200,
+          7592000,
+          7688100,
+          7757800,
+          7679700,
+          7488100,
+          7325600
+        ]
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 1,
+      "order": [
+        "m15-objectis",
+        "m15-render-helper-call",
+        "m15-render-live"
+      ],
+      "perRuntime": {
+        "m15-objectis": [
+          7160100,
+          10635700,
+          6982000,
+          10363600,
+          6979900,
+          10136700,
+          6858800
+        ],
+        "m15-render-helper-call": [
+          15192100,
+          15855000,
+          22856800,
+          20536100,
+          23561800,
+          28115400,
+          11525700
+        ],
+        "m15-render-live": [
+          14905000,
+          15254800,
+          14339300,
+          11853500,
+          10581000,
+          11634000,
+          13784800
+        ]
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 2,
+      "order": [
+        "m15-render-helper-call",
+        "m15-render-live",
+        "m15-objectis"
+      ],
+      "perRuntime": {
+        "m15-render-helper-call": [
+          18784500,
+          21335200,
+          21780600,
+          25016300,
+          25848600,
+          26568400,
+          22668900
+        ],
+        "m15-render-live": [
+          16600600,
+          15002700,
+          19297400,
+          17901200,
+          13492000,
+          15740700,
+          14018300
+        ],
+        "m15-objectis": [
+          7105000,
+          10474100,
+          7249700,
+          11369400,
+          7620700,
+          10515200,
+          7037200
+        ]
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 3,
+      "order": [
+        "m15-render-live",
+        "m15-objectis",
+        "m15-render-helper-call"
+      ],
+      "perRuntime": {
+        "m15-render-live": [
+          13030100,
+          12234800,
+          19388100,
+          15088600,
+          9846100,
+          14382100,
+          9128700
+        ],
+        "m15-objectis": [
+          7149100,
+          10138400,
+          7270800,
+          10702700,
+          7230200,
+          10201900,
+          7277900
+        ],
+        "m15-render-helper-call": [
+          17579700,
+          12318100,
+          17802700,
+          16037000,
+          15956900,
+          11899400,
+          14682200
+        ]
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 4,
+      "order": [
+        "m15-objectis",
+        "m15-render-live",
+        "m15-render-helper-call"
+      ],
+      "perRuntime": {
+        "m15-objectis": [
+          7009200,
+          10424900,
+          6953700,
+          10392600,
+          6865900,
+          10352900,
+          10372200
+        ],
+        "m15-render-live": [
+          15181700,
+          15158100,
+          14414600,
+          9157400,
+          15441300,
+          11902800,
+          17450700
+        ],
+        "m15-render-helper-call": [
+          17824700,
+          12762800,
+          17996000,
+          11770800,
+          18420500,
+          20571500,
+          22818600
+        ]
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 5,
+      "order": [
+        "m15-render-live",
+        "m15-render-helper-call",
+        "m15-objectis"
+      ],
+      "perRuntime": {
+        "m15-render-live": [
+          16423700,
+          18143800,
+          15388900,
+          14886500,
+          17242200,
+          16479700,
+          15402700
+        ],
+        "m15-render-helper-call": [
+          19237900,
+          18470000,
+          11698200,
+          12033500,
+          10866900,
+          15519300,
+          17456400
+        ],
+        "m15-objectis": [
+          6666500,
+          10289200,
+          7238700,
+          10659800,
+          7108400,
+          10889700,
+          6901600
+        ]
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 6,
+      "order": [
+        "m15-render-helper-call",
+        "m15-objectis",
+        "m15-render-live"
+      ],
+      "perRuntime": {
+        "m15-render-helper-call": [
+          18409800,
+          19796000,
+          20458500,
+          21882600,
+          16283100,
+          13901200,
+          20329600
+        ],
+        "m15-objectis": [
+          7134000,
+          10247700,
+          7048400,
+          10096700,
+          8765300,
+          9971900,
+          7314800
+        ],
+        "m15-render-live": [
+          17914000,
+          17307500,
+          14284000,
+          12423900,
+          10672500,
+          10859400,
+          15034200
+        ]
+      }
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 1,
+      "order": [
+        "m15-render-helper-call",
+        "m15-render-foreign"
+      ],
+      "perRuntime": {
+        "m15-render-helper-call": [
+          18434700,
+          12656700,
+          21728700,
+          15539800,
+          16737100,
+          12919800,
+          12932800
+        ],
+        "m15-render-foreign": [
+          36823200,
+          35542300,
+          44709500,
+          38227700,
+          38303800,
+          41733200,
+          37540900
+        ]
+      }
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 2,
+      "order": [
+        "m15-render-foreign",
+        "m15-render-helper-call"
+      ],
+      "perRuntime": {
+        "m15-render-foreign": [
+          46657600,
+          37593500,
+          37650100,
+          33793900,
+          34233400,
+          39578900,
+          34925400
+        ],
+        "m15-render-helper-call": [
+          14866900,
+          9744800,
+          15752500,
+          11075000,
+          14358200,
+          14621900,
+          22496100
+        ]
+      }
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 3,
+      "order": [
+        "m15-render-helper-call",
+        "m15-render-foreign"
+      ],
+      "perRuntime": {
+        "m15-render-helper-call": [
+          16571800,
+          12673700,
+          21182000,
+          12668800,
+          18337300,
+          19697400,
+          22932000
+        ],
+        "m15-render-foreign": [
+          36413300,
+          34858300,
+          50330000,
+          42263200,
+          33308300,
+          40977300,
+          36084200
+        ]
+      }
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 4,
+      "order": [
+        "m15-render-foreign",
+        "m15-render-helper-call"
+      ],
+      "perRuntime": {
+        "m15-render-foreign": [
+          50764000,
+          45733900,
+          36735700,
+          40610500,
+          36461300,
+          36126700,
+          40383000
+        ],
+        "m15-render-helper-call": [
+          15631900,
+          17256800,
+          16454400,
+          17488700,
+          10700600,
+          11774000,
+          14889500
+        ]
+      }
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 5,
+      "order": [
+        "m15-render-helper-call",
+        "m15-render-foreign"
+      ],
+      "perRuntime": {
+        "m15-render-helper-call": [
+          17859500,
+          12160700,
+          17412400,
+          16306800,
+          18514600,
+          11923000,
+          16786100
+        ],
+        "m15-render-foreign": [
+          42025600,
+          42458500,
+          51613200,
+          37811100,
+          36302400,
+          51012500,
+          48018900
+        ]
+      }
+    },
+    {
+      "caseId": "foreign/effect-observed-write@1",
+      "kind": "effect-observed-write",
+      "iterations": 106279,
+      "round": 6,
+      "order": [
+        "m15-render-foreign",
+        "m15-render-helper-call"
+      ],
+      "perRuntime": {
+        "m15-render-foreign": [
+          70897200,
+          47439500,
+          47028900,
+          42847000,
+          43658100,
+          53552400,
+          42973400
+        ],
+        "m15-render-helper-call": [
+          12112900,
+          13256300,
+          18680900,
+          24082500,
+          19402800,
+          20682700,
+          18611200
+        ]
+      }
+    }
+  ]
+}

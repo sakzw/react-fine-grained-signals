@@ -1,0 +1,154 @@
+{
+  "purpose": "public-wrapper-and-brand source/create differential",
+  "caseId": "source/create@1",
+  "iterations": 471476,
+  "rounds": 4,
+  "warmups": 3,
+  "samples": 7,
+  "preflights": [
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "bare",
+      "caseId": "source/create@1",
+      "iterations": 471476
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "public",
+      "caseId": "source/create@1",
+      "iterations": 471476
+    }
+  ],
+  "results": [
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 1,
+      "order": [
+        "bare",
+        "public"
+      ],
+      "perVariant": {
+        "bare": [
+          88326200,
+          105364300,
+          119863400,
+          167976900,
+          128564300,
+          89237200,
+          83778200
+        ],
+        "public": [
+          757223200,
+          893187400,
+          1145912300,
+          1190609800,
+          1035569900,
+          1111457000,
+          788731900
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 2,
+      "order": [
+        "public",
+        "bare"
+      ],
+      "perVariant": {
+        "public": [
+          1273291300,
+          650079200,
+          856801800,
+          1261380100,
+          1025491200,
+          1087378300,
+          930100200
+        ],
+        "bare": [
+          78060100,
+          84819400,
+          75715700,
+          63108900,
+          55048900,
+          52273700,
+          51002200
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 3,
+      "order": [
+        "bare",
+        "public"
+      ],
+      "perVariant": {
+        "bare": [
+          65148500,
+          56689300,
+          52587500,
+          48492000,
+          49063800,
+          53161000,
+          69753500
+        ],
+        "public": [
+          1333939300,
+          1169989400,
+          915252500,
+          1152760900,
+          1286444900,
+          1292269000,
+          1167844900
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 4,
+      "order": [
+        "public",
+        "bare"
+      ],
+      "perVariant": {
+        "public": [
+          828546000,
+          1317548200,
+          710079000,
+          710991600,
+          740029500,
+          672192400,
+          570332800
+        ],
+        "bare": [
+          43137300,
+          48757600,
+          55172600,
+          92430900,
+          112814600,
+          122449400,
+          108657100
+        ]
+      }
+    }
+  ]
+}

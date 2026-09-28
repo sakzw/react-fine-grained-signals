@@ -1,0 +1,1289 @@
+{
+  "purpose": "early_structure_screening_only",
+  "rounds": 8,
+  "warmups": 3,
+  "samples": 7,
+  "orderBalance": "Each round is paired with its reverse; all pairwise before/after counts balance.",
+  "results": [
+    {
+      "caseId": "source/read@1",
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-alien-derived-helper",
+        "rfsg-current",
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            27825600,
+            21316800,
+            22504900,
+            29238300,
+            22728900,
+            24726700,
+            32888600
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            122515000,
+            93448700,
+            60563700,
+            58073300,
+            49702500,
+            60081200,
+            54244100
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            31324300,
+            30794900,
+            38382500,
+            32372800,
+            30219700,
+            31050000,
+            30201900
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            30360500,
+            28929500,
+            29407600,
+            30632500,
+            39357700,
+            39106900,
+            41010400
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            43232800,
+            36515500,
+            36362700,
+            34260200,
+            34636600,
+            35783500,
+            42346800
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            47473400,
+            43656500,
+            38076300,
+            41479400,
+            38395700,
+            37938300,
+            37088000
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "round": 2,
+      "order": [
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals",
+        "rfsg-current",
+        "m15-alien-derived-helper",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            35925400,
+            42222800,
+            45544000,
+            57931500,
+            56280500,
+            44842700,
+            46807100
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            56771400,
+            65908300,
+            65367000,
+            71527800,
+            69663000,
+            64876700,
+            60604200
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            32544000,
+            30486600,
+            33601400,
+            29654900,
+            33014400,
+            32018500,
+            49438100
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            20364500,
+            20084700,
+            24856700,
+            38370600,
+            32555200,
+            32264700,
+            40887000
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            72139900,
+            56506200,
+            43840300,
+            39424000,
+            38622500,
+            47607800,
+            40617300
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            17320200,
+            16378600,
+            16667300,
+            15296100,
+            14852900,
+            18700600,
+            19047700
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "round": 3,
+      "order": [
+        "m15-alien-derived-helper",
+        "rfsg-current",
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            45987600,
+            44067300,
+            54966100,
+            60441700,
+            68023100,
+            57704400,
+            61397700
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            26474500,
+            26032300,
+            32960900,
+            34346900,
+            34910100,
+            38229100,
+            37159700
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            45794000,
+            48867900,
+            40634300,
+            43269800,
+            45738000,
+            42886000,
+            42571500
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            69358900,
+            61728500,
+            58752200,
+            66930300,
+            77893700,
+            76241300,
+            68733800
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            80303100,
+            82948500,
+            74272500,
+            76381500,
+            66799800,
+            63253300,
+            57821800
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            20902600,
+            20087500,
+            20151300,
+            19232400,
+            19788000,
+            17906900,
+            17116700
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "round": 4,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals",
+        "rfsg-current",
+        "m15-alien-derived-helper"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            23215800,
+            19416400,
+            20472000,
+            22192500,
+            27346300,
+            25386000,
+            22172200
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            87214400,
+            86675300,
+            70523400,
+            69096400,
+            65860900,
+            62829000,
+            60585200
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            55337200,
+            55032900,
+            60058000,
+            58470800,
+            71147900,
+            72784800,
+            61621500
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            95928900,
+            120193500,
+            48790900,
+            46951700,
+            99043100,
+            93601700,
+            71243800
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            43402500,
+            29952700,
+            33856300,
+            39458700,
+            33792700,
+            33387200,
+            37697900
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            71522900,
+            73407800,
+            61039600,
+            66933700,
+            74486000,
+            58824200,
+            60506500
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-helper"
+      ],
+      "perRuntime": {
+        "rfsg-current": {
+          "durationsNs": [
+            28719900,
+            26136100,
+            27032100,
+            22480100,
+            20595500,
+            22649800,
+            24209600
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            42232000,
+            31418200,
+            30007200,
+            28108700,
+            26228900,
+            28080700,
+            35299200
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            69160100,
+            78058300,
+            64438500,
+            75312000,
+            53979300,
+            45320400,
+            48633700
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            46525200,
+            43260600,
+            82836100,
+            88987100,
+            76378100,
+            68838800,
+            60828100
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            16164000,
+            16120300,
+            15303500,
+            15467700,
+            15238100,
+            15800900,
+            16875700
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            40381900,
+            48364300,
+            39947800,
+            42768000,
+            42978500,
+            41020800,
+            42578500
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "round": 6,
+      "order": [
+        "m15-alien-derived-helper",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            38930100,
+            40457300,
+            43528200,
+            48033900,
+            49105000,
+            44251600,
+            41215200
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            18995400,
+            17733400,
+            15030100,
+            14186900,
+            14878400,
+            14115300,
+            13814600
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            47856600,
+            45154500,
+            42733400,
+            41214500,
+            41078300,
+            45360000,
+            43171600
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            68875100,
+            73736500,
+            56922200,
+            53454300,
+            62919300,
+            53101600,
+            52338600
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            44349600,
+            58192100,
+            53373500,
+            46352600,
+            42724500,
+            50534600,
+            39970800
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            29802800,
+            29209200,
+            31915100,
+            32171100,
+            25457800,
+            24343600,
+            24017900
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "round": 7,
+      "order": [
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-helper",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "alien-signals": {
+          "durationsNs": [
+            53628500,
+            43705400,
+            48355800,
+            56037800,
+            59450400,
+            58263100,
+            52704000
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            75853300,
+            54575000,
+            51128100,
+            48343900,
+            49417900,
+            45762800,
+            50636900
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            62173400,
+            81755200,
+            64669600,
+            65685900,
+            66040800,
+            59351400,
+            48115000
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            19080600,
+            18120300,
+            18889700,
+            18761300,
+            15688600,
+            14418600,
+            14942100
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            75207700,
+            79401800,
+            80814700,
+            70705000,
+            60141600,
+            57734600,
+            54866900
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            23395500,
+            23961600,
+            25531800,
+            23713100,
+            28037800,
+            25120400,
+            27496200
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "round": 8,
+      "order": [
+        "rfsg-current",
+        "m15-alien-derived-helper",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-current": {
+          "durationsNs": [
+            28648400,
+            26710300,
+            28392800,
+            29749500,
+            32105100,
+            37194800,
+            38930800
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            86807400,
+            61867500,
+            55546500,
+            86527500,
+            75142300,
+            63304500,
+            64475600
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            18934900,
+            18565400,
+            16744100,
+            16652300,
+            18003200,
+            29157600,
+            21014600
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            60793700,
+            52997100,
+            48545000,
+            73803700,
+            90120000,
+            92473600,
+            102709200
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            69573500,
+            87427500,
+            73805100,
+            79404500,
+            77723900,
+            58537800,
+            60713900
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            36551900,
+            37657900,
+            30842200,
+            28362300,
+            31702900,
+            34008600,
+            53603600
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-alien-derived-helper",
+        "rfsg-current",
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            28902300,
+            33915100,
+            32867200,
+            32862100,
+            34158300,
+            33127900,
+            24951500
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            153657800,
+            143393100,
+            259430000,
+            298091400,
+            234874200,
+            177037000,
+            145192300
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            47900600,
+            43328800,
+            42397300,
+            32960900,
+            28949400,
+            28392700,
+            29952500
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            20848500,
+            21392700,
+            23630200,
+            22790100,
+            22477400,
+            23585600,
+            21731300
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            124179800,
+            139335200,
+            153144900,
+            178526000,
+            212943900,
+            138532900,
+            121597500
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            255659700,
+            233782700,
+            215010900,
+            246467600,
+            180985600,
+            212281600,
+            209516900
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 2,
+      "order": [
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals",
+        "rfsg-current",
+        "m15-alien-derived-helper",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            168927100,
+            165546800,
+            171868300,
+            182110000,
+            254093700,
+            178298300,
+            203190100
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            233193000,
+            226644800,
+            271089600,
+            320029000,
+            225544700,
+            165244700,
+            141990300
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            21667400,
+            21248400,
+            23635700,
+            29145600,
+            29448500,
+            30628100,
+            33348500
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            29093900,
+            27365400,
+            36228300,
+            39803800,
+            33373200,
+            40194000,
+            48055800
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            140949600,
+            199796600,
+            224028800,
+            229856600,
+            192267300,
+            143407800,
+            158929700
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            31278300,
+            26337600,
+            29548000,
+            31568800,
+            29865800,
+            32279000,
+            33309600
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 3,
+      "order": [
+        "m15-alien-derived-helper",
+        "rfsg-current",
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            211315800,
+            138940700,
+            173941400,
+            241849300,
+            249462800,
+            140201700,
+            233809300
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            76375400,
+            50684400,
+            51922100,
+            50320700,
+            68690200,
+            84738200,
+            71355500
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            49301200,
+            40058600,
+            48980800,
+            34755200,
+            34488600,
+            35682400,
+            30681000
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            276803500,
+            229858600,
+            387288800,
+            276829500,
+            256733700,
+            231633800,
+            189108400
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            251104800,
+            191179400,
+            216892900,
+            140428600,
+            163802500,
+            123365200,
+            135964000
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            23456500,
+            21631000,
+            26795300,
+            31071200,
+            32113900,
+            33022900,
+            36113100
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 4,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals",
+        "rfsg-current",
+        "m15-alien-derived-helper"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            22952000,
+            24131300,
+            24336700,
+            26061000,
+            28929300,
+            35131800,
+            31359700
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            285996500,
+            219604500,
+            377264500,
+            377792400,
+            422291800,
+            486889400,
+            218673200
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            248640400,
+            283631100,
+            306692800,
+            254180200,
+            235297500,
+            324812500,
+            244047300
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            21482300,
+            20043800,
+            23653500,
+            21521400,
+            22493500,
+            26952400,
+            22728200
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            35324000,
+            34984100,
+            39105600,
+            32058900,
+            61838800,
+            70073800,
+            42445500
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            206123600,
+            145291400,
+            129293400,
+            409029900,
+            251146400,
+            198248900,
+            137137800
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-helper"
+      ],
+      "perRuntime": {
+        "rfsg-current": {
+          "durationsNs": [
+            35114700,
+            31406800,
+            30558200,
+            26572600,
+            27795900,
+            28768800,
+            27669200
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            33865700,
+            23850000,
+            28336900,
+            28751700,
+            27206200,
+            32413600,
+            30604100
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            197108100,
+            158651100,
+            159858900,
+            280879300,
+            169769400,
+            129484600,
+            134593900
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            211797400,
+            206431300,
+            225992400,
+            206424600,
+            209342000,
+            220851100,
+            237415800
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            38357000,
+            34445900,
+            33787700,
+            36542300,
+            49110900,
+            35600000,
+            41834000
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            291983200,
+            152083000,
+            120567600,
+            119150400,
+            109408100,
+            168880200,
+            163937200
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 6,
+      "order": [
+        "m15-alien-derived-helper",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            166827400,
+            146195400,
+            260574100,
+            174538900,
+            114239900,
+            125328600,
+            161798400
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            23672300,
+            22535500,
+            23350200,
+            22133600,
+            21640200,
+            24987600,
+            26459900
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            138285700,
+            131552600,
+            139251800,
+            155250300,
+            130633100,
+            163679600,
+            120337200
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            134617300,
+            147480300,
+            287898400,
+            188851300,
+            131314900,
+            147349500,
+            127766400
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            39342000,
+            31629300,
+            33469000,
+            24991000,
+            20979700,
+            20459100,
+            18722500
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            32595700,
+            34183400,
+            31281300,
+            26477500,
+            26395000,
+            28175000,
+            26447400
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 7,
+      "order": [
+        "alien-signals",
+        "m15-alien-derived-bound",
+        "m15-alien-derived-inline",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-helper",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "alien-signals": {
+          "durationsNs": [
+            14394800,
+            14580500,
+            15101700,
+            13839800,
+            12938800,
+            14220500,
+            16168900
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            184464200,
+            132330100,
+            162975500,
+            169819400,
+            131775100,
+            173683000,
+            150961500
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            150157000,
+            252193200,
+            208343800,
+            245410400,
+            150526400,
+            161964900,
+            156770200
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            22628400,
+            24861400,
+            27274600,
+            38712000,
+            31937500,
+            35728500,
+            34880300
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            153346900,
+            204886600,
+            147929100,
+            164157600,
+            130306100,
+            151983800,
+            161025700
+          ]
+        },
+        "rfsg-current": {
+          "durationsNs": [
+            46634800,
+            94861800,
+            86260400,
+            48384500,
+            58140000,
+            58796400,
+            44768900
+          ]
+        }
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "round": 8,
+      "order": [
+        "rfsg-current",
+        "m15-alien-derived-helper",
+        "rfsg-v0.1.1",
+        "m15-alien-derived-inline",
+        "m15-alien-derived-bound",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-current": {
+          "durationsNs": [
+            77533600,
+            83170200,
+            77258700,
+            82155600,
+            83854100,
+            93409000,
+            81871400
+          ]
+        },
+        "m15-alien-derived-helper": {
+          "durationsNs": [
+            301077600,
+            213443800,
+            180313900,
+            277534800,
+            219273300,
+            231148800,
+            225255000
+          ]
+        },
+        "rfsg-v0.1.1": {
+          "durationsNs": [
+            38632400,
+            44935200,
+            44544100,
+            48009700,
+            48615500,
+            51682000,
+            49603500
+          ]
+        },
+        "m15-alien-derived-inline": {
+          "durationsNs": [
+            146269500,
+            184784900,
+            212122800,
+            176990800,
+            159544300,
+            143404100,
+            169197100
+          ]
+        },
+        "m15-alien-derived-bound": {
+          "durationsNs": [
+            136317400,
+            154132200,
+            146542500,
+            173857700,
+            238318900,
+            230136000,
+            288340500
+          ]
+        },
+        "alien-signals": {
+          "durationsNs": [
+            24745700,
+            27408900,
+            26977800,
+            25373100,
+            26608500,
+            27482000,
+            23510400
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,285 @@
+{
+  "purpose": "Object.is targeted paired screen only",
+  "rounds": 4,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "cases": [
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1
+    }
+  ],
+  "preflights": [
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "inline",
+      "caseId": "source/write-read@1",
+      "iterations": 636392
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "objectis",
+      "caseId": "source/write-read@1",
+      "iterations": 636392
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "inline",
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701
+    },
+    {
+      "status": "ok",
+      "preflight": "passed",
+      "variant": "objectis",
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701
+    }
+  ],
+  "results": [
+    {
+      "caseId": "source/write-read@1",
+      "iterations": 636392,
+      "round": 1,
+      "order": [
+        "inline",
+        "objectis"
+      ],
+      "perVariant": {
+        "inline": [
+          12676100,
+          12497700,
+          13291300,
+          16446500,
+          18078400,
+          16158500,
+          14485100
+        ],
+        "objectis": [
+          17884000,
+          15002700,
+          15974100,
+          16735600,
+          16133100,
+          16753800,
+          23231200
+        ]
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "iterations": 636392,
+      "round": 2,
+      "order": [
+        "objectis",
+        "inline"
+      ],
+      "perVariant": {
+        "objectis": [
+          19297700,
+          22402000,
+          24461400,
+          24639400,
+          22214600,
+          21246600,
+          22350500
+        ],
+        "inline": [
+          25966700,
+          26258800,
+          21519100,
+          26546900,
+          23523400,
+          24015800,
+          23860000
+        ]
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "iterations": 636392,
+      "round": 3,
+      "order": [
+        "inline",
+        "objectis"
+      ],
+      "perVariant": {
+        "inline": [
+          15296000,
+          16955400,
+          14178600,
+          15062100,
+          13041700,
+          24628500,
+          24995500
+        ],
+        "objectis": [
+          18430000,
+          18689100,
+          15354400,
+          13135100,
+          18400800,
+          13593000,
+          12929800
+        ]
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "iterations": 636392,
+      "round": 4,
+      "order": [
+        "objectis",
+        "inline"
+      ],
+      "perVariant": {
+        "objectis": [
+          14628600,
+          14867200,
+          15363100,
+          15635800,
+          18623600,
+          16991600,
+          16745100
+        ],
+        "inline": [
+          11290000,
+          11397200,
+          11458500,
+          11860200,
+          11868600,
+          12243700,
+          12322100
+        ]
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701,
+      "round": 1,
+      "order": [
+        "inline",
+        "objectis"
+      ],
+      "perVariant": {
+        "inline": [
+          29224900,
+          20924000,
+          16198500,
+          34430200,
+          21503700,
+          39516800,
+          30833100
+        ],
+        "objectis": [
+          18785400,
+          39209500,
+          22738800,
+          54125700,
+          45990000,
+          17345500,
+          22943600
+        ]
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701,
+      "round": 2,
+      "order": [
+        "objectis",
+        "inline"
+      ],
+      "perVariant": {
+        "objectis": [
+          19856300,
+          21793500,
+          16578200,
+          30434200,
+          18794700,
+          17643200,
+          12457100
+        ],
+        "inline": [
+          12760100,
+          19153700,
+          13648800,
+          31715700,
+          16615400,
+          25839700,
+          17563900
+        ]
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701,
+      "round": 3,
+      "order": [
+        "inline",
+        "objectis"
+      ],
+      "perVariant": {
+        "inline": [
+          23657900,
+          36547900,
+          23886600,
+          58681100,
+          48133600,
+          18932000,
+          25694400
+        ],
+        "objectis": [
+          21704500,
+          14439500,
+          29288200,
+          14413100,
+          32094600,
+          17256400,
+          32724300
+        ]
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701,
+      "round": 4,
+      "order": [
+        "objectis",
+        "inline"
+      ],
+      "perVariant": {
+        "objectis": [
+          25489900,
+          21009200,
+          15020500,
+          29269000,
+          15740700,
+          21115700,
+          16868300
+        ],
+        "inline": [
+          15194800,
+          25383100,
+          21138300,
+          37292100,
+          17743200,
+          25977400,
+          18124900
+        ]
+      }
+    }
+  ]
+}

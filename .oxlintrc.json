@@ -49,6 +49,31 @@
       }
     },
     {
+      // The disposable M1.5 hooks intentionally forward dynamic dependency
+      // lists, and the copied React suite uses the same render-capture pattern
+      // as the repository's own tests. Those cases are not statically
+      // analyzable by the React hook rules.
+      "files": [
+        "benchmarks/phase9/m15/react-adapter.mjs",
+        "benchmarks/phase9/m15/deep-selector-react-hook.mjs"
+      ],
+      "rules": {
+        "react/use-memo": "off",
+        "react/memo-dependencies": "off",
+        "react/exhaustive-effect-dependencies": "off",
+        "react/exhaustive-deps": "off"
+      }
+    },
+    {
+      "files": ["benchmarks/phase9/m15/react-deep-signal-candidate.test.tsx"],
+      "rules": {
+        "react/globals": "off",
+        "react/use-memo": "off",
+        "react/exhaustive-effect-dependencies": "off",
+        "react/exhaustive-deps": "off"
+      }
+    },
+    {
       // The library's own signal/hook/JSX-runtime implementation. Reading
       // `.value` as a bare statement is how this code registers a reactive
       // dependency (the getter has the tracking side effect, so the read

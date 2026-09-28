@@ -1,0 +1,5203 @@
+{
+  "purpose": "early-core-screen-only",
+  "rounds": 4,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "preflights": [
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/unobserved-write@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/unobserved-write@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/unobserved-write@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/unobserved-write@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/write-read@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/write-read@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/write-read@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "source/write-read@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create-dispose@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create-dispose@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create-dispose@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/create-dispose@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/fanout@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/fanout@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/fanout@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/fanout@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/fanout@16",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "effect/fanout@16",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "effect/fanout@16",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "effect/fanout@16",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "effect/fanout@64",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "effect/fanout@64",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "effect/fanout@64",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "effect/fanout@64",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "effect/dynamic-dependencies@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/dynamic-dependencies@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/dynamic-dependencies@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "effect/dynamic-dependencies@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/create@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/create@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/create@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/create@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-read@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-read@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-read@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-read@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-unread@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-unread@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-unread@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/dirty-unread@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/source-to-many@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/source-to-many@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/source-to-many@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/source-to-many@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/source-to-many@16",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/source-to-many@16",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/source-to-many@16",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/source-to-many@16",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/source-to-many@64",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "computed/source-to-many@64",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "computed/source-to-many@64",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "computed/source-to-many@64",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "computed/many-to-one@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/many-to-one@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/many-to-one@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/many-to-one@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "computed/many-to-one@16",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/many-to-one@16",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/many-to-one@16",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/many-to-one@16",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 16
+    },
+    {
+      "caseId": "computed/many-to-one@64",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "computed/many-to-one@64",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "computed/many-to-one@64",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "computed/many-to-one@64",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 64
+    },
+    {
+      "caseId": "batch/two-writes-one-reaction@1",
+      "runtimeId": "rfsg-v0.1.1",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "batch/two-writes-one-reaction@1",
+      "runtimeId": "m15-inline-class",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "batch/two-writes-one-reaction@1",
+      "runtimeId": "rfsg-current",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    },
+    {
+      "caseId": "batch/two-writes-one-reaction@1",
+      "runtimeId": "alien-signals",
+      "status": "ok",
+      "preflight": "passed",
+      "size": 1
+    }
+  ],
+  "results": [
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          1135601200,
+          1419596200,
+          1138348800,
+          1036434000,
+          811981700,
+          1228634500,
+          1290967000
+        ],
+        "m15-inline-class": [
+          91850700,
+          85533100,
+          78805900,
+          75111000,
+          71749100,
+          80663200,
+          84883700
+        ],
+        "rfsg-current": [
+          1195150300,
+          1607283700,
+          1270462100,
+          1640633800,
+          1362359700,
+          1822678300,
+          1503415600
+        ],
+        "alien-signals": [
+          19412900,
+          20168400,
+          20751900,
+          18907700,
+          21512800,
+          26796200,
+          18380600
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          74566900,
+          60080100,
+          72993800,
+          68268300,
+          70162200,
+          57151700,
+          56224200
+        ],
+        "alien-signals": [
+          20460300,
+          21409200,
+          23786100,
+          20785900,
+          18932000,
+          16734100,
+          16057100
+        ],
+        "rfsg-v0.1.1": [
+          704301200,
+          1004178800,
+          1063781200,
+          1319613900,
+          893518800,
+          498552500,
+          427936800
+        ],
+        "rfsg-current": [
+          842892100,
+          732090200,
+          892559800,
+          914302000,
+          927545600,
+          1083159400,
+          1153539800
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          22820700,
+          17886400,
+          17627000,
+          16858700,
+          15304500,
+          14448700,
+          14269300
+        ],
+        "rfsg-current": [
+          691681800,
+          691923600,
+          882962200,
+          1005298800,
+          688861500,
+          1012475500,
+          713555600
+        ],
+        "m15-inline-class": [
+          43661000,
+          40655600,
+          41449600,
+          42732800,
+          42178000,
+          54616900,
+          80775600
+        ],
+        "rfsg-v0.1.1": [
+          508528900,
+          401772300,
+          478684600,
+          474602400,
+          498579500,
+          546185800,
+          521201500
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          1191550600,
+          1218492400,
+          864977400,
+          1200113900,
+          1043791800,
+          680133700,
+          784031900
+        ],
+        "rfsg-v0.1.1": [
+          347791500,
+          352661200,
+          575913900,
+          401277400,
+          365410900,
+          397211400,
+          664148600
+        ],
+        "alien-signals": [
+          25061200,
+          25930600,
+          33049000,
+          32948800,
+          32974600,
+          26491700,
+          18892000
+        ],
+        "m15-inline-class": [
+          46004900,
+          38740000,
+          46982400,
+          50669700,
+          41605600,
+          36942400,
+          36987800
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          10436600,
+          10628900,
+          11464300,
+          11088100,
+          11148000,
+          11187700,
+          11774400
+        ],
+        "m15-inline-class": [
+          9902400,
+          10249400,
+          10441300,
+          10428300,
+          10201700,
+          10148000,
+          9747100
+        ],
+        "rfsg-current": [
+          16325600,
+          15642300,
+          15489300,
+          16067100,
+          15431100,
+          15657600,
+          15818500
+        ],
+        "alien-signals": [
+          25234300,
+          24371600,
+          22381100,
+          22561100,
+          19520000,
+          19525300,
+          18848500
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          7887900,
+          7973100,
+          8041300,
+          7820100,
+          8232300,
+          8550500,
+          8489700
+        ],
+        "alien-signals": [
+          26306600,
+          23239600,
+          25433800,
+          27179300,
+          25888600,
+          33209000,
+          55787400
+        ],
+        "rfsg-v0.1.1": [
+          11792500,
+          11798400,
+          12274100,
+          12782000,
+          13598800,
+          14352500,
+          15555100
+        ],
+        "rfsg-current": [
+          16527500,
+          15565800,
+          16144700,
+          17598400,
+          16204600,
+          15782600,
+          16479200
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          20821800,
+          20351100,
+          20278200,
+          19939100,
+          19160800,
+          19306300,
+          19006200
+        ],
+        "rfsg-current": [
+          28510900,
+          21844600,
+          17916500,
+          16807400,
+          30124800,
+          25788600,
+          28124800
+        ],
+        "m15-inline-class": [
+          25751400,
+          22206200,
+          22283500,
+          28501200,
+          24878200,
+          21760200,
+          16669300
+        ],
+        "rfsg-v0.1.1": [
+          12419000,
+          11842200,
+          11983200,
+          12523600,
+          11995700,
+          11213300,
+          11639800
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          18129400,
+          18316900,
+          18438100,
+          19210800,
+          17025800,
+          16648500,
+          16305000
+        ],
+        "rfsg-v0.1.1": [
+          9493800,
+          9336100,
+          9435600,
+          9846700,
+          9861600,
+          9754900,
+          9574600
+        ],
+        "alien-signals": [
+          19666600,
+          18598400,
+          20721500,
+          20625600,
+          19343700,
+          20374100,
+          35449700
+        ],
+        "m15-inline-class": [
+          10604600,
+          9945900,
+          10399600,
+          10165200,
+          9769100,
+          9835500,
+          9852900
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          20196300,
+          22501700,
+          26842800,
+          23752900,
+          23315400,
+          20420000,
+          19308300
+        ],
+        "m15-inline-class": [
+          9187500,
+          8542000,
+          8780800,
+          8725600,
+          9797300,
+          8884500,
+          9994900
+        ],
+        "rfsg-current": [
+          25605700,
+          36689400,
+          35984700,
+          36009400,
+          33243300,
+          35952500,
+          28806200
+        ],
+        "alien-signals": [
+          27926700,
+          29401900,
+          26604800,
+          22832500,
+          19210900,
+          16121900,
+          17054600
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          7681900,
+          8807900,
+          11223500,
+          10837400,
+          9678000,
+          8970700,
+          8507000
+        ],
+        "alien-signals": [
+          19016100,
+          23275800,
+          22187300,
+          22771800,
+          25485800,
+          32175300,
+          26124900
+        ],
+        "rfsg-v0.1.1": [
+          26253700,
+          28508100,
+          29431600,
+          28989900,
+          33023600,
+          39310200,
+          36640600
+        ],
+        "rfsg-current": [
+          32182300,
+          41068300,
+          34861900,
+          36125700,
+          37747800,
+          42377300,
+          40198500
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          28432500,
+          28268400,
+          25272900,
+          25188500,
+          24739900,
+          20981800,
+          23753100
+        ],
+        "rfsg-current": [
+          22758000,
+          25559900,
+          25478900,
+          23058100,
+          21512500,
+          20374300,
+          21869600
+        ],
+        "m15-inline-class": [
+          17608500,
+          19740300,
+          17898000,
+          15540200,
+          12000100,
+          11867400,
+          11473900
+        ],
+        "rfsg-v0.1.1": [
+          42467000,
+          45164500,
+          57664800,
+          53102000,
+          46470200,
+          37904700,
+          30993500
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          48307300,
+          51899900,
+          45427400,
+          39702100,
+          44584900,
+          46457600,
+          50900600
+        ],
+        "rfsg-v0.1.1": [
+          29958300,
+          34705800,
+          46499500,
+          50228400,
+          46346100,
+          34028400,
+          33891500
+        ],
+        "alien-signals": [
+          53948600,
+          50767900,
+          46972700,
+          50709200,
+          44814300,
+          37716400,
+          41696100
+        ],
+        "m15-inline-class": [
+          15610600,
+          13621900,
+          14372200,
+          17211100,
+          14183700,
+          17605700,
+          15026100
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          49024900,
+          31915500,
+          48287500,
+          82781700,
+          66729200,
+          70353700,
+          50562300
+        ],
+        "m15-inline-class": [
+          24138700,
+          24728200,
+          28504500,
+          27477700,
+          23841700,
+          24478800,
+          22139400
+        ],
+        "rfsg-current": [
+          57999200,
+          51925700,
+          84264100,
+          80175200,
+          44984800,
+          45131500,
+          55919800
+        ],
+        "alien-signals": [
+          33119800,
+          30016500,
+          34186400,
+          27049800,
+          35002200,
+          54476100,
+          56412400
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          15001100,
+          15264300,
+          14854200,
+          12593200,
+          11496300,
+          10667700,
+          10619700
+        ],
+        "alien-signals": [
+          11076000,
+          10483300,
+          13480400,
+          12862000,
+          12170600,
+          11764900,
+          14317300
+        ],
+        "rfsg-v0.1.1": [
+          27626900,
+          35271700,
+          27614300,
+          30288800,
+          29168200,
+          29007100,
+          29515800
+        ],
+        "rfsg-current": [
+          40101700,
+          40356200,
+          31478300,
+          28335500,
+          24297300,
+          22033600,
+          25762400
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          31741600,
+          30652700,
+          23648700,
+          19995100,
+          18894200,
+          17339100,
+          17502400
+        ],
+        "rfsg-current": [
+          25035300,
+          25813200,
+          31445100,
+          25762300,
+          23097400,
+          24337600,
+          23911200
+        ],
+        "m15-inline-class": [
+          10508100,
+          10878700,
+          11515100,
+          12198200,
+          13490200,
+          14795500,
+          15954200
+        ],
+        "rfsg-v0.1.1": [
+          16491600,
+          16046900,
+          15847700,
+          15727300,
+          16121800,
+          15457300,
+          16355700
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          22130100,
+          24070000,
+          25450700,
+          31273200,
+          28393600,
+          26113000,
+          26326800
+        ],
+        "rfsg-v0.1.1": [
+          19882400,
+          19316600,
+          20412800,
+          18371400,
+          18639600,
+          16193500,
+          16781900
+        ],
+        "alien-signals": [
+          12068800,
+          11071100,
+          10284000,
+          11568200,
+          10291000,
+          10237400,
+          11637900
+        ],
+        "m15-inline-class": [
+          10310700,
+          11583700,
+          11285700,
+          10062900,
+          9555500,
+          9316800,
+          9227700
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          16396700,
+          16087700,
+          15504100,
+          15725500,
+          16223000,
+          15540800,
+          15804600
+        ],
+        "m15-inline-class": [
+          53962600,
+          26962900,
+          16728600,
+          15114600,
+          15351400,
+          13716100,
+          16151500
+        ],
+        "rfsg-current": [
+          38083000,
+          14323100,
+          17605100,
+          19872700,
+          15095700,
+          12053400,
+          14029000
+        ],
+        "alien-signals": [
+          12355600,
+          9676900,
+          9507200,
+          12114000,
+          9525600,
+          9513500,
+          11101400
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          44573300,
+          14690700,
+          12817300,
+          12704600,
+          12110800,
+          12224000,
+          12483100
+        ],
+        "alien-signals": [
+          13746800,
+          13785400,
+          21627100,
+          19840400,
+          15165300,
+          16866600,
+          15282100
+        ],
+        "rfsg-v0.1.1": [
+          29009200,
+          28650700,
+          22745800,
+          27845500,
+          19981500,
+          20326800,
+          36996400
+        ],
+        "rfsg-current": [
+          50414500,
+          22360600,
+          17794000,
+          17353200,
+          14800300,
+          14135000,
+          14513900
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          14331200,
+          12753700,
+          9029800,
+          9010700,
+          10965300,
+          8137400,
+          8022900
+        ],
+        "rfsg-current": [
+          73796000,
+          24361100,
+          36673000,
+          37773400,
+          16412300,
+          15766400,
+          18097600
+        ],
+        "m15-inline-class": [
+          49232600,
+          15797200,
+          13723300,
+          15380000,
+          12269900,
+          13251800,
+          12708500
+        ],
+        "rfsg-v0.1.1": [
+          14803200,
+          14675100,
+          15045400,
+          15198300,
+          14402100,
+          14576500,
+          14714500
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          20123600,
+          22047600,
+          22088400,
+          21807600,
+          16401100,
+          12557000,
+          12541500
+        ],
+        "rfsg-v0.1.1": [
+          20053100,
+          18365000,
+          25461500,
+          26073400,
+          21169600,
+          18691600,
+          17532600
+        ],
+        "alien-signals": [
+          9898000,
+          8039600,
+          8400000,
+          10330100,
+          8185200,
+          8678300,
+          9071700
+        ],
+        "m15-inline-class": [
+          46684700,
+          21339700,
+          18971900,
+          17220000,
+          15535400,
+          14953900,
+          16595100
+        ]
+      }
+    },
+    {
+      "id": "effect/create-dispose",
+      "caseId": "effect/create-dispose@1",
+      "kind": "effect-create-dispose",
+      "size": 1,
+      "iterations": 78528,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          26832600,
+          33703800,
+          35607500,
+          35393900,
+          35221300,
+          30440800,
+          31649900
+        ],
+        "m15-inline-class": [
+          15903500,
+          16752500,
+          17406900,
+          17059700,
+          16250400,
+          16191700,
+          17225200
+        ],
+        "rfsg-current": [
+          30729900,
+          26841100,
+          31957900,
+          32800700,
+          34612600,
+          31736100,
+          34969100
+        ],
+        "alien-signals": [
+          12739100,
+          10072900,
+          8966100,
+          11623600,
+          10022300,
+          9111400,
+          12166300
+        ]
+      }
+    },
+    {
+      "id": "effect/create-dispose",
+      "caseId": "effect/create-dispose@1",
+      "kind": "effect-create-dispose",
+      "size": 1,
+      "iterations": 78528,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          18516700,
+          18184300,
+          19757700,
+          19394200,
+          17338900,
+          15994700,
+          17484700
+        ],
+        "alien-signals": [
+          13762900,
+          9856500,
+          9786800,
+          12294500,
+          10273000,
+          9598700,
+          12451000
+        ],
+        "rfsg-v0.1.1": [
+          24386900,
+          22955900,
+          23896600,
+          27909900,
+          19351500,
+          18844300,
+          18033500
+        ],
+        "rfsg-current": [
+          39988500,
+          28299200,
+          35346200,
+          39234900,
+          26236500,
+          22902400,
+          23979500
+        ]
+      }
+    },
+    {
+      "id": "effect/create-dispose",
+      "caseId": "effect/create-dispose@1",
+      "kind": "effect-create-dispose",
+      "size": 1,
+      "iterations": 78528,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          15166600,
+          13470100,
+          13148100,
+          19314300,
+          18530600,
+          19363800,
+          21386300
+        ],
+        "rfsg-current": [
+          49028100,
+          37789800,
+          35002800,
+          40414800,
+          33545200,
+          37530700,
+          44612100
+        ],
+        "m15-inline-class": [
+          37904800,
+          42126100,
+          52303200,
+          39005200,
+          44820600,
+          38060200,
+          36777800
+        ],
+        "rfsg-v0.1.1": [
+          42033800,
+          31676800,
+          33207900,
+          34988100,
+          30950400,
+          24103400,
+          32200100
+        ]
+      }
+    },
+    {
+      "id": "effect/create-dispose",
+      "caseId": "effect/create-dispose@1",
+      "kind": "effect-create-dispose",
+      "size": 1,
+      "iterations": 78528,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          62538200,
+          37877300,
+          37771600,
+          45017100,
+          44953900,
+          38398100,
+          46055500
+        ],
+        "rfsg-v0.1.1": [
+          37441400,
+          36000100,
+          34660200,
+          35024900,
+          32472100,
+          32078300,
+          31468400
+        ],
+        "alien-signals": [
+          19805000,
+          17789300,
+          17139500,
+          22611300,
+          20193600,
+          16838300,
+          20932600
+        ],
+        "m15-inline-class": [
+          30216300,
+          28758800,
+          24375300,
+          24699600,
+          20677700,
+          18234600,
+          18702400
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          21323800,
+          35937500,
+          26947300,
+          20004300,
+          25550100,
+          23793400,
+          16011200
+        ],
+        "m15-inline-class": [
+          16288800,
+          12041600,
+          40639900,
+          13751400,
+          37970900,
+          23826700,
+          37792500
+        ],
+        "rfsg-current": [
+          38895700,
+          29632300,
+          26614100,
+          30902500,
+          19792800,
+          21138500,
+          20851200
+        ],
+        "alien-signals": [
+          10097600,
+          11831700,
+          27025500,
+          16156700,
+          24019500,
+          56435700,
+          22572200
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          14324600,
+          9365900,
+          14469000,
+          10270200,
+          18149700,
+          12072700,
+          20524400
+        ],
+        "alien-signals": [
+          8589800,
+          8092500,
+          17299800,
+          9281900,
+          9307400,
+          18281100,
+          10388300
+        ],
+        "rfsg-v0.1.1": [
+          17079300,
+          26499700,
+          22376200,
+          18619300,
+          29405400,
+          31331500,
+          21130300
+        ],
+        "rfsg-current": [
+          29134100,
+          28475600,
+          46241600,
+          34591200,
+          29630400,
+          33262800,
+          24350100
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          10610100,
+          9181900,
+          21138300,
+          11297000,
+          10716700,
+          19173500,
+          10077600
+        ],
+        "rfsg-current": [
+          44070000,
+          38551200,
+          33875900,
+          38122700,
+          26218400,
+          24943300,
+          33772400
+        ],
+        "m15-inline-class": [
+          22119200,
+          15425900,
+          25759000,
+          14045600,
+          27667200,
+          14270800,
+          24725700
+        ],
+        "rfsg-v0.1.1": [
+          32893100,
+          38418000,
+          20071800,
+          28808400,
+          42635000,
+          37635400,
+          27566600
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          32819400,
+          32128500,
+          23285700,
+          32084700,
+          22549200,
+          22765400,
+          34838900
+        ],
+        "rfsg-v0.1.1": [
+          21286700,
+          31067100,
+          25141000,
+          19545200,
+          29005600,
+          30604300,
+          22837200
+        ],
+        "alien-signals": [
+          14395200,
+          14392100,
+          32252000,
+          16642600,
+          15273900,
+          25341900,
+          12662900
+        ],
+        "m15-inline-class": [
+          31132900,
+          30938500,
+          24341500,
+          14529000,
+          21604800,
+          13690900,
+          20549600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@1",
+      "kind": "effect-fanout",
+      "size": 1,
+      "iterations": 131407,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          36263300,
+          21765800,
+          21411900,
+          25799600,
+          18647900,
+          18520200,
+          31096600
+        ],
+        "m15-inline-class": [
+          9298100,
+          15184700,
+          14762600,
+          9342100,
+          15212200,
+          9509800,
+          13945800
+        ],
+        "rfsg-current": [
+          31436200,
+          25748900,
+          23664700,
+          36523900,
+          28738800,
+          34549200,
+          64452200
+        ],
+        "alien-signals": [
+          24697200,
+          20752600,
+          21027400,
+          20731400,
+          18209600,
+          17208000,
+          19761900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@1",
+      "kind": "effect-fanout",
+      "size": 1,
+      "iterations": 131407,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          48134800,
+          61881200,
+          28812800,
+          28376200,
+          16515000,
+          24652100,
+          14348500
+        ],
+        "alien-signals": [
+          19856200,
+          16740300,
+          20946500,
+          26707700,
+          25941500,
+          18395900,
+          18864600
+        ],
+        "rfsg-v0.1.1": [
+          37387500,
+          29068900,
+          19374300,
+          24847400,
+          23770500,
+          34628200,
+          33358200
+        ],
+        "rfsg-current": [
+          28786500,
+          23275800,
+          20805000,
+          24643800,
+          18270700,
+          18352900,
+          24067500
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@1",
+      "kind": "effect-fanout",
+      "size": 1,
+      "iterations": 131407,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          18071400,
+          14472000,
+          15404200,
+          17130800,
+          14873700,
+          16168100,
+          17525700
+        ],
+        "rfsg-current": [
+          27906800,
+          21177300,
+          19047600,
+          30655800,
+          23504100,
+          20211200,
+          24922700
+        ],
+        "m15-inline-class": [
+          11840600,
+          12182500,
+          7914800,
+          12617800,
+          8174200,
+          11718600,
+          7665900
+        ],
+        "rfsg-v0.1.1": [
+          25333300,
+          27748600,
+          18384600,
+          16979200,
+          23304600,
+          22155000,
+          21083800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@1",
+      "kind": "effect-fanout",
+      "size": 1,
+      "iterations": 131407,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          24721900,
+          21047800,
+          18475700,
+          26685800,
+          18837100,
+          20149300,
+          27212000
+        ],
+        "rfsg-v0.1.1": [
+          20116200,
+          13680200,
+          13742500,
+          17525100,
+          13293900,
+          13052800,
+          16066300
+        ],
+        "alien-signals": [
+          22961900,
+          20096600,
+          17967500,
+          20624500,
+          16984300,
+          20193000,
+          29320500
+        ],
+        "m15-inline-class": [
+          22265300,
+          19762700,
+          27249500,
+          28626400,
+          24386600,
+          20612100,
+          20623600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          31894900,
+          26266800,
+          25906100,
+          35065100,
+          31253000,
+          29886500,
+          33295400
+        ],
+        "m15-inline-class": [
+          28301400,
+          36686000,
+          31010500,
+          26084300,
+          24544700,
+          24268900,
+          26987700
+        ],
+        "rfsg-current": [
+          66972300,
+          51626500,
+          55194700,
+          69752500,
+          41441900,
+          34649600,
+          39726500
+        ],
+        "alien-signals": [
+          27444000,
+          21846900,
+          20447200,
+          19638600,
+          20458500,
+          20549600,
+          24251600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          29450900,
+          25345000,
+          23913400,
+          25274200,
+          24730500,
+          27777000,
+          31438900
+        ],
+        "alien-signals": [
+          19127000,
+          20399100,
+          20811100,
+          28473200,
+          26379000,
+          30382200,
+          31112700
+        ],
+        "rfsg-v0.1.1": [
+          48091900,
+          42537200,
+          70944200,
+          63252700,
+          35361900,
+          29744600,
+          31298300
+        ],
+        "rfsg-current": [
+          49673600,
+          37351200,
+          37086100,
+          41921500,
+          39250900,
+          40013700,
+          52303200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          24189700,
+          20066700,
+          20058300,
+          19631700,
+          22656600,
+          22827100,
+          21877500
+        ],
+        "rfsg-current": [
+          61259300,
+          38424100,
+          36449200,
+          43947200,
+          39331300,
+          37377400,
+          38983400
+        ],
+        "m15-inline-class": [
+          34536500,
+          42646600,
+          36278800,
+          33381200,
+          28950200,
+          26285800,
+          28014000
+        ],
+        "rfsg-v0.1.1": [
+          31317100,
+          30228300,
+          29386500,
+          33097800,
+          37007400,
+          37836400,
+          34430900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          43819000,
+          36757000,
+          36827900,
+          38728600,
+          36595700,
+          35629800,
+          40600900
+        ],
+        "rfsg-v0.1.1": [
+          36801400,
+          33916900,
+          35191400,
+          43404200,
+          44118200,
+          34027000,
+          35129200
+        ],
+        "alien-signals": [
+          26422100,
+          21652900,
+          20373200,
+          19756400,
+          20249500,
+          18734000,
+          22935300
+        ],
+        "m15-inline-class": [
+          27045900,
+          24415600,
+          26210300,
+          24781400,
+          24477100,
+          23523600,
+          25590100
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          45313400,
+          32786300,
+          28503900,
+          27581700,
+          25938700,
+          26449400,
+          30666200
+        ],
+        "m15-inline-class": [
+          32380800,
+          33044700,
+          36721900,
+          27161700,
+          30297000,
+          23172100,
+          22451300
+        ],
+        "rfsg-current": [
+          53997400,
+          43679400,
+          36687600,
+          41528000,
+          37599100,
+          35166700,
+          34435300
+        ],
+        "alien-signals": [
+          22267800,
+          18645100,
+          19259100,
+          21350400,
+          23724500,
+          25019000,
+          22336400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          38157600,
+          24449900,
+          25192500,
+          19676100,
+          25895800,
+          22915200,
+          23526700
+        ],
+        "alien-signals": [
+          22233000,
+          19574200,
+          19059900,
+          20799000,
+          22982700,
+          24690400,
+          28538000
+        ],
+        "rfsg-v0.1.1": [
+          31864500,
+          24412400,
+          27167800,
+          30680900,
+          31727100,
+          34598300,
+          39980300
+        ],
+        "rfsg-current": [
+          42342700,
+          34312100,
+          28602000,
+          33887900,
+          32935600,
+          35668500,
+          39457400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          19563400,
+          20334200,
+          20051300,
+          18678000,
+          19936900,
+          19234400,
+          23871500
+        ],
+        "rfsg-current": [
+          48355700,
+          43702000,
+          34077200,
+          34934900,
+          33973100,
+          37177900,
+          34192600
+        ],
+        "m15-inline-class": [
+          32569800,
+          29415900,
+          27722000,
+          24795800,
+          36664000,
+          34080700,
+          29524700
+        ],
+        "rfsg-v0.1.1": [
+          31743500,
+          26705700,
+          24791900,
+          25433200,
+          25003200,
+          25402400,
+          33457000
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          43564000,
+          33341600,
+          28906600,
+          33627500,
+          33303500,
+          37525200,
+          43112200
+        ],
+        "rfsg-v0.1.1": [
+          31741900,
+          24436000,
+          24852100,
+          26284100,
+          25700000,
+          25768600,
+          30872600
+        ],
+        "alien-signals": [
+          27255300,
+          25787100,
+          21589500,
+          19717400,
+          19892200,
+          20092600,
+          23660700
+        ],
+        "m15-inline-class": [
+          30527100,
+          31158500,
+          30199600,
+          20255600,
+          24923500,
+          24823600,
+          31649600
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          28288000,
+          24062400,
+          23170100,
+          26124200,
+          28903300,
+          31424200,
+          29324600
+        ],
+        "m15-inline-class": [
+          20590500,
+          18828900,
+          18877200,
+          20284800,
+          19107600,
+          18183300,
+          20209500
+        ],
+        "rfsg-current": [
+          48003500,
+          41196000,
+          54641900,
+          47723200,
+          33691400,
+          32142300,
+          33234000
+        ],
+        "alien-signals": [
+          26538000,
+          22209800,
+          26733900,
+          26876900,
+          23560900,
+          23959800,
+          29715800
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          39228400,
+          36697300,
+          33167600,
+          25964800,
+          24337100,
+          23343900,
+          23222300
+        ],
+        "alien-signals": [
+          31602000,
+          26347700,
+          28151800,
+          29860100,
+          28394700,
+          26727700,
+          28006200
+        ],
+        "rfsg-v0.1.1": [
+          43425000,
+          69286900,
+          56980500,
+          56080400,
+          48930900,
+          34391200,
+          34940900
+        ],
+        "rfsg-current": [
+          43255800,
+          33534500,
+          36283400,
+          41975300,
+          31555100,
+          33012300,
+          38664100
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          35695100,
+          31561500,
+          33874800,
+          34701000,
+          38673900,
+          35711900,
+          36063100
+        ],
+        "rfsg-current": [
+          38110800,
+          28604000,
+          30393800,
+          35677800,
+          34011500,
+          32783600,
+          35080400
+        ],
+        "m15-inline-class": [
+          34117100,
+          22969200,
+          20605300,
+          22665600,
+          20899900,
+          25902900,
+          26312100
+        ],
+        "rfsg-v0.1.1": [
+          33723300,
+          34051500,
+          32698300,
+          33859700,
+          29244200,
+          37708000,
+          34869000
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          42609100,
+          30939400,
+          29375300,
+          35113800,
+          32669500,
+          34692200,
+          43546300
+        ],
+        "rfsg-v0.1.1": [
+          31361200,
+          28971400,
+          29159200,
+          32880700,
+          32101900,
+          33380400,
+          33446600
+        ],
+        "alien-signals": [
+          31729200,
+          27672400,
+          23300100,
+          24331100,
+          22416000,
+          23716400,
+          26149700
+        ],
+        "m15-inline-class": [
+          23335900,
+          22726600,
+          22749300,
+          23268600,
+          23119700,
+          23176900,
+          25075900
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          953043800,
+          986905400,
+          919593100,
+          956760000,
+          966033200,
+          1089787900,
+          1380776200
+        ],
+        "m15-inline-class": [
+          619675800,
+          514308800,
+          475228000,
+          670487200,
+          614040900,
+          588439600,
+          532088700
+        ],
+        "rfsg-current": [
+          3699289300,
+          3667073100,
+          1451209900,
+          1041071300,
+          805006300,
+          631323400,
+          604223600
+        ],
+        "alien-signals": [
+          16107200,
+          15181700,
+          14796700,
+          16251100,
+          18472700,
+          21007900,
+          32784400
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          422704200,
+          616360800,
+          434763500,
+          518648000,
+          422062900,
+          454271000,
+          506504200
+        ],
+        "alien-signals": [
+          15598700,
+          15336900,
+          15539300,
+          15208500,
+          14708700,
+          14881000,
+          14674400
+        ],
+        "rfsg-v0.1.1": [
+          1049272300,
+          1054602000,
+          1048534100,
+          1139015000,
+          1189403500,
+          991079700,
+          1301045500
+        ],
+        "rfsg-current": [
+          772781700,
+          832647700,
+          774746400,
+          558690900,
+          973704700,
+          1326233800,
+          1985158500
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          42644700,
+          59980100,
+          42310100,
+          42707600,
+          38481300,
+          42398900,
+          46170900
+        ],
+        "rfsg-current": [
+          1273346800,
+          753943900,
+          958866100,
+          1049317700,
+          981240400,
+          913288200,
+          711504100
+        ],
+        "m15-inline-class": [
+          477572300,
+          483760600,
+          674739600,
+          808513400,
+          717778000,
+          675682400,
+          818820700
+        ],
+        "rfsg-v0.1.1": [
+          1333451000,
+          1517625000,
+          1411762300,
+          1831122400,
+          2328324500,
+          1629197000,
+          990703200
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          1051768900,
+          581737400,
+          577880100,
+          693268900,
+          581762100,
+          583707900,
+          629820400
+        ],
+        "rfsg-v0.1.1": [
+          1013934800,
+          1086571100,
+          1061509100,
+          1506370700,
+          1198247700,
+          1470311800,
+          1615491500
+        ],
+        "alien-signals": [
+          15524400,
+          16773500,
+          17699500,
+          18395500,
+          18550800,
+          17327100,
+          16424400
+        ],
+        "m15-inline-class": [
+          1489973600,
+          1689418500,
+          1558884000,
+          1164453400,
+          1195147600,
+          1345953700,
+          1101073200
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          26034200,
+          22241300,
+          29006600,
+          49021400,
+          33720300,
+          26333200,
+          35823400
+        ],
+        "m15-inline-class": [
+          11216700,
+          7024900,
+          12423400,
+          7478500,
+          10593300,
+          6657100,
+          11138400
+        ],
+        "rfsg-current": [
+          37594800,
+          25951800,
+          37129600,
+          25891800,
+          25103800,
+          22247800,
+          31935400
+        ],
+        "alien-signals": [
+          8000800,
+          7047300,
+          14850900,
+          7783000,
+          8148700,
+          12345300,
+          8603400
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          9417000,
+          8948300,
+          8104600,
+          12713600,
+          11921400,
+          15976900,
+          10955800
+        ],
+        "alien-signals": [
+          12490000,
+          12588600,
+          24256900,
+          11520400,
+          10199300,
+          15915200,
+          9276200
+        ],
+        "rfsg-v0.1.1": [
+          22309600,
+          16781900,
+          17214700,
+          21709400,
+          16201600,
+          17752800,
+          22469000
+        ],
+        "rfsg-current": [
+          68617700,
+          36062900,
+          37752200,
+          62560500,
+          34579500,
+          35181900,
+          61286500
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          11349500,
+          21145700,
+          9980500,
+          9433000,
+          14210600,
+          9433100,
+          9451700
+        ],
+        "rfsg-current": [
+          84400100,
+          51497500,
+          48955400,
+          47335700,
+          26239100,
+          20799100,
+          29536100
+        ],
+        "m15-inline-class": [
+          9376500,
+          14700600,
+          14216000,
+          18784300,
+          14611400,
+          13290100,
+          15107000
+        ],
+        "rfsg-v0.1.1": [
+          20175700,
+          17210000,
+          14842900,
+          18239600,
+          15206600,
+          17926400,
+          16728400
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          29141500,
+          20536500,
+          20208100,
+          19886700,
+          19928800,
+          22027900,
+          34026900
+        ],
+        "rfsg-v0.1.1": [
+          26189800,
+          22017200,
+          18572100,
+          21279500,
+          15095400,
+          14922900,
+          19076600
+        ],
+        "alien-signals": [
+          8169300,
+          5925900,
+          14706600,
+          9277500,
+          9600700,
+          17179500,
+          12636000
+        ],
+        "m15-inline-class": [
+          17659000,
+          15549700,
+          9630700,
+          13683400,
+          12988000,
+          7796500,
+          12113200
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-unread",
+      "caseId": "computed/dirty-unread@1",
+      "kind": "computed-dirty-unread",
+      "size": 1,
+      "iterations": 298365,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          11465100,
+          11979500,
+          11735600,
+          11976300,
+          11990700,
+          11300900,
+          11726400
+        ],
+        "m15-inline-class": [
+          6549600,
+          6777700,
+          6543100,
+          6578200,
+          6392100,
+          6809800,
+          7195500
+        ],
+        "rfsg-current": [
+          8878100,
+          9082100,
+          9241200,
+          9072700,
+          9090100,
+          9053300,
+          9268600
+        ],
+        "alien-signals": [
+          10039000,
+          8092800,
+          8883800,
+          10314300,
+          10229300,
+          9100500,
+          9390100
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-unread",
+      "caseId": "computed/dirty-unread@1",
+      "kind": "computed-dirty-unread",
+      "size": 1,
+      "iterations": 298365,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          8356700,
+          8310800,
+          8287200,
+          8467900,
+          8664400,
+          9498300,
+          8191200
+        ],
+        "alien-signals": [
+          8854100,
+          8548200,
+          9138000,
+          9917600,
+          9688900,
+          10465600,
+          11638100
+        ],
+        "rfsg-v0.1.1": [
+          13954200,
+          14782700,
+          14905800,
+          13282000,
+          13621100,
+          13284500,
+          12385300
+        ],
+        "rfsg-current": [
+          9666800,
+          10463200,
+          10912000,
+          9571400,
+          14724200,
+          21579500,
+          20788700
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-unread",
+      "caseId": "computed/dirty-unread@1",
+      "kind": "computed-dirty-unread",
+      "size": 1,
+      "iterations": 298365,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          8491700,
+          7883500,
+          8092300,
+          9163500,
+          8055600,
+          8556900,
+          8945400
+        ],
+        "rfsg-current": [
+          9397700,
+          9380500,
+          8660500,
+          9360100,
+          9127900,
+          8921900,
+          9153500
+        ],
+        "m15-inline-class": [
+          6525100,
+          6446800,
+          7280500,
+          6337300,
+          6511300,
+          6217800,
+          6798000
+        ],
+        "rfsg-v0.1.1": [
+          12616200,
+          12640700,
+          11627500,
+          11854900,
+          13563500,
+          11629900,
+          11734000
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-unread",
+      "caseId": "computed/dirty-unread@1",
+      "kind": "computed-dirty-unread",
+      "size": 1,
+      "iterations": 298365,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          11153900,
+          12203200,
+          10439500,
+          11916900,
+          11135500,
+          11810200,
+          12317300
+        ],
+        "rfsg-v0.1.1": [
+          12339300,
+          12651300,
+          14389200,
+          12396400,
+          12972900,
+          15096700,
+          15979200
+        ],
+        "alien-signals": [
+          15373300,
+          16415100,
+          17828900,
+          18177500,
+          14396500,
+          15227400,
+          14607800
+        ],
+        "m15-inline-class": [
+          9327000,
+          9769200,
+          9116600,
+          9978500,
+          10118000,
+          10773500,
+          10826600
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          25552700,
+          27682500,
+          36841700,
+          27902600,
+          27193000,
+          35981900,
+          25547200
+        ],
+        "m15-inline-class": [
+          9852700,
+          8902400,
+          12079700,
+          8459300,
+          12375700,
+          9812600,
+          19687700
+        ],
+        "rfsg-current": [
+          26250000,
+          90199800,
+          48734900,
+          43286400,
+          81262700,
+          45185600,
+          57217400
+        ],
+        "alien-signals": [
+          11551900,
+          11298700,
+          36948000,
+          15266900,
+          13073500,
+          12802200,
+          29083300
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          16487300,
+          12093600,
+          16685600,
+          15845000,
+          26247000,
+          15755400,
+          14409100
+        ],
+        "alien-signals": [
+          30777100,
+          24048100,
+          24179000,
+          53311900,
+          15740300,
+          14667000,
+          15216400
+        ],
+        "rfsg-v0.1.1": [
+          20383800,
+          42219500,
+          36126400,
+          48323900,
+          21147000,
+          37463900,
+          39880200
+        ],
+        "rfsg-current": [
+          32774500,
+          39081300,
+          75727900,
+          37048000,
+          34832800,
+          85398600,
+          61464000
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          11325000,
+          9413200,
+          26706600,
+          9353400,
+          8579100,
+          8547700,
+          26525400
+        ],
+        "rfsg-current": [
+          104486000,
+          71983400,
+          56784000,
+          106529300,
+          64262900,
+          41014100,
+          43553400
+        ],
+        "m15-inline-class": [
+          18884700,
+          13462600,
+          16398900,
+          12298400,
+          27983200,
+          18327200,
+          11626200
+        ],
+        "rfsg-v0.1.1": [
+          44544800,
+          36975000,
+          40421300,
+          28073800,
+          31912200,
+          65803600,
+          38055100
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          50356000,
+          38219800,
+          37824700,
+          108232900,
+          65456100,
+          45493800,
+          78509500
+        ],
+        "rfsg-v0.1.1": [
+          67335500,
+          45269800,
+          71875200,
+          74082900,
+          107409800,
+          54573100,
+          60403600
+        ],
+        "alien-signals": [
+          24270600,
+          18002500,
+          17696300,
+          44057500,
+          16690700,
+          15472700,
+          15236300
+        ],
+        "m15-inline-class": [
+          38885100,
+          28090700,
+          40797900,
+          22779700,
+          43572500,
+          32513700,
+          40970500
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@1",
+      "kind": "computed-fanout",
+      "size": 1,
+      "iterations": 103370,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          91336000,
+          95099600,
+          47908300,
+          72357200,
+          61885900,
+          55993900,
+          76973100
+        ],
+        "m15-inline-class": [
+          47560700,
+          40803700,
+          39632600,
+          48094600,
+          38513500,
+          40283600,
+          42845600
+        ],
+        "rfsg-current": [
+          121996500,
+          87039300,
+          77151300,
+          106244000,
+          81294400,
+          74300700,
+          104007500
+        ],
+        "alien-signals": [
+          31762300,
+          23888700,
+          50187200,
+          24659200,
+          23681300,
+          56593500,
+          31340300
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@1",
+      "kind": "computed-fanout",
+      "size": 1,
+      "iterations": 103370,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          31321100,
+          41133700,
+          33818400,
+          32840900,
+          34848500,
+          30811200,
+          31802200
+        ],
+        "alien-signals": [
+          31496800,
+          44018300,
+          26574600,
+          38077800,
+          47554300,
+          33801400,
+          28243100
+        ],
+        "rfsg-v0.1.1": [
+          50563900,
+          33673800,
+          49123800,
+          58906000,
+          43985900,
+          36174100,
+          46734600
+        ],
+        "rfsg-current": [
+          148053000,
+          66532600,
+          59971500,
+          101477100,
+          41865300,
+          39301500,
+          79654000
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@1",
+      "kind": "computed-fanout",
+      "size": 1,
+      "iterations": 103370,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          21072800,
+          17154100,
+          36176400,
+          17266200,
+          18904200,
+          40823400,
+          17983400
+        ],
+        "rfsg-current": [
+          52516900,
+          71939400,
+          45675400,
+          65147200,
+          86314100,
+          49980800,
+          43945900
+        ],
+        "m15-inline-class": [
+          32250900,
+          65047400,
+          86595400,
+          64935500,
+          64377800,
+          62909500,
+          63947400
+        ],
+        "rfsg-v0.1.1": [
+          41621900,
+          32202200,
+          31467000,
+          42835000,
+          36127700,
+          32044000,
+          39415200
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@1",
+      "kind": "computed-fanout",
+      "size": 1,
+      "iterations": 103370,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          50435400,
+          53634100,
+          46459400,
+          67892200,
+          48966100,
+          47514500,
+          73515900
+        ],
+        "rfsg-v0.1.1": [
+          45883200,
+          33255300,
+          33771100,
+          48097600,
+          35721400,
+          36163900,
+          67394500
+        ],
+        "alien-signals": [
+          28720300,
+          28059100,
+          40616900,
+          21046400,
+          21502000,
+          40605800,
+          22659700
+        ],
+        "m15-inline-class": [
+          28534500,
+          35443200,
+          29234600,
+          27049900,
+          32323000,
+          26663100,
+          25341100
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@16",
+      "kind": "computed-fanout",
+      "size": 16,
+      "iterations": 14758,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          40837000,
+          37447000,
+          36536100,
+          44540200,
+          39153800,
+          35197200,
+          39541500
+        ],
+        "m15-inline-class": [
+          34746900,
+          57543800,
+          44827400,
+          36711200,
+          43284400,
+          33823800,
+          32795700
+        ],
+        "rfsg-current": [
+          55762400,
+          34090000,
+          30773200,
+          44879800,
+          33902400,
+          32632200,
+          46296500
+        ],
+        "alien-signals": [
+          26714000,
+          19782900,
+          17505200,
+          18575600,
+          15527000,
+          14627500,
+          15935300
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@16",
+      "kind": "computed-fanout",
+      "size": 16,
+      "iterations": 14758,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          20712800,
+          17287600,
+          17426300,
+          18504900,
+          18973900,
+          22435900,
+          28030600
+        ],
+        "alien-signals": [
+          34552800,
+          31610100,
+          30714700,
+          35844800,
+          27482500,
+          28052100,
+          31173900
+        ],
+        "rfsg-v0.1.1": [
+          61808800,
+          44827700,
+          36419800,
+          31903100,
+          40552900,
+          67436100,
+          49902400
+        ],
+        "rfsg-current": [
+          146255800,
+          81258100,
+          65965600,
+          81507400,
+          35513000,
+          30241700,
+          44786100
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@16",
+      "kind": "computed-fanout",
+      "size": 16,
+      "iterations": 14758,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          14433200,
+          13935900,
+          15360200,
+          12569000,
+          12056400,
+          13994900,
+          11472600
+        ],
+        "rfsg-current": [
+          101123300,
+          68890700,
+          48123300,
+          61572300,
+          39580500,
+          38000000,
+          46792700
+        ],
+        "m15-inline-class": [
+          24774200,
+          19203000,
+          18018300,
+          19502000,
+          18047000,
+          19273000,
+          21475700
+        ],
+        "rfsg-v0.1.1": [
+          35355300,
+          35717100,
+          40376200,
+          37925800,
+          33818900,
+          31419900,
+          31106000
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@16",
+      "kind": "computed-fanout",
+      "size": 16,
+      "iterations": 14758,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          53052900,
+          36375800,
+          32358300,
+          46546000,
+          37476900,
+          37706100,
+          51643900
+        ],
+        "rfsg-v0.1.1": [
+          58823200,
+          47318600,
+          47656000,
+          52663800,
+          47002000,
+          36040300,
+          35768700
+        ],
+        "alien-signals": [
+          14425300,
+          13552400,
+          15089100,
+          11944900,
+          12466900,
+          15334100,
+          13671100
+        ],
+        "m15-inline-class": [
+          19178800,
+          24366400,
+          19631800,
+          20028100,
+          27345600,
+          30194300,
+          25530500
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@64",
+      "kind": "computed-fanout",
+      "size": 64,
+      "iterations": 4583,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          40605700,
+          39283300,
+          40242000,
+          41774700,
+          39905800,
+          38534100,
+          45155900
+        ],
+        "m15-inline-class": [
+          25093700,
+          23740100,
+          24199300,
+          26091900,
+          25575600,
+          30016800,
+          38011500
+        ],
+        "rfsg-current": [
+          57608800,
+          45808900,
+          45656400,
+          61772700,
+          48868600,
+          44775400,
+          60397700
+        ],
+        "alien-signals": [
+          23590500,
+          20342400,
+          18989100,
+          20014200,
+          17774200,
+          17132800,
+          18698500
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@64",
+      "kind": "computed-fanout",
+      "size": 64,
+      "iterations": 4583,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          23867600,
+          26160100,
+          59385600,
+          54539400,
+          47871600,
+          42505400,
+          43765500
+        ],
+        "alien-signals": [
+          22363800,
+          20921200,
+          19584200,
+          21322800,
+          16901300,
+          16118500,
+          17576800
+        ],
+        "rfsg-v0.1.1": [
+          91622700,
+          84481100,
+          84717200,
+          98694300,
+          75880000,
+          81550300,
+          77212800
+        ],
+        "rfsg-current": [
+          90019600,
+          72572700,
+          95504000,
+          115762900,
+          80747800,
+          77864200,
+          92230600
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@64",
+      "kind": "computed-fanout",
+      "size": 64,
+      "iterations": 4583,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          44843200,
+          42198800,
+          32891100,
+          35669600,
+          38033100,
+          31321900,
+          89006500
+        ],
+        "rfsg-current": [
+          140067700,
+          87432400,
+          78133400,
+          118989500,
+          100099600,
+          84697300,
+          100809700
+        ],
+        "m15-inline-class": [
+          54566000,
+          49967700,
+          48786500,
+          51370100,
+          52730800,
+          53578700,
+          55775200
+        ],
+        "rfsg-v0.1.1": [
+          60003000,
+          56201700,
+          51111600,
+          66867200,
+          64733600,
+          59135700,
+          78770100
+        ]
+      }
+    },
+    {
+      "id": "computed/source-to-many",
+      "caseId": "computed/source-to-many@64",
+      "kind": "computed-fanout",
+      "size": 64,
+      "iterations": 4583,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          78871500,
+          58207700,
+          53737600,
+          92535100,
+          67388300,
+          53547700,
+          66549500
+        ],
+        "rfsg-v0.1.1": [
+          43104600,
+          38662000,
+          37899900,
+          41058000,
+          40746500,
+          39277100,
+          41458300
+        ],
+        "alien-signals": [
+          24657000,
+          24566400,
+          44040700,
+          49128500,
+          49297300,
+          40357500,
+          32816600
+        ],
+        "m15-inline-class": [
+          21499500,
+          22335900,
+          22630700,
+          22635300,
+          23032800,
+          25038000,
+          22211700
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@1",
+      "kind": "computed-fanin",
+      "size": 1,
+      "iterations": 66044,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          32141200,
+          20514600,
+          16607100,
+          15313000,
+          8487500,
+          13990600,
+          8350200
+        ],
+        "m15-inline-class": [
+          11052900,
+          6464400,
+          11520100,
+          6461800,
+          12261800,
+          6192600,
+          12054500
+        ],
+        "rfsg-current": [
+          44492700,
+          22523800,
+          22087200,
+          30365600,
+          27249800,
+          29917600,
+          52386900
+        ],
+        "alien-signals": [
+          6431700,
+          6515700,
+          16203200,
+          7686300,
+          5977500,
+          6074600,
+          13033100
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@1",
+      "kind": "computed-fanin",
+      "size": 1,
+      "iterations": 66044,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          15377300,
+          9524500,
+          15136400,
+          8495900,
+          15509100,
+          8443900,
+          16933300
+        ],
+        "alien-signals": [
+          10644700,
+          15299300,
+          92825400,
+          85337500,
+          12410600,
+          11054700,
+          10325800
+        ],
+        "rfsg-v0.1.1": [
+          63528300,
+          53006700,
+          50902200,
+          35057800,
+          40662700,
+          38180100,
+          35308700
+        ],
+        "rfsg-current": [
+          21577500,
+          34900700,
+          19702800,
+          13570700,
+          21340400,
+          39563500,
+          35350300
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@1",
+      "kind": "computed-fanin",
+      "size": 1,
+      "iterations": 66044,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          15272400,
+          10277100,
+          11186600,
+          27612900,
+          10519100,
+          9695300,
+          6920600
+        ],
+        "rfsg-current": [
+          30154900,
+          16069200,
+          17382600,
+          16709300,
+          22954000,
+          18543800,
+          23047200
+        ],
+        "m15-inline-class": [
+          26257300,
+          14251600,
+          26078500,
+          13423100,
+          25191500,
+          13165600,
+          31194300
+        ],
+        "rfsg-v0.1.1": [
+          14744600,
+          14500300,
+          8809000,
+          14391500,
+          15549400,
+          17968500,
+          8713300
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@1",
+      "kind": "computed-fanin",
+      "size": 1,
+      "iterations": 66044,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          12018000,
+          19773900,
+          20093200,
+          29910900,
+          20224500,
+          10822300,
+          20121300
+        ],
+        "rfsg-v0.1.1": [
+          20410100,
+          22377700,
+          29128200,
+          23339200,
+          23121200,
+          30044600,
+          32629700
+        ],
+        "alien-signals": [
+          12000900,
+          11843600,
+          11528100,
+          33992900,
+          13061500,
+          11498700,
+          12212900
+        ],
+        "m15-inline-class": [
+          20839600,
+          11385200,
+          27560900,
+          13585800,
+          37089000,
+          16275600,
+          29590700
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@16",
+      "kind": "computed-fanin",
+      "size": 16,
+      "iterations": 32869,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          25561000,
+          21326400,
+          21462900,
+          25420200,
+          28230200,
+          39209400,
+          40729100
+        ],
+        "m15-inline-class": [
+          8840800,
+          7659200,
+          15434300,
+          12756300,
+          18288200,
+          16677500,
+          19292400
+        ],
+        "rfsg-current": [
+          23181900,
+          21745900,
+          44563100,
+          23662900,
+          30360100,
+          15368000,
+          24938100
+        ],
+        "alien-signals": [
+          16573700,
+          12538500,
+          12180000,
+          14881800,
+          14020100,
+          14686300,
+          19775300
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@16",
+      "kind": "computed-fanin",
+      "size": 16,
+      "iterations": 32869,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          7166200,
+          7143300,
+          13136700,
+          10016800,
+          10848100,
+          8539700,
+          11196700
+        ],
+        "alien-signals": [
+          17148700,
+          12974700,
+          12875300,
+          14026400,
+          11369300,
+          11791900,
+          13772000
+        ],
+        "rfsg-v0.1.1": [
+          22863200,
+          17468200,
+          15699900,
+          18407000,
+          16363100,
+          15407000,
+          18057700
+        ],
+        "rfsg-current": [
+          19827400,
+          19143400,
+          37857500,
+          21046900,
+          29109700,
+          17137500,
+          27944200
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@16",
+      "kind": "computed-fanin",
+      "size": 16,
+      "iterations": 32869,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          16414500,
+          12963000,
+          13117100,
+          23728100,
+          14776500,
+          13131500,
+          12828400
+        ],
+        "rfsg-current": [
+          61569100,
+          42973200,
+          34154300,
+          73482700,
+          38232800,
+          54098800,
+          35658100
+        ],
+        "m15-inline-class": [
+          32957800,
+          23862100,
+          30388300,
+          23571200,
+          31973200,
+          25298200,
+          24894200
+        ],
+        "rfsg-v0.1.1": [
+          68418000,
+          51618400,
+          40869400,
+          50403900,
+          39811300,
+          56262100,
+          64953900
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@16",
+      "kind": "computed-fanin",
+      "size": 16,
+      "iterations": 32869,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          73205700,
+          56246800,
+          43254800,
+          134235500,
+          74777800,
+          89111000,
+          50642800
+        ],
+        "rfsg-v0.1.1": [
+          38763900,
+          32350500,
+          32216900,
+          45621300,
+          48835700,
+          36632700,
+          39333000
+        ],
+        "alien-signals": [
+          20294600,
+          15340400,
+          14995700,
+          27599100,
+          16922200,
+          20341400,
+          29967700
+        ],
+        "m15-inline-class": [
+          9912000,
+          8144400,
+          16787800,
+          12375200,
+          14500900,
+          11430800,
+          14472400
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@64",
+      "kind": "computed-fanin",
+      "size": 64,
+      "iterations": 11708,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          23981500,
+          28904300,
+          21124000,
+          23636300,
+          28545500,
+          24458400,
+          21585900
+        ],
+        "m15-inline-class": [
+          20117800,
+          12302400,
+          21765400,
+          22257400,
+          11854100,
+          19963900,
+          20319500
+        ],
+        "rfsg-current": [
+          49410400,
+          64972000,
+          44583100,
+          75115800,
+          47999600,
+          29463900,
+          48891300
+        ],
+        "alien-signals": [
+          15751000,
+          14090600,
+          13765200,
+          30506800,
+          15668800,
+          14928300,
+          14379000
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@64",
+      "kind": "computed-fanin",
+      "size": 64,
+      "iterations": 11708,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          28536700,
+          12681000,
+          10769000,
+          26294400,
+          33884500,
+          17867500,
+          13003700
+        ],
+        "alien-signals": [
+          39963000,
+          61338200,
+          103664800,
+          56328800,
+          28801900,
+          25994200,
+          63304900
+        ],
+        "rfsg-v0.1.1": [
+          22877000,
+          31540800,
+          31788900,
+          45826400,
+          35863300,
+          31956900,
+          40947700
+        ],
+        "rfsg-current": [
+          36114800,
+          29931700,
+          32584400,
+          67408000,
+          50224300,
+          32810200,
+          54799600
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@64",
+      "kind": "computed-fanin",
+      "size": 64,
+      "iterations": 11708,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          23432600,
+          21676900,
+          25881200,
+          46448400,
+          20537100,
+          24784800,
+          23947000
+        ],
+        "rfsg-current": [
+          62701000,
+          50734500,
+          37418600,
+          53417900,
+          45761400,
+          26403200,
+          52528900
+        ],
+        "m15-inline-class": [
+          32126900,
+          29068700,
+          20422200,
+          20957700,
+          23192200,
+          22224100,
+          26389600
+        ],
+        "rfsg-v0.1.1": [
+          41321100,
+          61125600,
+          36017800,
+          33343200,
+          38636500,
+          35694000,
+          34980500
+        ]
+      }
+    },
+    {
+      "id": "computed/many-to-one",
+      "caseId": "computed/many-to-one@64",
+      "kind": "computed-fanin",
+      "size": 64,
+      "iterations": 11708,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          28219300,
+          29674700,
+          25036900,
+          91295100,
+          56915200,
+          50344100,
+          97965100
+        ],
+        "rfsg-v0.1.1": [
+          66292100,
+          44970500,
+          54101000,
+          41839400,
+          67906100,
+          43307400,
+          39767900
+        ],
+        "alien-signals": [
+          34633300,
+          44961300,
+          34745800,
+          66442500,
+          30641700,
+          25578100,
+          26242800
+        ],
+        "m15-inline-class": [
+          22042700,
+          37670100,
+          19340400,
+          20520600,
+          22893400,
+          23553900,
+          19517900
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "round": 1,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-inline-class",
+        "rfsg-current",
+        "alien-signals"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          18546700,
+          53091200,
+          35996600,
+          53539600,
+          30658800,
+          16420400,
+          38870400
+        ],
+        "m15-inline-class": [
+          23307000,
+          21293700,
+          15430600,
+          18122300,
+          18128300,
+          14415400,
+          24985700
+        ],
+        "rfsg-current": [
+          35802100,
+          39412600,
+          38279600,
+          30738100,
+          91901000,
+          43336100,
+          47772800
+        ],
+        "alien-signals": [
+          21715300,
+          13750200,
+          17595100,
+          15889700,
+          65900900,
+          28445700,
+          18539600
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "round": 2,
+      "order": [
+        "m15-inline-class",
+        "alien-signals",
+        "rfsg-v0.1.1",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "m15-inline-class": [
+          15463600,
+          15021500,
+          13794400,
+          15205500,
+          14374900,
+          13852900,
+          17565500
+        ],
+        "alien-signals": [
+          17586700,
+          15237100,
+          18491600,
+          55954100,
+          28979300,
+          20798800,
+          32706500
+        ],
+        "rfsg-v0.1.1": [
+          51160300,
+          23424700,
+          47980000,
+          24305100,
+          46939500,
+          23195800,
+          44801200
+        ],
+        "rfsg-current": [
+          35206600,
+          25850000,
+          36267900,
+          29979700,
+          74062000,
+          70064000,
+          31008800
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "round": 3,
+      "order": [
+        "alien-signals",
+        "rfsg-current",
+        "m15-inline-class",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "alien-signals": [
+          14932500,
+          13953200,
+          38327500,
+          15133800,
+          15957800,
+          15888100,
+          10071000
+        ],
+        "rfsg-current": [
+          26361400,
+          33301700,
+          39513400,
+          96627800,
+          43659500,
+          48899400,
+          52322900
+        ],
+        "m15-inline-class": [
+          21953500,
+          39044500,
+          32906500,
+          20728600,
+          16763500,
+          18389300,
+          19578000
+        ],
+        "rfsg-v0.1.1": [
+          35773700,
+          74345600,
+          30584700,
+          54067200,
+          51156400,
+          29128400,
+          43175400
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "round": 4,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "alien-signals",
+        "m15-inline-class"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          24745800,
+          32022800,
+          34395700,
+          25422400,
+          34170400,
+          51026100,
+          103363000
+        ],
+        "rfsg-v0.1.1": [
+          56803200,
+          28561500,
+          54797400,
+          23675900,
+          42661200,
+          38553500,
+          24843500
+        ],
+        "alien-signals": [
+          17772400,
+          12844900,
+          9441900,
+          13537200,
+          37563100,
+          22693300,
+          16919200
+        ],
+        "m15-inline-class": [
+          21595100,
+          11759300,
+          23559400,
+          18597000,
+          13745500,
+          12270300,
+          13625800
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,516 @@
+{
+  "purpose": "single-object public brand candidate differential",
+  "rounds": 4,
+  "warmups": 3,
+  "samples": 7,
+  "cases": [
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079
+    }
+  ],
+  "orders": [
+    [
+      "bare",
+      "weakset-brand",
+      "helper-brand",
+      "direct-brand"
+    ],
+    [
+      "weakset-brand",
+      "direct-brand",
+      "bare",
+      "helper-brand"
+    ],
+    [
+      "helper-brand",
+      "direct-brand",
+      "weakset-brand",
+      "bare"
+    ],
+    [
+      "direct-brand",
+      "bare",
+      "helper-brand",
+      "weakset-brand"
+    ]
+  ],
+  "preflights": [
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "bare",
+      "status": "ok",
+      "preflight": "passed"
+    },
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "weakset-brand",
+      "status": "ok",
+      "preflight": "passed"
+    },
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "helper-brand",
+      "status": "ok",
+      "preflight": "passed"
+    },
+    {
+      "caseId": "source/create@1",
+      "runtimeId": "direct-brand",
+      "status": "ok",
+      "preflight": "passed"
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "bare",
+      "status": "ok",
+      "preflight": "passed"
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "weakset-brand",
+      "status": "ok",
+      "preflight": "passed"
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "helper-brand",
+      "status": "ok",
+      "preflight": "passed"
+    },
+    {
+      "caseId": "source/read@1",
+      "runtimeId": "direct-brand",
+      "status": "ok",
+      "preflight": "passed"
+    }
+  ],
+  "results": [
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 1,
+      "order": [
+        "bare",
+        "weakset-brand",
+        "helper-brand",
+        "direct-brand"
+      ],
+      "perRuntime": {
+        "bare": [
+          51320300,
+          68050200,
+          67880300,
+          50952700,
+          44571600,
+          53977500,
+          50027600
+        ],
+        "weakset-brand": [
+          637077900,
+          649557900,
+          533719000,
+          562642100,
+          496756200,
+          637394700,
+          735550700
+        ],
+        "helper-brand": [
+          250002200,
+          199330100,
+          216920100,
+          187938000,
+          199691100,
+          218406000,
+          208155700
+        ],
+        "direct-brand": [
+          231230600,
+          302924500,
+          407417900,
+          212779900,
+          357118500,
+          224573100,
+          312885200
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 2,
+      "order": [
+        "weakset-brand",
+        "direct-brand",
+        "bare",
+        "helper-brand"
+      ],
+      "perRuntime": {
+        "weakset-brand": [
+          532107100,
+          650727000,
+          862264900,
+          604737400,
+          876055600,
+          853057200,
+          1016829000
+        ],
+        "direct-brand": [
+          401358600,
+          396229900,
+          421716300,
+          434691600,
+          376885200,
+          443214500,
+          356667700
+        ],
+        "bare": [
+          103661000,
+          73602700,
+          70669000,
+          78540400,
+          81872800,
+          85621600,
+          81487200
+        ],
+        "helper-brand": [
+          434031400,
+          550331200,
+          480153100,
+          541999600,
+          589750700,
+          664729300,
+          623897500
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 3,
+      "order": [
+        "helper-brand",
+        "direct-brand",
+        "weakset-brand",
+        "bare"
+      ],
+      "perRuntime": {
+        "helper-brand": [
+          648666900,
+          437099200,
+          606381900,
+          431281000,
+          460810600,
+          537214800,
+          497975100
+        ],
+        "direct-brand": [
+          327154000,
+          409658900,
+          480880800,
+          525852700,
+          544338200,
+          626040300,
+          591906700
+        ],
+        "weakset-brand": [
+          1352904100,
+          1138974000,
+          1092353600,
+          1163692400,
+          1028583800,
+          1562187300,
+          1463229100
+        ],
+        "bare": [
+          93714500,
+          91654400,
+          88690300,
+          97875800,
+          98629400,
+          84337400,
+          76444700
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "round": 4,
+      "order": [
+        "direct-brand",
+        "bare",
+        "helper-brand",
+        "weakset-brand"
+      ],
+      "perRuntime": {
+        "direct-brand": [
+          399577200,
+          535735700,
+          623629000,
+          982858300,
+          733119700,
+          590355000,
+          551354000
+        ],
+        "bare": [
+          122328400,
+          107447800,
+          104996800,
+          77682700,
+          76391100,
+          76058400,
+          92774100
+        ],
+        "helper-brand": [
+          401027000,
+          392386100,
+          347594200,
+          342872100,
+          438372500,
+          577641100,
+          574303800
+        ],
+        "weakset-brand": [
+          1524137000,
+          1370939200,
+          1002983700,
+          1332850500,
+          1251562200,
+          1407936700,
+          1362350000
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 1,
+      "order": [
+        "bare",
+        "weakset-brand",
+        "helper-brand",
+        "direct-brand"
+      ],
+      "perRuntime": {
+        "bare": [
+          17370400,
+          19897800,
+          27950600,
+          28773900,
+          24601700,
+          26402500,
+          23656600
+        ],
+        "weakset-brand": [
+          19092900,
+          17167500,
+          18947200,
+          20428000,
+          21437800,
+          21575200,
+          19875700
+        ],
+        "helper-brand": [
+          24430700,
+          24306200,
+          22498300,
+          24310400,
+          22804500,
+          25617200,
+          22426800
+        ],
+        "direct-brand": [
+          14272800,
+          15497700,
+          18171100,
+          18949800,
+          18745200,
+          18257300,
+          17015300
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 2,
+      "order": [
+        "weakset-brand",
+        "direct-brand",
+        "bare",
+        "helper-brand"
+      ],
+      "perRuntime": {
+        "weakset-brand": [
+          21677500,
+          21141100,
+          20460600,
+          19086300,
+          20586800,
+          21216100,
+          20690200
+        ],
+        "direct-brand": [
+          16200100,
+          18056100,
+          19041400,
+          24043800,
+          19409700,
+          21986700,
+          25238700
+        ],
+        "bare": [
+          21563600,
+          23111300,
+          22136300,
+          24455100,
+          18730800,
+          22713100,
+          20649300
+        ],
+        "helper-brand": [
+          19447100,
+          22477500,
+          21692900,
+          19895500,
+          28771900,
+          23039400,
+          24693500
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 3,
+      "order": [
+        "helper-brand",
+        "direct-brand",
+        "weakset-brand",
+        "bare"
+      ],
+      "perRuntime": {
+        "helper-brand": [
+          24733100,
+          18888500,
+          19099800,
+          19754500,
+          19759000,
+          17559000,
+          15293600
+        ],
+        "direct-brand": [
+          29234600,
+          20989600,
+          27042700,
+          19659400,
+          24774500,
+          22892900,
+          35472400
+        ],
+        "weakset-brand": [
+          18917900,
+          19554600,
+          21619100,
+          19297800,
+          21148200,
+          23545800,
+          21683700
+        ],
+        "bare": [
+          18712800,
+          17168200,
+          19057000,
+          18593100,
+          18814000,
+          17773400,
+          17833000
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "round": 4,
+      "order": [
+        "direct-brand",
+        "bare",
+        "helper-brand",
+        "weakset-brand"
+      ],
+      "perRuntime": {
+        "direct-brand": [
+          21614100,
+          18808600,
+          18277600,
+          18463000,
+          17461100,
+          15562000,
+          16955000
+        ],
+        "bare": [
+          18411200,
+          18896200,
+          23556000,
+          18064800,
+          18716200,
+          17631100,
+          18607900
+        ],
+        "helper-brand": [
+          21232300,
+          23820300,
+          20146000,
+          21515400,
+          23286300,
+          20679400,
+          22681100
+        ],
+        "weakset-brand": [
+          21191600,
+          20782100,
+          19846300,
+          18938200,
+          25377200,
+          20048100,
+          21530300
+        ]
+      }
+    }
+  ]
+}
