@@ -1,0 +1,147 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-09-28T23-03-07-594Z",
+  "status": "completed",
+  "preRunStateCapturedAt": "2026-09-28T23:03:07.595Z",
+  "currentHead": "df56eb98fe1235963b60fa04d5f114ca6605aec5",
+  "worktreeDirty": true,
+  "dirtyPaths": [
+    "?? benchmarks/phase9/analyze-deep-signal-ab.mjs",
+    "?? benchmarks/phase9/deep-signal-ab-runner.mjs",
+    "?? benchmarks/phase9/deep-signal-ab-worker.mjs"
+  ],
+  "reference": {
+    "runtimeId": "rfsg-v0.1.1",
+    "tag": "v0.1.1",
+    "commit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+    "packageVersion": "0.1.1",
+    "packageEntry": "file:///C:/Users/catro/Documents/Git/Github/react-alien-signals/benchmarks/phase9/node_modules/.pnpm/react-fine-grained-signals@_8f5ce038aa86de06cb2875ff5f9ebd7a/node_modules/react-fine-grained-signals/dist/index.js",
+    "pinnedArtifactIntegrity": {
+      "rfsgV011": "sha512-S5azA4ENEJ/LpH29v4AnO3ctvacqHmi0lV8u3ettbQ61JSWCQkKr1c2Nk3t3n2PIP3FTVMnILUlYOfb23yrUbg==",
+      "alienSignals": "sha512-I8FjmltrfnDFoZedi5CG8DghVYNhzb/Ijluz7tCSJH0xpd0484Kowhbb1XDYOxfJpU1p5wnM2X54dA+IfGyD1g==",
+      "vueReactivity": "sha512-PBNUnlLzHSmmIqJ0aDDp2Jf8Iox3CSCLUCnUc/96wk2fBba+s6+qlMQ4mkVOIMUv2HGJ1aoTUyiciBSrkwUWQw=="
+    },
+    "verifiedPins": {
+      "v0_1_1": {
+        "version": "0.1.1",
+        "tarballSource": "npm registry package installed by the pinned fixture lockfile"
+      },
+      "oldAlien": "3.2.1",
+      "currentAlien": "3.2.1",
+      "vue": "3.6.0-rc.9",
+      "pinnedArtifactIntegrity": {
+        "rfsgV011": "sha512-S5azA4ENEJ/LpH29v4AnO3ctvacqHmi0lV8u3ettbQ61JSWCQkKr1c2Nk3t3n2PIP3FTVMnILUlYOfb23yrUbg==",
+        "alienSignals": "sha512-I8FjmltrfnDFoZedi5CG8DghVYNhzb/Ijluz7tCSJH0xpd0484Kowhbb1XDYOxfJpU1p5wnM2X54dA+IfGyD1g==",
+        "vueReactivity": "sha512-PBNUnlLzHSmmIqJ0aDDp2Jf8Iox3CSCLUCnUc/96wk2fBba+s6+qlMQ4mkVOIMUv2HGJ1aoTUyiciBSrkwUWQw=="
+      }
+    }
+  },
+  "currentRuntime": {
+    "runtimeId": "rfsg-current",
+    "packageVersion": "0.1.1",
+    "sourceHead": "df56eb98fe1235963b60fa04d5f114ca6605aec5",
+    "runtimeInputsSha256": "756b420b611e800883e30fe5e864e78fc0e9d35650c61e3a7deae3fdf95254ed",
+    "artifactSha256": "946e86786f36718f45b792d5d19e0e02e06b2183c21168490ae52fbb87198787",
+    "artifactFileCount": 26
+  },
+  "environment": {
+    "node": "v24.21.0",
+    "nodeExecutable": "C:\\Users\\catro\\AppData\\Local\\Volta\\tools\\image\\node\\24.21.0\\node.exe",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+    "packageManager": "unknown"
+  },
+  "protocol": {
+    "primary": {
+      "pairsPerSession": 24,
+      "sessions": 3,
+      "warmups": 3,
+      "samples": 7,
+      "gc": "global.gc() immediately before each warmup and measured execution",
+      "sameFrozenIterations": true
+    },
+    "auxiliary": {
+      "pairs": 12,
+      "warmups": 3,
+      "samples": 7,
+      "counts": {
+        "deepSignal/create@1": 2500,
+        "deepSignal/nested-tracked-read@1": 5000,
+        "deepSignal/unwatched-sibling-write@1": 8657,
+        "deepSignal/many-watched-leaves@16": 20000,
+        "deepSignal/many-watched-leaves@64": 20000,
+        "deepSignal/many-watched-leaves@256": 20000,
+        "deepSignal/many-watched-leaves@1000": 20000
+      }
+    },
+    "allocation": {
+      "pairs": 12,
+      "graphCount": 1000,
+      "kind": "deep-watched-leaves",
+      "gc": "Phase 9 allocation-worker forced-GC methodology"
+    },
+    "pairOrder": [
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB"
+    ],
+    "orderEncoding": "AB means fresh v0.1.1 process then fresh current process; BA reverses the order.",
+    "pauseBetweenChildrenMs": 0,
+    "frozenIterationsFile": "benchmarks/phase9/m1b-iterations.json",
+    "frozenIterationsSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+    "primaryCounts": {
+      "rfsg/deepSignal-read@1": 50000,
+      "rfsg/deepSignal-watched-leaf-write@1": 8657
+    }
+  },
+  "sessions": {
+    "1": {
+      "status": "completed",
+      "startedAt": "2026-09-28T23:03:07.601Z",
+      "pairs": 24,
+      "finishedAt": "2026-09-28T23:03:55.105Z"
+    },
+    "2": {
+      "status": "completed",
+      "startedAt": "2026-09-28T23:05:20.227Z",
+      "pairs": 24,
+      "finishedAt": "2026-09-28T23:06:11.775Z"
+    },
+    "3": {
+      "status": "completed",
+      "startedAt": "2026-09-28T23:07:44.537Z",
+      "pairs": 24,
+      "finishedAt": "2026-09-28T23:08:35.658Z"
+    }
+  },
+  "auxiliaryStatus": "completed",
+  "allocationStatus": "completed",
+  "createdAt": "2026-09-28T23:03:07.596Z",
+  "auxiliaryStartedAt": "2026-09-28T23:09:15.633Z",
+  "auxiliaryFinishedAt": "2026-09-28T23:12:42.635Z",
+  "allocationStartedAt": "2026-09-28T23:12:56.353Z",
+  "allocationFinishedAt": "2026-09-28T23:13:02.045Z",
+  "finishedAt": "2026-09-28T23:13:02.045Z"
+}
