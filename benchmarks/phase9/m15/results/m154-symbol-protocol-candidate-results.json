@@ -1,0 +1,7775 @@
+{
+  "purpose": "M1.5.4 source representation diagnostic; fresh-process paired durations, not an authoritative release matrix",
+  "gitHead": "53ea18007b1934dc51902b6447551b1e237a2545",
+  "worktreeStatusAtStart": " M benchmarks/phase9/m15/README.md\r\n M src/core/alien-derived-runtime-core.mts\r\n M src/core/foreign-readable-v1.mts\r\n M tests/reactive-runtime.test.ts\r\n?? benchmarks/phase9/m15/m154-source-representation-screen.mjs\r\n?? benchmarks/phase9/m15/results/m154-lazy-protocol-candidate-results.json\r\n?? benchmarks/phase9/m15/results/m154-lazy-protocol-candidate-summary.json\r\n?? benchmarks/phase9/m15/results/m154-object-prototype-candidate-incomplete.json\r\n?? benchmarks/phase9/m15/results/m154-shared-method-candidate-results.json\r\n?? benchmarks/phase9/m15/results/m154-shared-method-candidate-summary.json\r\n?? benchmarks/phase9/m15/summarize-m154.mjs\r\n?? docs/implementation-phase9-m1.5.4.md\r\n",
+  "node": "v24.21.0",
+  "roundsPolicy": "24 source/create and source/read; 12 source/write and creation diagnostics; 8 regression controls",
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "frozenIterationsSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+  "runtimes": [
+    "rfsg-current",
+    "m151-integrated",
+    "rfsg-v0.1.1",
+    "rfsg-pre-m15"
+  ],
+  "schedule": [
+    [
+      "rfsg-current",
+      "m151-integrated",
+      "rfsg-pre-m15",
+      "rfsg-v0.1.1"
+    ],
+    [
+      "m151-integrated",
+      "rfsg-v0.1.1",
+      "rfsg-current",
+      "rfsg-pre-m15"
+    ],
+    [
+      "rfsg-v0.1.1",
+      "rfsg-pre-m15",
+      "m151-integrated",
+      "rfsg-current"
+    ],
+    [
+      "rfsg-pre-m15",
+      "rfsg-current",
+      "rfsg-v0.1.1",
+      "m151-integrated"
+    ]
+  ],
+  "cases": [
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8
+    }
+  ],
+  "measurements": [
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          672209700,
+          601222400,
+          672707600,
+          622325700,
+          625343000,
+          648016800,
+          608453700
+        ],
+        "m151-integrated": [
+          706886600,
+          627788000,
+          399256300,
+          383127500,
+          531771200,
+          354893800,
+          379517400
+        ],
+        "rfsg-pre-m15": [
+          440138900,
+          427167900,
+          429582700,
+          416585300,
+          412581600,
+          441449600,
+          459303100
+        ],
+        "rfsg-v0.1.1": [
+          348120200,
+          338136400,
+          334550900,
+          311909400,
+          316523200,
+          306673800,
+          346698500
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          953880600,
+          835360900,
+          365102200,
+          405388900,
+          368136400,
+          393817700,
+          371974200
+        ],
+        "rfsg-v0.1.1": [
+          268602700,
+          287217900,
+          265877800,
+          259939100,
+          276227700,
+          368404300,
+          364729000
+        ],
+        "rfsg-current": [
+          621066900,
+          557297300,
+          609422900,
+          640351100,
+          581057200,
+          618908000,
+          651876100
+        ],
+        "rfsg-pre-m15": [
+          445984700,
+          473869800,
+          413978900,
+          431308000,
+          423991400,
+          440934400,
+          439848000
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          320861000,
+          272573800,
+          289203000,
+          262279600,
+          280763400,
+          282350400,
+          256017900
+        ],
+        "rfsg-pre-m15": [
+          489348600,
+          502229000,
+          513185600,
+          545098400,
+          531165500,
+          652787600,
+          489783900
+        ],
+        "m151-integrated": [
+          967521300,
+          804750200,
+          408408300,
+          365508800,
+          402955000,
+          358390000,
+          397327300
+        ],
+        "rfsg-current": [
+          627421200,
+          630302000,
+          614288000,
+          633094700,
+          595050100,
+          579130200,
+          614767600
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          443145000,
+          496765400,
+          411421000,
+          405352600,
+          442374000,
+          428612600,
+          440699800
+        ],
+        "rfsg-current": [
+          611198000,
+          579144700,
+          605366500,
+          648749000,
+          600413800,
+          634399200,
+          724936300
+        ],
+        "rfsg-v0.1.1": [
+          296752100,
+          330810100,
+          345649400,
+          352243700,
+          330187700,
+          320632100,
+          393904700
+        ],
+        "m151-integrated": [
+          981830300,
+          1182299200,
+          869088000,
+          695028600,
+          703588000,
+          749257200,
+          892883400
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          1112939300,
+          1224731100,
+          1138593200,
+          1128365400,
+          1140060700,
+          1094949500,
+          1086820300
+        ],
+        "m151-integrated": [
+          1548677000,
+          1163627600,
+          890697700,
+          820890000,
+          686259100,
+          709376200,
+          709781000
+        ],
+        "rfsg-pre-m15": [
+          534713700,
+          561749200,
+          755145300,
+          898302000,
+          960008300,
+          869417500,
+          866858100
+        ],
+        "rfsg-v0.1.1": [
+          392426700,
+          341196000,
+          330225300,
+          344123000,
+          318542000,
+          515041200,
+          585097700
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          1369476900,
+          1057258100,
+          910609900,
+          760471100,
+          807018600,
+          852693900,
+          832878200
+        ],
+        "rfsg-v0.1.1": [
+          341308200,
+          323658100,
+          322765600,
+          355315500,
+          355030900,
+          503927900,
+          522942500
+        ],
+        "rfsg-current": [
+          862202300,
+          1040405200,
+          1158495500,
+          1149509600,
+          1086108400,
+          1014139700,
+          1050302500
+        ],
+        "rfsg-pre-m15": [
+          519931100,
+          571054000,
+          805463600,
+          834195900,
+          742073000,
+          891905200,
+          706483300
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          404947600,
+          375881400,
+          429884900,
+          413007900,
+          498013700,
+          648962800,
+          627260500
+        ],
+        "rfsg-pre-m15": [
+          599706900,
+          767845200,
+          858998900,
+          820160100,
+          915812800,
+          815685600,
+          846452500
+        ],
+        "m151-integrated": [
+          1269821000,
+          1091813400,
+          753386000,
+          759622700,
+          744335300,
+          721207100,
+          707475800
+        ],
+        "rfsg-current": [
+          1077236400,
+          1277788000,
+          1273239800,
+          1223752700,
+          1242134400,
+          1257334500,
+          1119850900
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          597861300,
+          825303100,
+          1116143500,
+          1209577100,
+          1040309600,
+          1165970600,
+          1110408200
+        ],
+        "rfsg-current": [
+          1469609800,
+          1435084900,
+          1403681500,
+          1306019500,
+          1218306900,
+          1377188400,
+          1267281000
+        ],
+        "rfsg-v0.1.1": [
+          371897000,
+          454240500,
+          405274900,
+          380979000,
+          685719200,
+          704776500,
+          731940000
+        ],
+        "m151-integrated": [
+          1449459900,
+          1165805600,
+          867708100,
+          840387400,
+          810584300,
+          869927400,
+          872405200
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 9,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          1535162000,
+          1275838800,
+          1083203600,
+          1258910600,
+          1309234300,
+          1277639400,
+          1374223200
+        ],
+        "m151-integrated": [
+          1545383000,
+          1404708400,
+          835349600,
+          861090300,
+          835589400,
+          863452200,
+          859506600
+        ],
+        "rfsg-pre-m15": [
+          614171000,
+          769288100,
+          973340100,
+          1015952000,
+          1035154200,
+          985694500,
+          1115958800
+        ],
+        "rfsg-v0.1.1": [
+          406174300,
+          460016600,
+          421599600,
+          525151200,
+          658273500,
+          636699700,
+          626428700
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          808254500,
+          824494400,
+          854060700,
+          916688400,
+          826747300,
+          755133800,
+          736554600
+        ],
+        "rfsg-v0.1.1": [
+          344931400,
+          337093900,
+          356562900,
+          367497900,
+          363375000,
+          553581200,
+          561904700
+        ],
+        "rfsg-current": [
+          1011990600,
+          1289637400,
+          1056320900,
+          1078032800,
+          1184405500,
+          1119176600,
+          1141257200
+        ],
+        "rfsg-pre-m15": [
+          692062000,
+          793517300,
+          983078800,
+          1003967200,
+          1086637600,
+          989553600,
+          1097852900
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 11,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          415673800,
+          403852800,
+          401463400,
+          450880300,
+          669275200,
+          678417300,
+          760786800
+        ],
+        "rfsg-pre-m15": [
+          614990300,
+          945529900,
+          1019652400,
+          960826200,
+          888482800,
+          902456500,
+          845909300
+        ],
+        "m151-integrated": [
+          1418433800,
+          1204811100,
+          746328400,
+          883396100,
+          865435500,
+          648306700,
+          736304300
+        ],
+        "rfsg-current": [
+          1162250200,
+          1218183500,
+          1246333600,
+          1219871900,
+          1288264400,
+          1271046900,
+          1264382400
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 12,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          658585000,
+          764856600,
+          1074917500,
+          1068927000,
+          1056400900,
+          1070409800,
+          1037162000
+        ],
+        "rfsg-current": [
+          1235598200,
+          1281968200,
+          1100350300,
+          1420142400,
+          1048566400,
+          1059772000,
+          1069962700
+        ],
+        "rfsg-v0.1.1": [
+          381673600,
+          343342500,
+          343895200,
+          335600700,
+          351302000,
+          481434300,
+          529421700
+        ],
+        "m151-integrated": [
+          1254133900,
+          1047831000,
+          610227700,
+          451057400,
+          430675800,
+          513181000,
+          625657000
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 13,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          730849600,
+          1158236500,
+          785420900,
+          711207700,
+          818580100,
+          583854700,
+          612278000
+        ],
+        "m151-integrated": [
+          648137500,
+          620882100,
+          381713300,
+          359397600,
+          366498400,
+          360438100,
+          378394000
+        ],
+        "rfsg-pre-m15": [
+          425581800,
+          418404800,
+          428399500,
+          419879200,
+          484858500,
+          414273100,
+          413408800
+        ],
+        "rfsg-v0.1.1": [
+          293933900,
+          285290500,
+          256662800,
+          255711000,
+          337074300,
+          257127600,
+          307058300
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 14,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          649998100,
+          656519400,
+          422367500,
+          468953400,
+          517375000,
+          546598900,
+          501600700
+        ],
+        "rfsg-v0.1.1": [
+          332679700,
+          316411000,
+          308695400,
+          346025500,
+          367748000,
+          352675400,
+          379979500
+        ],
+        "rfsg-current": [
+          667602000,
+          751893100,
+          678078600,
+          602574700,
+          612345700,
+          605715500,
+          602472200
+        ],
+        "rfsg-pre-m15": [
+          447533700,
+          433207900,
+          440920500,
+          407642900,
+          416182500,
+          463089800,
+          414508200
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 15,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          358808100,
+          326611000,
+          265104600,
+          258173800,
+          263051700,
+          304166100,
+          269107800
+        ],
+        "rfsg-pre-m15": [
+          448527800,
+          428961100,
+          414142400,
+          432069000,
+          421308800,
+          452830100,
+          448107000
+        ],
+        "m151-integrated": [
+          686914200,
+          760979200,
+          376140800,
+          411039200,
+          386729300,
+          400298300,
+          452149000
+        ],
+        "rfsg-current": [
+          681914400,
+          832909500,
+          870940900,
+          603823700,
+          582111300,
+          577668800,
+          572296200
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 16,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          426352300,
+          405607800,
+          478062500,
+          418823500,
+          462496800,
+          419485300,
+          415807700
+        ],
+        "rfsg-current": [
+          585311500,
+          613372100,
+          645646600,
+          584899600,
+          591203700,
+          619303300,
+          666207100
+        ],
+        "rfsg-v0.1.1": [
+          267531000,
+          294433300,
+          254026700,
+          266948000,
+          266794300,
+          287163600,
+          257433200
+        ],
+        "m151-integrated": [
+          686213800,
+          673429200,
+          389011700,
+          390664500,
+          394696600,
+          488261900,
+          451559200
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 17,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          795037200,
+          726603500,
+          876708300,
+          603283300,
+          565110900,
+          639511100,
+          582607500
+        ],
+        "m151-integrated": [
+          643805600,
+          641022100,
+          375833100,
+          496635600,
+          414230800,
+          392284000,
+          373443500
+        ],
+        "rfsg-pre-m15": [
+          400091900,
+          421702700,
+          396892100,
+          533848200,
+          467943700,
+          425362400,
+          450248700
+        ],
+        "rfsg-v0.1.1": [
+          264723700,
+          265954200,
+          254686100,
+          282957600,
+          304572200,
+          274967900,
+          256488900
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 18,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          682420700,
+          838898300,
+          641105300,
+          437387800,
+          547965300,
+          440452500,
+          552191300
+        ],
+        "rfsg-v0.1.1": [
+          287684300,
+          260443100,
+          254884500,
+          266780800,
+          293470500,
+          258418900,
+          258224200
+        ],
+        "rfsg-current": [
+          652851900,
+          578926100,
+          600126800,
+          618285900,
+          617190700,
+          550143000,
+          657628100
+        ],
+        "rfsg-pre-m15": [
+          425903700,
+          406034200,
+          418957000,
+          434327400,
+          433039600,
+          583658200,
+          650721600
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 19,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          312190000,
+          286690900,
+          253282200,
+          255771200,
+          254842300,
+          282532300,
+          261877600
+        ],
+        "rfsg-pre-m15": [
+          428842700,
+          434739600,
+          459029000,
+          466364700,
+          408626100,
+          429731800,
+          450377100
+        ],
+        "m151-integrated": [
+          701297300,
+          999187000,
+          493900000,
+          410151600,
+          442597300,
+          435468500,
+          372874400
+        ],
+        "rfsg-current": [
+          654414200,
+          584649100,
+          656613600,
+          621596700,
+          623578000,
+          585643700,
+          616438300
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 20,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          424955900,
+          410722300,
+          444645100,
+          413794200,
+          600274900,
+          442829200,
+          440032300
+        ],
+        "rfsg-current": [
+          614913800,
+          604977100,
+          652232700,
+          663038800,
+          620606300,
+          658508300,
+          595944600
+        ],
+        "rfsg-v0.1.1": [
+          282205300,
+          257210800,
+          258520500,
+          256739000,
+          293819900,
+          277907700,
+          261361000
+        ],
+        "m151-integrated": [
+          920760500,
+          807423000,
+          512185500,
+          503216600,
+          445770400,
+          499518600,
+          558193400
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 21,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          634260800,
+          587369900,
+          599766600,
+          595862800,
+          601322600,
+          586746200,
+          630750900
+        ],
+        "m151-integrated": [
+          629754500,
+          645905200,
+          415052400,
+          381395000,
+          389548300,
+          409896000,
+          381544300
+        ],
+        "rfsg-pre-m15": [
+          404370700,
+          407433700,
+          453871600,
+          402650600,
+          454001100,
+          413651600,
+          422427700
+        ],
+        "rfsg-v0.1.1": [
+          291488100,
+          258021300,
+          259644900,
+          262962200,
+          280680800,
+          260783300,
+          282071300
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 22,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          897425200,
+          759333900,
+          490610000,
+          582814000,
+          522003500,
+          394124600,
+          534516300
+        ],
+        "rfsg-v0.1.1": [
+          276135300,
+          283221800,
+          272494600,
+          262810100,
+          264832300,
+          295155400,
+          274256800
+        ],
+        "rfsg-current": [
+          572509200,
+          618366300,
+          607418000,
+          636842800,
+          689037900,
+          718002700,
+          703599900
+        ],
+        "rfsg-pre-m15": [
+          441836200,
+          411928200,
+          419710400,
+          406490700,
+          410231400,
+          469517600,
+          415421900
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 23,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          302199900,
+          288064500,
+          287418800,
+          259043600,
+          265674400,
+          282887800,
+          259443700
+        ],
+        "rfsg-pre-m15": [
+          426671100,
+          439142900,
+          415741400,
+          442542100,
+          439474400,
+          571363300,
+          722592800
+        ],
+        "m151-integrated": [
+          854275200,
+          922201300,
+          491651900,
+          434538600,
+          478542400,
+          356766800,
+          629981200
+        ],
+        "rfsg-current": [
+          591431800,
+          597186900,
+          608056000,
+          608024700,
+          582558800,
+          601961500,
+          621315700
+        ]
+      }
+    },
+    {
+      "id": "source/create",
+      "caseId": "source/create@1",
+      "kind": "source-create",
+      "size": 1,
+      "iterations": 471476,
+      "rounds": 24,
+      "round": 24,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          450814500,
+          428310400,
+          417002000,
+          410076000,
+          431847400,
+          419020900,
+          414417500
+        ],
+        "rfsg-current": [
+          597906600,
+          588976800,
+          637123900,
+          619590100,
+          584081000,
+          699063600,
+          598128500
+        ],
+        "rfsg-v0.1.1": [
+          257045900,
+          286857400,
+          287124600,
+          258688300,
+          278154600,
+          280506800,
+          269341200
+        ],
+        "m151-integrated": [
+          1204079600,
+          788352800,
+          540847800,
+          367612100,
+          389621200,
+          406326400,
+          389916500
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          8622600,
+          8506100,
+          9201900,
+          9353800,
+          10142000,
+          10535900,
+          11314800
+        ],
+        "m151-integrated": [
+          10006800,
+          9305300,
+          9790600,
+          9383400,
+          9086200,
+          8862100,
+          8894200
+        ],
+        "rfsg-pre-m15": [
+          11807100,
+          11137500,
+          11920500,
+          12171700,
+          11403100,
+          11447000,
+          12567500
+        ],
+        "rfsg-v0.1.1": [
+          7596400,
+          7342600,
+          7792000,
+          7888900,
+          7677700,
+          8183600,
+          7583000
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          11598100,
+          11216200,
+          10949300,
+          11111300,
+          11217700,
+          11212400,
+          11335500
+        ],
+        "rfsg-v0.1.1": [
+          8175600,
+          7867500,
+          7841500,
+          7570400,
+          7617200,
+          7609400,
+          7637000
+        ],
+        "rfsg-current": [
+          8371300,
+          8701700,
+          8770300,
+          8488000,
+          8432000,
+          8682100,
+          8536500
+        ],
+        "rfsg-pre-m15": [
+          11956700,
+          11361900,
+          12287200,
+          12724700,
+          12311200,
+          11873200,
+          11941900
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          7295500,
+          7439700,
+          7640100,
+          7537300,
+          7571700,
+          7750700,
+          7969100
+        ],
+        "rfsg-pre-m15": [
+          12925600,
+          11821000,
+          12512100,
+          14161500,
+          17034600,
+          18376100,
+          16816300
+        ],
+        "m151-integrated": [
+          9024900,
+          9844700,
+          9421700,
+          9157100,
+          9159300,
+          9036800,
+          8929900
+        ],
+        "rfsg-current": [
+          8527200,
+          8475300,
+          8771600,
+          9563000,
+          10249800,
+          10023400,
+          9711400
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          12832500,
+          12463500,
+          12524500,
+          13866700,
+          14267800,
+          14582400,
+          14959700
+        ],
+        "rfsg-current": [
+          8890700,
+          9162200,
+          9701400,
+          10665200,
+          10454800,
+          10625700,
+          11061000
+        ],
+        "rfsg-v0.1.1": [
+          8177000,
+          7685100,
+          7617300,
+          7832000,
+          7399900,
+          7701900,
+          7705200
+        ],
+        "m151-integrated": [
+          9895000,
+          9910400,
+          9615700,
+          9350000,
+          9111900,
+          9527700,
+          9402300
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          15250800,
+          15003000,
+          14447300,
+          15094400,
+          13487000,
+          11868200,
+          11145400
+        ],
+        "m151-integrated": [
+          8990000,
+          8915600,
+          8489100,
+          8753200,
+          9907700,
+          10089000,
+          10426600
+        ],
+        "rfsg-pre-m15": [
+          13352200,
+          12352400,
+          13430800,
+          14809100,
+          14654100,
+          14953400,
+          16041700
+        ],
+        "rfsg-v0.1.1": [
+          7901300,
+          7976300,
+          8156000,
+          8060600,
+          7812400,
+          8150100,
+          7931900
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          9561600,
+          9497300,
+          9880600,
+          9769100,
+          9945500,
+          10922600,
+          11737200
+        ],
+        "rfsg-v0.1.1": [
+          7593300,
+          7589100,
+          7520700,
+          7821600,
+          7563300,
+          7596700,
+          7672300
+        ],
+        "rfsg-current": [
+          8642300,
+          8729400,
+          8618500,
+          8529300,
+          8836700,
+          9440800,
+          9206700
+        ],
+        "rfsg-pre-m15": [
+          11782500,
+          11843800,
+          12686100,
+          12711400,
+          12064300,
+          11758500,
+          12542000
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          10869400,
+          10837100,
+          10736200,
+          11257900,
+          11612500,
+          11066400,
+          10848800
+        ],
+        "rfsg-pre-m15": [
+          12077400,
+          11262900,
+          11264300,
+          11635500,
+          11335100,
+          11349100,
+          11610100
+        ],
+        "m151-integrated": [
+          9902600,
+          9417400,
+          9202800,
+          9050900,
+          9136700,
+          9346400,
+          9439500
+        ],
+        "rfsg-current": [
+          8346300,
+          8499000,
+          8281700,
+          8626300,
+          8484300,
+          8209800,
+          8210100
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          11593700,
+          11220500,
+          13441000,
+          13527400,
+          12827700,
+          12147500,
+          12396000
+        ],
+        "rfsg-current": [
+          9214100,
+          9390400,
+          9460300,
+          8957100,
+          8683000,
+          8443700,
+          8482200
+        ],
+        "rfsg-v0.1.1": [
+          7697000,
+          7582000,
+          7750800,
+          8014700,
+          7715600,
+          7598800,
+          7670700
+        ],
+        "m151-integrated": [
+          9185400,
+          9185400,
+          9880200,
+          9538400,
+          9085000,
+          8940100,
+          9076300
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 9,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          11389100,
+          10895900,
+          10995700,
+          11254200,
+          11681900,
+          11491000,
+          10934600
+        ],
+        "m151-integrated": [
+          12280100,
+          12679900,
+          12098100,
+          11394900,
+          10807700,
+          10586800,
+          9932800
+        ],
+        "rfsg-pre-m15": [
+          11752800,
+          11039600,
+          11352900,
+          11822500,
+          11631100,
+          11515800,
+          12503500
+        ],
+        "rfsg-v0.1.1": [
+          12128600,
+          12471000,
+          11033000,
+          9803700,
+          8921500,
+          8985200,
+          8896000
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          10659600,
+          10840100,
+          10879700,
+          10220800,
+          10545800,
+          10475200,
+          12011500
+        ],
+        "rfsg-v0.1.1": [
+          9575300,
+          9538700,
+          10134100,
+          10140300,
+          9623700,
+          9354300,
+          9279700
+        ],
+        "rfsg-current": [
+          8795200,
+          8899700,
+          8879300,
+          8772900,
+          8653800,
+          8384300,
+          8114900
+        ],
+        "rfsg-pre-m15": [
+          12146800,
+          11535200,
+          11673200,
+          11977300,
+          11841700,
+          11359200,
+          11952300
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 11,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          10598600,
+          10093100,
+          10241200,
+          10129800,
+          9993200,
+          9693000,
+          9261600
+        ],
+        "rfsg-pre-m15": [
+          11942600,
+          11319000,
+          11696700,
+          11893900,
+          12109000,
+          12093800,
+          12153100
+        ],
+        "m151-integrated": [
+          9541000,
+          10161800,
+          10009700,
+          9404100,
+          9134500,
+          9309200,
+          9336800
+        ],
+        "rfsg-current": [
+          8728400,
+          8636600,
+          8620200,
+          8406000,
+          8367000,
+          8245100,
+          8379300
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 12,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          12266800,
+          12517200,
+          14784200,
+          16788500,
+          17080600,
+          15885700,
+          16103100
+        ],
+        "rfsg-current": [
+          10841100,
+          10617500,
+          10392400,
+          10378900,
+          10246300,
+          9958000,
+          9707700
+        ],
+        "rfsg-v0.1.1": [
+          7820600,
+          7803100,
+          7834000,
+          8550000,
+          7850800,
+          7692200,
+          7971200
+        ],
+        "m151-integrated": [
+          9041000,
+          9083900,
+          8880100,
+          8561000,
+          8778200,
+          8945500,
+          8799100
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 13,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          8625200,
+          8989600,
+          8697800,
+          8427200,
+          8565500,
+          8604000,
+          8688700
+        ],
+        "m151-integrated": [
+          8840100,
+          8892600,
+          8864600,
+          9131500,
+          10208700,
+          10810200,
+          11614400
+        ],
+        "rfsg-pre-m15": [
+          12624900,
+          11415500,
+          12102200,
+          12718200,
+          12439700,
+          11934100,
+          12321600
+        ],
+        "rfsg-v0.1.1": [
+          8965000,
+          8509000,
+          7885400,
+          7921200,
+          8187600,
+          7866800,
+          7690200
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 14,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          11255200,
+          11417100,
+          11657700,
+          11736200,
+          11602800,
+          12332900,
+          11785600
+        ],
+        "rfsg-v0.1.1": [
+          9878900,
+          11327600,
+          13637800,
+          12284800,
+          10247400,
+          9320000,
+          9314800
+        ],
+        "rfsg-current": [
+          8756400,
+          8506800,
+          8500500,
+          8661800,
+          8562500,
+          8722700,
+          9548900
+        ],
+        "rfsg-pre-m15": [
+          12308900,
+          13006700,
+          16039100,
+          15060600,
+          12758200,
+          11962600,
+          12230900
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 15,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          7401500,
+          7489000,
+          7745700,
+          7665800,
+          7485700,
+          7475600,
+          7497300
+        ],
+        "rfsg-pre-m15": [
+          12297100,
+          12139700,
+          12320300,
+          12860300,
+          12569500,
+          12246200,
+          12508900
+        ],
+        "m151-integrated": [
+          8748200,
+          9246400,
+          9706300,
+          10128100,
+          10857800,
+          12143000,
+          13001200
+        ],
+        "rfsg-current": [
+          9658200,
+          9240500,
+          9180200,
+          9228000,
+          8648800,
+          8824400,
+          8699300
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 16,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          15332100,
+          15249600,
+          15634000,
+          15585600,
+          15036600,
+          13931000,
+          14332900
+        ],
+        "rfsg-current": [
+          9049100,
+          9780600,
+          9702600,
+          9339400,
+          9082700,
+          9091700,
+          8954600
+        ],
+        "rfsg-v0.1.1": [
+          8400400,
+          7946300,
+          7835100,
+          7972200,
+          8122700,
+          7955500,
+          7867600
+        ],
+        "m151-integrated": [
+          9844800,
+          10001100,
+          9224100,
+          9099500,
+          10479400,
+          8726600,
+          9197400
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 17,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          8561100,
+          8814400,
+          8563700,
+          8972000,
+          9757000,
+          9055000,
+          8887500
+        ],
+        "m151-integrated": [
+          9406800,
+          9384500,
+          9117100,
+          9767700,
+          9390400,
+          9100900,
+          9419600
+        ],
+        "rfsg-pre-m15": [
+          12697700,
+          12000200,
+          11669400,
+          12137400,
+          11850400,
+          11911600,
+          12905900
+        ],
+        "rfsg-v0.1.1": [
+          11053200,
+          12013200,
+          11834100,
+          13480300,
+          14034300,
+          12226400,
+          10703200
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 18,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          13231200,
+          12491700,
+          12099500,
+          11479200,
+          11016000,
+          10315300,
+          9509400
+        ],
+        "rfsg-v0.1.1": [
+          7555700,
+          7741700,
+          7643000,
+          7780700,
+          8253000,
+          8314500,
+          8531300
+        ],
+        "rfsg-current": [
+          10008800,
+          8764100,
+          8662800,
+          8829400,
+          9406400,
+          8858300,
+          8873900
+        ],
+        "rfsg-pre-m15": [
+          15793700,
+          13258400,
+          12442000,
+          12444300,
+          12400500,
+          11342300,
+          11828700
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 19,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          7343300,
+          7249100,
+          7523400,
+          7860700,
+          9064600,
+          8728000,
+          9325000
+        ],
+        "rfsg-pre-m15": [
+          14147400,
+          12165600,
+          11679600,
+          11806600,
+          11821800,
+          11900000,
+          12680600
+        ],
+        "m151-integrated": [
+          9079200,
+          8737400,
+          8711200,
+          8655500,
+          9891500,
+          9507300,
+          9427500
+        ],
+        "rfsg-current": [
+          8860000,
+          9012700,
+          8935700,
+          9561800,
+          10464400,
+          9801900,
+          9461200
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 20,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          15263200,
+          15194500,
+          15512100,
+          16631200,
+          16296700,
+          16490000,
+          17019900
+        ],
+        "rfsg-current": [
+          8777300,
+          8891500,
+          8883000,
+          9149200,
+          8662200,
+          8676600,
+          8363000
+        ],
+        "rfsg-v0.1.1": [
+          7453500,
+          7544200,
+          7640800,
+          7624900,
+          7833100,
+          8424400,
+          8754600
+        ],
+        "m151-integrated": [
+          11171700,
+          11151900,
+          10963900,
+          10958000,
+          11225600,
+          10769100,
+          10660300
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 21,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          10093400,
+          10001700,
+          9956000,
+          10177100,
+          10050900,
+          10447700,
+          10177000
+        ],
+        "m151-integrated": [
+          10728700,
+          11124500,
+          11644100,
+          11904400,
+          12242200,
+          12348600,
+          13280600
+        ],
+        "rfsg-pre-m15": [
+          14185600,
+          13197900,
+          13906400,
+          14515100,
+          15425000,
+          13358100,
+          14324500
+        ],
+        "rfsg-v0.1.1": [
+          10137800,
+          10254100,
+          10342500,
+          10893600,
+          11525500,
+          12495800,
+          11645500
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 22,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          10747500,
+          10501000,
+          10848900,
+          10586700,
+          10985600,
+          12019900,
+          11786900
+        ],
+        "rfsg-v0.1.1": [
+          9439600,
+          9288400,
+          9376700,
+          9874300,
+          9575000,
+          9633000,
+          9688700
+        ],
+        "rfsg-current": [
+          10613500,
+          10366000,
+          10361700,
+          10558300,
+          11698000,
+          12862700,
+          12948300
+        ],
+        "rfsg-pre-m15": [
+          14284200,
+          14036500,
+          15068000,
+          15200700,
+          14739100,
+          14015600,
+          15183400
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 23,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          13916300,
+          16457700,
+          14256000,
+          12479800,
+          10648900,
+          10509200,
+          9993300
+        ],
+        "rfsg-pre-m15": [
+          16612700,
+          16005600,
+          15141500,
+          14600400,
+          14807200,
+          14211600,
+          14854100
+        ],
+        "m151-integrated": [
+          10446200,
+          10397000,
+          10339200,
+          10199400,
+          10326900,
+          10565300,
+          10431900
+        ],
+        "rfsg-current": [
+          10379800,
+          10692600,
+          10792400,
+          10914300,
+          10418100,
+          10482900,
+          10002100
+        ]
+      }
+    },
+    {
+      "id": "source/read",
+      "caseId": "source/read@1",
+      "kind": "source-read",
+      "size": 1,
+      "iterations": 1693079,
+      "rounds": 24,
+      "round": 24,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          18591300,
+          17525800,
+          17885400,
+          19244200,
+          17787500,
+          17638400,
+          17563300
+        ],
+        "rfsg-current": [
+          10124300,
+          9956400,
+          9675900,
+          9729200,
+          9738500,
+          9811100,
+          9706000
+        ],
+        "rfsg-v0.1.1": [
+          8592500,
+          8776900,
+          8955500,
+          9097800,
+          9147300,
+          9181000,
+          9237100
+        ],
+        "m151-integrated": [
+          10423000,
+          10738500,
+          10768100,
+          11088800,
+          11415100,
+          11164400,
+          10715500
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          13799900,
+          14458700,
+          14038400,
+          14907500,
+          14641800,
+          14564500,
+          14661700
+        ],
+        "m151-integrated": [
+          8859200,
+          8206700,
+          8004000,
+          8244400,
+          7665600,
+          7153700,
+          6849600
+        ],
+        "rfsg-pre-m15": [
+          14424800,
+          15141500,
+          16838400,
+          17191800,
+          15571200,
+          15135100,
+          15560600
+        ],
+        "rfsg-v0.1.1": [
+          15190500,
+          18848500,
+          18473800,
+          17309000,
+          18559100,
+          16568100,
+          16467500
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          10296500,
+          9160600,
+          8511100,
+          8337100,
+          7750900,
+          7452700,
+          8249500
+        ],
+        "rfsg-v0.1.1": [
+          11645300,
+          11917800,
+          13004000,
+          12618700,
+          13329800,
+          12704000,
+          12451800
+        ],
+        "rfsg-current": [
+          14982000,
+          14111900,
+          13934000,
+          14001900,
+          13305400,
+          13416100,
+          14531800
+        ],
+        "rfsg-pre-m15": [
+          17454500,
+          18086300,
+          19526100,
+          16561800,
+          16388700,
+          16546800,
+          17418700
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          13046200,
+          13707900,
+          13883000,
+          13118800,
+          13885900,
+          12781700,
+          12760300
+        ],
+        "rfsg-pre-m15": [
+          15374700,
+          16171400,
+          15007800,
+          14411000,
+          13934100,
+          13758400,
+          14193900
+        ],
+        "m151-integrated": [
+          6647000,
+          6166300,
+          6056700,
+          6250600,
+          6133700,
+          6116200,
+          6503400
+        ],
+        "rfsg-current": [
+          14843200,
+          16018800,
+          17035500,
+          19118000,
+          18761300,
+          17671100,
+          17565400
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          15184500,
+          15974200,
+          14466200,
+          15025900,
+          16609800,
+          19428200,
+          18173400
+        ],
+        "rfsg-current": [
+          14899300,
+          13719200,
+          13897100,
+          14010700,
+          13773800,
+          14064900,
+          15152200
+        ],
+        "rfsg-v0.1.1": [
+          13503800,
+          14884700,
+          13847700,
+          12969900,
+          13989400,
+          13132600,
+          12770700
+        ],
+        "m151-integrated": [
+          8477400,
+          8427800,
+          9534200,
+          9725400,
+          8803500,
+          9751600,
+          9179400
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          14504800,
+          14294400,
+          13973500,
+          14394800,
+          14417200,
+          14772700,
+          15807500
+        ],
+        "m151-integrated": [
+          6090500,
+          5963500,
+          6298200,
+          6676800,
+          6569800,
+          6490200,
+          6593300
+        ],
+        "rfsg-pre-m15": [
+          14076000,
+          14318600,
+          13855800,
+          13908100,
+          14104300,
+          13714700,
+          13952900
+        ],
+        "rfsg-v0.1.1": [
+          21224700,
+          21344200,
+          19468600,
+          22449200,
+          17440900,
+          18251100,
+          16383700
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          7085800,
+          7199900,
+          6990900,
+          6971400,
+          6552600,
+          6324400,
+          6463400
+        ],
+        "rfsg-v0.1.1": [
+          11624700,
+          13124400,
+          14048900,
+          14518900,
+          14741900,
+          13494100,
+          13036100
+        ],
+        "rfsg-current": [
+          15124500,
+          14575300,
+          14589900,
+          14620600,
+          14546800,
+          14922300,
+          14999600
+        ],
+        "rfsg-pre-m15": [
+          16623800,
+          16052900,
+          15867000,
+          15684800,
+          14580800,
+          14058700,
+          14157100
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          12649100,
+          12588600,
+          13825900,
+          13003800,
+          13180100,
+          12920800,
+          12923000
+        ],
+        "rfsg-pre-m15": [
+          12187900,
+          11967100,
+          11753700,
+          12385300,
+          11917100,
+          11723900,
+          11887300
+        ],
+        "m151-integrated": [
+          5678000,
+          5279900,
+          5273500,
+          5615200,
+          5170000,
+          5400800,
+          5795800
+        ],
+        "rfsg-current": [
+          13977200,
+          14424500,
+          15094000,
+          15818700,
+          14553800,
+          15158400,
+          14344800
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          13116000,
+          14544500,
+          14816000,
+          17617900,
+          15339700,
+          15340300,
+          16003000
+        ],
+        "rfsg-current": [
+          13659800,
+          13243700,
+          12550500,
+          12238900,
+          12476200,
+          12205100,
+          12338400
+        ],
+        "rfsg-v0.1.1": [
+          10617600,
+          11221800,
+          11555300,
+          11223800,
+          12686800,
+          11751800,
+          11182300
+        ],
+        "m151-integrated": [
+          6456700,
+          6117300,
+          6680500,
+          7569800,
+          7166700,
+          6946600,
+          7390300
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 9,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          23275900,
+          18088500,
+          14074400,
+          13175800,
+          12092000,
+          12077200,
+          12013000
+        ],
+        "m151-integrated": [
+          5200300,
+          5184900,
+          5359600,
+          5762800,
+          5570600,
+          5595800,
+          5633600
+        ],
+        "rfsg-pre-m15": [
+          12579400,
+          12577300,
+          12280100,
+          12582000,
+          11972700,
+          11640300,
+          11733700
+        ],
+        "rfsg-v0.1.1": [
+          10826500,
+          11578700,
+          11779100,
+          11439700,
+          12247300,
+          11985200,
+          11670400
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          7207700,
+          7498300,
+          7426100,
+          7146000,
+          6785100,
+          6786000,
+          7470100
+        ],
+        "rfsg-v0.1.1": [
+          10957000,
+          11504900,
+          11901900,
+          11408200,
+          12013900,
+          11394400,
+          11121500
+        ],
+        "rfsg-current": [
+          12275200,
+          11678800,
+          11822000,
+          11822900,
+          12229800,
+          12221800,
+          12923700
+        ],
+        "rfsg-pre-m15": [
+          11673700,
+          12233700,
+          12015200,
+          11772900,
+          12016300,
+          12163100,
+          12237100
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 11,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          11862000,
+          13106800,
+          15304400,
+          15501600,
+          16681600,
+          16776000,
+          14773400
+        ],
+        "rfsg-pre-m15": [
+          12006900,
+          12178500,
+          11775600,
+          11896800,
+          11442800,
+          11911900,
+          12499000
+        ],
+        "m151-integrated": [
+          5314400,
+          5411800,
+          5626600,
+          5701400,
+          5497000,
+          5718400,
+          5980300
+        ],
+        "rfsg-current": [
+          12729800,
+          11816900,
+          11938700,
+          12531900,
+          12352700,
+          12174100,
+          12462200
+        ]
+      }
+    },
+    {
+      "id": "source/unobserved-write",
+      "caseId": "source/unobserved-write@1",
+      "kind": "source-unobserved-write",
+      "size": 1,
+      "iterations": 1084411,
+      "rounds": 12,
+      "round": 12,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          14059200,
+          15030300,
+          15429800,
+          15563900,
+          14810900,
+          13914700,
+          13704300
+        ],
+        "rfsg-current": [
+          12590300,
+          13069400,
+          12904700,
+          12905400,
+          13325900,
+          13404200,
+          12926700
+        ],
+        "rfsg-v0.1.1": [
+          10986700,
+          10331700,
+          10992000,
+          11170200,
+          11645400,
+          11852700,
+          11818300
+        ],
+        "m151-integrated": [
+          5206700,
+          5146200,
+          5325700,
+          5647200,
+          5472300,
+          5746300,
+          5858400
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          16393800,
+          17009100,
+          15795200,
+          14978600,
+          14104500,
+          13753900,
+          14595700
+        ],
+        "m151-integrated": [
+          9341300,
+          9474700,
+          9681900,
+          9952900,
+          11206700,
+          9795700,
+          10184400
+        ],
+        "rfsg-pre-m15": [
+          17065300,
+          17754600,
+          18029100,
+          19598500,
+          17131200,
+          17182100,
+          18692400
+        ],
+        "rfsg-v0.1.1": [
+          11838400,
+          12335000,
+          12788100,
+          13061900,
+          13305900,
+          12592600,
+          12775200
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          13055100,
+          14536200,
+          15373600,
+          15842300,
+          14104300,
+          11946500,
+          13821900
+        ],
+        "rfsg-v0.1.1": [
+          11939000,
+          11024400,
+          12621300,
+          14422200,
+          13892500,
+          13473800,
+          13884200
+        ],
+        "rfsg-current": [
+          13033200,
+          13202400,
+          13204400,
+          13704900,
+          14206800,
+          17392400,
+          17560500
+        ],
+        "rfsg-pre-m15": [
+          19017300,
+          17643500,
+          16786300,
+          17637500,
+          16363100,
+          16013900,
+          18747900
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          12112100,
+          13551700,
+          14924600,
+          17903800,
+          18402100,
+          16945500,
+          16280900
+        ],
+        "rfsg-pre-m15": [
+          16901200,
+          17421900,
+          16471200,
+          17797400,
+          16467900,
+          16163300,
+          17616800
+        ],
+        "m151-integrated": [
+          8991100,
+          9929100,
+          9689100,
+          9792800,
+          9177700,
+          9154100,
+          9587200
+        ],
+        "rfsg-current": [
+          14822200,
+          16911500,
+          17099800,
+          18118400,
+          17069400,
+          17004800,
+          21508500
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          19004000,
+          19443000,
+          19133300,
+          18854300,
+          17412600,
+          17026500,
+          18651800
+        ],
+        "rfsg-current": [
+          13758200,
+          13570400,
+          13790500,
+          14138300,
+          13624200,
+          13798300,
+          14031600
+        ],
+        "rfsg-v0.1.1": [
+          11502900,
+          11784800,
+          12959800,
+          13101200,
+          13198100,
+          14652600,
+          14553500
+        ],
+        "m151-integrated": [
+          9007800,
+          9371700,
+          9328600,
+          9767800,
+          10163400,
+          10933800,
+          11949900
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          21338400,
+          16901700,
+          14112300,
+          13952100,
+          13582200,
+          13469600,
+          13756000
+        ],
+        "m151-integrated": [
+          9539300,
+          9291400,
+          9509000,
+          9989600,
+          9079400,
+          9188000,
+          9940300
+        ],
+        "rfsg-pre-m15": [
+          18942300,
+          18468800,
+          17649300,
+          21354200,
+          24188800,
+          23938600,
+          21306800
+        ],
+        "rfsg-v0.1.1": [
+          12292400,
+          11661700,
+          12204700,
+          13199600,
+          14069700,
+          15808500,
+          17604700
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          12049500,
+          10885600,
+          9967700,
+          10065900,
+          10460400,
+          9687400,
+          10253500
+        ],
+        "rfsg-v0.1.1": [
+          11924900,
+          11995500,
+          12858700,
+          13703800,
+          13986200,
+          12702900,
+          12226200
+        ],
+        "rfsg-current": [
+          13887900,
+          14607100,
+          14638100,
+          14959900,
+          14649800,
+          15755400,
+          16196500
+        ],
+        "rfsg-pre-m15": [
+          17246000,
+          16823300,
+          16028600,
+          18069200,
+          16601900,
+          16048500,
+          19869400
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          13483800,
+          12865700,
+          13646400,
+          14535900,
+          13573600,
+          13374100,
+          13608800
+        ],
+        "rfsg-pre-m15": [
+          17381400,
+          16395400,
+          16895700,
+          17369100,
+          15994100,
+          16416300,
+          18713700
+        ],
+        "m151-integrated": [
+          8897200,
+          10436800,
+          10136900,
+          10336000,
+          9725700,
+          9600000,
+          10301200
+        ],
+        "rfsg-current": [
+          13154400,
+          14949800,
+          16243600,
+          18360600,
+          17638200,
+          17270200,
+          16597900
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          22211000,
+          21073400,
+          19983700,
+          18651100,
+          16843000,
+          16345100,
+          18140700
+        ],
+        "rfsg-current": [
+          13933100,
+          14492500,
+          14433700,
+          14884900,
+          14222900,
+          13434400,
+          13997300
+        ],
+        "rfsg-v0.1.1": [
+          12337300,
+          11893000,
+          12898900,
+          14101100,
+          14993600,
+          15937900,
+          15415700
+        ],
+        "m151-integrated": [
+          9748700,
+          9703300,
+          10512900,
+          12206900,
+          12422100,
+          12968600,
+          13953900
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 9,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          13488100,
+          13886000,
+          15573100,
+          15051700,
+          13985400,
+          13421800,
+          14296900
+        ],
+        "m151-integrated": [
+          9469800,
+          9739000,
+          9571900,
+          10080500,
+          9881300,
+          9720900,
+          10269500
+        ],
+        "rfsg-pre-m15": [
+          16789100,
+          17058200,
+          16505300,
+          17704500,
+          15912100,
+          16098300,
+          16920900
+        ],
+        "rfsg-v0.1.1": [
+          15679100,
+          15107700,
+          17679400,
+          18188700,
+          16985900,
+          16820900,
+          17565400
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          9397300,
+          9850200,
+          10643300,
+          11067100,
+          10276300,
+          10516800,
+          11890400
+        ],
+        "rfsg-v0.1.1": [
+          12098700,
+          12364500,
+          13508100,
+          14020300,
+          13124700,
+          12577800,
+          13256900
+        ],
+        "rfsg-current": [
+          12926700,
+          13611200,
+          14071800,
+          14457400,
+          14000500,
+          13743300,
+          14656600
+        ],
+        "rfsg-pre-m15": [
+          19135100,
+          20975800,
+          21406500,
+          22042600,
+          20480800,
+          20606200,
+          26120200
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 11,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          11758700,
+          12164500,
+          13512200,
+          14800000,
+          13257300,
+          12656900,
+          13603900
+        ],
+        "rfsg-pre-m15": [
+          17025000,
+          16642900,
+          16310000,
+          17733200,
+          16382400,
+          15939800,
+          18337000
+        ],
+        "m151-integrated": [
+          9761400,
+          10450700,
+          9608000,
+          10162400,
+          9409000,
+          9293100,
+          9505700
+        ],
+        "rfsg-current": [
+          14551100,
+          14130900,
+          14185500,
+          15216100,
+          15421500,
+          14226700,
+          15647000
+        ]
+      }
+    },
+    {
+      "id": "source/write-read",
+      "caseId": "source/write-read@1",
+      "kind": "source-write-read",
+      "size": 1,
+      "iterations": 636392,
+      "rounds": 12,
+      "round": 12,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          17832700,
+          21819700,
+          21063300,
+          18973800,
+          16625200,
+          16663900,
+          17863000
+        ],
+        "rfsg-current": [
+          14444200,
+          14684200,
+          13879100,
+          14542000,
+          13576700,
+          14017800,
+          15246900
+        ],
+        "rfsg-v0.1.1": [
+          11527700,
+          12114800,
+          13507600,
+          15481500,
+          19331100,
+          20893700,
+          19719600
+        ],
+        "m151-integrated": [
+          18248600,
+          21632100,
+          21635000,
+          20825400,
+          15688200,
+          14481800,
+          14547300
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          858841600,
+          1239661500,
+          1309744400,
+          1227589700,
+          1224422500,
+          1153795200,
+          906815700
+        ],
+        "m151-integrated": [
+          1086120000,
+          1208667700,
+          1174534600,
+          1109842600,
+          1195801600,
+          1204367300,
+          1137095000
+        ],
+        "rfsg-pre-m15": [
+          552980000,
+          624733500,
+          590686200,
+          586793800,
+          617807600,
+          579693700,
+          600847900
+        ],
+        "rfsg-v0.1.1": [
+          1345481500,
+          1660008900,
+          1499439800,
+          1219213800,
+          1265023800,
+          1330029500,
+          1198662700
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          1127133200,
+          1250993200,
+          1117075200,
+          1085648500,
+          1044624100,
+          1130122700,
+          1113770000
+        ],
+        "rfsg-v0.1.1": [
+          1049836800,
+          1059566700,
+          1407959000,
+          1051649300,
+          1078166700,
+          1191278500,
+          1116781800
+        ],
+        "rfsg-current": [
+          1197908100,
+          1149667400,
+          1219822400,
+          1128262500,
+          1186872400,
+          1145270200,
+          1133423400
+        ],
+        "rfsg-pre-m15": [
+          728592500,
+          1015860800,
+          868633900,
+          799614600,
+          966560000,
+          688276900,
+          905273100
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          914946400,
+          973226100,
+          962284000,
+          1006329300,
+          975224600,
+          971434900,
+          1012854100
+        ],
+        "rfsg-pre-m15": [
+          574374700,
+          562367000,
+          591406300,
+          620024600,
+          580805700,
+          587843900,
+          571921200
+        ],
+        "m151-integrated": [
+          1103326600,
+          1180870700,
+          1134162200,
+          1325567800,
+          1491895700,
+          1336309900,
+          1706248800
+        ],
+        "rfsg-current": [
+          1273275400,
+          1069173600,
+          918209900,
+          1181881200,
+          955545200,
+          883542900,
+          912360000
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          617549800,
+          611437900,
+          605891200,
+          633410100,
+          613158700,
+          625133800,
+          687526100
+        ],
+        "rfsg-current": [
+          898340100,
+          1006908400,
+          884193000,
+          1039079100,
+          944841800,
+          943622200,
+          932969700
+        ],
+        "rfsg-v0.1.1": [
+          1198436100,
+          1356397500,
+          1410064900,
+          1475962000,
+          1418583500,
+          1378179400,
+          1420349900
+        ],
+        "m151-integrated": [
+          1075760200,
+          1468870900,
+          1363106300,
+          1157881400,
+          1142361600,
+          1142492900,
+          1191860100
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          919706800,
+          1032475000,
+          919534300,
+          909080800,
+          889191100,
+          988103500,
+          917477200
+        ],
+        "m151-integrated": [
+          1534663400,
+          1377328200,
+          2249904700,
+          1438610900,
+          1420861400,
+          1119626400,
+          1150193100
+        ],
+        "rfsg-pre-m15": [
+          624138200,
+          573626400,
+          641090700,
+          627208100,
+          578637000,
+          647535500,
+          615620800
+        ],
+        "rfsg-v0.1.1": [
+          1018673500,
+          1005525700,
+          974255400,
+          1037083000,
+          977008600,
+          1029385200,
+          970906800
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          1336869700,
+          1510934200,
+          1546893600,
+          1878303300,
+          1391554200,
+          1803647100,
+          1568504200
+        ],
+        "rfsg-v0.1.1": [
+          1399723300,
+          1212327400,
+          1006613600,
+          1026202400,
+          940978100,
+          917692400,
+          928109200
+        ],
+        "rfsg-current": [
+          882344300,
+          907022800,
+          856434200,
+          900263200,
+          868144100,
+          911269700,
+          891373600
+        ],
+        "rfsg-pre-m15": [
+          568297600,
+          591564300,
+          586501000,
+          587844600,
+          573287500,
+          621127100,
+          634681700
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          1015360600,
+          1225873200,
+          1500378600,
+          1328120100,
+          1275108300,
+          1257999600,
+          1244855100
+        ],
+        "rfsg-pre-m15": [
+          571815600,
+          607791100,
+          628673300,
+          578217800,
+          588440100,
+          578230400,
+          642656600
+        ],
+        "m151-integrated": [
+          1116994600,
+          1161177100,
+          1140984700,
+          1109953900,
+          1119236300,
+          1204439400,
+          1172820100
+        ],
+        "rfsg-current": [
+          893525200,
+          1289321600,
+          1364648800,
+          1502853600,
+          1597700000,
+          1196424400,
+          1318287800
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          576891200,
+          590721600,
+          668446500,
+          577031400,
+          584298400,
+          569782100,
+          585280600
+        ],
+        "rfsg-current": [
+          811208400,
+          845557200,
+          857746000,
+          942036400,
+          919217900,
+          875222600,
+          949177200
+        ],
+        "rfsg-v0.1.1": [
+          1097323500,
+          962931700,
+          981505300,
+          982835700,
+          970313300,
+          1151057200,
+          1463801200
+        ],
+        "m151-integrated": [
+          1370135200,
+          1154027700,
+          1366970700,
+          1281653900,
+          1179222200,
+          1117676800,
+          1111399500
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 9,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          1036223900,
+          1139128400,
+          1024823100,
+          886943400,
+          944683600,
+          923784700,
+          923866400
+        ],
+        "m151-integrated": [
+          1181753200,
+          1526185800,
+          1370540000,
+          1393408300,
+          1394022700,
+          1500567000,
+          1394863300
+        ],
+        "rfsg-pre-m15": [
+          562575200,
+          564274900,
+          607866900,
+          628192000,
+          574791000,
+          573780400,
+          597015500
+        ],
+        "rfsg-v0.1.1": [
+          919962600,
+          1069978700,
+          938531700,
+          1041476500,
+          954765100,
+          1033999000,
+          1297527800
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          1304996700,
+          1345310200,
+          1311521100,
+          1549576300,
+          1567538700,
+          1412097800,
+          1385683600
+        ],
+        "rfsg-v0.1.1": [
+          1133507200,
+          1359463100,
+          1329884100,
+          1328396200,
+          1430484000,
+          1250291700,
+          1560389300
+        ],
+        "rfsg-current": [
+          1388279100,
+          1066466300,
+          1270973100,
+          1450360600,
+          1296998200,
+          1310556500,
+          1430015400
+        ],
+        "rfsg-pre-m15": [
+          726518400,
+          783639700,
+          766586200,
+          905410100,
+          893615400,
+          1000578300,
+          1108341900
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 11,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          1307407300,
+          1408228500,
+          1480096400,
+          1384647200,
+          1582298400,
+          1468654100,
+          1387766400
+        ],
+        "rfsg-pre-m15": [
+          733022800,
+          831049200,
+          742225500,
+          842172600,
+          792197900,
+          787756500,
+          890478400
+        ],
+        "m151-integrated": [
+          1705108700,
+          2789824400,
+          1422062500,
+          1709205800,
+          1646817600,
+          1497628800,
+          1551806100
+        ],
+        "rfsg-current": [
+          868485500,
+          880588800,
+          868710600,
+          905780100,
+          868411600,
+          894139300,
+          915425900
+        ]
+      }
+    },
+    {
+      "id": "computed/create",
+      "caseId": "computed/create@1",
+      "kind": "computed-create",
+      "size": 1,
+      "iterations": 633875,
+      "rounds": 12,
+      "round": 12,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          576249600,
+          575196500,
+          680568600,
+          571587000,
+          576823100,
+          597724200,
+          612958500
+        ],
+        "rfsg-current": [
+          908959800,
+          907987800,
+          919715700,
+          1144626900,
+          1398491600,
+          1231862500,
+          1345707500
+        ],
+        "rfsg-v0.1.1": [
+          1233934100,
+          1047570800,
+          999447100,
+          935950300,
+          996255700,
+          926293900,
+          1013947200
+        ],
+        "m151-integrated": [
+          1954384900,
+          1921209700,
+          2025860900,
+          1910732100,
+          1916983300,
+          2153082600,
+          2375683200
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          25521800,
+          20227900,
+          21324000,
+          22444900,
+          21246900,
+          21986600,
+          19905700
+        ],
+        "m151-integrated": [
+          45208800,
+          27413700,
+          26461100,
+          23747000,
+          25019600,
+          25132200,
+          31773400
+        ],
+        "rfsg-pre-m15": [
+          49470200,
+          15073800,
+          14268200,
+          14554500,
+          10325500,
+          10458300,
+          12049800
+        ],
+        "rfsg-v0.1.1": [
+          18266100,
+          18145000,
+          18307400,
+          16373100,
+          17302500,
+          16524400,
+          20356100
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          19053500,
+          25504500,
+          20479900,
+          22938300,
+          22331300,
+          19568900,
+          17523000
+        ],
+        "rfsg-v0.1.1": [
+          16263600,
+          15464100,
+          15491200,
+          16201700,
+          17061500,
+          17265100,
+          19874400
+        ],
+        "rfsg-current": [
+          20259400,
+          17122400,
+          18464500,
+          19668400,
+          18250900,
+          17948800,
+          22242700
+        ],
+        "rfsg-pre-m15": [
+          54888700,
+          22324100,
+          25407400,
+          24578600,
+          18654200,
+          31116200,
+          28845700
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          15009900,
+          15325500,
+          15658800,
+          15065400,
+          16309400,
+          16073000,
+          15390500
+        ],
+        "rfsg-pre-m15": [
+          13112400,
+          11699100,
+          14945900,
+          13830800,
+          10597400,
+          9992500,
+          10605200
+        ],
+        "m151-integrated": [
+          17756600,
+          16628000,
+          16489900,
+          17161400,
+          16281200,
+          15420100,
+          15436600
+        ],
+        "rfsg-current": [
+          17450700,
+          16044300,
+          15424400,
+          15985300,
+          16063800,
+          15379900,
+          15696100
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          46807000,
+          12765700,
+          13623400,
+          12917500,
+          9670100,
+          10032100,
+          11543000
+        ],
+        "rfsg-current": [
+          17988200,
+          18545700,
+          18522600,
+          19072800,
+          16000700,
+          15968200,
+          15385700
+        ],
+        "rfsg-v0.1.1": [
+          14698200,
+          14417700,
+          13240800,
+          14074200,
+          13589500,
+          12982200,
+          13232000
+        ],
+        "m151-integrated": [
+          16826700,
+          17262000,
+          16527500,
+          17673800,
+          16397600,
+          15716000,
+          31960600
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          17930300,
+          16878500,
+          17633100,
+          16970500,
+          17923000,
+          20822000,
+          20531600
+        ],
+        "m151-integrated": [
+          19204200,
+          18707400,
+          17730100,
+          18486400,
+          18108300,
+          17014900,
+          18057000
+        ],
+        "rfsg-pre-m15": [
+          59301900,
+          16838800,
+          15296100,
+          14775800,
+          10931400,
+          10465000,
+          12188100
+        ],
+        "rfsg-v0.1.1": [
+          18798000,
+          22297000,
+          24209900,
+          16665800,
+          14668700,
+          14171300,
+          14107600
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          22368400,
+          23837700,
+          27306400,
+          30176800,
+          27219200,
+          28821300,
+          30462900
+        ],
+        "rfsg-v0.1.1": [
+          18181500,
+          17601200,
+          17145600,
+          20682500,
+          25208600,
+          31188200,
+          29579300
+        ],
+        "rfsg-current": [
+          27172800,
+          24500000,
+          22311800,
+          21527800,
+          20795300,
+          19711100,
+          18496500
+        ],
+        "rfsg-pre-m15": [
+          42018200,
+          13249600,
+          15061200,
+          15461000,
+          11409000,
+          11959500,
+          13808100
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          34492200,
+          27888800,
+          24609700,
+          21107500,
+          17227100,
+          17577400,
+          17668600
+        ],
+        "rfsg-pre-m15": [
+          47237000,
+          33234500,
+          37994200,
+          33559600,
+          26086200,
+          25480100,
+          25578500
+        ],
+        "m151-integrated": [
+          17978700,
+          17819500,
+          17988600,
+          18822900,
+          18255600,
+          17068900,
+          18167000
+        ],
+        "rfsg-current": [
+          19648500,
+          20494100,
+          18523600,
+          18809700,
+          16958900,
+          16845700,
+          16952800
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          13877600,
+          11933700,
+          14214300,
+          14002500,
+          10682700,
+          10042700,
+          10758400
+        ],
+        "rfsg-current": [
+          35453400,
+          26388300,
+          19033800,
+          20115200,
+          18438400,
+          19927900,
+          23278800
+        ],
+        "rfsg-v0.1.1": [
+          16254700,
+          18617100,
+          13741000,
+          15109300,
+          12984800,
+          13030800,
+          14079300
+        ],
+        "m151-integrated": [
+          17091100,
+          15475700,
+          14615000,
+          14730700,
+          15028800,
+          14489200,
+          14505800
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 9,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          22015100,
+          18358200,
+          17976900,
+          19853900,
+          17141700,
+          16614900,
+          19032100
+        ],
+        "m151-integrated": [
+          17223300,
+          17764600,
+          21072000,
+          28845700,
+          22162700,
+          17617600,
+          16961100
+        ],
+        "rfsg-pre-m15": [
+          45439100,
+          16922700,
+          15914600,
+          15540200,
+          10328800,
+          9846300,
+          11316600
+        ],
+        "rfsg-v0.1.1": [
+          14863200,
+          13570200,
+          12966900,
+          13423400,
+          13602700,
+          12690500,
+          13014700
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          18487000,
+          18585700,
+          18147800,
+          19784400,
+          21124700,
+          23097200,
+          22703700
+        ],
+        "rfsg-v0.1.1": [
+          13571100,
+          12755900,
+          12899800,
+          13246300,
+          13289400,
+          12798900,
+          13049600
+        ],
+        "rfsg-current": [
+          22297000,
+          19950500,
+          19239100,
+          21590900,
+          16490200,
+          16361700,
+          15814500
+        ],
+        "rfsg-pre-m15": [
+          47499900,
+          15027000,
+          16407100,
+          18920600,
+          17237900,
+          20786100,
+          18019900
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 11,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          14248000,
+          15325000,
+          14795700,
+          15752200,
+          14192400,
+          13545800,
+          14590100
+        ],
+        "rfsg-pre-m15": [
+          41650500,
+          15361500,
+          13055100,
+          13229600,
+          10439900,
+          11072100,
+          11981300
+        ],
+        "m151-integrated": [
+          20916500,
+          17542500,
+          15648900,
+          16672500,
+          16110500,
+          15720600,
+          14574200
+        ],
+        "rfsg-current": [
+          21882400,
+          22572200,
+          18314100,
+          19117800,
+          17623700,
+          20913500,
+          20643300
+        ]
+      }
+    },
+    {
+      "id": "effect/create",
+      "caseId": "effect/create@1",
+      "kind": "effect-create",
+      "size": 1,
+      "iterations": 85858,
+      "rounds": 12,
+      "round": 12,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          36250300,
+          13084600,
+          14261000,
+          13607900,
+          10865200,
+          10154400,
+          11239600
+        ],
+        "rfsg-current": [
+          18438500,
+          15096200,
+          15482600,
+          17314700,
+          14703700,
+          14975200,
+          16383800
+        ],
+        "rfsg-v0.1.1": [
+          16003600,
+          15850900,
+          15833600,
+          14392900,
+          13825300,
+          13326400,
+          13216600
+        ],
+        "m151-integrated": [
+          17038000,
+          17102900,
+          17174200,
+          18061500,
+          17056400,
+          16354500,
+          16602600
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          28486500,
+          27819800,
+          16710000,
+          16126500,
+          22928200,
+          19823800,
+          19052800
+        ],
+        "m151-integrated": [
+          18859600,
+          10289600,
+          17772000,
+          13507200,
+          20260600,
+          16715400,
+          20052500
+        ],
+        "rfsg-pre-m15": [
+          26148400,
+          17806500,
+          18062700,
+          15027600,
+          16948400,
+          18742000,
+          30698100
+        ],
+        "rfsg-v0.1.1": [
+          18091000,
+          12426300,
+          11833800,
+          17009300,
+          13567100,
+          13435500,
+          16764800
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          16297400,
+          8801400,
+          13623900,
+          11260100,
+          11404100,
+          13436300,
+          16496700
+        ],
+        "rfsg-v0.1.1": [
+          17572000,
+          13219700,
+          12434100,
+          16341200,
+          14296200,
+          13340400,
+          17085700
+        ],
+        "rfsg-current": [
+          29904300,
+          18022800,
+          17471600,
+          19811300,
+          18202500,
+          17086000,
+          22010600
+        ],
+        "rfsg-pre-m15": [
+          42135400,
+          26753600,
+          23894100,
+          19858400,
+          19156700,
+          20408500,
+          29043700
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          17781200,
+          15918800,
+          19616300,
+          27235900,
+          22144300,
+          21492400,
+          26683800
+        ],
+        "rfsg-pre-m15": [
+          29648200,
+          15992500,
+          16114200,
+          28408100,
+          17062600,
+          16928800,
+          24093400
+        ],
+        "m151-integrated": [
+          17419900,
+          18390000,
+          14237400,
+          8662400,
+          13796200,
+          11956800,
+          11772000
+        ],
+        "rfsg-current": [
+          23911200,
+          18603500,
+          16806700,
+          20333600,
+          17713900,
+          16344200,
+          21736700
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          26966800,
+          17296000,
+          18218700,
+          15242500,
+          14890800,
+          14857800,
+          23903900
+        ],
+        "rfsg-current": [
+          19267800,
+          27199600,
+          23527100,
+          22152500,
+          31993500,
+          31157600,
+          26787400
+        ],
+        "rfsg-v0.1.1": [
+          25957900,
+          18697100,
+          24785000,
+          29687900,
+          18804500,
+          17448600,
+          24990900
+        ],
+        "m151-integrated": [
+          20443800,
+          11134600,
+          18952100,
+          16302900,
+          14868400,
+          15023200,
+          18355900
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          18437000,
+          23501500,
+          20945800,
+          19917600,
+          23367600,
+          21682700,
+          19168100
+        ],
+        "m151-integrated": [
+          14122900,
+          27142400,
+          17643700,
+          14327500,
+          15328700,
+          18699700,
+          13216200
+        ],
+        "rfsg-pre-m15": [
+          36926400,
+          24406200,
+          24557100,
+          50705400,
+          29027700,
+          27829500,
+          41305400
+        ],
+        "rfsg-v0.1.1": [
+          22562600,
+          15864100,
+          15387500,
+          19264400,
+          16255000,
+          16778600,
+          20334900
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          19700100,
+          10421600,
+          15068500,
+          12199400,
+          12082200,
+          15792800,
+          17926100
+        ],
+        "rfsg-v0.1.1": [
+          18585300,
+          14073800,
+          14050200,
+          19261400,
+          15541500,
+          17506700,
+          18203200
+        ],
+        "rfsg-current": [
+          24690300,
+          23530600,
+          34517800,
+          35380900,
+          30314700,
+          28874600,
+          32207100
+        ],
+        "rfsg-pre-m15": [
+          30523500,
+          20334200,
+          25191500,
+          29817100,
+          23880400,
+          21517300,
+          32216900
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          32044200,
+          27638600,
+          23775500,
+          23119900,
+          17737200,
+          17878400,
+          21978700
+        ],
+        "rfsg-pre-m15": [
+          31244200,
+          20968900,
+          22926700,
+          29830400,
+          24432600,
+          22016100,
+          32431200
+        ],
+        "m151-integrated": [
+          11299700,
+          17768300,
+          13329900,
+          21555500,
+          14752200,
+          14420900,
+          21713500
+        ],
+        "rfsg-current": [
+          23749500,
+          21801200,
+          22489500,
+          22783800,
+          24986600,
+          19921200,
+          18754100
+        ]
+      }
+    },
+    {
+      "id": "computed/dirty-read",
+      "caseId": "computed/dirty-read@1",
+      "kind": "computed-dirty-read",
+      "size": 1,
+      "iterations": 93142,
+      "rounds": 8,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          34305800,
+          19862300,
+          19600500,
+          35106100,
+          20019900,
+          17119800,
+          32927900
+        ],
+        "rfsg-current": [
+          24051700,
+          19177800,
+          19742800,
+          22811400,
+          21192700,
+          21690500,
+          25660900
+        ],
+        "rfsg-v0.1.1": [
+          28504600,
+          21371000,
+          22129100,
+          28743900,
+          20508300,
+          21595800,
+          24843700
+        ],
+        "m151-integrated": [
+          18445600,
+          11628100,
+          17014100,
+          13464000,
+          12373000,
+          14036400,
+          17721700
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          30088800,
+          13457600,
+          17005800,
+          16193600,
+          28470000,
+          17104600,
+          19343500
+        ],
+        "m151-integrated": [
+          13885100,
+          17570800,
+          16416800,
+          13018500,
+          16343300,
+          15702200,
+          12075800
+        ],
+        "rfsg-pre-m15": [
+          37944500,
+          25295800,
+          18490300,
+          32144800,
+          20046500,
+          16783400,
+          31215000
+        ],
+        "rfsg-v0.1.1": [
+          21989900,
+          19383300,
+          27023400,
+          17466600,
+          18679000,
+          25827900,
+          22218800
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          17120400,
+          15343100,
+          26191800,
+          13198000,
+          19550400,
+          15685800,
+          14673200
+        ],
+        "rfsg-v0.1.1": [
+          19923700,
+          18916300,
+          28609200,
+          20058000,
+          20802600,
+          29173100,
+          12348400
+        ],
+        "rfsg-current": [
+          25250600,
+          16809800,
+          16961000,
+          14708500,
+          25661000,
+          15667500,
+          20781500
+        ],
+        "rfsg-pre-m15": [
+          34583100,
+          22378200,
+          19103200,
+          33969000,
+          23665700,
+          18437500,
+          31502200
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          19278800,
+          18699200,
+          28582900,
+          26465900,
+          27977400,
+          28510300,
+          16788500
+        ],
+        "rfsg-pre-m15": [
+          15563600,
+          37581800,
+          24981400,
+          19061000,
+          34114300,
+          20467800,
+          16021000
+        ],
+        "m151-integrated": [
+          14736300,
+          20182900,
+          14463300,
+          18409200,
+          13215500,
+          19572100,
+          12859700
+        ],
+        "rfsg-current": [
+          23336300,
+          16303100,
+          24245900,
+          26195600,
+          24680700,
+          17099700,
+          21401500
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          36340600,
+          26324700,
+          19475000,
+          35161600,
+          22139700,
+          18100800,
+          33776000
+        ],
+        "rfsg-current": [
+          23177400,
+          11897700,
+          22753000,
+          14792100,
+          18339900,
+          14296400,
+          19782700
+        ],
+        "rfsg-v0.1.1": [
+          19504700,
+          18376900,
+          25521400,
+          20643000,
+          26007700,
+          33339600,
+          14729100
+        ],
+        "m151-integrated": [
+          16796900,
+          17061900,
+          30959600,
+          15885000,
+          24546000,
+          11251900,
+          14947000
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          26159100,
+          18558700,
+          16923400,
+          18058900,
+          12491800,
+          16428000,
+          15043200
+        ],
+        "m151-integrated": [
+          14345200,
+          10282500,
+          13668700,
+          11248300,
+          17788100,
+          11442400,
+          14738400
+        ],
+        "rfsg-pre-m15": [
+          39649900,
+          31184200,
+          25644100,
+          19279300,
+          35275300,
+          25625200,
+          20024300
+        ],
+        "rfsg-v0.1.1": [
+          20832100,
+          39632600,
+          36139500,
+          30459600,
+          30355500,
+          17708900,
+          19030800
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          16208800,
+          11378600,
+          14763800,
+          9995200,
+          13799900,
+          9620000,
+          13804100
+        ],
+        "rfsg-v0.1.1": [
+          18880900,
+          19908900,
+          26497200,
+          12081000,
+          17323100,
+          18934700,
+          25265000
+        ],
+        "rfsg-current": [
+          32056000,
+          37845100,
+          18189100,
+          23941800,
+          14235500,
+          14945900,
+          14065600
+        ],
+        "rfsg-pre-m15": [
+          46081800,
+          28852300,
+          17961900,
+          40180600,
+          25375200,
+          19940600,
+          38736000
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          18836400,
+          26709500,
+          18875300,
+          18570600,
+          27686500,
+          22721900,
+          21035400
+        ],
+        "rfsg-pre-m15": [
+          43249700,
+          28009400,
+          20198300,
+          34906400,
+          25209600,
+          17919600,
+          30619300
+        ],
+        "m151-integrated": [
+          12198700,
+          14663200,
+          13130100,
+          9724800,
+          13726700,
+          18819900,
+          31000600
+        ],
+        "rfsg-current": [
+          25709200,
+          12681500,
+          17894600,
+          14939400,
+          26586900,
+          15171900,
+          19271200
+        ]
+      }
+    },
+    {
+      "id": "computed/equality-suppression",
+      "caseId": "computed/equality-suppression@1",
+      "kind": "computed-equality",
+      "size": 1,
+      "iterations": 62701,
+      "rounds": 8,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          36741000,
+          26121400,
+          20951300,
+          32573900,
+          22924900,
+          17543700,
+          16899800
+        ],
+        "rfsg-current": [
+          20713100,
+          18501900,
+          19016500,
+          15040400,
+          19699900,
+          16014600,
+          19148400
+        ],
+        "rfsg-v0.1.1": [
+          36420100,
+          24554000,
+          32477600,
+          14657600,
+          21639700,
+          21406500,
+          30618800
+        ],
+        "m151-integrated": [
+          12320700,
+          14719400,
+          13620700,
+          10273900,
+          14168300,
+          9571700,
+          13548400
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          12650700,
+          9443500,
+          12476100,
+          13593600,
+          18828700,
+          14489100,
+          10491200
+        ],
+        "m151-integrated": [
+          8239200,
+          11924500,
+          10448200,
+          18539500,
+          23474000,
+          24767000,
+          15718500
+        ],
+        "rfsg-pre-m15": [
+          31871300,
+          21180700,
+          17695500,
+          24301500,
+          15354300,
+          16930200,
+          23840600
+        ],
+        "rfsg-v0.1.1": [
+          14804200,
+          27520500,
+          22952200,
+          16507100,
+          25279000,
+          20789800,
+          14689500
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          13276400,
+          22302600,
+          17309300,
+          10391800,
+          13939700,
+          9300400,
+          12701700
+        ],
+        "rfsg-v0.1.1": [
+          20050700,
+          21497400,
+          13461800,
+          11984800,
+          18916000,
+          16957400,
+          12414000
+        ],
+        "rfsg-current": [
+          13139300,
+          13296000,
+          9298300,
+          12557500,
+          9532300,
+          13271100,
+          13399000
+        ],
+        "rfsg-pre-m15": [
+          29413500,
+          26775500,
+          35593000,
+          46161000,
+          24659500,
+          24153300,
+          30203900
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          12300900,
+          20489800,
+          16869600,
+          12584400,
+          19860400,
+          17465600,
+          12790700
+        ],
+        "rfsg-pre-m15": [
+          13107000,
+          20778000,
+          20428600,
+          20442200,
+          26823400,
+          20072400,
+          18583600
+        ],
+        "m151-integrated": [
+          14758800,
+          22224100,
+          16655400,
+          10702500,
+          14427500,
+          10811600,
+          13332400
+        ],
+        "rfsg-current": [
+          19982100,
+          14615300,
+          19159100,
+          12143700,
+          16224600,
+          17367600,
+          20361000
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          23662500,
+          20440000,
+          17208200,
+          24097400,
+          15751300,
+          18200700,
+          16379400
+        ],
+        "rfsg-current": [
+          10103800,
+          14536300,
+          14767600,
+          11032200,
+          17612800,
+          19610100,
+          12959500
+        ],
+        "rfsg-v0.1.1": [
+          19738100,
+          22380900,
+          12803400,
+          11815200,
+          18213200,
+          18244200,
+          12493400
+        ],
+        "m151-integrated": [
+          18844700,
+          52489300,
+          33394200,
+          23697000,
+          16008000,
+          17245000,
+          15467400
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          13963900,
+          14479100,
+          10842000,
+          13110400,
+          9595900,
+          12478300,
+          9857300
+        ],
+        "m151-integrated": [
+          10870700,
+          20965700,
+          16595100,
+          10837600,
+          14983900,
+          10884400,
+          15260800
+        ],
+        "rfsg-pre-m15": [
+          27285600,
+          24034000,
+          20852100,
+          19307300,
+          16142900,
+          23351300,
+          17596900
+        ],
+        "rfsg-v0.1.1": [
+          15740000,
+          26311300,
+          20458400,
+          14404600,
+          23243900,
+          24154500,
+          15229000
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          12323800,
+          9161500,
+          12388000,
+          8368700,
+          13457700,
+          13651700,
+          20735900
+        ],
+        "rfsg-v0.1.1": [
+          18495900,
+          19745200,
+          11840900,
+          11373300,
+          17561100,
+          17330300,
+          12113500
+        ],
+        "rfsg-current": [
+          13519700,
+          9985600,
+          12916200,
+          13721900,
+          10656600,
+          13717400,
+          9739100
+        ],
+        "rfsg-pre-m15": [
+          23807600,
+          27300700,
+          34818600,
+          40581300,
+          23889400,
+          23186300,
+          21561600
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          16441000,
+          27987100,
+          26191900,
+          20970400,
+          23657400,
+          20667700,
+          15127100
+        ],
+        "rfsg-pre-m15": [
+          27869000,
+          23551900,
+          19412200,
+          23125000,
+          28655900,
+          22576800,
+          18500800
+        ],
+        "m151-integrated": [
+          8847900,
+          13369300,
+          9718700,
+          12169200,
+          13524000,
+          19300800,
+          15632300
+        ],
+        "rfsg-current": [
+          13241500,
+          10184600,
+          12491800,
+          8891500,
+          13252000,
+          14616800,
+          10281600
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "rounds": 8,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          22752200,
+          19598000,
+          17443400,
+          22592400,
+          15442100,
+          19040600,
+          25954600
+        ],
+        "rfsg-current": [
+          14133800,
+          19830100,
+          14475800,
+          10990800,
+          19018700,
+          14001600,
+          16479200
+        ],
+        "rfsg-v0.1.1": [
+          19530900,
+          21961400,
+          13730900,
+          12141400,
+          18600300,
+          18647600,
+          12124000
+        ],
+        "m151-integrated": [
+          19291500,
+          25688200,
+          19814100,
+          15577800,
+          10922000,
+          13929200,
+          13883700
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          30973900,
+          28682100,
+          31417900,
+          36463900,
+          30312800,
+          29767500,
+          32265900
+        ],
+        "m151-integrated": [
+          32905300,
+          27861200,
+          27545800,
+          29621800,
+          26894200,
+          27645400,
+          30774000
+        ],
+        "rfsg-pre-m15": [
+          53521400,
+          34552500,
+          34985700,
+          38471000,
+          34287100,
+          34299000,
+          40277900
+        ],
+        "rfsg-v0.1.1": [
+          38017900,
+          36375400,
+          33555000,
+          35698700,
+          37379800,
+          33740900,
+          38227200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          49599600,
+          45235600,
+          41803400,
+          37904600,
+          35010000,
+          32776600,
+          36885400
+        ],
+        "rfsg-v0.1.1": [
+          38481400,
+          31101600,
+          30377600,
+          36875200,
+          46758500,
+          38035100,
+          48021400
+        ],
+        "rfsg-current": [
+          36280300,
+          31804600,
+          29992300,
+          37021600,
+          31754600,
+          38914900,
+          46702700
+        ],
+        "rfsg-pre-m15": [
+          51099100,
+          40953200,
+          40214600,
+          42582100,
+          40754400,
+          57263800,
+          52758700
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          44066800,
+          40310100,
+          36175200,
+          42390800,
+          35696200,
+          34042200,
+          36404800
+        ],
+        "rfsg-pre-m15": [
+          51669600,
+          50178000,
+          46080000,
+          61241000,
+          52615700,
+          48811600,
+          50410800
+        ],
+        "m151-integrated": [
+          36869100,
+          32380100,
+          33307000,
+          35580900,
+          33972900,
+          32855700,
+          37345900
+        ],
+        "rfsg-current": [
+          39495300,
+          31363200,
+          34154000,
+          42989600,
+          38319500,
+          33922400,
+          38682600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          53000300,
+          46203400,
+          59034500,
+          51591500,
+          43555600,
+          42977900,
+          46518900
+        ],
+        "rfsg-current": [
+          40542300,
+          38822500,
+          31760300,
+          42265100,
+          39969200,
+          37675700,
+          44747500
+        ],
+        "rfsg-v0.1.1": [
+          40507400,
+          30740800,
+          31316400,
+          38679300,
+          34205100,
+          34767800,
+          36027000
+        ],
+        "m151-integrated": [
+          39049200,
+          36385500,
+          37892300,
+          42254800,
+          37149500,
+          36297000,
+          40212400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          41011900,
+          33453600,
+          31484900,
+          36874200,
+          30589800,
+          30286400,
+          36284300
+        ],
+        "m151-integrated": [
+          37334500,
+          33693700,
+          32402500,
+          34451800,
+          31869600,
+          31986200,
+          36687400
+        ],
+        "rfsg-pre-m15": [
+          52827900,
+          43258000,
+          43848600,
+          45981600,
+          42029300,
+          41453000,
+          47258900
+        ],
+        "rfsg-v0.1.1": [
+          40611600,
+          39294100,
+          40959700,
+          48565500,
+          38166400,
+          37896100,
+          32202900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          37028200,
+          32640800,
+          33420900,
+          37495200,
+          33686600,
+          32509200,
+          34531900
+        ],
+        "rfsg-v0.1.1": [
+          40402200,
+          35521800,
+          40886300,
+          39922100,
+          35860700,
+          35545100,
+          43771900
+        ],
+        "rfsg-current": [
+          38833500,
+          31767300,
+          33091100,
+          38113300,
+          31233500,
+          30573600,
+          36080900
+        ],
+        "rfsg-pre-m15": [
+          55004100,
+          42020100,
+          47264800,
+          51460800,
+          43059500,
+          41211300,
+          49781000
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          30726100,
+          29680200,
+          29272300,
+          32045300,
+          29396200,
+          30075300,
+          34256400
+        ],
+        "rfsg-pre-m15": [
+          46340600,
+          37226000,
+          36490800,
+          38848400,
+          34619500,
+          35474800,
+          42008100
+        ],
+        "m151-integrated": [
+          31635500,
+          26656500,
+          27432600,
+          29792200,
+          28712700,
+          27279600,
+          29908000
+        ],
+        "rfsg-current": [
+          34064200,
+          26965500,
+          27501900,
+          31051900,
+          26681500,
+          31885600,
+          38692600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "rounds": 8,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          48441200,
+          39249800,
+          37858600,
+          39920200,
+          34736100,
+          35488600,
+          38822300
+        ],
+        "rfsg-current": [
+          33011900,
+          26488200,
+          28121800,
+          32538100,
+          26033700,
+          26336800,
+          31164200
+        ],
+        "rfsg-v0.1.1": [
+          33719200,
+          27478700,
+          25888300,
+          32818800,
+          33715800,
+          30593800,
+          31212900
+        ],
+        "m151-integrated": [
+          33146900,
+          32436200,
+          30935900,
+          37466600,
+          33295200,
+          31908200,
+          30464200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          37392800,
+          31468200,
+          27157600,
+          21593300,
+          29393400,
+          32745500,
+          34119600
+        ],
+        "m151-integrated": [
+          31564100,
+          29693500,
+          27244500,
+          23038700,
+          30330200,
+          26792400,
+          26324400
+        ],
+        "rfsg-pre-m15": [
+          61875800,
+          39522100,
+          29162700,
+          34426400,
+          34258500,
+          36568400,
+          34731200
+        ],
+        "rfsg-v0.1.1": [
+          33780800,
+          24278600,
+          24888900,
+          27086800,
+          31373000,
+          27091500,
+          28019700
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          30689200,
+          26662300,
+          26097500,
+          22601500,
+          33438200,
+          28632400,
+          27416800
+        ],
+        "rfsg-v0.1.1": [
+          32572700,
+          29008600,
+          33868600,
+          37890900,
+          37144600,
+          34822100,
+          38442100
+        ],
+        "rfsg-current": [
+          37899800,
+          30870500,
+          30569500,
+          23538700,
+          30607100,
+          27884200,
+          26696800
+        ],
+        "rfsg-pre-m15": [
+          47339900,
+          37105200,
+          29265700,
+          35650200,
+          34085900,
+          35830500,
+          36713800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          31967900,
+          24521600,
+          24546200,
+          24705500,
+          25938300,
+          25920900,
+          30357500
+        ],
+        "rfsg-pre-m15": [
+          43096700,
+          37180600,
+          29281000,
+          34935800,
+          40568000,
+          53592400,
+          55698400
+        ],
+        "m151-integrated": [
+          32855900,
+          29430500,
+          27618700,
+          24318900,
+          31662800,
+          27444500,
+          28333900
+        ],
+        "rfsg-current": [
+          51058500,
+          33805500,
+          25901000,
+          21841200,
+          27675600,
+          25401100,
+          25373100
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          42193900,
+          33852400,
+          28490800,
+          33548400,
+          33811900,
+          34999200,
+          35002000
+        ],
+        "rfsg-current": [
+          31043900,
+          27204100,
+          25805000,
+          21858300,
+          28512000,
+          26210400,
+          27738300
+        ],
+        "rfsg-v0.1.1": [
+          53314900,
+          33990200,
+          27775000,
+          26330500,
+          30686900,
+          33260300,
+          38530300
+        ],
+        "m151-integrated": [
+          29902500,
+          26842000,
+          26092300,
+          24827700,
+          33190500,
+          32712600,
+          37613400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          29014000,
+          26608700,
+          25308600,
+          21702300,
+          28800300,
+          25231100,
+          29390600
+        ],
+        "m151-integrated": [
+          30114300,
+          28702100,
+          26893300,
+          23190900,
+          29127500,
+          28511500,
+          28747500
+        ],
+        "rfsg-pre-m15": [
+          56496700,
+          42656500,
+          31055600,
+          35023300,
+          33692700,
+          36050800,
+          33535200
+        ],
+        "rfsg-v0.1.1": [
+          43230400,
+          32690500,
+          28962100,
+          26209000,
+          26100900,
+          28585600,
+          34969800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          30145800,
+          28106000,
+          27662900,
+          22078600,
+          31391600,
+          27206100,
+          25134700
+        ],
+        "rfsg-v0.1.1": [
+          32050900,
+          24597900,
+          24668200,
+          29953200,
+          32388400,
+          27210700,
+          30737200
+        ],
+        "rfsg-current": [
+          39951200,
+          31904500,
+          32191400,
+          27519800,
+          32103100,
+          25881800,
+          26235400
+        ],
+        "rfsg-pre-m15": [
+          43641800,
+          37859700,
+          30576200,
+          34540800,
+          34978900,
+          41289800,
+          49928500
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          36748900,
+          25610100,
+          26560600,
+          25727400,
+          25758400,
+          25204100,
+          30153600
+        ],
+        "rfsg-pre-m15": [
+          43386300,
+          34169700,
+          29899800,
+          35665800,
+          35386200,
+          37027600,
+          34834000
+        ],
+        "m151-integrated": [
+          58802600,
+          34078600,
+          32641400,
+          28264900,
+          31181700,
+          27505900,
+          27138100
+        ],
+        "rfsg-current": [
+          28960300,
+          26838800,
+          33180700,
+          27930700,
+          30493900,
+          26677400,
+          26363900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "rounds": 8,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          55124600,
+          48143500,
+          35839400,
+          36526400,
+          37849000,
+          46061100,
+          43891100
+        ],
+        "rfsg-current": [
+          29704500,
+          26432500,
+          26553800,
+          22384200,
+          28426300,
+          25919300,
+          24808900
+        ],
+        "rfsg-v0.1.1": [
+          35395900,
+          34821100,
+          38168500,
+          38655700,
+          28323200,
+          26465100,
+          29037900
+        ],
+        "m151-integrated": [
+          31414400,
+          27398900,
+          25352500,
+          21829600,
+          29676700,
+          29019100,
+          28080000
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 1,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          18314500,
+          14932100,
+          19654500,
+          10697600,
+          15395700,
+          11874400,
+          16315500
+        ],
+        "m151-integrated": [
+          15830900,
+          10274400,
+          19373700,
+          13349100,
+          10773500,
+          20434200,
+          12633800
+        ],
+        "rfsg-pre-m15": [
+          26418800,
+          18705200,
+          32754800,
+          20120700,
+          19300400,
+          11624200,
+          18334000
+        ],
+        "rfsg-v0.1.1": [
+          19517700,
+          9340300,
+          15319300,
+          9619300,
+          14919700,
+          7919700,
+          14497000
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          10375700,
+          15137700,
+          10473500,
+          14101700,
+          10146300,
+          10850400,
+          11495900
+        ],
+        "rfsg-v0.1.1": [
+          9055000,
+          19176700,
+          9895000,
+          15206500,
+          10459200,
+          14752600,
+          9486600
+        ],
+        "rfsg-current": [
+          12459500,
+          11639900,
+          10359600,
+          8152700,
+          14583900,
+          9949100,
+          12175100
+        ],
+        "rfsg-pre-m15": [
+          18852900,
+          40603900,
+          20725000,
+          18734400,
+          13463400,
+          18503100,
+          13634400
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 3,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          20805300,
+          11775900,
+          18584300,
+          11537500,
+          18564800,
+          10483800,
+          15917700
+        ],
+        "rfsg-pre-m15": [
+          18819600,
+          12239900,
+          16031800,
+          10809200,
+          14045800,
+          10236300,
+          13085500
+        ],
+        "m151-integrated": [
+          23873400,
+          19817100,
+          24423500,
+          14012800,
+          16889900,
+          10451700,
+          15030200
+        ],
+        "rfsg-current": [
+          20231000,
+          10913700,
+          16209800,
+          9925700,
+          14939300,
+          9680800,
+          18399500
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 4,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          11080800,
+          12967100,
+          9896600,
+          14030100,
+          11124800,
+          14571500,
+          14465900
+        ],
+        "rfsg-current": [
+          15556800,
+          10418500,
+          15999000,
+          12044700,
+          9823200,
+          16716500,
+          11442600
+        ],
+        "rfsg-v0.1.1": [
+          15985000,
+          11795900,
+          22245100,
+          10381800,
+          16932000,
+          11585400,
+          13560000
+        ],
+        "m151-integrated": [
+          22551200,
+          16233100,
+          17195900,
+          22198500,
+          14305900,
+          11018900,
+          24964400
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 5,
+      "order": [
+        "rfsg-current",
+        "m151-integrated",
+        "rfsg-pre-m15",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          19093000,
+          11749700,
+          15516200,
+          10921300,
+          15354800,
+          12213500,
+          18957100
+        ],
+        "m151-integrated": [
+          18340700,
+          11354500,
+          15745500,
+          10488400,
+          13864900,
+          12722900,
+          14849800
+        ],
+        "rfsg-pre-m15": [
+          16771200,
+          11980900,
+          26074400,
+          21069600,
+          22186800,
+          16084800,
+          25150800
+        ],
+        "rfsg-v0.1.1": [
+          21067700,
+          10488900,
+          15539300,
+          17550700,
+          10168400,
+          15376100,
+          11035000
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-v0.1.1",
+        "rfsg-current",
+        "rfsg-pre-m15"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          18239500,
+          13889300,
+          18979600,
+          14909000,
+          20910100,
+          12190700,
+          10995500
+        ],
+        "rfsg-v0.1.1": [
+          21528600,
+          11003600,
+          17168000,
+          12555800,
+          21506800,
+          12383300,
+          20322500
+        ],
+        "rfsg-current": [
+          17838000,
+          12675000,
+          17176500,
+          13768600,
+          17394100,
+          11154700,
+          16816500
+        ],
+        "rfsg-pre-m15": [
+          14260300,
+          16441500,
+          12308100,
+          16498300,
+          11863400,
+          26464500,
+          18946000
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 7,
+      "order": [
+        "rfsg-v0.1.1",
+        "rfsg-pre-m15",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          12792500,
+          24170400,
+          11054600,
+          8306100,
+          16694500,
+          16351300,
+          10457800
+        ],
+        "rfsg-pre-m15": [
+          12799400,
+          16551900,
+          35464500,
+          21544000,
+          21668800,
+          19889500,
+          13475700
+        ],
+        "m151-integrated": [
+          16642400,
+          11964200,
+          10868700,
+          9137500,
+          14123300,
+          10431300,
+          15921100
+        ],
+        "rfsg-current": [
+          18268400,
+          11191400,
+          18980000,
+          17382600,
+          21932900,
+          14856800,
+          20130000
+        ]
+      }
+    },
+    {
+      "id": "batch/two-writes-one-reaction",
+      "caseId": "batch/two-writes-one-reaction@1",
+      "kind": "batch-two-writes",
+      "size": 1,
+      "iterations": 28057,
+      "rounds": 8,
+      "round": 8,
+      "order": [
+        "rfsg-pre-m15",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-pre-m15": [
+          13967100,
+          18697500,
+          30492300,
+          24053000,
+          16336600,
+          21247100,
+          13552700
+        ],
+        "rfsg-current": [
+          15337300,
+          14097000,
+          12297700,
+          9994200,
+          20713900,
+          11070700,
+          23853700
+        ],
+        "rfsg-v0.1.1": [
+          18425400,
+          12067300,
+          17697200,
+          18130700,
+          10406900,
+          19721100,
+          11088500
+        ],
+        "m151-integrated": [
+          20571100,
+          11388500,
+          17507300,
+          11216700,
+          17212700,
+          11269000,
+          12262900
+        ]
+      }
+    }
+  ]
+}

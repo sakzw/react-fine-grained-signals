@@ -1,0 +1,138 @@
+{
+  "purpose": "M1.5.4 focused source-only owner-free fastpath diagnostic; fresh-process paired durations, not an authoritative release matrix",
+  "gitHead": "53ea18007b1934dc51902b6447551b1e237a2545",
+  "node": "v24.21.0",
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+  "rows": [
+    {
+      "caseId": "source/create@1",
+      "iterations": 471476,
+      "rounds": 24,
+      "currentMedianNs": 446523050,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 0.8873795439478043,
+          "q1": 0.7768132053655529,
+          "q3": 1.0059143261367702,
+          "candidateFasterRounds": 17,
+          "candidateSlowerRounds": 7
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.3607344807485844,
+          "q1": 1.2490802194618722,
+          "q3": 1.6004864544220918,
+          "candidateFasterRounds": 2,
+          "candidateSlowerRounds": 22
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.8136600900645917,
+          "q1": 0.76718596836759,
+          "q3": 0.981439109803804,
+          "candidateFasterRounds": 18,
+          "candidateSlowerRounds": 6
+        }
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "iterations": 1693079,
+      "rounds": 24,
+      "currentMedianNs": 11456350,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 24,
+          "median": 0.8833420513509203,
+          "q1": 0.8381551619986539,
+          "q3": 1.0018238588124677,
+          "candidateFasterRounds": 17,
+          "candidateSlowerRounds": 7
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 24,
+          "median": 1.078800187369255,
+          "q1": 1.0074052246757201,
+          "q3": 1.168690498587664,
+          "candidateFasterRounds": 5,
+          "candidateSlowerRounds": 19
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 24,
+          "median": 0.6907695459624821,
+          "q1": 0.6615694554433458,
+          "q3": 0.7780997614817058,
+          "candidateFasterRounds": 23,
+          "candidateSlowerRounds": 1
+        }
+      }
+    },
+    {
+      "caseId": "computed/dirty-read@1",
+      "iterations": 93142,
+      "rounds": 8,
+      "currentMedianNs": 18982850,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 8,
+          "median": 1.341170012633958,
+          "q1": 1.1793032084207435,
+          "q3": 1.4991857033693585,
+          "candidateFasterRounds": 1,
+          "candidateSlowerRounds": 7
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 8,
+          "median": 1.276605190286981,
+          "q1": 1.143305241910132,
+          "q3": 1.4122527582566526,
+          "candidateFasterRounds": 1,
+          "candidateSlowerRounds": 7
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 8,
+          "median": 0.9393955754279508,
+          "q1": 0.8522890628319116,
+          "q3": 1.1149822216012952,
+          "candidateFasterRounds": 5,
+          "candidateSlowerRounds": 3
+        }
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "iterations": 106279,
+      "rounds": 8,
+      "currentMedianNs": 15293250,
+      "comparisons": {
+        "m151-integrated": {
+          "pairedRounds": 8,
+          "median": 1.0240926477528578,
+          "q1": 0.9257762400858176,
+          "q3": 1.0797034095831646,
+          "candidateFasterRounds": 4,
+          "candidateSlowerRounds": 4
+        },
+        "rfsg-v0.1.1": {
+          "pairedRounds": 8,
+          "median": 0.8208191944677123,
+          "q1": 0.7132241254796561,
+          "q3": 0.8509990791144979,
+          "candidateFasterRounds": 8,
+          "candidateSlowerRounds": 0
+        },
+        "rfsg-pre-m15": {
+          "pairedRounds": 8,
+          "median": 0.65683641245157,
+          "q1": 0.6330875495897794,
+          "q3": 0.7157989146216394,
+          "candidateFasterRounds": 8,
+          "candidateSlowerRounds": 0
+        }
+      }
+    }
+  ]
+}
