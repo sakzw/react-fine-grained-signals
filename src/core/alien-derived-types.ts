@@ -24,6 +24,7 @@ export interface RuntimeNode extends Omit<ReactiveNode, "deps" | "depsTail" | "s
   fn?: (() => unknown) | undefined;
   cleanup?: (() => unknown) | undefined;
   protocol?: ReadableProtocolV1 | undefined;
+  readableProtocol?: ReadableProtocolV1 | undefined;
   revision?: number | undefined;
   pendingRevision?: number | undefined;
   unsubscribe?: (() => void) | undefined;

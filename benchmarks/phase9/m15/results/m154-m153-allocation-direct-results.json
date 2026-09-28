@@ -1,0 +1,680 @@
+{
+  "purpose": "M1.5.4 coarse retained-heap comparison; directional only, not allocation rates or a release gate",
+  "gitHead": "fefd6bfb2b985fa16d647d9851fca22646d0f91f",
+  "node": "v24.21.0",
+  "graphCount": 1000,
+  "rounds": 4,
+  "schedule": [
+    [
+      "rfsg-m153",
+      "m154-c3"
+    ],
+    [
+      "m154-c3",
+      "rfsg-m153"
+    ],
+    [
+      "rfsg-m153",
+      "m154-c3"
+    ],
+    [
+      "m154-c3",
+      "rfsg-m153"
+    ]
+  ],
+  "runtimeIdentities": {
+    "rfsg-m153": {
+      "commit": "53ea18007b1934dc51902b6447551b1e237a2545",
+      "artifactDirectory": "benchmarks/phase9/m15/baselines/m153-53ea/dist",
+      "artifactSha256": "0e6f644945d9385d8ea32ed66f2d3785e13984abfd47202c58bfdefe0459f54d",
+      "files": [
+        {
+          "name": "base-Uaa8g2GJ.js",
+          "sha256": "79dd4393473c3dd6fdbc48a2c2a86aafb7e6b15397628bdfb446aa86a1035fc4"
+        },
+        {
+          "name": "core-runtime-BRIcQGuI.js",
+          "sha256": "c14cfd3209d0c731af2458dbd777d2973dfb7fe98fcb2e006694bb9c39c8ca0e"
+        },
+        {
+          "name": "hooks-BrLVzWYI.js",
+          "sha256": "bdf0292a6ad21f3c7cd9c8defed20fd6cae64a9bf812722e6de7d46528c7e7b5"
+        },
+        {
+          "name": "index.js",
+          "sha256": "e16543af9ba7af63c40e2b439663d54816eab4b9a69d7c7bcb968b32440caf7a"
+        },
+        {
+          "name": "jsx-CIzqkThi.js",
+          "sha256": "8b50eecb1a44d3f684adf0f20503bf14c189984a71c93182c45fe47f562f1b5d"
+        },
+        {
+          "name": "jsx-dev-runtime.js",
+          "sha256": "24541e028c540c110b576f45dd7dc3f31872e2dae9c52086d9e26de29bc39939"
+        },
+        {
+          "name": "jsx-runtime.js",
+          "sha256": "41da76b88e4b21f9358fd0286404b0036d4b90303ce6267c2030bf74315c22d4"
+        },
+        {
+          "name": "runtime.js",
+          "sha256": "bac3a15b83956962a92cffaf36a9c2858f5951742000b2add69d17203bd775c2"
+        },
+        {
+          "name": "use-signals-BuuW0UYH.js",
+          "sha256": "5e56044206eef08b59afdd16f545e41056d25d22b00b13e1e22b524e96f6a5cf"
+        },
+        {
+          "name": "utils.js",
+          "sha256": "3c7958c4dc7ffd98a8d0ea00048a464cbab39507441a78e58c25c241d0a4dfef"
+        }
+      ]
+    },
+    "m154-c3": {
+      "commit": "fefd6bfb2b985fa16d647d9851fca22646d0f91f",
+      "artifactDirectory": "dist",
+      "artifactSha256": "25689e971a54d01347687ab817f8a5f128f8ee1bd1a9c05526f2f1dd6338880f",
+      "files": [
+        {
+          "name": "base-BmMmSiK1.js",
+          "sha256": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8"
+        },
+        {
+          "name": "core-runtime-Dqo8e5cK.js",
+          "sha256": "39a62459f032fc8e0e28d2b872b90d595cb9a59bba545822a1c32501a8cef7b3"
+        },
+        {
+          "name": "hooks-BO5dRw7P.js",
+          "sha256": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917"
+        },
+        {
+          "name": "index.js",
+          "sha256": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e"
+        },
+        {
+          "name": "jsx-S8SS1Qgs.js",
+          "sha256": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e"
+        },
+        {
+          "name": "jsx-dev-runtime.js",
+          "sha256": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c"
+        },
+        {
+          "name": "jsx-runtime.js",
+          "sha256": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7"
+        },
+        {
+          "name": "runtime.js",
+          "sha256": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5"
+        },
+        {
+          "name": "use-signals-BU65end7.js",
+          "sha256": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e"
+        },
+        {
+          "name": "utils.js",
+          "sha256": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        }
+      ]
+    }
+  },
+  "kinds": [
+    "signal-computed-effect-graph",
+    "one-source-many-effects",
+    "deep-watched-leaves"
+  ],
+  "measurements": [
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "signal-computed-effect-graph",
+      "round": 1,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767192,
+      "heapLiveBytes": 6413496,
+      "heapAfterDisposeBytes": 5061536,
+      "liveDeltaBytes": 1646304,
+      "retainedDeltaBytes": 294344,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "signal-computed-effect-graph",
+      "round": 1,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4761712,
+      "heapLiveBytes": 6040352,
+      "heapAfterDisposeBytes": 4984552,
+      "liveDeltaBytes": 1278640,
+      "retainedDeltaBytes": 222840,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "signal-computed-effect-graph",
+      "round": 2,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4761712,
+      "heapLiveBytes": 6395752,
+      "heapAfterDisposeBytes": 4988432,
+      "liveDeltaBytes": 1634040,
+      "retainedDeltaBytes": 226720,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "signal-computed-effect-graph",
+      "round": 2,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767192,
+      "heapLiveBytes": 6420360,
+      "heapAfterDisposeBytes": 5059832,
+      "liveDeltaBytes": 1653168,
+      "retainedDeltaBytes": 292640,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "signal-computed-effect-graph",
+      "round": 3,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767192,
+      "heapLiveBytes": 6417160,
+      "heapAfterDisposeBytes": 5064448,
+      "liveDeltaBytes": 1649968,
+      "retainedDeltaBytes": 297256,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "signal-computed-effect-graph",
+      "round": 3,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4761824,
+      "heapLiveBytes": 6042960,
+      "heapAfterDisposeBytes": 4990664,
+      "liveDeltaBytes": 1281136,
+      "retainedDeltaBytes": 228840,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "signal-computed-effect-graph",
+      "round": 4,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4761712,
+      "heapLiveBytes": 6043832,
+      "heapAfterDisposeBytes": 4987320,
+      "liveDeltaBytes": 1282120,
+      "retainedDeltaBytes": 225608,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "signal-computed-effect-graph",
+      "round": 4,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1000,
+        "computedSignals": 1000,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767192,
+      "heapLiveBytes": 6418440,
+      "heapAfterDisposeBytes": 5062000,
+      "liveDeltaBytes": 1651248,
+      "retainedDeltaBytes": 294808,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "one-source-many-effects",
+      "round": 1,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4767184,
+      "heapLiveBytes": 5185776,
+      "heapAfterDisposeBytes": 4857672,
+      "liveDeltaBytes": 418592,
+      "retainedDeltaBytes": 90488,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "one-source-many-effects",
+      "round": 1,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4761704,
+      "heapLiveBytes": 5180200,
+      "heapAfterDisposeBytes": 4855440,
+      "liveDeltaBytes": 418496,
+      "retainedDeltaBytes": 93736,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "one-source-many-effects",
+      "round": 2,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4761704,
+      "heapLiveBytes": 5182616,
+      "heapAfterDisposeBytes": 4853136,
+      "liveDeltaBytes": 420912,
+      "retainedDeltaBytes": 91432,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "one-source-many-effects",
+      "round": 2,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4767184,
+      "heapLiveBytes": 5185488,
+      "heapAfterDisposeBytes": 4856168,
+      "liveDeltaBytes": 418304,
+      "retainedDeltaBytes": 88984,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "one-source-many-effects",
+      "round": 3,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4767184,
+      "heapLiveBytes": 5185776,
+      "heapAfterDisposeBytes": 4856072,
+      "liveDeltaBytes": 418592,
+      "retainedDeltaBytes": 88888,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "one-source-many-effects",
+      "round": 3,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4761704,
+      "heapLiveBytes": 5181232,
+      "heapAfterDisposeBytes": 4852504,
+      "liveDeltaBytes": 419528,
+      "retainedDeltaBytes": 90800,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "one-source-many-effects",
+      "round": 4,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4761704,
+      "heapLiveBytes": 5476816,
+      "heapAfterDisposeBytes": 4850816,
+      "liveDeltaBytes": 715112,
+      "retainedDeltaBytes": 89112,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "one-source-many-effects",
+      "round": 4,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 1,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 0,
+        "watchedLeaves": 0,
+        "subscribersToSingleSource": 1000
+      },
+      "heapBeforeBytes": 4767184,
+      "heapLiveBytes": 5185488,
+      "heapAfterDisposeBytes": 4858968,
+      "liveDeltaBytes": 418304,
+      "retainedDeltaBytes": 91784,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "deep-watched-leaves",
+      "round": 1,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767624,
+      "heapLiveBytes": 8455416,
+      "heapAfterDisposeBytes": 5296944,
+      "liveDeltaBytes": 3687792,
+      "retainedDeltaBytes": 529320,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "deep-watched-leaves",
+      "round": 1,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4762144,
+      "heapLiveBytes": 8079496,
+      "heapAfterDisposeBytes": 5222984,
+      "liveDeltaBytes": 3317352,
+      "retainedDeltaBytes": 460840,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "deep-watched-leaves",
+      "round": 2,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4762144,
+      "heapLiveBytes": 8079560,
+      "heapAfterDisposeBytes": 5223048,
+      "liveDeltaBytes": 3317416,
+      "retainedDeltaBytes": 460904,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "deep-watched-leaves",
+      "round": 2,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767624,
+      "heapLiveBytes": 8455352,
+      "heapAfterDisposeBytes": 5296952,
+      "liveDeltaBytes": 3687728,
+      "retainedDeltaBytes": 529328,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "deep-watched-leaves",
+      "round": 3,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767624,
+      "heapLiveBytes": 8455416,
+      "heapAfterDisposeBytes": 5297016,
+      "liveDeltaBytes": 3687792,
+      "retainedDeltaBytes": 529392,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "deep-watched-leaves",
+      "round": 3,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4762144,
+      "heapLiveBytes": 8079560,
+      "heapAfterDisposeBytes": 5223000,
+      "liveDeltaBytes": 3317416,
+      "retainedDeltaBytes": 460856,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "m154-c3",
+      "kind": "deep-watched-leaves",
+      "round": 4,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4762144,
+      "heapLiveBytes": 8079560,
+      "heapAfterDisposeBytes": 5223048,
+      "liveDeltaBytes": 3317416,
+      "retainedDeltaBytes": 460904,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    },
+    {
+      "runtimeId": "rfsg-m153",
+      "kind": "deep-watched-leaves",
+      "round": 4,
+      "status": "ok",
+      "sanity": "directional_only",
+      "graphCount": 1000,
+      "graphShape": {
+        "sourceSignals": 0,
+        "computedSignals": 0,
+        "effects": 1000,
+        "deepSignalRoots": 1,
+        "watchedLeaves": 1000,
+        "subscribersToSingleSource": 0
+      },
+      "heapBeforeBytes": 4767624,
+      "heapLiveBytes": 8455416,
+      "heapAfterDisposeBytes": 5297064,
+      "liveDeltaBytes": 3687792,
+      "retainedDeltaBytes": 529440,
+      "disposedEffectsStopped": true,
+      "gcExposed": true
+    }
+  ]
+}

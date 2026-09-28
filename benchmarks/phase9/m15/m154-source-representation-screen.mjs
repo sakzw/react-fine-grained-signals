@@ -1,28 +1,26 @@
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, writeFileSync } from "node:fs";
+import { join, relative } from "node:path";
 import { commonCases } from "../config.mjs";
 import { fileURLToPath } from "node:url";
 
 const schedule = [
-  ["rfsg-current", "m151-integrated", "rfsg-pre-m15", "rfsg-v0.1.1"],
-  ["m151-integrated", "rfsg-v0.1.1", "rfsg-current", "rfsg-pre-m15"],
-  ["rfsg-v0.1.1", "rfsg-pre-m15", "m151-integrated", "rfsg-current"],
-  ["rfsg-pre-m15", "rfsg-current", "rfsg-v0.1.1", "m151-integrated"],
+  ["rfsg-m153", "m154-c3", "rfsg-v0.1.1"],
+  ["m154-c3", "rfsg-v0.1.1", "rfsg-m153"],
+  ["rfsg-v0.1.1", "rfsg-m153", "m154-c3"],
+  ["rfsg-m153", "rfsg-v0.1.1", "m154-c3"],
+  ["rfsg-v0.1.1", "m154-c3", "rfsg-m153"],
+  ["m154-c3", "rfsg-m153", "rfsg-v0.1.1"],
 ];
-const fullDefinitions = [
+const definitions = [
   ["source/create", 24], ["source/read", 24],
-  ["source/unobserved-write", 12], ["source/write-read", 12],
-  ["computed/create", 12], ["effect/create", 12],
-  ["computed/dirty-read", 8], ["computed/equality-suppression", 8],
-  ["effect/observed-write", 8], ["effect/fanout", 8, 16],
-  ["effect/fanout", 8, 64], ["batch/two-writes-one-reaction", 8],
+  ["source/unobserved-write", 18], ["source/write-read", 18],
+  ["computed/create", 18], ["effect/create", 18],
+  ["computed/dirty-read", 12], ["computed/equality-suppression", 12],
+  ["effect/observed-write", 12], ["effect/fanout", 12, 16],
+  ["effect/fanout", 12, 64], ["batch/two-writes-one-reaction", 12],
 ];
-const focused = process.env.M154_FOCUSED === "1";
-const definitions = focused ? [
-  ["source/create", 24], ["source/read", 24],
-  ["computed/dirty-read", 8], ["effect/observed-write", 8],
-] : fullDefinitions;
 const iterationsBytes = readFileSync(new URL("../m1b-iterations.json", import.meta.url));
 const frozenIterations = JSON.parse(iterationsBytes.toString("utf8"));
 const cases = definitions.map(([id, rounds, size = 1]) => {
@@ -33,19 +31,48 @@ const cases = definitions.map(([id, rounds, size = 1]) => {
   return { id, caseId, kind: definition.kind, size, iterations, rounds };
 });
 const workerPath = fileURLToPath(new URL("./owner-diagnostic-worker.mjs", import.meta.url));
-const candidateName = focused ? "m154-source-fastpath-candidate" : "m154-symbol-protocol-candidate";
-const resultPath = new URL(`./results/${candidateName}-results.json`, import.meta.url);
+const resultPath = new URL("./results/m154-m153-direct-results.json", import.meta.url);
+
+const projectRoot = fileURLToPath(new URL("../../../", import.meta.url));
+function runtimeIdentity(directory, commit) {
+  const files = readdirSync(directory).filter((name) => name.endsWith(".js")).toSorted();
+  if (!files.includes("index.js") || !files.some((name) => /^core-runtime-.*\.js$/.test(name))) {
+    throw new Error(`Expected index.js and a core runtime bundle in ${directory}`);
+  }
+  const artifacts = files.map((name) => ({ name, sha256: createHash("sha256").update(readFileSync(join(directory, name))).digest("hex") }));
+  const hashInput = JSON.stringify(artifacts);
+  return {
+    commit,
+    artifactDirectory: relative(projectRoot, directory).replaceAll("\\", "/"),
+    artifactSha256: createHash("sha256").update(hashInput).digest("hex"),
+    files: artifacts,
+  };
+}
+
+const baselineCommit = "53ea18007b1934dc51902b6447551b1e237a2545";
+const baselineDist = fileURLToPath(new URL("./baselines/m153-53ea/dist/", import.meta.url));
+const currentDist = fileURLToPath(new URL("../../../dist/", import.meta.url));
+const baselineManifest = JSON.parse(readFileSync(new URL("./baselines/m153-53ea/identity.json", import.meta.url), "utf8"));
+if (baselineManifest.sourceCommit !== baselineCommit) throw new Error("Frozen M1.5.3 artifact commit identity is incorrect.");
+const runtimeIdentities = {
+  "rfsg-m153": runtimeIdentity(baselineDist, baselineCommit),
+  "m154-c3": runtimeIdentity(currentDist, process.env.M154_GIT_HEAD ?? "uncommitted candidate from current HEAD"),
+};
+if (runtimeIdentities["rfsg-m153"].artifactSha256 !== baselineManifest.artifactSha256) {
+  throw new Error("Frozen M1.5.3 artifact hash does not match its checked-in identity manifest.");
+}
 const result = {
-  purpose: `M1.5.4 ${focused ? "focused source-only owner-free fastpath" : "source representation"} diagnostic; fresh-process paired durations, not an authoritative release matrix`,
+  purpose: "M1.5.4 direct C3 vs frozen M1.5.3 paired duration diagnostic; not the authoritative release matrix",
   gitHead: process.env.M154_GIT_HEAD ?? "not-provided",
   worktreeStatusAtStart: process.env.M154_START_STATUS ?? "not-provided",
   node: process.version,
-  roundsPolicy: "24 source/create and source/read; 12 source/write and creation diagnostics; 8 regression controls",
+  roundsPolicy: "24 source/create and source/read; 18 source/write and creation diagnostics; 12 computed/effect/batch regression controls; three-runtime six-round balanced schedule",
   warmups: 3,
   samples: 7,
   frozenIterationsFile: "../m1b-iterations.json",
   frozenIterationsSha256: createHash("sha256").update(iterationsBytes).digest("hex"),
-  runtimes: ["rfsg-current", "m151-integrated", "rfsg-v0.1.1", "rfsg-pre-m15"],
+  runtimes: ["rfsg-m153", "m154-c3", "rfsg-v0.1.1"],
+  runtimeIdentities,
   schedule,
   cases,
   measurements: [],
@@ -62,6 +89,10 @@ function run(payload) {
 }
 
 for (const item of cases) for (const runtimeId of result.runtimes) run({ ...item, runtimeId, preflightOnly: true });
+if (process.env.M154_PREFLIGHT_ONLY === "1") {
+  process.stdout.write(`${JSON.stringify({ runtimeIdentities, preflightCases: cases.map(({ caseId, iterations }) => ({ caseId, iterations })), status: "passed" }, null, 2)}\n`);
+  process.exit(0);
+}
 writeFileSync(resultPath, `${JSON.stringify(result, null, 2)}\n`);
 for (const item of cases) {
   for (let round = 0; round < item.rounds; round += 1) {

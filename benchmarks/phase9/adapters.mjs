@@ -4,6 +4,30 @@ const adapterReadLoop = (source, iterations, read) => {
   return sum;
 };
 
+const rfsgDirectReadLoop = (source, iterations) => {
+  let sum = 0;
+  for (let index = 0; index < iterations; index += 1) sum += source.value;
+  return sum;
+};
+
+function adaptRfsg(api, runtimeId, signal = api.signal, computed = api.computed) {
+  return {
+    runtimeId,
+    signal,
+    read: (source) => source.value,
+    write: (source, value) => { source.value = value; },
+    computed,
+    readComputed: (value) => value.value,
+    effect: (fn) => api.effect(fn),
+    dispose: (stop) => stop(),
+    batch: api.batch,
+    supportsBatch: true,
+    directReadLoop: rfsgDirectReadLoop,
+    adapterReadLoop: (source, count) => adapterReadLoop(source, count, (value) => value.value),
+    deepSignal: api.deepSignal,
+  };
+}
+
 export async function loadAdapter(runtimeId) {
   const directReadLoop = (source, iterations) => {
     let sum = 0;
@@ -36,21 +60,15 @@ export async function loadAdapter(runtimeId) {
     }
     case "rfsg-current": {
       const api = await import("../../dist/index.js");
-      return {
-        runtimeId,
-        signal: (value) => api.signal(value),
-        read: (source) => source.value,
-        write: (source, value) => { source.value = value; },
-        computed: (fn) => api.computed(fn),
-        readComputed: (value) => value.value,
-        effect: (fn) => api.effect(fn),
-        dispose: (stop) => stop(),
-        batch: api.batch,
-        supportsBatch: true,
-        directReadLoop,
-        adapterReadLoop: (source, count) => adapterReadLoop(source, count, (value) => value.value),
-        deepSignal: (value) => api.deepSignal(value),
-      };
+      return adaptRfsg(api, runtimeId);
+    }
+    case "rfsg-m153": {
+      const api = await import("./m15/baselines/m153-53ea/dist/index.js");
+      return adaptRfsg(api, runtimeId);
+    }
+    case "m154-c3": {
+      const api = await import("../../dist/index.js");
+      return adaptRfsg(api, runtimeId);
     }
     case "rfsg-pre-m15": {
       const api = await import("./m15/current-dist/index.js");

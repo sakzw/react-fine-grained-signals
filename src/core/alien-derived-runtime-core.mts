@@ -535,20 +535,25 @@ class HelperBrandSignal<T = unknown> {
   constructor(node: RuntimeSource, branded = true) { this.#node = node; if (branded) registerHelperBrand(this); attachProtocol(this, node); }
   get value(): T {
     const node = this.#node;
-    const attempt = activeRenderAttempt;
     const currentOwner = executionContext.owner;
+    // A render attempt is installed with its render owner. Ordinary owner-free
+    // reads can skip speculative-render dispatch while preserving collection.
+    if (currentOwner === undefined) {
+      const value = readSource(node);
+      const collector = activeRenderCollector;
+      if (collector !== undefined) {
+        trackRenderDependency(getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency);
+      }
+      return value as T;
+    }
+    const attempt = activeRenderAttempt;
     if (attempt !== undefined && isRenderExecutionOwner(currentOwner) && currentOwner.runtimeToken === runtimeToken && renderAdapter !== undefined) {
       foreignAdapter.observeRevision(node);
       return renderAdapter.readSource(this, node, attempt) as T;
     }
     const value = readSource(node);
-    const owner = currentOwner;
-    if (owner === undefined) {
-      if (activeRenderCollector !== undefined) {
-        trackRenderDependency(getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency);
-      }
-    } else if ((isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken) {
-      foreignAdapter.publishForeignReadable(this, node, owner);
+    if ((isGraphExecutionOwner(currentOwner) || isRenderExecutionOwner(currentOwner)) && currentOwner.runtimeToken !== runtimeToken) {
+      foreignAdapter.publishForeignReadable(this, node, currentOwner);
     }
     return value as T;
   }

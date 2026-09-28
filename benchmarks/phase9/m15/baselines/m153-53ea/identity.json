@@ -1,0 +1,49 @@
+{
+  "sourceCommit": "53ea18007b1934dc51902b6447551b1e237a2545",
+  "sourceTree": "5daebfd17e10290715e6ff5c44e7748829f7c378",
+  "node": "v24.21.0",
+  "build": "tsdown 0.22.14 / rolldown 1.2.6; pnpm-lock.yaml from source commit; archive build",
+  "artifactSha256": "0e6f644945d9385d8ea32ed66f2d3785e13984abfd47202c58bfdefe0459f54d",
+  "files": [
+    {
+      "name": "base-Uaa8g2GJ.js",
+      "sha256": "79dd4393473c3dd6fdbc48a2c2a86aafb7e6b15397628bdfb446aa86a1035fc4"
+    },
+    {
+      "name": "core-runtime-BRIcQGuI.js",
+      "sha256": "c14cfd3209d0c731af2458dbd777d2973dfb7fe98fcb2e006694bb9c39c8ca0e"
+    },
+    {
+      "name": "hooks-BrLVzWYI.js",
+      "sha256": "bdf0292a6ad21f3c7cd9c8defed20fd6cae64a9bf812722e6de7d46528c7e7b5"
+    },
+    {
+      "name": "index.js",
+      "sha256": "e16543af9ba7af63c40e2b439663d54816eab4b9a69d7c7bcb968b32440caf7a"
+    },
+    {
+      "name": "jsx-CIzqkThi.js",
+      "sha256": "8b50eecb1a44d3f684adf0f20503bf14c189984a71c93182c45fe47f562f1b5d"
+    },
+    {
+      "name": "jsx-dev-runtime.js",
+      "sha256": "24541e028c540c110b576f45dd7dc3f31872e2dae9c52086d9e26de29bc39939"
+    },
+    {
+      "name": "jsx-runtime.js",
+      "sha256": "41da76b88e4b21f9358fd0286404b0036d4b90303ce6267c2030bf74315c22d4"
+    },
+    {
+      "name": "runtime.js",
+      "sha256": "bac3a15b83956962a92cffaf36a9c2858f5951742000b2add69d17203bd775c2"
+    },
+    {
+      "name": "use-signals-BuuW0UYH.js",
+      "sha256": "5e56044206eef08b59afdd16f545e41056d25d22b00b13e1e22b524e96f6a5cf"
+    },
+    {
+      "name": "utils.js",
+      "sha256": "3c7958c4dc7ffd98a8d0ea00048a464cbab39507441a78e58c25c241d0a4dfef"
+    }
+  ]
+}

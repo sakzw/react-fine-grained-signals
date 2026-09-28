@@ -34,9 +34,31 @@ export function createForeignReadableAdapter({
   isBatching,
   effect,
 }: ForeignReadableAdapterOptions) {
-  const protocols = new WeakMap<object, ReadableProtocolV1>();
   const readableNodes = new WeakMap<object, RuntimeNode>();
   const foreignNodes = new WeakMap<ReadableProtocolV1, RuntimeNode>();
+  const localReadable = Symbol("localReadable");
+  type LocalReadableProtocol = ReadableProtocolV1 & { readonly [localReadable]: CandidateReadable };
+
+  function getLocalReadableRevision(this: LocalReadableProtocol): number {
+    const readable = this[localReadable];
+    const node = readableNodes.get(readable)!;
+    try { withSynchronousExecutionOwner(UNTRACKED_OWNER, () => readable.value); }
+    catch { /* Revisions remain observable while computed read errors are cached. */ }
+    return observeRevision(node);
+  }
+
+  function subscribeLocalReadable(this: LocalReadableProtocol, listener: (revision: number) => void) {
+    const readable = this[localReadable];
+    const node = readableNodes.get(readable)!;
+    const revision = observeRevision(node);
+    let initial = true;
+    const unsubscribe = effect(() => {
+      try { readable.value; } catch { /* Keep errored computed boundaries observed. */ }
+      if (initial) initial = false;
+      else listener(observeRevision(node));
+    });
+    return { unsubscribe, revision };
+  }
 
   function ensureForeignNode(protocol: ReadableProtocolV1, observedRevision: number): RuntimeNode {
     let node = foreignNodes.get(protocol);
@@ -96,7 +118,7 @@ export function createForeignReadableAdapter({
 
   function publishForeignReadable(readable: object, node: RuntimeNode, owner: ExecutionContextOwnerV2 | undefined): void {
     if (owner === UNTRACKED_OWNER || ((isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken === runtimeToken)) return;
-    const protocol = protocols.get(readable);
+    const protocol = node.readableProtocol;
     if (protocol !== undefined) {
       if (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) owner.add(protocol, observeRevision(node));
     }
@@ -104,26 +126,14 @@ export function createForeignReadableAdapter({
 
   function attachProtocol(readable: CandidateReadable, node: RuntimeNode): void {
     readableNodes.set(readable, node);
-    const protocol = {
+    const protocol: LocalReadableProtocol = {
       version: 1 as const,
       runtimeToken,
-      getRevision() {
-        try { withSynchronousExecutionOwner(UNTRACKED_OWNER, () => readable.value); }
-        catch { /* Revisions remain observable while computed read errors are cached. */ }
-        return observeRevision(node);
-      },
-      subscribe(listener: (revision: number) => void) {
-        const revision = observeRevision(node);
-        let initial = true;
-        const unsubscribe = effect(() => {
-          try { readable.value; } catch { /* Keep errored computed boundaries observed. */ }
-          if (initial) initial = false;
-          else listener(observeRevision(node));
-        });
-        return { unsubscribe, revision };
-      },
+      [localReadable]: readable,
+      getRevision: getLocalReadableRevision,
+      subscribe: subscribeLocalReadable,
     };
-    protocols.set(readable, protocol);
+    node.readableProtocol = protocol;
     Object.defineProperty(readable, READABLE_INTEROP_V1, {
       value: protocol,
       enumerable: false,

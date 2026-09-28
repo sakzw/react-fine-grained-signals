@@ -1,0 +1,370 @@
+{
+  "purpose": "M1.5.4 direct C3 vs frozen M1.5.3 paired duration diagnostic; not the authoritative release matrix",
+  "gitHead": "fefd6bfb2b985fa16d647d9851fca22646d0f91f",
+  "node": "v24.21.0",
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+  "runtimeIdentities": {
+    "rfsg-m153": {
+      "commit": "53ea18007b1934dc51902b6447551b1e237a2545",
+      "artifactDirectory": "benchmarks/phase9/m15/baselines/m153-53ea/dist",
+      "artifactSha256": "0e6f644945d9385d8ea32ed66f2d3785e13984abfd47202c58bfdefe0459f54d",
+      "files": [
+        {
+          "name": "base-Uaa8g2GJ.js",
+          "sha256": "79dd4393473c3dd6fdbc48a2c2a86aafb7e6b15397628bdfb446aa86a1035fc4"
+        },
+        {
+          "name": "core-runtime-BRIcQGuI.js",
+          "sha256": "c14cfd3209d0c731af2458dbd777d2973dfb7fe98fcb2e006694bb9c39c8ca0e"
+        },
+        {
+          "name": "hooks-BrLVzWYI.js",
+          "sha256": "bdf0292a6ad21f3c7cd9c8defed20fd6cae64a9bf812722e6de7d46528c7e7b5"
+        },
+        {
+          "name": "index.js",
+          "sha256": "e16543af9ba7af63c40e2b439663d54816eab4b9a69d7c7bcb968b32440caf7a"
+        },
+        {
+          "name": "jsx-CIzqkThi.js",
+          "sha256": "8b50eecb1a44d3f684adf0f20503bf14c189984a71c93182c45fe47f562f1b5d"
+        },
+        {
+          "name": "jsx-dev-runtime.js",
+          "sha256": "24541e028c540c110b576f45dd7dc3f31872e2dae9c52086d9e26de29bc39939"
+        },
+        {
+          "name": "jsx-runtime.js",
+          "sha256": "41da76b88e4b21f9358fd0286404b0036d4b90303ce6267c2030bf74315c22d4"
+        },
+        {
+          "name": "runtime.js",
+          "sha256": "bac3a15b83956962a92cffaf36a9c2858f5951742000b2add69d17203bd775c2"
+        },
+        {
+          "name": "use-signals-BuuW0UYH.js",
+          "sha256": "5e56044206eef08b59afdd16f545e41056d25d22b00b13e1e22b524e96f6a5cf"
+        },
+        {
+          "name": "utils.js",
+          "sha256": "3c7958c4dc7ffd98a8d0ea00048a464cbab39507441a78e58c25c241d0a4dfef"
+        }
+      ]
+    },
+    "m154-c3": {
+      "commit": "fefd6bfb2b985fa16d647d9851fca22646d0f91f",
+      "artifactDirectory": "dist",
+      "artifactSha256": "25689e971a54d01347687ab817f8a5f128f8ee1bd1a9c05526f2f1dd6338880f",
+      "files": [
+        {
+          "name": "base-BmMmSiK1.js",
+          "sha256": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8"
+        },
+        {
+          "name": "core-runtime-Dqo8e5cK.js",
+          "sha256": "39a62459f032fc8e0e28d2b872b90d595cb9a59bba545822a1c32501a8cef7b3"
+        },
+        {
+          "name": "hooks-BO5dRw7P.js",
+          "sha256": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917"
+        },
+        {
+          "name": "index.js",
+          "sha256": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e"
+        },
+        {
+          "name": "jsx-S8SS1Qgs.js",
+          "sha256": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e"
+        },
+        {
+          "name": "jsx-dev-runtime.js",
+          "sha256": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c"
+        },
+        {
+          "name": "jsx-runtime.js",
+          "sha256": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7"
+        },
+        {
+          "name": "runtime.js",
+          "sha256": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5"
+        },
+        {
+          "name": "use-signals-BU65end7.js",
+          "sha256": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e"
+        },
+        {
+          "name": "utils.js",
+          "sha256": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        }
+      ]
+    }
+  },
+  "rows": [
+    {
+      "caseId": "source/create@1",
+      "iterations": 471476,
+      "rounds": 24,
+      "c3MedianDurationNs": 488757600,
+      "m153MedianDurationNs": 1817738000,
+      "c3OverM153": {
+        "pairedRounds": 24,
+        "median": 0.27557967944958217,
+        "q1": 0.21620548863943434,
+        "q3": 0.7760680672483884,
+        "min": 0.14856726168643006,
+        "max": 1.1359275066717018,
+        "candidateFasterRounds": 22,
+        "candidateSlowerRounds": 2
+      },
+      "c3OverV011Context": {
+        "median": 1.2866636605078738,
+        "q1": 1.191908868913486,
+        "q3": 1.435683994843174
+      }
+    },
+    {
+      "caseId": "source/read@1",
+      "iterations": 1693079,
+      "rounds": 24,
+      "c3MedianDurationNs": 10951300,
+      "m153MedianDurationNs": 12772100,
+      "c3OverM153": {
+        "pairedRounds": 24,
+        "median": 0.8828092134419917,
+        "q1": 0.8033891288379622,
+        "q3": 1.0163400335594324,
+        "min": 0.665398946916106,
+        "max": 1.240283977383837,
+        "candidateFasterRounds": 17,
+        "candidateSlowerRounds": 7
+      },
+      "c3OverV011Context": {
+        "median": 1.1473663935556835,
+        "q1": 1.082407566898015,
+        "q3": 1.284564388163696
+      }
+    },
+    {
+      "caseId": "source/unobserved-write@1",
+      "iterations": 1084411,
+      "rounds": 18,
+      "c3MedianDurationNs": 17171950,
+      "m153MedianDurationNs": 15866850,
+      "c3OverM153": {
+        "pairedRounds": 18,
+        "median": 1.0743022005895484,
+        "q1": 0.9010347035595233,
+        "q3": 1.2096800818464368,
+        "min": 0.35252922158667,
+        "max": 1.3249193360405345,
+        "candidateFasterRounds": 9,
+        "candidateSlowerRounds": 9
+      },
+      "c3OverV011Context": {
+        "median": 1.1143258954153183,
+        "q1": 1.0630200804882524,
+        "q3": 1.3210104724375828
+      }
+    },
+    {
+      "caseId": "source/write-read@1",
+      "iterations": 636392,
+      "rounds": 18,
+      "c3MedianDurationNs": 23300650,
+      "m153MedianDurationNs": 23125600,
+      "c3OverM153": {
+        "pairedRounds": 18,
+        "median": 0.923348904679191,
+        "q1": 0.8332059520332472,
+        "q3": 1.2952501443073983,
+        "min": 0.46654625235118113,
+        "max": 2.8592503841369723,
+        "candidateFasterRounds": 12,
+        "candidateSlowerRounds": 6
+      },
+      "c3OverV011Context": {
+        "median": 1.1160592340095166,
+        "q1": 0.9831179442875355,
+        "q3": 1.2197933790889608
+      }
+    },
+    {
+      "caseId": "computed/create@1",
+      "iterations": 633875,
+      "rounds": 18,
+      "c3MedianDurationNs": 852426950,
+      "m153MedianDurationNs": 2409359400,
+      "c3OverM153": {
+        "pairedRounds": 18,
+        "median": 0.36023977594099194,
+        "q1": 0.3407658066052977,
+        "q3": 0.44290208793755836,
+        "min": 0.3038337309389064,
+        "max": 0.9209088263197809,
+        "candidateFasterRounds": 18,
+        "candidateSlowerRounds": 0
+      },
+      "c3OverV011Context": {
+        "median": 0.8011685648146007,
+        "q1": 0.661719497809108,
+        "q3": 0.8416189258557562
+      }
+    },
+    {
+      "caseId": "effect/create@1",
+      "iterations": 85858,
+      "rounds": 18,
+      "c3MedianDurationNs": 17552850,
+      "m153MedianDurationNs": 19006000,
+      "c3OverM153": {
+        "pairedRounds": 18,
+        "median": 0.9287165206095931,
+        "q1": 0.8495260795715212,
+        "q3": 1.0264856438646566,
+        "min": 0.6970867988161004,
+        "max": 1.319574104582342,
+        "candidateFasterRounds": 12,
+        "candidateSlowerRounds": 6
+      },
+      "c3OverV011Context": {
+        "median": 1.1712269107001387,
+        "q1": 1.047298426991354,
+        "q3": 1.2899461308656304
+      }
+    },
+    {
+      "caseId": "computed/dirty-read@1",
+      "iterations": 93142,
+      "rounds": 12,
+      "c3MedianDurationNs": 19445200,
+      "m153MedianDurationNs": 18943850,
+      "c3OverM153": {
+        "pairedRounds": 12,
+        "median": 1.0548855009055385,
+        "q1": 0.8874480525100259,
+        "q3": 1.1227657537535,
+        "min": 0.563709283433882,
+        "max": 1.2858163649062484,
+        "candidateFasterRounds": 5,
+        "candidateSlowerRounds": 7
+      },
+      "c3OverV011Context": {
+        "median": 1.3473825822495082,
+        "q1": 1.0745517032718965,
+        "q3": 1.3926846091084775
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "iterations": 62701,
+      "rounds": 12,
+      "c3MedianDurationNs": 17287850,
+      "m153MedianDurationNs": 19143800,
+      "c3OverM153": {
+        "pairedRounds": 12,
+        "median": 0.9776778439180729,
+        "q1": 0.7987388768163762,
+        "q3": 1.0846237056724535,
+        "min": 0.6735881016318942,
+        "max": 1.1688114199849737,
+        "candidateFasterRounds": 7,
+        "candidateSlowerRounds": 5
+      },
+      "c3OverV011Context": {
+        "median": 0.8384116024438084,
+        "q1": 0.7988744590931939,
+        "q3": 0.9454534459076778
+      }
+    },
+    {
+      "caseId": "effect/observed-write@1",
+      "iterations": 106279,
+      "rounds": 12,
+      "c3MedianDurationNs": 14241300,
+      "m153MedianDurationNs": 15874200,
+      "c3OverM153": {
+        "pairedRounds": 12,
+        "median": 0.9116674879338275,
+        "q1": 0.8712897515816687,
+        "q3": 0.9931798969136514,
+        "min": 0.7424232730994934,
+        "max": 1.1650050132037904,
+        "candidateFasterRounds": 9,
+        "candidateSlowerRounds": 3
+      },
+      "c3OverV011Context": {
+        "median": 0.7207233667273687,
+        "q1": 0.6184283229124059,
+        "q3": 0.829195057277193
+      }
+    },
+    {
+      "caseId": "effect/fanout@16",
+      "iterations": 35830,
+      "rounds": 12,
+      "c3MedianDurationNs": 29646250,
+      "m153MedianDurationNs": 30853150,
+      "c3OverM153": {
+        "pairedRounds": 12,
+        "median": 0.9469564309080014,
+        "q1": 0.9062558032801363,
+        "q3": 1.0635406078633323,
+        "min": 0.7508279994949446,
+        "max": 1.2595405705816969,
+        "candidateFasterRounds": 8,
+        "candidateSlowerRounds": 4
+      },
+      "c3OverV011Context": {
+        "median": 0.8990937975789777,
+        "q1": 0.7877912383307453,
+        "q3": 1.0031617623936002
+      }
+    },
+    {
+      "caseId": "effect/fanout@64",
+      "iterations": 8680,
+      "rounds": 12,
+      "c3MedianDurationNs": 31069250,
+      "m153MedianDurationNs": 30493550,
+      "c3OverM153": {
+        "pairedRounds": 12,
+        "median": 1.0052732330697625,
+        "q1": 0.9495693557881116,
+        "q3": 1.119686176823848,
+        "min": 0.7789097586661073,
+        "max": 1.2273077245595714,
+        "candidateFasterRounds": 6,
+        "candidateSlowerRounds": 6
+      },
+      "c3OverV011Context": {
+        "median": 1.0214684696949503,
+        "q1": 0.9337549963320042,
+        "q3": 1.1039929603729544
+      }
+    },
+    {
+      "caseId": "batch/two-writes-one-reaction@1",
+      "iterations": 28057,
+      "rounds": 12,
+      "c3MedianDurationNs": 13455950,
+      "m153MedianDurationNs": 15161700,
+      "c3OverM153": {
+        "pairedRounds": 12,
+        "median": 0.836933574929418,
+        "q1": 0.773595055958301,
+        "q3": 1.0226035992791813,
+        "min": 0.5763272828136092,
+        "max": 1.2384845032473741,
+        "candidateFasterRounds": 9,
+        "candidateSlowerRounds": 3
+      },
+      "c3OverV011Context": {
+        "median": 1.0178519974947997,
+        "q1": 0.8838979987078076,
+        "q3": 1.2567388349032957
+      }
+    }
+  ]
+}
