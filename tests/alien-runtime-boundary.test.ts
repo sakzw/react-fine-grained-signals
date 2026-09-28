@@ -5,7 +5,7 @@ import { describe, expect, it } from "vitest";
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const productionRoot = join(repositoryRoot, "src");
-const allowedSystemImport = "src/core/reactive-runtime.ts";
+const allowedSystemImport = "src/core/alien-derived-runtime-core.mjs";
 
 interface AlienImport {
   readonly specifier: string;
@@ -81,7 +81,7 @@ async function listProductionFiles(directory: string): Promise<string[]> {
   const nestedFiles = await Promise.all(entries.map(async (entry) => {
     const path = join(directory, entry.name);
     if (entry.isDirectory()) return listProductionFiles(path);
-    return entry.isFile() && /\.tsx?$/.test(entry.name) ? [path] : [];
+    return entry.isFile() && /\.(?:tsx?|mjs)$/.test(entry.name) ? [path] : [];
   }));
   return nestedFiles.flat();
 }
@@ -130,7 +130,7 @@ describe("Alien Signals production dependency boundary", () => {
     if (violations.length > 0) {
       throw new Error([
         "Production code must not import Alien Signals' high-level root API.",
-        "Use RFSG's private ReactiveRuntime; only src/core/reactive-runtime.ts may depend directly on alien-signals/system.",
+        "Use RFSG's private ReactiveRuntime; only src/core/alien-derived-runtime-core.mjs may depend directly on alien-signals/system.",
         ...violations,
       ].join("\n"));
     }

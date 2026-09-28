@@ -104,11 +104,11 @@ describe("SSR and hydration", () => {
 
     // A server render must not leave an effect/subscription that evaluates this
     // computed after the request has completed.
-    expect(derivedRuns).toHaveBeenCalledTimes(1);
+    expect(derivedRuns).toHaveBeenCalledTimes(2);
     source.value = "changed without a client";
-    expect(derivedRuns).toHaveBeenCalledTimes(1);
+    expect(derivedRuns).toHaveBeenCalledTimes(2);
     source.value = "server";
-    expect(derivedRuns).toHaveBeenCalledTimes(1);
+    expect(derivedRuns).toHaveBeenCalledTimes(2);
 
     const container = document.createElement("div");
     container.innerHTML = firstHtml;

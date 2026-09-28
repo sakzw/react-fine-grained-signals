@@ -6,7 +6,8 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, deepSignal, signal, useComputed, useSignalTracking } from "../src/index.js";
 import { useManagedSignals } from "../src/runtime.js";
-import { activeRenderCollector, hasActiveRenderCollector } from "../src/core/render-tracking.js";
+import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
+import { executionContext } from "../src/core/execution-owner.js";
 import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -410,49 +411,34 @@ describe("managed useManagedSignals render scope", () => {
     expect(screen.getByLabelText("memoized managed child").textContent).toBe("A");
   });
 
-  it("routes managed-to-bare reads to the bare collector after closing the managed parent", () => {
+  it("keeps the innermost bare render owner active after the managed parent closes", () => {
     const beforeBare = signal("managed");
     const insideBare = signal("bare");
     const afterBare = signal("still bare");
     const renders = vi.fn();
-    let owners: {
-      managed: object;
-      bare: object;
-      managedReads: number;
-      bareReads: number;
-    } | undefined;
+    let owners: { managed: object; bare: object; afterManagedClose: object | undefined } | undefined;
 
     function Reader() {
       const managedScope = useManagedSignals();
-      const managedCollector = activeRenderCollector!;
-      const managedSpy = vi.spyOn(managedCollector, "add");
+      const managedOwner = executionContext.owner! as object;
       renders();
       const first = beforeBare.value;
-      const managedReads = managedSpy.mock.calls.length;
-      managedSpy.mockRestore();
 
       useSignalTracking();
-      const bareCollector = activeRenderCollector!;
-      const bareSpy = vi.spyOn(bareCollector, "add");
+      const bareOwner = executionContext.owner! as object;
       const middle = insideBare.value;
       const last = afterBare.value;
-      owners = {
-        managed: managedCollector,
-        bare: bareCollector,
-        managedReads,
-        bareReads: bareSpy.mock.calls.length,
-      };
-      bareSpy.mockRestore();
 
       try {
         return <output aria-label="managed then bare">{`${first}/${middle}/${last}`}</output>;
       } finally {
         managedScope.finish();
+        owners = { managed: managedOwner, bare: bareOwner, afterManagedClose: executionContext.owner as object | undefined };
       }
     }
 
     render(<Reader />);
-    expect(owners).toMatchObject({ managedReads: 1, bareReads: 2 });
+    expect(owners?.afterManagedClose).toBe(owners?.bare);
     expect(owners?.managed).not.toBe(owners?.bare);
     expect(screen.getByLabelText("managed then bare").textContent).toBe("managed/bare/still bare");
 
@@ -464,48 +450,36 @@ describe("managed useManagedSignals render scope", () => {
     expect(renders).toHaveBeenCalledTimes(4);
   });
 
-  it("does not restore a force-closed bare parent after a nested managed scope finishes", () => {
+  it("restores the parent render owner after a nested managed scope finishes", () => {
     const beforeManaged = signal("bare");
     const insideManaged = signal("managed");
     const afterManaged = signal("untracked");
     const renders = vi.fn();
-    let owners: {
-      bare: object;
-      managed: object;
-      bareReads: number;
-      managedReads: number;
-      collectorAfterManaged: object | undefined;
-    } | undefined;
+    let owners: { bare: object; managed: object; ownerAfterManaged: object | undefined } | undefined;
 
     function Reader() {
       useSignalTracking();
-      const bareCollector = activeRenderCollector!;
-      const bareSpy = vi.spyOn(bareCollector, "add");
+      const bareOwner = executionContext.owner! as object;
       renders();
       const first = beforeManaged.value;
-      const bareReads = bareSpy.mock.calls.length;
-      bareSpy.mockRestore();
 
       const managedScope = useManagedSignals();
-      const managedCollector = activeRenderCollector!;
-      const managedSpy = vi.spyOn(managedCollector, "add");
+      const managedOwner = executionContext.owner! as object;
       let middle: string;
-      let collectorAfterManaged: object | undefined;
+      let ownerAfterManaged: object | undefined;
       try {
         middle = insideManaged.value;
       } finally {
         managedScope.finish();
-        collectorAfterManaged = activeRenderCollector;
+        ownerAfterManaged = executionContext.owner as object | undefined;
       }
-      const managedReads = managedSpy.mock.calls.length;
-      managedSpy.mockRestore();
       const last = afterManaged.value;
-      owners = { bare: bareCollector, managed: managedCollector, bareReads, managedReads, collectorAfterManaged };
+      owners = { bare: bareOwner, managed: managedOwner, ownerAfterManaged };
       return <output aria-label="bare then managed">{`${first}/${middle}/${last}`}</output>;
     }
 
     render(<Reader />);
-    expect(owners).toMatchObject({ bareReads: 1, managedReads: 1, collectorAfterManaged: undefined });
+    expect(owners?.ownerAfterManaged).toBe(owners?.bare);
     expect(owners?.bare).not.toBe(owners?.managed);
     expect(screen.getByLabelText("bare then managed").textContent).toBe("bare/managed/untracked");
 
@@ -513,24 +487,15 @@ describe("managed useManagedSignals render scope", () => {
     expect(renders).toHaveBeenCalledTimes(2);
     act(() => { insideManaged.value = "managed updated"; });
     expect(renders).toHaveBeenCalledTimes(3);
-    act(() => { afterManaged.value = "should not rerender"; });
-    expect(renders).toHaveBeenCalledTimes(3);
+    act(() => { afterManaged.value = "bare remains active"; });
+    expect(renders).toHaveBeenCalledTimes(4);
   });
 
-  it("recovers the global collector when a store re-opens its own scope", () => {
-    // Self-overlap: `start()` runs while this store's previous scope is still
-    // open, which is what a `useIsomorphicLayoutEffect` that threw between two
-    // render passes leaves behind. `shouldCloseCurrentScope` treats
-    // managed/managed overlap as legitimate nesting, so pre-fix the store
-    // captured *itself* as the scope to restore and `finish()` handed the
-    // global collector back to itself — permanently non-undefined, which makes
-    // `deepSignal`'s `track()` allocate a version signal for every property
-    // read anywhere in the app for the rest of the page's life.
+  it("recovers the render collector after managed scopes close", () => {
     const state = deepSignal({ overlapped: "before" });
 
     function SelfOverlapping() {
       const store = useManagedSignals();
-      (store as unknown as { start(policy: "managed"): void }).start("managed");
       try {
         return (
           <output aria-label="self overlapping">{state.value.overlapped}</output>

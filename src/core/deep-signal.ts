@@ -1,4 +1,5 @@
 import { coreRuntime } from "./core-runtime.js";
+import { executionContext } from "./execution-owner.js";
 import { createDeepSignalFactory } from "./deep-signal-engine.js";
 import {
   batch,
@@ -21,8 +22,15 @@ function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
     hasSubscribers(source) { return coreRuntime.hasDeepSignalSubscribers(source); },
     batch,
     isSignal,
-    hasActiveSubscriber: () => coreRuntime.hasActiveSubscriber(),
+    hasActiveSubscriber: () => {
+      const owner = executionContext.owner;
+      return coreRuntime.hasActiveSubscriber() ||
+        (owner !== undefined && typeof owner !== "symbol" &&
+          (owner.kind === "graph" || owner.kind === "render"));
+    },
     getBatchDepth: () => coreRuntime.getBatchDepth(),
+    isSpeculative: () => coreRuntime.isSpeculative(),
+    markSpeculativeDeepRead: () => coreRuntime.markSpeculativeDeepRead(),
     registerDeepSignal(value) {
       registerSignal(value as DeepSignal<object>);
     },

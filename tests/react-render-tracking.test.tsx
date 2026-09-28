@@ -4,7 +4,7 @@
 import { StrictMode, Suspense, act, memo } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
+import { executionContext } from "../src/core/execution-owner.js";
 import { getReadableInterop } from "../src/core/interop.js";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
@@ -148,11 +148,15 @@ describe("useSignalTracking render tracking", () => {
     expect(() => render(<Throwing />)).toThrow("render failed");
     // The layout effect that normally closes the collector never ran, so it
     // is still the active collector right after the throw.
-    expect(hasActiveRenderCollector()).toBe(true);
+    expect(
+      executionContext.owner !== undefined && typeof executionContext.owner !== "symbol"
+        ? executionContext.owner.kind
+        : undefined,
+    ).toBe("render");
     // Nothing else calls useSignalTracking() here, so only the microtask fallback
     // (not start()'s self-heal on a later call) can close it at this point.
     await Promise.resolve();
-    expect(hasActiveRenderCollector()).toBe(false);
+    expect(executionContext.owner).toBeUndefined();
 
     render(<Healthy />);
     act(() => {
@@ -189,9 +193,13 @@ describe("useSignalTracking render tracking", () => {
     // The fallback tree doesn't call useSignalTracking(), and the gate is still
     // pending so no retry (and thus no self-heal) can have happened yet;
     // only the microtask fallback can close the abandoned attempt from here.
-    expect(hasActiveRenderCollector()).toBe(true);
+    expect(
+      executionContext.owner !== undefined && typeof executionContext.owner !== "symbol"
+        ? executionContext.owner.kind
+        : undefined,
+    ).toBe("render");
     await Promise.resolve();
-    expect(hasActiveRenderCollector()).toBe(false);
+    expect(executionContext.owner).toBeUndefined();
 
     const rendersWhileSuspended = renders.mock.calls.length;
     // This write targets a dependency only the abandoned attempt read. Since

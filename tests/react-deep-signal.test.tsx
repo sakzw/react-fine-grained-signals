@@ -111,10 +111,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       return <output aria-label="unstable-deep">{viewModel.value.label}</output>;
     }
 
-    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
     render(<Reader />);
     expect(screen.getByLabelText("unstable-deep").textContent).toBe("Ada");
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBeGreaterThan(epoch);
+    // Speculative deep-read invalidation now lives on the render attempt.
     expect(renders.mock.calls.length).toBeLessThan(4);
 
     act(() => { state.value.user.age = 37; });

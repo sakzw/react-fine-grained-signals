@@ -1,0 +1,71 @@
+{
+  "purpose": "M1.5.2 production-shaped paired diagnostics; exploratory, not authoritative M1b",
+  "roundsPerCase": 24,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "summary": [
+    {
+      "caseId": "computed/dirty-read@1",
+      "rounds": 24,
+      "coreMedianNs": 10345350,
+      "pairedRatios": {
+        "m151-integrated": {
+          "median": 1.371695294857176,
+          "q1": 1.2403253976672197,
+          "q3": 1.5101447798227874,
+          "min": 0.936466168215939,
+          "max": 2.5419648317222587,
+          "roundsFaster": 1
+        },
+        "rfsg-current": {
+          "median": 2.6720011292265555,
+          "q1": 2.0666702591691006,
+          "q3": 3.0032495038049434,
+          "min": 1.027126141669188,
+          "max": 3.537314354143776,
+          "roundsFaster": 0
+        },
+        "rfsg-v0.1.1": {
+          "median": 1.5830606483223013,
+          "q1": 1.2567350184723929,
+          "q3": 1.950755157258306,
+          "min": 0.7083786457779704,
+          "max": 2.866326243590021,
+          "roundsFaster": 2
+        }
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "rounds": 24,
+      "coreMedianNs": 13835650,
+      "pairedRatios": {
+        "m151-integrated": {
+          "median": 1.3340135787966863,
+          "q1": 1.1677709671724936,
+          "q3": 1.5541484493518483,
+          "min": 0.7623779925315115,
+          "max": 2.1063337283683667,
+          "roundsFaster": 2
+        },
+        "rfsg-current": {
+          "median": 2.386572237679534,
+          "q1": 2.110628512875728,
+          "q3": 3.154662646101969,
+          "min": 1.3247774344540644,
+          "max": 4.393535756433597,
+          "roundsFaster": 0
+        },
+        "rfsg-v0.1.1": {
+          "median": 1.6068739135276555,
+          "q1": 1.3447136592005413,
+          "q3": 2.1295303525007876,
+          "min": 1.0345115784823502,
+          "max": 2.7791124759152215,
+          "roundsFaster": 0
+        }
+      }
+    }
+  ]
+}

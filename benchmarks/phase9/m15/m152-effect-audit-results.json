@@ -1,0 +1,5037 @@
+{
+  "purpose": "M1.5.2 production-shaped paired diagnostics; exploratory, not authoritative M1b",
+  "rounds": 24,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "runtimes": [
+    "m15-core",
+    "m151-integrated",
+    "rfsg-current",
+    "rfsg-v0.1.1"
+  ],
+  "cases": [
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680
+    }
+  ],
+  "measurements": [
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 1,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          11946900,
+          7509900,
+          11372700,
+          7185600,
+          14227200,
+          8089200,
+          15837600
+        ],
+        "m151-integrated": [
+          11054300,
+          18617400,
+          14413800,
+          9492200,
+          13004400,
+          13639500,
+          10209100
+        ],
+        "rfsg-current": [
+          27441800,
+          24511400,
+          27539000,
+          32114000,
+          32025600,
+          22174000,
+          24113700
+        ],
+        "rfsg-v0.1.1": [
+          20224800,
+          36712300,
+          24349900,
+          15405600,
+          24556400,
+          23886300,
+          15923700
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          13613200,
+          40557400,
+          30297300,
+          32927200,
+          37562600,
+          46519500,
+          36584500
+        ],
+        "rfsg-current": [
+          27082000,
+          21528900,
+          21653200,
+          22854700,
+          40756400,
+          64839700,
+          55544900
+        ],
+        "rfsg-v0.1.1": [
+          15297200,
+          16995900,
+          16738100,
+          23803300,
+          14304800,
+          13844800,
+          21297800
+        ],
+        "m15-core": [
+          18376900,
+          12747100,
+          20615900,
+          11132100,
+          17475100,
+          10788900,
+          16148700
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 3,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          31821300,
+          25736600,
+          30131600,
+          34415800,
+          30965900,
+          31883300,
+          30315800
+        ],
+        "rfsg-v0.1.1": [
+          20519900,
+          21370100,
+          13176400,
+          11754100,
+          18237300,
+          17054000,
+          12207000
+        ],
+        "m15-core": [
+          18141000,
+          11181900,
+          20604200,
+          13203900,
+          64129000,
+          37464700,
+          53488900
+        ],
+        "m151-integrated": [
+          15504400,
+          37053700,
+          25073000,
+          33741600,
+          27885600,
+          20705700,
+          30091900
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 4,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          42014200,
+          62475900,
+          44205200,
+          28547100,
+          35757700,
+          25906900,
+          15566500
+        ],
+        "m15-core": [
+          12890800,
+          10082400,
+          13535400,
+          8096300,
+          13506100,
+          8494200,
+          14609800
+        ],
+        "m151-integrated": [
+          19668400,
+          21388400,
+          32945200,
+          24739300,
+          13902600,
+          20088900,
+          15215000
+        ],
+        "rfsg-current": [
+          42549300,
+          29164200,
+          30336500,
+          33013400,
+          30216600,
+          31555900,
+          36943200
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 5,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          16081200,
+          16571500,
+          16786600,
+          10475700,
+          15755800,
+          9719200,
+          13860300
+        ],
+        "m151-integrated": [
+          26396800,
+          20390000,
+          35946400,
+          40012300,
+          37393700,
+          48977400,
+          39206900
+        ],
+        "rfsg-current": [
+          36712900,
+          31802400,
+          35809600,
+          38678200,
+          31180400,
+          35701800,
+          42142100
+        ],
+        "rfsg-v0.1.1": [
+          28388600,
+          19201400,
+          16597400,
+          22994700,
+          20387900,
+          15249700,
+          21227000
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          18405000,
+          17333400,
+          9921800,
+          15264600,
+          12327700,
+          15722800,
+          16660200
+        ],
+        "rfsg-current": [
+          27778700,
+          23709400,
+          24162100,
+          28065600,
+          27327400,
+          31999900,
+          30026800
+        ],
+        "rfsg-v0.1.1": [
+          22695000,
+          27588000,
+          16933100,
+          17942200,
+          24013500,
+          24740700,
+          17083100
+        ],
+        "m15-core": [
+          14674500,
+          12016000,
+          17329000,
+          12191300,
+          19790300,
+          10803600,
+          17442600
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 7,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          55744900,
+          47385800,
+          45802700,
+          49763400,
+          42900200,
+          33157000,
+          38916800
+        ],
+        "rfsg-v0.1.1": [
+          19594900,
+          36907500,
+          31248400,
+          23027100,
+          32850300,
+          29950700,
+          19929600
+        ],
+        "m15-core": [
+          20818100,
+          14296000,
+          23363600,
+          22697300,
+          13127200,
+          19466800,
+          10057100
+        ],
+        "m151-integrated": [
+          11470900,
+          19344900,
+          12491700,
+          16547900,
+          16449900,
+          12523100,
+          17279400
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 8,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          16541300,
+          18222600,
+          18111500,
+          27147400,
+          18142200,
+          15917500,
+          26607900
+        ],
+        "m15-core": [
+          16941100,
+          11323800,
+          20415800,
+          14708700,
+          30474400,
+          22692000,
+          27463100
+        ],
+        "m151-integrated": [
+          47912800,
+          49694400,
+          32431000,
+          18379500,
+          27102500,
+          27885600,
+          12874000
+        ],
+        "rfsg-current": [
+          26360800,
+          24447000,
+          22849000,
+          28621100,
+          25199300,
+          20948000,
+          24982500
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 9,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          12396900,
+          9425800,
+          12135700,
+          7502100,
+          11964300,
+          12790200,
+          16731100
+        ],
+        "m151-integrated": [
+          11271700,
+          19449500,
+          13881900,
+          11005100,
+          12234800,
+          9670100,
+          13456700
+        ],
+        "rfsg-current": [
+          30100500,
+          27344400,
+          26065700,
+          29719500,
+          26239100,
+          29297500,
+          26984200
+        ],
+        "rfsg-v0.1.1": [
+          19215100,
+          33707800,
+          28625000,
+          19268100,
+          24772400,
+          23363000,
+          14655600
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          11919600,
+          19468800,
+          15554400,
+          10133400,
+          14138800,
+          14837900,
+          19486900
+        ],
+        "rfsg-current": [
+          38967400,
+          30578500,
+          30871500,
+          29498400,
+          28908900,
+          22490600,
+          25458800
+        ],
+        "rfsg-v0.1.1": [
+          16270300,
+          25592800,
+          21564000,
+          15313600,
+          22339700,
+          21951900,
+          14884800
+        ],
+        "m15-core": [
+          12428400,
+          8615500,
+          16028100,
+          14557800,
+          9248500,
+          13834100,
+          8045700
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 11,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          27294800,
+          24760700,
+          25582800,
+          31440200,
+          33074400,
+          24394300,
+          27376000
+        ],
+        "rfsg-v0.1.1": [
+          25246400,
+          13314600,
+          19512700,
+          15889100,
+          26261400,
+          21978900,
+          15835700
+        ],
+        "m15-core": [
+          16666600,
+          10891000,
+          15071200,
+          8918900,
+          13583400,
+          9006400,
+          14568500
+        ],
+        "m151-integrated": [
+          17272300,
+          21015500,
+          16795200,
+          11106400,
+          14597700,
+          15195200,
+          10898400
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 12,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          20265300,
+          38179800,
+          37489200,
+          31450500,
+          33051900,
+          30333900,
+          21395800
+        ],
+        "m15-core": [
+          16805000,
+          11094200,
+          17027200,
+          8525200,
+          15689700,
+          8675000,
+          14928800
+        ],
+        "m151-integrated": [
+          20641400,
+          12692900,
+          19965400,
+          12735400,
+          20551800,
+          24630500,
+          14718300
+        ],
+        "rfsg-current": [
+          57873900,
+          52012500,
+          43602100,
+          50770400,
+          46145000,
+          27492700,
+          32006000
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 13,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          15525200,
+          10919600,
+          17855900,
+          9783500,
+          16662900,
+          10547500,
+          17074600
+        ],
+        "m151-integrated": [
+          21964000,
+          18530600,
+          26806100,
+          21675000,
+          19145700,
+          10826500,
+          14560500
+        ],
+        "rfsg-current": [
+          19938900,
+          27427900,
+          25521700,
+          26572800,
+          36656100,
+          39012200,
+          33037100
+        ],
+        "rfsg-v0.1.1": [
+          23332000,
+          45900600,
+          37501600,
+          23586600,
+          50960700,
+          39392900,
+          30023300
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 14,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          18408400,
+          18348900,
+          26027700,
+          23057800,
+          12591600,
+          30248000,
+          25502600
+        ],
+        "rfsg-current": [
+          25030300,
+          21821500,
+          21222900,
+          26482000,
+          25922500,
+          24266900,
+          25104100
+        ],
+        "rfsg-v0.1.1": [
+          23596600,
+          43344900,
+          33477700,
+          23615100,
+          31199600,
+          24669500,
+          16034100
+        ],
+        "m15-core": [
+          16120000,
+          18544300,
+          10582700,
+          23396400,
+          17972000,
+          13544000,
+          21501500
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 15,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          35216700,
+          28149500,
+          27560000,
+          23288300,
+          20927200,
+          19190000,
+          26424500
+        ],
+        "rfsg-v0.1.1": [
+          21059500,
+          25419200,
+          15965400,
+          15165200,
+          21958600,
+          18722500,
+          13324600
+        ],
+        "m15-core": [
+          13590500,
+          9277800,
+          14101700,
+          15147000,
+          9790400,
+          15094200,
+          9687900
+        ],
+        "m151-integrated": [
+          17675300,
+          19120700,
+          16574200,
+          21856200,
+          19375800,
+          12100700,
+          18537700
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 16,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          13997300,
+          27185500,
+          22410800,
+          14303000,
+          23506000,
+          21236000,
+          13276200
+        ],
+        "m15-core": [
+          12281800,
+          8165500,
+          13815900,
+          13911800,
+          7380700,
+          12768400,
+          8559400
+        ],
+        "m151-integrated": [
+          10832700,
+          14688200,
+          14723400,
+          9890400,
+          13573900,
+          14230900,
+          10209000
+        ],
+        "rfsg-current": [
+          22128200,
+          26499900,
+          20600800,
+          15134900,
+          22839400,
+          20916200,
+          15262900
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 17,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          11443600,
+          8547200,
+          11188500,
+          7000200,
+          10788400,
+          7235000,
+          11459400
+        ],
+        "m151-integrated": [
+          10423400,
+          18098100,
+          13593700,
+          9027900,
+          12228400,
+          8434300,
+          11566200
+        ],
+        "rfsg-current": [
+          26622300,
+          24858400,
+          22653400,
+          28418700,
+          25877900,
+          23894900,
+          25613400
+        ],
+        "rfsg-v0.1.1": [
+          15033800,
+          25967600,
+          22420700,
+          17075900,
+          23766000,
+          23453100,
+          14727000
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 18,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          10645000,
+          19292500,
+          16541600,
+          9596400,
+          14196700,
+          10243700,
+          12644900
+        ],
+        "rfsg-current": [
+          25561600,
+          21965600,
+          24189000,
+          27403800,
+          29968100,
+          31859700,
+          30830900
+        ],
+        "rfsg-v0.1.1": [
+          24505300,
+          21672400,
+          12293000,
+          11529900,
+          19351400,
+          17822000,
+          13041800
+        ],
+        "m15-core": [
+          15847300,
+          9173800,
+          12381300,
+          7949500,
+          13124200,
+          7936700,
+          13114800
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 19,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          30075600,
+          22122500,
+          25539200,
+          27257400,
+          22749100,
+          27360400,
+          25373500
+        ],
+        "rfsg-v0.1.1": [
+          18504400,
+          21949200,
+          12270700,
+          12489700,
+          17646600,
+          15863800,
+          12512800
+        ],
+        "m15-core": [
+          11142500,
+          8327500,
+          11618100,
+          11766300,
+          8024800,
+          11861700,
+          7839600
+        ],
+        "m151-integrated": [
+          17958800,
+          14615700,
+          18172600,
+          19800300,
+          13867900,
+          19902400,
+          20826800
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 20,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          14594800,
+          26461300,
+          24087100,
+          16686500,
+          27143000,
+          30267600,
+          17909500
+        ],
+        "m15-core": [
+          11203100,
+          7515300,
+          10641100,
+          7526700,
+          13964000,
+          16447100,
+          9106700
+        ],
+        "m151-integrated": [
+          14046300,
+          8788800,
+          12978500,
+          12494800,
+          9654800,
+          14017700,
+          13950500
+        ],
+        "rfsg-current": [
+          30832600,
+          25660300,
+          25733100,
+          27084400,
+          21473100,
+          23418900,
+          23814200
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 21,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          12245400,
+          9504100,
+          13778600,
+          8852200,
+          14485200,
+          8899300,
+          13736500
+        ],
+        "m151-integrated": [
+          16021200,
+          26643600,
+          20019100,
+          12641200,
+          20747500,
+          12022700,
+          16292500
+        ],
+        "rfsg-current": [
+          33235200,
+          27126400,
+          25425300,
+          35796400,
+          25493900,
+          28347800,
+          29612800
+        ],
+        "rfsg-v0.1.1": [
+          16898500,
+          24505400,
+          21221900,
+          16630400,
+          22697500,
+          21652000,
+          14718200
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 22,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          13731800,
+          10838500,
+          14404500,
+          9972900,
+          15388900,
+          10228200,
+          14470100
+        ],
+        "rfsg-current": [
+          31190300,
+          33600300,
+          48807500,
+          50746300,
+          41023900,
+          60352200,
+          81306400
+        ],
+        "rfsg-v0.1.1": [
+          21699200,
+          14038900,
+          12615600,
+          16737400,
+          13090500,
+          13510300,
+          18499500
+        ],
+        "m15-core": [
+          10177800,
+          7906400,
+          11234000,
+          6747000,
+          10486100,
+          6482900,
+          11101100
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 23,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          36568700,
+          27838400,
+          25875200,
+          29289000,
+          24303600,
+          25507500,
+          26707800
+        ],
+        "rfsg-v0.1.1": [
+          19006900,
+          21552900,
+          12409000,
+          12350500,
+          19295200,
+          18394100,
+          13163200
+        ],
+        "m15-core": [
+          12765500,
+          8772500,
+          12091400,
+          8189600,
+          12547600,
+          8472100,
+          14392000
+        ],
+        "m151-integrated": [
+          17306000,
+          16954000,
+          25697100,
+          18185500,
+          11568800,
+          13440200,
+          12351700
+        ]
+      }
+    },
+    {
+      "id": "effect/observed-write",
+      "caseId": "effect/observed-write@1",
+      "kind": "effect-observed-write",
+      "size": 1,
+      "iterations": 106279,
+      "round": 24,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          12479600,
+          20779600,
+          17832400,
+          12256500,
+          19554900,
+          17171000,
+          12241100
+        ],
+        "m15-core": [
+          11351100,
+          7574000,
+          11801700,
+          12151400,
+          7771500,
+          11735200,
+          7964000
+        ],
+        "m151-integrated": [
+          11066500,
+          18503800,
+          14527100,
+          10356900,
+          14848600,
+          9973000,
+          12002600
+        ],
+        "rfsg-current": [
+          31199900,
+          30882800,
+          33363100,
+          38929700,
+          33154500,
+          31351600,
+          28866500
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 1,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          25057900,
+          24865600,
+          22329800,
+          24165300,
+          22718600,
+          20967000,
+          24781800
+        ],
+        "m151-integrated": [
+          26938400,
+          25457900,
+          25412700,
+          27305600,
+          23688800,
+          24344900,
+          32720000
+        ],
+        "rfsg-current": [
+          40530500,
+          53487600,
+          57457700,
+          57663100,
+          37606900,
+          36490500,
+          41396400
+        ],
+        "rfsg-v0.1.1": [
+          43065900,
+          28114000,
+          23877500,
+          26377100,
+          25421200,
+          22790100,
+          25454000
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          30028600,
+          29136100,
+          29781500,
+          33178900,
+          30866100,
+          34833600,
+          37627200
+        ],
+        "rfsg-current": [
+          32900600,
+          29934800,
+          30300800,
+          39119900,
+          26023500,
+          28063600,
+          38467900
+        ],
+        "rfsg-v0.1.1": [
+          35669200,
+          29690400,
+          27200000,
+          27460600,
+          28776700,
+          25213400,
+          26551100
+        ],
+        "m15-core": [
+          32728600,
+          34751600,
+          30789700,
+          28055600,
+          34762700,
+          21248200,
+          26461100
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 3,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          37464000,
+          37544600,
+          34118200,
+          39387000,
+          40769300,
+          81981800,
+          116912800
+        ],
+        "rfsg-v0.1.1": [
+          65010100,
+          56316300,
+          48436100,
+          53475400,
+          43146800,
+          38550000,
+          38961400
+        ],
+        "m15-core": [
+          26307800,
+          22319800,
+          20665000,
+          22404400,
+          20607900,
+          21035800,
+          25067900
+        ],
+        "m151-integrated": [
+          31677700,
+          29465300,
+          30701200,
+          31478300,
+          29917500,
+          29737700,
+          30634400
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 4,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          31636200,
+          27225500,
+          26538100,
+          29130900,
+          36002600,
+          32490000,
+          35182800
+        ],
+        "m15-core": [
+          35871100,
+          26719500,
+          24778200,
+          26437100,
+          21853400,
+          19990700,
+          23919100
+        ],
+        "m151-integrated": [
+          32321900,
+          38631900,
+          42678700,
+          56019600,
+          53290700,
+          44093500,
+          39484000
+        ],
+        "rfsg-current": [
+          56980100,
+          45595400,
+          47682800,
+          45917700,
+          39989700,
+          39585300,
+          46986500
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 5,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          41134800,
+          27097000,
+          25123500,
+          28444500,
+          25245300,
+          23625100,
+          34054400
+        ],
+        "m151-integrated": [
+          34151200,
+          46507400,
+          36379600,
+          50562800,
+          43254200,
+          51732200,
+          48538400
+        ],
+        "rfsg-current": [
+          41917000,
+          40293700,
+          43008000,
+          47193100,
+          29299700,
+          28014700,
+          39152000
+        ],
+        "rfsg-v0.1.1": [
+          36151600,
+          32451300,
+          29763100,
+          35418400,
+          33848700,
+          33989500,
+          31553100
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          30847600,
+          27328800,
+          25542600,
+          30471000,
+          24129000,
+          22047300,
+          29763800
+        ],
+        "rfsg-current": [
+          83278100,
+          56755700,
+          37253200,
+          38657800,
+          41293900,
+          38535100,
+          50751400
+        ],
+        "rfsg-v0.1.1": [
+          34342700,
+          29212600,
+          29450600,
+          31314500,
+          27990300,
+          28093500,
+          31317000
+        ],
+        "m15-core": [
+          27138000,
+          25640400,
+          23315200,
+          26025300,
+          23123000,
+          23118100,
+          30449700
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 7,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          49136600,
+          38510900,
+          54325200,
+          92719800,
+          93056900,
+          79567900,
+          74703400
+        ],
+        "rfsg-v0.1.1": [
+          69396100,
+          48498200,
+          35601700,
+          53147600,
+          59188700,
+          64319600,
+          68274200
+        ],
+        "m15-core": [
+          31034000,
+          34191900,
+          20221300,
+          34163000,
+          24319200,
+          29220700,
+          19380400
+        ],
+        "m151-integrated": [
+          62120700,
+          47055900,
+          70206900,
+          77567100,
+          64374400,
+          65949000,
+          68048800
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 8,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          82619100,
+          66952500,
+          66436900,
+          82442200,
+          77602900,
+          79579200,
+          82612700
+        ],
+        "m15-core": [
+          58456000,
+          52290300,
+          46531500,
+          54955000,
+          50890700,
+          43785400,
+          58857100
+        ],
+        "m151-integrated": [
+          67373500,
+          50971300,
+          57509800,
+          52933400,
+          51541800,
+          55399200,
+          67004000
+        ],
+        "rfsg-current": [
+          85816000,
+          84887200,
+          83892400,
+          72099100,
+          49929700,
+          43108200,
+          66665600
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 9,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          50147600,
+          41518000,
+          27132400,
+          46122000,
+          36895700,
+          41150300,
+          30454600
+        ],
+        "m151-integrated": [
+          50472700,
+          49526000,
+          54190900,
+          50291700,
+          52783600,
+          57361900,
+          56467100
+        ],
+        "rfsg-current": [
+          62910900,
+          37536700,
+          39745900,
+          52714200,
+          51430900,
+          42890700,
+          51912100
+        ],
+        "rfsg-v0.1.1": [
+          44564800,
+          41460900,
+          34686600,
+          37976200,
+          36353800,
+          37162000,
+          46889100
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          35255300,
+          33883500,
+          35009100,
+          43576200,
+          37766400,
+          35649100,
+          40899100
+        ],
+        "rfsg-current": [
+          53196300,
+          38101200,
+          35746500,
+          67612300,
+          56289800,
+          54677400,
+          59946600
+        ],
+        "rfsg-v0.1.1": [
+          45264000,
+          36474700,
+          34464900,
+          38148500,
+          35835300,
+          37143800,
+          36019500
+        ],
+        "m15-core": [
+          43816900,
+          32601600,
+          37654600,
+          37556500,
+          31848700,
+          29876100,
+          33385800
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 11,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          50837200,
+          44892000,
+          68663400,
+          49477700,
+          35384400,
+          35822700,
+          47187200
+        ],
+        "rfsg-v0.1.1": [
+          63252900,
+          44299600,
+          58208200,
+          62963000,
+          64458300,
+          44685600,
+          42925900
+        ],
+        "m15-core": [
+          45768600,
+          38081000,
+          40078200,
+          41937900,
+          42540900,
+          44984900,
+          67715800
+        ],
+        "m151-integrated": [
+          50674400,
+          42646600,
+          35712900,
+          46330600,
+          34346300,
+          26271200,
+          38305100
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 12,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          33162500,
+          29223700,
+          26141000,
+          29697500,
+          29351400,
+          27915000,
+          31969800
+        ],
+        "m15-core": [
+          27810100,
+          27937900,
+          25036800,
+          28218200,
+          24591000,
+          25325300,
+          28732900
+        ],
+        "m151-integrated": [
+          47033200,
+          34669100,
+          25989400,
+          48181900,
+          41058000,
+          30087600,
+          44797900
+        ],
+        "rfsg-current": [
+          49468800,
+          36461000,
+          40556100,
+          56109800,
+          44935700,
+          49638500,
+          59452100
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 13,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          31047700,
+          25820100,
+          18882800,
+          28355100,
+          19670000,
+          36960300,
+          21025700
+        ],
+        "m151-integrated": [
+          38659400,
+          39404200,
+          54043200,
+          59769200,
+          54748000,
+          51436900,
+          51763700
+        ],
+        "rfsg-current": [
+          62190000,
+          46691900,
+          53056600,
+          61288600,
+          52393400,
+          45462500,
+          61017400
+        ],
+        "rfsg-v0.1.1": [
+          39699400,
+          38137000,
+          34318000,
+          37995900,
+          40249400,
+          40498800,
+          40828000
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 14,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          35675800,
+          29356900,
+          31602400,
+          33280300,
+          47702800,
+          57700200,
+          51652300
+        ],
+        "rfsg-current": [
+          47084700,
+          70064700,
+          96021100,
+          109638100,
+          85175100,
+          83833900,
+          65547200
+        ],
+        "rfsg-v0.1.1": [
+          59122400,
+          41610000,
+          36402800,
+          56069400,
+          55244800,
+          40555800,
+          51511300
+        ],
+        "m15-core": [
+          20955700,
+          14181100,
+          24009300,
+          17034500,
+          21812600,
+          21011600,
+          15012200
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 15,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          74806100,
+          59168200,
+          55201600,
+          51353700,
+          32946800,
+          37022600,
+          44926800
+        ],
+        "rfsg-v0.1.1": [
+          38127900,
+          33253100,
+          28337300,
+          31956000,
+          34499100,
+          36207700,
+          49177900
+        ],
+        "m15-core": [
+          21515400,
+          22531500,
+          13920100,
+          17816900,
+          13333900,
+          18103000,
+          13261400
+        ],
+        "m151-integrated": [
+          27308000,
+          30995400,
+          30803600,
+          32048300,
+          35149400,
+          33915800,
+          30667300
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 16,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          51357000,
+          38300700,
+          35364200,
+          42288000,
+          47026100,
+          50200700,
+          48782500
+        ],
+        "m15-core": [
+          55184300,
+          52636200,
+          70288700,
+          59040600,
+          36355900,
+          48197300,
+          33873000
+        ],
+        "m151-integrated": [
+          92992100,
+          69682200,
+          57178600,
+          62736500,
+          59293500,
+          44855700,
+          44279400
+        ],
+        "rfsg-current": [
+          78883200,
+          41524700,
+          32584900,
+          39024400,
+          32333000,
+          31854000,
+          37240700
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 17,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          31564300,
+          19924800,
+          31471400,
+          20047000,
+          24124500,
+          16089600,
+          20281400
+        ],
+        "m151-integrated": [
+          36485000,
+          27298800,
+          23764800,
+          34839200,
+          43024900,
+          59158700,
+          40266400
+        ],
+        "rfsg-current": [
+          57754200,
+          55288500,
+          87493000,
+          129199800,
+          110963300,
+          109914800,
+          95507000
+        ],
+        "rfsg-v0.1.1": [
+          67789200,
+          62953200,
+          63087100,
+          74471600,
+          63127300,
+          55941600,
+          62562200
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 18,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          64190900,
+          59630200,
+          73874000,
+          96508300,
+          74838400,
+          57242400,
+          75542300
+        ],
+        "rfsg-current": [
+          132309900,
+          109085200,
+          101758000,
+          91121600,
+          77488600,
+          72416100,
+          98388000
+        ],
+        "rfsg-v0.1.1": [
+          71890000,
+          69168100,
+          58207600,
+          67747500,
+          77445300,
+          68766800,
+          69742300
+        ],
+        "m15-core": [
+          97930800,
+          83641000,
+          73188400,
+          73442500,
+          57261300,
+          49085200,
+          51461600
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 19,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          123678100,
+          84684000,
+          87465700,
+          95200900,
+          70414700,
+          76458200,
+          98820500
+        ],
+        "rfsg-v0.1.1": [
+          80482100,
+          72891200,
+          72352900,
+          79800200,
+          68203800,
+          71603100,
+          72359500
+        ],
+        "m15-core": [
+          52967500,
+          50795400,
+          46880700,
+          53140300,
+          48006100,
+          43605000,
+          49031500
+        ],
+        "m151-integrated": [
+          67197000,
+          54974700,
+          52958100,
+          67298800,
+          66180200,
+          54233100,
+          64224400
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 20,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          81197100,
+          62694300,
+          63062500,
+          69837600,
+          58592700,
+          51978400,
+          54117400
+        ],
+        "m15-core": [
+          52143300,
+          41573500,
+          40431000,
+          56092200,
+          48519900,
+          45513100,
+          57077200
+        ],
+        "m151-integrated": [
+          65212400,
+          55877200,
+          71409700,
+          65184000,
+          48750500,
+          49566000,
+          63802900
+        ],
+        "rfsg-current": [
+          77621500,
+          72655900,
+          80745700,
+          84557200,
+          70947800,
+          65534300,
+          86852600
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 21,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          65050200,
+          56745200,
+          64485800,
+          69867100,
+          66540600,
+          50967500,
+          51503200
+        ],
+        "m151-integrated": [
+          77481800,
+          64777800,
+          66805000,
+          62661200,
+          56537000,
+          70315300,
+          71293000
+        ],
+        "rfsg-current": [
+          110880600,
+          96979600,
+          80682400,
+          84961700,
+          82117100,
+          66844600,
+          85628000
+        ],
+        "rfsg-v0.1.1": [
+          112678800,
+          56105200,
+          61673500,
+          73375200,
+          66126500,
+          58792200,
+          67623700
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 22,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          59834300,
+          73808800,
+          90766000,
+          81776600,
+          56676500,
+          57760400,
+          74552200
+        ],
+        "rfsg-current": [
+          89904900,
+          83793000,
+          85040500,
+          92959400,
+          84409800,
+          76097000,
+          90393800
+        ],
+        "rfsg-v0.1.1": [
+          64826000,
+          60819200,
+          54292500,
+          61686500,
+          56031100,
+          59448800,
+          61521400
+        ],
+        "m15-core": [
+          44091600,
+          41692300,
+          45829300,
+          51717700,
+          42113500,
+          52633000,
+          70875400
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 23,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          73774100,
+          54614600,
+          58791200,
+          67267100,
+          56328600,
+          53075200,
+          71327100
+        ],
+        "rfsg-v0.1.1": [
+          64167300,
+          54328900,
+          42109900,
+          54670100,
+          53931000,
+          51567600,
+          56042600
+        ],
+        "m15-core": [
+          53989700,
+          42661400,
+          38389800,
+          47649000,
+          41781900,
+          37295800,
+          41449900
+        ],
+        "m151-integrated": [
+          50305500,
+          54103000,
+          49266600,
+          56307300,
+          57710300,
+          43415000,
+          52888200
+        ]
+      }
+    },
+    {
+      "id": "effect/dynamic-dependencies",
+      "caseId": "effect/dynamic-dependencies@1",
+      "kind": "effect-dynamic",
+      "size": 1,
+      "iterations": 57379,
+      "round": 24,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          63072200,
+          54179600,
+          52990800,
+          52949000,
+          53534600,
+          44665300,
+          43935500
+        ],
+        "m15-core": [
+          54000400,
+          56085100,
+          45945800,
+          50359200,
+          47818800,
+          43443700,
+          46382900
+        ],
+        "m151-integrated": [
+          39235400,
+          41827900,
+          47866300,
+          48564700,
+          44556800,
+          42732000,
+          56067000
+        ],
+        "rfsg-current": [
+          77772900,
+          70924700,
+          65301500,
+          57948200,
+          44778200,
+          60676200,
+          71056100
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 1,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          41395000,
+          42377300,
+          65206600,
+          61732700,
+          62123700,
+          62055200,
+          46517500
+        ],
+        "m151-integrated": [
+          46065200,
+          50538600,
+          56704100,
+          71879600,
+          69611700,
+          56542800,
+          55970800
+        ],
+        "rfsg-current": [
+          101955000,
+          85094600,
+          84472900,
+          82225700,
+          71978600,
+          65565200,
+          85477900
+        ],
+        "rfsg-v0.1.1": [
+          84777400,
+          65999700,
+          48625300,
+          48475000,
+          47864400,
+          51572200,
+          54725400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          41483100,
+          37393900,
+          38558000,
+          41606400,
+          37227900,
+          39834900,
+          51897700
+        ],
+        "rfsg-current": [
+          132916900,
+          117072700,
+          114129900,
+          119029700,
+          76570900,
+          74359300,
+          75618900
+        ],
+        "rfsg-v0.1.1": [
+          63872900,
+          63232800,
+          54422100,
+          52008600,
+          40900300,
+          51349100,
+          48765200
+        ],
+        "m15-core": [
+          38148800,
+          32517600,
+          36352500,
+          38019100,
+          34501100,
+          31957300,
+          38452900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 3,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          69601500,
+          122178900,
+          84445200,
+          68557600,
+          67612400,
+          66116400,
+          118057800
+        ],
+        "rfsg-v0.1.1": [
+          46163900,
+          39407300,
+          58235100,
+          75491400,
+          45370600,
+          40575600,
+          45472200
+        ],
+        "m15-core": [
+          52627300,
+          51766500,
+          48682400,
+          45235100,
+          42253900,
+          48131700,
+          57467400
+        ],
+        "m151-integrated": [
+          43424900,
+          52186600,
+          47933400,
+          64303400,
+          75802800,
+          71940300,
+          73632900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 4,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          43914300,
+          39475600,
+          43975100,
+          44609000,
+          40586800,
+          46018200,
+          43197500
+        ],
+        "m15-core": [
+          40363900,
+          42513900,
+          49294000,
+          54562900,
+          55411900,
+          58179700,
+          59112100
+        ],
+        "m151-integrated": [
+          83687000,
+          65457000,
+          52999000,
+          49308800,
+          51692300,
+          50724600,
+          50106800
+        ],
+        "rfsg-current": [
+          96595100,
+          64951000,
+          65791900,
+          73273600,
+          65831500,
+          61596000,
+          83583700
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 5,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          42208200,
+          38129300,
+          43197400,
+          61281000,
+          56735500,
+          53699000,
+          48666200
+        ],
+        "m151-integrated": [
+          44815000,
+          38198200,
+          42342400,
+          51467600,
+          50481000,
+          53076500,
+          62281900
+        ],
+        "rfsg-current": [
+          94035300,
+          70484700,
+          65372400,
+          72439700,
+          72201900,
+          60462200,
+          68669300
+        ],
+        "rfsg-v0.1.1": [
+          65655300,
+          52360400,
+          53961100,
+          52882500,
+          49668000,
+          39837800,
+          59571600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          42853000,
+          40306400,
+          37391100,
+          39433000,
+          37660200,
+          41992400,
+          57511200
+        ],
+        "rfsg-current": [
+          145919500,
+          135713700,
+          114434900,
+          73405400,
+          60156600,
+          58560900,
+          75483200
+        ],
+        "rfsg-v0.1.1": [
+          45274600,
+          41262400,
+          39012500,
+          43870500,
+          40551400,
+          40462600,
+          43525600
+        ],
+        "m15-core": [
+          42350700,
+          33900400,
+          40635800,
+          57967800,
+          58401400,
+          62372300,
+          61612400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 7,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          98818600,
+          68430200,
+          67126500,
+          82841500,
+          70951900,
+          58829100,
+          68433600
+        ],
+        "rfsg-v0.1.1": [
+          50375300,
+          35689500,
+          33279600,
+          41471200,
+          43861100,
+          39699200,
+          48538300
+        ],
+        "m15-core": [
+          48063900,
+          51387400,
+          56388900,
+          79387500,
+          69981700,
+          59298900,
+          50214000
+        ],
+        "m151-integrated": [
+          43760200,
+          37928800,
+          39742700,
+          40851900,
+          38069100,
+          39671600,
+          45185900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 8,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          63088400,
+          67297500,
+          57549400,
+          60067400,
+          42932900,
+          52667300,
+          72343200
+        ],
+        "m15-core": [
+          69361100,
+          60158200,
+          54101600,
+          61146000,
+          54649700,
+          51500800,
+          58887400
+        ],
+        "m151-integrated": [
+          47470000,
+          49551200,
+          55139000,
+          67197900,
+          44437500,
+          51508000,
+          43092700
+        ],
+        "rfsg-current": [
+          119014000,
+          100843100,
+          81342000,
+          74445200,
+          70687400,
+          69630300,
+          82189900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 9,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          79993900,
+          67921800,
+          92182100,
+          72795900,
+          75867100,
+          62699300,
+          47540900
+        ],
+        "m151-integrated": [
+          71081500,
+          67246800,
+          64094700,
+          80487200,
+          61665000,
+          50849700,
+          52540400
+        ],
+        "rfsg-current": [
+          81651600,
+          92676900,
+          101280800,
+          131497100,
+          105298200,
+          75968800,
+          86573900
+        ],
+        "rfsg-v0.1.1": [
+          75808300,
+          78883600,
+          79384500,
+          87259900,
+          78347600,
+          84320700,
+          88768700
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          63794100,
+          53078200,
+          48017000,
+          63267700,
+          74608700,
+          75666100,
+          84489700
+        ],
+        "rfsg-current": [
+          127399500,
+          110957400,
+          120024600,
+          112305700,
+          127791200,
+          97532900,
+          87672200
+        ],
+        "rfsg-v0.1.1": [
+          53588200,
+          49097000,
+          50592900,
+          78141900,
+          79076900,
+          82131500,
+          83845500
+        ],
+        "m15-core": [
+          48564100,
+          39048500,
+          45251200,
+          43616200,
+          44702000,
+          47404700,
+          57997900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 11,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          133371600,
+          102737800,
+          93401000,
+          107351900,
+          102078300,
+          112215900,
+          131371800
+        ],
+        "rfsg-v0.1.1": [
+          75520100,
+          56845200,
+          48161200,
+          57917600,
+          49294500,
+          48848700,
+          52104700
+        ],
+        "m15-core": [
+          51770300,
+          44269400,
+          49804500,
+          63083000,
+          51338300,
+          48659600,
+          53017600
+        ],
+        "m151-integrated": [
+          55039800,
+          52679300,
+          50590200,
+          57225100,
+          59663300,
+          72868800,
+          68631800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 12,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          59262200,
+          51922700,
+          47831900,
+          72003700,
+          52288500,
+          46655000,
+          51226100
+        ],
+        "m15-core": [
+          70120200,
+          62526000,
+          69305800,
+          65344300,
+          57091600,
+          41713100,
+          40396500
+        ],
+        "m151-integrated": [
+          49303700,
+          46474400,
+          57315500,
+          71810600,
+          67198700,
+          68040200,
+          70648600
+        ],
+        "rfsg-current": [
+          79370900,
+          70722000,
+          72047000,
+          93219500,
+          75296100,
+          75436300,
+          87785600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 13,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          45544700,
+          39905200,
+          42079200,
+          41699700,
+          36388600,
+          40397600,
+          70554500
+        ],
+        "m151-integrated": [
+          83327900,
+          81120700,
+          72044800,
+          49624800,
+          53181300,
+          45043900,
+          40662600
+        ],
+        "rfsg-current": [
+          105233100,
+          124693900,
+          84265600,
+          67735700,
+          62357200,
+          87410300,
+          110573100
+        ],
+        "rfsg-v0.1.1": [
+          45051300,
+          39534500,
+          41648500,
+          48188600,
+          41894100,
+          39647700,
+          49554000
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 14,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          51883300,
+          44080800,
+          37971800,
+          43566100,
+          42705700,
+          38822500,
+          79093100
+        ],
+        "rfsg-current": [
+          115734300,
+          98032600,
+          101658100,
+          80793800,
+          61908700,
+          59368700,
+          66533300
+        ],
+        "rfsg-v0.1.1": [
+          48079100,
+          37401000,
+          42387900,
+          59694100,
+          61510500,
+          66586000,
+          66460100
+        ],
+        "m15-core": [
+          36767700,
+          35798300,
+          34772300,
+          35530600,
+          32913700,
+          32110000,
+          35800400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 15,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          70305100,
+          63823400,
+          63253900,
+          78828700,
+          85575100,
+          71717800,
+          70349300
+        ],
+        "rfsg-v0.1.1": [
+          71130200,
+          50862200,
+          48424200,
+          60449300,
+          54133600,
+          55690100,
+          65780100
+        ],
+        "m15-core": [
+          43283000,
+          34353000,
+          33093300,
+          37077300,
+          33367700,
+          38308900,
+          43619600
+        ],
+        "m151-integrated": [
+          42221500,
+          35560800,
+          38374300,
+          41722200,
+          37023600,
+          36464100,
+          40631300
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 16,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          53609200,
+          51789500,
+          42303800,
+          55679000,
+          56354500,
+          69962700,
+          71048600
+        ],
+        "m15-core": [
+          75204500,
+          73808200,
+          51872400,
+          52303300,
+          48949800,
+          46666800,
+          37703200
+        ],
+        "m151-integrated": [
+          45948100,
+          39488900,
+          37020100,
+          38863800,
+          39639400,
+          41517800,
+          49220900
+        ],
+        "rfsg-current": [
+          79448400,
+          65590500,
+          65372400,
+          69873200,
+          76252200,
+          89740800,
+          107314200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 17,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          38392600,
+          32872900,
+          34409400,
+          40459800,
+          40533200,
+          39887900,
+          40109100
+        ],
+        "m151-integrated": [
+          51753500,
+          59147700,
+          67803600,
+          73564600,
+          72204600,
+          65877000,
+          55553700
+        ],
+        "rfsg-current": [
+          83124000,
+          95196000,
+          98664000,
+          106188100,
+          97646000,
+          76247300,
+          78309200
+        ],
+        "rfsg-v0.1.1": [
+          59096700,
+          46395100,
+          52690600,
+          67572300,
+          52051400,
+          50354600,
+          55486900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 18,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          47657600,
+          38664200,
+          40475800,
+          43666100,
+          42000800,
+          40782200,
+          50087800
+        ],
+        "rfsg-current": [
+          135631100,
+          120156000,
+          101665400,
+          83161400,
+          58960900,
+          83245600,
+          91125100
+        ],
+        "rfsg-v0.1.1": [
+          59286700,
+          40580200,
+          43425800,
+          71971600,
+          57304800,
+          48651400,
+          59982200
+        ],
+        "m15-core": [
+          46884900,
+          38355100,
+          44388300,
+          43723700,
+          34606400,
+          34088700,
+          38593500
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 19,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          100116000,
+          65090000,
+          64988800,
+          71938100,
+          59334500,
+          58476800,
+          81054800
+        ],
+        "rfsg-v0.1.1": [
+          97673000,
+          69634900,
+          55830900,
+          53853100,
+          47405000,
+          49188100,
+          51233000
+        ],
+        "m15-core": [
+          58956300,
+          62661000,
+          71709800,
+          69594200,
+          63016400,
+          65892300,
+          66240600
+        ],
+        "m151-integrated": [
+          80402200,
+          78402300,
+          75419700,
+          75282400,
+          78408700,
+          71796200,
+          76685100
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 20,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          85410000,
+          69887000,
+          78796700,
+          76313400,
+          73606500,
+          74223700,
+          93762500
+        ],
+        "m15-core": [
+          69524900,
+          49880800,
+          44936100,
+          49622200,
+          66774100,
+          78730800,
+          64474400
+        ],
+        "m151-integrated": [
+          76328800,
+          72515200,
+          75726100,
+          70405800,
+          75092900,
+          86051800,
+          66445900
+        ],
+        "rfsg-current": [
+          122082300,
+          98588400,
+          98769800,
+          104428400,
+          96121600,
+          110283000,
+          126548300
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 21,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          91427400,
+          62675900,
+          58982400,
+          60106000,
+          54683500,
+          80127700,
+          73109500
+        ],
+        "m151-integrated": [
+          57504400,
+          51551000,
+          53147900,
+          65211600,
+          51973800,
+          64945800,
+          53318900
+        ],
+        "rfsg-current": [
+          119992800,
+          97355200,
+          87323500,
+          95487800,
+          108722200,
+          85941200,
+          77550600
+        ],
+        "rfsg-v0.1.1": [
+          74724100,
+          49017900,
+          46472700,
+          54308800,
+          52746700,
+          55095100,
+          74626200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 22,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          57641600,
+          62081300,
+          62300600,
+          50790300,
+          65352500,
+          71456400,
+          83187200
+        ],
+        "rfsg-current": [
+          135554300,
+          122033400,
+          125524200,
+          97856900,
+          90429600,
+          73278900,
+          88412800
+        ],
+        "rfsg-v0.1.1": [
+          73077400,
+          56923900,
+          49445500,
+          74573700,
+          72114700,
+          62958200,
+          61330900
+        ],
+        "m15-core": [
+          54616200,
+          50574200,
+          53466900,
+          54561900,
+          50037400,
+          58327500,
+          63960900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 23,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          137596400,
+          125448300,
+          97501500,
+          98924600,
+          98476000,
+          100581000,
+          148379200
+        ],
+        "rfsg-v0.1.1": [
+          68742300,
+          48890700,
+          44146000,
+          56947000,
+          77792800,
+          77950900,
+          87600900
+        ],
+        "m15-core": [
+          67429800,
+          52164900,
+          48526100,
+          43368800,
+          41054600,
+          40387600,
+          41575000
+        ],
+        "m151-integrated": [
+          52244300,
+          45987600,
+          42684500,
+          48034500,
+          56299100,
+          56206700,
+          72958100
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@16",
+      "kind": "effect-fanout",
+      "size": 16,
+      "iterations": 35830,
+      "round": 24,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          82792600,
+          55238500,
+          46407700,
+          55261400,
+          52001200,
+          47572300,
+          48430600
+        ],
+        "m15-core": [
+          61320000,
+          54189500,
+          51372400,
+          54985600,
+          41788900,
+          34423200,
+          36716700
+        ],
+        "m151-integrated": [
+          43137100,
+          36785100,
+          37871700,
+          41652800,
+          40565800,
+          44112100,
+          63173800
+        ],
+        "rfsg-current": [
+          74224000,
+          60033900,
+          72662400,
+          89050400,
+          92737400,
+          85390700,
+          70074700
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 1,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          38541200,
+          33275000,
+          32648600,
+          26197800,
+          34495500,
+          32095700,
+          31900800
+        ],
+        "m151-integrated": [
+          50903500,
+          41829200,
+          36958300,
+          33729800,
+          81418900,
+          70468400,
+          76271600
+        ],
+        "rfsg-current": [
+          87004400,
+          110424900,
+          116169400,
+          97844300,
+          128895400,
+          95759600,
+          95170300
+        ],
+        "rfsg-v0.1.1": [
+          77752300,
+          97248800,
+          121184800,
+          142020500,
+          155991200,
+          166719500,
+          134214900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 2,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          61262900,
+          48596100,
+          44997700,
+          36577200,
+          49577300,
+          38172200,
+          36590000
+        ],
+        "rfsg-current": [
+          116167700,
+          81371800,
+          68922200,
+          53489000,
+          69686300,
+          66893100,
+          72032700
+        ],
+        "rfsg-v0.1.1": [
+          75620800,
+          65381000,
+          53359400,
+          58016200,
+          66604200,
+          71152200,
+          72626900
+        ],
+        "m15-core": [
+          41647200,
+          42830600,
+          35562100,
+          26171600,
+          35993200,
+          31989700,
+          34771400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 3,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          76535000,
+          65966200,
+          62076400,
+          46273300,
+          68005100,
+          62629500,
+          59838000
+        ],
+        "rfsg-v0.1.1": [
+          83040100,
+          62243900,
+          43951300,
+          39371400,
+          37132400,
+          48177200,
+          75861700
+        ],
+        "m15-core": [
+          37108800,
+          35775400,
+          33582500,
+          26113300,
+          35880500,
+          32679200,
+          32026700
+        ],
+        "m151-integrated": [
+          43831000,
+          40392500,
+          40996500,
+          37527700,
+          44795000,
+          46134300,
+          53844700
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 4,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          49966700,
+          36695700,
+          37884800,
+          39773900,
+          39899900,
+          35191700,
+          45268400
+        ],
+        "m15-core": [
+          46419500,
+          49858500,
+          64772500,
+          49791000,
+          73551700,
+          68715100,
+          61736600
+        ],
+        "m151-integrated": [
+          53380400,
+          52076600,
+          46509500,
+          33040900,
+          48398400,
+          39055600,
+          36085200
+        ],
+        "rfsg-current": [
+          85547700,
+          68953600,
+          70523500,
+          58349800,
+          65369500,
+          73685200,
+          91710200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 5,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          64230100,
+          53076500,
+          50072900,
+          35309900,
+          44660600,
+          34739700,
+          32645000
+        ],
+        "m151-integrated": [
+          43288600,
+          36203600,
+          43594600,
+          44354200,
+          61705300,
+          62374900,
+          59500400
+        ],
+        "rfsg-current": [
+          82543700,
+          62241300,
+          59321000,
+          46889900,
+          74964100,
+          85601400,
+          84845100
+        ],
+        "rfsg-v0.1.1": [
+          82232600,
+          52727800,
+          39240500,
+          35533500,
+          35047200,
+          35530100,
+          40682600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 6,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          50641400,
+          48684500,
+          38481900,
+          30925100,
+          43786000,
+          36907400,
+          49058300
+        ],
+        "rfsg-current": [
+          76161300,
+          93446200,
+          101457800,
+          92897400,
+          112212400,
+          122066900,
+          81124300
+        ],
+        "rfsg-v0.1.1": [
+          50034500,
+          37452000,
+          39740300,
+          37828000,
+          36695000,
+          44557500,
+          43020400
+        ],
+        "m15-core": [
+          36918100,
+          33404400,
+          34690600,
+          27816300,
+          35815200,
+          32581900,
+          31332300
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 7,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          88230700,
+          61534600,
+          60580100,
+          53193100,
+          62746300,
+          76491100,
+          90376900
+        ],
+        "rfsg-v0.1.1": [
+          79593000,
+          57595200,
+          39966500,
+          35218800,
+          38764000,
+          41440200,
+          43466600
+        ],
+        "m15-core": [
+          43239200,
+          35794100,
+          32752000,
+          24180500,
+          36951400,
+          33321500,
+          33486100
+        ],
+        "m151-integrated": [
+          44113300,
+          36900000,
+          34275600,
+          30743500,
+          45411500,
+          45652400,
+          38812300
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 8,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          76980000,
+          70419200,
+          63552200,
+          69673000,
+          64520000,
+          70885900,
+          71968700
+        ],
+        "m15-core": [
+          60066800,
+          51905100,
+          50454800,
+          36899200,
+          56010900,
+          43981200,
+          39675200
+        ],
+        "m151-integrated": [
+          58489200,
+          48978900,
+          43345700,
+          67098100,
+          73431800,
+          63162000,
+          56260100
+        ],
+        "rfsg-current": [
+          109982500,
+          77425600,
+          88961800,
+          62091800,
+          91452300,
+          71431600,
+          73062000
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 9,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          55977000,
+          44642400,
+          47500000,
+          34213900,
+          52093700,
+          40082200,
+          56251500
+        ],
+        "m151-integrated": [
+          86502800,
+          73195000,
+          67550400,
+          60739600,
+          75922300,
+          63984200,
+          62282200
+        ],
+        "rfsg-current": [
+          89509800,
+          73945100,
+          65519900,
+          55794100,
+          72634200,
+          56882600,
+          80611700
+        ],
+        "rfsg-v0.1.1": [
+          64130800,
+          40860100,
+          36620500,
+          36839900,
+          37556500,
+          38284200,
+          45629500
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 10,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          60531800,
+          63442600,
+          64713100,
+          52935800,
+          70776500,
+          53545600,
+          47537600
+        ],
+        "rfsg-current": [
+          111937900,
+          94572800,
+          69522600,
+          50774900,
+          82565100,
+          62911800,
+          60359300
+        ],
+        "rfsg-v0.1.1": [
+          58134500,
+          57570600,
+          47671700,
+          49582000,
+          50493500,
+          39098300,
+          45903300
+        ],
+        "m15-core": [
+          52568900,
+          44423600,
+          45209300,
+          27213300,
+          39819700,
+          36279800,
+          32187200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 11,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          87021600,
+          63190100,
+          56699300,
+          51204200,
+          70587000,
+          62829800,
+          64900900
+        ],
+        "rfsg-v0.1.1": [
+          69786700,
+          56679400,
+          57360200,
+          49621000,
+          50143200,
+          40608400,
+          45349000
+        ],
+        "m15-core": [
+          69015600,
+          86527600,
+          94866200,
+          86559500,
+          114124000,
+          86688100,
+          67791400
+        ],
+        "m151-integrated": [
+          55924100,
+          71007100,
+          65092000,
+          47178400,
+          50353500,
+          42539500,
+          42540800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 12,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          76588800,
+          65103200,
+          52856100,
+          54855100,
+          54685600,
+          57559400,
+          62874300
+        ],
+        "m15-core": [
+          73516300,
+          59538700,
+          46507400,
+          45965700,
+          64543500,
+          39164300,
+          37539200
+        ],
+        "m151-integrated": [
+          40646100,
+          34414400,
+          32563600,
+          28336000,
+          41945900,
+          37307600,
+          36098600
+        ],
+        "rfsg-current": [
+          78684300,
+          98367500,
+          91934800,
+          55300800,
+          72969000,
+          67762000,
+          58007300
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 13,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          46846200,
+          72237200,
+          76197900,
+          48997100,
+          66221100,
+          46589800,
+          41103400
+        ],
+        "m151-integrated": [
+          43593700,
+          34062500,
+          40342400,
+          84632000,
+          92526500,
+          69471600,
+          43421900
+        ],
+        "rfsg-current": [
+          52513500,
+          50609500,
+          58640200,
+          58560700,
+          91859400,
+          89347600,
+          79950700
+        ],
+        "rfsg-v0.1.1": [
+          53551200,
+          38007900,
+          44986100,
+          48645500,
+          44379700,
+          41111200,
+          49594100
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 14,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          55148700,
+          41573700,
+          38634800,
+          36373400,
+          48491400,
+          37250100,
+          40119700
+        ],
+        "rfsg-current": [
+          153503100,
+          181600900,
+          149228800,
+          116113900,
+          87281000,
+          96809100,
+          113603300
+        ],
+        "rfsg-v0.1.1": [
+          39097500,
+          31336900,
+          28141300,
+          28648600,
+          30209200,
+          34130100,
+          41869600
+        ],
+        "m15-core": [
+          41041900,
+          30090000,
+          30550300,
+          24166000,
+          42007100,
+          55402500,
+          47998500
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 15,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          98033800,
+          74079600,
+          70487400,
+          53348500,
+          63428100,
+          74601300,
+          76615200
+        ],
+        "rfsg-v0.1.1": [
+          57848100,
+          35646100,
+          34271600,
+          49120100,
+          48898400,
+          42269400,
+          41570500
+        ],
+        "m15-core": [
+          42008600,
+          32564200,
+          29128700,
+          26358000,
+          71198900,
+          59919100,
+          41563100
+        ],
+        "m151-integrated": [
+          44872000,
+          49815200,
+          43302000,
+          34470100,
+          60231100,
+          67820600,
+          49916000
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 16,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          43902500,
+          35741800,
+          31875900,
+          35490800,
+          33432100,
+          32913000,
+          42348300
+        ],
+        "m15-core": [
+          35036500,
+          35664600,
+          37356400,
+          27591300,
+          39470200,
+          52341400,
+          40634800
+        ],
+        "m151-integrated": [
+          183231000,
+          42585000,
+          171084400,
+          36601100,
+          176299300,
+          32329900,
+          163790100
+        ],
+        "rfsg-current": [
+          66865200,
+          54474900,
+          49665900,
+          42762900,
+          54162300,
+          49008600,
+          50593400
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 17,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          34963800,
+          37902800,
+          33378600,
+          28104700,
+          34411600,
+          30544200,
+          31328600
+        ],
+        "m151-integrated": [
+          61273400,
+          41356600,
+          37205500,
+          33298400,
+          42427200,
+          47478400,
+          44867100
+        ],
+        "rfsg-current": [
+          123834800,
+          87299300,
+          97729400,
+          67757400,
+          94713000,
+          65202600,
+          74104300
+        ],
+        "rfsg-v0.1.1": [
+          66026300,
+          51422400,
+          46013800,
+          102660000,
+          94693100,
+          96650800,
+          107117800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 18,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          51450600,
+          34464200,
+          36838000,
+          35115700,
+          54577000,
+          52236500,
+          45180800
+        ],
+        "rfsg-current": [
+          69751200,
+          59122400,
+          61717600,
+          49652600,
+          56358300,
+          48823800,
+          53829300
+        ],
+        "rfsg-v0.1.1": [
+          43387100,
+          43436000,
+          30840000,
+          36302000,
+          33069100,
+          65195800,
+          74981500
+        ],
+        "m15-core": [
+          31970200,
+          46957800,
+          41516400,
+          26722500,
+          33749800,
+          33804300,
+          39700500
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 19,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          58908000,
+          52187700,
+          51491000,
+          40879600,
+          58173500,
+          48672900,
+          51672500
+        ],
+        "rfsg-v0.1.1": [
+          50826900,
+          46230800,
+          38519600,
+          44469200,
+          49579700,
+          50414500,
+          49294700
+        ],
+        "m15-core": [
+          34308900,
+          29186500,
+          31531500,
+          29041200,
+          48281900,
+          41143100,
+          33734300
+        ],
+        "m151-integrated": [
+          38465500,
+          35677000,
+          37240700,
+          34810100,
+          56175500,
+          47986400,
+          51328600
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 20,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          53416400,
+          35950400,
+          36530100,
+          39174700,
+          41282900,
+          39399100,
+          42247800
+        ],
+        "m15-core": [
+          38497000,
+          34808200,
+          38249600,
+          37874700,
+          47190500,
+          38453300,
+          35611100
+        ],
+        "m151-integrated": [
+          49355900,
+          41256900,
+          45618100,
+          39417900,
+          46531400,
+          38563000,
+          37080900
+        ],
+        "rfsg-current": [
+          71401700,
+          65838000,
+          117899900,
+          96018500,
+          94302600,
+          67150700,
+          73646800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 21,
+      "order": [
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1"
+      ],
+      "perRuntime": {
+        "m15-core": [
+          86142800,
+          75788200,
+          67281300,
+          51899600,
+          91631200,
+          81893000,
+          84983100
+        ],
+        "m151-integrated": [
+          80279600,
+          64296600,
+          49644500,
+          45294000,
+          80655800,
+          54614700,
+          47236300
+        ],
+        "rfsg-current": [
+          159451000,
+          131250800,
+          104256600,
+          110086400,
+          148478700,
+          134791700,
+          127560700
+        ],
+        "rfsg-v0.1.1": [
+          58260200,
+          39626800,
+          44511300,
+          40035100,
+          44640300,
+          51546200,
+          58241200
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 22,
+      "order": [
+        "m151-integrated",
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core"
+      ],
+      "perRuntime": {
+        "m151-integrated": [
+          60781000,
+          71573300,
+          52290300,
+          40642700,
+          57795900,
+          45097000,
+          45240400
+        ],
+        "rfsg-current": [
+          128307000,
+          115865800,
+          74026900,
+          57660000,
+          72659800,
+          67099800,
+          66368300
+        ],
+        "rfsg-v0.1.1": [
+          46875700,
+          34838900,
+          36489700,
+          38418800,
+          43936100,
+          51689900,
+          65519500
+        ],
+        "m15-core": [
+          79582000,
+          58684200,
+          56780300,
+          38246500,
+          44524100,
+          40317500,
+          36893800
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 23,
+      "order": [
+        "rfsg-current",
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated"
+      ],
+      "perRuntime": {
+        "rfsg-current": [
+          74810300,
+          67963800,
+          70291300,
+          47478700,
+          68533300,
+          62337700,
+          58626900
+        ],
+        "rfsg-v0.1.1": [
+          55809800,
+          37125600,
+          37551100,
+          31078300,
+          34486200,
+          33721000,
+          42597700
+        ],
+        "m15-core": [
+          35248800,
+          30635000,
+          33203300,
+          27336100,
+          39706000,
+          35622700,
+          66769400
+        ],
+        "m151-integrated": [
+          42926900,
+          49212300,
+          49490200,
+          38812600,
+          47432900,
+          37384500,
+          37866900
+        ]
+      }
+    },
+    {
+      "id": "effect/fanout",
+      "caseId": "effect/fanout@64",
+      "kind": "effect-fanout",
+      "size": 64,
+      "iterations": 8680,
+      "round": 24,
+      "order": [
+        "rfsg-v0.1.1",
+        "m15-core",
+        "m151-integrated",
+        "rfsg-current"
+      ],
+      "perRuntime": {
+        "rfsg-v0.1.1": [
+          45390700,
+          37183800,
+          39497600,
+          36047000,
+          34646600,
+          38024000,
+          90673800
+        ],
+        "m15-core": [
+          42288700,
+          36234100,
+          40940300,
+          33767900,
+          43879300,
+          44878900,
+          54473200
+        ],
+        "m151-integrated": [
+          59829800,
+          43863800,
+          36280600,
+          33261700,
+          47274300,
+          52831400,
+          54077300
+        ],
+        "rfsg-current": [
+          66115100,
+          68212000,
+          59062300,
+          43721100,
+          63805000,
+          61088100,
+          51970000
+        ]
+      }
+    }
+  ]
+}

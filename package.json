@@ -58,7 +58,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "LICENSE-ALIEN-SIGNALS.txt"
   ],
   "dependencies": {
     "alien-signals": "^3.2.1"

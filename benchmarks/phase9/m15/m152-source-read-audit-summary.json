@@ -1,0 +1,40 @@
+{
+  "purpose": "M1.5.2 production-shaped paired diagnostics; exploratory, not authoritative M1b",
+  "roundsPerCase": 24,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "summary": [
+    {
+      "caseId": "source/read@1",
+      "rounds": 24,
+      "coreMedianNs": 15916300,
+      "pairedRatios": {
+        "m151-integrated": {
+          "median": 1.2953191861929718,
+          "q1": 1.1236043399030062,
+          "q3": 1.6451386419297505,
+          "min": 0.6527073485174044,
+          "max": 2.095544415620837,
+          "roundsFaster": 4
+        },
+        "rfsg-current": {
+          "median": 1.1428622692864052,
+          "q1": 0.7495901378607012,
+          "q3": 1.7112373664820892,
+          "min": 0.6409262567754048,
+          "max": 2.607149339334979,
+          "roundsFaster": 9
+        },
+        "rfsg-v0.1.1": {
+          "median": 1.1072944514516987,
+          "q1": 0.9093711714152314,
+          "q3": 1.3074987756469318,
+          "min": 0.41562160689025685,
+          "max": 1.693735699923733,
+          "roundsFaster": 8
+        }
+      }
+    }
+  ]
+}

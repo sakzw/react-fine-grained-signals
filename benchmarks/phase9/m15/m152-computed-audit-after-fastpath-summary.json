@@ -1,0 +1,71 @@
+{
+  "purpose": "M1.5.2 production-shaped paired diagnostics; exploratory, not authoritative M1b",
+  "roundsPerCase": 24,
+  "warmups": 3,
+  "samples": 7,
+  "frozenIterationsFile": "../m1b-iterations.json",
+  "summary": [
+    {
+      "caseId": "computed/dirty-read@1",
+      "rounds": 24,
+      "coreMedianNs": 11191950,
+      "pairedRatios": {
+        "m151-integrated": {
+          "median": 1.487916105311347,
+          "q1": 1.1642883038538596,
+          "q3": 1.914357931337468,
+          "min": 0.8535713828302104,
+          "max": 2.6450943971066625,
+          "roundsFaster": 3
+        },
+        "rfsg-current": {
+          "median": 2.608436312106986,
+          "q1": 2.2630579539633007,
+          "q3": 3.1802986088911194,
+          "min": 1.3813253243509778,
+          "max": 5.225370607139155,
+          "roundsFaster": 0
+        },
+        "rfsg-v0.1.1": {
+          "median": 1.4234651119676247,
+          "q1": 1.3441160946088027,
+          "q3": 1.9866485176837905,
+          "min": 0.756464606360225,
+          "max": 2.555482920103644,
+          "roundsFaster": 1
+        }
+      }
+    },
+    {
+      "caseId": "computed/equality-suppression@1",
+      "rounds": 24,
+      "coreMedianNs": 13167550,
+      "pairedRatios": {
+        "m151-integrated": {
+          "median": 1.2728057926848848,
+          "q1": 1.087311454268757,
+          "q3": 1.6707705469340688,
+          "min": 0.8538923031899327,
+          "max": 2.4162421458009593,
+          "roundsFaster": 2
+        },
+        "rfsg-current": {
+          "median": 2.2942371318639925,
+          "q1": 1.9363322391467237,
+          "q3": 2.797657721435053,
+          "min": 1.4179494239423167,
+          "max": 4.067177893385582,
+          "roundsFaster": 0
+        },
+        "rfsg-v0.1.1": {
+          "median": 1.421920106575589,
+          "q1": 1.32851946410252,
+          "q3": 1.5914492593166023,
+          "min": 0.9941675056663476,
+          "max": 2.981081902446437,
+          "roundsFaster": 1
+        }
+      }
+    }
+  ]
+}

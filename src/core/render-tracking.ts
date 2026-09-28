@@ -3,6 +3,7 @@ import {
   withoutInteropRenderCollector,
   type ReadableInteropV1,
 } from "./interop.js";
+import { UNTRACKED_OWNER, executionContext, withExecutionOwner } from "./execution-owner.js";
 
 /** Internal dependency contract used by the React render collector. */
 export interface RenderDependency {
@@ -75,7 +76,13 @@ export function trackRenderDependency(
 export function untrackedRender<T>(callback: () => T): T {
   const previous = setActiveRenderCollector();
   try {
-    return withoutInteropRenderCollector(callback);
+    const owner = executionContext.owner;
+    const run = () => withoutInteropRenderCollector(callback);
+    // A render-only pause must keep an enclosing graph subscriber active.
+    if (owner !== undefined && typeof owner !== "symbol" && owner.kind === "graph") {
+      return run();
+    }
+    return withExecutionOwner(UNTRACKED_OWNER, run);
   } finally {
     setActiveRenderCollector(previous);
   }

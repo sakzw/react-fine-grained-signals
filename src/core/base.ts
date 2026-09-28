@@ -57,12 +57,12 @@ export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
 
 /** Creates a writable reactive value. */
 export function signal<T>(initialValue: T): Signal<T> {
-  return registerSignal(coreRuntime.signal(initialValue));
+  return coreRuntime.signal(initialValue);
 }
 
 /** Creates a lazily evaluated reactive value. */
 export function computed<T>(getter: () => T): ReadonlySignal<T> {
-  return registerSignal(coreRuntime.computed(getter));
+  return coreRuntime.computed(getter);
 }
 
 /** Runs a reactive side effect and returns a disposer. */

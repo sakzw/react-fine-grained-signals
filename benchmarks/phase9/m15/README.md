@@ -1,5 +1,9 @@
 # M1.5 bare Alien-derived screening prototype
 
+## M1.5.2 production-shaped candidate
+
+The M1.5.2 production port, package/bundle and allocation reviews, 24-pair focused audits, final eight-round matrix, and architecture decision are documented in [`docs/implementation-phase9-m1.5.2.md`](../../../docs/implementation-phase9-m1.5.2.md). The final authoritative artifacts are in [`results/m1.5.2-2026-09-28-production-alien-derived-final/`](../results/m1.5.2-2026-09-28-production-alien-derived-final/). These measurements use the actual built production runtime. The direction is accepted, with a narrow M1.5.x computed/effect hot-path follow-up; this does not start M2.
+
 ## M1.5.1 adapter architecture rebase
 
 The benchmark-only M1.5.1 candidate keeps one Alien-derived graph core and places lexical V2 execution ownership, render/speculative behavior, cross-copy readable bridging, React hooks, and DeepSignal adaptation in separate modules. The graph core is not copied for render mode. Its V2 owner is shared across independent candidate copies; the per-readable bridge remains V1. No compatibility promise for a mixed v0.1.1/new-development graph protocol was found in the v0.1.1 tag or repository docs/tests.

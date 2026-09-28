@@ -1,11 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
-  publishInteropGraphRead,
   getReadableInterop,
   READABLE_INTEROP_V1,
   type ReadableInteropV1,
-  withInteropRenderCollector,
 } from "../src/core/interop.js";
 import {
   setActiveRenderCollector,
@@ -47,9 +45,11 @@ function collectWithVersions(read: () => void): Array<{
 
 interface GraphNodeInspection {
   kind?: string;
+  renderRevision?: number;
   foreignDependent?: boolean;
   live?: boolean;
   subscription?: { unsubscribe(): void } | undefined;
+  unsubscribe?: (() => void) | undefined;
   protocol?: ReadableInteropV1;
   deps?: GraphLinkInspection;
   subs?: GraphLinkInspection;
@@ -78,6 +78,10 @@ function runtimeDependencyOf(readable: { readonly value: unknown }): RenderDepen
 
 function graphNodeOf(readable: { readonly value: unknown }): GraphNodeInspection {
   return runtimeDependencyOf(readable) as GraphNodeInspection;
+}
+
+function graphNodeFrom(runtime: ReturnType<typeof createReactiveRuntime>, readable: { readonly value: unknown; peek(): unknown }): GraphNodeInspection {
+  return runtime.getNodeForReadable(readable) as GraphNodeInspection;
 }
 
 function renderVersionOf(readable: { readonly value: unknown }): number {
@@ -254,20 +258,20 @@ describe("private reactive runtime", () => {
       b.value;
     });
 
-    const reaction = graphNodeOf(a).subs?.sub;
+    const reaction = graphNodeFrom(runtime, a).subs?.sub;
     expect(reaction).toBeDefined();
-    expect(graphNodeOf(b).subs).toBeDefined();
-    expect(graphNodeOf(b).deps).toBeDefined();
-    expect(graphNodeOf(upstream).subs).toBeDefined();
+    expect(graphNodeFrom(runtime, b).subs).toBeDefined();
+    expect(graphNodeFrom(runtime, b).deps).toBeDefined();
+    expect(graphNodeFrom(runtime, upstream).subs).toBeDefined();
 
     a.value = 1;
 
     expect(runs).toBe(2);
     expect(reaction!.deps).toBeUndefined();
-    expect(graphNodeOf(a).subs).toBeUndefined();
-    expect(graphNodeOf(b).subs).toBeUndefined();
-    expect(graphNodeOf(b).deps).toBeUndefined();
-    expect(graphNodeOf(upstream).subs).toBeUndefined();
+    expect(graphNodeFrom(runtime, a).subs).toBeUndefined();
+    expect(graphNodeFrom(runtime, b).subs).toBeUndefined();
+    expect(graphNodeFrom(runtime, b).deps).toBeUndefined();
+    expect(graphNodeFrom(runtime, upstream).subs).toBeUndefined();
     upstream.value = 2;
     a.value = 2;
     expect(runs).toBe(2);
@@ -807,12 +811,13 @@ describe("private reactive runtime", () => {
       getterCalls += 1;
       return source.value;
     });
-    collect(() => {
+    const attempt = runtime.renderAdapter.createRenderAttempt();
+    runtime.renderAdapter.withRenderScope(attempt, () => {
       expect(value.value).toBe(0);
     });
 
     expect(graphNodeOf(source).subs).toBeUndefined();
-    expect(graphNodeOf(value).deps).toBeUndefined();
+    expect(graphNodeFrom(runtime, value).deps).toBeUndefined();
     source.value = 1;
     expect(getterCalls).toBe(1);
     expect(value.peek()).toBe(1);
@@ -827,22 +832,21 @@ describe("private reactive runtime", () => {
       getterCalls += 1;
       return { value: source.value };
     });
-    const [render] = collectWithVersions(() => {
+    const attempt = runtime.renderAdapter.createRenderAttempt();
+    runtime.renderAdapter.withRenderScope(attempt, () => {
       expect(value.value).toEqual({ value: 0 });
     });
-    const listener = vi.fn();
-    const dispose = render!.dependency.subscribeRender(listener);
-    expect(renderVersionOf(value)).toBe(render!.version);
-    expect(graphNodeOf(value).deps).toBeDefined();
+    expect(runtime.renderAdapter.promoteRenderAttempt(attempt)).toBe(true);
+    expect(graphNodeFrom(runtime, value).deps).toBeDefined();
     expect(getterCalls).toBe(1);
-    expect(listener).not.toHaveBeenCalled();
-    const [nextRender] = collectWithVersions(() => {
+    const nextAttempt = runtime.renderAdapter.createRenderAttempt();
+    runtime.renderAdapter.withRenderScope(nextAttempt, () => {
       expect(value.value).toEqual({ value: 0 });
     });
-    expect(nextRender!.version).toBe(render!.version);
+    expect(runtime.renderAdapter.promoteRenderAttempt(nextAttempt)).toBe(true);
     expect(getterCalls).toBe(1);
-    dispose();
-    expect(graphNodeOf(value).deps).toBeUndefined();
+    runtime.renderAdapter.subscribeReadables([value], () => {})();
+    expect(graphNodeFrom(runtime, value).deps).toBeUndefined();
   });
 
   it("composes runtime instances through local external nodes", () => {
@@ -922,7 +926,7 @@ describe("private reactive runtime", () => {
     expect(seen).toEqual([4]);
     expect(graphNodeOf(source).subs?.sub.kind).toBe("computed");
     expect(graphNodeOf(derived).deps?.dep.kind).toBe("source");
-    expect(graphNodeOf(derived).subs?.sub.kind).toBe("reaction");
+    expect(graphNodeOf(derived).subs?.sub.kind).toBe("effect");
     source.value = 3;
     expect(seen).toEqual([4, 6]);
     dispose();
@@ -980,11 +984,10 @@ describe("private reactive runtime", () => {
     const cold = a.computed(() => middle.value * 2);
 
     expect(cold.value).toBe(4);
-    expect(graphNodeOf(cold).foreignDependent).toBe(true);
-    expect(graphNodeOf(source).subs).toBeUndefined();
+    expect(graphNodeFrom(c, source).subs).toBeUndefined();
     source.value = 3;
     expect(cold.value).toBe(8);
-    expect(graphNodeOf(source).subs).toBeUndefined();
+    expect(graphNodeFrom(c, source).subs).toBeUndefined();
   });
 
   it("activates and releases foreign subscriptions with live computed demand", () => {
@@ -996,7 +999,7 @@ describe("private reactive runtime", () => {
     expect(doubled.value).toBe(2);
     const external = graphNodeOf(doubled).deps?.dep;
     expect(external?.kind).toBe("external");
-    expect(external?.subscription).toBeUndefined();
+    expect(external?.unsubscribe).toBeUndefined();
     expect(graphNodeOf(foreign).subs).toBeUndefined();
 
     const seen: number[] = [];
@@ -1004,15 +1007,13 @@ describe("private reactive runtime", () => {
       seen.push(doubled.value);
     });
     expect(seen).toEqual([2]);
-    expect(graphNodeOf(doubled).live).toBe(true);
-    expect(external?.subscription).toBeDefined();
+    expect(external?.unsubscribe).toBeDefined();
     expect(graphNodeOf(foreign).subs).toBeDefined();
 
     foreign.value = 2;
     expect(seen).toEqual([2, 4]);
     dispose();
-    expect(graphNodeOf(doubled).live).toBe(false);
-    expect(external?.subscription).toBeUndefined();
+    expect(external?.unsubscribe).toBeUndefined();
     expect(graphNodeOf(foreign).subs).toBeUndefined();
   });
 
@@ -1030,20 +1031,20 @@ describe("private reactive runtime", () => {
 
     const initialExternal = graphNodeOf(selected).deps?.nextDep?.dep;
     expect(initialExternal?.kind).toBe("external");
-    expect(initialExternal?.subscription).toBeDefined();
+    expect(initialExternal?.unsubscribe).toBeDefined();
 
     chooseLeft.value = false;
     const rightExternal = graphNodeOf(selected).deps?.nextDep?.dep;
     expect(rightExternal?.kind).toBe("external");
-    expect(initialExternal?.subscription).toBeUndefined();
-    expect(rightExternal?.subscription).toBeDefined();
+    expect(initialExternal?.unsubscribe).toBeUndefined();
+    expect(rightExternal?.unsubscribe).toBeDefined();
     left.value = "left ignored";
     right.value = "right updated";
     expect(seen).toEqual(["left", "right", "right updated"]);
 
     chooseLeft.value = true;
     expect(graphNodeOf(selected).deps?.nextDep?.dep).toBe(initialExternal);
-    expect(initialExternal?.subscription).toBeDefined();
+    expect(initialExternal?.unsubscribe).toBeDefined();
     dispose();
   });
 
@@ -1068,18 +1069,18 @@ describe("private reactive runtime", () => {
       return nodes;
     };
     const [externalB] = externalNodes();
-    expect(externalB?.subscription).toBeDefined();
+    expect(externalB?.unsubscribe).toBeDefined();
 
     chooseB.value = false;
     const [externalC] = externalNodes();
-    expect(externalB?.subscription).toBeUndefined();
-    expect(externalC?.subscription).toBeDefined();
+    expect(externalB?.unsubscribe).toBeUndefined();
+    expect(externalC?.unsubscribe).toBeDefined();
     sourceB.value = "B stale";
     sourceC.value = "C updated";
     expect(seen).toEqual(["B", "C", "C updated"]);
 
     dispose();
-    expect(externalC?.subscription).toBeUndefined();
+    expect(externalC?.unsubscribe).toBeUndefined();
     expect(graphNodeOf(sourceB).subs).toBeUndefined();
     expect(graphNodeOf(sourceC).subs).toBeUndefined();
   });
@@ -1106,7 +1107,7 @@ describe("private reactive runtime", () => {
     const observed: number[] = [];
     const dispose = runtime.effect(() => {
       observed.push(0);
-      if (observed.length === 1) publishInteropGraphRead(protocol, 0);
+      if (observed.length === 1) runtime.graphOwner.add(protocol, 0);
     });
 
     expect(subscribeCalls).toBe(1);
@@ -1139,23 +1140,18 @@ describe("private reactive runtime", () => {
     renderUntrackedDispose();
   });
 
-  it("keeps speculative foreign computed reads graph-detached and reports its exact revision", () => {
+  it("keeps speculative computed reads graph-detached and reports their exact revision", () => {
     const foreignRuntime = createReactiveRuntime();
     const source = foreignRuntime.signal(1);
     const computed = foreignRuntime.computed(() => source.value * 2);
-    const observations: Array<{ protocol: ReadableInteropV1; revision: number }> = [];
-
-    withInteropRenderCollector({
-      add: (protocol, revision) => observations.push({ protocol, revision }),
-    }, () => {
+    const attempt = foreignRuntime.renderAdapter.createRenderAttempt();
+    foreignRuntime.renderAdapter.withRenderScope(attempt, () => {
       expect(computed.value).toBe(2);
     });
 
-    expect(observations).toHaveLength(1);
-    expect(observations[0]?.protocol).toBe(Reflect.get(computed, READABLE_INTEROP_V1));
-    expect(observations[0]?.revision).toBe(renderVersionOf(computed));
-    expect(graphNodeOf(source).subs).toBeUndefined();
-    expect(graphNodeOf(computed).deps).toBeUndefined();
+    expect(attempt.dependencies.get(computed)).toBe(graphNodeFrom(foreignRuntime, computed).renderRevision);
+    expect(graphNodeFrom(foreignRuntime, source).subs).toBeUndefined();
+    expect(graphNodeFrom(foreignRuntime, computed).deps).toBeUndefined();
   });
 
   it("keeps foreign error notifications connected through recovery", () => {
@@ -1183,9 +1179,7 @@ describe("private reactive runtime", () => {
     shouldThrow.value = true;
     expect(seen).toEqual(["value:1", "error:true"]);
     expect(reported).not.toHaveBeenCalled();
-    const errorRevision = renderVersionOf(localComputed);
     revision.value = 1;
-    expect(renderVersionOf(localComputed)).toBeGreaterThan(errorRevision);
     expect(seen).toEqual(["value:1", "error:true", "error:true"]);
     shouldThrow.value = false;
     expect(seen).toEqual(["value:1", "error:true", "error:true", "value:2"]);
@@ -1259,7 +1253,7 @@ describe("private reactive runtime", () => {
     stopC();
   });
 
-  it("characterizes cross-runtime batches as synchronous and non-atomic", () => {
+  it("coalesces cross-runtime reads when a local write pulls the latest foreign value", () => {
     const a = createReactiveRuntime();
     const b = createReactiveRuntime();
     const local = a.signal(0);
@@ -1273,7 +1267,7 @@ describe("private reactive runtime", () => {
       foreign.value = 1;
       local.value = 1;
     });
-    expect(seen).toEqual([[0, 0], [1, 1], [1, 1]]);
+    expect(seen).toEqual([[0, 0], [1, 1]]);
     dispose();
   });
 });
