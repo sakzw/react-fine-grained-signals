@@ -8,7 +8,7 @@ The earlier Stage 2 stop was caused by an accessor/helper-object prototype, not 
 
 ## Provenance and scope
 
-The reference is Alien Signals 3.2.1 at `8734d386d925025d0e99419bd9161c17b112c5ee`, MIT licensed. Research prototypes and raw process records are under [`benchmarks/phase9/m15/`](../benchmarks/phase9/m15/). They are isolated from `src/` and package exports. Starting main was `0762e5098d2ce88d9b1c8546f8238d35ffb70f63` (`docs: record Phase 9 M1.5 baseline blocker`).
+The reference is Alien Signals 3.2.1 at `8734d386d925025d0e99419bd9161c17b112c5ee`, MIT licensed. Research prototypes and raw process records are under [`benchmarks/phase9/m15/`](../benchmarks/phase9/m15/). They are isolated from package exports. The public starting main was `9c979b2b2b0a951c30e1bc98675fa8ff1d7d7f44` (`docs: record Phase 9 M1.4.2 findings`). Commit `0762e5098d2ce88d9b1c8546f8238d35ffb70f63` (`docs: record Phase 9 M1.5 baseline blocker`) is a subsequent intermediate commit on the M1.5 development line, not the public starting main.
 
 ## Architecture and incremental findings
 

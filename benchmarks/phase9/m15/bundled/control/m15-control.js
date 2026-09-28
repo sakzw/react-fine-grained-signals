@@ -1,6 +1,6 @@
-import { useMemo as e, useRef as t, useSyncExternalStore as n } from "react";
+import { useEffect as e, useLayoutEffect as t, useMemo as n, useRef as r, useSyncExternalStore as i } from "react";
 //#region benchmarks/phase9/node_modules/.pnpm/alien-signals@3.2.1/node_modules/alien-signals/esm/system.mjs
-var r = {
+var a = {
 	None: 0,
 	Mutable: 1,
 	Watching: 2,
@@ -9,7 +9,7 @@ var r = {
 	Dirty: 16,
 	Pending: 32
 };
-function i({ update: e, notify: t, unwatched: n }) {
+function o({ update: e, notify: t, unwatched: n }) {
 	return {
 		link: r,
 		unlink: i,
@@ -125,28 +125,171 @@ function i({ update: e, notify: t, unwatched: n }) {
 	}
 }
 //#endregion
-//#region benchmarks/phase9/m15/alien-derived-runtime-objectis.mjs
-var { None: a, Mutable: o, Watching: s, RecursedCheck: c, Recursed: l, Dirty: u, Pending: d } = r, f = 64, p, m = 0, h = 0, g = 0, _ = 0, v = 0, y = [], { link: b, unlink: x, propagate: S, checkDirty: C, shallowPropagate: w } = i({
+//#region benchmarks/phase9/m15/render-context.mjs
+var s, c;
+function l() {
+	return {
+		dependencies: /* @__PURE__ */ new Map(),
+		add(e, t) {
+			this.dependencies.has(e) || this.dependencies.set(e, t);
+		}
+	};
+}
+function u(e) {
+	let t = c;
+	return c = e, s = e, t;
+}
+function d(e) {
+	let t = s, n = c;
+	return s = e, c = e, () => {
+		s = t, c = n;
+	};
+}
+function f() {
+	return s;
+}
+function p() {
+	return c;
+}
+function m(e, t) {
+	c?.add(e, t);
+}
+function ee(e, t) {
+	let n = c;
+	c = e;
+	try {
+		return t();
+	} finally {
+		c = n;
+	}
+}
+function te(e) {
+	let t = c;
+	c = void 0;
+	try {
+		return e();
+	} finally {
+		c = t;
+	}
+}
+function h(e) {
+	let t = s, n = c;
+	s = void 0, c = void 0;
+	try {
+		return e();
+	} finally {
+		s = t, c = n;
+	}
+}
+function ne(e, t) {
+	let n = s, r = c;
+	s = e, c = e;
+	try {
+		return t();
+	} finally {
+		s = n, c = r;
+	}
+}
+//#endregion
+//#region benchmarks/phase9/m15/alien-derived-runtime-interop-context.mjs
+var re = Symbol.for("react-fine-grained-signals.shared-interop-context.v1"), g = Symbol.for("react-fine-grained-signals.readable-interop.v1");
+function _() {
+	let e = globalThis, t = e[re];
+	if (t === void 0 && (t = {
+		version: 1,
+		graphCollector: void 0,
+		renderCollector: void 0,
+		renderScope: void 0,
+		speculativeDepth: 0,
+		speculativeDeepReadEpoch: 0
+	}, Object.defineProperty(e, re, {
+		value: t,
+		enumerable: !1,
+		configurable: !1,
+		writable: !1
+	})), t.version !== 1) throw Error("Incompatible shared interop context");
+	return t;
+}
+//#endregion
+//#region benchmarks/phase9/m15/alien-derived-runtime-render.mjs
+var { None: v, Mutable: y, Watching: b, RecursedCheck: x, Recursed: ie, Dirty: S, Pending: C } = a, w = 64, T = {}, E = _(), D, O = 0, k = 0, A = 0, j = 0, M = 0, N = [], ae = /* @__PURE__ */ new WeakMap(), oe = /* @__PURE__ */ new WeakMap(), se = /* @__PURE__ */ new WeakMap(), ce = /* @__PURE__ */ new WeakSet(), { link: P, unlink: le, propagate: F, checkDirty: ue, shallowPropagate: I } = o({
 	update(e) {
-		return e.kind === "computed" ? A(e) : e.kind === "source" ? O(e) : (e.flags = o, !0);
+		if (e.kind === "external") {
+			let t = e.revision !== e.pendingRevision;
+			return e.revision = e.pendingRevision, e.flags = y, t;
+		}
+		return e.kind === "computed" ? _e(e) : e.kind === "source" ? ge(e) : (e.flags = y, !0);
 	},
 	notify(e) {
-		let t = v, n = t;
+		let t = M, n = t;
 		do
-			if (y[t++] = e, e.flags &= ~s, e = e.subs?.sub, e === void 0 || !(e.flags & s)) break;
+			if (N[t++] = e, e.flags &= ~b, e = e.subs?.sub, e === void 0 || !(e.flags & b)) break;
 		while (!0);
-		v = t;
+		M = t;
 		let r = n;
 		for (; r < --t;) {
-			let e = y[r];
-			y[r++] = y[t], y[t] = e;
+			let e = N[r];
+			N[r++] = N[t], N[t] = e;
 		}
 	},
 	unwatched(e) {
-		e.kind === "computed" ? e.depsTail !== void 0 && (e.flags = o | u, F(e)) : e.kind === "effect" && ne(e);
+		if (e.kind === "external") {
+			e.subscription?.unsubscribe(), e.subscription = void 0;
+			return;
+		}
+		e.kind === "computed" ? e.depsTail !== void 0 && (e.flags = y | S, xe(e)) : e.kind === "effect" && we(e);
 	}
-}), T = /* @__PURE__ */ new WeakMap();
-function E(e, t, n = {}) {
+}), de = {
+	runtimeToken: T,
+	add(e, t) {
+		if (e.runtimeToken === T || D === void 0) return;
+		let n = oe.get(e);
+		if (n === void 0 && (n = z("external", y, {
+			protocol: e,
+			revision: t,
+			pendingRevision: t,
+			subscription: void 0
+		}), oe.set(e, n)), n.pendingRevision = t, P(n, D, O), n.subscription === void 0) try {
+			let t = e.subscribe((e) => {
+				e !== n.revision && e !== n.pendingRevision && (n.pendingRevision = e, n.flags = y | S, n.subs !== void 0 && (F(n.subs, !!k), A || H()));
+			});
+			n.subscription = t, t.revision !== n.revision && (n.pendingRevision = t.revision, n.flags = y | S, n.subs !== void 0 && (F(n.subs, !!k), A || H()));
+		} catch (e) {
+			U(e);
+		}
+	}
+};
+function L(e) {
+	let t = E.graphCollector;
+	if (t === void 0 || t.runtimeToken === T) return;
+	let n = se.get(e);
+	n !== void 0 && t.add(n, e.renderRevision);
+}
+function R(e, t) {
+	let n = E.renderCollector;
+	if (n === void 0 || n.runtimeToken === T) return;
+	let r = ae.get(e);
+	r !== void 0 && n.add(r, t.renderRevision);
+}
+function fe(e, t) {
+	let n = D, r = E.graphCollector;
+	D = e, E.graphCollector = de;
+	try {
+		return t();
+	} finally {
+		D = n, E.graphCollector = r;
+	}
+}
+function pe(e, t) {
+	let n = E.renderCollector, r = E.speculativeDepth;
+	E.renderCollector = void 0, E.speculativeDepth = 0;
+	try {
+		return h(() => fe(e, t));
+	} finally {
+		E.speculativeDepth = r, E.renderCollector = n;
+	}
+}
+function z(e, t, n = {}) {
 	return {
 		kind: e,
 		flags: t,
@@ -154,138 +297,195 @@ function E(e, t, n = {}) {
 		depsTail: void 0,
 		subs: void 0,
 		subsTail: void 0,
+		renderRevision: 0,
 		...n
 	};
 }
-function D(e) {
-	return e.flags & u && O(e) && e.subs !== void 0 && w(e.subs), p !== void 0 && b(e, p, m), e.currentValue;
+var me = class {
+	#e;
+	#t;
+	constructor(e, t) {
+		this.#e = e, this.#t = t, this.runtimeToken = T, Object.freeze(this);
+	}
+	get version() {
+		return 1;
+	}
+	getRevision() {
+		return this.#t.renderRevision;
+	}
+	subscribe(e) {
+		let t = !0;
+		return {
+			unsubscribe: Ne(() => {
+				try {
+					this.#e.value;
+				} catch {}
+				t ? t = !1 : e(this.#t.renderRevision);
+			}),
+			revision: this.#t.renderRevision
+		};
+	}
+};
+function he(e, t) {
+	let n = new me(e, t);
+	ae.set(e, n), se.set(t, n), Object.defineProperty(e, g, {
+		value: n,
+		enumerable: !1,
+		writable: !1,
+		configurable: !1
+	});
 }
-function O(e) {
-	return e.flags = o, !Object.is(e.currentValue, e.currentValue = e.pendingValue);
+function B(e) {
+	return e.flags & S && ge(e) && e.subs !== void 0 && I(e.subs), D !== void 0 && P(e, D, O), L(e), e.currentValue;
 }
-function k(e) {
+function ge(e) {
+	return e.flags = y, !Object.is(e.currentValue, e.currentValue = e.pendingValue);
+}
+function V(e) {
 	let t = e.flags;
-	if (t & u || t & d && (C(e.deps, e) || (e.flags = t & ~d, !1))) A(e) && e.subs !== void 0 && w(e.subs);
-	else if (!t) {
-		e.flags = o | c;
-		let t = p;
-		p = e;
-		try {
-			e.value = e.getter();
-		} finally {
-			p = t, e.flags &= ~c;
-		}
-	}
-	return p !== void 0 && b(e, p, m), e.value;
+	if (t & S || t & C && (ue(e.deps, e) || (e.flags = t & ~C, !1)) ? _e(e) && e.subs !== void 0 && I(e.subs) : t || _e(e), D !== void 0 && P(e, D, O), L(e), e.hasError) throw e.error;
+	return e.value;
 }
-function A(e) {
-	e.flags & f && P(e), e.depsTail = void 0, e.flags = o | c;
-	let t = p;
-	p = e;
+function _e(e) {
+	e.flags & w && be(e), e.depsTail = void 0, e.flags = y | x;
+	let t = D;
+	D = e;
+	let n = !e.initialized, r = e.hasError, i = e.value;
 	try {
-		m += 1;
-		let t = e.value;
-		return e.value = e.getter(t), !Object.is(t, e.value);
+		O += 1;
+		try {
+			e.value = fe(e, () => e.getter(i)), e.error = void 0, e.hasError = !1;
+		} catch (t) {
+			e.value = void 0, e.error = t, e.hasError = !0;
+		}
+		return e.initialized = !0, n = n || r || e.hasError || !Object.is(i, e.value), n && (e.renderRevision = e.renderRevision + 1 | 0), n;
 	} finally {
-		p = t, e.flags &= ~c, ee(e);
+		D = t, e.flags &= ~x, Se(e);
 	}
 }
-function j(e, t) {
-	Object.is(e.pendingValue, e.pendingValue = t) || (e.flags = o | u, e.subs !== void 0 && (S(e.subs, !!h), g || N()));
+function ve(e, t) {
+	Object.is(e.pendingValue, e.pendingValue = t) || (e.renderRevision = e.renderRevision + 1 | 0, e.flags = y | S, e.subs !== void 0 && (F(e.subs, !!k), A || H()));
 }
-function M(e) {
+function ye(e) {
 	let t = e.flags;
-	if (t & u || t & d && C(e.deps, e)) {
-		if (t & f && P(e), e.cleanup !== void 0 && (te(e), !e.flags)) return;
-		e.depsTail = void 0, e.flags = s | c;
-		let n = p;
-		p = e;
-		try {
-			m += 1, h += 1, e.cleanup = e.fn();
-		} finally {
-			--h, p = n, e.flags &= ~c, ee(e);
+	if (t & S || t & C && ue(e.deps, e)) {
+		if (t & w && be(e), e.cleanup !== void 0) {
+			try {
+				Ce(e);
+			} catch (n) {
+				throw e.flags = b | t & w, n;
+			}
+			if (!e.flags) return;
 		}
-	} else e.deps !== void 0 && (e.flags = s | t & f);
+		e.depsTail = void 0, e.flags = b | x;
+		let n = D;
+		D = e;
+		try {
+			O += 1, k += 1;
+			let t = pe(e, e.fn);
+			e.cleanup = typeof t == "function" ? t : void 0;
+		} finally {
+			--k, D = n, e.flags &= ~x, Se(e);
+		}
+	} else e.deps !== void 0 && (e.flags = b | t & w);
 }
-function N() {
+function H() {
 	try {
-		for (; _ < v;) {
-			let e = y[_];
-			y[_++] = void 0, M(e);
+		for (; j < M;) {
+			let e = N[j];
+			N[j++] = void 0;
+			try {
+				ye(e);
+			} catch (e) {
+				U(e);
+			}
 		}
 	} finally {
-		for (; _ < v;) {
-			let e = y[_];
-			y[_++] = void 0, e.flags |= s | l;
+		for (; j < M;) {
+			let e = N[j];
+			N[j++] = void 0, e.flags |= b | ie;
 		}
-		_ = 0, v = 0;
+		j = 0, M = 0;
 	}
 }
-function P(e) {
+function U(e) {
+	try {
+		console.error("react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.", { cause: e });
+	} catch {}
+	try {
+		let t = globalThis.reportError;
+		typeof t == "function" && t.call(globalThis, e);
+	} catch {}
+}
+function be(e) {
 	let t = e.depsTail;
 	for (; t !== void 0;) {
 		let n = t.prevDep;
-		t.dep.kind === "effect" && x(t, e), t = n;
+		t.dep.kind === "effect" && le(t, e), t = n;
 	}
 }
-function F(e) {
+function xe(e) {
 	let t = e.depsTail;
 	for (; t !== void 0;) {
 		let n = t.prevDep;
-		x(t, e), t = n;
+		le(t, e), t = n;
 	}
 }
-function ee(e) {
+function Se(e) {
 	let t = e.depsTail, n = t === void 0 ? e.deps : t.nextDep;
-	for (; n !== void 0;) n = x(n, e);
+	for (; n !== void 0;) n = le(n, e);
 }
-function te(e) {
+function Ce(e) {
 	let t = e.cleanup;
 	e.cleanup = void 0;
-	let n = p;
-	p = void 0;
+	let n = D, r = E.renderCollector, i = E.speculativeDepth;
+	D = void 0, E.renderCollector = void 0, E.speculativeDepth = 0;
 	try {
-		t();
+		h(t);
 	} finally {
-		p = n;
+		E.speculativeDepth = i, E.renderCollector = r, D = n;
 	}
 }
-function ne(e) {
-	e.flags = a, F(e), e.cleanup !== void 0 && te(e);
+function we(e) {
+	if (e.flags = v, xe(e), e.cleanup !== void 0) try {
+		Ce(e);
+	} catch (e) {
+		U(e);
+	}
 }
-function re(e) {
-	let t = E("source", o, {
+function Te(e) {
+	let t = z("source", y, {
 		currentValue: e,
 		pendingValue: e
 	});
 	return {
 		get value() {
-			return D(t);
+			return B(t);
 		},
 		set value(e) {
-			j(t, e);
+			ve(t, e);
 		},
 		peek() {
-			return U(() => D(t));
+			return W(() => B(t));
 		}
 	};
 }
-function ie(e) {
-	let t = E("source", o, {
+function Ee(e) {
+	let t = z("source", y, {
 		currentValue: e,
 		pendingValue: e
 	});
 	function n(...e) {
 		if (e.length) {
 			if (!Object.is(this.pendingValue, this.pendingValue = e[0])) {
-				this.flags = o | u;
+				this.flags = y | S;
 				let e = this.subs;
-				e !== void 0 && (S(e, !!h), g || N());
+				e !== void 0 && (F(e, !!k), A || H());
 			}
-		} else return this.flags & u && O(this) && this.subs !== void 0 && w(this.subs), p !== void 0 && b(this, p, m), this.currentValue;
+		} else return this.flags & S && ge(this) && this.subs !== void 0 && I(this.subs), D !== void 0 && P(this, D, O), this.currentValue;
 	}
 	let r = n.bind(t), i = { peek() {
-		return U(() => r());
+		return W(() => r());
 	} };
 	return Object.defineProperty(i, "value", {
 		get: r,
@@ -293,215 +493,556 @@ function ie(e) {
 		enumerable: !0
 	}), i;
 }
-function ae(e) {
-	let t = E("source", o, {
+function De(e) {
+	let t = z("source", y, {
 		currentValue: e,
 		pendingValue: e
 	});
 	return {
 		get value() {
-			if (t.flags & u && (t.flags = o, !Object.is(t.currentValue, t.currentValue = t.pendingValue))) {
+			if (t.flags & S && (t.flags = y, !Object.is(t.currentValue, t.currentValue = t.pendingValue))) {
 				let e = t.subs;
-				e !== void 0 && w(e);
+				e !== void 0 && I(e);
 			}
-			return p !== void 0 && b(t, p, m), t.currentValue;
+			return D !== void 0 && P(t, D, O), t.currentValue;
 		},
 		set value(e) {
 			if (!Object.is(t.pendingValue, t.pendingValue = e)) {
-				t.flags = o | u;
+				t.flags = y | S;
 				let e = t.subs;
-				e !== void 0 && (S(e, !!h), g || N());
+				e !== void 0 && (F(e, !!k), A || H());
 			}
 		},
 		peek() {
-			return U(() => {
-				if (t.flags & u && (t.flags = o, !Object.is(t.currentValue, t.currentValue = t.pendingValue))) {
+			return W(() => {
+				if (t.flags & S && (t.flags = y, !Object.is(t.currentValue, t.currentValue = t.pendingValue))) {
 					let e = t.subs;
-					e !== void 0 && w(e);
+					e !== void 0 && I(e);
 				}
-				return p !== void 0 && b(t, p, m), t.currentValue;
+				return D !== void 0 && P(t, D, O), t.currentValue;
 			});
 		}
 	};
 }
-var oe = class {
+var Oe = class {
 	#e;
 	constructor(e) {
 		this.#e = e;
 	}
 	get value() {
-		return D(this.#e);
+		return B(this.#e);
 	}
 	set value(e) {
-		j(this.#e, e);
+		ve(this.#e, e);
 	}
 	peek() {
-		return U(() => D(this.#e));
+		return W(() => B(this.#e));
 	}
-}, se = class {
+}, ke = class {
 	#e;
 	constructor(e) {
 		this.#e = e;
 	}
 	get value() {
 		let e = this.#e;
-		if (e.flags & u && (e.flags = o, !Object.is(e.currentValue, e.currentValue = e.pendingValue))) {
+		if (e.flags & S && (e.flags = y, !Object.is(e.currentValue, e.currentValue = e.pendingValue))) {
 			let t = e.subs;
-			t !== void 0 && w(t);
+			t !== void 0 && I(t);
 		}
-		return p !== void 0 && b(e, p, m), e.currentValue;
+		return D !== void 0 && P(e, D, O), e.currentValue;
 	}
 	set value(e) {
 		let t = this.#e;
 		if (!Object.is(t.pendingValue, t.pendingValue = e)) {
-			t.flags = o | u;
+			t.flags = y | S;
 			let e = t.subs;
-			e !== void 0 && (S(e, !!h), g || N());
+			e !== void 0 && (F(e, !!k), A || H());
 		}
 	}
 	peek() {
-		return U(() => this.value);
+		return W(() => this.value);
 	}
 };
-function I(e) {
-	let t = E("source", o, {
+function Ae(e) {
+	return new Oe(z("source", y, {
 		currentValue: e,
 		pendingValue: e
-	}), n = new oe(t);
-	return T.set(n, t), n;
+	}));
 }
-function ce(e) {
-	let t = E("source", o, {
+function je(e) {
+	return new ke(z("source", y, {
 		currentValue: e,
 		pendingValue: e
-	}), n = new se(t);
-	return T.set(n, t), n;
+	}));
 }
-function L(e) {
-	return T.get(e)?.subs !== void 0;
-}
-function R() {
-	return p !== void 0;
-}
-function z() {
-	return g;
-}
-function B() {}
-function V(e) {
-	return T.has(e);
-}
-function le(e) {
-	let t = E("computed", a, {
+function Me(e) {
+	let t = z("computed", v, {
 		getter: e,
-		value: void 0
+		value: void 0,
+		error: void 0,
+		hasError: !1,
+		initialized: !1
 	});
 	return Object.freeze({
 		get value() {
-			return k(t);
+			return V(t);
 		},
 		peek() {
-			return U(() => k(t));
+			return W(() => V(t));
 		}
 	});
 }
-function ue(e) {
-	let t = E("effect", s | c, {
+function Ne(e) {
+	let t = z("effect", b | x, {
 		fn: e,
 		cleanup: void 0
-	}), n = p;
-	n !== void 0 && (b(t, n, 0), n.flags |= f);
+	}), n = D;
+	n !== void 0 && (P(t, n, 0), n.flags |= w);
 	try {
-		p = t, h += 1, t.cleanup = e();
-	} finally {
-		--h, p = n, t.flags &= ~c;
+		D = t, k += 1;
+		try {
+			let n = pe(t, e);
+			t.cleanup = typeof n == "function" ? n : void 0;
+		} catch (e) {
+			t.cleanup = void 0, U(e);
+		} finally {
+			--k, D = n, t.flags &= ~x, Se(t);
+		}
+	} catch (e) {
+		U(e);
 	}
-	return () => ne(t);
+	return () => we(t);
 }
-function H(e) {
-	g += 1;
+function Pe(e) {
+	A += 1;
 	try {
 		return e();
 	} finally {
-		--g, g || N();
+		--A, A || H();
 	}
 }
-function U(e) {
-	let t = p;
-	p = void 0;
+function W(e) {
+	let t = D, n = E.graphCollector, r = E.renderCollector, i = E.speculativeDepth;
+	D = void 0, E.graphCollector = void 0, E.renderCollector = void 0, E.speculativeDepth = 0;
 	try {
-		return e();
+		return h(() => te(e));
 	} finally {
-		p = t;
+		D = t, E.graphCollector = n, E.renderCollector = r, E.speculativeDepth = i;
 	}
+}
+var G = /* @__PURE__ */ new WeakMap(), Fe = /* @__PURE__ */ new WeakMap(), Ie = /* @__PURE__ */ new WeakMap(), Le = /* @__PURE__ */ new WeakMap(), K;
+function Re(e) {
+	let t = Le.get(e);
+	if (t !== void 0) for (let e = t.length - 1; e >= 0; --e) {
+		let n = t[e], r = !0;
+		for (let [e, t] of n.dependencies) try {
+			if (pt(e) !== t) {
+				r = !1;
+				break;
+			}
+		} catch {
+			r = !1;
+			break;
+		}
+		if (r) return n;
+	}
+}
+function ze(e, t) {
+	let n = Le.get(e) ?? [];
+	n.push(t), n.length > 4 && n.shift(), Le.set(e, n);
+}
+function Be(e) {
+	let t = Fe.get(e);
+	if (t === void 0) return !0;
+	for (let [e, n] of t) {
+		if (!n.canPromote || e.initialized) continue;
+		let t = [];
+		for (let [e, r] of n.dependencies) {
+			let n;
+			try {
+				n = pt(e);
+			} catch {
+				return !1;
+			}
+			if (n !== r) return !1;
+			let i = G.get(e);
+			if (i === void 0) return !1;
+			t.push(i);
+		}
+		xe(e), e.depsTail = void 0;
+		let r = D;
+		D = e, O += 1;
+		try {
+			for (let n of t) P(n, e, O);
+		} finally {
+			D = r;
+		}
+		e.value = n.value, e.error = n.error, e.hasError = n.hasError, e.initialized = !0, e.flags = y;
+	}
+	return !0;
+}
+var q = Symbol.for("react-fine-grained-signals.signal"), Ve = 1, He = 1, Ue = /* @__PURE__ */ new WeakSet(), We = () => ({
+	value: Ve,
+	enumerable: !1,
+	writable: !1,
+	configurable: !1
+});
+function Ge(e) {
+	Ue.add(e), Object.defineProperty(e, q, We());
+}
+function Ke(e) {
+	Object.defineProperty(e, q, We());
+}
+function J(e) {
+	if (e.flags & S && (e.flags = y, !Object.is(e.currentValue, e.currentValue = e.pendingValue))) {
+		let t = e.subs;
+		t !== void 0 && I(t);
+	}
+	return D !== void 0 && P(e, D, O), e.currentValue;
+}
+function qe(e, t) {
+	if (!Object.is(e.pendingValue, e.pendingValue = t)) {
+		e.renderRevision = e.renderRevision + 1 | 0, e.flags = y | S;
+		let t = e.subs;
+		t !== void 0 && (F(t, !!k), A || H());
+	}
+}
+var Je = class {
+	#e;
+	constructor(e) {
+		this.#e = e, Ge(this);
+	}
+	get value() {
+		return J(this.#e);
+	}
+	set value(e) {
+		qe(this.#e, e);
+	}
+	peek() {
+		return W(() => this.value);
+	}
+}, Ye = class {
+	#e;
+	constructor(e) {
+		this.#e = e, Ke(this), G.set(this, e), he(this, e);
+	}
+	get value() {
+		let e = this.#e;
+		if (e.renderReadMode === "helper-call") {
+			let t = f();
+			if (t !== void 0) return p()?.add(this, e.renderRevision), t.runtimeToken !== void 0 && t.runtimeToken !== T && R(this, e), e.flags & S ? e.pendingValue : e.currentValue;
+			let n = J(e);
+			return L(e), m(this, e.renderRevision), n;
+		}
+		if (s === void 0) {
+			let t = J(e);
+			return E.graphCollector !== void 0 && E.graphCollector.runtimeToken !== T && L(e), t;
+		}
+		let t = s;
+		if (t !== void 0) return c !== void 0 && (t.runtimeToken === void 0 || t.runtimeToken === T || c !== t) && m(this, e.renderRevision), t.runtimeToken !== void 0 && t.runtimeToken !== T && R(this, e), e.flags & S ? e.pendingValue : e.currentValue;
+		let n = J(e);
+		return L(e), c !== void 0 && m(this, e.renderRevision), n;
+	}
+	set value(e) {
+		qe(this.#e, e);
+	}
+	peek() {
+		return W(() => this.value);
+	}
+}, Xe = class {
+	#e;
+	constructor(e) {
+		this.#e = e, Object.defineProperty(this, q, {
+			value: Ve,
+			enumerable: !1,
+			writable: !1,
+			configurable: !1
+		});
+	}
+	get value() {
+		return J(this.#e);
+	}
+	set value(e) {
+		qe(this.#e, e);
+	}
+	peek() {
+		return W(() => this.value);
+	}
+};
+function Ze(e, t) {
+	return new e(z("source", y, {
+		currentValue: t,
+		pendingValue: t
+	}));
+}
+var Qe = (e) => Ze(Je, e), $e = (e) => Ze(Ye, e), et = (e) => Ze(Xe, e), tt = (e) => new Ye(z("source", y, {
+	currentValue: e,
+	pendingValue: e,
+	renderReadMode: "helper-call"
+})), nt = class {
+	#e;
+	constructor(e) {
+		this.#e = e, Ge(this);
+	}
+	get value() {
+		return V(this.#e);
+	}
+	peek() {
+		return W(() => V(this.#e));
+	}
+}, rt = class {
+	#e;
+	constructor(e) {
+		this.#e = e, Ke(this), G.set(this, e), he(this, e);
+	}
+	get value() {
+		let e = this.#e;
+		if (e.initialized && !(e.flags & (S | C))) {
+			if (D !== void 0 && P(e, D, O), L(e), m(this, e.renderRevision), s?.runtimeToken !== void 0 && s.runtimeToken !== T && R(this, e), e.hasError) throw e.error;
+			return e.value;
+		}
+		if (s !== void 0) {
+			if (K !== void 0 && K !== e) {
+				let t = E.renderCollector, n = E.speculativeDepth;
+				E.renderCollector = void 0, E.speculativeDepth = 0;
+				let r;
+				try {
+					r = h(() => V(e));
+				} finally {
+					E.speculativeDepth = n, E.renderCollector = t;
+				}
+				return m(this, e.renderRevision), L(e), r;
+			}
+			let t = s, n = Fe.get(t);
+			n === void 0 && Fe.set(t, n = /* @__PURE__ */ new Map());
+			let r = n.get(e);
+			if (r === void 0 && (r = Re(e), r !== void 0 && n.set(e, r)), r === void 0) {
+				let i = /* @__PURE__ */ new Map(), a = Ie.get(t);
+				if (a === void 0 && Ie.set(t, a = /* @__PURE__ */ new Set()), a.has(e)) throw Error("Computed cycle detected");
+				a.add(e);
+				let o = K;
+				K = e;
+				try {
+					let t = E.speculativeDeepReadEpoch;
+					try {
+						let t = E, n = t.speculativeDepth;
+						t.speculativeDepth = n + 1;
+						let a;
+						try {
+							a = ee({ add(e, t) {
+								i.has(e) || i.set(e, t);
+							} }, () => e.getter(e.value));
+						} finally {
+							t.speculativeDepth = n;
+						}
+						r = {
+							hasError: !1,
+							value: a,
+							error: void 0,
+							dependencies: i,
+							canPromote: !1
+						};
+					} catch (e) {
+						r = {
+							hasError: !0,
+							value: void 0,
+							error: e,
+							dependencies: i,
+							canPromote: !1
+						};
+					}
+					r.canPromote = E.speculativeDeepReadEpoch === t, n.set(e, r), E.speculativeDeepReadEpoch === t && ze(e, r);
+				} finally {
+					K = o, a.delete(e);
+				}
+			}
+			if (c !== void 0 && (t.runtimeToken === void 0 || t.runtimeToken === T || c !== t) && m(this, e.renderRevision), t.runtimeToken !== void 0 && t.runtimeToken !== T && R(this, e), r.hasError) throw r.error;
+			return r.value;
+		}
+		try {
+			let t = V(e);
+			return L(e), m(this, e.renderRevision), t;
+		} catch (t) {
+			throw L(e), (s?.runtimeToken === T || s?.runtimeToken === void 0) && c !== void 0 && m(this, e.renderRevision), s?.runtimeToken !== void 0 && s?.runtimeToken !== T && R(this, e), t;
+		}
+	}
+	peek() {
+		return W(() => this.value);
+	}
+}, it = class {
+	#e;
+	constructor(e) {
+		this.#e = e, Object.defineProperty(this, q, {
+			value: Ve,
+			enumerable: !1,
+			writable: !1,
+			configurable: !1
+		});
+	}
+	get value() {
+		return V(this.#e);
+	}
+	peek() {
+		return W(() => V(this.#e));
+	}
+};
+function at(e, t) {
+	return new e(z("computed", v, {
+		getter: t,
+		value: void 0,
+		error: void 0,
+		hasError: !1,
+		initialized: !1
+	}));
+}
+var ot = (e) => at(nt, e), st = (e) => at(rt, e), ct = (e) => at(it, e);
+function lt(e) {
+	if (typeof e != "object" || !e) return !1;
+	let t = e[q];
+	return typeof t == "number" && t >= He && typeof e.peek == "function";
+}
+function ut(e) {
+	return typeof e != "object" || !e ? !1 : Ue.has(e) || lt(e);
+}
+var dt = lt, ft = lt;
+function pt(e) {
+	let t = G.get(e);
+	if (t === void 0) {
+		let t = e?.[g];
+		if (t?.version === 1 && typeof t.getRevision == "function") return t.getRevision();
+		throw TypeError("Unknown render-readable");
+	}
+	return t.renderRevision;
+}
+function mt(e, t) {
+	let n = !0;
+	return Ne(() => h(() => {
+		for (let t of e) try {
+			t.value;
+		} catch {}
+		n ? n = !1 : t();
+	}));
+}
+function ht(e) {
+	return gt(e).value;
+}
+function gt(e) {
+	let t = l();
+	t.runtimeToken = T;
+	let n, r = E.renderCollector;
+	E.renderCollector = t;
+	try {
+		ne(t, () => {
+			n = e.value;
+		});
+	} finally {
+		E.renderCollector = r;
+	}
+	return {
+		value: n,
+		dependencies: t.dependencies
+	};
+}
+function _t(e) {
+	let t = G.get(e);
+	if (t === void 0) throw TypeError("Unknown render-readable");
+	return {
+		flags: t.flags,
+		currentValue: t.currentValue,
+		pendingValue: t.pendingValue,
+		deps: t.deps,
+		depsTail: t.depsTail,
+		subs: t.subs,
+		subsTail: t.subsTail,
+		computedValue: t.value,
+		hasError: t.hasError,
+		error: t.error,
+		initialized: t.initialized
+	};
+}
+function vt(e) {
+	return G.get(e)?.subs !== void 0;
+}
+function yt() {
+	return D !== void 0;
+}
+function bt() {
+	return A;
+}
+function xt(e) {
+	ce.add(e);
+}
+function St(e) {
+	return ce.has(e);
 }
 //#endregion
 //#region src/core/interop.ts
-var W = Symbol.for("react-fine-grained-signals.readable-interop.v1"), G = Symbol.for("react-fine-grained-signals.shared-interop-context.v1"), K;
-function q() {
-	if (K !== void 0) return K;
-	let e = globalThis, t = e[G];
+var Ct = Symbol.for("react-fine-grained-signals.readable-interop.v1"), wt = Symbol.for("react-fine-grained-signals.shared-interop-context.v1"), Y;
+function Tt() {
+	if (Y !== void 0) return Y;
+	let e = globalThis, t = e[wt];
 	if (t !== void 0) {
 		if (t.version !== 1 || typeof t.speculativeDepth != "number") throw Error("Incompatible react-fine-grained-signals interop context");
-		return K = t, t;
+		return Y = t, t;
 	}
 	let n = {
 		version: 1,
 		speculativeDepth: 0,
 		speculativeDeepReadEpoch: 0
 	};
-	return Object.defineProperty(e, G, {
+	return Object.defineProperty(e, wt, {
 		value: n,
 		enumerable: !1,
 		configurable: !1,
 		writable: !1
-	}), K = n, n;
+	}), Y = n, n;
 }
-function de(e) {
-	let t = e[W];
+function Et(e) {
+	let t = e[Ct];
 	if (t === void 0 || typeof t != "object" || !t) return;
 	let n = t;
 	return n.version === 1 && typeof n.getRevision == "function" && typeof n.subscribe == "function" && typeof n.runtimeToken == "object" && n.runtimeToken !== null ? n : void 0;
 }
-function fe(e, t) {
-	Object.defineProperty(e, W, {
+function Dt(e, t) {
+	Object.defineProperty(e, Ct, {
 		value: t,
 		enumerable: !1,
 		configurable: !1,
 		writable: !1
 	});
 }
-function pe() {
-	return q().speculativeDepth > 0;
+function Ot() {
+	return Tt().speculativeDepth > 0;
 }
-function me() {
-	let e = q();
+function kt() {
+	let e = Tt();
 	e.speculativeDeepReadEpoch = (e.speculativeDeepReadEpoch ?? 0) + 1;
 }
-function he() {
+function At() {
 	return !1;
 }
 //#endregion
 //#region src/core/signal-brand.ts
-var ge = Symbol.for("react-fine-grained-signals.signal");
+var jt = Symbol.for("react-fine-grained-signals.signal");
 //#endregion
 //#region src/core/deep-signal-engine.ts
-function J(e) {
+function X(e) {
 	return typeof e == "object" && !!e || typeof e == "function";
 }
-function _e(e) {
+function Mt(e) {
 	if (!Object.isExtensible(e)) throw TypeError("deepSignal() cannot proxy a non-extensible object or array");
 }
-function Y(e) {
+function Nt(e) {
 	for (let t of Reflect.ownKeys(e)) {
 		let n = Reflect.getOwnPropertyDescriptor(e, t);
 		if (n !== void 0 && !("value" in n)) throw TypeError("deepSignal() does not support accessor properties");
 	}
 }
-function ve(e) {
+function Pt(e) {
 	let t = [];
 	return t.length = e, t;
 }
-function X(e) {
+function Ft(e) {
 	if (typeof e != "string" || e === "") return !1;
 	let t = Number(e);
 	return Number.isInteger(t) && t >= 0 && t < 4294967295 && String(t) === e;
@@ -511,10 +1052,10 @@ var Z = (e, t) => {
 	n !== void 0 && (n.value += 1);
 }, Q = (e, t) => {
 	!e.properties.has(t) && !e.existence.has(t) || (e.prunable ??= /* @__PURE__ */ new Set()).add(t);
-}, $ = (e) => {
+}, It = (e) => {
 	e.iteration !== void 0 && (e.iteration.value += 1);
 };
-function ye(e) {
+function Lt(e) {
 	let t = /* @__PURE__ */ new Set([
 		"copyWithin",
 		"fill",
@@ -525,13 +1066,13 @@ function ye(e) {
 		"sort",
 		"splice",
 		"unshift"
-	]), n = /* @__PURE__ */ new WeakMap(), r = /* @__PURE__ */ new WeakMap(), i = /* @__PURE__ */ new WeakMap(), a = /* @__PURE__ */ new WeakMap(), o = /* @__PURE__ */ new WeakMap(), s = /* @__PURE__ */ new WeakMap();
-	function c() {
-		if (pe()) return me(), !1;
-		let t = q();
-		return e.hasActiveSubscriber() || he() || t.graphCollector !== void 0 || t.renderCollector !== void 0;
+	]), n = /* @__PURE__ */ new WeakMap(), r = /* @__PURE__ */ new WeakMap(), i = /* @__PURE__ */ new WeakMap(), a = /* @__PURE__ */ new WeakMap(), o = /* @__PURE__ */ new WeakMap(), s = /* @__PURE__ */ new WeakMap(), c = e.isSpeculative ?? Ot, l = e.markSpeculativeDeepRead ?? kt;
+	function u() {
+		if (c()) return l(), !1;
+		let t = Tt();
+		return e.hasActiveSubscriber() || At() || t.graphCollector !== void 0 || t.renderCollector !== void 0;
 	}
-	let l = (() => {
+	let d = (() => {
 		let e = /* @__PURE__ */ new Set();
 		for (let t of /* @__PURE__ */ "Object.Array.Function.Boolean.Number.String.Symbol.BigInt.Date.RegExp.Error.AggregateError.EvalError.RangeError.ReferenceError.SyntaxError.TypeError.URIError.Map.Set.WeakMap.WeakSet.WeakRef.FinalizationRegistry.Promise.ArrayBuffer.SharedArrayBuffer.DataView".split(".")) {
 			let n = globalThis[t];
@@ -540,19 +1081,19 @@ function ye(e) {
 			(typeof r == "object" && r || typeof r == "function") && e.add(r);
 		}
 		return e;
-	})(), u = (e) => J(e) && l.has(e);
-	function d(t) {
-		if (typeof t != "object" || !t || e.isSignal(t) || l.has(t)) return !1;
+	})(), f = (e) => X(e) && d.has(e);
+	function p(t) {
+		if (typeof t != "object" || !t || e.isSignal(t) || d.has(t)) return !1;
 		if (Array.isArray(t)) return !0;
 		let n = Object.getPrototypeOf(t);
 		return n === Object.prototype || n === null;
 	}
-	function f(e) {
-		if (!J(e)) return;
+	function m(e) {
+		if (!X(e)) return;
 		let t = n.get(e);
 		return t === void 0 ? o.get(e) : t;
 	}
-	function p(e, t, n, r, i, a) {
+	function ee(e, t, n, r, i, a) {
 		let s = t.get(e);
 		if (s !== void 0) return s;
 		let c = Object.create(n), l = (e) => () => {
@@ -566,8 +1107,8 @@ function ye(e) {
 		});
 		return t.set(e, c), o.set(c, e), c;
 	}
-	function m(e) {
-		return p(e, i, Map.prototype, "Map", (e, t, n) => ({
+	function te(e) {
+		return ee(e, i, Map.prototype, "Map", (e, t, n) => ({
 			size: {
 				enumerable: !1,
 				configurable: !1,
@@ -636,7 +1177,7 @@ function ye(e) {
 		});
 	}
 	function h(e) {
-		return p(e, a, Set.prototype, "Set", (e, t, n) => ({
+		return ee(e, a, Set.prototype, "Set", (e, t, n) => ({
 			size: {
 				enumerable: !1,
 				configurable: !1,
@@ -693,7 +1234,7 @@ function ye(e) {
 			let t = [], n = (t) => (n) => {
 				let r = Set.prototype[t];
 				if (typeof r != "function") throw TypeError(`Set#${t}() is unavailable in this JavaScript engine`);
-				let i = J(n) ? o.get(n) ?? n : n;
+				let i = X(n) ? o.get(n) ?? n : n;
 				return Reflect.apply(r, e, [i]);
 			};
 			for (let e of [
@@ -708,58 +1249,58 @@ function ye(e) {
 			return t;
 		});
 	}
-	function g(e) {
-		if (!d(e)) throw TypeError("deepSignal() only accepts a plain object or array root");
+	function ne(e) {
+		if (!p(e)) throw TypeError("deepSignal() only accepts a plain object or array root");
 	}
-	function _(e) {
-		if (!J(e)) return !1;
+	function re(e) {
+		if (!X(e)) return !1;
 		let t = /* @__PURE__ */ new WeakMap(), r = [{
 			value: e,
 			insideOpaque: !1
 		}], i = !1;
 		for (; r.length > 0;) {
 			let { value: e, insideOpaque: a } = r.pop();
-			if (f(e) !== void 0) {
+			if (m(e) !== void 0) {
 				if (a) throw TypeError(n.has(e) ? "deepSignal() cannot store a deep proxy inside an opaque value" : "deepSignal() cannot store a deep collection view inside an opaque value");
 				i = !0;
 				continue;
 			}
 			let o = e, s = t.get(o) ?? 0, c = a ? 2 : 1;
 			if ((s & c) === 0) {
-				if (t.set(o, s | c), !a && u(o)) throw TypeError("deepSignal() cannot store a built-in prototype object in deep state");
+				if (t.set(o, s | c), !a && f(o)) throw TypeError("deepSignal() cannot store a built-in prototype object in deep state");
 				if (o instanceof Map) {
-					for (let [e, t] of o) J(e) && r.push({
+					for (let [e, t] of o) X(e) && r.push({
 						value: e,
 						insideOpaque: !0
-					}), J(t) && r.push({
+					}), X(t) && r.push({
 						value: t,
 						insideOpaque: !0
 					});
 					continue;
 				}
 				if (o instanceof Set) {
-					for (let e of o) J(e) && r.push({
+					for (let e of o) X(e) && r.push({
 						value: e,
 						insideOpaque: !0
 					});
 					continue;
 				}
-				if (!d(o)) {
+				if (!p(o)) {
 					for (let e of Reflect.ownKeys(o)) {
 						let t = Reflect.getOwnPropertyDescriptor(o, e);
-						t !== void 0 && "value" in t && J(t.value) && r.push({
+						t !== void 0 && "value" in t && X(t.value) && r.push({
 							value: t.value,
 							insideOpaque: !0
 						});
 					}
 					continue;
 				}
-				a || (_e(o), Y(o));
+				a || (Mt(o), Nt(o));
 				for (let e of Reflect.ownKeys(o)) {
 					let t = Reflect.getOwnPropertyDescriptor(o, e);
 					if (t !== void 0 && "value" in t) {
 						let e = t.value;
-						J(e) && r.push({
+						X(e) && r.push({
 							value: e,
 							insideOpaque: a
 						});
@@ -769,7 +1310,7 @@ function ye(e) {
 		}
 		return i;
 	}
-	function v(e, t) {
+	function g(e, t) {
 		let n = /* @__PURE__ */ new WeakMap(), r = /* @__PURE__ */ new WeakMap(), i = [[e, t]];
 		for (; i.length > 0;) {
 			let [e, t] = i.pop();
@@ -777,16 +1318,16 @@ function ye(e) {
 				if (!Object.is(e, t)) return !1;
 				continue;
 			}
-			let a = f(e);
+			let a = m(e);
 			if (a !== void 0) {
 				if (a !== t) return !1;
 				continue;
 			}
-			if (!d(e)) {
+			if (!p(e)) {
 				if (e !== t) return !1;
 				continue;
 			}
-			if (typeof t != "object" || !t || !d(t)) return !1;
+			if (typeof t != "object" || !t || !p(t)) return !1;
 			let o = n.get(e);
 			if (o !== void 0) {
 				if (o !== t) return !1;
@@ -805,19 +1346,19 @@ function ye(e) {
 		}
 		return !0;
 	}
-	function y(e) {
-		let t = f(e);
+	function _(e) {
+		let t = m(e);
 		if (t !== void 0) return t;
-		if (!J(e)) return e;
+		if (!X(e)) return e;
 		let n = s.get(e);
-		if (n !== void 0 && v(e, n)) return n;
+		if (n !== void 0 && g(e, n)) return n;
 		let r = /* @__PURE__ */ new WeakMap(), i = [], a = [], o = (e) => {
-			let t = f(e);
+			let t = m(e);
 			if (t !== void 0) return t;
-			if (!d(e)) return e;
+			if (!p(e)) return e;
 			let n = r.get(e);
 			if (n !== void 0) return n;
-			let o = Array.isArray(e) ? ve(e.length) : Object.create(Object.getPrototypeOf(e));
+			let o = Array.isArray(e) ? Pt(e.length) : Object.create(Object.getPrototypeOf(e));
 			return r.set(e, o), i.push([e, o]), a.push(e), o;
 		}, c = o(e);
 		for (; a.length > 0;) {
@@ -834,23 +1375,23 @@ function ye(e) {
 		for (let [e, t] of i) s.set(e, t);
 		return c;
 	}
-	function b(e) {
-		let t = f(e);
-		return t === void 0 ? _(e) ? y(e) : e : t;
+	function v(e) {
+		let t = m(e);
+		return t === void 0 ? re(e) ? _(e) : e : t;
 	}
-	let x = (e) => b(e), S = new Set(Reflect.ownKeys(Object.prototype)), C = /* @__PURE__ */ new Set([...Reflect.ownKeys(Object.prototype), ...Reflect.ownKeys(Array.prototype)]), w = (e, t) => {
+	let y = (e) => v(e), b = new Set(Reflect.ownKeys(Object.prototype)), x = /* @__PURE__ */ new Set([...Reflect.ownKeys(Object.prototype), ...Reflect.ownKeys(Array.prototype)]), ie = (e, t) => {
 		if (Object.prototype.hasOwnProperty.call(e, t)) return !1;
 		let n = Object.getPrototypeOf(e);
-		return n === Object.prototype ? S.has(t) : n === Array.prototype && C.has(t);
-	}, T = (t, n) => {
+		return n === Object.prototype ? b.has(t) : n === Array.prototype && x.has(t);
+	}, S = (t, n) => {
 		let r = t.get(n);
 		return r === void 0 && (r = e.createSignal(0), t.set(n, r)), r;
-	}, E = (t, n, r, i) => {
-		if (!c() || w(t, i)) return;
-		X(i) && r.add(Number(i));
-		let a = T(n, i);
+	}, C = (t, n, r, i) => {
+		if (!u() || ie(t, i)) return;
+		Ft(i) && r.add(Number(i));
+		let a = S(n, i);
 		e.markWatched(a), a.value;
-	}, D = (t, n) => {
+	}, w = (t, n) => {
 		let r = t.prunable;
 		if (r !== void 0 && r.size !== 0 && e.getBatchDepth() === 0) {
 			for (let i of r) {
@@ -860,7 +1401,7 @@ function ye(e) {
 				}
 				let a = t.properties.get(i), o = t.existence.get(i);
 				if (!(a !== void 0 && e.hasSubscribers(a) || o !== void 0 && e.hasSubscribers(o))) {
-					if (t.properties.delete(i), t.existence.delete(i), X(i)) {
+					if (t.properties.delete(i), t.existence.delete(i), Ft(i)) {
 						let e = Number(i);
 						t.propertyIndices.delete(e), t.existenceIndices.delete(e);
 					}
@@ -869,9 +1410,9 @@ function ye(e) {
 			}
 			r.size === 0 && (t.prunable = void 0);
 		}
-	}, O = (t) => {
-		c() && (t.iteration ??= e.createSignal(0), t.iteration.value);
-	}, k = (e, t, n) => {
+	}, T = (t) => {
+		u() && (t.iteration ??= e.createSignal(0), t.iteration.value);
+	}, E = (e, t, n) => {
 		let r = n - t, i = e.propertyIndices.size + e.existenceIndices.size;
 		if (i !== 0) {
 			if (r <= i) {
@@ -890,15 +1431,15 @@ function ye(e) {
 				Z(e.existence, t), Q(e, t);
 			}
 		}
-	}, A = (e) => d(e) || e instanceof Map || e instanceof Set, j = (i) => {
-		let a = f(i) ?? i;
-		if (a instanceof Map) return m(a);
+	}, D = (e) => p(e) || e instanceof Map || e instanceof Set, O = (i) => {
+		let a = m(i) ?? i;
+		if (a instanceof Map) return te(a);
 		if (a instanceof Set) return h(a);
-		if (!d(a)) return a;
-		_e(a);
+		if (!p(a)) return a;
+		Mt(a);
 		let o = r.get(a);
 		if (o !== void 0) return o.proxy;
-		Y(a);
+		Nt(a);
 		let s = {
 			properties: /* @__PURE__ */ new Map(),
 			existence: /* @__PURE__ */ new Map(),
@@ -908,8 +1449,8 @@ function ye(e) {
 			proxy: void 0
 		}, c = new Proxy(a, {
 			get(n, r, i) {
-				if (r === ge && !Object.prototype.hasOwnProperty.call(n, r)) return;
-				E(n, s.properties, s.propertyIndices, r);
+				if (r === jt && !Object.prototype.hasOwnProperty.call(n, r)) return;
+				C(n, s.properties, s.propertyIndices, r);
 				let a = Reflect.get(n, r, i);
 				if (Array.isArray(n) && t.has(r) && typeof a == "function") {
 					let t = s.arrayMethods.get(r);
@@ -918,7 +1459,7 @@ function ye(e) {
 						try {
 							return e.batch(() => Reflect.apply(i, this, t));
 						} finally {
-							D(s, n);
+							w(s, n);
 						}
 					};
 					return s.arrayMethods.set(r, {
@@ -926,41 +1467,41 @@ function ye(e) {
 						wrapper: o
 					}), o;
 				}
-				if (A(a)) {
+				if (D(a)) {
 					let e = Reflect.getOwnPropertyDescriptor(n, r);
 					if (e !== void 0 && "value" in e && e.configurable === !1 && e.writable === !1) throw TypeError("deepSignal() cannot wrap a non-configurable, non-writable object property");
 				}
-				return j(a);
+				return O(a);
 			},
 			set(t, n, r) {
 				if (n === "__proto__") throw TypeError("deepSignal() does not support prototype mutation");
-				if (n === ge) throw TypeError("deepSignal() does not support branding state as a signal");
-				let i = Reflect.get(t, n, t), a = Reflect.has(t, n), o = Object.prototype.hasOwnProperty.call(t, n), c = Array.isArray(t) ? t.length : void 0, l = x(r);
+				if (n === jt) throw TypeError("deepSignal() does not support branding state as a signal");
+				let i = Reflect.get(t, n, t), a = Reflect.has(t, n), o = Object.prototype.hasOwnProperty.call(t, n), c = Array.isArray(t) ? t.length : void 0, l = y(r);
 				if (!Reflect.set(t, n, l, t)) return !1;
 				let u = Reflect.get(t, n, t), d = Reflect.has(t, n), f = Object.prototype.hasOwnProperty.call(t, n);
 				return e.batch(() => {
-					if ((!Object.is(i, u) || o !== f) && Z(s.properties, n), a !== d && Z(s.existence, n), o !== f && $(s), Array.isArray(t) && c !== void 0) {
+					if ((!Object.is(i, u) || o !== f) && Z(s.properties, n), a !== d && Z(s.existence, n), o !== f && It(s), Array.isArray(t) && c !== void 0) {
 						let e = t.length;
-						n !== "length" && c !== e && Z(s.properties, "length"), n === "length" && e < c && (k(s, e, c), $(s));
+						n !== "length" && c !== e && Z(s.properties, "length"), n === "length" && e < c && (E(s, e, c), It(s));
 					}
-				}), D(s, t), !0;
+				}), w(s, t), !0;
 			},
 			deleteProperty(t, n) {
 				let r = Reflect.has(t, n), i = Object.prototype.hasOwnProperty.call(t, n), a = Reflect.deleteProperty(t, n);
 				return !a || !i ? a : (e.batch(() => {
-					Z(s.properties, n), r !== Reflect.has(t, n) && Z(s.existence, n), $(s), Q(s, n);
-				}), D(s, t), !0);
+					Z(s.properties, n), r !== Reflect.has(t, n) && Z(s.existence, n), It(s), Q(s, n);
+				}), w(s, t), !0);
 			},
 			getOwnPropertyDescriptor(e, t) {
-				E(e, s.properties, s.propertyIndices, t);
+				C(e, s.properties, s.propertyIndices, t);
 				let n = Reflect.getOwnPropertyDescriptor(e, t);
-				return n === void 0 || !("value" in n) || n.configurable === !1 && n.writable === !1 || (n.value = j(n.value)), n;
+				return n === void 0 || !("value" in n) || n.configurable === !1 && n.writable === !1 || (n.value = O(n.value)), n;
 			},
 			has(e, t) {
-				return E(e, s.existence, s.existenceIndices, t), Reflect.has(e, t);
+				return C(e, s.existence, s.existenceIndices, t), Reflect.has(e, t);
 			},
 			ownKeys(e) {
-				return O(s), Reflect.ownKeys(e);
+				return T(s), Reflect.ownKeys(e);
 			},
 			defineProperty() {
 				throw TypeError("deepSignal() does not support property descriptors");
@@ -974,26 +1515,26 @@ function ye(e) {
 		});
 		return s.proxy = c, r.set(a, s), n.set(c, a), c;
 	};
-	class M {
+	class k {
 		#e;
 		constructor(e) {
 			this.#e = e;
-			let t = de(this.#e);
-			t !== void 0 && fe(this, t);
+			let t = Et(this.#e);
+			t !== void 0 && Dt(this, t);
 		}
 		get value() {
-			return j(this.#e.value);
+			return O(this.#e.value);
 		}
 		set value(e) {
-			let t = x(e);
-			g(t), this.#e.value = t;
+			let t = y(e);
+			ne(t), this.#e.value = t;
 		}
 		peek() {
 			return this.#e.peek();
 		}
 	}
-	function N(e) {
-		let t = r.get(f(e) ?? e);
+	function A(e) {
+		let t = r.get(m(e) ?? e);
 		if (t !== void 0) return {
 			properties: [...t.properties.keys()],
 			existence: [...t.existence.keys()],
@@ -1001,55 +1542,57 @@ function ye(e) {
 			existenceIndices: [...t.existenceIndices]
 		};
 	}
-	function P(t) {
-		let n = b(t);
-		g(n), j(n);
-		let r = e.createSignal(n), i = new M(r);
+	function j(t) {
+		let n = v(t);
+		ne(n), O(n);
+		let r = e.createSignal(n), i = new k(r);
 		return e.registerDeepSignal?.(i), i;
 	}
 	return {
-		deepSignal: P,
-		inspectDeepSignalMetadata: N
+		deepSignal: j,
+		inspectDeepSignalMetadata: A
 	};
 }
-var be = ye({
-	createSignal: I,
-	markWatched: B,
-	hasSubscribers: L,
-	batch: H,
-	isSignal: V,
-	hasActiveSubscriber: R,
-	getBatchDepth: z,
+//#endregion
+//#region benchmarks/phase9/m15/alien-derived-deep-signal-render-engine.ts
+var Rt = Lt({
+	createSignal: $e,
+	markWatched: xt,
+	hasSubscribers: vt,
+	batch: Pe,
+	isSignal: dt,
+	hasActiveSubscriber: yt,
+	getBatchDepth: bt,
 	registerDeepSignal(e) {
-		Object.defineProperty(e, Symbol.for("react-fine-grained-signals.signal"), {
+		Object.defineProperty(e, q, {
 			value: 1,
 			enumerable: !1,
 			writable: !1,
 			configurable: !1
 		});
 	}
-}).deepSignal;
+}), zt = Rt.deepSignal, Bt = Rt.inspectDeepSignalMetadata;
 //#endregion
 //#region benchmarks/phase9/m15/deep-selector-react-hook.mjs
-function xe(t) {
-	return function(r) {
-		let i = e(() => (e) => {
-			let n = !0;
-			return t.effect(() => {
-				r.value, n ? n = !1 : e();
+function Vt(e) {
+	return function(t) {
+		let r = n(() => (n) => {
+			let r = !0;
+			return e.effect(() => {
+				t.value, r ? r = !1 : n();
 			});
-		}, [r]), a = e(() => () => r.value, [r]);
-		return n(i, a, a);
+		}, [t]), a = n(() => () => t.value, [t]);
+		return i(r, a, a);
 	};
 }
-function Se(r) {
-	return function(i, a, o = []) {
-		let s = t(o.length);
+function Ht(e) {
+	return function(t, a, o = []) {
+		let s = r(o.length);
 		if (o.length !== s.current) throw Error("selector dependencies length changed");
-		let c = e(() => {
-			let e = () => {
+		let c = n(() => {
+			let n = () => {
 				try {
-					let e = a(i.value);
+					let e = a(t.value);
 					if (typeof e == "object" && e || typeof e == "function") throw TypeError("selector must return a primitive snapshot");
 					return {
 						kind: "value",
@@ -1061,23 +1604,136 @@ function Se(r) {
 						error: e
 					};
 				}
-			}, t = r.untracked(e), n = (e) => t.kind !== e.kind || t.kind === "value" && e.kind === "value" && !Object.is(t.value, e.value) || t.kind === "error" && e.kind === "error" && !Object.is(t.error, e.error);
+			}, r = e.untracked(n), i = (e) => r.kind !== e.kind || r.kind === "value" && e.kind === "value" && !Object.is(r.value, e.value) || r.kind === "error" && e.kind === "error" && !Object.is(r.error, e.error);
 			return {
 				getSnapshot() {
-					if (t.kind === "error") throw t.error;
-					return t.value;
+					if (r.kind === "error") throw r.error;
+					return r.value;
 				},
-				subscribe(i) {
+				subscribe(t) {
 					let a = !0;
-					return r.effect(() => {
-						let r = e(), o = n(r);
-						t = r, a ? a = !1 : o && i();
+					return e.effect(() => {
+						let e = n(), o = i(e);
+						r = e, a ? a = !1 : o && t();
 					});
 				}
 			};
-		}, [i, ...o]);
-		return n(c.subscribe, c.getSnapshot, c.getSnapshot);
+		}, [t, ...o]);
+		return i(c.subscribe, c.getSnapshot, c.getSnapshot);
 	};
 }
 //#endregion
-export { H as batch, le as computed, Se as createDeepSelectorHook, xe as createSignalValueHook, be as deepSignal, ue as effect, z as getBatchDepth, R as hasActiveSubscriber, L as hasSubscribers, V as isSignalRuntimeReadable, B as markDeepSignalWatched, re as signal, ie as signalBoundAccessor, I as signalClassHelper, ce as signalClassInline, ae as signalInlineAccessor, U as untracked };
+//#region benchmarks/phase9/m15/react-adapter.mjs
+function $(e) {
+	return typeof e == "object" && !!e && typeof e.getRevision == "function" && typeof e.subscribe == "function";
+}
+function Ut(e, t) {
+	return $(t) ? t.getRevision() : e.getRenderVersion(t);
+}
+function Wt(e, t, n) {
+	return $(t) ? t.subscribe(() => n()).unsubscribe : e.subscribeReadables([t], n);
+}
+function Gt(e, t, n) {
+	let r = t.captureRenderSnapshot(e);
+	return n.current !== void 0 && n.current.dependencies.size === r.dependencies.size && [...r.dependencies].every(([e, r]) => n.current.dependencies.get(e) === r && Ut(t, e) === r) ? n.current.value : (n.current = r, r.value);
+}
+var Kt = class {
+	#e;
+	#t;
+	#n = /* @__PURE__ */ new Map();
+	#r = /* @__PURE__ */ new Set();
+	#i = /* @__PURE__ */ new Set();
+	#a = 0;
+	#o = 0;
+	constructor(e, t) {
+		this.#e = e, this.#t = t;
+	}
+	getSnapshot = () => this.#a;
+	subscribe = (e) => (this.#i.add(e), () => this.#i.delete(e));
+	begin() {
+		let e = l();
+		e.runtimeToken = this.#e.runtimeToken, e.restoreCollector = d(e);
+		let t = _(), n = t.renderCollector;
+		t.renderCollector = e, e.restoreSharedCollector = () => {
+			t.renderCollector = n;
+		};
+		let r = ++this.#o;
+		return queueMicrotask(() => {
+			this.#o === r && u(void 0);
+		}), e;
+	}
+	finish(e, t = !1) {
+		e !== void 0 && (t ? (e.restoreCollector?.(), e.restoreSharedCollector?.()) : (u(void 0), _().renderCollector = void 0));
+	}
+	commit(e) {
+		this.finish(e);
+		let t = e.dependencies, n = this.#e.promoteRenderAttempt?.(e) === !1;
+		if (this.#t === "combined") {
+			let e = new Set([...t.keys()].filter((e) => !$(e)));
+			e.size === this.#r.size && [...e].every((e) => this.#r.has(e)) || (this.#n.get(this)?.(), this.#n.delete(this), this.#r = e, e.size > 0 && this.#n.set(this, this.#e.subscribeReadables([...e], this.#s)));
+			for (let [e, n] of this.#n) e !== this && (!$(e) || !t.has(e)) && (n(), this.#n.delete(e));
+			for (let e of t.keys()) $(e) && !this.#n.has(e) && this.#n.set(e, Wt(this.#e, e, this.#s));
+		} else {
+			for (let [e, n] of this.#n) t.has(e) || (n(), this.#n.delete(e));
+			for (let e of t.keys()) this.#n.has(e) || this.#n.set(e, Wt(this.#e, e, this.#s));
+		}
+		for (let [e, r] of t) Ut(this.#e, e) !== r && (n = !0);
+		n && this.#s();
+	}
+	#s = () => {
+		this.#a = this.#a + 1 | 0;
+		for (let e of this.#i) e();
+	};
+	dispose() {
+		for (let e of this.#n.values()) e();
+		this.#n.clear(), this.#r.clear();
+	}
+	scheduleDispose() {
+		let e = ++this.#o;
+		queueMicrotask(() => {
+			this.#o === e && this.dispose();
+		});
+	}
+	activate() {
+		this.#o += 1;
+	}
+};
+function qt(r, { mode: a = "combined" } = {}) {
+	if (a !== "combined" && a !== "per-readable") throw Error(`Unknown render subscription mode: ${a}`);
+	function o(e) {
+		let t = n(() => (t) => r.subscribeReadables([e], t), [e]), a = n(() => ({ current: void 0 }), [e]), o = n(() => () => Gt(e, r, a), [e, a]);
+		return i(t, o, o);
+	}
+	function s() {
+		let o = n(() => new Kt(r, a), []);
+		i(o.subscribe, o.getSnapshot, o.getSnapshot);
+		let s = o.begin();
+		return t(() => {
+			o.commit(s);
+		}, [o, s]), e(() => (o.activate(), () => o.scheduleDispose()), [o]), {
+			store: o,
+			attempt: s
+		};
+	}
+	function c() {
+		s();
+	}
+	function l() {
+		let { store: e, attempt: t } = s();
+		return { finish: () => e.finish(t, !0) };
+	}
+	return {
+		useSignalValue: o,
+		useSignalTracking: c,
+		useManagedSignals: l
+	};
+}
+function Jt(e, t) {
+	try {
+		return t();
+	} finally {
+		e.finish();
+	}
+}
+//#endregion
+export { g as READABLE_INTEROP_V1, q as SIGNAL_BRAND, Pe as batch, gt as captureRenderSnapshot, Me as computed, ct as computedClassBrandDirect, st as computedClassBrandHelper, ot as computedClassBrandWeakSet, Ht as createDeepSelectorHook, qt as createReactAdapter, Vt as createSignalValueHook, zt as deepSignal, Ne as effect, bt as getBatchDepth, _t as getRenderDebugSnapshot, pt as getRenderVersion, yt as hasActiveSubscriber, vt as hasSubscribers, Bt as inspectDeepSignalMetadata, St as isDeepSignalWatched, ft as isSignalBrandDirect, dt as isSignalBrandHelper, ut as isSignalBrandWeakSet, Jt as managed, xt as markDeepSignalWatched, Be as promoteRenderAttempt, ht as readRenderSnapshot, T as runtimeToken, Te as signal, Ee as signalBoundAccessor, et as signalClassBrandDirect, $e as signalClassBrandHelper, tt as signalClassBrandHelperCalls, Qe as signalClassBrandWeakSet, Ae as signalClassHelper, je as signalClassInline, De as signalInlineAccessor, mt as subscribeReadables, W as untracked };

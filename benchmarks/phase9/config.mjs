@@ -55,8 +55,8 @@ export const commonCases = [
 ];
 
 export const rfsgCases = [
-  { id: "rfsg/deepSignal-read", kind: "deep-read", iterations: 50_000, runtimes: ["rfsg-v0.1.1", "rfsg-current"] },
-  { id: "rfsg/deepSignal-watched-leaf-write", kind: "deep-watched-write", iterations: 5_000, runtimes: ["rfsg-v0.1.1", "rfsg-current"] },
+  { id: "rfsg/deepSignal-read", kind: "deep-read", iterations: 50_000, runtimes: ["rfsg-v0.1.1", "rfsg-current", "rfsg-m151-owner"] },
+  { id: "rfsg/deepSignal-watched-leaf-write", kind: "deep-watched-write", iterations: 5_000, runtimes: ["rfsg-v0.1.1", "rfsg-current", "rfsg-m151-owner"] },
   { id: "rfsg/react-bare-tracking", kind: "bare", iterations: 250, runtimes: ["rfsg-v0.1.1", "rfsg-current"], react: true },
   { id: "rfsg/react-managed-tracking", kind: "managed", iterations: 250, runtimes: ["rfsg-v0.1.1", "rfsg-current"], react: true },
   { id: "rfsg/react-useSignalValue", kind: "useSignalValue", iterations: 250, runtimes: ["rfsg-v0.1.1", "rfsg-current"], react: true },

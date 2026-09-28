@@ -27,6 +27,9 @@ export interface DeepSignalRuntimeAdapter {
   hasActiveSubscriber(): boolean;
   getBatchDepth(): number;
   registerDeepSignal?(value: DeepSignalLike<object>): void;
+  /** Optional execution-owner hooks for alternate internal runtime adapters. */
+  isSpeculative?(): boolean;
+  markSpeculativeDeepRead?(): void;
 }
 
 interface PropertyMetadata {
@@ -108,12 +111,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   // stored. Remember that copy so assigning the same carrier again preserves the
   // same identity and aliases, just like assigning an ordinary raw object does.
   const normalizedProxyCarriers = new WeakMap<object, object>();
+  const isSpeculative = adapter.isSpeculative ?? isInteropSpeculative;
+  const markSpeculativeDeepRead = adapter.markSpeculativeDeepRead ?? markInteropSpeculativeDeepRead;
 
   function shouldTrackDeepRead(): boolean {
-    if (isInteropSpeculative()) {
+    if (isSpeculative()) {
       // No per-key metadata during speculation; the computed's speculative
       // result must therefore not be promoted as a complete graph cache.
-      markInteropSpeculativeDeepRead();
+      markSpeculativeDeepRead();
       return false;
     }
     const shared = getSharedInteropContext();

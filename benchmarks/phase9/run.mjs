@@ -21,6 +21,7 @@ import {
   runtimeOrderForRound,
   smokeCases,
 } from "./config.mjs";
+import * as m151Matrix from "./m15/matrix-config.mjs";
 import { verifiedPins } from "./verify-pins.mjs";
 import { hashCurrentRuntimeArtifact, verifyCurrentRuntimeIdentity } from "./runtime-identity.mjs";
 
@@ -30,6 +31,9 @@ const repoRoot = resolve(harnessDir, "../..");
 const workerPath = resolve(harnessDir, "worker.mjs");
 const reactWorkerPath = resolve(harnessDir, "react-worker.mjs");
 const cli = process.argv.slice(2);
+const m151Candidate = cli.includes("--m151-candidate");
+const selectedRuntimes = m151Candidate ? m151Matrix.runtimes : runtimes;
+const selectedRuntimeOrderForRound = m151Candidate ? m151Matrix.runtimeOrderForRound : runtimeOrderForRound;
 const modeIndex = cli.indexOf("--mode");
 const requestedMode = modeIndex === -1 ? undefined : cli[modeIndex + 1];
 const smoke = cli.includes("--smoke") || requestedMode === "smoke_validation";
@@ -213,10 +217,10 @@ manifest.currentRuntimeArtifact = {
 };
 const allocationTasksPerRound = allocationWorkloadIds.reduce((total, kind) => total + (
   kind === "deep-watched-leaves"
-    ? runtimes.filter((runtime) => runtime.id.startsWith("rfsg-")).length
-    : runtimes.length
+    ? selectedRuntimes.filter((runtime) => runtime.id.startsWith("rfsg-")).length
+    : selectedRuntimes.length
 ), 0);
-manifest.plannedTasks = expandedCases.length * runtimes.length * rounds
+manifest.plannedTasks = expandedCases.length * selectedRuntimes.length * rounds
   + (includeAllocations ? allocationTasksPerRound * allocationRounds : 0);
 if (preflightOnly) {
   process.stdout.write(`Preflight passed for mode=${mode}; no output directory was created and no benchmark workers were started.\n`);
@@ -314,7 +318,7 @@ async function runAllocation(kind, runtime, round, orderPosition) {
 let failed = false;
 try {
   for (let round = 0; round < rounds && !failed; round += 1) {
-    const runtimeOrder = runtimeOrderForRound(round + 1);
+    const runtimeOrder = selectedRuntimeOrderForRound(round + 1);
     manifest[`round${round + 1}RuntimeOrder`] = runtimeOrder.map((runtime) => runtime.id);
     for (const definition of expandedCases) {
       for (let orderPosition = 0; orderPosition < runtimeOrder.length; orderPosition += 1) {
@@ -425,7 +429,7 @@ try {
     }
   }
   for (let round = 0; round < allocationRounds && !failed; round += 1) {
-    const runtimeOrder = runtimeOrderForRound(round + 1);
+    const runtimeOrder = selectedRuntimeOrderForRound(round + 1);
     manifest[`allocationRound${round + 1}RuntimeOrder`] = runtimeOrder.map((runtime) => runtime.id);
     for (let orderPosition = 0; orderPosition < runtimeOrder.length; orderPosition += 1) {
       const runtime = runtimeOrder[orderPosition];

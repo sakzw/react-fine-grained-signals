@@ -1,5 +1,13 @@
 # M1.5 bare Alien-derived screening prototype
 
+## M1.5.1 adapter architecture rebase
+
+The benchmark-only M1.5.1 candidate keeps one Alien-derived graph core and places lexical V2 execution ownership, render/speculative behavior, cross-copy readable bridging, React hooks, and DeepSignal adaptation in separate modules. The graph core is not copied for render mode. Its V2 owner is shared across independent candidate copies; the per-readable bridge remains V1. No compatibility promise for a mixed v0.1.1/new-development graph protocol was found in the v0.1.1 tag or repository docs/tests.
+
+Before the full matrix, 24 paired fresh-process rounds showed integration medians against M1.5 core of 1.11x source/read, 1.14x source/write-read, 1.22x observed effect writes, 1.22x dynamic effects, 1.18x/1.13x fanout 16/64, and 1.33x/1.40x computed dirty-read/equality. This cleared the exploratory gate: effect cost no longer resembles the prior ~1.93x render-integrated prototype. The full frozen-count, eight-round M1.5.1 matrix then completed with 3 warmups, 7 samples, and 3 allocation rounds. It is an architecture comparison, not an M1b release result.
+
+The run manifest, JSONL samples, allocation data, and failures are in [`results/m151-owner-2026-09-28/`](results/m151-owner-2026-09-28/). The paired-round summary is [`owner-matrix-summary.json`](owner-matrix-summary.json), and the architecture, React screens, selected ratios, validation, and migration recommendation are in [`docs/implementation-phase9-m1.5.1.md`](../../../docs/implementation-phase9-m1.5.1.md). The candidate is not production-selected; source/read and DeepSignal allocation remain review items.
+
 This directory is a disposable benchmark-only experiment. Nothing here is imported by `src/` or package exports.
 
 `alien-derived-runtime.mjs` is a small high-level port based on Alien Signals 3.2.1 commit `8734d386d925025d0e99419bd9161c17b112c5ee`. It imports only `alien-signals/system`; signal/computed expose RFSG-style `.value` and `.peek`, alongside `effect`, `batch`, and `untracked`. It retains Alien's pending/current values, push/pull links, linked-list dependency cleanup, high-level effect notification queue ordering, lazy computed evaluation, and child-effect disposal before parent reruns. The extra node `kind` discriminator and accessor wrappers are experiment implementation details. Additional files in this directory layer branding, `Object.is`, error handling, render tracking, cross-copy interop, and DeepSignal for architecture experiments; none are imported by production `src/` or package exports.

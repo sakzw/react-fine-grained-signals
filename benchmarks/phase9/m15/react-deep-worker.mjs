@@ -1,10 +1,13 @@
 import { JSDOM } from "jsdom";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { performance } from "node:perf_hooks";
 
 const input = JSON.parse(process.argv[2] ?? "{}");
 const { runtimeId, kind, iterations, warmups = 3, samples = 7, preflightOnly = false } = input;
-if (!new Set(["m15-control", "m15-candidate"]).has(runtimeId)) throw new Error(`Unknown runtime ${runtimeId}`);
-if (!new Set(["useSignalValue", "deep-selector"]).has(kind)) throw new Error(`Unknown case ${kind}`);
+if (!new Set(["m15-control", "m15-candidate", "rfsg-current"]).has(runtimeId)) throw new Error(`Unknown runtime ${runtimeId}`);
+if (!new Set(["useSignalValue", "deep-selector", "bare", "managed"]).has(kind)) throw new Error(`Unknown case ${kind}`);
 if (!Number.isSafeInteger(iterations) || iterations <= 0) throw new Error("iterations must be positive");
 
 const dom = new JSDOM("<!doctype html><html><body></body></html>", { url: "http://localhost/" });
@@ -12,24 +15,43 @@ globalThis.window = dom.window;
 globalThis.document = dom.window.document;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 Object.defineProperty(globalThis, "navigator", { value: dom.window.navigator, configurable: true, writable: true });
-const React = await import("react");
-const { createRoot } = await import("react-dom/client");
-const bundlePath = new URL(`./bundled/${runtimeId === "m15-control" ? "control/m15-control.js" : "candidate/m15-candidate.js"}`, import.meta.url);
-const api = await import(bundlePath.href);
+const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
+const rootRequire = createRequire(pathToFileURL(resolve(repoRoot, "dist/index.js")).href);
+const reactSpecifier = runtimeId === "rfsg-current" ? pathToFileURL(rootRequire.resolve("react")).href : "react";
+const reactDomSpecifier = runtimeId === "rfsg-current" ? pathToFileURL(rootRequire.resolve("react-dom/client")).href : "react-dom/client";
+const React = await import(reactSpecifier);
+const { createRoot } = await import(reactDomSpecifier);
 const control = runtimeId === "m15-control";
+const candidate = runtimeId === "m15-candidate";
+const api = runtimeId === "rfsg-current"
+  ? await import(new URL("../../../dist/index.js", import.meta.url).href)
+  : await import(new URL(`./bundled/${control ? "control/m15-control.js" : "candidate/m15-candidate.js"}`, import.meta.url).href);
+const runtimeApi = runtimeId === "rfsg-current"
+  ? await import(new URL("../../../dist/runtime.js", import.meta.url).href)
+  : api;
+const adapter = runtimeId === "rfsg-current"
+  ? { useSignalTracking: api.useSignalTracking, useManagedSignals: runtimeApi.useManagedSignals }
+  : api.createReactAdapter(api);
 const hook = kind === "deep-selector"
   ? api.createDeepSelectorHook(api)
-  : control ? api.createSignalValueHook(api) : api.createReactAdapter(api).useSignalValue;
+  : kind === "useSignalValue" ? (control ? api.createSignalValueHook(api) : api.useSignalValue ?? adapter.useSignalValue) : undefined;
 const selector = (value) => value.user.name;
 
 async function runOne(_timed) {
   const state = kind === "deep-selector"
     ? api.deepSignal({ user: { name: "0", age: 36 } })
-    : (control ? api.signalClassHelper(0) : api.signalClassBrandHelper(0));
+    : control ? api.signalClassHelper(0) : candidate ? api.signalClassBrandHelper(0) : api.signal(0);
   let renders = 0;
   function Reader() {
     renders += 1;
-    const value = kind === "deep-selector" ? hook(state, selector, []) : hook(state);
+    if (kind === "bare") adapter.useSignalTracking();
+    const scope = kind === "managed" ? (adapter.useManagedSignals?.() ?? api.useManagedSignals?.()) : undefined;
+    let value;
+    try {
+      value = kind === "deep-selector" ? hook(state, selector, [])
+        : kind === "useSignalValue" ? hook(state)
+          : state.value;
+    } finally { scope?.finish(); }
     return React.createElement("output", { "aria-label": "result" }, String(value));
   }
   const container = document.createElement("div");

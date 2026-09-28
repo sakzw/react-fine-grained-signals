@@ -1,0 +1,225 @@
+{
+  "schemaVersion": 1,
+  "mode": "measure",
+  "createdAt": "2026-09-28T07:34:54.633Z",
+  "runId": "2026-09-28T07-34-54-633Z-23872",
+  "gitHead": "987b05c5cc278286ba1d236883587794a2864208",
+  "worktreeDirty": true,
+  "dirtyPaths": [
+    "M benchmarks/phase9/adapters.mjs",
+    " M benchmarks/phase9/config.mjs",
+    " M benchmarks/phase9/m15/bundled/candidate/m15-candidate.js",
+    " M benchmarks/phase9/m15/bundled/control/m15-control.js",
+    " M benchmarks/phase9/m15/react-deep-results.json",
+    " M benchmarks/phase9/m15/react-deep-screen.mjs",
+    " M benchmarks/phase9/m15/react-deep-worker.mjs",
+    " M benchmarks/phase9/m15/vitest.config.mjs",
+    " M benchmarks/phase9/run.mjs",
+    " M docs/implementation-phase9-m1.5.md",
+    " M src/core/deep-signal-engine.ts",
+    "?? benchmarks/phase9/m15/alien-derived-deep-signal-owner-engine.ts",
+    "?? benchmarks/phase9/m15/alien-derived-deep-signal-render-engine.ts",
+    "?? benchmarks/phase9/m15/alien-derived-runtime-execution-owner.mjs",
+    "?? benchmarks/phase9/m15/alien-derived-runtime-foreign-adapter.mjs",
+    "?? benchmarks/phase9/m15/alien-derived-runtime-owner-candidate.mjs",
+    "?? benchmarks/phase9/m15/alien-derived-runtime-owner-core.mjs",
+    "?? benchmarks/phase9/m15/alien-derived-runtime-owner.test.jsx",
+    "?? benchmarks/phase9/m15/alien-derived-runtime-react-adapter.mjs",
+    "?? benchmarks/phase9/m15/alien-derived-runtime-render-adapter.mjs",
+    "?? benchmarks/phase9/m15/bundle-owner-candidate-entry.mjs",
+    "?? benchmarks/phase9/m15/bundle-owner-candidate.mjs",
+    "?? benchmarks/phase9/m15/bundle-render-control-entry.mjs",
+    "?? benchmarks/phase9/m15/deep-signal-owner.test.ts",
+    "?? benchmarks/phase9/m15/matrix-config.mjs",
+    "?? benchmarks/phase9/m15/owner-core-check.mjs",
+    "?? benchmarks/phase9/m15/owner-diagnostic-results.json",
+    "?? benchmarks/phase9/m15/owner-diagnostic-screen.mjs",
+    "?? benchmarks/phase9/m15/owner-diagnostic-summary.json",
+    "?? benchmarks/phase9/m15/owner-diagnostic-worker.mjs",
+    "?? benchmarks/phase9/m15/react-deep-signal-owner.test.tsx",
+    "?? benchmarks/phase9/m15/react-jsx-diagnostic.mjs",
+    "?? benchmarks/phase9/m15/react-production-shapes-results.json",
+    "?? benchmarks/phase9/m15/react-production-shapes-screen.mjs",
+    "?? benchmarks/phase9/m15/summarize-owner-diagnostic.mjs"
+  ],
+  "phase9RuntimeBaselineSha": "c5d1796cfa2063db7eecb99e537209de185a530c",
+  "v0_1_1": {
+    "tag": "v0.1.1",
+    "commit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+    "packageVersion": "0.1.1",
+    "alienSignals": "3.2.1"
+  },
+  "currentRfsg": {
+    "packageVersion": "0.1.1",
+    "runtimeBaselineSha": "c5d1796cfa2063db7eecb99e537209de185a530c"
+  },
+  "alienSignals": {
+    "packageVersion": "3.2.1"
+  },
+  "vue": {
+    "packageVersion": "3.6.0-rc.9",
+    "vueCoreCommit": "5be279570a844b953dd44b56bdc2426f7421aecd"
+  },
+  "verifiedPins": {
+    "v0_1_1": {
+      "version": "0.1.1",
+      "tarballSource": "npm registry package installed by the pinned fixture lockfile"
+    },
+    "oldAlien": "3.2.1",
+    "currentAlien": "3.2.1",
+    "vue": "3.6.0-rc.9",
+    "pinnedArtifactIntegrity": {
+      "rfsgV011": "sha512-S5azA4ENEJ/LpH29v4AnO3ctvacqHmi0lV8u3ettbQ61JSWCQkKr1c2Nk3t3n2PIP3FTVMnILUlYOfb23yrUbg==",
+      "alienSignals": "sha512-I8FjmltrfnDFoZedi5CG8DghVYNhzb/Ijluz7tCSJH0xpd0484Kowhbb1XDYOxfJpU1p5wnM2X54dA+IfGyD1g==",
+      "vueReactivity": "sha512-PBNUnlLzHSmmIqJ0aDDp2Jf8Iox3CSCLUCnUc/96wk2fBba+s6+qlMQ4mkVOIMUv2HGJ1aoTUyiciBSrkwUWQw=="
+    }
+  },
+  "harnessHead": "987b05c5cc278286ba1d236883587794a2864208",
+  "node": "v24.21.0",
+  "packageManagerUserAgent": "unknown",
+  "platform": "win32",
+  "arch": "x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "configurations": {
+    "rounds": 8,
+    "warmups": 3,
+    "samples": 7,
+    "iterationOverride": null,
+    "sizeOverride": [
+      1,
+      16,
+      64
+    ],
+    "graphCount": 1000,
+    "includeAllocations": true,
+    "allocationRounds": 3,
+    "includeDeepAllocation": true,
+    "iterationsFile": {
+      "path": "benchmarks/phase9/m1b-iterations.json",
+      "sha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+      "counts": {
+        "batch/two-writes-one-reaction@1": 28057,
+        "computed/create@1": 633875,
+        "computed/dirty-read@1": 93142,
+        "computed/dirty-unread@1": 298365,
+        "computed/equality-suppression@1": 62701,
+        "computed/many-to-one@1": 66044,
+        "computed/many-to-one@16": 32869,
+        "computed/many-to-one@64": 11708,
+        "computed/source-to-many@1": 103370,
+        "computed/source-to-many@16": 14758,
+        "computed/source-to-many@64": 4583,
+        "diagnostic/adapter-read-dispatch@1": 4679020,
+        "effect/create-dispose@1": 78528,
+        "effect/create@1": 85858,
+        "effect/dynamic-dependencies@1": 57379,
+        "effect/fanout@1": 131407,
+        "effect/fanout@16": 35830,
+        "effect/fanout@64": 8680,
+        "effect/observed-write@1": 106279,
+        "rfsg/deepSignal-read@1": 50000,
+        "rfsg/deepSignal-watched-leaf-write@1": 8657,
+        "rfsg/react-bare-tracking@1": 250,
+        "rfsg/react-jsx-direct-binding@1": 1679,
+        "rfsg/react-managed-tracking@1": 250,
+        "rfsg/react-useSignalValue@1": 250,
+        "source/create@1": 471476,
+        "source/read@1": 1693079,
+        "source/unobserved-write@1": 1084411,
+        "source/write-read@1": 636392
+      }
+    }
+  },
+  "gc": {
+    "workerFlag": "--expose-gc",
+    "requestedBeforeWarmupsAndSamples": true
+  },
+  "deterministicOrder": "frozen balanced four-round runtime schedule; serial child execution",
+  "packageLockSha256": "6ffceab2cb498cabc9bd5932cbdc49ac2ce171657600345d373a37413cbd3c03",
+  "harnessSha256": "276013c9c4868737757a31f39f0db3b97adc5de4769ed26c73c877e36d4189cc",
+  "outputDir": "C:\\Users\\catro\\Documents\\Git\\Github\\react-alien-signals\\benchmarks\\phase9\\m15\\results\\m151-owner-2026-09-28",
+  "status": "completed",
+  "completedTasks": 961,
+  "plannedTasks": 961,
+  "currentRuntimeArtifact": {
+    "sha256": "d83aff51cde134254853d5c2f472fcf240392f43bc4c32e242607eb8bc50109a",
+    "fileCount": 26,
+    "requiredEntries": [
+      "index.js",
+      "jsx-runtime.js",
+      "jsx-dev-runtime.js",
+      "runtime.js",
+      "utils.js"
+    ],
+    "identityGuard": "explicit-runtime-inputs-sha256",
+    "runtimeInputsSha256": "65038356e5c010b6b0e4b82187d3f0e8e6edf1fb0875dbd984a42e8af49d29c7",
+    "guardedBaselineSha": "c5d1796cfa2063db7eecb99e537209de185a530c"
+  },
+  "round1RuntimeOrder": [
+    "rfsg-v0.1.1",
+    "rfsg-current",
+    "rfsg-m151-owner",
+    "alien-signals"
+  ],
+  "round2RuntimeOrder": [
+    "rfsg-current",
+    "alien-signals",
+    "rfsg-v0.1.1",
+    "rfsg-m151-owner"
+  ],
+  "round3RuntimeOrder": [
+    "alien-signals",
+    "rfsg-m151-owner",
+    "rfsg-current",
+    "rfsg-v0.1.1"
+  ],
+  "round4RuntimeOrder": [
+    "rfsg-m151-owner",
+    "rfsg-v0.1.1",
+    "alien-signals",
+    "rfsg-current"
+  ],
+  "round5RuntimeOrder": [
+    "rfsg-v0.1.1",
+    "rfsg-current",
+    "rfsg-m151-owner",
+    "alien-signals"
+  ],
+  "round6RuntimeOrder": [
+    "rfsg-current",
+    "alien-signals",
+    "rfsg-v0.1.1",
+    "rfsg-m151-owner"
+  ],
+  "round7RuntimeOrder": [
+    "alien-signals",
+    "rfsg-m151-owner",
+    "rfsg-current",
+    "rfsg-v0.1.1"
+  ],
+  "round8RuntimeOrder": [
+    "rfsg-m151-owner",
+    "rfsg-v0.1.1",
+    "alien-signals",
+    "rfsg-current"
+  ],
+  "allocationRound1RuntimeOrder": [
+    "rfsg-v0.1.1",
+    "rfsg-current",
+    "rfsg-m151-owner",
+    "alien-signals"
+  ],
+  "allocationRound2RuntimeOrder": [
+    "rfsg-current",
+    "alien-signals",
+    "rfsg-v0.1.1",
+    "rfsg-m151-owner"
+  ],
+  "allocationRound3RuntimeOrder": [
+    "alien-signals",
+    "rfsg-m151-owner",
+    "rfsg-current",
+    "rfsg-v0.1.1"
+  ],
+  "finishedAt": "2026-09-28T07:58:21.140Z"
+}
