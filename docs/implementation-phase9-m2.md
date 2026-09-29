@@ -43,8 +43,23 @@ The final normal retry of `pnpm test` again hit worker-start timeouts: 7 root fi
 
 `pnpm test` itself did not pass. Both package scripts remain unchanged; the repeated normal-run timeout evidence is consistent with this environment's worker-spawn sensitivity, while both bounded suites pass. The docs-only closure also passed `pnpm typecheck`, `pnpm lint` (existing warnings), and `git diff --check`. Runtime source was unchanged, and both package versions remain `0.1.1`.
 
-**M2 is complete. M3 is ready to begin as a separate next step; it was not started in this closure.**
+**Historical decision at the prior checkpoint:** M2 was considered complete and M3 ready. The test-gate re-evaluation below supersedes that decision; M2 is not closed until the final pushed HEAD has successful Test and E2E workflows.
 
-## Remaining polish and M3 readiness
+## Test-gate stability re-evaluation — 2026-09-29
 
-M0 API migration, documentation, and packed-entry coverage findings are closed. The normal `pnpm test` retry again encountered worker-start timeouts, but both complete suites passed independently with bounded worker concurrency as recorded above. **Decision A: M2 release hardening is complete and the repository is ready to begin M3 release-candidate freeze.** M3 still needs its explicit version update to `0.2.0` followed by its frozen release validation; this milestone did not perform that version change.
+At `57a91e3b24e7798d1199e1873d0946022e358765`, local HEAD, `origin/main`, and GitHub `main` matched and the worktree was clean. The pre-edit baseline did not reproduce the reported worker-start timeout in this controlled run:
+
+- Normal `pnpm test` passed: root 21 files / 285 tests, then transform 3 files / 221 passed / 3 skipped.
+- Normal `pnpm test:coverage` completed the root tests (21 files / 285 passed) but failed all four root coverage thresholds: statements 87.16% (threshold 92%), branches 80.96% (83%), functions 88.46% (96%), and lines 88.75% (94%). The combined script therefore did not reach transform coverage.
+- Bounded root `pnpm exec vitest run --coverage --maxWorkers=2` produced the same threshold failures, without worker-start errors. Bounded transform `pnpm --filter unplugin-react-fine-grained-signals exec vitest run --coverage --maxWorkers=2` passed 3 files / 221 tests / 3 skipped and all thresholds: statements 92.50% (92%), branches 91.05% (90%), functions 94.57% (92%), and lines 96.37% (95%).
+- GitHub Actions Test run [36555960795](https://github.com/sakzw/react-fine-grained-signals/actions/runs/36555960795) failed after all 285 runtime tests passed because the root coverage thresholds were short; the log shows no worker-start failure. GitHub Actions E2E run [36555960918](https://github.com/sakzw/react-fine-grained-signals/actions/runs/36555960918) succeeded.
+
+The root coverage gap was restored with focused tests of the existing execution-owner, interop, render-tracking, render-runtime, and React-adapter contracts. No production source, test isolation, package script, workflow, or coverage threshold changed. The unbounded commands passed after that change, so a worker cap was not justified by the reproduced evidence:
+
+- `pnpm test` passed twice: each run had root 26 files / 303 tests and transform 3 files / 221 passed / 3 skipped.
+- `pnpm test:coverage` passed both suites. Root coverage: statements 93.50%, branches 85.45%, functions 97.43%, lines 94.95%. Transform coverage: statements 92.50%, branches 91.05%, functions 94.57%, lines 96.37%.
+- `pnpm typecheck`, `pnpm lint`, and `pnpm build` passed. Lint reported existing warnings only.
+
+The post-fix GitHub Actions Test and E2E results are pending the push of this validation commit. Package versions remain `0.1.1`; M3 has not begun.
+
+**Decision: M2 remains open until Test and E2E both succeed on the final pushed HEAD. Do not begin M3 before that CI closure.**

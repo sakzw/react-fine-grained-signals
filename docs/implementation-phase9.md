@@ -391,4 +391,4 @@ The clean matrix preserved ordinary-write recovery (`source/unobserved-write` `1
 
 ### M2 — Release hardening closure
 
-M2 closed the v0.1.1 API migration, migration documentation, and packed-consumer entry-point findings without changing runtime behavior or package versions. The migration guides, packed public-entry checks, validation results, and M3 readiness decision are recorded in [implementation-phase9-m2.md](implementation-phase9-m2.md). No benchmark was run in M2.
+M2 closed the v0.1.1 API migration, migration documentation, and packed-consumer entry-point findings without changing runtime behavior or package versions. The migration guides, packed public-entry checks, and test-gate closure evidence are recorded in [implementation-phase9-m2.md](implementation-phase9-m2.md). Focused tests restore root coverage above its frozen thresholds; post-fix GitHub Actions Test and E2E confirmation is pending. M2 remains open and M3 has not begun. No benchmark was run in M2.
