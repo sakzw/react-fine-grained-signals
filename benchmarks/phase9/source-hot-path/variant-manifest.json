@@ -1,0 +1,151 @@
+{
+  "sourceHead": "a6afcbc1e79573272b25740a5066d8429d32e1f5",
+  "sourceDistPath": "C:\\Users\\catro\\Documents\\Codex\\2026-09-29\\files-pasted-by-the-user-continue\\work\\react-fine-grained-signals\\dist",
+  "coreChunk": "core-runtime-Dqo8e5cK.js",
+  "variants": {
+    "R1": {
+      "coreSha256": "e13bd468a030a7f26a07090306cadb9007466f7f941bd41324a51c157e004cd3",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "e13bd468a030a7f26a07090306cadb9007466f7f941bd41324a51c157e004cd3",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "56a259cbad508a085e197b8b585ef39594c1f49b6cc291133cae0ad1afadef70"
+    },
+    "R2": {
+      "coreSha256": "f5f2c6e8c5551698630ddf67cba1836648bbd501542c5aae563da5afcab41929",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "f5f2c6e8c5551698630ddf67cba1836648bbd501542c5aae563da5afcab41929",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "e02462942d18e92c986eaab805b32369f99d5c4a59b2f35f306fad962b4bba8e"
+    },
+    "R3": {
+      "coreSha256": "974c927028fce5aa3065bdd4424720ae69c72f2e76c00f8bc8f2494bc58559ad",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "974c927028fce5aa3065bdd4424720ae69c72f2e76c00f8bc8f2494bc58559ad",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "146bc54274df6ad8beb9605721f5c2234a7021ae1ab43a36a5edd9e8ab704995"
+    },
+    "R4": {
+      "coreSha256": "830f002ae85ec519a67d77d2c6b43bae0b50459bd26537530f21fb25403143e5",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "830f002ae85ec519a67d77d2c6b43bae0b50459bd26537530f21fb25403143e5",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "68cb0808841b0330b3d975f1e5889129abc62bea554bb568fe6d5c97ef05ab29"
+    },
+    "R5": {
+      "coreSha256": "eeab6f8454351682c3a3678dea9fdebd3808ae57100ee1f34c79d9c348c9267c",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "eeab6f8454351682c3a3678dea9fdebd3808ae57100ee1f34c79d9c348c9267c",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "5292b27f8f5c10c568b712ae97c85e8871fa2a9cbc12d1eae3317d0b081f8155"
+    },
+    "W1": {
+      "coreSha256": "3a0a991c8cfaeb736a8001400b1eb4eb2a8e086194879ac90dc9340860fc7f99",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "3a0a991c8cfaeb736a8001400b1eb4eb2a8e086194879ac90dc9340860fc7f99",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "7f007440f4c5654234e546343263c9ad662276767ca7a0537ede2f2c820551c1"
+    },
+    "W2": {
+      "coreSha256": "d9772a74b168e343577f54a5c40916d12c010304d7ed85e4a59a6bbd8072cab5",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "d9772a74b168e343577f54a5c40916d12c010304d7ed85e4a59a6bbd8072cab5",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "a52a86fd961f10b1ab1b5463787adf03397dfc63199ddaefa345cf960db7e51f"
+    },
+    "W3": {
+      "coreSha256": "34f76b3e8b58b8936c1a20567b8a03c7493fb853aeb5f034548f9caf5af766ed",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "34f76b3e8b58b8936c1a20567b8a03c7493fb853aeb5f034548f9caf5af766ed",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "f77e1cd78abfd9f368d23f52346bb434b4fe12a058c21b1ec889de7a215e471d"
+    },
+    "W4": {
+      "coreSha256": "e7885dab8b2beb346d785979c52fa18d1a858bad41323f4745ea24fc8472d6db",
+      "files": {
+        "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+        "core-runtime-Dqo8e5cK.js": "e7885dab8b2beb346d785979c52fa18d1a858bad41323f4745ea24fc8472d6db",
+        "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+        "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+        "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+        "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+        "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+        "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+        "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+        "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+      },
+      "artifactSha256": "c69be5a08cd75b8a61849dd0dde2167704c2689aeab9e802e125924fc3530489"
+    }
+  }
+}

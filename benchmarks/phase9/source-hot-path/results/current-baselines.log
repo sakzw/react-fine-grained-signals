@@ -1,0 +1,284 @@
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 1/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 1/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 2/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 2/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 3/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 3/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 4/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 4/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 5/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 5/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 6/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 6/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 7/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 7/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 8/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 8/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 9/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 9/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 10/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 10/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 11/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 11/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 12/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 12/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 13/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 13/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 14/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 14/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 15/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 15/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 16/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 16/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 17/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 17/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 18/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 18/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 19/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 19/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 20/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 20/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 21/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 21/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 22/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 22/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 23/24 BA source-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 23/24 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 24/24 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-rfsg-v0.1.1] 24/24 AB source-read rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 1/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 1/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 2/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 2/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 3/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 3/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 4/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 4/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 5/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 5/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 6/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 6/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 7/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 7/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 8/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 8/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 9/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 9/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 10/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 10/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 11/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 11/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 12/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 12/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 13/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 13/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 14/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 14/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 15/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 15/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 16/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 16/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 17/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 17/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 18/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 18/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 19/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 19/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 20/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 20/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 21/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 21/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 22/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 22/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 23/24 BA source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 23/24 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 24/24 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1] 24/24 AB source-unobserved-write rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 1/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 1/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 2/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 2/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 3/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 3/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 4/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 4/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 5/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 5/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 6/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 6/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 7/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 7/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 8/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 8/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 9/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 9/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 10/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 10/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 11/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 11/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 12/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 12/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 13/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 13/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 14/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 14/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 15/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 15/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 16/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 16/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 17/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 17/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 18/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 18/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 19/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 19/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 20/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 20/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 21/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 21/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 22/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 22/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 23/24 BA source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 23/24 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 24/24 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-rfsg-v0.1.1] 24/24 AB source-write-read rfsg-v0.1.1
+[compare/rfsg-current/source-read/against-alien-signals] 1/12 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 1/12 AB source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 2/12 BA source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 2/12 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 3/12 BA source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 3/12 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 4/12 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 4/12 AB source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 5/12 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 5/12 AB source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 6/12 BA source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 6/12 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 7/12 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 7/12 AB source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 8/12 BA source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 8/12 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 9/12 BA source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 9/12 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 10/12 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 10/12 AB source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 11/12 BA source-read alien-signals
+[compare/rfsg-current/source-read/against-alien-signals] 11/12 BA source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 12/12 AB source-read rfsg-current
+[compare/rfsg-current/source-read/against-alien-signals] 12/12 AB source-read alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 1/12 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 1/12 AB source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 2/12 BA source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 2/12 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 3/12 BA source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 3/12 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 4/12 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 4/12 AB source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 5/12 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 5/12 AB source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 6/12 BA source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 6/12 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 7/12 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 7/12 AB source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 8/12 BA source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 8/12 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 9/12 BA source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 9/12 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 10/12 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 10/12 AB source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 11/12 BA source-unobserved-write alien-signals
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 11/12 BA source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 12/12 AB source-unobserved-write rfsg-current
+[compare/rfsg-current/source-unobserved-write/against-alien-signals] 12/12 AB source-unobserved-write alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 1/12 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 1/12 AB source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 2/12 BA source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 2/12 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 3/12 BA source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 3/12 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 4/12 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 4/12 AB source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 5/12 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 5/12 AB source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 6/12 BA source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 6/12 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 7/12 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 7/12 AB source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 8/12 BA source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 8/12 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 9/12 BA source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 9/12 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 10/12 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 10/12 AB source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 11/12 BA source-write-read alien-signals
+[compare/rfsg-current/source-write-read/against-alien-signals] 11/12 BA source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 12/12 AB source-write-read rfsg-current
+[compare/rfsg-current/source-write-read/against-alien-signals] 12/12 AB source-write-read alien-signals
+[
+  {
+    "label": "compare/rfsg-current/source-read/against-rfsg-v0.1.1",
+    "pairs": 24,
+    "median": 0.8849770365724562,
+    "q1": 0.7943225746077036,
+    "q3": 0.9589958752004193,
+    "min": 0.6894047779727359,
+    "max": 1.5922384088629127,
+    "candidateFasterPairs": 4,
+    "controlFasterPairs": 20
+  },
+  {
+    "label": "compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1",
+    "pairs": 24,
+    "median": 0.8812473671328691,
+    "q1": 0.764990484392501,
+    "q3": 0.9986814227162125,
+    "min": 0.6952204186648736,
+    "max": 1.4317619105380701,
+    "candidateFasterPairs": 6,
+    "controlFasterPairs": 18
+  },
+  {
+    "label": "compare/rfsg-current/source-write-read/against-rfsg-v0.1.1",
+    "pairs": 24,
+    "median": 0.9782232591915476,
+    "q1": 0.8732890295421742,
+    "q3": 1.1046103475098956,
+    "min": 0.6685462136310363,
+    "max": 2.6742725080673435,
+    "candidateFasterPairs": 9,
+    "controlFasterPairs": 15
+  },
+  {
+    "label": "compare/rfsg-current/source-read/against-alien-signals",
+    "pairs": 12,
+    "median": 1.7447185618157819,
+    "q1": 1.499586797406601,
+    "q3": 1.9219847076805459,
+    "min": 1.2045330383239095,
+    "max": 2.5470219977863864,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "compare/rfsg-current/source-unobserved-write/against-alien-signals",
+    "pairs": 12,
+    "median": 0.8816035191800566,
+    "q1": 0.8351546964511937,
+    "q3": 1.0097978549192166,
+    "min": 0.766710079695524,
+    "max": 1.181318098347276,
+    "candidateFasterPairs": 3,
+    "controlFasterPairs": 9
+  },
+  {
+    "label": "compare/rfsg-current/source-write-read/against-alien-signals",
+    "pairs": 12,
+    "median": 0.9659620059525934,
+    "q1": 0.7600327683260022,
+    "q3": 1.0184437079213344,
+    "min": 0.495589102488501,
+    "max": 1.1510441294522582,
+    "candidateFasterPairs": 4,
+    "controlFasterPairs": 8
+  }
+]

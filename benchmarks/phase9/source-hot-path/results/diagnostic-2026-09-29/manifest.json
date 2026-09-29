@@ -1,0 +1,922 @@
+{
+  "schemaVersion": 1,
+  "sourceHead": "a6afcbc1e79573272b25740a5066d8429d32e1f5",
+  "verifiedStartingHead": "a6afcbc1e79573272b25740a5066d8429d32e1f5",
+  "v011TagCommit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+  "status": "completed",
+  "sourceRuntime": {
+    "inputsSha256": "a524b192b73f18dd9f7865d32e17c7b88b9fa801f2668089669814f13ed56943",
+    "controlArtifactSha256": "3173e6bf348a10fd6e278ad8d01a99f5b3b6145ea3b6eee646b17a11541dbc28",
+    "files": [
+      "dist/base-BmMmSiK1.js",
+      "dist/core-runtime-Dqo8e5cK.js",
+      "dist/hooks-BO5dRw7P.js",
+      "dist/index.js",
+      "dist/jsx-dev-runtime.js",
+      "dist/jsx-runtime.js",
+      "dist/jsx-S8SS1Qgs.js",
+      "dist/runtime.js",
+      "dist/use-signals-BU65end7.js",
+      "dist/utils.js"
+    ]
+  },
+  "frozenIterations": {
+    "path": "benchmarks/phase9/m1b-iterations.json",
+    "sha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+    "counts": {
+      "batch/two-writes-one-reaction@1": 28057,
+      "computed/create@1": 633875,
+      "computed/dirty-read@1": 93142,
+      "computed/dirty-unread@1": 298365,
+      "computed/equality-suppression@1": 62701,
+      "computed/many-to-one@1": 66044,
+      "computed/many-to-one@16": 32869,
+      "computed/many-to-one@64": 11708,
+      "computed/source-to-many@1": 103370,
+      "computed/source-to-many@16": 14758,
+      "computed/source-to-many@64": 4583,
+      "diagnostic/adapter-read-dispatch@1": 4679020,
+      "effect/create-dispose@1": 78528,
+      "effect/create@1": 85858,
+      "effect/dynamic-dependencies@1": 57379,
+      "effect/fanout@1": 131407,
+      "effect/fanout@16": 35830,
+      "effect/fanout@64": 8680,
+      "effect/observed-write@1": 106279,
+      "rfsg/deepSignal-read@1": 50000,
+      "rfsg/deepSignal-watched-leaf-write@1": 8657,
+      "rfsg/react-bare-tracking@1": 250,
+      "rfsg/react-jsx-direct-binding@1": 1679,
+      "rfsg/react-managed-tracking@1": 250,
+      "rfsg/react-useSignalValue@1": 250,
+      "source/create@1": 471476,
+      "source/read@1": 1693079,
+      "source/unobserved-write@1": 1084411,
+      "source/write-read@1": 636392
+    }
+  },
+  "environment": {
+    "node": "v24.21.0",
+    "nodeExecutable": "C:\\Users\\catro\\AppData\\Local\\Volta\\tools\\image\\node\\24.21.0\\node.exe",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     "
+  },
+  "protocol": {
+    "screeningPairs": 12,
+    "confirmationPairsPerSession": 24,
+    "sessions": 3,
+    "warmups": 3,
+    "samples": 7,
+    "forcedGc": "global.gc() before each warmup and sample",
+    "pairOrders": [
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB"
+    ],
+    "workloadIterationCounts": {
+      "batch/two-writes-one-reaction@1": 28057,
+      "computed/create@1": 633875,
+      "computed/dirty-read@1": 93142,
+      "computed/dirty-unread@1": 298365,
+      "computed/equality-suppression@1": 62701,
+      "computed/many-to-one@1": 66044,
+      "computed/many-to-one@16": 32869,
+      "computed/many-to-one@64": 11708,
+      "computed/source-to-many@1": 103370,
+      "computed/source-to-many@16": 14758,
+      "computed/source-to-many@64": 4583,
+      "diagnostic/adapter-read-dispatch@1": 4679020,
+      "effect/create-dispose@1": 78528,
+      "effect/create@1": 85858,
+      "effect/dynamic-dependencies@1": 57379,
+      "effect/fanout@1": 131407,
+      "effect/fanout@16": 35830,
+      "effect/fanout@64": 8680,
+      "effect/observed-write@1": 106279,
+      "rfsg/deepSignal-read@1": 50000,
+      "rfsg/deepSignal-watched-leaf-write@1": 8657,
+      "rfsg/react-bare-tracking@1": 250,
+      "rfsg/react-jsx-direct-binding@1": 1679,
+      "rfsg/react-managed-tracking@1": 250,
+      "rfsg/react-useSignalValue@1": 250,
+      "source/create@1": 471476,
+      "source/read@1": 1693079,
+      "source/unobserved-write@1": 1084411,
+      "source/write-read@1": 636392
+    }
+  },
+  "variantBuild": {
+    "sourceHead": "a6afcbc1e79573272b25740a5066d8429d32e1f5",
+    "sourceDistPath": "C:\\Users\\catro\\Documents\\Codex\\2026-09-29\\files-pasted-by-the-user-continue\\work\\react-fine-grained-signals\\dist",
+    "coreChunk": "core-runtime-Dqo8e5cK.js",
+    "variants": {
+      "R1": {
+        "coreSha256": "e13bd468a030a7f26a07090306cadb9007466f7f941bd41324a51c157e004cd3",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "e13bd468a030a7f26a07090306cadb9007466f7f941bd41324a51c157e004cd3",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "56a259cbad508a085e197b8b585ef39594c1f49b6cc291133cae0ad1afadef70"
+      },
+      "R2": {
+        "coreSha256": "f5f2c6e8c5551698630ddf67cba1836648bbd501542c5aae563da5afcab41929",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "f5f2c6e8c5551698630ddf67cba1836648bbd501542c5aae563da5afcab41929",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "e02462942d18e92c986eaab805b32369f99d5c4a59b2f35f306fad962b4bba8e"
+      },
+      "R3": {
+        "coreSha256": "974c927028fce5aa3065bdd4424720ae69c72f2e76c00f8bc8f2494bc58559ad",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "974c927028fce5aa3065bdd4424720ae69c72f2e76c00f8bc8f2494bc58559ad",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "146bc54274df6ad8beb9605721f5c2234a7021ae1ab43a36a5edd9e8ab704995"
+      },
+      "R4": {
+        "coreSha256": "830f002ae85ec519a67d77d2c6b43bae0b50459bd26537530f21fb25403143e5",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "830f002ae85ec519a67d77d2c6b43bae0b50459bd26537530f21fb25403143e5",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "68cb0808841b0330b3d975f1e5889129abc62bea554bb568fe6d5c97ef05ab29"
+      },
+      "R5": {
+        "coreSha256": "eeab6f8454351682c3a3678dea9fdebd3808ae57100ee1f34c79d9c348c9267c",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "eeab6f8454351682c3a3678dea9fdebd3808ae57100ee1f34c79d9c348c9267c",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "5292b27f8f5c10c568b712ae97c85e8871fa2a9cbc12d1eae3317d0b081f8155"
+      },
+      "W1": {
+        "coreSha256": "3a0a991c8cfaeb736a8001400b1eb4eb2a8e086194879ac90dc9340860fc7f99",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "3a0a991c8cfaeb736a8001400b1eb4eb2a8e086194879ac90dc9340860fc7f99",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "7f007440f4c5654234e546343263c9ad662276767ca7a0537ede2f2c820551c1"
+      },
+      "W2": {
+        "coreSha256": "d9772a74b168e343577f54a5c40916d12c010304d7ed85e4a59a6bbd8072cab5",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "d9772a74b168e343577f54a5c40916d12c010304d7ed85e4a59a6bbd8072cab5",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "a52a86fd961f10b1ab1b5463787adf03397dfc63199ddaefa345cf960db7e51f"
+      },
+      "W3": {
+        "coreSha256": "34f76b3e8b58b8936c1a20567b8a03c7493fb853aeb5f034548f9caf5af766ed",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "34f76b3e8b58b8936c1a20567b8a03c7493fb853aeb5f034548f9caf5af766ed",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "f77e1cd78abfd9f368d23f52346bb434b4fe12a058c21b1ec889de7a215e471d"
+      },
+      "W4": {
+        "coreSha256": "e7885dab8b2beb346d785979c52fa18d1a858bad41323f4745ea24fc8472d6db",
+        "files": {
+          "base-BmMmSiK1.js": "289d57c6ec64bac1260c93865bc727791da019ad1f0d7e517c170d00fac514f8",
+          "core-runtime-Dqo8e5cK.js": "e7885dab8b2beb346d785979c52fa18d1a858bad41323f4745ea24fc8472d6db",
+          "hooks-BO5dRw7P.js": "9ece68b56cdd8384ed095f76c8cdb29e7c5fee0b3222a870e4b81c0648b4c917",
+          "index.js": "a223782806ecfd0ad047a3f12f8475c38a70709eef589e5914f91b7e9fce465e",
+          "jsx-S8SS1Qgs.js": "c20137a3591d5809478cc29384964fa7d9c47a4a5513f9e64a46971fd673429e",
+          "jsx-dev-runtime.js": "30c2f5de84553a7da8060ac9284bfc3f7167a5b32c27dccfadddedf18da77f0c",
+          "jsx-runtime.js": "9e600c54dd112acee854f16c3e361b9c1a872869c71cf1eb69b35e308ecf62d7",
+          "runtime.js": "87ce237c76c66facc8530da1fa440f6d5ad5c1c28d6a9a5c0715435c4194d0d5",
+          "use-signals-BU65end7.js": "47ca899eb585c2ece77a60e13b731ebad28d69bbbf9aed2b8b000e94cd07ef4e",
+          "utils.js": "1e165e4b14278e3d8fca0a8a8ab6b97f2fef63820094a4f17e2495e4cd8e6242"
+        },
+        "artifactSha256": "c69be5a08cd75b8a61849dd0dde2167704c2689aeab9e802e125924fc3530489"
+      }
+    }
+  },
+  "screenStatus": "completed",
+  "sessions": {
+    "1": {
+      "status": "completed",
+      "summaries": [
+        {
+          "label": "confirm/1/rfsg-R4/source-read",
+          "pairs": 24,
+          "median": 1.3956102862914854,
+          "q1": 1.241109814936607,
+          "q3": 1.518923433590035,
+          "min": 1.0374770629638759,
+          "max": 2.531177291763611,
+          "candidateFasterPairs": 24,
+          "controlFasterPairs": 0
+        },
+        {
+          "label": "confirm/1/rfsg-R4/source-write-read",
+          "pairs": 24,
+          "median": 1.1264453545115871,
+          "q1": 0.9791645867717775,
+          "q3": 1.2521328725623297,
+          "min": 0.7975490390069518,
+          "max": 1.7974536305014368,
+          "candidateFasterPairs": 16,
+          "controlFasterPairs": 8
+        },
+        {
+          "label": "confirm/1/rfsg-W1/source-unobserved-write",
+          "pairs": 24,
+          "median": 2.39859183783868,
+          "q1": 2.1915386124308727,
+          "q3": 2.5722863417710675,
+          "min": 1.4032995058711015,
+          "max": 3.62166976510755,
+          "candidateFasterPairs": 24,
+          "controlFasterPairs": 0
+        },
+        {
+          "label": "confirm/1/rfsg-W1/source-write-read",
+          "pairs": 24,
+          "median": 1.4350557834896578,
+          "q1": 1.2847725087329056,
+          "q3": 1.6634549093828181,
+          "min": 0.93008992195453,
+          "max": 2.6661893055190906,
+          "candidateFasterPairs": 23,
+          "controlFasterPairs": 1
+        }
+      ]
+    },
+    "2": {
+      "status": "completed",
+      "summaries": [
+        {
+          "label": "confirm/2/rfsg-R4/source-read",
+          "pairs": 24,
+          "median": 1.1983780783405018,
+          "q1": 1.014765651520267,
+          "q3": 1.3194523906296285,
+          "min": 0.7271389804660342,
+          "max": 1.9530674794103042,
+          "candidateFasterPairs": 18,
+          "controlFasterPairs": 6
+        },
+        {
+          "label": "confirm/2/rfsg-R4/source-write-read",
+          "pairs": 24,
+          "median": 1.1091651533898295,
+          "q1": 0.9258727344087276,
+          "q3": 1.2913249005864667,
+          "min": 0.5371824584864587,
+          "max": 1.9835299205585102,
+          "candidateFasterPairs": 16,
+          "controlFasterPairs": 8
+        },
+        {
+          "label": "confirm/2/rfsg-W1/source-unobserved-write",
+          "pairs": 24,
+          "median": 2.1291231569328177,
+          "q1": 1.8970483375474627,
+          "q3": 2.5172553360843186,
+          "min": 1.5066608082120252,
+          "max": 3.2189803111759887,
+          "candidateFasterPairs": 24,
+          "controlFasterPairs": 0
+        },
+        {
+          "label": "confirm/2/rfsg-W1/source-write-read",
+          "pairs": 24,
+          "median": 1.6120315931125617,
+          "q1": 1.1289200930916021,
+          "q3": 1.7748250829476007,
+          "min": 0.8229732345006564,
+          "max": 3.0354682391405885,
+          "candidateFasterPairs": 21,
+          "controlFasterPairs": 3
+        }
+      ]
+    },
+    "3": {
+      "status": "completed",
+      "summaries": [
+        {
+          "label": "confirm/3/rfsg-R4/source-read",
+          "pairs": 24,
+          "median": 1.3027199007716623,
+          "q1": 1.210316838204725,
+          "q3": 1.4461256526193735,
+          "min": 0.9009613580424057,
+          "max": 1.9466211814551622,
+          "candidateFasterPairs": 22,
+          "controlFasterPairs": 2
+        },
+        {
+          "label": "confirm/3/rfsg-R4/source-write-read",
+          "pairs": 24,
+          "median": 1.0871515236808436,
+          "q1": 0.9817572466920124,
+          "q3": 1.1854050622452639,
+          "min": 0.6231761976739304,
+          "max": 2.3925245256151113,
+          "candidateFasterPairs": 17,
+          "controlFasterPairs": 7
+        },
+        {
+          "label": "confirm/3/rfsg-W1/source-unobserved-write",
+          "pairs": 24,
+          "median": 2.2433852217996613,
+          "q1": 1.7763180577348916,
+          "q3": 2.4479986491697985,
+          "min": 1.0471352957563376,
+          "max": 2.9481819094972628,
+          "candidateFasterPairs": 24,
+          "controlFasterPairs": 0
+        },
+        {
+          "label": "confirm/3/rfsg-W1/source-write-read",
+          "pairs": 24,
+          "median": 1.5277561649773994,
+          "q1": 1.3862809868863437,
+          "q3": 1.6629212997466845,
+          "min": 1.0603590997938541,
+          "max": 2.7186265939167393,
+          "candidateFasterPairs": 24,
+          "controlFasterPairs": 0
+        }
+      ]
+    }
+  },
+  "screenSummaries": [
+    {
+      "label": "screen/rfsg-R1/source-read",
+      "pairs": 12,
+      "median": 1.1475765351433327,
+      "q1": 1.121987517724419,
+      "q3": 1.226424323621948,
+      "min": 1.0112305320635653,
+      "max": 1.6482075665626927,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-R1/source-write-read",
+      "pairs": 12,
+      "median": 1.0089755194828691,
+      "q1": 0.9693309655906904,
+      "q3": 1.0514880927179733,
+      "min": 0.8059653485026997,
+      "max": 1.1128995479060915,
+      "candidateFasterPairs": 7,
+      "controlFasterPairs": 5
+    },
+    {
+      "label": "screen/rfsg-R2/source-read",
+      "pairs": 12,
+      "median": 1.0450981981387573,
+      "q1": 0.9633306260388601,
+      "q3": 1.3077559471677636,
+      "min": 0.6153999286656326,
+      "max": 2.461642036396078,
+      "candidateFasterPairs": 7,
+      "controlFasterPairs": 5
+    },
+    {
+      "label": "screen/rfsg-R2/source-write-read",
+      "pairs": 12,
+      "median": 0.9029957696724922,
+      "q1": 0.8034512242109535,
+      "q3": 1.1576498878374832,
+      "min": 0.676107178005651,
+      "max": 1.3696126103691277,
+      "candidateFasterPairs": 5,
+      "controlFasterPairs": 7
+    },
+    {
+      "label": "screen/rfsg-R3/source-read",
+      "pairs": 12,
+      "median": 1.3106945729884396,
+      "q1": 1.0354538078511568,
+      "q3": 1.4589004112090371,
+      "min": 0.6719954682628007,
+      "max": 1.8536912005779222,
+      "candidateFasterPairs": 9,
+      "controlFasterPairs": 3
+    },
+    {
+      "label": "screen/rfsg-R3/source-write-read",
+      "pairs": 12,
+      "median": 1.0767242825422358,
+      "q1": 0.8620484883177943,
+      "q3": 1.1822790202287108,
+      "min": 0.6514438805283913,
+      "max": 1.7770052356020942,
+      "candidateFasterPairs": 7,
+      "controlFasterPairs": 5
+    },
+    {
+      "label": "screen/rfsg-R4/source-read",
+      "pairs": 12,
+      "median": 1.4037901887440865,
+      "q1": 1.2548958264656624,
+      "q3": 1.58577795544085,
+      "min": 0.8346390417610877,
+      "max": 2.098395897286416,
+      "candidateFasterPairs": 11,
+      "controlFasterPairs": 1
+    },
+    {
+      "label": "screen/rfsg-R4/source-write-read",
+      "pairs": 12,
+      "median": 1.0346391303169822,
+      "q1": 0.9317427244958716,
+      "q3": 1.1599985560094954,
+      "min": 0.8470823591986758,
+      "max": 1.3266467469679522,
+      "candidateFasterPairs": 7,
+      "controlFasterPairs": 5
+    },
+    {
+      "label": "screen/rfsg-R5/source-read",
+      "pairs": 12,
+      "median": 2.8287951305962244,
+      "q1": 2.497138038176559,
+      "q3": 3.358618705101005,
+      "min": 1.7163219405847694,
+      "max": 4.755900237040091,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-R5/source-write-read",
+      "status": "not-applicable",
+      "reason": "R5 intentionally skips graph settling, so it cannot satisfy write/read semantics."
+    },
+    {
+      "label": "screen/rfsg-W1/source-unobserved-write",
+      "pairs": 12,
+      "median": 2.901892583209383,
+      "q1": 2.3352398345751286,
+      "q3": 3.32026332506437,
+      "min": 1.3153048993657295,
+      "max": 3.739965424104993,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-W1/source-write-read",
+      "pairs": 12,
+      "median": 1.5603224193425853,
+      "q1": 1.430645049978937,
+      "q3": 1.671200296456076,
+      "min": 1.1623704712602705,
+      "max": 2.870255561992592,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-W1/effect-observed-write",
+      "pairs": 12,
+      "median": 1.2097141831086997,
+      "q1": 1.1031608140946099,
+      "q3": 1.3074231826039766,
+      "min": 0.8977559206219005,
+      "max": 1.5665185185185184,
+      "candidateFasterPairs": 10,
+      "controlFasterPairs": 2
+    },
+    {
+      "label": "screen/rfsg-W1/computed-dirty-read",
+      "pairs": 12,
+      "median": 1.031831459085908,
+      "q1": 0.7285090564191412,
+      "q3": 1.2452223814591243,
+      "min": 0.6441286564628497,
+      "max": 1.4937798133151614,
+      "candidateFasterPairs": 6,
+      "controlFasterPairs": 6
+    },
+    {
+      "label": "screen/rfsg-W1/batch-two-writes",
+      "pairs": 12,
+      "median": 0.9772112881582651,
+      "q1": 0.7751510932945376,
+      "q3": 1.3080356938459181,
+      "min": 0.5901114460946139,
+      "max": 1.6761053433560025,
+      "candidateFasterPairs": 6,
+      "controlFasterPairs": 6
+    },
+    {
+      "label": "screen/rfsg-W2/source-unobserved-write",
+      "pairs": 12,
+      "median": 1.0679420089614005,
+      "q1": 0.8673233153759159,
+      "q3": 1.2350709708652587,
+      "min": 0.6938528517612848,
+      "max": 1.8431001451917413,
+      "candidateFasterPairs": 8,
+      "controlFasterPairs": 4
+    },
+    {
+      "label": "screen/rfsg-W2/source-write-read",
+      "pairs": 12,
+      "median": 1.13716780799286,
+      "q1": 1.0583382038819327,
+      "q3": 1.2028641815044747,
+      "min": 0.9176419302731095,
+      "max": 1.9453720053380887,
+      "candidateFasterPairs": 10,
+      "controlFasterPairs": 2
+    },
+    {
+      "label": "screen/rfsg-W2/effect-observed-write",
+      "pairs": 12,
+      "median": 0.9547239859803172,
+      "q1": 0.8324612621123537,
+      "q3": 1.063873009243258,
+      "min": 0.7380978858533813,
+      "max": 1.3783992915025647,
+      "candidateFasterPairs": 3,
+      "controlFasterPairs": 9
+    },
+    {
+      "label": "screen/rfsg-W2/computed-dirty-read",
+      "pairs": 12,
+      "median": 0.9629091981642093,
+      "q1": 0.8588822058403188,
+      "q3": 1.1267818373146705,
+      "min": 0.5503805844277538,
+      "max": 1.3160963055155672,
+      "candidateFasterPairs": 5,
+      "controlFasterPairs": 7
+    },
+    {
+      "label": "screen/rfsg-W2/batch-two-writes",
+      "pairs": 12,
+      "median": 1.1159959945703395,
+      "q1": 0.7812611663397329,
+      "q3": 1.2193781877958998,
+      "min": 0.5828382957465889,
+      "max": 1.4405224290256762,
+      "candidateFasterPairs": 7,
+      "controlFasterPairs": 5
+    },
+    {
+      "label": "screen/rfsg-W3/source-unobserved-write",
+      "pairs": 12,
+      "median": 2.3959658413236893,
+      "q1": 2.1383808127226986,
+      "q3": 2.647141659146566,
+      "min": 1.6295601684118797,
+      "max": 4.538371215298163,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-W3/source-write-read",
+      "pairs": 12,
+      "median": 1.5513013186747693,
+      "q1": 1.5151528011817192,
+      "q3": 1.8275353059506028,
+      "min": 1.4822629690999471,
+      "max": 2.161275459146574,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-W3/effect-observed-write",
+      "pairs": 12,
+      "median": 1.3154114384625415,
+      "q1": 1.063009549106078,
+      "q3": 1.371315622367043,
+      "min": 0.7428440968263977,
+      "max": 1.8030225509371398,
+      "candidateFasterPairs": 9,
+      "controlFasterPairs": 3
+    },
+    {
+      "label": "screen/rfsg-W3/computed-dirty-read",
+      "pairs": 12,
+      "median": 1.1200785992072801,
+      "q1": 0.8604166420069698,
+      "q3": 1.4241498567808692,
+      "min": 0.7105852614718506,
+      "max": 1.5311478050745067,
+      "candidateFasterPairs": 8,
+      "controlFasterPairs": 4
+    },
+    {
+      "label": "screen/rfsg-W3/batch-two-writes",
+      "pairs": 12,
+      "median": 1.140309625796581,
+      "q1": 1.0265872422747881,
+      "q3": 1.387172406664709,
+      "min": 0.8112880126698927,
+      "max": 1.5783060718429374,
+      "candidateFasterPairs": 9,
+      "controlFasterPairs": 3
+    },
+    {
+      "label": "screen/rfsg-W4/source-unobserved-write",
+      "pairs": 12,
+      "median": 2.693702074830096,
+      "q1": 2.442342411510636,
+      "q3": 2.9535200272763324,
+      "min": 2.139753011712436,
+      "max": 4.197859349578634,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-W4/source-write-read",
+      "pairs": 12,
+      "median": 1.6588227577999612,
+      "q1": 1.5794106373340293,
+      "q3": 1.7268897703100097,
+      "min": 1.3061091208525983,
+      "max": 2.316072137283674,
+      "candidateFasterPairs": 12,
+      "controlFasterPairs": 0
+    },
+    {
+      "label": "screen/rfsg-W4/effect-observed-write",
+      "pairs": 12,
+      "median": 1.1054865659538982,
+      "q1": 1.0120423381502355,
+      "q3": 1.3010123931128523,
+      "min": 0.8135943030595847,
+      "max": 1.9839405179559746,
+      "candidateFasterPairs": 9,
+      "controlFasterPairs": 3
+    },
+    {
+      "label": "screen/rfsg-W4/computed-dirty-read",
+      "pairs": 12,
+      "median": 1.1126101289150747,
+      "q1": 0.9117811211873706,
+      "q3": 1.173451224271309,
+      "min": 0.8363703367924953,
+      "max": 1.5846228641219926,
+      "candidateFasterPairs": 7,
+      "controlFasterPairs": 5
+    },
+    {
+      "label": "screen/rfsg-W4/batch-two-writes",
+      "pairs": 12,
+      "median": 1.193151877405152,
+      "q1": 0.7812856984206142,
+      "q3": 1.4291713316522268,
+      "min": 0.6542174753051385,
+      "max": 1.744963874853936,
+      "candidateFasterPairs": 8,
+      "controlFasterPairs": 4
+    }
+  ],
+  "updatedAt": "2026-09-29T00:59:55.571Z",
+  "comparisons": {
+    "status": "completed",
+    "summaries": [
+      {
+        "label": "compare/rfsg-R4/source-read/against-rfsg-v0.1.1",
+        "pairs": 24,
+        "median": 1.220032427749385,
+        "q1": 1.0569775066624263,
+        "q3": 1.3793590499240667,
+        "min": 0.5972625100956671,
+        "max": 1.9089234188014808,
+        "candidateFasterPairs": 19,
+        "controlFasterPairs": 5
+      },
+      {
+        "label": "compare/rfsg-R4/source-write-read/against-rfsg-v0.1.1",
+        "pairs": 24,
+        "median": 0.933765763994362,
+        "q1": 0.7849816456915805,
+        "q3": 1.0498162137885965,
+        "min": 0.5576552687515307,
+        "max": 1.5616069143089455,
+        "candidateFasterPairs": 7,
+        "controlFasterPairs": 17
+      },
+      {
+        "label": "compare/rfsg-W1/source-unobserved-write/against-rfsg-v0.1.1",
+        "pairs": 24,
+        "median": 1.8918426895743026,
+        "q1": 1.7278332533716498,
+        "q3": 2.0410024742401274,
+        "min": 1.2995966928816294,
+        "max": 3.3237408470766288,
+        "candidateFasterPairs": 24,
+        "controlFasterPairs": 0
+      },
+      {
+        "label": "compare/rfsg-W1/source-write-read/against-rfsg-v0.1.1",
+        "pairs": 24,
+        "median": 1.4867489023122973,
+        "q1": 1.347084318071902,
+        "q3": 1.7509785830017877,
+        "min": 0.9546850998463902,
+        "max": 2.3075509487724806,
+        "candidateFasterPairs": 23,
+        "controlFasterPairs": 1
+      },
+      {
+        "label": "compare/rfsg-R4/source-read/against-alien-signals",
+        "pairs": 12,
+        "median": 2.218318802103413,
+        "q1": 1.9611186147187736,
+        "q3": 2.4934866402768137,
+        "min": 1.1861746323454172,
+        "max": 2.7479644798661846,
+        "candidateFasterPairs": 12,
+        "controlFasterPairs": 0
+      },
+      {
+        "label": "compare/rfsg-R4/source-write-read/against-alien-signals",
+        "pairs": 12,
+        "median": 0.7660243325536652,
+        "q1": 0.5134652747133873,
+        "q3": 1.0654817678134065,
+        "min": 0.4037427088898484,
+        "max": 1.3706765157229432,
+        "candidateFasterPairs": 4,
+        "controlFasterPairs": 8
+      },
+      {
+        "label": "compare/rfsg-W1/source-unobserved-write/against-alien-signals",
+        "pairs": 12,
+        "median": 2.108600507518224,
+        "q1": 1.88294772790461,
+        "q3": 2.169698125240463,
+        "min": 1.2138440458222337,
+        "max": 3.000277466398819,
+        "candidateFasterPairs": 12,
+        "controlFasterPairs": 0
+      },
+      {
+        "label": "compare/rfsg-W1/source-write-read/against-alien-signals",
+        "pairs": 12,
+        "median": 1.0418990814610765,
+        "q1": 0.8905132782484124,
+        "q3": 1.5321897546406331,
+        "min": 0.6639978009127957,
+        "max": 2.4240509863598922,
+        "candidateFasterPairs": 7,
+        "controlFasterPairs": 5
+      }
+    ]
+  },
+  "currentBaselines": {
+    "status": "completed",
+    "summaries": [
+      {
+        "label": "compare/rfsg-current/source-read/against-rfsg-v0.1.1",
+        "pairs": 24,
+        "median": 0.8849770365724562,
+        "q1": 0.7943225746077036,
+        "q3": 0.9589958752004193,
+        "min": 0.6894047779727359,
+        "max": 1.5922384088629127,
+        "candidateFasterPairs": 4,
+        "controlFasterPairs": 20
+      },
+      {
+        "label": "compare/rfsg-current/source-unobserved-write/against-rfsg-v0.1.1",
+        "pairs": 24,
+        "median": 0.8812473671328691,
+        "q1": 0.764990484392501,
+        "q3": 0.9986814227162125,
+        "min": 0.6952204186648736,
+        "max": 1.4317619105380701,
+        "candidateFasterPairs": 6,
+        "controlFasterPairs": 18
+      },
+      {
+        "label": "compare/rfsg-current/source-write-read/against-rfsg-v0.1.1",
+        "pairs": 24,
+        "median": 0.9782232591915476,
+        "q1": 0.8732890295421742,
+        "q3": 1.1046103475098956,
+        "min": 0.6685462136310363,
+        "max": 2.6742725080673435,
+        "candidateFasterPairs": 9,
+        "controlFasterPairs": 15
+      },
+      {
+        "label": "compare/rfsg-current/source-read/against-alien-signals",
+        "pairs": 12,
+        "median": 1.7447185618157819,
+        "q1": 1.499586797406601,
+        "q3": 1.9219847076805459,
+        "min": 1.2045330383239095,
+        "max": 2.5470219977863864,
+        "candidateFasterPairs": 12,
+        "controlFasterPairs": 0
+      },
+      {
+        "label": "compare/rfsg-current/source-unobserved-write/against-alien-signals",
+        "pairs": 12,
+        "median": 0.8816035191800566,
+        "q1": 0.8351546964511937,
+        "q3": 1.0097978549192166,
+        "min": 0.766710079695524,
+        "max": 1.181318098347276,
+        "candidateFasterPairs": 3,
+        "controlFasterPairs": 9
+      },
+      {
+        "label": "compare/rfsg-current/source-write-read/against-alien-signals",
+        "pairs": 12,
+        "median": 0.9659620059525934,
+        "q1": 0.7600327683260022,
+        "q3": 1.0184437079213344,
+        "min": 0.495589102488501,
+        "max": 1.1510441294522582,
+        "candidateFasterPairs": 4,
+        "controlFasterPairs": 8
+      }
+    ]
+  }
+}

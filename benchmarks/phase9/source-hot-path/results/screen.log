@@ -1,0 +1,806 @@
+[screen/rfsg-W1/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-W1
+[screen/rfsg-W1/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W1/source-write-read] 1/12 AB source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 1/12 AB source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 2/12 BA source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 2/12 BA source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 3/12 BA source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 3/12 BA source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 4/12 AB source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 4/12 AB source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 5/12 AB source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 5/12 AB source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 6/12 BA source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 6/12 BA source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 7/12 AB source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 7/12 AB source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 8/12 BA source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 8/12 BA source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 9/12 BA source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 9/12 BA source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 10/12 AB source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 10/12 AB source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 11/12 BA source-write-read rfsg-current
+[screen/rfsg-W1/source-write-read] 11/12 BA source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 12/12 AB source-write-read rfsg-W1
+[screen/rfsg-W1/source-write-read] 12/12 AB source-write-read rfsg-current
+[screen/rfsg-W1/effect-observed-write] 1/12 AB effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 1/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 2/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 2/12 BA effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 3/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 3/12 BA effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 4/12 AB effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 4/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 5/12 AB effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 5/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 6/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 6/12 BA effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 7/12 AB effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 7/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 8/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 8/12 BA effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 9/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 9/12 BA effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 10/12 AB effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 10/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 11/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W1/effect-observed-write] 11/12 BA effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 12/12 AB effect-observed-write rfsg-W1
+[screen/rfsg-W1/effect-observed-write] 12/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W1/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-W1
+[screen/rfsg-W1/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W1/batch-two-writes] 1/12 AB batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 1/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 2/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 2/12 BA batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 3/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 3/12 BA batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 4/12 AB batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 4/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 5/12 AB batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 5/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 6/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 6/12 BA batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 7/12 AB batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 7/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 8/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 8/12 BA batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 9/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 9/12 BA batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 10/12 AB batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 10/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 11/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W1/batch-two-writes] 11/12 BA batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 12/12 AB batch-two-writes rfsg-W1
+[screen/rfsg-W1/batch-two-writes] 12/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-W2
+[screen/rfsg-W2/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W2/source-write-read] 1/12 AB source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 1/12 AB source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 2/12 BA source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 2/12 BA source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 3/12 BA source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 3/12 BA source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 4/12 AB source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 4/12 AB source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 5/12 AB source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 5/12 AB source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 6/12 BA source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 6/12 BA source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 7/12 AB source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 7/12 AB source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 8/12 BA source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 8/12 BA source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 9/12 BA source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 9/12 BA source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 10/12 AB source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 10/12 AB source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 11/12 BA source-write-read rfsg-current
+[screen/rfsg-W2/source-write-read] 11/12 BA source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 12/12 AB source-write-read rfsg-W2
+[screen/rfsg-W2/source-write-read] 12/12 AB source-write-read rfsg-current
+[screen/rfsg-W2/effect-observed-write] 1/12 AB effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 1/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 2/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 2/12 BA effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 3/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 3/12 BA effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 4/12 AB effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 4/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 5/12 AB effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 5/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 6/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 6/12 BA effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 7/12 AB effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 7/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 8/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 8/12 BA effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 9/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 9/12 BA effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 10/12 AB effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 10/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 11/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W2/effect-observed-write] 11/12 BA effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 12/12 AB effect-observed-write rfsg-W2
+[screen/rfsg-W2/effect-observed-write] 12/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W2/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-W2
+[screen/rfsg-W2/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W2/batch-two-writes] 1/12 AB batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 1/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 2/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 2/12 BA batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 3/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 3/12 BA batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 4/12 AB batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 4/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 5/12 AB batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 5/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 6/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 6/12 BA batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 7/12 AB batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 7/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 8/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 8/12 BA batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 9/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 9/12 BA batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 10/12 AB batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 10/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 11/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W2/batch-two-writes] 11/12 BA batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 12/12 AB batch-two-writes rfsg-W2
+[screen/rfsg-W2/batch-two-writes] 12/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-W3
+[screen/rfsg-W3/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W3/source-write-read] 1/12 AB source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 1/12 AB source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 2/12 BA source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 2/12 BA source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 3/12 BA source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 3/12 BA source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 4/12 AB source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 4/12 AB source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 5/12 AB source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 5/12 AB source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 6/12 BA source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 6/12 BA source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 7/12 AB source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 7/12 AB source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 8/12 BA source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 8/12 BA source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 9/12 BA source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 9/12 BA source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 10/12 AB source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 10/12 AB source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 11/12 BA source-write-read rfsg-current
+[screen/rfsg-W3/source-write-read] 11/12 BA source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 12/12 AB source-write-read rfsg-W3
+[screen/rfsg-W3/source-write-read] 12/12 AB source-write-read rfsg-current
+[screen/rfsg-W3/effect-observed-write] 1/12 AB effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 1/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 2/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 2/12 BA effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 3/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 3/12 BA effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 4/12 AB effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 4/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 5/12 AB effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 5/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 6/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 6/12 BA effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 7/12 AB effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 7/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 8/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 8/12 BA effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 9/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 9/12 BA effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 10/12 AB effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 10/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 11/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W3/effect-observed-write] 11/12 BA effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 12/12 AB effect-observed-write rfsg-W3
+[screen/rfsg-W3/effect-observed-write] 12/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W3/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-W3
+[screen/rfsg-W3/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W3/batch-two-writes] 1/12 AB batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 1/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 2/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 2/12 BA batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 3/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 3/12 BA batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 4/12 AB batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 4/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 5/12 AB batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 5/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 6/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 6/12 BA batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 7/12 AB batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 7/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 8/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 8/12 BA batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 9/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 9/12 BA batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 10/12 AB batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 10/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 11/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W3/batch-two-writes] 11/12 BA batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 12/12 AB batch-two-writes rfsg-W3
+[screen/rfsg-W3/batch-two-writes] 12/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 1/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 2/12 BA source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 3/12 BA source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 4/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 5/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 6/12 BA source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 7/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 8/12 BA source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 9/12 BA source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 10/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-unobserved-write] 11/12 BA source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-W4
+[screen/rfsg-W4/source-unobserved-write] 12/12 AB source-unobserved-write rfsg-current
+[screen/rfsg-W4/source-write-read] 1/12 AB source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 1/12 AB source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 2/12 BA source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 2/12 BA source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 3/12 BA source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 3/12 BA source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 4/12 AB source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 4/12 AB source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 5/12 AB source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 5/12 AB source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 6/12 BA source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 6/12 BA source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 7/12 AB source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 7/12 AB source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 8/12 BA source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 8/12 BA source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 9/12 BA source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 9/12 BA source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 10/12 AB source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 10/12 AB source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 11/12 BA source-write-read rfsg-current
+[screen/rfsg-W4/source-write-read] 11/12 BA source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 12/12 AB source-write-read rfsg-W4
+[screen/rfsg-W4/source-write-read] 12/12 AB source-write-read rfsg-current
+[screen/rfsg-W4/effect-observed-write] 1/12 AB effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 1/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 2/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 2/12 BA effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 3/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 3/12 BA effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 4/12 AB effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 4/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 5/12 AB effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 5/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 6/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 6/12 BA effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 7/12 AB effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 7/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 8/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 8/12 BA effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 9/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 9/12 BA effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 10/12 AB effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 10/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 11/12 BA effect-observed-write rfsg-current
+[screen/rfsg-W4/effect-observed-write] 11/12 BA effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 12/12 AB effect-observed-write rfsg-W4
+[screen/rfsg-W4/effect-observed-write] 12/12 AB effect-observed-write rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 1/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 2/12 BA computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 3/12 BA computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 4/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 5/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 6/12 BA computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 7/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 8/12 BA computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 9/12 BA computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 10/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-current
+[screen/rfsg-W4/computed-dirty-read] 11/12 BA computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-W4
+[screen/rfsg-W4/computed-dirty-read] 12/12 AB computed-dirty-read rfsg-current
+[screen/rfsg-W4/batch-two-writes] 1/12 AB batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 1/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 2/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 2/12 BA batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 3/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 3/12 BA batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 4/12 AB batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 4/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 5/12 AB batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 5/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 6/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 6/12 BA batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 7/12 AB batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 7/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 8/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 8/12 BA batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 9/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 9/12 BA batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 10/12 AB batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 10/12 AB batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 11/12 BA batch-two-writes rfsg-current
+[screen/rfsg-W4/batch-two-writes] 11/12 BA batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 12/12 AB batch-two-writes rfsg-W4
+[screen/rfsg-W4/batch-two-writes] 12/12 AB batch-two-writes rfsg-current
+[
+  {
+    "label": "screen/rfsg-R1/source-read",
+    "pairs": 12,
+    "median": 1.1475765351433327,
+    "q1": 1.121987517724419,
+    "q3": 1.226424323621948,
+    "min": 1.0112305320635653,
+    "max": 1.6482075665626927,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-R1/source-write-read",
+    "pairs": 12,
+    "median": 1.0089755194828691,
+    "q1": 0.9693309655906904,
+    "q3": 1.0514880927179733,
+    "min": 0.8059653485026997,
+    "max": 1.1128995479060915,
+    "candidateFasterPairs": 7,
+    "controlFasterPairs": 5
+  },
+  {
+    "label": "screen/rfsg-R2/source-read",
+    "pairs": 12,
+    "median": 1.0450981981387573,
+    "q1": 0.9633306260388601,
+    "q3": 1.3077559471677636,
+    "min": 0.6153999286656326,
+    "max": 2.461642036396078,
+    "candidateFasterPairs": 7,
+    "controlFasterPairs": 5
+  },
+  {
+    "label": "screen/rfsg-R2/source-write-read",
+    "pairs": 12,
+    "median": 0.9029957696724922,
+    "q1": 0.8034512242109535,
+    "q3": 1.1576498878374832,
+    "min": 0.676107178005651,
+    "max": 1.3696126103691277,
+    "candidateFasterPairs": 5,
+    "controlFasterPairs": 7
+  },
+  {
+    "label": "screen/rfsg-R3/source-read",
+    "pairs": 12,
+    "median": 1.3106945729884396,
+    "q1": 1.0354538078511568,
+    "q3": 1.4589004112090371,
+    "min": 0.6719954682628007,
+    "max": 1.8536912005779222,
+    "candidateFasterPairs": 9,
+    "controlFasterPairs": 3
+  },
+  {
+    "label": "screen/rfsg-R3/source-write-read",
+    "pairs": 12,
+    "median": 1.0767242825422358,
+    "q1": 0.8620484883177943,
+    "q3": 1.1822790202287108,
+    "min": 0.6514438805283913,
+    "max": 1.7770052356020942,
+    "candidateFasterPairs": 7,
+    "controlFasterPairs": 5
+  },
+  {
+    "label": "screen/rfsg-R4/source-read",
+    "pairs": 12,
+    "median": 1.4037901887440865,
+    "q1": 1.2548958264656624,
+    "q3": 1.58577795544085,
+    "min": 0.8346390417610877,
+    "max": 2.098395897286416,
+    "candidateFasterPairs": 11,
+    "controlFasterPairs": 1
+  },
+  {
+    "label": "screen/rfsg-R4/source-write-read",
+    "pairs": 12,
+    "median": 1.0346391303169822,
+    "q1": 0.9317427244958716,
+    "q3": 1.1599985560094954,
+    "min": 0.8470823591986758,
+    "max": 1.3266467469679522,
+    "candidateFasterPairs": 7,
+    "controlFasterPairs": 5
+  },
+  {
+    "label": "screen/rfsg-R5/source-read",
+    "pairs": 12,
+    "median": 2.8287951305962244,
+    "q1": 2.497138038176559,
+    "q3": 3.358618705101005,
+    "min": 1.7163219405847694,
+    "max": 4.755900237040091,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-R5/source-write-read",
+    "status": "not-applicable",
+    "reason": "R5 intentionally skips graph settling, so it cannot satisfy write/read semantics."
+  },
+  {
+    "label": "screen/rfsg-W1/source-unobserved-write",
+    "pairs": 12,
+    "median": 2.901892583209383,
+    "q1": 2.3352398345751286,
+    "q3": 3.32026332506437,
+    "min": 1.3153048993657295,
+    "max": 3.739965424104993,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-W1/source-write-read",
+    "pairs": 12,
+    "median": 1.5603224193425853,
+    "q1": 1.430645049978937,
+    "q3": 1.671200296456076,
+    "min": 1.1623704712602705,
+    "max": 2.870255561992592,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-W1/effect-observed-write",
+    "pairs": 12,
+    "median": 1.2097141831086997,
+    "q1": 1.1031608140946099,
+    "q3": 1.3074231826039766,
+    "min": 0.8977559206219005,
+    "max": 1.5665185185185184,
+    "candidateFasterPairs": 10,
+    "controlFasterPairs": 2
+  },
+  {
+    "label": "screen/rfsg-W1/computed-dirty-read",
+    "pairs": 12,
+    "median": 1.031831459085908,
+    "q1": 0.7285090564191412,
+    "q3": 1.2452223814591243,
+    "min": 0.6441286564628497,
+    "max": 1.4937798133151614,
+    "candidateFasterPairs": 6,
+    "controlFasterPairs": 6
+  },
+  {
+    "label": "screen/rfsg-W1/batch-two-writes",
+    "pairs": 12,
+    "median": 0.9772112881582651,
+    "q1": 0.7751510932945376,
+    "q3": 1.3080356938459181,
+    "min": 0.5901114460946139,
+    "max": 1.6761053433560025,
+    "candidateFasterPairs": 6,
+    "controlFasterPairs": 6
+  },
+  {
+    "label": "screen/rfsg-W2/source-unobserved-write",
+    "pairs": 12,
+    "median": 1.0679420089614005,
+    "q1": 0.8673233153759159,
+    "q3": 1.2350709708652587,
+    "min": 0.6938528517612848,
+    "max": 1.8431001451917413,
+    "candidateFasterPairs": 8,
+    "controlFasterPairs": 4
+  },
+  {
+    "label": "screen/rfsg-W2/source-write-read",
+    "pairs": 12,
+    "median": 1.13716780799286,
+    "q1": 1.0583382038819327,
+    "q3": 1.2028641815044747,
+    "min": 0.9176419302731095,
+    "max": 1.9453720053380887,
+    "candidateFasterPairs": 10,
+    "controlFasterPairs": 2
+  },
+  {
+    "label": "screen/rfsg-W2/effect-observed-write",
+    "pairs": 12,
+    "median": 0.9547239859803172,
+    "q1": 0.8324612621123537,
+    "q3": 1.063873009243258,
+    "min": 0.7380978858533813,
+    "max": 1.3783992915025647,
+    "candidateFasterPairs": 3,
+    "controlFasterPairs": 9
+  },
+  {
+    "label": "screen/rfsg-W2/computed-dirty-read",
+    "pairs": 12,
+    "median": 0.9629091981642093,
+    "q1": 0.8588822058403188,
+    "q3": 1.1267818373146705,
+    "min": 0.5503805844277538,
+    "max": 1.3160963055155672,
+    "candidateFasterPairs": 5,
+    "controlFasterPairs": 7
+  },
+  {
+    "label": "screen/rfsg-W2/batch-two-writes",
+    "pairs": 12,
+    "median": 1.1159959945703395,
+    "q1": 0.7812611663397329,
+    "q3": 1.2193781877958998,
+    "min": 0.5828382957465889,
+    "max": 1.4405224290256762,
+    "candidateFasterPairs": 7,
+    "controlFasterPairs": 5
+  },
+  {
+    "label": "screen/rfsg-W3/source-unobserved-write",
+    "pairs": 12,
+    "median": 2.3959658413236893,
+    "q1": 2.1383808127226986,
+    "q3": 2.647141659146566,
+    "min": 1.6295601684118797,
+    "max": 4.538371215298163,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-W3/source-write-read",
+    "pairs": 12,
+    "median": 1.5513013186747693,
+    "q1": 1.5151528011817192,
+    "q3": 1.8275353059506028,
+    "min": 1.4822629690999471,
+    "max": 2.161275459146574,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-W3/effect-observed-write",
+    "pairs": 12,
+    "median": 1.3154114384625415,
+    "q1": 1.063009549106078,
+    "q3": 1.371315622367043,
+    "min": 0.7428440968263977,
+    "max": 1.8030225509371398,
+    "candidateFasterPairs": 9,
+    "controlFasterPairs": 3
+  },
+  {
+    "label": "screen/rfsg-W3/computed-dirty-read",
+    "pairs": 12,
+    "median": 1.1200785992072801,
+    "q1": 0.8604166420069698,
+    "q3": 1.4241498567808692,
+    "min": 0.7105852614718506,
+    "max": 1.5311478050745067,
+    "candidateFasterPairs": 8,
+    "controlFasterPairs": 4
+  },
+  {
+    "label": "screen/rfsg-W3/batch-two-writes",
+    "pairs": 12,
+    "median": 1.140309625796581,
+    "q1": 1.0265872422747881,
+    "q3": 1.387172406664709,
+    "min": 0.8112880126698927,
+    "max": 1.5783060718429374,
+    "candidateFasterPairs": 9,
+    "controlFasterPairs": 3
+  },
+  {
+    "label": "screen/rfsg-W4/source-unobserved-write",
+    "pairs": 12,
+    "median": 2.693702074830096,
+    "q1": 2.442342411510636,
+    "q3": 2.9535200272763324,
+    "min": 2.139753011712436,
+    "max": 4.197859349578634,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-W4/source-write-read",
+    "pairs": 12,
+    "median": 1.6588227577999612,
+    "q1": 1.5794106373340293,
+    "q3": 1.7268897703100097,
+    "min": 1.3061091208525983,
+    "max": 2.316072137283674,
+    "candidateFasterPairs": 12,
+    "controlFasterPairs": 0
+  },
+  {
+    "label": "screen/rfsg-W4/effect-observed-write",
+    "pairs": 12,
+    "median": 1.1054865659538982,
+    "q1": 1.0120423381502355,
+    "q3": 1.3010123931128523,
+    "min": 0.8135943030595847,
+    "max": 1.9839405179559746,
+    "candidateFasterPairs": 9,
+    "controlFasterPairs": 3
+  },
+  {
+    "label": "screen/rfsg-W4/computed-dirty-read",
+    "pairs": 12,
+    "median": 1.1126101289150747,
+    "q1": 0.9117811211873706,
+    "q3": 1.173451224271309,
+    "min": 0.8363703367924953,
+    "max": 1.5846228641219926,
+    "candidateFasterPairs": 7,
+    "controlFasterPairs": 5
+  },
+  {
+    "label": "screen/rfsg-W4/batch-two-writes",
+    "pairs": 12,
+    "median": 1.193151877405152,
+    "q1": 0.7812856984206142,
+    "q3": 1.4291713316522268,
+    "min": 0.6542174753051385,
+    "max": 1.744963874853936,
+    "candidateFasterPairs": 8,
+    "controlFasterPairs": 4
+  }
+]
