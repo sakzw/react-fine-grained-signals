@@ -4,7 +4,7 @@
 
 The task started with a clean worktree at `8595a437c09725d6b12a4ab38752d4d7c9b309ad`. Local `main`, `origin/main`, and GitHub `main` all matched that commit. No Git history operation was performed.
 
-**Decision C — Phase 9 performance remains open.** Source creation is reconciled with the existing M1.1b evidence. Disposal-only measurements show that dependency teardown is not slower than the v0.1.1 path, and no disposal bookkeeping ablation consistently recovers the authoritative `effect/create-dispose` gap. The remaining cost is specific to repeated effect creation followed immediately by disposal, but these diagnostics did not isolate a safe, repeatable implementation cause. No production patch is justified. M2 must wait for a narrower explanation of this row.
+**Decision B — the `effect/create-dispose` lifecycle pattern is explained, with no production patch accepted.** Source creation is reconciled with the existing M1.1b evidence. A persistent-subscriber control supports the finding that the current/v0.1.1 gap is associated with repeatedly removing the final source subscriber. A benchmark-only fast path showed a promising initial result but did not reproduce across confirmation sessions or the control workloads. No production patch is justified. Phase 9 remains open on this row; M2 must wait for an explicit later release decision or a repeatable safe optimization.
 
 ## Authoritative workload and prior result
 
@@ -60,7 +60,7 @@ A single `--trace-gc` diagnostic recorded more GC events for v0.1.1 on the combi
 
 ### Strongest causal conclusion
 
-The paired decomposition locates the observed regression to the repeated **create then immediately dispose** lifecycle. Creation-only and disposal-only do not reproduce it, and removing the flags reset or absent-cleanup branch does not recover it. Reverse dependency unlinking is necessary and performs well as an isolated current-runtime path. The best-supported attribution is therefore an interaction in the full lifecycle loop and its transient effect/link/disposer objects; this task did not isolate a particular allocation or function as the stable cause. The known controls leave a material unexplained cost, so Phase 9 cannot close under the requested criterion. A narrower allocation/call-path diagnostic is needed before any production optimization is considered.
+The paired decomposition locates the observed regression to the repeated **create then immediately dispose** lifecycle. Creation-only and disposal-only do not reproduce it, and removing the flags reset or absent-cleanup branch does not recover it. Reverse dependency unlinking is necessary and performs well as an isolated current-runtime path. The follow-up sentinel diagnostic narrows the pattern to losing the last source subscriber on each temporary effect disposal. It supports the lifecycle attribution, but does not establish a stable production optimization: the benchmark-only fast path did not survive confirmation. No production change was accepted, so Phase 9 remains open for an explicit release decision.
 
 ## Source creation reconciliation
 
@@ -95,3 +95,13 @@ The original diagnostics and their limitations remain in [`benchmarks/phase9/att
 - Full production validation was not applicable because no production patch was accepted.
 
 Phase 9 remains open solely for the combined `effect/create-dispose` cost. Do not begin M2 until this remaining performance blocker is either causally closed or explicitly accepted in a later release decision.
+
+## Last-subscriber transition diagnostic
+
+This follow-up started from `54999b9862ca73c54eb76bfe092387a19df73cce` with the existing sentinel worker changes and two v0.1.1 comparison records in the worktree. Git history operations were not performed.
+
+The paired fresh-process control compared the frozen 78,528-iteration loop against a sentinel effect that stayed subscribed to the same source for the entire timed loop. Each run used 24 AB/BA pairs, three warmups, and seven samples per process. Against fresh v0.1.1, ordinary create-dispose measured current/v0.1.1 throughput `0.805` (v0.1.1 won 14/24 pairs); the sentinel workload measured `1.066` (current won 15/24). Keeping one subscriber prevented the source from reaching its unwatched state on every temporary effect disposal, and the gap moved to near parity. This supports the last-subscriber transition as the causal lifecycle feature.
+
+U1 was a benchmark-only copy of the current built runtime with one change: `unwatched()` returns immediately for `node.kind === "source"` before external/computed/effect dispatch. The 24-pair screen measured U1/current `1.126` on ordinary create-dispose and `0.924` with the sentinel. The three new 24-pair ordinary confirmations measured `0.974`, `0.979`, and `1.033`; the initial gain was not repeatable. The remaining 24-pair U1/current screens were dispose-only `0.976`, create `0.875`, observed-write `0.933`, fanout@16 `1.075`, fanout@64 `0.917`, and computed/dirty-read `1.146`. These inconsistent control movements reinforce that the initial U1 screen is not acceptance evidence. U1 was not compared further against v0.1.1 and was not applied to production.
+
+Raw records are `last-subscriber-ordinary.json`, `last-subscriber-sentinel.json`, `u1-screen-*.json`, and `u1-confirm-*.json` under `benchmarks/phase9/attribution/disposal/`. The diagnostic worker supports the sentinel and focused U1 screening workloads; `prepare-variants.mjs` generates U1 as a disposable build copy. No authoritative M1b matrix or production runtime behavior was changed. Since the sentinel recovered the gap, no block-size follow-up was needed.

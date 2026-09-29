@@ -15,6 +15,10 @@ const replaceOnce = (source, before, after, label) => {
 };
 
 const candidates = {
+  U1: replaceOnce(original,
+    "\t\tunwatched(rawNode) {\n\t\t\tconst node = rawNode;\n\t\t\tif (node.kind === \"external\") {",
+    "\t\tunwatched(rawNode) {\n\t\t\tconst node = rawNode;\n\t\t\tif (node.kind === \"source\") return;\n\t\t\tif (node.kind === \"external\") {",
+    "U1 source early return"),
   D1: replaceOnce(original, "function disposeEffect(effect) {\n\t\teffect.flags = None;", "function disposeEffect(effect) {", "D1 no flags reset"),
   D2: replaceOnce(original,
     "\t\tif (effect.cleanup !== void 0) try {\n\t\t\trunCleanup(effect);\n\t\t} catch (error) {\n\t\t\treportFailure(error);\n\t\t}",

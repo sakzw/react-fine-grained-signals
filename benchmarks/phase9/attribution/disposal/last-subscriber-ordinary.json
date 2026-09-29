@@ -1,0 +1,1759 @@
+{
+  "method": "24 balanced AB/BA paired fresh-process rounds; three warmups and seven samples per process; median duration ratio current / variant",
+  "node": "v24.21.0",
+  "workload": "effect/create-dispose",
+  "records": [
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 1,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 46374500,
+      "variantMedianNs": 19789200,
+      "variantOverCurrentSpeedup": 2.3434246962989915,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 46374500
+        },
+        {
+          "sample": 1,
+          "durationNs": 30664900
+        },
+        {
+          "sample": 2,
+          "durationNs": 28948800
+        },
+        {
+          "sample": 3,
+          "durationNs": 51995200
+        },
+        {
+          "sample": 4,
+          "durationNs": 46907300
+        },
+        {
+          "sample": 5,
+          "durationNs": 41715300
+        },
+        {
+          "sample": 6,
+          "durationNs": 51952600
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 15443500
+        },
+        {
+          "sample": 1,
+          "durationNs": 14887100
+        },
+        {
+          "sample": 2,
+          "durationNs": 15595300
+        },
+        {
+          "sample": 3,
+          "durationNs": 19789200
+        },
+        {
+          "sample": 4,
+          "durationNs": 25460300
+        },
+        {
+          "sample": 5,
+          "durationNs": 24835800
+        },
+        {
+          "sample": 6,
+          "durationNs": 27755400
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 2,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 19546500,
+      "variantMedianNs": 20967100,
+      "variantOverCurrentSpeedup": 0.9322462333846836,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 25392000
+        },
+        {
+          "sample": 1,
+          "durationNs": 16990500
+        },
+        {
+          "sample": 2,
+          "durationNs": 16272300
+        },
+        {
+          "sample": 3,
+          "durationNs": 22983600
+        },
+        {
+          "sample": 4,
+          "durationNs": 16891300
+        },
+        {
+          "sample": 5,
+          "durationNs": 19546500
+        },
+        {
+          "sample": 6,
+          "durationNs": 32818200
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 16799600
+        },
+        {
+          "sample": 1,
+          "durationNs": 18894700
+        },
+        {
+          "sample": 2,
+          "durationNs": 19086600
+        },
+        {
+          "sample": 3,
+          "durationNs": 20967100
+        },
+        {
+          "sample": 4,
+          "durationNs": 26041700
+        },
+        {
+          "sample": 5,
+          "durationNs": 23676600
+        },
+        {
+          "sample": 6,
+          "durationNs": 24075600
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 3,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 22126300,
+      "variantMedianNs": 18013800,
+      "variantOverCurrentSpeedup": 1.2282971943732028,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 22044500
+        },
+        {
+          "sample": 1,
+          "durationNs": 15628500
+        },
+        {
+          "sample": 2,
+          "durationNs": 16466900
+        },
+        {
+          "sample": 3,
+          "durationNs": 36353900
+        },
+        {
+          "sample": 4,
+          "durationNs": 26404400
+        },
+        {
+          "sample": 5,
+          "durationNs": 22126300
+        },
+        {
+          "sample": 6,
+          "durationNs": 28193700
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 24606200
+        },
+        {
+          "sample": 1,
+          "durationNs": 21036100
+        },
+        {
+          "sample": 2,
+          "durationNs": 18013800
+        },
+        {
+          "sample": 3,
+          "durationNs": 17018100
+        },
+        {
+          "sample": 4,
+          "durationNs": 18198800
+        },
+        {
+          "sample": 5,
+          "durationNs": 16026600
+        },
+        {
+          "sample": 6,
+          "durationNs": 16957500
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 4,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 26907500,
+      "variantMedianNs": 29413200,
+      "variantOverCurrentSpeedup": 0.9148103572545659,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 31010500
+        },
+        {
+          "sample": 1,
+          "durationNs": 22471500
+        },
+        {
+          "sample": 2,
+          "durationNs": 21531300
+        },
+        {
+          "sample": 3,
+          "durationNs": 37556600
+        },
+        {
+          "sample": 4,
+          "durationNs": 26907500
+        },
+        {
+          "sample": 5,
+          "durationNs": 23246800
+        },
+        {
+          "sample": 6,
+          "durationNs": 32675200
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 32640900
+        },
+        {
+          "sample": 1,
+          "durationNs": 34900100
+        },
+        {
+          "sample": 2,
+          "durationNs": 26452700
+        },
+        {
+          "sample": 3,
+          "durationNs": 28503900
+        },
+        {
+          "sample": 4,
+          "durationNs": 29629400
+        },
+        {
+          "sample": 5,
+          "durationNs": 26942500
+        },
+        {
+          "sample": 6,
+          "durationNs": 29413200
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 5,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 21465600,
+      "variantMedianNs": 23302700,
+      "variantOverCurrentSpeedup": 0.9211636419814013,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 33041500
+        },
+        {
+          "sample": 1,
+          "durationNs": 21465600
+        },
+        {
+          "sample": 2,
+          "durationNs": 18476100
+        },
+        {
+          "sample": 3,
+          "durationNs": 26063000
+        },
+        {
+          "sample": 4,
+          "durationNs": 20623800
+        },
+        {
+          "sample": 5,
+          "durationNs": 18481500
+        },
+        {
+          "sample": 6,
+          "durationNs": 31514700
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 18876000
+        },
+        {
+          "sample": 1,
+          "durationNs": 25256300
+        },
+        {
+          "sample": 2,
+          "durationNs": 24341700
+        },
+        {
+          "sample": 3,
+          "durationNs": 19948500
+        },
+        {
+          "sample": 4,
+          "durationNs": 19981700
+        },
+        {
+          "sample": 5,
+          "durationNs": 23302700
+        },
+        {
+          "sample": 6,
+          "durationNs": 25734800
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 6,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 18818300,
+      "variantMedianNs": 12178000,
+      "variantOverCurrentSpeedup": 1.5452701593036624,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 23198400
+        },
+        {
+          "sample": 1,
+          "durationNs": 16706800
+        },
+        {
+          "sample": 2,
+          "durationNs": 17902600
+        },
+        {
+          "sample": 3,
+          "durationNs": 25220300
+        },
+        {
+          "sample": 4,
+          "durationNs": 18368900
+        },
+        {
+          "sample": 5,
+          "durationNs": 18818300
+        },
+        {
+          "sample": 6,
+          "durationNs": 28332400
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 16373600
+        },
+        {
+          "sample": 1,
+          "durationNs": 13675600
+        },
+        {
+          "sample": 2,
+          "durationNs": 12799800
+        },
+        {
+          "sample": 3,
+          "durationNs": 12149300
+        },
+        {
+          "sample": 4,
+          "durationNs": 12178000
+        },
+        {
+          "sample": 5,
+          "durationNs": 12144400
+        },
+        {
+          "sample": 6,
+          "durationNs": 12092500
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 7,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 19607600,
+      "variantMedianNs": 26517600,
+      "variantOverCurrentSpeedup": 0.7394183485684979,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 21566700
+        },
+        {
+          "sample": 1,
+          "durationNs": 16546600
+        },
+        {
+          "sample": 2,
+          "durationNs": 17790300
+        },
+        {
+          "sample": 3,
+          "durationNs": 29016100
+        },
+        {
+          "sample": 4,
+          "durationNs": 19607600
+        },
+        {
+          "sample": 5,
+          "durationNs": 19144200
+        },
+        {
+          "sample": 6,
+          "durationNs": 27713200
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 31364100
+        },
+        {
+          "sample": 1,
+          "durationNs": 30407300
+        },
+        {
+          "sample": 2,
+          "durationNs": 26517600
+        },
+        {
+          "sample": 3,
+          "durationNs": 30409400
+        },
+        {
+          "sample": 4,
+          "durationNs": 24440700
+        },
+        {
+          "sample": 5,
+          "durationNs": 23602900
+        },
+        {
+          "sample": 6,
+          "durationNs": 21076200
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 8,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 29101800,
+      "variantMedianNs": 30382300,
+      "variantOverCurrentSpeedup": 0.9578537503743956,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 48628200
+        },
+        {
+          "sample": 1,
+          "durationNs": 35926600
+        },
+        {
+          "sample": 2,
+          "durationNs": 29101800
+        },
+        {
+          "sample": 3,
+          "durationNs": 31851900
+        },
+        {
+          "sample": 4,
+          "durationNs": 21651200
+        },
+        {
+          "sample": 5,
+          "durationNs": 20474400
+        },
+        {
+          "sample": 6,
+          "durationNs": 27736100
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 30246400
+        },
+        {
+          "sample": 1,
+          "durationNs": 31196900
+        },
+        {
+          "sample": 2,
+          "durationNs": 30651200
+        },
+        {
+          "sample": 3,
+          "durationNs": 24851200
+        },
+        {
+          "sample": 4,
+          "durationNs": 30382300
+        },
+        {
+          "sample": 5,
+          "durationNs": 32948400
+        },
+        {
+          "sample": 6,
+          "durationNs": 27181800
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 9,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 25575100,
+      "variantMedianNs": 14902100,
+      "variantOverCurrentSpeedup": 1.7162077827957134,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 28529500
+        },
+        {
+          "sample": 1,
+          "durationNs": 25575100
+        },
+        {
+          "sample": 2,
+          "durationNs": 23736600
+        },
+        {
+          "sample": 3,
+          "durationNs": 32257300
+        },
+        {
+          "sample": 4,
+          "durationNs": 21888600
+        },
+        {
+          "sample": 5,
+          "durationNs": 21667500
+        },
+        {
+          "sample": 6,
+          "durationNs": 36497800
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 15119900
+        },
+        {
+          "sample": 1,
+          "durationNs": 15001800
+        },
+        {
+          "sample": 2,
+          "durationNs": 14902100
+        },
+        {
+          "sample": 3,
+          "durationNs": 16196200
+        },
+        {
+          "sample": 4,
+          "durationNs": 14845900
+        },
+        {
+          "sample": 5,
+          "durationNs": 13545600
+        },
+        {
+          "sample": 6,
+          "durationNs": 14313300
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 10,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 33382000,
+      "variantMedianNs": 22565900,
+      "variantOverCurrentSpeedup": 1.4793117048289677,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 51233200
+        },
+        {
+          "sample": 1,
+          "durationNs": 33382000
+        },
+        {
+          "sample": 2,
+          "durationNs": 29930900
+        },
+        {
+          "sample": 3,
+          "durationNs": 40191100
+        },
+        {
+          "sample": 4,
+          "durationNs": 21297800
+        },
+        {
+          "sample": 5,
+          "durationNs": 20952700
+        },
+        {
+          "sample": 6,
+          "durationNs": 34176400
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 19465700
+        },
+        {
+          "sample": 1,
+          "durationNs": 22565900
+        },
+        {
+          "sample": 2,
+          "durationNs": 26124500
+        },
+        {
+          "sample": 3,
+          "durationNs": 18974800
+        },
+        {
+          "sample": 4,
+          "durationNs": 17687700
+        },
+        {
+          "sample": 5,
+          "durationNs": 31205900
+        },
+        {
+          "sample": 6,
+          "durationNs": 36752800
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 11,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 51405500,
+      "variantMedianNs": 33024500,
+      "variantOverCurrentSpeedup": 1.5565867764841255,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 46820800
+        },
+        {
+          "sample": 1,
+          "durationNs": 33020000
+        },
+        {
+          "sample": 2,
+          "durationNs": 41917200
+        },
+        {
+          "sample": 3,
+          "durationNs": 77580800
+        },
+        {
+          "sample": 4,
+          "durationNs": 57528600
+        },
+        {
+          "sample": 5,
+          "durationNs": 51405500
+        },
+        {
+          "sample": 6,
+          "durationNs": 91443200
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 35383300
+        },
+        {
+          "sample": 1,
+          "durationNs": 33533800
+        },
+        {
+          "sample": 2,
+          "durationNs": 33024500
+        },
+        {
+          "sample": 3,
+          "durationNs": 33508700
+        },
+        {
+          "sample": 4,
+          "durationNs": 28874400
+        },
+        {
+          "sample": 5,
+          "durationNs": 25378500
+        },
+        {
+          "sample": 6,
+          "durationNs": 26831600
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 12,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 17145200,
+      "variantMedianNs": 39894500,
+      "variantOverCurrentSpeedup": 0.429763501234506,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 24593100
+        },
+        {
+          "sample": 1,
+          "durationNs": 17145200
+        },
+        {
+          "sample": 2,
+          "durationNs": 16801900
+        },
+        {
+          "sample": 3,
+          "durationNs": 23618400
+        },
+        {
+          "sample": 4,
+          "durationNs": 16648400
+        },
+        {
+          "sample": 5,
+          "durationNs": 16130000
+        },
+        {
+          "sample": 6,
+          "durationNs": 22090800
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 31340300
+        },
+        {
+          "sample": 1,
+          "durationNs": 27485700
+        },
+        {
+          "sample": 2,
+          "durationNs": 31967600
+        },
+        {
+          "sample": 3,
+          "durationNs": 39894500
+        },
+        {
+          "sample": 4,
+          "durationNs": 41040000
+        },
+        {
+          "sample": 5,
+          "durationNs": 40636200
+        },
+        {
+          "sample": 6,
+          "durationNs": 48747700
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 13,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 32966300,
+      "variantMedianNs": 21602500,
+      "variantOverCurrentSpeedup": 1.5260409674806157,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 32966300
+        },
+        {
+          "sample": 1,
+          "durationNs": 20141800
+        },
+        {
+          "sample": 2,
+          "durationNs": 28491500
+        },
+        {
+          "sample": 3,
+          "durationNs": 40180800
+        },
+        {
+          "sample": 4,
+          "durationNs": 41048700
+        },
+        {
+          "sample": 5,
+          "durationNs": 26034500
+        },
+        {
+          "sample": 6,
+          "durationNs": 51671000
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 27666600
+        },
+        {
+          "sample": 1,
+          "durationNs": 29427400
+        },
+        {
+          "sample": 2,
+          "durationNs": 23695800
+        },
+        {
+          "sample": 3,
+          "durationNs": 21602500
+        },
+        {
+          "sample": 4,
+          "durationNs": 20905100
+        },
+        {
+          "sample": 5,
+          "durationNs": 16205700
+        },
+        {
+          "sample": 6,
+          "durationNs": 14574900
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 14,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 27633600,
+      "variantMedianNs": 29008100,
+      "variantOverCurrentSpeedup": 0.9526166829264929,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 37962900
+        },
+        {
+          "sample": 1,
+          "durationNs": 27633600
+        },
+        {
+          "sample": 2,
+          "durationNs": 26387800
+        },
+        {
+          "sample": 3,
+          "durationNs": 37483700
+        },
+        {
+          "sample": 4,
+          "durationNs": 22079500
+        },
+        {
+          "sample": 5,
+          "durationNs": 24335600
+        },
+        {
+          "sample": 6,
+          "durationNs": 38000500
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 29008100
+        },
+        {
+          "sample": 1,
+          "durationNs": 32561500
+        },
+        {
+          "sample": 2,
+          "durationNs": 29098500
+        },
+        {
+          "sample": 3,
+          "durationNs": 28323100
+        },
+        {
+          "sample": 4,
+          "durationNs": 29680900
+        },
+        {
+          "sample": 5,
+          "durationNs": 24726900
+        },
+        {
+          "sample": 6,
+          "durationNs": 24586100
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 15,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 27164100,
+      "variantMedianNs": 16555700,
+      "variantOverCurrentSpeedup": 1.6407702483132698,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 27164100
+        },
+        {
+          "sample": 1,
+          "durationNs": 24580000
+        },
+        {
+          "sample": 2,
+          "durationNs": 25487000
+        },
+        {
+          "sample": 3,
+          "durationNs": 38995400
+        },
+        {
+          "sample": 4,
+          "durationNs": 30486900
+        },
+        {
+          "sample": 5,
+          "durationNs": 20976500
+        },
+        {
+          "sample": 6,
+          "durationNs": 35135400
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 16605600
+        },
+        {
+          "sample": 1,
+          "durationNs": 16555700
+        },
+        {
+          "sample": 2,
+          "durationNs": 15354300
+        },
+        {
+          "sample": 3,
+          "durationNs": 15701900
+        },
+        {
+          "sample": 4,
+          "durationNs": 17353400
+        },
+        {
+          "sample": 5,
+          "durationNs": 15467700
+        },
+        {
+          "sample": 6,
+          "durationNs": 20334500
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 16,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 20399700,
+      "variantMedianNs": 45130000,
+      "variantOverCurrentSpeedup": 0.45202082871703964,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 26451000
+        },
+        {
+          "sample": 1,
+          "durationNs": 18522400
+        },
+        {
+          "sample": 2,
+          "durationNs": 17407800
+        },
+        {
+          "sample": 3,
+          "durationNs": 31624800
+        },
+        {
+          "sample": 4,
+          "durationNs": 18455500
+        },
+        {
+          "sample": 5,
+          "durationNs": 20399700
+        },
+        {
+          "sample": 6,
+          "durationNs": 25061800
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 38688400
+        },
+        {
+          "sample": 1,
+          "durationNs": 48359600
+        },
+        {
+          "sample": 2,
+          "durationNs": 37196300
+        },
+        {
+          "sample": 3,
+          "durationNs": 40017400
+        },
+        {
+          "sample": 4,
+          "durationNs": 49552400
+        },
+        {
+          "sample": 5,
+          "durationNs": 46470600
+        },
+        {
+          "sample": 6,
+          "durationNs": 45130000
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 17,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 24940400,
+      "variantMedianNs": 17953600,
+      "variantOverCurrentSpeedup": 1.3891587202566615,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 24940400
+        },
+        {
+          "sample": 1,
+          "durationNs": 18743900
+        },
+        {
+          "sample": 2,
+          "durationNs": 18109100
+        },
+        {
+          "sample": 3,
+          "durationNs": 28539300
+        },
+        {
+          "sample": 4,
+          "durationNs": 22614100
+        },
+        {
+          "sample": 5,
+          "durationNs": 26891000
+        },
+        {
+          "sample": 6,
+          "durationNs": 43037500
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 19657800
+        },
+        {
+          "sample": 1,
+          "durationNs": 15621300
+        },
+        {
+          "sample": 2,
+          "durationNs": 17953600
+        },
+        {
+          "sample": 3,
+          "durationNs": 17579200
+        },
+        {
+          "sample": 4,
+          "durationNs": 17349000
+        },
+        {
+          "sample": 5,
+          "durationNs": 18365600
+        },
+        {
+          "sample": 6,
+          "durationNs": 19764400
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 18,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 22674300,
+      "variantMedianNs": 12697100,
+      "variantOverCurrentSpeedup": 1.7857857305999008,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 38247200
+        },
+        {
+          "sample": 1,
+          "durationNs": 22674300
+        },
+        {
+          "sample": 2,
+          "durationNs": 19326400
+        },
+        {
+          "sample": 3,
+          "durationNs": 26462700
+        },
+        {
+          "sample": 4,
+          "durationNs": 16838800
+        },
+        {
+          "sample": 5,
+          "durationNs": 19273800
+        },
+        {
+          "sample": 6,
+          "durationNs": 23858500
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 13316600
+        },
+        {
+          "sample": 1,
+          "durationNs": 14800800
+        },
+        {
+          "sample": 2,
+          "durationNs": 13274000
+        },
+        {
+          "sample": 3,
+          "durationNs": 12117400
+        },
+        {
+          "sample": 4,
+          "durationNs": 12697100
+        },
+        {
+          "sample": 5,
+          "durationNs": 12406100
+        },
+        {
+          "sample": 6,
+          "durationNs": 12008700
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 19,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 25110600,
+      "variantMedianNs": 12740600,
+      "variantOverCurrentSpeedup": 1.970911887980158,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 46539200
+        },
+        {
+          "sample": 1,
+          "durationNs": 29675100
+        },
+        {
+          "sample": 2,
+          "durationNs": 25110600
+        },
+        {
+          "sample": 3,
+          "durationNs": 25368700
+        },
+        {
+          "sample": 4,
+          "durationNs": 16341300
+        },
+        {
+          "sample": 5,
+          "durationNs": 14875700
+        },
+        {
+          "sample": 6,
+          "durationNs": 20318000
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 14062300
+        },
+        {
+          "sample": 1,
+          "durationNs": 12989500
+        },
+        {
+          "sample": 2,
+          "durationNs": 13235900
+        },
+        {
+          "sample": 3,
+          "durationNs": 12740600
+        },
+        {
+          "sample": 4,
+          "durationNs": 12193400
+        },
+        {
+          "sample": 5,
+          "durationNs": 12609500
+        },
+        {
+          "sample": 6,
+          "durationNs": 12200200
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 20,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 31044500,
+      "variantMedianNs": 12873600,
+      "variantOverCurrentSpeedup": 2.411485520755655,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 29216800
+        },
+        {
+          "sample": 1,
+          "durationNs": 18548200
+        },
+        {
+          "sample": 2,
+          "durationNs": 19372100
+        },
+        {
+          "sample": 3,
+          "durationNs": 33706800
+        },
+        {
+          "sample": 4,
+          "durationNs": 31044500
+        },
+        {
+          "sample": 5,
+          "durationNs": 31708800
+        },
+        {
+          "sample": 6,
+          "durationNs": 33073300
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 13527500
+        },
+        {
+          "sample": 1,
+          "durationNs": 12873600
+        },
+        {
+          "sample": 2,
+          "durationNs": 12354400
+        },
+        {
+          "sample": 3,
+          "durationNs": 12625500
+        },
+        {
+          "sample": 4,
+          "durationNs": 12812400
+        },
+        {
+          "sample": 5,
+          "durationNs": 13775600
+        },
+        {
+          "sample": 6,
+          "durationNs": 14084100
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 21,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 19267900,
+      "variantMedianNs": 26150300,
+      "variantOverCurrentSpeedup": 0.7368137268023693,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 23639400
+        },
+        {
+          "sample": 1,
+          "durationNs": 16981400
+        },
+        {
+          "sample": 2,
+          "durationNs": 19267900
+        },
+        {
+          "sample": 3,
+          "durationNs": 26678700
+        },
+        {
+          "sample": 4,
+          "durationNs": 19067700
+        },
+        {
+          "sample": 5,
+          "durationNs": 17711500
+        },
+        {
+          "sample": 6,
+          "durationNs": 42028000
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 26150300
+        },
+        {
+          "sample": 1,
+          "durationNs": 28845200
+        },
+        {
+          "sample": 2,
+          "durationNs": 25546700
+        },
+        {
+          "sample": 3,
+          "durationNs": 26063700
+        },
+        {
+          "sample": 4,
+          "durationNs": 39216200
+        },
+        {
+          "sample": 5,
+          "durationNs": 29316400
+        },
+        {
+          "sample": 6,
+          "durationNs": 24941500
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 22,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 22333800,
+      "variantMedianNs": 17789300,
+      "variantOverCurrentSpeedup": 1.2554625533326214,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 49058600
+        },
+        {
+          "sample": 1,
+          "durationNs": 30381800
+        },
+        {
+          "sample": 2,
+          "durationNs": 20324700
+        },
+        {
+          "sample": 3,
+          "durationNs": 24738400
+        },
+        {
+          "sample": 4,
+          "durationNs": 16822400
+        },
+        {
+          "sample": 5,
+          "durationNs": 15612700
+        },
+        {
+          "sample": 6,
+          "durationNs": 22333800
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 17789300
+        },
+        {
+          "sample": 1,
+          "durationNs": 17995900
+        },
+        {
+          "sample": 2,
+          "durationNs": 16412200
+        },
+        {
+          "sample": 3,
+          "durationNs": 17021100
+        },
+        {
+          "sample": 4,
+          "durationNs": 17307400
+        },
+        {
+          "sample": 5,
+          "durationNs": 20938600
+        },
+        {
+          "sample": 6,
+          "durationNs": 23298400
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 23,
+      "order": [
+        "current",
+        "v011"
+      ],
+      "currentMedianNs": 31864500,
+      "variantMedianNs": 27452500,
+      "variantOverCurrentSpeedup": 1.160713960477188,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 41650300
+        },
+        {
+          "sample": 1,
+          "durationNs": 31864500
+        },
+        {
+          "sample": 2,
+          "durationNs": 29171500
+        },
+        {
+          "sample": 3,
+          "durationNs": 40145200
+        },
+        {
+          "sample": 4,
+          "durationNs": 30344100
+        },
+        {
+          "sample": 5,
+          "durationNs": 29639200
+        },
+        {
+          "sample": 6,
+          "durationNs": 42459100
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 27623800
+        },
+        {
+          "sample": 1,
+          "durationNs": 32419500
+        },
+        {
+          "sample": 2,
+          "durationNs": 26591400
+        },
+        {
+          "sample": 3,
+          "durationNs": 28562900
+        },
+        {
+          "sample": 4,
+          "durationNs": 27452500
+        },
+        {
+          "sample": 5,
+          "durationNs": 24626000
+        },
+        {
+          "sample": 6,
+          "durationNs": 23580000
+        }
+      ]
+    },
+    {
+      "workload": "effect/create-dispose",
+      "variant": "v011",
+      "iterations": 78528,
+      "pair": 24,
+      "order": [
+        "v011",
+        "current"
+      ],
+      "currentMedianNs": 18516900,
+      "variantMedianNs": 24509900,
+      "variantOverCurrentSpeedup": 0.7554865584926908,
+      "currentSamples": [
+        {
+          "sample": 0,
+          "durationNs": 24724100
+        },
+        {
+          "sample": 1,
+          "durationNs": 18479800
+        },
+        {
+          "sample": 2,
+          "durationNs": 18516900
+        },
+        {
+          "sample": 3,
+          "durationNs": 28505500
+        },
+        {
+          "sample": 4,
+          "durationNs": 18048400
+        },
+        {
+          "sample": 5,
+          "durationNs": 16844500
+        },
+        {
+          "sample": 6,
+          "durationNs": 22655300
+        }
+      ],
+      "variantSamples": [
+        {
+          "sample": 0,
+          "durationNs": 33686500
+        },
+        {
+          "sample": 1,
+          "durationNs": 25250800
+        },
+        {
+          "sample": 2,
+          "durationNs": 24710900
+        },
+        {
+          "sample": 3,
+          "durationNs": 24509900
+        },
+        {
+          "sample": 4,
+          "durationNs": 19224900
+        },
+        {
+          "sample": 5,
+          "durationNs": 14804800
+        },
+        {
+          "sample": 6,
+          "durationNs": 13519600
+        }
+      ]
+    }
+  ]
+}
