@@ -60,6 +60,6 @@ The root coverage gap was restored with focused tests of the existing execution-
 - `pnpm test:coverage` passed both suites. Root coverage: statements 93.50%, branches 85.45%, functions 97.43%, lines 94.95%. Transform coverage: statements 92.50%, branches 91.05%, functions 94.57%, lines 96.37%.
 - `pnpm typecheck`, `pnpm lint`, and `pnpm build` passed. Lint reported existing warnings only.
 
-The post-fix GitHub Actions Test and E2E results are pending the push of this validation commit. Package versions remain `0.1.1`; M3 has not begun.
+The validation commit `84c6f4fe68ee8e431ef933dd921a9efcee381004` was pushed to `main`. GitHub Actions [Test run 36561524863](https://github.com/sakzw/react-fine-grained-signals/actions/runs/36561524863) and [E2E run 36561524855](https://github.com/sakzw/react-fine-grained-signals/actions/runs/36561524855) both completed successfully. Test passed lint, typecheck, coverage, build, size, and consumer smoke; E2E passed build, preparation, app typecheck, and browser tests.
 
-**Decision: M2 remains open until Test and E2E both succeed on the final pushed HEAD. Do not begin M3 before that CI closure.**
+This closure record is being committed separately, so its own Test and E2E workflows must also complete successfully before M2 is considered fully closed. Package versions remain `0.1.1`; M3 has not begun.
