@@ -128,6 +128,8 @@ export interface AlienDerivedGraphRuntime {
   readonly hasActiveSubscriber: () => boolean;
   readonly getBatchDepth: () => number;
   readonly createDeepSignal: <T>(initialValue: T) => RuntimeWritable<T>;
+  /** Creates an internal per-key DeepSignal version source with liveness-aware writes. */
+  readonly createDeepSignalVersion: <T>(initialValue: T) => RuntimeWritable<T>;
   readonly markDeepSignalWatched: (readable: object) => void;
   readonly hasDeepSignalSubscribers: (readable: object) => boolean;
   readonly getRenderVersion: (readable: object) => number;

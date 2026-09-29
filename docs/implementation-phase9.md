@@ -368,3 +368,9 @@ M1.5.1 then validated a shared lexical-owner adapter architecture and recorded p
 The final accepted implementation is C3, directly compared against frozen M1.5.3 production. The eight-round authoritative M1b run is complete, the full per-case paired throughput ratios and spread are recorded in [the M1.5.4 closure](implementation-phase9-m1.5.4.md), and all correctness, allocation-shape, and frozen package-size checks passed. C3 improves the source/create and computed/create paths over M1.5.3 with no repeatable material regression in the direct paired comparison. Residual v0.1.1 gaps and gains are retained as case-specific optimization evidence; they do not change the already-attributed release decision.
 
 **Decision A — Phase 9 performance validation is closed; M2 may begin next.** No M2 implementation is included in this record.
+
+#### M1.6 — Source hot-path production recovery
+
+The follow-up at [`implementation-phase9-source-hot-path-recovery.md`](implementation-phase9-source-hot-path-recovery.md) supersedes the earlier M1.3.1 closure recommendation for the current tree. It removes DeepSignal membership classification from ordinary signal writes while preserving a dedicated liveness-aware DeepSignal writer. The focused candidate measured 2.18× v0.1.1 for unobserved writes and 1.58× for write/read in the eight-round matrix; separate read prototypes did not improve source reads and were rejected.
+
+The full candidate matrix found stable `source/create` (0.69×, 8/8 slower rounds) and `effect/create-dispose` (0.80×, 8/8 slower rounds) regressions that still need M1.1 attribution. `source/read` was 0.84× with wide spread and remains inconclusive. **Phase 9 performance is not closed; M2 must not begin until targeted attribution resolves these remaining rows.** The result directory is `benchmarks/phase9/results/source-hot-path-recovery-2026-09-29/`.

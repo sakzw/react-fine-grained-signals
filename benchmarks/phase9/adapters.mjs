@@ -40,6 +40,10 @@ export async function loadAdapter(runtimeId) {
   };
 
   switch (runtimeId) {
+    case "rfsg-W0": {
+      const api = await import("./source-hot-path/variants/W0/dist/index.js");
+      return adaptRfsg(api, runtimeId);
+    }
     case "rfsg-v0.1.1": {
       const api = await import("react-fine-grained-signals");
       return {

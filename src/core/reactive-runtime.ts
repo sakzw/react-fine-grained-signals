@@ -29,6 +29,7 @@ export interface ReactiveRuntime {
   hasActiveSubscriber(): boolean;
   getBatchDepth(): number;
   createDeepSignal<T>(initialValue: T): RuntimeSignal<T>;
+  createDeepSignalVersion<T>(initialValue: T): RuntimeSignal<T>;
   markDeepSignalWatched(readable: RuntimeReadonlySignal<unknown>): void;
   hasDeepSignalSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
   isSpeculative(): boolean;
@@ -54,6 +55,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
     hasActiveSubscriber: graph.hasActiveSubscriber,
     getBatchDepth: graph.getBatchDepth,
     createDeepSignal: graph.createDeepSignal,
+    createDeepSignalVersion: graph.createDeepSignalVersion,
     markDeepSignalWatched: graph.markDeepSignalWatched,
     hasDeepSignalSubscribers: graph.hasDeepSignalSubscribers,
     isSpeculative: render.isSpeculative,

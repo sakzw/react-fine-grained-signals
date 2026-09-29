@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-09-29-write-current-44368",
+  "phase": "write-current",
+  "status": "failed",
+  "preRunStateCapturedAt": "2026-09-29T01:58:47.820Z",
+  "currentHead": "6d18a71be72a3a26f09a6b541a8bd2534b110553",
+  "worktreeDirty": true,
+  "dirtyPaths": [
+    "M benchmarks/phase9/deep-signal-ab-worker.mjs",
+    " M benchmarks/phase9/source-hot-path/worker.mjs",
+    " M src/core/alien-derived-runtime-core.mts",
+    " M src/core/alien-derived-types.ts",
+    " M src/core/deep-signal-engine.ts",
+    " M src/core/deep-signal.ts",
+    " M src/core/reactive-runtime.ts",
+    "?? benchmarks/phase9/source-hot-path/recovery-runner.mjs",
+    "?? docs/implementation-phase9-source-hot-path-recovery.md"
+  ],
+  "baseline": "rfsg-W0",
+  "candidate": "rfsg-current",
+  "v011Commit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+  "environment": {
+    "node": "v24.21.0",
+    "nodeExecutable": "C:\\Users\\catro\\AppData\\Local\\Volta\\tools\\image\\node\\24.21.0\\node.exe",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     "
+  },
+  "protocol": {
+    "pairsPerWorkloadSession": 24,
+    "primarySessions": 3,
+    "controlSessions": 1,
+    "warmups": 3,
+    "samples": 7,
+    "gc": "global.gc() immediately before each warmup and measured execution",
+    "iterationFile": "benchmarks/phase9/m1b-iterations.json",
+    "iterationSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+    "pairOrder": [
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB"
+    ]
+  },
+  "sourceInputsSha256": "45d2b8d28d1ea4fa454b67822625a8980876af5ae654ccc80a723bd83bedeccc",
+  "candidateArtifact": {
+    "sha256": "4d91a3b47044b0d2a1a6f06e3f75d9264258605352ac8c534ec1510fdacaf935",
+    "fileCount": 26,
+    "requiredEntries": [
+      "index.js",
+      "jsx-runtime.js",
+      "jsx-dev-runtime.js",
+      "runtime.js",
+      "utils.js"
+    ]
+  },
+  "workloadCounts": {
+    "source/unobserved-write@1": {
+      "iterations": 1084411,
+      "frozen": true
+    },
+    "source/write-read@1": {
+      "iterations": 636392,
+      "frozen": true
+    },
+    "effect/observed-write@1": {
+      "iterations": 106279,
+      "frozen": true
+    },
+    "effect/fanout@16": {
+      "iterations": 35830,
+      "frozen": true
+    },
+    "effect/fanout@64": {
+      "iterations": 8680,
+      "frozen": true
+    },
+    "computed/dirty-read@1": {
+      "iterations": 93142,
+      "frozen": true
+    },
+    "computed/equality-suppression@1": {
+      "iterations": 62701,
+      "frozen": true
+    },
+    "batch/two-writes-one-reaction@1": {
+      "iterations": 28057,
+      "frozen": true
+    },
+    "rfsg/deepSignal-watched-leaf-write@1": {
+      "iterations": 8657,
+      "frozen": true
+    },
+    "deepSignal/many-watched-leaves@64": {
+      "iterations": 20000,
+      "frozen": false
+    },
+    "deepSignal/many-watched-leaves@1000": {
+      "iterations": 20000,
+      "frozen": false
+    }
+  },
+  "sessions": {},
+  "startedAt": "2026-09-29T01:58:47.820Z",
+  "finishedAt": "2026-09-29T01:58:49.649Z"
+}

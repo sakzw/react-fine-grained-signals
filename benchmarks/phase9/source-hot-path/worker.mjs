@@ -10,7 +10,7 @@ if (!runtimeId || !kind || !Number.isSafeInteger(iterations) || iterations < 1) 
 if (typeof global.gc !== "function") throw new Error("Run with --expose-gc.");
 
 let api;
-if (/^rfsg-R[1-5]$|^rfsg-W[1-4]$/.test(runtimeId)) {
+if (/^rfsg-(?:R[1-5]|W[0-4]|P[0-2])$/.test(runtimeId)) {
   const name = runtimeId.slice("rfsg-".length);
   const variant = await import(pathToFileURL(resolve(import.meta.dirname, `variants/${name}/dist/index.js`)));
   api = {
@@ -29,7 +29,6 @@ if (/^rfsg-R[1-5]$|^rfsg-W[1-4]$/.test(runtimeId)) {
   api = await loadAdapter(runtimeId);
 }
 
-const assert = (condition, message) => { if (!condition) throw new Error(message); };
 async function execute(count, timed) {
   const workload = createWorkload(kind, api, count, size);
   const state = workload.setup();

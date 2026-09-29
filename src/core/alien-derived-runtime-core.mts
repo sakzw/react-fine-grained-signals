@@ -518,7 +518,6 @@ function registerHelperBrand(value: object): void {
 }
 
 function inlineWrite(node: RuntimeSource, value: unknown): void {
-  if (deepSignalNodes.has(node)) deepWatchedNodes.delete(node);
   if (!Object.is(node.pendingValue, node.pendingValue = value)) {
     if (node.renderRevision !== undefined) node.renderRevision = (node.renderRevision + 1) | 0;
     node.flags = Mutable | Dirty;
@@ -528,6 +527,13 @@ function inlineWrite(node: RuntimeSource, value: unknown): void {
       if (!batchDepth) flush();
     }
   }
+}
+
+function inlineDeepSignalWrite(node: RuntimeSource, value: unknown): void {
+  // DeepSignal version sources use this specialized entry point so liveness
+  // bookkeeping stays exact without classifying every ordinary source write.
+  deepWatchedNodes.delete(node);
+  inlineWrite(node, value);
 }
 
 class HelperBrandSignal<T = unknown> {
@@ -558,6 +564,39 @@ class HelperBrandSignal<T = unknown> {
     return value as T;
   }
   set value(value: T) { inlineWrite(this.#node, value); }
+  peek(): T { return this.#node.pendingValue as T; }
+}
+
+/** Internal DeepSignal root and per-property version sources have a distinct
+ * write entry point because their liveness markers must be cleared before any
+ * write, including an Object.is-equal write. Ordinary branded signals never
+ * pay that bookkeeping cost. */
+class DeepSignalRuntimeSource<T = unknown> {
+  #node: RuntimeSource;
+  constructor(node: RuntimeSource) { this.#node = node; attachProtocol(this, node); }
+  get value(): T {
+    const node = this.#node;
+    const currentOwner = executionContext.owner;
+    if (currentOwner === undefined) {
+      const value = readSource(node);
+      const collector = activeRenderCollector;
+      if (collector !== undefined) {
+        trackRenderDependency(getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency);
+      }
+      return value as T;
+    }
+    const attempt = activeRenderAttempt;
+    if (attempt !== undefined && isRenderExecutionOwner(currentOwner) && currentOwner.runtimeToken === runtimeToken && renderAdapter !== undefined) {
+      foreignAdapter.observeRevision(node);
+      return renderAdapter.readSource(this, node, attempt) as T;
+    }
+    const value = readSource(node);
+    if ((isGraphExecutionOwner(currentOwner) || isRenderExecutionOwner(currentOwner)) && currentOwner.runtimeToken !== runtimeToken) {
+      foreignAdapter.publishForeignReadable(this, node, currentOwner);
+    }
+    return value as T;
+  }
+  set value(value: T) { inlineDeepSignalWrite(this.#node, value); }
   peek(): T { return this.#node.pendingValue as T; }
 }
 function createBrandedSignal<T>(makeReadable: new (node: RuntimeSource) => RuntimeWritable<T>, initialValue: T): RuntimeWritable<T> {
@@ -603,11 +642,17 @@ function hasBrandAndPeek(value: unknown): value is { peek(): unknown } & object 
 }
 const isSignalBrandHelper = hasBrandAndPeek;
 function createDeepSignal<T>(initialValue: T): RuntimeWritable<T> {
-    const node = makeNode("source", Mutable, { currentValue: initialValue, pendingValue: initialValue });
-    const readable = new HelperBrandSignal<T>(node as RuntimeSource, false);
-    deepSignalNodes.add(node);
-    return readable;
-  }
+  const node = makeNode("source", Mutable, { currentValue: initialValue, pendingValue: initialValue });
+  const readable = new DeepSignalRuntimeSource<T>(node as RuntimeSource);
+  deepSignalNodes.add(node);
+  return readable;
+}
+function createDeepSignalVersion<T>(initialValue: T): RuntimeWritable<T> {
+  const node = makeNode("source", Mutable, { currentValue: initialValue, pendingValue: initialValue });
+  const readable = new DeepSignalRuntimeSource<T>(node as RuntimeSource);
+  deepSignalNodes.add(node);
+  return readable;
+}
 function markDeepSignalWatched(readable: object): void {
     const node = foreignAdapter.getNodeForReadable(readable);
     if (node !== undefined) deepWatchedNodes.add(node);
@@ -638,7 +683,7 @@ function subscribeReadables(readables: readonly RuntimeReadable[], notify: () =>
     promoteComputed, hasSubscribers, hasActiveSubscriber, getBatchDepth,
     signal: signalClassBrandHelper, computed: computedClassBrandHelper,
     effect, batch, untracked, SIGNAL_BRAND, isSignal: isSignalBrandHelper,
-    createDeepSignal, markDeepSignalWatched, hasDeepSignalSubscribers,
+    createDeepSignal, createDeepSignalVersion, markDeepSignalWatched, hasDeepSignalSubscribers,
     getRenderVersion, subscribeReadables,
   };
 }

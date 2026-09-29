@@ -1,0 +1,376 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-09-29-write-current-11884",
+  "phase": "write-current",
+  "status": "failed",
+  "preRunStateCapturedAt": "2026-09-29T01:59:17.884Z",
+  "currentHead": "6d18a71be72a3a26f09a6b541a8bd2534b110553",
+  "worktreeDirty": true,
+  "dirtyPaths": [
+    "M benchmarks/phase9/deep-signal-ab-worker.mjs",
+    " M benchmarks/phase9/source-hot-path/worker.mjs",
+    " M src/core/alien-derived-runtime-core.mts",
+    " M src/core/alien-derived-types.ts",
+    " M src/core/deep-signal-engine.ts",
+    " M src/core/deep-signal.ts",
+    " M src/core/reactive-runtime.ts",
+    "?? benchmarks/phase9/source-hot-path/recovery-runner.mjs",
+    "?? benchmarks/phase9/source-hot-path/results/recovery-2026-09-29/",
+    "?? docs/implementation-phase9-source-hot-path-recovery.md"
+  ],
+  "baseline": "rfsg-W0",
+  "candidate": "rfsg-current",
+  "v011Commit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+  "environment": {
+    "node": "v24.21.0",
+    "nodeExecutable": "C:\\Users\\catro\\AppData\\Local\\Volta\\tools\\image\\node\\24.21.0\\node.exe",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     "
+  },
+  "protocol": {
+    "pairsPerWorkloadSession": 24,
+    "primarySessions": 3,
+    "controlSessions": 1,
+    "warmups": 3,
+    "samples": 7,
+    "gc": "global.gc() immediately before each warmup and measured execution",
+    "iterationFile": "benchmarks/phase9/m1b-iterations.json",
+    "iterationSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+    "pairOrder": [
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB"
+    ]
+  },
+  "sourceInputsSha256": "45d2b8d28d1ea4fa454b67822625a8980876af5ae654ccc80a723bd83bedeccc",
+  "candidateArtifact": {
+    "sha256": "4d91a3b47044b0d2a1a6f06e3f75d9264258605352ac8c534ec1510fdacaf935",
+    "fileCount": 26,
+    "requiredEntries": [
+      "index.js",
+      "jsx-runtime.js",
+      "jsx-dev-runtime.js",
+      "runtime.js",
+      "utils.js"
+    ]
+  },
+  "workloadCounts": {
+    "source/unobserved-write@1": {
+      "iterations": 1084411,
+      "frozen": true
+    },
+    "source/write-read@1": {
+      "iterations": 636392,
+      "frozen": true
+    },
+    "effect/observed-write@1": {
+      "iterations": 106279,
+      "frozen": true
+    },
+    "effect/fanout@16": {
+      "iterations": 35830,
+      "frozen": true
+    },
+    "effect/fanout@64": {
+      "iterations": 8680,
+      "frozen": true
+    },
+    "computed/dirty-read@1": {
+      "iterations": 93142,
+      "frozen": true
+    },
+    "computed/equality-suppression@1": {
+      "iterations": 62701,
+      "frozen": true
+    },
+    "batch/two-writes-one-reaction@1": {
+      "iterations": 28057,
+      "frozen": true
+    },
+    "rfsg/deepSignal-watched-leaf-write@1": {
+      "iterations": 8657,
+      "frozen": true
+    },
+    "deepSignal/many-watched-leaves@64": {
+      "iterations": 20000,
+      "frozen": false
+    },
+    "deepSignal/many-watched-leaves@1000": {
+      "iterations": 20000,
+      "frozen": false
+    }
+  },
+  "sessions": {
+    "source/unobserved-write@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "source/unobserved-write",
+        "size": 1,
+        "iterations": 1084411,
+        "pairs": 24,
+        "median": 2.3169743670632723,
+        "q1": 2.060266803211271,
+        "q3": 2.61296414732551,
+        "iqr": 0.5526973441142387,
+        "min": 1.0798140509395666,
+        "max": 4.809606315944327,
+        "candidateFasterPairs": 24,
+        "baselineFasterPairs": 0
+      }
+    },
+    "source/unobserved-write@1/session-2": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-2",
+        "workload": "source/unobserved-write",
+        "size": 1,
+        "iterations": 1084411,
+        "pairs": 24,
+        "median": 2.329406127063314,
+        "q1": 2.02285221356396,
+        "q3": 2.6171812448018437,
+        "iqr": 0.5943290312378835,
+        "min": 1.2049643374529524,
+        "max": 4.447859025487463,
+        "candidateFasterPairs": 24,
+        "baselineFasterPairs": 0
+      }
+    },
+    "source/unobserved-write@1/session-3": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-3",
+        "workload": "source/unobserved-write",
+        "size": 1,
+        "iterations": 1084411,
+        "pairs": 24,
+        "median": 2.2014317554185823,
+        "q1": 1.916778633028355,
+        "q3": 2.5348898448623274,
+        "iqr": 0.6181112118339724,
+        "min": 1.1817961838743425,
+        "max": 3.667509633151917,
+        "candidateFasterPairs": 24,
+        "baselineFasterPairs": 0
+      }
+    },
+    "source/write-read@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "source/write-read",
+        "size": 1,
+        "iterations": 636392,
+        "pairs": 24,
+        "median": 1.591113434642825,
+        "q1": 1.3659550213855707,
+        "q3": 1.7913263142846187,
+        "iqr": 0.42537129289904807,
+        "min": 0.9008634494420886,
+        "max": 3.3826132475111237,
+        "candidateFasterPairs": 22,
+        "baselineFasterPairs": 2
+      }
+    },
+    "source/write-read@1/session-2": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-2",
+        "workload": "source/write-read",
+        "size": 1,
+        "iterations": 636392,
+        "pairs": 24,
+        "median": 1.4340058671485145,
+        "q1": 1.2560199341900846,
+        "q3": 1.8487269213817934,
+        "iqr": 0.5927069871917088,
+        "min": 0.7458886780518659,
+        "max": 2.5984219791273735,
+        "candidateFasterPairs": 21,
+        "baselineFasterPairs": 3
+      }
+    },
+    "source/write-read@1/session-3": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-3",
+        "workload": "source/write-read",
+        "size": 1,
+        "iterations": 636392,
+        "pairs": 24,
+        "median": 1.5388293563375708,
+        "q1": 1.2414322805583078,
+        "q3": 1.7358966491875245,
+        "iqr": 0.4944643686292167,
+        "min": 0.7923381123011343,
+        "max": 2.1956599321926364,
+        "candidateFasterPairs": 22,
+        "baselineFasterPairs": 2
+      }
+    },
+    "effect/observed-write@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "effect/observed-write",
+        "size": 1,
+        "iterations": 106279,
+        "pairs": 24,
+        "median": 1.1275613972672067,
+        "q1": 0.9192444499248476,
+        "q3": 1.4004453805551496,
+        "iqr": 0.481200930630302,
+        "min": 0.5655055433147973,
+        "max": 2.2516477051779322,
+        "candidateFasterPairs": 14,
+        "baselineFasterPairs": 10
+      }
+    },
+    "effect/fanout@16/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "effect/fanout",
+        "size": 16,
+        "iterations": 35830,
+        "pairs": 24,
+        "median": 0.9665829822349664,
+        "q1": 0.8944065866417532,
+        "q3": 1.0966790061676317,
+        "iqr": 0.2022724195258785,
+        "min": 0.7541830655090919,
+        "max": 1.3859490125767233,
+        "candidateFasterPairs": 11,
+        "baselineFasterPairs": 13
+      }
+    },
+    "effect/fanout@64/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "effect/fanout",
+        "size": 64,
+        "iterations": 8680,
+        "pairs": 24,
+        "median": 0.9663188956585929,
+        "q1": 0.8783287123188986,
+        "q3": 1.0261257992214914,
+        "iqr": 0.14779708690259274,
+        "min": 0.7294056977836859,
+        "max": 1.1959765356633256,
+        "candidateFasterPairs": 10,
+        "baselineFasterPairs": 14
+      }
+    },
+    "computed/dirty-read@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "computed/dirty-read",
+        "size": 1,
+        "iterations": 93142,
+        "pairs": 24,
+        "median": 1.3045505782745452,
+        "q1": 1.0645462511924282,
+        "q3": 1.558159131785409,
+        "iqr": 0.4936128805929809,
+        "min": 0.5734273934338009,
+        "max": 1.9285824752757315,
+        "candidateFasterPairs": 19,
+        "baselineFasterPairs": 5
+      }
+    },
+    "computed/equality-suppression@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "computed/equality-suppression",
+        "size": 1,
+        "iterations": 62701,
+        "pairs": 24,
+        "median": 1.3045370679403379,
+        "q1": 1.146394975574509,
+        "q3": 1.370946200823217,
+        "iqr": 0.22455122524870785,
+        "min": 0.6933827472764966,
+        "max": 1.7925665973533846,
+        "candidateFasterPairs": 23,
+        "baselineFasterPairs": 1
+      }
+    },
+    "batch/two-writes-one-reaction@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "batch/two-writes-one-reaction",
+        "size": 1,
+        "iterations": 28057,
+        "pairs": 24,
+        "median": 1.1245906511529764,
+        "q1": 0.9548632928881753,
+        "q3": 1.273810035666379,
+        "iqr": 0.3189467427782038,
+        "min": 0.6829141388388815,
+        "max": 1.7539231714188073,
+        "candidateFasterPairs": 17,
+        "baselineFasterPairs": 7
+      }
+    },
+    "rfsg/deepSignal-watched-leaf-write@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "rfsg/deepSignal-watched-leaf-write",
+        "size": 1,
+        "iterations": 8657,
+        "pairs": 24,
+        "median": 0.9710686736424372,
+        "q1": 0.8869746541022336,
+        "q3": 1.1587957606827548,
+        "iqr": 0.27182110658052117,
+        "min": 0.5625224703391524,
+        "max": 1.598039439188419,
+        "candidateFasterPairs": 11,
+        "baselineFasterPairs": 13
+      }
+    }
+  },
+  "startedAt": "2026-09-29T01:59:17.884Z",
+  "finishedAt": "2026-09-29T02:04:10.230Z"
+}

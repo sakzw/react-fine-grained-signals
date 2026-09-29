@@ -18,6 +18,9 @@ function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
     createSignal<T>(initial: T) {
       return coreRuntime.createDeepSignal(initial);
     },
+    createVersionSignal<T>(initial: T) {
+      return coreRuntime.createDeepSignalVersion(initial);
+    },
     markWatched(source) { coreRuntime.markDeepSignalWatched(source); },
     hasSubscribers(source) { return coreRuntime.hasDeepSignalSubscribers(source); },
     batch,

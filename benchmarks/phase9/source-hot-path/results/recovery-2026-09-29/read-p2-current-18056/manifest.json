@@ -1,0 +1,238 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-09-29-read-p2-current-18056",
+  "phase": "read-p2-current",
+  "status": "completed",
+  "preRunStateCapturedAt": "2026-09-29T02:15:57.444Z",
+  "currentHead": "6d18a71be72a3a26f09a6b541a8bd2534b110553",
+  "worktreeDirty": true,
+  "dirtyPaths": [
+    "M benchmarks/phase9/deep-signal-ab-worker.mjs",
+    " M benchmarks/phase9/source-hot-path/worker.mjs",
+    " M src/core/alien-derived-runtime-core.mts",
+    " M src/core/alien-derived-types.ts",
+    " M src/core/deep-signal-engine.ts",
+    " M src/core/deep-signal.ts",
+    " M src/core/reactive-runtime.ts",
+    "?? benchmarks/phase9/source-hot-path/recovery-runner.mjs",
+    "?? benchmarks/phase9/source-hot-path/results/recovery-2026-09-29/",
+    "?? docs/implementation-phase9-source-hot-path-recovery.md"
+  ],
+  "baseline": "rfsg-P1",
+  "candidate": "rfsg-P2",
+  "v011Commit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+  "environment": {
+    "node": "v24.21.0",
+    "nodeExecutable": "C:\\Users\\catro\\AppData\\Local\\Volta\\tools\\image\\node\\24.21.0\\node.exe",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     "
+  },
+  "protocol": {
+    "pairsPerWorkloadSession": 24,
+    "primarySessions": 3,
+    "controlSessions": 1,
+    "warmups": 3,
+    "samples": 7,
+    "gc": "global.gc() immediately before each warmup and measured execution",
+    "iterationFile": "benchmarks/phase9/m1b-iterations.json",
+    "iterationSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+    "pairOrder": [
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB"
+    ]
+  },
+  "sourceInputsSha256": "1eee501c5ca399154562d64ad06015e8c4ab26cf7e5b8c46381a7c841fadbebf",
+  "candidateArtifact": {
+    "sha256": "31baeb01401898b57d8aaa6ef761bd021ca898c56fac4ba94374e168f5f6e8aa",
+    "fileCount": 26,
+    "requiredEntries": [
+      "index.js",
+      "jsx-runtime.js",
+      "jsx-dev-runtime.js",
+      "runtime.js",
+      "utils.js"
+    ]
+  },
+  "workloadCounts": {
+    "source/read@1": {
+      "iterations": 1693079,
+      "frozen": true
+    },
+    "source/write-read@1": {
+      "iterations": 636392,
+      "frozen": true
+    },
+    "computed/dirty-read@1": {
+      "iterations": 93142,
+      "frozen": true
+    },
+    "computed/equality-suppression@1": {
+      "iterations": 62701,
+      "frozen": true
+    },
+    "effect/observed-write@1": {
+      "iterations": 106279,
+      "frozen": true
+    }
+  },
+  "sessions": {
+    "source/read@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "source/read",
+        "size": 1,
+        "iterations": 1693079,
+        "pairs": 24,
+        "median": 0.9756507719064611,
+        "q1": 0.9215439066554322,
+        "q3": 1.070207236473509,
+        "iqr": 0.14866332981807673,
+        "min": 0.622291960341148,
+        "max": 1.4630347086312259,
+        "candidateFasterPairs": 10,
+        "baselineFasterPairs": 14
+      }
+    },
+    "source/read@1/session-2": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-2",
+        "workload": "source/read",
+        "size": 1,
+        "iterations": 1693079,
+        "pairs": 24,
+        "median": 1.017109769763163,
+        "q1": 0.9656240565267153,
+        "q3": 1.08443508401064,
+        "iqr": 0.11881102748392469,
+        "min": 0.583136496202824,
+        "max": 1.2363799778761062,
+        "candidateFasterPairs": 16,
+        "baselineFasterPairs": 8
+      }
+    },
+    "source/read@1/session-3": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-3",
+        "workload": "source/read",
+        "size": 1,
+        "iterations": 1693079,
+        "pairs": 24,
+        "median": 0.9950519680896917,
+        "q1": 0.9216099726173907,
+        "q3": 1.1298149219471156,
+        "iqr": 0.2082049493297249,
+        "min": 0.6957341275834779,
+        "max": 1.352484816690543,
+        "candidateFasterPairs": 12,
+        "baselineFasterPairs": 12
+      }
+    },
+    "source/write-read@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "source/write-read",
+        "size": 1,
+        "iterations": 636392,
+        "pairs": 24,
+        "median": 1.043388207395295,
+        "q1": 0.9473740327147206,
+        "q3": 1.1355208807398949,
+        "iqr": 0.18814684802517423,
+        "min": 0.6195113175086863,
+        "max": 2.0067146759374226,
+        "candidateFasterPairs": 15,
+        "baselineFasterPairs": 9
+      }
+    },
+    "computed/dirty-read@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "computed/dirty-read",
+        "size": 1,
+        "iterations": 93142,
+        "pairs": 24,
+        "median": 0.9550740810883094,
+        "q1": 0.8093777158261951,
+        "q3": 1.1314876211299831,
+        "iqr": 0.322109905303788,
+        "min": 0.5262209641409695,
+        "max": 1.682001576413114,
+        "candidateFasterPairs": 10,
+        "baselineFasterPairs": 14
+      }
+    },
+    "computed/equality-suppression@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "computed/equality-suppression",
+        "size": 1,
+        "iterations": 62701,
+        "pairs": 24,
+        "median": 0.9498656825669474,
+        "q1": 0.8343786583631236,
+        "q3": 1.153645305920014,
+        "iqr": 0.3192666475568904,
+        "min": 0.6518210556566721,
+        "max": 1.6759473078328244,
+        "candidateFasterPairs": 10,
+        "baselineFasterPairs": 14
+      }
+    },
+    "effect/observed-write@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "effect/observed-write",
+        "size": 1,
+        "iterations": 106279,
+        "pairs": 24,
+        "median": 1.002389302107713,
+        "q1": 0.8625595077073307,
+        "q3": 1.0755666579788714,
+        "iqr": 0.2130071502715407,
+        "min": 0.7016164562067575,
+        "max": 2.8486859569949563,
+        "candidateFasterPairs": 12,
+        "baselineFasterPairs": 12
+      }
+    }
+  },
+  "startedAt": "2026-09-29T02:15:57.444Z",
+  "finishedAt": "2026-09-29T02:17:51.329Z"
+}

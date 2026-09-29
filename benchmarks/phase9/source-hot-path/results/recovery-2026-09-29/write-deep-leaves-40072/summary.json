@@ -1,0 +1,32 @@
+[
+  {
+    "session": "session-1",
+    "workload": "deepSignal/many-watched-leaves",
+    "size": 64,
+    "iterations": 20000,
+    "pairs": 24,
+    "median": 0.9620932000447071,
+    "q1": 0.9468437400182629,
+    "q3": 1.1304301975078308,
+    "iqr": 0.18358645748956792,
+    "min": 0.8041112521689959,
+    "max": 1.3765725054802485,
+    "candidateFasterPairs": 11,
+    "baselineFasterPairs": 13
+  },
+  {
+    "session": "session-1",
+    "workload": "deepSignal/many-watched-leaves",
+    "size": 1000,
+    "iterations": 20000,
+    "pairs": 24,
+    "median": 1.021367690381156,
+    "q1": 0.8639271941131272,
+    "q3": 1.104339771680342,
+    "iqr": 0.2404125775672148,
+    "min": 0.6973378550333226,
+    "max": 1.321094338543107,
+    "candidateFasterPairs": 13,
+    "baselineFasterPairs": 11
+  }
+]

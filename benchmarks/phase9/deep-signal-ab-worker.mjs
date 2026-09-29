@@ -1,4 +1,6 @@
 import { loadAdapter } from "./adapters.mjs";
+import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const input = JSON.parse(process.argv[2] ?? "{}");
 const { runtimeId, workload, iterations, size = 1, warmups, samples } = input;
@@ -14,7 +16,26 @@ if (!Number.isSafeInteger(warmups) || warmups < 0 || !Number.isSafeInteger(sampl
 }
 if (typeof global.gc !== "function") throw new Error("DeepSignal measurements require --expose-gc.");
 
-const api = await loadAdapter(runtimeId);
+let api;
+if (/^rfsg-(?:W0|P[0-2])$/.test(runtimeId)) {
+  const name = runtimeId.slice("rfsg-".length);
+  const variant = await import(pathToFileURL(resolve(import.meta.dirname, `source-hot-path/variants/${name}/dist/index.js`)));
+  api = {
+    runtimeId,
+    signal: variant.signal,
+    read: (source) => source.value,
+    write: (source, value) => { source.value = value; },
+    computed: variant.computed,
+    readComputed: (value) => value.value,
+    effect: variant.effect,
+    dispose: (stop) => stop(),
+    batch: variant.batch,
+    supportsBatch: true,
+    deepSignal: variant.deepSignal,
+  };
+} else {
+  api = await loadAdapter(runtimeId);
+}
 if (typeof api.deepSignal !== "function") throw new Error(`${runtimeId} does not provide deepSignal.`);
 
 function verifyDeepSignalSemantics() {
@@ -85,7 +106,7 @@ function makeRepresentativeState(index) {
 function makeWorkload() {
   if (workload === "deepSignal/create") {
     const inputs = Array.from({ length: iterations }, (_, index) => makeRepresentativeState(index));
-    const outputs = new Array(iterations);
+    const outputs = Array.from({ length: iterations });
     return {
       run() {
         for (let index = 0; index < iterations; index += 1) outputs[index] = api.deepSignal(inputs[index]);
@@ -166,7 +187,7 @@ function makeWorkload() {
   if (workload === "deepSignal/many-watched-leaves") {
     if (!Number.isSafeInteger(size) || size < 1) throw new Error("Many-leaf workload needs a positive size.");
     const state = api.deepSignal({ leaves: Array.from({ length: size }, () => ({ value: 0 })) });
-    const runs = new Array(size).fill(0);
+    const runs = Array.from({ length: size }, () => 0);
     const stops = Array.from({ length: size }, (_, leaf) => api.effect(() => {
       state.value.leaves[leaf].value;
       runs[leaf] += 1;

@@ -1,0 +1,62 @@
+[
+  {
+    "session": "session-1",
+    "workload": "source/read",
+    "size": 1,
+    "iterations": 1693079,
+    "pairs": 24,
+    "median": 0.8729035488962035,
+    "q1": 0.7412971126364571,
+    "q3": 0.9868438995254174,
+    "iqr": 0.24554678688896026,
+    "min": 0.5571933193152351,
+    "max": 1.4538053376123488,
+    "candidateFasterPairs": 5,
+    "baselineFasterPairs": 19
+  },
+  {
+    "session": "session-2",
+    "workload": "source/read",
+    "size": 1,
+    "iterations": 1693079,
+    "pairs": 24,
+    "median": 0.8961206446071781,
+    "q1": 0.7573620201604219,
+    "q3": 0.9826465659861954,
+    "iqr": 0.2252845458257735,
+    "min": 0.6047242698452747,
+    "max": 1.2332660631137469,
+    "candidateFasterPairs": 5,
+    "baselineFasterPairs": 19
+  },
+  {
+    "session": "session-3",
+    "workload": "source/read",
+    "size": 1,
+    "iterations": 1693079,
+    "pairs": 24,
+    "median": 0.870003020395133,
+    "q1": 0.7459774856440928,
+    "q3": 0.95235936297767,
+    "iqr": 0.20638187733357716,
+    "min": 0.6569511573013307,
+    "max": 1.2052469490473674,
+    "candidateFasterPairs": 4,
+    "baselineFasterPairs": 20
+  },
+  {
+    "session": "session-1",
+    "workload": "source/write-read",
+    "size": 1,
+    "iterations": 636392,
+    "pairs": 24,
+    "median": 1.4965138272396268,
+    "q1": 1.2240428135212829,
+    "q3": 1.573576095576828,
+    "iqr": 0.34953328205554524,
+    "min": 0.586574779407097,
+    "max": 2.027915086202899,
+    "candidateFasterPairs": 21,
+    "baselineFasterPairs": 3
+  }
+]

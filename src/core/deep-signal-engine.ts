@@ -19,7 +19,10 @@ export interface DeepSignalLike<T extends object> {
 }
 
 export interface DeepSignalRuntimeAdapter {
+  /** Creates the root source behind the public DeepSignal wrapper. */
   createSignal<T>(initial: T): DeepSignalSource<T>;
+  /** Creates an internal property/existence/iteration version source. */
+  createVersionSignal<T>(initial: T): DeepSignalSource<T>;
   markWatched(source: DeepSignalSource<unknown>): void;
   hasSubscribers(source: DeepSignalSource<unknown>): boolean;
   batch<T>(callback: () => T): T;
@@ -673,7 +676,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   ): VersionSignal => {
     let version = versions.get(key);
     if (version === undefined) {
-      version = adapter.createSignal<number>(0);
+      version = adapter.createVersionSignal<number>(0);
       versions.set(key, version);
     }
     return version;
@@ -746,7 +749,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
 
   const trackIteration = (metadata: PropertyMetadata): void => {
     if (!shouldTrackDeepRead()) return;
-    metadata.iteration ??= adapter.createSignal(0);
+    metadata.iteration ??= adapter.createVersionSignal(0);
     metadata.iteration.value;
   };
 

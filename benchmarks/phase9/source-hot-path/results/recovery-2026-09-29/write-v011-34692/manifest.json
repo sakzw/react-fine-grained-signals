@@ -1,0 +1,207 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-09-29-write-v011-34692",
+  "phase": "write-v011",
+  "status": "completed",
+  "preRunStateCapturedAt": "2026-09-29T02:07:57.726Z",
+  "currentHead": "6d18a71be72a3a26f09a6b541a8bd2534b110553",
+  "worktreeDirty": true,
+  "dirtyPaths": [
+    "M benchmarks/phase9/deep-signal-ab-worker.mjs",
+    " M benchmarks/phase9/source-hot-path/worker.mjs",
+    " M src/core/alien-derived-runtime-core.mts",
+    " M src/core/alien-derived-types.ts",
+    " M src/core/deep-signal-engine.ts",
+    " M src/core/deep-signal.ts",
+    " M src/core/reactive-runtime.ts",
+    "?? benchmarks/phase9/source-hot-path/recovery-runner.mjs",
+    "?? benchmarks/phase9/source-hot-path/results/recovery-2026-09-29/",
+    "?? docs/implementation-phase9-source-hot-path-recovery.md"
+  ],
+  "baseline": "rfsg-v0.1.1",
+  "candidate": "rfsg-current",
+  "v011Commit": "0e12bbf46ab098fbb2388704ab85c3c406189cbb",
+  "environment": {
+    "node": "v24.21.0",
+    "nodeExecutable": "C:\\Users\\catro\\AppData\\Local\\Volta\\tools\\image\\node\\24.21.0\\node.exe",
+    "platform": "win32",
+    "arch": "x64",
+    "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     "
+  },
+  "protocol": {
+    "pairsPerWorkloadSession": 24,
+    "primarySessions": 3,
+    "controlSessions": 1,
+    "warmups": 3,
+    "samples": 7,
+    "gc": "global.gc() immediately before each warmup and measured execution",
+    "iterationFile": "benchmarks/phase9/m1b-iterations.json",
+    "iterationSha256": "fb549096642e48eda6ba9f50485e67b41079d2178dbd2ba607c6931106d5f056",
+    "pairOrder": [
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "AB",
+      "BA",
+      "AB",
+      "BA",
+      "BA",
+      "AB",
+      "BA",
+      "AB"
+    ]
+  },
+  "sourceInputsSha256": "45d2b8d28d1ea4fa454b67822625a8980876af5ae654ccc80a723bd83bedeccc",
+  "candidateArtifact": {
+    "sha256": "4d91a3b47044b0d2a1a6f06e3f75d9264258605352ac8c534ec1510fdacaf935",
+    "fileCount": 26,
+    "requiredEntries": [
+      "index.js",
+      "jsx-runtime.js",
+      "jsx-dev-runtime.js",
+      "runtime.js",
+      "utils.js"
+    ]
+  },
+  "workloadCounts": {
+    "source/unobserved-write@1": {
+      "iterations": 1084411,
+      "frozen": true
+    },
+    "source/write-read@1": {
+      "iterations": 636392,
+      "frozen": true
+    }
+  },
+  "sessions": {
+    "source/unobserved-write@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "source/unobserved-write",
+        "size": 1,
+        "iterations": 1084411,
+        "pairs": 24,
+        "median": 1.9886973882802588,
+        "q1": 1.6566806629727102,
+        "q3": 2.147209183286585,
+        "iqr": 0.49052852031387495,
+        "min": 1.3458863842510163,
+        "max": 3.7155193847275862,
+        "candidateFasterPairs": 24,
+        "baselineFasterPairs": 0
+      }
+    },
+    "source/unobserved-write@1/session-2": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-2",
+        "workload": "source/unobserved-write",
+        "size": 1,
+        "iterations": 1084411,
+        "pairs": 24,
+        "median": 2.089919221625336,
+        "q1": 1.7737164861784964,
+        "q3": 2.48531906874476,
+        "iqr": 0.7116025825662637,
+        "min": 1.0835234531848879,
+        "max": 3.6623078687772423,
+        "candidateFasterPairs": 24,
+        "baselineFasterPairs": 0
+      }
+    },
+    "source/unobserved-write@1/session-3": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-3",
+        "workload": "source/unobserved-write",
+        "size": 1,
+        "iterations": 1084411,
+        "pairs": 24,
+        "median": 1.887054421588485,
+        "q1": 1.6479042249118456,
+        "q3": 2.2930578646111965,
+        "iqr": 0.6451536396993509,
+        "min": 1.21548178613396,
+        "max": 3.992127689525604,
+        "candidateFasterPairs": 24,
+        "baselineFasterPairs": 0
+      }
+    },
+    "source/write-read@1/session-1": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-1",
+        "workload": "source/write-read",
+        "size": 1,
+        "iterations": 636392,
+        "pairs": 24,
+        "median": 1.4124413638363893,
+        "q1": 1.343838578229094,
+        "q3": 1.6030657837864641,
+        "iqr": 0.2592272055573701,
+        "min": 0.9579086894108977,
+        "max": 2.328707000650215,
+        "candidateFasterPairs": 22,
+        "baselineFasterPairs": 2
+      }
+    },
+    "source/write-read@1/session-2": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-2",
+        "workload": "source/write-read",
+        "size": 1,
+        "iterations": 636392,
+        "pairs": 24,
+        "median": 1.4063104750136475,
+        "q1": 1.2888851387867089,
+        "q3": 1.5987027282723456,
+        "iqr": 0.30981758948563676,
+        "min": 0.7603810860213068,
+        "max": 2.7818245588126707,
+        "candidateFasterPairs": 21,
+        "baselineFasterPairs": 3
+      }
+    },
+    "source/write-read@1/session-3": {
+      "status": "completed",
+      "pairs": 24,
+      "summary": {
+        "session": "session-3",
+        "workload": "source/write-read",
+        "size": 1,
+        "iterations": 636392,
+        "pairs": 24,
+        "median": 1.4377289829540452,
+        "q1": 1.1331412556168026,
+        "q3": 1.7409425938436316,
+        "iqr": 0.607801338226829,
+        "min": 0.727321687922411,
+        "max": 2.1213119469632633,
+        "candidateFasterPairs": 18,
+        "baselineFasterPairs": 6
+      }
+    }
+  },
+  "startedAt": "2026-09-29T02:07:57.726Z",
+  "finishedAt": "2026-09-29T02:09:43.212Z"
+}
