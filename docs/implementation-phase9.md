@@ -388,3 +388,7 @@ The accepted production runtime was confirmed from clean committed HEAD `efbe51e
 The clean matrix preserved ordinary-write recovery (`source/unobserved-write` `1.87×`, `source/write-read` `1.39×` current/v0.1.1). It retained the known `source/create` gap (`0.81×`) and the explained `effect/create-dispose` cost (`0.83×`). A surprising `effect/create` row (`0.70×`, 7/8 rounds slower) was checked against raw samples and a 24-pair fresh-process follow-up; the follow-up was `0.973×` with 13/24 pairs favoring v0.1.1, consistent with the previous `1.002×` 4/8 result and not a stable material regression. Contextual Alien/Vue comparisons retained the expected workload-specific mixed profile, and retained-heap medians showed no dramatic increase. Detailed ratios, spread, contextual comparisons, and allocation data are recorded in the linked analysis.
 
 **Decision A — Phase 9 performance validation is closed.** No new material unexplained regression was found. Known residual costs remain optimization evidence rather than release blockers. M2 Release Hardening may begin next; no M2 implementation is included in this record.
+
+### M2 — Release hardening closure
+
+M2 closed the v0.1.1 API migration, migration documentation, and packed-consumer entry-point findings without changing runtime behavior or package versions. The migration guides, packed public-entry checks, validation results, and M3 readiness decision are recorded in [implementation-phase9-m2.md](implementation-phase9-m2.md). No benchmark was run in M2.

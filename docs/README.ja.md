@@ -6,6 +6,8 @@
 
 ライブラリの使い方です。
 
+- [v0.2への移行](migration-v0.2.ja.md) — v0.1.1からのAPIとdependencyの変更点。
+
 - [コアプリミティブ](core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`、`isSignal`。
 - [Reactフック](hooks.ja.md) — `useSignalTracking`、`useSignal`、`useDeepSignal`、`useComputed`、`useSignalEffect`、低レベルselector hooks。
 - [グローバルステート](global-state.ja.md) — module scopeのsignalをストアとして使う方法と、SSRで必要になるリクエストごとのストア。

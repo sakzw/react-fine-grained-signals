@@ -158,6 +158,48 @@ try {
     throw new Error('The published manifest must keep "sideEffects": false for tree-shaking');
   }
 
+  // Import the packed public entries as an installed consumer would. The
+  // fixture's TS file covers declaration resolution; this runtime check covers
+  // actual package export maps and the minimum usable shape of every adapter.
+  const entryContractPath = join(consumerRoot, "entry-contract.mjs");
+  await writeFile(entryContractPath, `
+    import { Fragment, jsxDEV } from "react-fine-grained-signals/jsx-dev-runtime";
+    import generic, { pluginName, reactFineGrainedSignals } from "unplugin-react-fine-grained-signals";
+    import vite from "unplugin-react-fine-grained-signals/vite";
+    import rollup from "unplugin-react-fine-grained-signals/rollup";
+    import webpack from "unplugin-react-fine-grained-signals/webpack";
+    import rspack from "unplugin-react-fine-grained-signals/rspack";
+    import esbuild from "unplugin-react-fine-grained-signals/esbuild";
+
+    if (typeof jsxDEV !== "function" || Fragment === undefined) {
+      throw new Error("The packed jsx-dev-runtime must export jsxDEV and Fragment");
+    }
+    if (generic !== reactFineGrainedSignals || pluginName !== "unplugin-react-fine-grained-signals") {
+      throw new Error("The generic unplugin entry must expose its named public plugin");
+    }
+    const raw = generic.raw({});
+    if (raw.name !== pluginName || typeof raw.transform !== "function") {
+      throw new Error("The generic unplugin entry must create a usable raw plugin");
+    }
+    for (const [name, create] of [["vite", vite], ["rollup", rollup]]) {
+      const plugin = create({});
+      if (plugin.name !== pluginName || typeof plugin.transform !== "function") {
+        throw new Error(name + " entry must create a named transform plugin");
+      }
+    }
+    for (const [name, create] of [["webpack", webpack], ["rspack", rspack]]) {
+      if (typeof create({}).apply !== "function") {
+        throw new Error(name + " entry must create a compiler plugin with apply()");
+      }
+    }
+    const esbuildPlugin = esbuild({});
+    if (esbuildPlugin.name !== pluginName || typeof esbuildPlugin.setup !== "function") {
+      throw new Error("The esbuild entry must create a named plugin with setup()");
+    }
+    console.log("Packed jsx-dev-runtime and unplugin public entries passed.");
+  `);
+  await run(process.execPath, [entryContractPath], consumerRoot);
+
   await run(
     pnpmInvocation.command,
     [...pnpmInvocation.prefixArguments, "exec", "tsc", "--noEmit"],

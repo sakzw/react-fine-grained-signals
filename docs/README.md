@@ -6,6 +6,8 @@
 
 How to use the library.
 
+- [Migration to v0.2](migration-v0.2.md) — API and dependency changes from v0.1.1.
+
 - [Core primitives](core-primitives.md) — `signal`, `computed`, `effect`, `batch`, `untracked`, `deepSignal`, and `isSignal`.
 - [React hooks](hooks.md) — `useSignalTracking`, `useSignal`, `useDeepSignal`, `useComputed`, `useSignalEffect`, and the low-level selector hooks.
 - [Global state](global-state.md) — module-scope signals as a store, and the per-request store SSR needs instead.

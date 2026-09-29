@@ -9,6 +9,7 @@ An experimental fine-grained rendering layer for React 19, built on [alien-signa
 ## Documentation
 
 See [`docs/README.md`](docs/README.md) for guides on using the library, design investigation memos, and the full documentation index.
+For upgrades from v0.1.1, see the [v0.2 migration guide](docs/migration-v0.2.md).
 
 ## Installation
 
