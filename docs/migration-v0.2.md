@@ -4,9 +4,19 @@ This guide covers the public API and dependency changes when upgrading from v0.1
 
 ## Render tracking hooks
 
-The root `useSignals()` hook is now `useSignalTracking()`. It remains the small, best-effort tracking boundary:
+v0.1.1 exposed two different hooks with the same name. Their import paths identify two different tracking contracts; migrate them separately.
+
+### Root API: bare, best-effort tracking
+
+The root `useSignals()` became the root `useSignalTracking()`:
 
 ```tsx
+// v0.1.1
+import { useSignals } from "react-fine-grained-signals";
+```
+
+```tsx
+// v0.2
 import { useSignalTracking } from "react-fine-grained-signals";
 
 function Counter() {
@@ -15,9 +25,19 @@ function Counter() {
 }
 ```
 
-For exact render tracking, import `useManagedSignals()` from `/runtime` and finish its scope synchronously in `finally`:
+This is the small, best-effort tracking boundary.
+
+### `/runtime` API: managed, exact tracking
+
+The separate `/runtime` `useSignals()` alias became `/runtime` `useManagedSignals()`:
 
 ```tsx
+// v0.1.1
+import { useSignals } from "react-fine-grained-signals/runtime";
+```
+
+```tsx
+// v0.2
 import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 function Counter() {
@@ -30,7 +50,7 @@ function Counter() {
 }
 ```
 
-When the transform plugin is available, its default `transform: "managed"` mode is the recommended exact boundary and inserts this `try/finally` scope automatically. Manual `useManagedSignals()` is the plugin-free alternative. The advanced `transform: "inject"` mode inserts best-effort `useSignalTracking()` instead.
+This is the managed, exact render-tracking boundary. When the transform plugin is available, its default `transform: "managed"` mode is the recommended exact boundary and inserts this `try/finally` scope automatically. Manual `useManagedSignals()` is the plugin-free alternative. The advanced `transform: "inject"` mode inserts the root best-effort `useSignalTracking()` boundary instead.
 
 ## Managed scope method
 

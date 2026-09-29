@@ -4,9 +4,19 @@
 
 ## 描画追跡フック
 
-rootの `useSignals()` は `useSignalTracking()` に変わりました。これは小さなbest-effort追跡境界です。
+v0.1.1には、同じ名前の異なるhookが2つありました。import pathごとに追跡契約が異なるため、それぞれ分けて移行してください。
+
+### root API: bare / best-effort追跡
+
+rootの `useSignals()` はrootの `useSignalTracking()` に変わりました。
 
 ```tsx
+// v0.1.1
+import { useSignals } from "react-fine-grained-signals";
+```
+
+```tsx
+// v0.2
 import { useSignalTracking } from "react-fine-grained-signals";
 
 function Counter() {
@@ -15,9 +25,19 @@ function Counter() {
 }
 ```
 
-正確な描画追跡には `/runtime` から `useManagedSignals()` をimportし、`finally` でscopeを同期的に終了します。
+これは小さなbest-effort追跡境界です。
+
+### `/runtime` API: managed / exact追跡
+
+別APIである `/runtime` の `useSignals()` aliasは、`/runtime` の `useManagedSignals()` に変わりました。
 
 ```tsx
+// v0.1.1
+import { useSignals } from "react-fine-grained-signals/runtime";
+```
+
+```tsx
+// v0.2
 import { useManagedSignals } from "react-fine-grained-signals/runtime";
 
 function Counter() {
@@ -30,7 +50,7 @@ function Counter() {
 }
 ```
 
-transform pluginを利用できる場合は、既定の `transform: "managed"` が推奨される正確な境界であり、この `try/finally` scopeを自動挿入します。手動の `useManagedSignals()` はpluginを使わない場合の選択肢です。高度な `transform: "inject"` modeでは、代わりにbest-effortの `useSignalTracking()` が挿入されます。
+これはmanaged / exactな描画追跡境界です。transform pluginを利用できる場合は、既定の `transform: "managed"` が推奨される正確な追跡境界であり、この `try/finally` scopeを自動挿入します。手動の `useManagedSignals()` はpluginを使わない場合の選択肢です。高度な `transform: "inject"` modeでは、代わりにrootのbest-effort境界 `useSignalTracking()` が挿入されます。
 
 ## Managed scopeのmethod
 
