@@ -8,11 +8,17 @@ A signal is an ordinary value that lives wherever you put it, so a global store 
 // store.ts
 import { deepSignal, signal } from "react-fine-grained-signals";
 
+export interface Task {
+  title: string;
+  done: boolean;
+}
+
 export const theme = signal<"light" | "dark">("light");
 export const board = deepSignal({ filter: "all", tasks: [] as Task[] });
 ```
 
 ```tsx
+import { useSignalTracking } from "react-fine-grained-signals";
 import { board, theme } from "./store.js";
 
 function FilterBadge() {
@@ -37,7 +43,7 @@ Development can hide all three: a dev server invalidates and re-evaluates module
 
 ### What does not leak
 
-Subscriptions do not. A server render never commits — the tracking hook's commit-phase layout effect falls back to `useEffect` on the server, and React does not run effects during `renderToString` or `renderToPipeableStream` — so `commit()` never runs and nothing ever subscribes to a signal on the server. Render tracking on the server is inert bookkeeping; it is the values that cross the request boundary, not the listeners.
+Subscriptions do not. The tracking hooks and `useSignalValue()` subscribe through `useSyncExternalStore`'s `subscribe` and through layout and passive effects, and direct host bindings attach through a ref. During `renderToString` or `renderToPipeableStream`, React calls none of these: it reads the server snapshot, runs no effects, and attaches no refs. So nothing ever subscribes to a signal on the server. Render tracking on the server is inert bookkeeping; it is the values that cross the request boundary, not the listeners.
 
 The exception is `effect()` called at module scope. That runs at import time, on the server too, and its disposer is never called, so it holds its dependencies for the life of the process. Keep module-scope effects out of code that is loaded on the server, or start them from `useSignalEffect()` instead.
 
@@ -46,6 +52,17 @@ The exception is `effect()` called at module scope. That runs at import time, on
 Export a factory rather than the signals, create it once per request, and pass it down:
 
 ```ts
+import { useRef } from "react";
+import { computed, deepSignal } from "react-fine-grained-signals";
+import type { Task } from "./store.js";
+
+// A deterministic seed; see below.
+function seedState() {
+  return { tasks: [] as Task[] };
+}
+
+export type TaskStore = ReturnType<typeof createTaskStore>;
+
 export function createTaskStore() {
   const state = deepSignal(seedState());
   const remaining = computed(() => state.value.tasks.filter((task) => !task.done).length);
@@ -71,6 +88,6 @@ A module-scope signal is still fine under SSR when nothing writes to it per requ
 
 **A store in its own package.** RFSG package copies own independent runtimes and can exchange reactive reads through a private same-global protocol, so a store package does not need to resolve the same `alien-signals` module as its consumer. Cross-copy batches remain local and are not atomic across runtimes. `SIGNAL_BRAND` identity and reactive interoperability are separate contracts; see [the packaging note](../../development/design/packaging.md) and [Core primitives](./core-primitives.md#issignal).
 
-**Tests.** Vitest gives each test *file* a fresh module registry, not each test, so a module-scope signal carries its value from one `it()` to the next within a file. Reset it in `beforeEach`, or create the state inside the test — the tests in this repository create their signals inside each `it()` for exactly this reason.
+**Tests.** Vitest gives each test *file* a fresh module registry, not each test, so a module-scope signal carries its value from one `it()` to the next within a file. Reset it in `beforeEach`, or create the state inside each test.
 
 See also: [React hooks](./hooks.md), [Core primitives](./core-primitives.md), [Rendering optimization](./rendering-optimization.md).

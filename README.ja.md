@@ -17,6 +17,11 @@ v0.1.1からの移行については[v0.2移行ガイド](./docs/migration/v0.2.
 pnpm add react-fine-grained-signals
 ```
 
+React(19以降)はpeer dependencyで、Node.js 22以降が必要です。packageはESMのみで、
+entry pointと型を `exports` で公開しているため、`react-fine-grained-signals/utils`
+やJSXランタイムを解決するには、TypeScriptの `moduleResolution` を `bundler`、
+`node16`、`nodenext` のいずれかにしてください。
+
 ## セットアップ
 
 プリミティブとフックは、installした時点で動作します。buildツールやコンパイラの設定は不要です。
@@ -71,6 +76,7 @@ pnpm add -D unplugin-react-fine-grained-signals
 
 ```ts
 // vite.config.ts
+import { defineConfig } from "vite";
 import signals from "unplugin-react-fine-grained-signals/vite";
 
 export default defineConfig({

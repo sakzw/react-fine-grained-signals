@@ -143,7 +143,11 @@ of Hooks forbid. Recognition covers the inline definition site
 (`items.map((item) => …)`), a callback factored out and referenced by its own
 binding, whether that binding is a `const` (`const Row = …; items.map(Row)`) or
 a function declaration (`function Row() {…}` … `items.map(Row)`), and the
-optional-chained form of either (`items?.map(Row)`). Such a callback is left
+optional-chained form of either (`items?.map(Row)`). The `mapFn` of
+`Array.from(arrayLike, mapFn)` (`Array.from({ length: 5 }, Star)`) counts the
+same way, and so does a component held in an object that is destructured before
+being passed (`const { Row } = parts; items.map(Row)`, or `{ Row: Item }`).
+Such a callback is left
 alone, and its JSX and `.value` reads are collected by the component that
 invokes it — including when the callback is defined elsewhere in the same
 module, so that component is transformed even when its own body reads no
@@ -169,7 +173,7 @@ An anonymous or arrow function passed the same way —
 `observer((props) => …)` — carries no name for a boundary to attach to, and is
 left untransformed.
 
-This detection has four known limitations:
+This detection has five known limitations:
 
 - A re-assigned alias is not followed, so a PascalCase helper reached through
   `const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
@@ -186,6 +190,11 @@ This detection has four known limitations:
   `@noSignalTracking` comment.
 - A callback imported from another module is not followed, because the
   transform sees one file at a time.
+- A callback reached through an object key (`items.map(parts.Row)`, or
+  `const { Row } = parts` first) is kept off a boundary, but in `auto` mode its
+  `.value` reads are not credited to the caller. A caller that reads no signal
+  itself is then left untransformed and does not update; read the signal in the
+  caller, use `mode: "all"`, or add `@signalTracking` to the caller.
 - A function used in both roles keeps the exclusion. If `Row` is passed to
   `map` / `flatMap` / `forEach` anywhere in the module and is *also* rendered
   independently as a JSX tag (`<Row item={x} />`), the render-callback usage

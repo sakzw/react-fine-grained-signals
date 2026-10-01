@@ -139,7 +139,10 @@ Rules of Hooksに反するからです。認識するのは、定義箇所にinl
 （`items.map((item) => …)`）、変数に切り出してその束縛名で参照して渡す場合
 （`const` の `const Row = …; items.map(Row)` でも、function宣言の
 `function Row() {…}` … `items.map(Row)` でも）、およびそれぞれのoptional
-chaining形（`items?.map(Row)`）です。こうしたcallback自体は変換せず、そのJSXと
+chaining形（`items?.map(Row)`）です。`Array.from(arrayLike, mapFn)` の `mapFn`
+（`Array.from({ length: 5 }, Star)`）も同じ扱いで、objectに保持したcomponentを
+分割代入してから渡す場合（`const { Row } = parts; items.map(Row)` や
+`{ Row: Item }`）も同様です。こうしたcallback自体は変換せず、そのJSXと
 `.value` 読み取りは呼び出し元のcomponentが収集します。callbackが同じmodule内の
 別の場所で定義されている場合も同様で、呼び出し元componentの本体自体がsignalを
 読んでいなくても、そのcomponentが変換対象になります。
@@ -162,7 +165,7 @@ PascalCaseの名前を持っていればよく、`observer(function Row() { … 
 arrow関数（`observer((props) => …)`）は、boundaryを結び付けるための名前を
 持たないため、変換されないままです。
 
-この検出には既知の制約が4つあります。
+この検出には既知の制約が5つあります。
 
 - 再代入したaliasはたどりません。`const RowAlias = Row; items.map(RowAlias)`
   経由で渡したPascalCaseのhelperは、componentとして扱われたままになります。
@@ -177,6 +180,12 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   `@noSignalTracking` コメントで意図を明示してください。
 - 別moduleからimportしたcallbackはたどりません。変換は1ファイルずつ処理する
   ためです。
+- objectのkey経由で渡すcallback（`items.map(parts.Row)`、または先に
+  `const { Row } = parts` とする場合）はboundaryの対象から外れますが、`auto`
+  modeではその `.value` 読み取りが呼び出し元の分として扱われません。呼び出し元
+  自身がsignalを読んでいないと、呼び出し元は変換されず更新されません。呼び出し元で
+  signalを読むか、`mode: "all"` を使うか、呼び出し元に `@signalTracking` を
+  付けてください。
 - 2つの役割を兼ねる関数は、除外されたままになります。`Row` をmodule内のどこかで
   `map` / `flatMap` / `forEach` に渡していて、なおかつ別の場所でJSXタグとして
   単独でrenderしている（`<Row item={x} />`）場合、render callbackとしての用法が

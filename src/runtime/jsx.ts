@@ -191,7 +191,8 @@ type FailureEpisode = { hasReported: boolean };
  * the module doc: these write straight to the DOM from a subscription mounted
  * alongside the element's ref, bypassing React's render, so the owning
  * component never re-renders). A `computed()` whose getter throws caches and
- * rethrows that error on every read (see `computed()` in src/core/base.ts) —
+ * rethrows that error on every read (see `updateComputed` in
+ * src/core/alien-derived-runtime-core.mts) —
  * if `source` is such a computed and it starts failing after the binding is
  * already mounted, an unguarded read here could throw from the subscription's
  * update callback while processing the write. The direct V1 watcher contains
@@ -202,8 +203,8 @@ type FailureEpisode = { hasReported: boolean };
  * this cycle is skipped (the DOM is left at its last successful value) and
  * the failure is reported with `console.error(message, { cause: error })` —
  * assert against `mock.calls[i][1].cause` in tests, the same shape used by
- * `computed()`'s own error report (src/core/base.ts) and by
- * `render-tracking.ts`. Reporting is intentional here too: a direct binding
+ * `effect()`'s failure report (`reportFailure` in
+ * src/core/alien-derived-runtime-core.mts) and by `render-tracking.ts`. Reporting is intentional here too: a direct binding
  * has no Error Boundary or other surface to fall back on, and silence would
  * mean a binding that mysteriously stops updating with zero trace.
  *
@@ -499,7 +500,7 @@ function setStyleProperty(style: CSSStyleDeclaration, key: string, value: unknow
  * Applies a whole style object to an element, clearing keys that were present
  * in a previous call but are absent from this one. Only the coarse
  * `style={signal}` form is bound this way — an object whose individual entries
- * are themselves signals is out of scope (see docs/direct-binding-value-checked-style.md).
+ * are themselves signals is out of scope (see development/design/direct-binding-value-checked-style.md).
  */
 function applyStyle(node: HTMLElement, value: unknown, previousKeys: readonly string[]): string[] {
   // A non-object value (an `any`-typed or otherwise unchecked caller passing
@@ -835,7 +836,7 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
       // internal React guard (skipping a same-value write) rather than a
       // documented one. Substituting the uncontrolled prop instead means
       // React only ever reads it once, at mount, and never touches this
-      // property again — see docs/direct-binding-value-checked-style.md.
+      // property again — see development/design/direct-binding-value-checked-style.md.
       delete props[name];
       props[uncontrolledName] = readInitialValue(value, kind);
     } else {

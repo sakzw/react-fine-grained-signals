@@ -117,7 +117,7 @@ function Row() {
 ## useSignalValue
 
 ```ts
-useSignalValue<T>(source: ReadonlySignal<T>): T
+useSignalValue<T>(source: ReadonlySignal<T>): T // deepSignalはコンパイル時に拒否されます
 ```
 
 1つのsignalを購読し、現在の値を返します。コンポーネント全体の `useSignalTracking()` ウィンドウではなく、名前の付いた購読を1つだけ張りたい場合の低レベルAPIです。

@@ -117,7 +117,7 @@ See [the React Compiler compatibility note](../../development/design/react-compi
 ## useSignalValue
 
 ```ts
-useSignalValue<T>(source: ReadonlySignal<T>): T
+useSignalValue<T>(source: ReadonlySignal<T>): T // a deepSignal is rejected at compile time
 ```
 
 Subscribes to a single signal and returns its current value. This is the low-level explicit leaf subscription, for when you want one named subscription instead of a component-wide `useSignalTracking()` window.

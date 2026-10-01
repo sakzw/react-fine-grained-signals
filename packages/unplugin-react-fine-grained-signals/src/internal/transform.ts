@@ -912,9 +912,32 @@ function isRenderCallbackCallee(callee: t.Node): boolean {
  * reach the former from the latter.
  */
 function isRenderCallbackInvocation(call: t.Node, callback: t.Node): boolean {
+  const argument = getRenderCallbackArgument(call);
+  return argument !== undefined && argument === callback;
+}
+
+/**
+ * The argument slot of `call` that a known iteration method invokes once per
+ * item: argument 0 of `items.map` / `flatMap` / `forEach`, and argument 1 --
+ * the `mapFn` -- of `Array.from(arrayLike, mapFn)`, which builds an element per
+ * item exactly as `map` does (`Array.from({ length: 5 }, Star)`). Only a
+ * plain `Array` identifier counts as the callee's object; a shadowing local
+ * `Array` with its own `from` is not worth a scope lookup here, and matching it
+ * errs toward the crash-safe side (no hook in the callback).
+ */
+function getRenderCallbackArgument(call: t.Node): t.Node | undefined {
   const parts = getCallParts(call);
-  if (parts === undefined || !isRenderCallbackCallee(parts.callee)) return false;
-  return parts.arguments[0] === callback;
+  if (parts === undefined) return undefined;
+  if (isRenderCallbackCallee(parts.callee)) return parts.arguments[0];
+  const callee = unwrapTransparent(parts.callee);
+  if (
+    t.isMemberExpression(callee) &&
+    t.isIdentifier(callee.object, { name: "Array" }) &&
+    getReadPropertyName(callee) === "from"
+  ) {
+    return parts.arguments[1];
+  }
+  return undefined;
 }
 
 /**
@@ -1046,7 +1069,7 @@ function getKeyedSlotUses(access: { origin: NodePath; root: string; keys: string
   const uses: NodePath[] = [];
   for (const rootPath of binding.referencePaths) {
     let current: NodePath | undefined = rootPath;
-    for (const key of access.keys) {
+    for (const [index, key] of access.keys.entries()) {
       const member: NodePath | null = current.parentPath;
       if (
         member === null ||
@@ -1054,6 +1077,12 @@ function getKeyedSlotUses(access: { origin: NodePath; root: string; keys: string
         member.node.object !== current.node ||
         getReadPropertyName(member.node) !== key
       ) {
+        // `const { Row } = parts` reads the last key into a binding of its
+        // own, so that binding's references reach the slot just as
+        // `parts.Row` does -- `items.map(Row)` then runs the keyed function
+        // per item. Only this one-step destructuring of the final key is
+        // followed; deeper patterns and re-assigned aliases are not.
+        if (index === access.keys.length - 1) uses.push(...getDestructuredSlotUses(current, key));
         current = undefined;
         break;
       }
@@ -1062,6 +1091,30 @@ function getKeyedSlotUses(access: { origin: NodePath; root: string; keys: string
     if (current !== undefined) uses.push(climbTransparentWrappers(current));
   }
   return uses;
+}
+
+/**
+ * The references of the binding that `const { key } = object` or
+ * `const { key: Alias } = object` creates, when `object` is the node that
+ * initializes that declarator; nothing otherwise.
+ */
+function getDestructuredSlotUses(object: NodePath, key: string): NodePath[] {
+  const declarator = object.parentPath;
+  if (
+    declarator === null ||
+    !declarator.isVariableDeclarator() ||
+    declarator.node.init !== object.node ||
+    !t.isObjectPattern(declarator.node.id)
+  ) {
+    return [];
+  }
+  for (const property of declarator.node.id.properties) {
+    if (!t.isObjectProperty(property) || !t.isIdentifier(property.value)) continue;
+    if (getPropertyKeyName(property) !== key) continue;
+    const alias = declarator.scope.getBinding(property.value.name);
+    return alias === undefined ? [] : alias.referencePaths.map((reference) => climbTransparentWrappers(reference));
+  }
+  return [];
 }
 
 /** Is `slot` the callee of a plain or optional-chained call -- `Row()`, `Row?.()`, `ns.Row!()`? */
@@ -1602,9 +1655,9 @@ function inspectFunction(
   const foldReferencedRenderCallbacks = (
     call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
   ): void => {
-    // Only argument 0 can ever be the callback (see `isRenderCallbackInvocation`),
-    // so there is no need to scan the rest of the argument list for it.
-    const argument = call.node.arguments[0];
+    // Only one argument slot can ever be the callback (see
+    // `getRenderCallbackArgument`), so there is no need to scan the rest.
+    const argument = getRenderCallbackArgument(call.node);
     if (argument === undefined) return;
     // The wrapper node is what occupies the argument slot, so the position
     // check compares against `argument` itself; only the name has to be read

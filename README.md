@@ -17,6 +17,11 @@ For upgrades from v0.1.1, see the [v0.2 migration guide](./docs/migration/v0.2.m
 pnpm add react-fine-grained-signals
 ```
 
+React (19 or newer) is a peer dependency, and Node.js 22 or newer is required.
+The package is ESM-only and publishes its entry points and types through
+`exports`, so TypeScript needs `moduleResolution` set to `bundler`, `node16`, or
+`nodenext` to resolve `react-fine-grained-signals/utils` and the JSX runtime.
+
 ## Setup
 
 The primitives and hooks work as soon as the package is installed — no build
@@ -85,6 +90,7 @@ It then needs a bundler entry point — `/vite`, `/rollup`, `/webpack`,
 
 ```ts
 // vite.config.ts
+import { defineConfig } from "vite";
 import signals from "unplugin-react-fine-grained-signals/vite";
 
 export default defineConfig({

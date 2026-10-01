@@ -419,4 +419,11 @@ The chronology after the freeze is:
    - an undocumented runtime/plugin coupling;
    - a pack path that could ship a stale `dist`.
 3. The [post-M3 release review closure](./post-m3-release-review-closure.md) fixed or documented exactly those six. It added regression tests that fail on the RC and a `prepack` build for both packages, and reran the complete gate. Versions stay `0.2.0`. Other findings from the review are deferred and listed there.
-4. The final RC is the closure commit. It requires a fresh full validation (recorded in the closure document) and a fresh GitHub Actions Test/E2E pass before any tag or publish. No tag, push, publish, or GitHub Release has been performed.
+4. The closure commit `5d6370b` passed the full validation recorded in the closure document, and was pushed. Its GitHub Actions Test/E2E succeeded. No tag, publish, or GitHub Release has been performed.
+5. After `5d6370b` passed Test/E2E, a final pre-release follow-up did four things (see the [closure record](./post-m3-release-review-closure.md#final-pre-release-follow-up)):
+   - corrected the cross-generation wording in the migration guide;
+   - reproduced and fixed two transform callback gaps, `Array.from(…, Star)` and a destructured keyed `Row` passed to `map`, which crashed with a hook-count error;
+   - cleaned up documentation and comment findings;
+   - recorded the remaining behavior-changing findings as deferred.
+
+   That commit needs its own Test/E2E pass before tagging.

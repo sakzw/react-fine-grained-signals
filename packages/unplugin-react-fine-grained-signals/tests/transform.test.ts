@@ -2705,3 +2705,79 @@ describe("object-method shorthand components", () => {
     expect(hasBoundary(output, "Page")).toBe(true);
   });
 });
+
+describe("render callbacks reached through Array.from or a destructured keyed slot", () => {
+  it("keeps Array.from's mapFn off a boundary of its own", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      function Star() { return <span>{count.value}</span>; }
+      export function Rating() { return Array.from({ length: 5 }, Star); }
+    `, "all");
+
+    expect(output).toMatch(/function Star\(\) \{\s+return <span>/);
+    expect(output.match(/finally/g)).toHaveLength(1);
+  });
+
+  it("only treats Array.from's second argument as the callback", () => {
+    // \`other.from\` is not Array.from, and argument 0 of Array.from is the
+    // array-like, not a callback, so both components keep their boundaries.
+    const output = compile(`
+      const count = { value: 1 };
+      const other = { from: (a, b) => b };
+      function Star() { return <span>{count.value}</span>; }
+      function Badge() { return <b>{count.value}</b>; }
+      export function A() { return other.from([], Star); }
+      export function B() { return Array.from(Badge); }
+    `, "auto");
+
+    expect(output).toMatch(/function Star\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toMatch(/function Badge\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+
+  it("keeps a keyed function destructured and handed to map off a boundary", () => {
+    const shorthand = compile(`
+      const count = { value: 1 };
+      const parts = { Row: (item) => <li>{count.value}{item}</li> };
+      export function List({ items }) { const { Row } = parts; return <ul>{items.map(Row)}</ul>; }
+    `, "all");
+    const renamed = compile(`
+      const count = { value: 1 };
+      const parts = { Row: (item) => <li>{count.value}{item}</li> };
+      export function List({ items }) { const { Row: Item } = parts; return <ul>{items.map(Item)}</ul>; }
+    `, "all");
+    const called = compile(`
+      const count = { value: 1 };
+      const parts = { Row: () => <li>{count.value}</li> };
+      export function List() { const { Row } = parts; return <ul>{Row()}</ul>; }
+    `, "all");
+
+    for (const output of [shorthand, renamed, called]) {
+      expect(output).toMatch(/Row: \(?\w*\)? => <li>/);
+      expect(output.match(/finally/g)).toHaveLength(1);
+    }
+  });
+
+  it("lets an annotated caller own the keyed callback's reads in auto mode", () => {
+    const source = `
+      const count = { value: 1 };
+      const parts = { Row: (item) => <li>{count.value}{item}</li> };
+      export function List({ items }) { const { Row } = parts; return <ul>{items.map(Row)}</ul>; }
+    `;
+    // auto mode does not credit a keyed callback's reads to its caller, so an
+    // unannotated caller that reads nothing itself is left alone (documented).
+    expect(compile(source, "auto")).toBe(source);
+    const annotated = compile(source.replace("export function List", "/* @signalTracking */ export function List"), "auto");
+    expect(annotated.match(/finally/g)).toHaveLength(1);
+    expect(annotated).toMatch(/Row: \(?item\)? => <li>/);
+  });
+
+  it("keeps the boundary when the destructured keyed component is mounted as JSX", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      const parts = { Row: () => <li>{count.value}</li> };
+      export function List() { const { Row } = parts; return <ul><Row /></ul>; }
+    `, "auto");
+
+    expect(output).toMatch(/Row: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
+});

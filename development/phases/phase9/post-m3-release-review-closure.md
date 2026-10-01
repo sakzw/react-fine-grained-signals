@@ -269,8 +269,121 @@ These items from the same review are deliberately not part of this closure. They
 - benchmark artifact cleanup
 - helper class renaming (`HelperBrandSignal`)
 - `useSignal(() => value)` lazy initializer
+- bound `title`/`id` updated to `null` leave an empty attribute instead of removing it (present since v0.1)
+- `auto` mode does not detect destructured reads (`const { value } = count`)
+- `auto` mode does not credit a keyed callback's reads (`items.map(parts.Row)`, or a destructured `Row`) to its caller. This is now documented as a README limitation; the callback itself is safely kept off a boundary.
+- the "anonymous default export left untransformed" warning also fires for files that read no signal
+- `include`/`exclude` receive raw bundler IDs (path separators differ by bundler on Windows)
+- render-callback detection beyond `map`/`flatMap`/`forEach`, `Array.from`'s `mapFn`, and one-step destructuring of a keyed slot: re-assigned aliases (`const Alias = Row`, already a documented limitation), deeper patterns, and render props
 
-No release-blocking defect outside the six items was found while working.
+No release-blocking defect outside the six items was found while working. The final pre-release follow-up below found and fixed two more.
+
+## Final pre-release follow-up
+
+This follow-up was done after the closure commit `5d6370b` was pushed and its Test/E2E runs succeeded. It had three parts:
+- correct the cross-generation migration wording;
+- investigate two transform callback gaps as possible release blockers;
+- clean up review findings that are documentation- or comment-only.
+
+### Cross-generation migration wording
+
+**Reproduction.** A probe rendered the published v0.1.1 package next to the v0.2 sources under jsdom, in both directions:
+
+| Use of the other generation's signal | Result |
+| --- | --- |
+| JSX child | Throws "Objects are not valid as a React child" |
+| Host prop | Passed through as an ordinary value: `class`, `title`, and `value` become `"[object Object]"`; `hidden` and `disabled` are set while the signal holds `false`; a later write changes nothing |
+| `Show` `when`, `Match` `when` | The object is truthy, so the content renders for a `signal(false)` |
+
+**Change.** `docs/migration/v0.2.md` and `docs/migration/v0.2.ja.md` now state the unsupported status first, then the outcome for each place a signal can be used. No compatibility behavior was added.
+
+### Transform callback gaps (release blockers, fixed)
+
+Both gaps reproduced. The RC transform gave the per-item function its own `useManagedSignals()` boundary:
+- `function Star() {…}` passed as `Array.from({ length: 5 }, Star)`;
+- `const parts = { Row: () => … }` used as `const { Row } = parts; items.map(Row)`.
+
+Rendered through the existing execution harness, both crashed with "Rendered more hooks than during the previous render" as soon as the length or the item count changed. The same gap applied to `{ Row: Item }` and to a destructured `Row()` plain call.
+
+**Fix** (`transform.ts`):
+- `getRenderCallbackArgument` now names the per-item argument slot. It is argument 0 of `map`/`flatMap`/`forEach`, as before, and argument 1 of `Array.from(arrayLike, mapFn)` when the callee object is the identifier `Array`.
+- `isRenderCallbackInvocation` and the caller-side read fold both use it. So `Star` stays unwrapped, and `Rating` is transformed and owns its reads, exactly like `items.map(Star)`.
+- `getKeyedSlotUses` now also follows one-step destructuring of a keyed slot's last key (`const { Row } = parts` or `{ Row: Item }`) into that binding's references. Both by-key exclusions use this list, the render-callback one and the plain-call one, so `items.map(Row)` and `Row()` are both kept off a boundary.
+
+Deeper patterns and re-assigned aliases are not followed. JSX use of the destructured name (`<Row />`) keeps the boundary.
+
+As with the existing `items.map(parts.Row)`, `auto` mode does not credit the keyed callback's reads to the caller. A caller that reads no signal itself is then left untransformed, so the failure direction is a stale UI, not a crash. This is now listed as a known limitation in both plugin READMEs, with the workarounds (read in the caller, `mode: "all"`, or `@signalTracking` on the caller); a test pins the annotated-caller workaround.
+
+**Regression tests:**
+- `tests/react-execution.test.ts`: two cases, each asserting a single boundary and that the DOM renders, survives a length or item-count change, and stays subscribed. All four fail on the RC transform with the hook-count error.
+- `tests/transform.test.ts`, a new describe block:
+  - `Array.from` mapFn, in `all` mode;
+  - argument 0 of `Array.from` and a non-`Array` `.from` stay eligible;
+  - shorthand, renamed, and plain-call destructuring;
+  - the annotated-caller workaround;
+  - JSX use keeps the boundary.
+
+  The two cases that cover the reported gaps fail on the RC transform.
+
+**Documentation.** Both plugin READMEs now list `Array.from`'s `mapFn` and destructured keyed callbacks under render-callback detection, and add the fifth known limitation above.
+
+### Pre-release documentation and comment cleanup
+
+These changes contain no behavior change:
+- **ESM wording.** `docs/guides/rendering-optimization.md` (EN/JA) no longer tells readers to avoid `require()`. It says the plugin ships ESM only and that a CommonJS config can still `require()` it through `require(esm)`, linking the plugin README's installation section.
+- **Server rendering.** `docs/guides/global-state.md` (EN/JA) now explains why nothing subscribes on the server: `useSyncExternalStore`'s `subscribe`, effects, and refs are never run by `renderToString` or `renderToPipeableStream`. This replaces the nonexistent `useEffect` fallback and the internal `commit()` name.
+- **Migration notes** (EN/JA). Signals in array children are keyed by position (`rfgs-signal:${index}`, absent in v0.1.1), and the plugin matches `.TSX`/`.JSX` case-insensitively (`/i`, absent in the v0.1.1 regex).
+- **Root README** (EN/JA). The Vite example imports `defineConfig`. A new paragraph states that React 19+ is a peer dependency, that Node.js 22+ is required, and that `moduleResolution` must be `bundler`, `node16`, or `nodenext`, because entry points and types are published through `exports` only.
+- **`src/runtime/jsx.ts` comments.** They point to `development/design/direct-binding-value-checked-style.md`, and to `updateComputed` and `reportFailure` in `alien-derived-runtime-core.mts`, instead of the moved doc and the nonexistent `src/core/base.ts`. These are comment-only edits.
+- **Guide snippets** (EN/JA).
+  - `global-state`: the snippets now declare `Task`, `TaskStore`, and `seedState` and import `useSignalTracking`, `useRef`, `computed`, and `deepSignal`. The three snippets were extracted and type-checked with `tsc --strict` against `src`.
+  - `hooks`: the `useSignalValue` signature notes that a deepSignal is rejected at compile time.
+  - `rendering-optimization`: "the tracking boundary note" links to its anchor.
+  - The `global-state` "Tests" paragraph no longer refers to this repository's tests.
+- **Link to `tests/fixtures/consumer-vite`.** The `jsx-bindings` link is kept. It resolves in the repository, and it is the fixture the sentence describes.
+
+The EN and JA code blocks of every edited guide match. Every relative link and anchor in the edited documents resolves.
+
+### Follow-up validation
+
+Production transform code changed, so the complete gate was rerun without worker limits, with thresholds and budgets unchanged:
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 30 files / 370 tests; transform 5 files / 271 passed, 3 skipped (previously 262 / 3) |
+| `pnpm test:coverage` | first run: one runtime test, `concurrent.test.tsx` "keeps every sibling of a large fan-out consistent after one transitioned write", timed out at 5623 ms against the 5000 ms default while unrelated local type-check jobs were running. The same test had passed in `pnpm test` minutes earlier. No runtime code changed in this follow-up, only comments in `jsx.ts`. A standalone rerun passed: 370/370 and 271/3. |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed: both packages packed through `prepack` and installed as tarballs |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 27/27 |
+| `pnpm size` | passed, no budget change |
+| `git diff --check` | passed |
+
+Coverage, from the passing rerun:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime | 93.99% | 86.65% | 97.56% | 95.27% |
+| Transform (thresholds 92/90/92/95) | 92.62% | 90.72% | 95.45% | 96.65% |
+
+Exact gzip sizes (bytes), within budget:
+
+| Scenario | Size |
+| --- | ---: |
+| signal-only | 7038 |
+| core | 7080 |
+| core+hooks | 8707 |
+| deep | 11979 |
+| index-full | 16534 |
+| jsx-runtime | 10708 |
+| utils | 8549 |
+
+These differ from the closure's numbers only by a byte or two of chunk-hash noise; the runtime source changed only in comments.
 
 ## State
 
@@ -278,5 +391,5 @@ No release-blocking defect outside the six items was found while working.
 - `alien-signals` is still exactly `3.2.1`.
 - The v0.1 alias is still `npm:react-fine-grained-signals@0.1.1`, and the mixed-version smoke is unchanged.
 - The packed transform peer is `^0.2.0`.
-- No tag, push, publish, or GitHub Release was performed.
-- The final RC needs a fresh GitHub Actions Test/E2E pass on the closure commit before it can be tagged.
+- The closure commit `5d6370b` was pushed at the user's request, and its GitHub Actions Test/E2E succeeded. The follow-up is a separate commit and needs its own Test/E2E pass.
+- No tag, publish, or GitHub Release was performed.

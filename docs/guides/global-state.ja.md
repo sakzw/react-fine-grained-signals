@@ -8,11 +8,17 @@ signalは置いた場所で生きる普通の値なので、グローバルス�
 // store.ts
 import { deepSignal, signal } from "react-fine-grained-signals";
 
+export interface Task {
+  title: string;
+  done: boolean;
+}
+
 export const theme = signal<"light" | "dark">("light");
 export const board = deepSignal({ filter: "all", tasks: [] as Task[] });
 ```
 
 ```tsx
+import { useSignalTracking } from "react-fine-grained-signals";
 import { board, theme } from "./store.js";
 
 function FilterBadge() {
@@ -37,7 +43,7 @@ module scopeはリクエスト単位ではなくプロセス単位です。modul
 
 ### リークしないもの
 
-購読はリークしません。サーバーレンダーはコミットされないからです。追跡フックのコミット時のlayout effectはサーバーでは `useEffect` にフォールバックし、Reactは `renderToString` や `renderToPipeableStream` の最中にeffectを実行しないため、`commit()` は一度も走らず、サーバー上でsignalが購読されることはありません。サーバーでのレンダー追跡は何も生まない記帳作業であり、リクエスト境界を越えるのは値であってリスナーではありません。
+購読はリークしません。追跡フックと `useSignalValue()` は `useSyncExternalStore` の `subscribe` と、layout effectおよびpassive effectを通じて購読し、host要素への直接bindingはrefを通じて付けられます。`renderToString` や `renderToPipeableStream` の最中、Reactはこのどれも呼びません。server snapshotを読むだけで、effectを実行せず、refも付けません。そのため、サーバー上でsignalが購読されることはありません。サーバーでのレンダー追跡は何も生まない記帳作業であり、リクエスト境界を越えるのは値であってリスナーではありません。
 
 例外はmodule scopeで呼ぶ `effect()` です。これはimport時に、サーバーでも実行され、disposerが呼ばれることもないため、プロセスの寿命が尽きるまで依存を保持し続けます。サーバーで読み込まれるコードにmodule scopeのeffectを置かないか、代わりに `useSignalEffect()` から開始してください。
 
@@ -46,6 +52,17 @@ module scopeはリクエスト単位ではなくプロセス単位です。modul
 signalそのものではなくファクトリをexportし、リクエストごとに1つ作って配ります。
 
 ```ts
+import { useRef } from "react";
+import { computed, deepSignal } from "react-fine-grained-signals";
+import type { Task } from "./store.js";
+
+// A deterministic seed; see below.
+function seedState() {
+  return { tasks: [] as Task[] };
+}
+
+export type TaskStore = ReturnType<typeof createTaskStore>;
+
 export function createTaskStore() {
   const state = deepSignal(seedState());
   const remaining = computed(() => state.value.tasks.filter((task) => !task.done).length);
@@ -71,6 +88,6 @@ export function useTaskStore(): TaskStore {
 
 **ストアを別パッケージに置く場合。** RFSGの各package copyは独立したruntimeを持ち、privateなsame-global protocolを通じてリアクティブなreadを連携できるため、consumerと同じ `alien-signals` moduleを解決する必要はありません。copyをまたぐbatchは各runtime内でのみ動作し、atomicにはなりません。`SIGNAL_BRAND` によるidentity判定とreactive interopは別のcontractです。[パッケージングの検討docs](../../development/design/packaging.ja.md)と[コアプリミティブ](./core-primitives.ja.md#issignal)を参照してください。
 
-**テスト。** Vitestがまっさらなmodule registryを与えるのはテスト*ファイル*ごとであってテストごとではないため、module scopeのsignalは同一ファイル内の次の `it()` へ値を持ち越します。`beforeEach` でリセットするか、テストの内側で状態を作ってください。このリポジトリのテストが各 `it()` の中でsignalを作っているのは、まさにこの理由によるものです。
+**テスト。** Vitestがまっさらなmodule registryを与えるのはテスト*ファイル*ごとであってテストごとではないため、module scopeのsignalは同一ファイル内の次の `it()` へ値を持ち越します。`beforeEach` でリセットするか、各テストの内側で状態を作ってください。
 
 関連: [Reactフック](./hooks.ja.md)、[コアプリミティブ](./core-primitives.ja.md)、[描画最適化](./rendering-optimization.ja.md)。

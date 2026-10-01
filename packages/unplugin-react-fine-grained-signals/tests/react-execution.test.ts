@@ -305,3 +305,86 @@ export function Page() {
     expect(container.textContent).toBe("4");
   });
 });
+
+describe("a component-named function handed to Array.from as its mapFn", () => {
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const count = signal(0);
+export const length = signal(2);
+
+function Star() {
+  return <span>{count.value}</span>;
+}
+
+export function Rating() {
+  return <div>{Array.from({ length: length.value }, Star)}</div>;
+}
+`;
+
+  it("does not give the mapFn a hook boundary that runs once per item", async () => {
+    const transformed = transformReactFineGrainedSignals(source, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })?.code ?? source;
+    expect(transformed.match(/useManagedSignals\(\)/g)).toHaveLength(1);
+    expect(transformed).toMatch(/function Star\(\) \{\s+return <span>/);
+  });
+
+  it("renders, survives a length change, and stays subscribed through the caller", async () => {
+    const module = await loadModule(source);
+    const container = mount(module.Rating);
+    expect(container.textContent).toBe("00");
+
+    write(module, "length", 3);
+    expect(container.textContent).toBe("000");
+    write(module, "count", 1);
+    expect(container.textContent).toBe("111");
+    write(module, "length", 1);
+    expect(container.textContent).toBe("1");
+  });
+});
+
+describe("a keyed component destructured and handed to map", () => {
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const count = signal(0);
+export const items = signal([1, 2]);
+
+const parts = {
+  Row: (item) => <li>{count.value}:{item}</li>,
+};
+
+export function List() {
+  const { Row } = parts;
+  return <ul>{items.value.map(Row)}</ul>;
+}
+`;
+
+  it("does not give the keyed function a hook boundary that runs once per item", async () => {
+    const transformed = transformReactFineGrainedSignals(source, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })?.code ?? source;
+    expect(transformed.match(/useManagedSignals\(\)/g)).toHaveLength(1);
+    expect(transformed).toMatch(/Row: \(?item\)? => <li>/);
+  });
+
+  it("renders, survives an item-count change, and stays subscribed through the caller", async () => {
+    const module = await loadModule(source);
+    const container = mount(module.List);
+    expect(container.textContent).toBe("0:10:2");
+
+    write(module, "items", [1, 2, 3]);
+    expect(container.textContent).toBe("0:10:20:3");
+    write(module, "count", 1);
+    expect(container.textContent).toBe("1:11:21:3");
+  });
+});
