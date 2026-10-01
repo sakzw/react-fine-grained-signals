@@ -79,7 +79,7 @@ export function DevPanel({
       {/* checked={verbose} direct-binds the write direction (signal -> DOM),
           same as home.tsx's newTitle input value={}; reading the user's
           toggle back into the signal is still the ordinary onChange, which
-          direct binding does not automate away — see docs/jsx-bindings.md. */}
+          direct binding does not automate away — see docs/guides/jsx-bindings.md. */}
       <label>
         <input
           type="checkbox"

@@ -71,7 +71,7 @@ const transformedMetadataKey = "reactFineGrainedSignalsTransformed";
 // and never again: the render collector sees no dependencies on every later
 // render and drops the component's subscriptions. Opting the functions this
 // transform made reactive out of memoization keeps those reads happening.
-// See docs/design/react-compiler-compatibility.md for the measurements.
+// See development/design/react-compiler-compatibility.md for the measurements.
 const noMemoDirective = "use no memo";
 const memoizationDirectives = new Set([
   "use memo",
@@ -1221,7 +1221,7 @@ function isNestedTrackingBoundary(
 // `useCallback`/`useMemo` hand back a value reused across renders rather than
 // re-evaluated on each one. Making reads in effects, event handlers and
 // asynchronous callbacks into render dependencies is an explicit non-goal of
-// the boundary design (docs/design/use-signals-boundary-design.md), so a
+// the boundary design (development/design/use-signals-boundary-design.md), so a
 // `.value` read confined to one of these is no evidence that the surrounding
 // component subscribes to anything.
 const deferredCallbackHooks = new Set([

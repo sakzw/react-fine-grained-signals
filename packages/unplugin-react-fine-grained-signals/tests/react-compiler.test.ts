@@ -272,7 +272,7 @@ export function Counter() {
 }
 `;
 
-// The manual boundary pattern published in docs/hooks.md, hand-authored. It
+// The manual boundary pattern published in docs/guides/hooks.md, hand-authored. It
 // never goes through this package's transform (`signalsTransform: false`), so
 // nothing inserts an opt-out directive for it -- which is exactly the case
 // under measurement.

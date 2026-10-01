@@ -8,8 +8,8 @@
 
 ## ドキュメント
 
-ライブラリの使い方のガイド、設計検討メモ、ドキュメント索引全体については[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
-v0.1.1からの移行については[v0.2移行ガイド](docs/migration-v0.2.ja.md)を参照してください。
+ユーザー向けドキュメントの索引は[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
+v0.1.1からの移行については[v0.2移行ガイド](./docs/migration/v0.2.ja.md)を参照してください。
 
 ## インストール
 
@@ -57,7 +57,7 @@ function Counter() {
 
 Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じです。
 
-このランタイムが対象とするのはネイティブ要素と、意図的に絞ったpropsだけです。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。許可リスト全体と、JSXをBabelで変換するツールチェーン（`tsconfig.json` を読みません）については[JSXのsignal子要素とhost binding](docs/jsx-bindings.ja.md)を参照してください。
+このランタイムが対象とするのはネイティブ要素と、意図的に絞ったpropsだけです。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。許可リスト全体と、JSXをBabelで変換するツールチェーン（`tsconfig.json` を読みません）については[JSXのsignal子要素とhost binding](./docs/guides/jsx-bindings.ja.md)を参照してください。
 
 ### ビルドplugin — `useSignalTracking()` の自動挿入
 
@@ -78,9 +78,11 @@ export default defineConfig({
 });
 ```
 
-オプションの詳細と、フックを手書きする場合との使い分けについては[描画最適化](docs/rendering-optimization.ja.md)を参照してください。
+オプションの詳細と、フックを手書きする場合との使い分けについては[描画最適化](./docs/guides/rendering-optimization.ja.md)を参照してください。
 
 ## 開発
+
+アーキテクチャ、設計、実装履歴は[`development/README.md`](development/README.md)にまとめています。
 
 ```sh
 pnpm install --frozen-lockfile
@@ -109,4 +111,4 @@ pnpm test:browser
 
 - [alien-signals](https://www.npmjs.com/package/alien-signals) — 本パッケージが基盤とするシグナルエンジン。
 - [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — ベンチマークの比較対象。
-- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — 外部API `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](docs/design/use-signals-boundary-design.ja.md#先行事例)を参照。
+- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — 外部API `useSignals()` boundaryのstore protocol設計における先行事例。詳細は[Prior art](./development/design/use-signals-boundary-design.ja.md#先行事例)を参照。

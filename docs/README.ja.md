@@ -2,21 +2,15 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
+## 移行ガイド
+
+- [v0.2への移行](migration/v0.2.ja.md) — v0.1.1からのAPIとdependencyの変更点。
+
 ## ガイド
 
-ライブラリの使い方です。
-
-- [v0.2への移行](migration-v0.2.ja.md) — v0.1.1からのAPIとdependencyの変更点。
-
-- [コアプリミティブ](core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`、`isSignal`。
-- [Reactフック](hooks.ja.md) — `useSignalTracking`、`useSignal`、`useDeepSignal`、`useComputed`、`useSignalEffect`、低レベルselector hooks。
-- [グローバルステート](global-state.ja.md) — module scopeのsignalをストアとして使う方法と、SSRで必要になるリクエストごとのストア。
-- [描画最適化](rendering-optimization.ja.md) — 明示的な `useSignalTracking()` 追跡とbuild pluginによる自動挿入の比較。完全なオプションリファレンスについては[build pluginのdocs](../packages/unplugin-react-fine-grained-signals/README.ja.md)を参照してください。
-- [JSXのsignal子要素とhost binding](jsx-bindings.ja.md) — 独自JSXランタイムのDOM直接bindingとその制約。
-- [JSX制御フローユーティリティ](control-flow.ja.md) — `Show`、`Switch` / `Match`、`For`、`Index`。
-
-## 設計検討メモ
-
-未決定、または過去の実装判断に関する検討メモです。使い方のdocsではありません。
-
-- [`design/`](design/) — [直接バインディングの設計検討docs](design/direct-binding-value-checked-style.ja.md)、[`useSignalTracking()` 境界の設計検討docs](design/use-signals-boundary-design.ja.md)、[transform toolchainの代替候補の検討docs](design/transform-toolchain-alternatives.ja.md)、[React Compilerとの互換性の検討docs](design/react-compiler-compatibility.ja.md)、[パッケージングの検討docs](design/packaging.ja.md)を参照してください。
+- [コアプリミティブ](guides/core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`、`isSignal`。
+- [Reactフック](guides/hooks.ja.md) — `useSignalTracking`、`useSignal`、`useDeepSignal`、`useComputed`、`useSignalEffect`、selector hooks。
+- [グローバルステート](guides/global-state.ja.md) — module scopeのsignalをストアとして使う方法と、SSRで必要になるリクエストごとのストア。
+- [描画最適化](guides/rendering-optimization.ja.md) — 明示的な追跡とbuild pluginによる自動挿入。
+- [JSXのsignal子要素とhost binding](guides/jsx-bindings.ja.md) — 独自JSXランタイムのDOM直接bindingとその制約。
+- [JSX制御フローユーティリティ](guides/control-flow.ja.md) — `Show`、`Switch` / `Match`、`For`、`Index`。

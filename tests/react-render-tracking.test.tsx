@@ -122,7 +122,7 @@ describe("useSignalTracking render tracking", () => {
   // Bare useSignalTracking() only closes its collector deterministically from the
   // commit-phase layout effect; a render that never commits (throws, or is
   // discarded by Suspense) instead relies on a microtask fallback scheduled
-  // by ensureFinalCleanup() (see docs/rendering-optimization.md's "best-effort"
+  // by ensureFinalCleanup() (see docs/guides/rendering-optimization.md's "best-effort"
   // section). These two tests pin that documented fallback path itself, not
   // just its externally visible effect: start() also self-heals a dangling
   // collector the moment any *later* useSignalTracking() call runs, which would
@@ -255,7 +255,7 @@ describe("useSignalTracking render tracking", () => {
     expect(rightRenders).toHaveBeenCalledTimes(2);
   });
 
-  // Pins the documented boundary hazard (docs/hooks.md's "Tracking boundary"
+  // Pins the documented boundary hazard (docs/guides/hooks.md's "Tracking boundary"
   // section): a sibling that reads a signal without calling useSignalTracking()
   // itself gets that read attributed to whichever collector is still open,
   // not its own (nonexistent) one. This is a regression pin on the current

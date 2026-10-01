@@ -447,7 +447,7 @@ describe("computed error propagation", () => {
     // Reported once, in the codebase's `console.error(message, { cause })`
     // shape, carrying the original error — and contained there, not re-raised.
     expect(errorSpy).toHaveBeenCalledTimes(1);
-    // The literal message is pinned because docs/core-primitives.md and its
+    // The literal message is pinned because docs/guides/core-primitives.md and its
     // Japanese counterpart quote it verbatim; editing it here without editing
     // them would silently make the documented contract stale.
     expect(errorSpy.mock.calls[0]?.[0]).toBe(

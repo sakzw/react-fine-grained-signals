@@ -66,7 +66,7 @@ export default {
     `useSignalTracking()` を先頭hookとして挿入するため、手書きと同じbest-effort
     境界になります。この
     modeが露呈し得るsibling誤帰属の既知の制約については、
-    [境界設計の検討docs](../../docs/design/use-signals-boundary-design.ja.md)
+    [境界設計の検討docs](../../development/design/use-signals-boundary-design.ja.md)
     を参照してください。
 - `reactCompiler`
   - `"auto"`（既定）: 変換したすべての関数に `"use no memo"` を付け、render
@@ -74,7 +74,7 @@ export default {
     消さないようにします。付けない場合、compile済みcomponentはJSXをcacheし、
     最初のsignal書き込み以降、無言で更新が止まります。
   - `"off"`: directiveを付けません。React Compilerをbuildで使っていない場合か、
-    対象componentを[互換性の検討docs](../../docs/design/react-compiler-compatibility.ja.md)
+    対象componentを[互換性の検討docs](../../development/design/react-compiler-compatibility.ja.md)
     に照らして確認済みの場合だけ選んでください。
 - `importSource`: `react-fine-grained-signals` 互換wrapperへの置き換えです。
 - `reactImportSource`: wrapされた関数をcomponentと判定する際に、`memo` /

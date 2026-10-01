@@ -18,7 +18,7 @@ import { useManagedSignals } from "./react/use-signals.js";
  * a microtask) and misattribute a *sibling's* render-time signal read to this
  * component's store, which then silently stops updating the sibling. Every
  * branch and early return must stay inside the `try`. See
- * docs/design/use-signals-boundary-design.md.
+ * development/design/use-signals-boundary-design.md.
  */
 
 /** A plain value or a value created by `signal`, `computed`, or `deepSignal`. */

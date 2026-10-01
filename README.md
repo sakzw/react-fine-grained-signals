@@ -8,8 +8,8 @@ An experimental fine-grained rendering layer for React 19, built on [alien-signa
 
 ## Documentation
 
-See [`docs/README.md`](docs/README.md) for guides on using the library, design investigation memos, and the full documentation index.
-For upgrades from v0.1.1, see the [v0.2 migration guide](docs/migration-v0.2.md).
+See [`docs/README.md`](docs/README.md) for the user documentation index.
+For upgrades from v0.1.1, see the [v0.2 migration guide](./docs/migration/v0.2.md).
 
 ## Installation
 
@@ -67,7 +67,7 @@ configuration of its own.
 
 The runtime covers native elements only, and a deliberately narrow set of
 props. Signals passed to a React component's props or children are not
-unwrapped. See [JSX signal children and host bindings](docs/jsx-bindings.md)
+unwrapped. See [JSX signal children and host bindings](./docs/guides/jsx-bindings.md)
 for the full allow-list, and for toolchains that transform JSX through Babel,
 which do not read `tsconfig.json`.
 
@@ -92,10 +92,13 @@ export default defineConfig({
 });
 ```
 
-See [Rendering optimization](docs/rendering-optimization.md) for the options
+See [Rendering optimization](./docs/guides/rendering-optimization.md) for the options
 and for the trade-offs against calling the hook by hand.
 
 ## Development
+
+Architecture, design, and implementation history are indexed in
+[`development/README.md`](development/README.md).
 
 ```sh
 pnpm install --frozen-lockfile
@@ -125,4 +128,4 @@ Run `pnpm dev:browser` to build the transform package and inspect the same examp
 
 - [alien-signals](https://www.npmjs.com/package/alien-signals) — the signal engine this package builds on.
 - [@preact/signals-core](https://www.npmjs.com/package/@preact/signals-core) — benchmark comparison target.
-- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — prior art for the external `useSignals()` boundary's store protocol; see [Prior art](docs/design/use-signals-boundary-design.md#prior-art).
+- [@preact/signals-react](https://www.npmjs.com/package/@preact/signals-react) — prior art for the external `useSignals()` boundary's store protocol; see [Prior art](./development/design/use-signals-boundary-design.md#prior-art).

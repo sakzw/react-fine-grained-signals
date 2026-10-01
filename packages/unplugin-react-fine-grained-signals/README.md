@@ -67,7 +67,7 @@ export default {
     `useSignalTracking()` for best-effort opt-in. It inserts a normal
     `useSignalTracking()` call without rewriting control flow, so it has the same
     best-effort tracking boundary as a handwritten call — see
-    [the boundary design investigation](../../docs/design/use-signals-boundary-design.md)
+    [the boundary design investigation](../../development/design/use-signals-boundary-design.md)
     for the known sibling-misattribution limitation this mode can expose.
 - `reactCompiler`:
   - `"auto"` (default): marks every transformed function with `"use no memo"`,
@@ -76,7 +76,7 @@ export default {
     stops updating after the first signal write.
   - `"off"`: omits the directive. Choose it only when React Compiler is not in
     the build, or when the affected components were verified against
-    [the compatibility note](../../docs/design/react-compiler-compatibility.md).
+    [the compatibility note](../../development/design/react-compiler-compatibility.md).
 - `importSource`: overrides `react-fine-grained-signals` for a compatible wrapper.
 - `reactImportSource`: an additional module specifier whose `memo` and
   `forwardRef` exports count as React's own when the plugin decides whether a

@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-// These fill a gap flagged in docs/design/use-signals-boundary-design.md's
+// These fill a gap flagged in development/design/use-signals-boundary-design.md's
 // decision criteria: no test exercised startTransition, multiple concurrent
 // roots, or cross-mechanism tearing. A genuine mid-fiber yield is not
 // reproducible here without scheduler/unstable_mock (an internal React test
