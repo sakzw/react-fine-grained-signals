@@ -1963,23 +1963,66 @@ describe("components held in keyed slots", () => {
     );
   });
 
-  it("names a component held in an object-literal namespace or a class field", () => {
+  it("names a component held in an object-literal namespace", () => {
     const namespace = compile(`
       const count = { value: 1 };
       export const ns = { Home: () => <p>{count.value}</p> };
       export function App() { return <ns.Home />; }
     `, "auto");
-    const field = compile(`
-      const count = { value: 1 };
-      export class Holder {
-        Row = () => <p>{count.value}</p>;
-        static Cell = () => <p>{count.value}</p>;
-      }
-    `, "auto");
 
     expect(namespace.match(/finally/g)).toHaveLength(1);
     expect(namespace).toMatch(/Home: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
-    expect(field.match(/finally/g)).toHaveLength(2);
+  });
+
+  it("does not give a class field a hook boundary", () => {
+    // A field is reached through `this.Header` / `Page.Cell`, which the use-site
+    // walks cannot follow: `this.Header()` from `render()` or
+    // `items.map(this.Row)` would run the injected hook inside a class render.
+    const source = `
+      import { Component } from "react";
+      const count = { value: 1 };
+      export class Page extends Component {
+        Header = () => <h1>{count.value}</h1>;
+        Row = function (item) { return <li>{count.value}{item}</li>; };
+        static Cell = () => <p>{count.value}</p>;
+        useThing = () => count.value;
+        render() { return <div>{this.Header()}{this.props.items.map(this.Row)}</div>; }
+      }
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+    expect(compile(source, "all")).toBe(source);
+  });
+
+  it("ignores, and reports, an annotation on a class field", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const source = `
+        const count = { value: 1 };
+        export class Page {
+          /* @signalTracking */
+          Header = () => <h1>{count.value}</h1>;
+        }
+      `;
+
+      expect(compile(source, "manual")).toBe(source);
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("@signalTracking annotation is ignored"));
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it("keeps object, method and member-assignment slots transformed next to class fields", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export const ns = { Home: () => <p>{count.value}</p>, Footer() { return <p>{count.value}</p>; } };
+      export const Card = () => <div />;
+      Card.Header = () => <h1>{count.value}</h1>;
+      export class Holder { Row = () => <p>{count.value}</p>; }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(3);
+    expect(output).toMatch(/Row = \(\) => <p>\{count\.value\}<\/p>;/);
   });
 
   it("reads the key rather than the function's own name", () => {

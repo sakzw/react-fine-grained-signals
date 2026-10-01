@@ -564,7 +564,13 @@ function effect(fn: () => unknown, detached?: boolean): () => void {
     reportFailure(error);
   }
   if (!runDepth && !batchDepth) {
-    if (node.flags & (Dirty | Pending)) runEffect(node as RuntimeEffect);
+    // Only the stale-read bit (128, RFSG-only; set by the foreign adapter's
+    // subscription handshake, cleared by the next run's `flags` assignment)
+    // re-runs a new effect. A write its first run made to its own dependencies
+    // -- directly, or through effects it flushed -- leaves Recursed/Pending
+    // instead and, as in Alien 3.2.1 and v0.1.1, does not. The bit is a literal
+    // rather than a named constant to keep the signal-only bundle in budget.
+    if (node.flags & 128) runEffect(node as RuntimeEffect);
     if (queuedLength) flush();
   }
   return () => disposeEffect(node as RuntimeEffect);

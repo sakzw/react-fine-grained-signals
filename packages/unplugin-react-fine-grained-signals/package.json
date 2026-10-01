@@ -73,6 +73,7 @@
   "scripts": {
     "prepublishOnly": "node -e \"if(!/pnpm/i.test(process.env.npm_config_user_agent||process.env.npm_execpath||'')){console.error('Publish this package with pnpm publish, not npm publish -- workspace: peer ranges must be rewritten.');process.exit(1)}\"",
     "build": "tsdown && node tests/build-smoke.mjs",
+    "prepack": "pnpm build",
     "bench": "node --expose-gc benchmarks/transform.mjs",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",

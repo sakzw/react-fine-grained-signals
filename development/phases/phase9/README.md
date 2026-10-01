@@ -405,3 +405,18 @@ The v0.2.0 release review's findings (createElement fallback, bare-scope specula
 ### M3 — v0.2.0 release-candidate freeze closure
 
 Both packages are `0.2.0`; that is the only change from `0cf09a1`. The packed tarballs were inspected and installed into a clean consumer: the runtime ships `alien-signals` `3.2.1`, and the unplugin's `workspace:^` peer packs as `^0.2.0`. The complete gate above passed without worker limits or changed thresholds or budgets: 356 runtime tests, 259 transform tests (3 skipped), coverage, the mixed-version smoke against the published 0.1.1, the consumer smoke, 27/27 browser tests, and size. Evidence is recorded in [m3.md](./m3.md). No tag, push, publish, or GitHub Release was performed.
+
+### Post-M3 release review closure
+
+The chronology after the freeze is:
+
+1. M3 froze the original release candidate at `6020870` with its full gate and CI passing ([m3.md](./m3.md)). That record is unchanged and remains the evidence for that commit.
+2. An independent post-M3 pre-release review of that RC then found six issues:
+   - a v0.2 regression where a top-level self-invalidating `effect()` ran twice on creation;
+   - class fields receiving an automatic hook boundary from the transform;
+   - deepSignal `includes`/`indexOf`/`lastIndexOf` missing raw objects, which can make `splice(indexOf(a), 1)` delete the wrong element (pre-existing since v0.1);
+   - undocumented annotation renames;
+   - an undocumented runtime/plugin coupling;
+   - a pack path that could ship a stale `dist`.
+3. The [post-M3 release review closure](./post-m3-release-review-closure.md) fixed or documented exactly those six. It added regression tests that fail on the RC and a `prepack` build for both packages, and reran the complete gate. Versions stay `0.2.0`. Other findings from the review are deferred and listed there.
+4. The final RC is the closure commit. It requires a fresh full validation (recorded in the closure document) and a fresh GitHub Actions Test/E2E pass before any tag or publish. No tag, push, publish, or GitHub Release has been performed.

@@ -75,11 +75,15 @@ export function createForeignReadableAdapter({
     const subscriber = getActiveSubscriber();
     if (subscriber?.kind === "computed") subscriber.foreignDependent = true;
     if (subscriber !== undefined) link(node, subscriber);
-    if (subscriber?.kind === "effect") activateForeignNode(node);
+    // A handshake that finds the source already past the revision this effect
+    // just read marks it stale (bit 128), so its first run is retried once it
+    // finishes; see `effect()` in alien-derived-runtime-core.mts.
+    if (subscriber?.kind === "effect" && activateForeignNode(node)) subscriber.flags |= 128;
     return node;
   }
 
-  function activateForeignNode(node: RuntimeNode): void {
+  // Returns true when the subscription reports a revision newer than the read.
+  function activateForeignNode(node: RuntimeNode): boolean | undefined {
     if (node.unsubscribe === undefined) {
       const protocol = node.protocol;
       const subscription = protocol!.subscribe((revision) => {
@@ -99,6 +103,7 @@ export function createForeignReadableAdapter({
           propagate(node.subs, isRunning());
           if (!isBatching()) flush();
         }
+        return true;
       }
     }
   }

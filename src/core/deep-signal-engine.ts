@@ -107,6 +107,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     "splice",
     "unshift",
   ]);
+  const ARRAY_SEARCHES = new Set<PropertyKey>(["includes", "indexOf", "lastIndexOf"]);
   const proxyToRaw = new WeakMap<object, object>();
   const rawToMetadata = new WeakMap<object, PropertyMetadata>();
   const readonlyMapViews = new WeakMap<Map<unknown, unknown>, ReadonlyMap<unknown, unknown>>();
@@ -868,6 +869,31 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
             } finally {
               sweepPrunedKeys(metadata, target);
             }
+          };
+          metadata.arrayMethods.set(key, { method, wrapper });
+          return wrapper;
+        }
+
+        if (
+          Array.isArray(target) &&
+          ARRAY_SEARCHES.has(key) &&
+          typeof result === "function"
+        ) {
+          const cachedMethod = metadata.arrayMethods.get(key);
+          if (cachedMethod?.method === result) return cachedMethod.wrapper;
+
+          const method = result as (...args: unknown[]) => unknown;
+          // Elements read through the proxy as proxies, so an identity search
+          // for the raw object that was stored misses (and `splice(indexOf(a),
+          // 1)` then removes the last element). The proxied search runs first,
+          // keeping its reads tracked and native results unchanged; only an
+          // object it missed is searched again, as raw, in the raw array --
+          // elements are stored raw. Vue 3.6's `searchProxy` does the same.
+          const wrapper = function (this: unknown, ...args: unknown[]) {
+            const found = Reflect.apply(method, this, args);
+            if ((found !== -1 && found !== false) || !isObjectLike(args[0])) return found;
+            args[0] = toRaw(args[0]) ?? args[0];
+            return Reflect.apply(method, toRaw(this) ?? this, args);
           };
           metadata.arrayMethods.set(key, { method, wrapper });
           return wrapper;

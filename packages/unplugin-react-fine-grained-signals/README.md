@@ -19,6 +19,12 @@ pnpm add -D unplugin-react-fine-grained-signals
 `react-fine-grained-signals` is a peer dependency. Node.js `^22.18.0 || >=24.11.0`
 is required — the range Babel 8, which the transform runs on, declares.
 
+Use the plugin and the runtime from the same release line (v0.2 with v0.2): the
+generated code imports runtime entry points that change between lines. When
+upgrading from v0.1, upgrade both packages together and rename the
+`@useSignals` / `@noUseSignals` comments — see the
+[v0.2 migration guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.2.md#transform-plugin).
+
 This package ships ESM only; there is no CommonJS build. An ESM build
 configuration that uses `import` is the primary setup, but a CommonJS
 configuration file (a `webpack.config.js` or `next.config.js` in a project
@@ -119,6 +125,8 @@ export default {
     the build, or when the affected components were verified against
     [the compatibility note](../../development/design/react-compiler-compatibility.md).
 - `importSource`: overrides `react-fine-grained-signals` for a compatible wrapper.
+  The wrapper must re-export the runtime's root `useSignalTracking` and its
+  `/runtime` entry's `useManagedSignals`, which the generated code imports.
 - `reactImportSource`: an additional module specifier whose `memo` and
   `forwardRef` exports count as React's own when the plugin decides whether a
   wrapped function is a component. Recognition is additive, not a replacement:
@@ -283,8 +291,7 @@ reference (`items.map(Row)`) or write it inline, so the owning component
 collects it.
 
 A component can also carry no binding of its own and still be named: one held
-as an object or class property — `Card.Header = () => <p>{count.value}</p>`, or
-a `class Holder { Row = () => <p>{count.value}</p> }` field — or written as an
+as an object property — `Card.Header = () => <p>{count.value}</p>` — or written as an
 object-literal method (`export const ns = { Home() { return <p>{count.value}</p>; } }`)
 is named by its key, the same way `<Card.Header />` or `<ns.Row />` reaches it
 (a lowercase key stays excluded, exactly as a lowercase binding does; getters,
@@ -292,9 +299,16 @@ setters, async and generator methods are excluded, and so are class methods,
 which only an instance reaches), and a nameless default
 export (`export default (props) => <p>{count.value}</p>`) is named after the
 module's own file — the identity an `import App from "./App"` already gives it.
-A `this.Row = …` assignment inside a class is deliberately excluded, though —
-such a `this`-bound renderer still needs an explicit `useSignalTracking()` call or
-`@signalTracking` comment, as before this feature existed.
+Functions held by a class are deliberately excluded, though: a class field
+(`class Holder { Row = () => … }`, instance or `static`) and a `this.Row = …`
+assignment are never transformed, and a `@signalTracking` comment on one is
+reported and ignored. They are reached through `this.Row` or `Holder.Row`, which
+the transform cannot follow to tell a component from a function that
+`render()` calls directly (`this.Header()`) or passes per item
+(`items.map(this.Row)`) — and a hook boundary in either of those runs inside
+the class component's render, which React rejects. If such a function is only
+ever rendered as an element (`<this.Row />`), it may call `useSignalTracking()`
+itself; otherwise read signals in a function component instead.
 
 ## `memo` / `forwardRef` recognition
 

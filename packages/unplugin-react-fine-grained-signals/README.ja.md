@@ -18,6 +18,11 @@ pnpm add -D unplugin-react-fine-grained-signals
 `react-fine-grained-signals` はpeer dependencyです。Node.jsは
 `^22.18.0 || >=24.11.0` が必要です。変換が依存するBabel 8が宣言している範囲です。
 
+pluginとruntimeは同じrelease line(v0.2同士)で使ってください。生成されるコードが
+importするruntimeのentry pointはline間で変わります。v0.1からupgradeする場合は、
+両方のpackageを同時に更新し、`@useSignals` / `@noUseSignals` commentを書き換えて
+ください。[v0.2移行ガイド](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.2.ja.md#transform-plugin)を参照してください。
+
 このpackageはESMだけを配布しており、CommonJS buildはありません。`import` を
 使うESMのbuild設定が基本ですが、CommonJSの設定ファイル（`"type": "module"` の
 ないprojectの `webpack.config.js` や `next.config.js`）からも `require()` で
@@ -118,6 +123,8 @@ export default {
     対象componentを[互換性の検討docs](../../development/design/react-compiler-compatibility.ja.md)
     に照らして確認済みの場合だけ選んでください。
 - `importSource`: `react-fine-grained-signals` 互換wrapperへの置き換えです。
+  wrapperは、生成されたコードがimportするruntimeのrootの `useSignalTracking` と、
+  `/runtime` entryの `useManagedSignals` をre-exportしている必要があります。
 - `reactImportSource`: wrapされた関数をcomponentと判定する際に、`memo` /
   `forwardRef` をReact由来とみなすmodule specifierを追加します。置き換えでは
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり
@@ -273,8 +280,7 @@ renderするといった条件を満たす限り、他のhookとまったく同�
 componentに収集させてください。
 
 componentは、自分自身のbindingを持たなくても名前を得られる場合があります。
-objectやclassのproperty — `Card.Header = () => <p>{count.value}</p>` や、
-`class Holder { Row = () => <p>{count.value}</p> }` のようなfield — として
+objectのproperty — `Card.Header = () => <p>{count.value}</p>` など — として
 保持されているcomponent、またはobject literalのmethodとして書かれた
 component（`export const ns = { Home() { return <p>{count.value}</p>; } }`）は、
 `<Card.Header />` や `<ns.Row />` がそこへ到達するのと同じ、そのkeyから名前を
@@ -283,10 +289,16 @@ setter、async method、generator methodも除外され、instance経由でし�
 できないclassのmethodも対象外です）。また、名前を持たないdefault export
 （`export default (props) => <p>{count.value}</p>`）は、moduleのファイル名から
 名前を得ます。これは `import App from "./App"` が実際にそのcomponentへ与えて
-いる識別子そのものです。ただし、class内での `this.Row = …` という代入
-（たとえばconstructor内）は意図的に対象外です。そうした `this` を束縛する
-rendererには、この機能が存在する以前と同様、明示的な `useSignalTracking()` 呼び出し
-か `@signalTracking` コメントが必要です。
+いる識別子そのものです。ただし、classが保持する関数は意図的に対象外です。class field
+（`class Holder { Row = () => … }`。instanceでも `static` でも）と、class内での
+`this.Row = …` という代入（たとえばconstructor内）は変換されず、そこに付けた
+`@signalTracking` コメントは警告を出したうえで無視されます。これらは
+`this.Row` や `Holder.Row` 経由で到達するため、変換はそれがcomponentなのか、
+`render()` が関数として直接呼ぶもの（`this.Header()`）やitemごとに渡すもの
+（`items.map(this.Row)`）なのかを追跡できません。後者にhookのboundaryを入れると
+class componentのrender中でhookが動き、Reactに拒否されます。要素として
+（`<this.Row />`）だけrenderされる関数なら、その中で `useSignalTracking()` を
+自分で呼べます。そうでなければ、signalはfunction componentで読んでください。
 
 ## `memo` / `forwardRef` の認識
 

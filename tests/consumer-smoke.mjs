@@ -72,18 +72,10 @@ function resolvePnpmInvocation() {
 
 const pnpmInvocation = resolvePnpmInvocation();
 
-// `pnpm pack` below tars up whatever `dist` already holds -- neither package
-// declares a `prepack` script -- so a missing build surfaces as a confusing tsc
-// or vite failure inside the throwaway consumer instead of here. CI runs this
-// file directly after its own `pnpm build` step rather than through `pnpm
-// test:consumer`, whose script would rebuild; that is the same contract
-// scripts/check-size.mjs enforces for the size budget.
-for (const packageRoot of [repositoryRoot, pluginRoot]) {
-  if (!existsSync(join(packageRoot, "dist", "index.js"))) {
-    console.error(`No build found at ${join(packageRoot, "dist")}. Run \`pnpm build\` first.`);
-    process.exit(1);
-  }
-}
+// `pnpm pack` below runs each package's `prepack` script, which rebuilds its
+// `dist` from source, so the tarballs are packed exactly as `pnpm publish`
+// packs them -- never from whatever `dist` happened to hold. No separate build
+// step is needed first.
 
 const temporaryRoot = await mkdtemp(join(tmpdir(), "react-fine-grained-signals-consumer-"));
 

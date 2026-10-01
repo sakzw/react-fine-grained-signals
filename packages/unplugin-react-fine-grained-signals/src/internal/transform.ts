@@ -218,13 +218,13 @@ function isKnownComponentWrapper(
 }
 
 /**
- * The static name of an object property's or class field's key. A computed key
+ * The static name of an object property's key. A computed key
  * is only readable when it is a string literal (`{ ["Home"]: ... }`), exactly as
  * `getReadPropertyName` reads `items["map"]`; anything else is decided at
  * runtime and stays unnamed, which leaves the function untransformed.
  */
 function getPropertyKeyName(
-  node: t.ObjectProperty | t.ObjectMethod | t.ClassProperty,
+  node: t.ObjectProperty | t.ObjectMethod,
 ): string | undefined {
   const key = unwrapTransparent(node.key);
   if (node.computed) return t.isStringLiteral(key) ? key.value : undefined;
@@ -264,10 +264,9 @@ function getObjectMethodIdentityName(node: t.ObjectMethod): string | undefined {
  * ```js
  * Card.Header = () => <h1>{count.value}</h1>;          // a compound component
  * export const ns = { Home: () => <p>{count.value}</p> };  // an object namespace
- * class Holder { Row = () => <li>{count.value}</li>; }     // a class field
  * ```
  *
- * All three are ordinary ways to hold a component that no *binding* names, so
+ * Both are ordinary ways to hold a component that no *binding* names, so
  * without this they resolved to no identity at all and `auto` mode passed over
  * them in silence. The key is the name the rest of the module reaches them by
  * (`<ns.Home />`, `<Card.Header />`), which is precisely what the PascalCase /
@@ -294,8 +293,10 @@ function getObjectMethodIdentityName(node: t.ObjectMethod): string | undefined {
  * disqualifies every other keyed slot (`isKeyedRenderCallback`) cannot see those
  * uses at all -- there would be no way to take the boundary back once given. So
  * the ambiguous case resolves the way this file always resolves one: name
- * nothing, transform nothing. Class components stay a manual `useSignalTracking()` /
- * `@signalTracking` opt-in.
+ * nothing, transform nothing. Class fields (`Row = () => ...`) are excluded the
+ * same way. Such a renderer is left to its author: one rendered as an element
+ * (`<this.Row />`) can call `useSignalTracking()` itself; one called as a
+ * function or passed per item cannot hold a hook at all.
  */
 function getKeyedIdentityName(parent: NodePath): string | undefined {
   if (parent.isAssignmentExpression()) {
@@ -303,9 +304,7 @@ function getKeyedIdentityName(parent: NodePath): string | undefined {
     if (!t.isMemberExpression(left)) return undefined;
     return getStaticMemberPath(left)?.keys.at(-1);
   }
-  if (parent.isObjectProperty() || parent.isClassProperty()) {
-    return getPropertyKeyName(parent.node);
-  }
+  if (parent.isObjectProperty()) return getPropertyKeyName(parent.node);
   return undefined;
 }
 
@@ -1410,14 +1409,19 @@ function isAutomaticTransformCandidate(
       // so this widens what is *considered*, not what is transformed.
       parent.isArrowFunctionExpression() ||
       parent.isExportDefaultDeclaration() ||
-      // Keyed slots: a component held in an object namespace, a class field, or
-      // a compound-component assignment (`Card.Header = ...`). All three are
-      // named by `getKeyedIdentityName`, and all three were invisible to `auto`
-      // mode while they were not candidates -- no transform and no warning, even
+      // Keyed slots: a component held in an object namespace or a
+      // compound-component assignment (`Card.Header = ...`). Both are named by
+      // `getKeyedIdentityName`, and both were invisible to `auto` mode while
+      // they were not candidates -- no transform and no warning, even
       // when the name resolved perfectly well. The naming conventions still
       // decide what is actually transformed, so a lowercase key stays out.
+      // A class field -- instance or static -- is not a candidate: it is
+      // reached through `this.Row` or `Holder.Row`, which the use-site walks
+      // (`isPlainCalledComponent`, `isKeyedRenderCallback`) cannot follow, so a
+      // field called as a function (`this.Header()`) or passed per item
+      // (`items.map(this.Row)`) would get a hook boundary inside a class
+      // render. Same resolution as `this.Row = ...`: transform nothing.
       parent.isObjectProperty() ||
-      parent.isClassProperty() ||
       // The assignment target has to root in a plain identifier, which excludes
       // `this.Row = ...` in a class component's constructor -- see
       // `getKeyedIdentityName`, where the same rule keeps that shape unnamed.
@@ -1914,7 +1918,7 @@ function warnUnnamedSignalTrackingAnnotation(path: NodePath<t.Function>): void {
     "This @signalTracking annotation is ignored: the transform could not resolve a component " +
       "or hook identity for the annotated function, and the boundary is attached to that " +
       "identity. Give it a PascalCase (component) or useX (hook) name -- a binding, a named " +
-      "function declaration, or an object/class property key -- to opt it in.",
+      "function declaration, or an object property key -- to opt it in.",
   );
   console.warn(warning.message);
 }

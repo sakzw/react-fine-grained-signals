@@ -42,9 +42,11 @@ jobs:
         run: pnpm build
         background: true
 
-      # Only the build gates these two, so they overlap the test run; `parallel:`
-      # could not express that. Both refuse to run against a missing build, and
-      # going through `pnpm size` / `pnpm test:consumer` would rebuild it.
+      # Only the build gates these, so they overlap the test run; `parallel:`
+      # could not express that. The size check refuses to run against a missing
+      # build, and going through `pnpm size` would rebuild it. The consumer
+      # smoke packs through each package's `prepack`, which rebuilds `dist`
+      # from source exactly as `pnpm publish` does.
       - name: Wait for the build
         wait: build
       - run: node scripts/check-size.mjs
