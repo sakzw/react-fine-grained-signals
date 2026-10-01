@@ -237,7 +237,9 @@ describe("Signal children, props, and refs", () => {
     view.unmount();
     const cleanupCount = cleanups.mock.calls.length;
     title.value = "after unmount";
-    expect(node.title).toBe("after");
+    // Detaching hands the node back to the value React rendered, and the
+    // binding no longer follows the signal.
+    expect(node.title).toBe("before");
     expect(cleanups).toHaveBeenCalledTimes(setups.mock.calls.length);
     expect(cleanupCount).toBe(setups.mock.calls.length);
   });

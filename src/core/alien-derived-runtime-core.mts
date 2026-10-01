@@ -212,8 +212,17 @@ function promoteComputed(readable: object, node: RuntimeNode, entry: Speculative
   for (const [dependency, revision] of entry.dependencies) {
     if (getReadableRevision(dependency) !== revision) return false;
     const dependencyNode = foreignAdapter.getNodeForReadable(dependency);
-    if (dependencyNode !== undefined) dependencies.push(dependencyNode);
-    else {
+    if (dependencyNode !== undefined) {
+      // Link a dependency only in the state the speculative read observed. A
+      // computed's revision moves only when it re-evaluates, so one a later
+      // write left Dirty or Pending fails here, as it does on cache reuse.
+      if (dependencyNode.kind === "computed" && !isComputedClean(dependencyNode)) return false;
+      // The render read a source's pending value without settling it. Settle it
+      // before linking, as Alien's own signal read does, or a later write back
+      // to the stale committed value compares equal and never reaches us.
+      if (dependencyNode.kind === "source") readSourceUntracked(dependencyNode);
+      dependencies.push(dependencyNode);
+    } else {
       const protocolValue: unknown = Reflect.get(dependency, Symbol.for("react-fine-grained-signals.readable-interop.v1"));
       const protocol = typeof protocolValue === "object" && protocolValue !== null
         && Reflect.get(protocolValue, "version") === 1

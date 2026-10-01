@@ -53,6 +53,8 @@ interface PluginState extends PluginPass {
    * entry point into the bundle graph.
    */
   absorbedImports: NodePath<t.ImportSpecifier>[];
+  /** Whether the file was parsed as TypeScript, so generated code may use its syntax. */
+  typeScript: boolean;
 }
 
 interface FunctionInspection {
@@ -2366,14 +2368,15 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
  *   defaults keep their meaning by moving verbatim.
  * - A type annotation travels to the generated parameter, so the signature
  *   still says what it accepts; `?` optional markers have no meaning on a
- *   `let` and are dropped from the moved pattern.
+ *   `let` and are dropped from the moved pattern. In TypeScript the generated
+ *   parameter is marked `?` wherever the original was optional.
  *
  * When the move cannot be done without changing meaning
  * (`hasRelocationConflict`), or a parameter is a TypeScript parameter property
  * (constructor-only, never a component), nothing moves and the read stays
  * untracked exactly as before -- an edge this declines rather than miscompiles.
  */
-function relocateTrackedParameters(path: NodePath<t.Function>): t.Statement[] {
+function relocateTrackedParameters(path: NodePath<t.Function>, typeScript: boolean): t.Statement[] {
   const params = path.get("params");
   const first = params.findIndex((param) => parameterReadsTrackedValue(param, path));
   if (first === -1) return [];
@@ -2397,8 +2400,20 @@ function relocateTrackedParameters(path: NodePath<t.Function>): t.Statement[] {
     }
   }
   if (hasRelocationConflict(path, moved)) return [];
+  // TypeScript treats a parameter as optional when it is marked `?`, or when it
+  // has a default and every parameter after it is optional too. The generated
+  // parameter keeps that, which is also what keeps it legal after a `?` one:
+  // a required parameter there is a parse error in Oxc (and TS1016 in tsc).
+  const optional: boolean[] = [];
+  let laterOptional = true;
+  for (let index = plan.length - 1; index >= 0; index -= 1) {
+    const { pattern, fallback, rest } = plan[index]!;
+    optional[index] = typeScript && rest === undefined
+      && (pattern.optional === true || (fallback !== undefined && laterOptional));
+    laterOptional &&= rest !== undefined || optional[index]!;
+  }
   const declarations: t.Statement[] = [];
-  for (const { param, pattern, fallback, rest } of plan) {
+  for (const [index, { param, pattern, fallback, rest }] of plan.entries()) {
     const local = path.scope.generateUidIdentifier("param");
     const init = fallback === undefined
       ? t.cloneNode(local)
@@ -2416,6 +2431,7 @@ function relocateTrackedParameters(path: NodePath<t.Function>): t.Statement[] {
       // The signature keeps its type; the `let` gets the bare pattern.
       local.typeAnnotation = pattern.typeAnnotation;
     }
+    if (optional[index]) local.optional = true;
     pattern.typeAnnotation = null;
     pattern.optional = null;
     declarations.push(t.variableDeclaration("let", [t.variableDeclarator(pattern, init)]));
@@ -2442,7 +2458,7 @@ function applyInject(
     t.callExpression(t.cloneNode(runtimeImport.identifier), []),
   );
   // Bound again right after the call, so a default's read is collected too.
-  const relocated = relocateTrackedParameters(path);
+  const relocated = relocateTrackedParameters(path, state.typeScript);
   if (body.isBlockStatement()) {
     body.unshiftContainer("body", [call, ...relocated]);
   } else {
@@ -2483,7 +2499,7 @@ function applyManaged(
     : [t.returnStatement(body.node as t.Expression)];
   // Inside the `try`, not between the hook and it: a default that throws must
   // still reach `finish()`, exactly as a throw from the original body does.
-  const relocated = relocateTrackedParameters(path);
+  const relocated = relocateTrackedParameters(path, state.typeScript);
   const transformedBody = t.blockStatement([
     declaration,
     t.tryStatement(
@@ -2553,6 +2569,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
           );
           state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
           state.absorbedImports = [];
+          state.typeScript = state.file.opts.parserOpts?.plugins?.includes("typescript") === true;
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
         exit(path, state) {

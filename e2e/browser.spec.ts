@@ -77,7 +77,9 @@ test("cleans a StrictMode host binding after unmount", async ({ page }) => {
   const detachedTitle = await detachedHandle?.evaluate((element) =>
     element.getAttribute("title"),
   );
-  expect(detachedTitle).toBe("lifecycle updated");
+  // Detaching hands the node back to the value React rendered, and the
+  // binding no longer follows the signal.
+  expect(detachedTitle).toBe("lifecycle initial");
   expect(errors).toEqual([]);
 });
 

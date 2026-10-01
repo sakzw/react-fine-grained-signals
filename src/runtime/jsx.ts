@@ -120,7 +120,9 @@ const NON_HTML_HOST_ELEMENTS: ReadonlySet<string> = /* @__PURE__ */ (() => {
 // observes root replacement only, so nested mutations would never show.
 type SignalChild = React.ReactNode | (ReadonlySignal<SignalChild> & NotDeepSignal) | readonly SignalChild[];
 type HostProps = Record<string, unknown>;
-type Binding = readonly [name: string, source: ReadonlySignal<unknown>, kind: BindingKind];
+// `snapshot` is the value React itself was handed for the prop at render (see
+// `transformHostProps`); a binding hands the node back to it on detach.
+type Binding = readonly [name: string, source: ReadonlySignal<unknown>, kind: BindingKind, snapshot: unknown];
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
@@ -543,6 +545,7 @@ type MountedBinding = {
   readonly dispose: () => void;
   readonly refresh: () => void;
   readonly getStyleKeys: (() => readonly string[]) | undefined;
+  readonly restore: ((snapshot: unknown) => void) | undefined;
 };
 
 /** A binding's identity for the re-render diff: same name, source, and kind. */
@@ -552,8 +555,29 @@ function isSameBinding(a: Binding, b: Binding | undefined): boolean {
   return b !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
+/** Whether two style values set the same properties to the same values. */
+function isSameStyle(a: unknown, b: unknown): boolean {
+  if (typeof a !== "object" || a === null || typeof b !== "object" || b === null) return Object.is(a, b);
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length
+    && keys.every((key) => Object.is((a as HostProps)[key], (b as HostProps)[key]));
+}
+
+/**
+ * Whether React was handed the same value for this binding's prop. A two-way
+ * binding hands React an uncontrolled default that it reads only at mount, so
+ * only `"prop"` and `"style"` snapshots count; a style snapshot is a fresh copy
+ * every render (see `readInitialValue`), so it is compared by content.
+ */
+function hasSameSnapshot(a: Binding, b: Binding): boolean {
+  return isTwoWayBindingKind(a[2]) || (a[2] === "style" ? isSameStyle(a[3], b[3]) : Object.is(a[3], b[3]));
+}
+
 /** What `subscribeBinding` hands back to `mountBinding`. See `MountedBinding`. */
-type Subscription = BindingSubscription & { readonly getStyleKeys: (() => readonly string[]) | undefined };
+type Subscription = BindingSubscription & {
+  readonly getStyleKeys: (() => readonly string[]) | undefined;
+  readonly restore: ((snapshot: unknown) => void) | undefined;
+};
 
 /**
  * Subscribes a single binding to `node` and returns its teardown. Split out of
@@ -582,31 +606,53 @@ function subscribeBinding(
   switch (kind) {
     case "style": {
       let previousKeys: readonly string[] = initialStyleKeys ?? [];
-      const subscription = createBindingSubscription(source, whileAttached((value: unknown) => {
+      let applied: unknown;
+      const write = (value: unknown) => {
+        applied = value;
         previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
-      }));
-      return { ...subscription, getStyleKeys: () => previousKeys };
+      };
+      return {
+        ...createBindingSubscription(source, whileAttached(write)),
+        getStyleKeys: () => previousKeys,
+        restore: (snapshot) => { if (!isSameStyle(applied, snapshot)) write(snapshot); },
+      };
     }
     case "select-value":
       return {
         ...bindSelectValue(node as HTMLSelectElement, source, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
         getStyleKeys: undefined,
+        restore: undefined,
       };
     case "text-value":
       return {
         ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
         getStyleKeys: undefined,
+        restore: undefined,
       };
     case "checked":
-      return { ...createBindingSubscription(source, whileAttached((value: unknown) => setControlledProp(node, name, value))), getStyleKeys: undefined };
-    case "prop":
-      return { ...createBindingSubscription(source, whileAttached((value: unknown) => setDomProp(node, name, value))), getStyleKeys: undefined };
+      return {
+        ...createBindingSubscription(source, whileAttached((value: unknown) => setControlledProp(node, name, value))),
+        getStyleKeys: undefined,
+        restore: undefined,
+      };
+    case "prop": {
+      let applied: unknown;
+      const write = (value: unknown) => {
+        applied = value;
+        setDomProp(node, name, value);
+      };
+      return {
+        ...createBindingSubscription(source, whileAttached(write)),
+        getStyleKeys: undefined,
+        restore: (snapshot) => { if (!Object.is(applied, snapshot)) write(snapshot); },
+      };
+    }
   }
 }
 
 function mountBinding(node: Element, binding: Binding, binder: NodeBinder, initialStyleKeys?: readonly string[]): MountedBinding {
-  const { dispose, refresh, getStyleKeys } = subscribeBinding(node, binding[0], binding[1], binding[2], initialStyleKeys, binder);
-  return { binding, dispose, refresh, getStyleKeys };
+  const { dispose, refresh, getStyleKeys, restore } = subscribeBinding(node, binding[0], binding[1], binding[2], initialStyleKeys, binder);
+  return { binding, dispose, refresh, getStyleKeys, restore };
 }
 
 /**
@@ -663,6 +709,14 @@ class NodeBinder {
       // attach can only exist here if this cleanup is stale.
       if (token !== this.#token) return;
       this.#detached = true;
+      // React detaches a host's ref right before it diffs the host's props, and
+      // that diff starts from the snapshot it was handed, not from what the
+      // bindings wrote since. Hand the node back to that snapshot, or a plain
+      // value equal to it is skipped and the signal's last value stays in the
+      // DOM. `#mounted` lines up with `bindings` (see `#sync`), and a snapshot
+      // change gives the element a new ref (`getBindingRef`), so this is the
+      // committed one. A re-attach in the same commit refreshes right after.
+      this.#mounted.forEach((entry, index) => entry.restore?.(bindings[index]![3]));
       queueMicrotask(() => {
         if (this.#detached && token === this.#token) this.#dispose();
       });
@@ -748,8 +802,11 @@ type BindingRefEntry = {
 const bindingRefs = new WeakMap<object, BindingRefEntry[]>();
 const BINDING_REF_CACHE_LIMIT = 8;
 
+// Also compares snapshots, so a ref is only ever attached for the exact values
+// React was handed: the detach in `NodeBinder` restores to those.
 function haveSameBindings(a: readonly Binding[], b: readonly Binding[]): boolean {
-  return a.length === b.length && a.every((binding, index) => isSameBinding(binding, b[index]));
+  return a.length === b.length
+    && a.every((binding, index) => isSameBinding(binding, b[index]) && hasSameSnapshot(binding, b[index]!));
 }
 
 function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (node: Element | null) => RefCleanup {
@@ -784,7 +841,8 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
   const bindings: Binding[] = [];
   for (const [name, value] of Object.entries(props)) {
     if (isReactiveHostProp(name, value)) {
-      bindings.push([name, value, resolveBindingKind(tagName, name)]);
+      const kind = resolveBindingKind(tagName, name);
+      bindings.push([name, value, kind, readInitialValue(value, kind)]);
     }
   }
   return bindings;
@@ -824,7 +882,7 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
   if (childrenNeedNormalization) {
     props.children = normalizeChild(rawChildren);
   }
-  for (const [name, value, kind] of bindings) {
+  for (const [name, , kind, snapshot] of bindings) {
     // A two-way kind is only ever derived from a `value`/`checked` name (see
     // `resolveBindingKind`), so the lookup always hits; should it ever not, the
     // prop is written directly, which is the pre-substitution behaviour.
@@ -838,9 +896,9 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
       // React only ever reads it once, at mount, and never touches this
       // property again — see development/design/direct-binding-value-checked-style.md.
       delete props[name];
-      props[uncontrolledName] = readInitialValue(value, kind);
+      props[uncontrolledName] = snapshot;
     } else {
-      props[name] = readInitialValue(value, kind);
+      props[name] = snapshot;
     }
   }
   return { props, bindings };

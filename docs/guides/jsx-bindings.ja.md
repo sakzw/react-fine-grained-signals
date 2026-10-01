@@ -94,14 +94,14 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 
 - `value` にbindingされた*派生*値(例えばユーザーの入力をtrimしたりupper-caseしたりするsignal)は、派生後の文字列が入力と異なる場合、caretが動くことがあります。この部分はここでは解決していません。
 - 他の要素の `value`/`checked`(`<li value>`、`<option value>`、`<meter value>` など)は双方向bindingではない単なるwrite-only属性なので、`title`/`disabled` と同じdirect attribute bindingを使います。
-- formのresetでもsignalが値の正です。bindingは要素のdefault(`defaultValue`、`defaultChecked`、optionの `defaultSelected`)をbindingした値と常に一致させるため、`form.reset()`、resetボタン、`<form action>` 実行後のReact 19の自動resetは、初回レンダーの値ではなくsignalの現在値に戻します。これはReactがcontrolled inputに対して行う挙動と同じです。reset時にfieldを空にしたい場合は、signalへ書き込んでください。
+- formのresetは要素のdefault(`defaultValue`、`defaultChecked`、optionの `defaultSelected`)に戻します。bindingはsignalへの書き込みを反映するたびにdefaultも書き込んだ値へそろえるため、書き込みの後であれば(`<form action>` の中でも、`onReset` handlerの中でも、それ以外の場所でも)、`form.reset()`、resetボタン、`<form action>` 実行後のReact 19の自動resetはsignalの値に戻します。ただし、ユーザーがfieldを編集した後はこの限りではありません。`onChange` がsignalへ書き込んでいても、change eventに対するReact自身の処理がdefaultをownerが最後にレンダーした値へ戻すため、resetはそのレンダー時の値に戻り、fieldとsignalの値が食い違います。resetで表示する値を決めたい場合は、actionの中や `onReset` など、resetする時点でsignalへ書き込んでください。
 
 ## 制約
 
 - allowlistにないevent handler、SVG props、その他のhost propsはdirect bindingされません。
 - direct bindingの書き込みはReactのschedulerの外で行われ、実験的な最適化のままです。
 - host propはレンダーごとに素の値とsignalを切り替えられます。要素の型は変わらず、子のstateも保たれます。切り替わるのはbindingの付け外しだけです(ただし `value`/`checked` をsignalと素の値で切り替えると、inputはReactのuncontrolled/controlledの間で切り替わり、React標準の警告が出ます)。
-- bindingはhost要素自身のrefを通じて付けられます。渡したrefは、Reactが直接呼ぶ場合とまったく同じように要素を受け取ります。refが安定していれば、無関係な再レンダーで呼び直されることはありません。
+- bindingはhost要素自身のrefを通じて付けられます。渡したrefは、Reactが直接呼ぶ場合とまったく同じように要素を受け取ります。refが安定していれば、bindingが変わらない限り再レンダーで呼び直されることはありません。bindingが変わるのは、bindingが別のsignalや素の値に切り替わったときと、bindingしたpropや `style` が前回のレンダーと異なる値でレンダーされたとき(2回のレンダーの間に書き込みがあった場合)です。このときrefは同じcommitの中で一度外れ、再び付けられます。
 - `deepSignal` はsignal childやbindingするpropには使えません。これらの位置はrootの置き換えしか追わないため、ネストした変更は表示に反映されません。TypeScriptはこれをエラーにします。deepな状態は追跡されたコンポーネント内で読むか、[`useDeepSignalValue`](./hooks.ja.md#usedeepsignalvalue) でprimitiveを選択してください。
 - SSRとhydrationでは、signalの初期値がサーバーとクライアントで一致するようにしてください。リクエスト固有のsignalを共有のmodule scopeへ置かず、リクエストごとに生成してください。
 - bindingしたcomputed signalのgetterが例外を投げた場合、そのサイクルのDOM書き込みはスキップされ、`console.error` にエラーが記録されます。記録は書き込みごとではなく、連続した失敗のエピソードごとに1回です。メッセージは `"react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` で、`{ cause: error }` が付きます。direct bindingはReactのrenderサイクルを経由しないため、投げられたエラーを捕まえるError Boundaryはありません。失敗するcomputedにError Boundaryのセマンティクスが必要な場合は [`useSignalValue`](./hooks.ja.md#usesignalvalue) を使ってください。

@@ -1,3 +1,4 @@
+import { transformWithOxc } from "vite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   transformReactFineGrainedSignals,
@@ -2571,7 +2572,8 @@ describe("signal reads in parameter defaults", () => {
     `, "auto");
 
     expect(output).toContain("let n = _param === undefined ? count.value : _param;");
-    expect(output).toMatch(/const C = _param => \{/);
+    // A `.tsx` module: the generated parameter stays optional, like `n`.
+    expect(output).toMatch(/const C = \(_param\?\) => \{/);
   });
 
   it("moves the parameter behind a bare injected useSignalTracking() call too", () => {
@@ -2602,7 +2604,7 @@ describe("signal reads in parameter defaults", () => {
       export function C(label, n = count.value, m = n, ...rest) { return <p>{label}{m}{rest}</p>; }
     `, "auto");
 
-    expect(output).toContain("function C(label, _param, _param2, ..._param3)");
+    expect(output).toContain("function C(label, _param?, _param2?, ..._param3)");
     expect(output).toMatch(
       /let n = _param === undefined \? count\.value : _param;\s+let m = _param2 === undefined \? n : _param2;\s+let rest = _param3;/,
     );
@@ -2645,6 +2647,80 @@ describe("signal reads in parameter defaults", () => {
     expect(output).toMatch(/function C\(\{\s+v = count\.value\s+\}\)/);
     expect(output).toMatch(/function D\(v = count\.value\)/);
     expect(output.match(/finally/g)).toHaveLength(2);
+  });
+});
+
+/** Transforms `source` as `id` in auto mode, then parses the output the way Vite 8 does. */
+async function compileAndParse(
+  source: string,
+  id = "fixture.tsx",
+  transform: ReactFineGrainedSignalsTransform = "managed",
+): Promise<string> {
+  const output = transformReactFineGrainedSignals(source, id, {
+    importSource: "react-fine-grained-signals",
+    mode: "auto",
+    transform,
+    reactCompiler: "auto",
+    reactImportSource: "react",
+  })?.code;
+  if (output === undefined) throw new Error(`${id} was not transformed`);
+  // Oxc rejects a required parameter after an optional one while parsing.
+  await transformWithOxc(output, id, { jsx: { runtime: "automatic" } });
+  return output;
+}
+
+describe("parameter optionality after a relocated default", () => {
+  for (const transform of ["managed", "inject"] as const) {
+    it(`keeps a relocated default optional after a \`?\` parameter (${transform})`, async () => {
+      const component = await compileAndParse(`
+        const count = { value: 1 };
+        export function C(optional?: string, value = count.value) { return <p>{optional}{value}</p>; }
+      `, "fixture.tsx", transform);
+      expect(component).toContain("function C(optional?: string, _param?)");
+      expect(component).toContain("let value = _param === undefined ? count.value : _param;");
+
+      const hook = await compileAndParse(`
+        const count = { value: 1 };
+        export function useLabel(prefix?: string, value = count.value) { return \`\${prefix ?? ""}\${value}\`; }
+      `, "use-label.ts", transform);
+      expect(hook).toContain("function useLabel(prefix?: string, _param?)");
+    });
+  }
+
+  it("marks the replacement optional exactly where TypeScript treats the original as optional", async () => {
+    const output = await compileAndParse(`
+      const count = { value: 1 };
+      const defaults = { x: 1 };
+      interface Props { v?: number }
+      export function A(optional = "x", value = count.value) { return <p>{optional}{value}</p>; }
+      export function B(a?: string, b?: number, value = count.value) { return <p>{a}{b}{value}</p>; }
+      export function C(a: string | undefined, value = count.value) { return <p>{a}{value}</p>; }
+      export function D({ x } = defaults, value = count.value) { return <p>{x}{value}</p>; }
+      export function E(a?: string, value: number = count.value) { return <p>{a}{value}</p>; }
+      export function F(a?: string, value = count.value, ...rest: string[]) { return <p>{a}{value}{rest}</p>; }
+      export function G(a?: string, { v = count.value }: Props = {}) { return <p>{a}{v}</p>; }
+      export function H(value = count.value, required: number) { return <p>{value}{required}</p>; }
+    `);
+
+    // Each function's generated names are unique within the module.
+    expect(output).toMatch(/function A\(optional = "x", _param\?\)/);
+    expect(output).toMatch(/function B\(a\?: string, b\?: number, _param\d+\?\)/);
+    expect(output).toMatch(/function C\(a: string \| undefined, _param\d+\?\)/);
+    expect(output).toMatch(/function D\(\{\s+x\s+\} = defaults, _param\d+\?\)/);
+    expect(output).toMatch(/function E\(a\?: string, _param\d+\?: number\)/);
+    expect(output).toMatch(/function F\(a\?: string, _param\d+\?, \.\.\._param\d+: string\[\]\)/);
+    expect(output).toMatch(/function G\(a\?: string, _param\d+\?: Props\)/);
+    // A default followed by a required parameter is not optional in TypeScript.
+    expect(output).toMatch(/function H\(_param\d+, (_param\d+): number\)/);
+  });
+
+  it("emits no optional marker outside TypeScript", async () => {
+    const output = await compileAndParse(`
+      const count = { value: 1 };
+      export function C(label, value = count.value) { return <p>{label}{value}</p>; }
+    `, "fixture.jsx");
+
+    expect(output).toContain("function C(label, _param)");
   });
 });
 

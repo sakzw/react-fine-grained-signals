@@ -393,3 +393,229 @@ These differ from the closure's numbers only by a byte or two of chunk-hash nois
 - The packed transform peer is `^0.2.0`.
 - The closure commit `5d6370b` was pushed at the user's request, and its GitHub Actions Test/E2E succeeded. The follow-up is a separate commit and needs its own Test/E2E pass.
 - No tag, publish, or GitHub Release was performed.
+
+## Final targeted release-blocker validation
+
+### Starting point and scope
+
+- Starting commit: `05fa6fb2cdea165ca35f078ad4d6035ba69ed3ab` (`fix: close final v0.2.0 pre-release follow-up`). Its GitHub Actions Test and E2E had passed.
+- The working tree was clean. Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+- No `v0.2.0` tag existed, and npm listed only `0.1.0` and `0.1.1` for both packages.
+
+A later review reported three v0.2 regressions. This pass validated exactly those three: P1, P2, and P3 below. Each was reproduced on `05fa6fb` before any production change and compared with the published v0.1.1. All three were confirmed and fixed. Nothing else was investigated or changed, apart from one related form-reset check that the P2 investigation required.
+
+### P1 — a computed first read during a render could stay stale
+
+**Reproduction.**
+
+```ts
+const darkMode = signal(false);
+darkMode.value = true; // nothing observes darkMode yet
+const theme = computed(() => (darkMode.value ? "dark" : "light"));
+// A tracked component renders theme.value ("dark") and commits.
+darkMode.value = false;
+```
+
+| First read of `theme` | v0.1.1 after the write back | `05fa6fb` after the write back |
+| --- | --- | --- |
+| bare `useSignalTracking()` render | `"light"` | `"dark"` (DOM and `peek()`) |
+| managed `useManagedSignals()` render | `"light"` | `"dark"` |
+| `peek()` or an ordinary effect | `"light"` | `"light"` |
+
+At runtime level, the failure also occurred when:
+- the computed was created before the unobserved write;
+- the source had a subscriber that was disposed before the write;
+- an effect subscribed to the promoted computed later;
+- the render cached an error from the computed.
+
+**Cause.** These are the two halves:
+- A render reads a source through `readSource` in `render-runtime.mts`. That returns the source's `pendingValue` without settling a Dirty source.
+- At commit, `promoteComputed` linked the new computed to that still-Dirty source. The source's committed `currentValue` was still the value from before the write.
+
+A later write back to that committed value then reached `updateSource` through `checkDirty`. `updateSource` compared the new value with the stale `currentValue`, saw no change, and so the computed kept its speculative value until some other write came along. Alien 3.2.1's own signal read (`signalOper`) settles a Dirty signal before it calls `link()`; promotion did not.
+
+**The same invariant, a second case.** The investigation found a second way to break the same invariant: a computed *dependency* that a write left Pending between render and commit.
+- A computed's revision moves only when it re-evaluates, so promotion's revision check passed.
+- Promotion then marked the new computed clean on top of a Pending dependency.
+
+Repro through React: `<Writer /><Reader />`, where `Writer`'s layout effect writes the source behind `Reader`'s inner computed. `05fa6fb` rendered `3` and stayed stale; v0.1.1 rendered `5`. This case was fixed with P1 because it lives in the same function and breaks the same invariant: a dependency must be linked in the state the speculative read observed.
+
+**Fix** (`promoteComputed` in `alien-derived-runtime-core.mts`):
+- A Dirty local source is settled before it is linked, using `readSourceUntracked`, the existing read half of the graph read.
+- Promotion is refused when a local computed dependency is not clean. This is the same currency rule that `isEntryCurrent` already applies when a cached entry is reused. A refused computed stays uninitialized, and the store's existing changed-during-render path re-renders.
+
+The render read path, the speculative cache, and the write path are unchanged.
+
+**Tests** (`tests/final-release-blocker-regressions.test.tsx`): 15 tests. 11 fail on `05fa6fb`. The other 4 are guards:
+- a nested chain read through an inner computed;
+- memoization of the promoted value;
+- a source change between render and commit, which still refuses promotion;
+- a first read in an ordinary effect.
+
+**Performance.** Only promotion changed; the read and write paths are code-identical. Bundles of `src/core/reactive-runtime.ts` from `05fa6fb` and from the fix were compared in-process:
+- Method: interleaved paired runs, 41 rounds, alternating order, `--expose-gc`, both module load orders, repeated.
+- Load order dominated the raw ratios. For example, the code-identical `source/read` measured 3.63 in one order and 0.27 in the other.
+- Order-balanced geometric means for unobserved and observed source writes, source reads, clean and dirty computed reads, and observed recomputation were 0.98–1.05.
+- The commit-time promotion workloads ranged 0.90–1.04 across repeats, with no consistent direction.
+
+No material regression was found.
+
+**Size.**
+- `signal-only` grew from 7036 B to 7054 B gzip (+18), which is 14 B over its 7040 B budget.
+- `core` grew from 7079 B to 7094 B (budget 7104).
+
+The two checks are already in minimal form. The `signal-only` budget was raised by one 64-byte step, from 7040 to 7104, the granularity every budget in `scripts/size-budget.json` uses. No other budget changed. The structural checks still pass: no DeepSignal or React-store code in `signal-only` or `core`.
+
+### P2 — switching a host prop from a signal back to a plain value could leave stale DOM
+
+**Reproduction.** `<button disabled={bound ? dis : false}>`. Render with `bound`, write `dis.value = true` off-render, then re-render with `bound = false`:
+
+| Prop | v0.1.1 | `05fa6fb` |
+| --- | --- | --- |
+| `disabled` (signal → `false`) | enabled | still disabled |
+| `className` (`"x"` → write `"y"` → plain `"x"`) | `"x"` | `"y"` |
+| `style` (`{color: red}` → write `{color: blue, fontWeight: bold}` → plain `{color: red}`) | `color: red` | `color: blue; font-weight: bold` |
+
+- v0.1.1 got this right only because its wrapper changed the element type and remounted the node.
+- A plain value that *differs* from the render-time snapshot was already applied on `05fa6fb`.
+- Plain → signal and signal → another signal were already correct.
+
+Real Chromium shows the same `05fa6fb` result. In both builds the node identity, the focus, and a sibling field's typed value were kept.
+
+**Cause.**
+- React is handed a render-time snapshot of a bound prop (`readInitialValue`, a `.peek()`). The binding then writes the DOM directly.
+- React 19 detaches a host's old ref right before it diffs the host's props (`commitMutationEffectsOnFiber`: `safelyDetachRef`, then `commitHostUpdate`). That diff starts from the snapshot.
+- So a plain value equal to the snapshot was skipped, while the binding had already been detached.
+
+**Fix** (`src/runtime/jsx.ts`). The ownership handoff point is that ref detach:
+- Each binding tuple carries the snapshot React was handed.
+- The `prop` and `style` writers record the last value they applied and expose `restore(snapshot)`.
+- On a current (not stale) detach, the binder restores each `prop`/`style` binding to its snapshot. It skips the write when the last applied value already equals the snapshot. React's diff then applies the plain value.
+- Two-way kinds (`value`, `checked`, `select`) are untouched. React reads their uncontrolled default only at mount, and on a switch to a controlled plain value React compares against the DOM itself. Guard tests cover both.
+- So that the restored snapshot is always the committed one, the binding-ref cache now also matches snapshots: `Object.is` for `prop`, shallow content for `style`, whose snapshot is a fresh copy every render. An owner re-render that hands React a different bound value therefore gets a new ref:
+  1. The old ref's detach restores the snapshot.
+  2. React writes the new snapshot.
+  3. The re-attach refreshes in the same commit.
+
+  Without this, a re-render with a newer snapshot followed by a switch back to that value left the old value. The test "uses the snapshot of the latest committed render, not the first" covers this.
+
+There is no wrapper and no remount, and the element keeps its identity.
+
+**Behavior notes:**
+- **Stable user refs.** A stable user ref is now also detached and re-attached within one commit when the owner re-renders with a different bound `prop`/`style` value than its previous render. Before, that happened only when the bindings themselves changed. The `jsx-bindings` guide (EN/JA) now says so.
+- **Unmounted nodes.** A node removed by unmount now carries the props React last rendered instead of the binding's last write. Detach cannot tell an unmount from a prop switch, and React diffs right after it. Two existing assertions encoded the old detached value, and they now assert the rendered value. Both still prove that a write after unmount is ignored:
+  - `tests/react-signal-elements.test.tsx` "keeps a StrictMode host binding live for one update and inert after unmount";
+  - `e2e/browser.spec.ts` "cleans a StrictMode host binding after unmount", in Chromium, Firefox, and WebKit.
+- **Hidden Activity or Suspense boundaries.** A hidden boundary detaches refs, so the node is restored while hidden and refreshed on reveal. A plain value rendered while hidden is applied. Tests cover both.
+
+**Tests** (same file): 13 tests. 7 fail on `05fa6fb`. The other 6 are guards:
+- `value` and `checked` switches;
+- a plain value that differs from the snapshot;
+- a switch from one signal to another;
+- two Activity cases.
+
+**Size.**
+- `jsx-runtime` grew from 10708 B to 10895 B gzip (+187), within its 11264 B budget.
+- `index-full` grew from 16533 B to 16758 B (+225), within its 17280 B budget.
+
+### P2 companion — form reset after a user edit (distinct, documented)
+
+This was reproduced in jsdom against the P2 fix, and in Chromium on `05fa6fb` during the review:
+1. A bound input, textarea, or checkbox whose `onChange` writes the signal.
+2. The user edits it.
+3. `form.reset()` or React 19's reset after a `<form action>` then restores the render-time value (`"init"`) while the signal holds the edit.
+
+These cases restore the signal's value:
+- a programmatic write, then a reset;
+- an edit followed by a programmatic write, then a reset;
+- a write made in the action or in `onReset`.
+
+**Cause.** After a change event, React restores the target's controlled state from the fiber's props. That re-applies the render-time `defaultValue`/`defaultChecked` over the default the binding had just synchronized. This is not the ref-detach path, so the P2 fix does not reach it, and a fix would need a separate redesign.
+
+**Decision.** Narrow the claim rather than redesign. These docs now state the actual contract (a reset restores the last value written to the signal, except after a user edit) and the workaround (write the signal in the action or in `onReset`):
+- `docs/guides/jsx-bindings.md` and `.ja.md`, "value and checked";
+- `docs/migration/v0.2.md` and `.ja.md`, "JSX and hooks".
+
+### P3 — parameter relocation could emit a required parameter after an optional one
+
+**Reproduction.** In a `.ts` or `.tsx` module:
+
+```ts
+export function useLabel(prefix?: string, value = count.value) { … }
+```
+
+- `05fa6fb` emitted `useLabel(prefix?: string, _param)`.
+- A Vite 8.3.1 build (`builtin:vite-transform`, Oxc) then failed with "A required parameter cannot follow an optional parameter": 3 errors for a fixture with three such functions.
+- v0.1.1 left the parameter list untouched (it did not relocate parameters), so its output was valid.
+
+**Cause.** `relocateTrackedParameters` replaces each moved parameter with a generated identifier and never marked that identifier optional.
+
+**Fix** (`transform.ts`):
+- The generated parameter is marked `?` exactly where TypeScript treats the original as optional:
+  - when the original carries `?`;
+  - or when it has a default and every parameter after it is optional or a rest element.
+- `(value = sig.value, required: number)` therefore keeps a required `_param`.
+- The marker is emitted only when the file was parsed with Babel's `typescript` plugin, so JavaScript output is unchanged.
+
+Semantics are unchanged:
+- Omitting the argument or passing `undefined` still applies the default, and passing a value still uses it.
+- `function.length` is unchanged from `05fa6fb`'s output (the marker is type-only). The pre-existing, documented relocation length change remains: `useLabel` has length 1 in source and 2 after the transform.
+- Rest parameters, type annotations, destructuring, and `forwardRef`'s two-parameter shape are unchanged.
+
+**Tests** (`packages/unplugin-react-fine-grained-signals/tests/transform.test.ts`, "parameter optionality after a relocated default"). Each output is also parsed with Vite's `transformWithOxc`. The new tests cover:
+- a component and a custom hook in both managed and inject modes;
+- eight further TypeScript shapes, including a defaulted parameter followed by a required one;
+- a JavaScript guard.
+
+The three TypeScript tests fail on `05fa6fb`. Two existing `.tsx` expectations that asserted a required `_param` after a default now assert `_param?`. A real `vite build` of the fixture fails with the `05fa6fb` plugin and succeeds with the fix.
+
+### Validation
+
+The complete gate ran after the fixes, unmodified and without worker limits, and with no threshold change. The only budget change is the `signal-only` step above.
+
+The first run failed `pnpm test:browser`: 3 of 27, the StrictMode unmount test in each browser, because of the detached-node behavior note under P2. Its lint passed but reported four new warnings from the new tests, and the tests were restructured to remove them. After those changes, `typecheck`, `lint`, `test`, `test:coverage`, `test:browser`, `size`, and `git diff --check` were rerun. The rest of the gate ran on the final production code.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 31 files / 398 tests (previously 30 / 370); transform 5 files / 275 passed, 3 skipped (previously 271 / 3) |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed: 3 independent Alien systems |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 27/27 |
+| `pnpm size` | passed (`signal-only` budget 7104) |
+| `git diff --check` | passed |
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.14% | 86.91% | 97.60% | 95.44% |
+| Transform (thresholds 92/90/92/95) | 92.70% | 90.81% | 95.45% | 96.69% |
+
+Exact gzip sizes (bytes):
+
+| Scenario | `05fa6fb` | Now | Budget |
+| --- | ---: | ---: | ---: |
+| signal-only | 7036 | 7054 | 7104 (was 7040) |
+| core | 7079 | 7094 | 7104 |
+| core+hooks | 8708 | 8718 | 8768 |
+| deep | 11978 | 11998 | 12032 |
+| index-full | 16533 | 16758 | 17280 |
+| jsx-runtime | 10708 | 10895 | 11264 |
+| utils | 8548 | 8567 | 8640 |
+
+### Release notes
+
+A draft of the v0.2.0 GitHub Release notes is in [`v0.2.0-release-notes.md`](./v0.2.0-release-notes.md). Nothing has been released.
+
+### State after the targeted validation
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The fixes are one local commit on top of `05fa6fb`. It was not pushed, and it needs its own GitHub Actions Test/E2E pass before tagging.
+- No tag, publish, or GitHub Release was performed.

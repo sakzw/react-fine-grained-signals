@@ -426,4 +426,10 @@ The chronology after the freeze is:
    - cleaned up documentation and comment findings;
    - recorded the remaining behavior-changing findings as deferred.
 
-   That commit needs its own Test/E2E pass before tagging.
+   That commit (`05fa6fb`) passed Test/E2E.
+6. A final targeted validation of three newly reported v0.2 regressions confirmed and fixed all three (see the [closure record](./post-m3-release-review-closure.md#final-targeted-release-blocker-validation)):
+   - P1: a computed first read during a render could stay stale after an unobserved source write, or after a computed it read changed between render and commit;
+   - P2: switching a host prop from a signal back to a plain value could leave the signal's last value in the DOM;
+   - P3: the transform could emit a required parameter after an optional one, which Oxc rejects.
+
+   The related form-reset claim was narrowed in the docs. The `signal-only` size budget grew by one 64-byte step. A [release-note draft](./v0.2.0-release-notes.md) was added. The fix commit needs its own Test/E2E pass before tagging. Versions stay `0.2.0`; nothing was tagged, published, or released.
