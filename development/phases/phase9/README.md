@@ -148,13 +148,18 @@ Before final artifact validation, update both package versions to `0.2.0` so tar
 pnpm typecheck
 pnpm lint
 pnpm test
+pnpm test:coverage
 pnpm build
 pnpm test:phase4-duplicate
+pnpm test:mixed-version
 pnpm test:consumer
+pnpm prepare:e2e
 pnpm test:browser
 pnpm size
 git diff --check
 ```
+
+`pnpm test:coverage` enforces the frozen coverage thresholds, `pnpm test:mixed-version` runs the published v0.1.1 against this build (the generations must reject each other's signals), and `pnpm prepare:e2e` installs the isolated React Router example the browser suite builds.
 
 Pack both packages and validate the real tarballs from a clean consumer. `npm publish`, tagging, pushing, and GitHub release creation remain outside Phase 9. The documented release path is `pnpm publish`; do not bump versions during M0.
 
@@ -395,4 +400,8 @@ M2 closed the v0.1.1 API migration, migration documentation, and packed-consumer
 
 ### Pre-M3 correctness and compatibility closure
 
-The v0.2.0 release review's findings (createElement fallback, bare-scope speculative cache, cross-copy activation/refresh/untracked, generation brand, DeepSignal tracking, host identity, form reset, deep-signal positions, transform plain calls and React Compiler ordering, dependency pin, nested-effect ownership, and the smaller items) are fixed, narrowed, documented, or disproved in [pre-m3-closure.md](./pre-m3-closure.md), with paired performance and size deltas against the clean `91ad17f` baseline. Package versions are unchanged and M3 has not begun.
+The v0.2.0 release review's findings (createElement fallback, bare-scope speculative cache, cross-copy activation/refresh/untracked, generation brand, DeepSignal tracking, host identity, form reset, deep-signal positions, transform plain calls and React Compiler ordering, dependency pin, nested-effect ownership, and the smaller items) are fixed, narrowed, documented, or disproved in [pre-m3-closure.md](./pre-m3-closure.md), with paired performance and size deltas against the clean `91ad17f` baseline. Package versions were unchanged at that commit (`0cf09a1`).
+
+### M3 — v0.2.0 release-candidate freeze closure
+
+Both packages are `0.2.0`; that is the only change from `0cf09a1`. The packed tarballs were inspected and installed into a clean consumer: the runtime ships `alien-signals` `3.2.1`, and the unplugin's `workspace:^` peer packs as `^0.2.0`. The complete gate above passed without worker limits or changed thresholds or budgets: 356 runtime tests, 259 transform tests (3 skipped), coverage, the mixed-version smoke against the published 0.1.1, the consumer smoke, 27/27 browser tests, and size. Evidence is recorded in [m3.md](./m3.md). No tag, push, publish, or GitHub Release was performed.
