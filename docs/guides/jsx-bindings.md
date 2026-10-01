@@ -39,7 +39,7 @@ export default {
 };
 ```
 
-Either way both entry points are used: `jsx-runtime` in production builds and `jsx-dev-runtime` in development, and this package ships both.
+Either way both entry points are used: `jsx-runtime` in production builds and `jsx-dev-runtime` in development, and this package ships both. For the one shape the automatic runtime cannot express — a `key` written after a prop spread, `<div {...props} key="k" />` — TypeScript, Babel, and Oxc fall back to importing `createElement` from the package root, which this package also exports with the same signal bindings.
 
 The two forms select the same runtime; the pragma only narrows where it applies. [`examples/react-router`](../../examples/react-router) sets `jsx` but not `jsxImportSource` in its `tsconfig.json`, and opts two of its components in by pragma.
 
@@ -94,12 +94,15 @@ A number bound to a CSS property is written with a `px` suffix unless the proper
 
 - A *derived* value bound to `value` (for example a signal that trims or upper-cases what the user typed) can still move the caret when the derived string differs from what was typed. That part is not solved here.
 - `value`/`checked` on other elements (`<li value>`, `<option value>`, `<meter value>`, ...) are plain write-only attributes, not two-way bound, so they use the same direct-attribute binding as `title`/`disabled`.
+- The signal is the source of truth across a form reset as well. The binding keeps the element's default (`defaultValue`, `defaultChecked`, an option's `defaultSelected`) equal to the bound value, so `form.reset()`, a reset button, and React 19's automatic reset after a `<form action>` restore the signal's current value instead of the first render's — the same thing React does for a controlled input. To clear a field on reset, write the signal.
 
 ## Constraints
 
 - No event handlers, SVG props, or other host props outside the allowlist above are direct-bound.
 - Direct-binding writes happen outside the React scheduler and remain an experimental optimization.
-- Keep whether a host prop is bound fixed for the element lifetime. Switching between a plain value and a signal changes the wrapper type and remounts the DOM subtree.
+- A host prop can switch between a plain value and a signal across renders. The element keeps its type and its children keep their state; only the binding is attached or detached. (Switching `value`/`checked` between a signal and a plain value still switches the input between React's uncontrolled and controlled modes, with React's usual warning.)
+- Bindings are attached through a ref on the host element itself. A ref you pass is still called with the element exactly as React would call it, and is not re-invoked by unrelated re-renders as long as it is stable.
+- A `deepSignal` is not accepted as a signal child or a bound prop. Those positions follow root replacement only, so nested mutations would never show; TypeScript rejects them. Read deep state inside a tracked component, or select a primitive with [`useDeepSignalValue`](./hooks.md#usedeepsignalvalue).
 - For SSR and hydration, ensure the initial signal values are identical on server and client. Do not place request-specific signals in shared module scope; create them per request.
 - A computed signal whose getter throws after binding will skip DOM writes for that cycle and log the error via `console.error` — once per contiguous failure episode, not per write. The error message is `"react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` with `{ cause: error }`. Direct bindings bypass React's render cycle, so there is no Error Boundary to catch thrown errors; use [`useSignalValue`](./hooks.md#usesignalvalue) if you need Error Boundary semantics for a failing computed.
 - Two things about `value`/`checked`/`style` are still open — see [the direct-binding design note](../../development/design/direct-binding-value-checked-style.md) for the current state: caret preservation for a *derived* `value`, and fine-grained per-property `style` tracking (`style={{ color: signal }}`).

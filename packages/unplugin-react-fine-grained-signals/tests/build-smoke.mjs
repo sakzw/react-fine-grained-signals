@@ -40,3 +40,22 @@ const artifacts = await import("node:fs/promises").then(({ readdir }) =>
 if (artifacts.some((artifact) => artifact.endsWith(".cjs") || artifact.endsWith(".d.cts"))) {
   throw new TypeError("The ESM-only package must not emit CommonJS artifacts");
 }
+
+// A CommonJS build config (`webpack.config.js` / `next.config.js` without
+// `"type": "module"`) loads this package with `require()`. There is no CJS
+// build: the `default` export condition points `require` at the same ESM files,
+// which Node's `require(esm)` loads (unflagged since 20.19 / 22.12, so within
+// this package's `engines`). Resolved by the package's own name -- Node's
+// self-reference -- so the `exports` map itself is what is under test, not a
+// file path that would bypass it.
+const { createRequire } = await import("node:module");
+const requireFromPackage = createRequire(import.meta.url);
+for (const entry of entries) {
+  const required = requireFromPackage(`unplugin-react-fine-grained-signals/${entry}`);
+  if (typeof required.default !== "function") {
+    throw new TypeError(`require() of the ${entry} entry must expose the plugin factory as .default`);
+  }
+}
+if (typeof requireFromPackage("unplugin-react-fine-grained-signals").reactFineGrainedSignals !== "object") {
+  throw new TypeError("require() of the root entry must expose reactFineGrainedSignals");
+}

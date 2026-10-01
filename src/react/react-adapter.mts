@@ -1,5 +1,5 @@
 /* React hooks backed by attempt-local render tracking. */
-import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
+import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import type { AlienDerivedRenderAdapter, RenderAttempt, RuntimeReadable } from "../core/alien-derived-types.js";
 import type { ReadableProtocolV1 } from "../core/execution-owner.js";
 
@@ -138,6 +138,13 @@ function createReactAdapter(
     const store = useMemo(() => new RenderStore(mode), []);
     useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     const attempt = store.begin(scopePolicy);
+    // A bare scope deliberately stays open after this component returns, so
+    // descendants rendered without their own scope are still attributed to it.
+    // Rendering is over once React starts committing, though, and every
+    // insertion effect in the tree runs before any layout effect or ref
+    // callback. Closing here keeps descendants' layout effects and refs (which
+    // run before this component's own layout effect) out of the render attempt.
+    useInsertionEffect(() => { store.finish(attempt); }, [store, attempt]);
     useLayoutEffect(() => { store.commit(attempt); }, [store, attempt]);
     useEffect(() => {
       store.activate();

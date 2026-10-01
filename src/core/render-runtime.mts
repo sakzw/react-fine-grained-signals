@@ -38,7 +38,12 @@ function readComputed(readable: object, node: RuntimeComputed, attempt: RenderAt
   addDependency(attempt, readable, node.renderRevision);
   const cache = attempt.computedCache;
   let entry = cache.get(node);
-  if (entry !== undefined) {
+  // A speculative result is only reusable while every dependency it read is
+  // still at the revision it saw. An attempt can outlive its render (a bare
+  // scope stays open until commit or a microtask, and on the server nothing
+  // ever commits), so this is what keeps "read, write, read again" from
+  // returning the old value. Checked here, on reuse, so writes pay nothing.
+  if (entry !== undefined && isEntryCurrent(entry)) {
     if (entry.hasError) throw entry.error;
     return entry.value;
   }
@@ -69,6 +74,22 @@ function readComputed(readable: object, node: RuntimeComputed, attempt: RenderAt
   }
   if (entry.hasError) throw entry.error;
   return entry.value;
+}
+
+// Sources bump their revision on every value-changing write. A computed's
+// revision only moves when it re-evaluates, so it also has to be clean (a
+// write upstream marks even an unwatched computed dirty or pending, since
+// computeds stay linked to their sources). Foreign protocols report their own.
+function isEntryCurrent(entry: SpeculativeComputedEntry): boolean {
+  for (const [dependency, revision] of entry.dependencies) {
+    const node = core.getNodeForReadable(dependency);
+    if (node === undefined) {
+      if ((dependency as { getRevision(): number }).getRevision() !== revision) return false;
+    } else if (node.renderRevision !== revision || (node.kind === "computed" && !core.isComputedClean(node))) {
+      return false;
+    }
+  }
+  return true;
 }
 
 core.configureRenderAdapter({ readSource, readComputed });
@@ -182,7 +203,7 @@ function markSpeculativeDeepRead(): void {
 
 function subscribeReadables(readables: readonly RuntimeReadable[], notify: () => void): () => void {
   let initial = true;
-  return core.effect(() => {
+  return core.detachedEffect(() => {
     for (const readable of readables) {
       try { readable.value; } catch { /* Keep errored computed boundaries observed. */ }
     }

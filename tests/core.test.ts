@@ -25,7 +25,7 @@ function collectRenderDependencies(read: () => void): RenderDependency[] {
 
 // Spelled out rather than imported: the literal string is the cross-instance
 // wire format, so a second copy of the package can only agree by matching it.
-const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal");
+const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal.v2");
 
 /** Produces what a signal from a second copy of this package looks like here. */
 function brandForeign<T extends object>(value: T, version: unknown = 1): T {
@@ -236,6 +236,19 @@ describe("core signal primitives", () => {
     // A later protocol version only widens the `{ value, peek() }` contract,
     // so an older instance keeps trusting it.
     expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, 2))).toBe(true);
+  });
+
+  it("does not recognize a v0.1.x-generation signal brand", () => {
+    // v0.1.x branded `react-fine-grained-signals.signal`; its signals cannot
+    // take part in v0.2 tracking, so they must not be mistaken for signals
+    // (JSX would otherwise render them through a binding that never updates).
+    const legacy = { value: 1, peek: () => 1 };
+    Object.defineProperty(legacy, Symbol.for("react-fine-grained-signals.signal"), { value: 1 });
+    expect(isSignal(legacy)).toBe(false);
+    // And a v0.2 signal does not carry the v0.1.x key, so a v0.1.x copy
+    // (which trusts any version under that key) does not recognize it either.
+    expect(Symbol.for("react-fine-grained-signals.signal") in signal(0)).toBe(false);
+    expect(Symbol.for("react-fine-grained-signals.signal") in computed(() => 0)).toBe(false);
   });
 
   it("rejects a brand that claims no supported protocol version", () => {

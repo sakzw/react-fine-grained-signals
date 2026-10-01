@@ -23,6 +23,7 @@ export interface ReactiveRuntime {
   signal<T>(value: T): RuntimeSignal<T>;
   computed<T>(getter: () => T): RuntimeReadonlySignal<T>;
   effect(fn: () => void | (() => void)): () => void;
+  detachedEffect(fn: () => void | (() => void)): () => void;
   batch<T>(fn: () => T): T;
   untracked<T>(fn: () => T): T;
   hasSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
@@ -49,6 +50,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
     signal: graph.signal,
     computed: graph.computed,
     effect: graph.effect,
+    detachedEffect: graph.detachedEffect,
     batch: graph.batch,
     untracked: graph.untracked,
     hasSubscribers: graph.hasSubscribers,

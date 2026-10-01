@@ -12,10 +12,10 @@
     "gzip": 12032
   },
   "index-full": {
-    "gzip": 13632
+    "gzip": 17280
   },
   "jsx-runtime": {
-    "gzip": 10624
+    "gzip": 11264
   },
   "utils": {
     "gzip": 8640

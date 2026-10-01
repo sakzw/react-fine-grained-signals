@@ -385,22 +385,94 @@ describe("private reactive runtime", () => {
     disposeQueued();
   });
 
-  it("keeps nested candidate effects flat unless their disposer is returned", () => {
+  // v0.1.x (built on Alien Signals' high-level effect) owned nested effects,
+  // and Alien 3.2.1 still does: an effect created while another effect runs is
+  // disposed by that owner's next run or its disposal. v0.2 keeps that
+  // contract rather than leaving one more live child behind per parent run.
+  it("disposes a nested effect when its owner re-runs or is disposed", () => {
     const runtime = createReactiveRuntime();
-    const source = runtime.signal(0);
-    const seen: number[] = [];
-    let disposeInner: (() => void) | undefined;
+    const generation = runtime.signal(0);
+    const child = runtime.signal(0);
+    const events: string[] = [];
     const disposeOuter = runtime.effect(() => {
-      source.value;
-      disposeInner ??= runtime.effect(() => {
-        seen.push(source.value);
+      const id = generation.value;
+      events.push(`outer:${id}`);
+      runtime.effect(() => {
+        events.push(`inner:${id}:${child.value}`);
+        return () => events.push(`inner-cleanup:${id}`);
       });
+      return () => events.push(`outer-cleanup:${id}`);
     });
 
+    generation.value = 1;
+    generation.value = 2;
+    events.length = 0;
+    child.value = 1;
+    // Exactly one live child, the one created by the latest run.
+    expect(events).toEqual(["inner-cleanup:2", "inner:2:1"]);
+
+    events.length = 0;
+    generation.value = 3;
+    // Children go before the owner's own cleanup, as in Alien 3.2.1.
+    expect(events).toEqual(["inner-cleanup:2", "outer-cleanup:2", "outer:3", "inner:3:1"]);
+
+    events.length = 0;
     disposeOuter();
-    source.value = 1;
-    expect(seen).toEqual([0, 1]);
-    disposeInner?.();
+    expect(events).toEqual(["inner-cleanup:3", "outer-cleanup:3"]);
+    child.value = 2;
+    expect(events).toEqual(["inner-cleanup:3", "outer-cleanup:3"]);
+    expect(graphNodeOf(child).subs).toBeUndefined();
+  });
+
+  it("unlinks a manually disposed nested effect from its owner", () => {
+    const runtime = createReactiveRuntime();
+    const source = runtime.signal(0);
+    const child = runtime.signal(0);
+    let disposeInner: (() => void) | undefined;
+    let innerRuns = 0;
+    const disposeOuter = runtime.effect(() => {
+      source.value;
+      disposeInner = runtime.effect(() => {
+        child.value;
+        innerRuns += 1;
+      });
+    });
+    const outerNode = graphNodeOf(source).subs!.sub as unknown as { deps: { dep: { kind: string }; nextDep: unknown } | undefined };
+    const ownedKinds = () => {
+      const kinds: string[] = [];
+      for (let link = outerNode.deps as { dep: { kind: string }; nextDep: unknown } | undefined; link; link = link.nextDep as typeof link) kinds.push(link.dep.kind);
+      return kinds;
+    };
+    expect(ownedKinds()).toEqual(["source", "effect"]);
+
+    disposeInner!();
+    expect(ownedKinds()).toEqual(["source"]);
+    child.value = 1;
+    expect(innerRuns).toBe(1);
+    // A second disposal, now through the owner, is a no-op for the child.
+    disposeOuter();
+    expect(graphNodeOf(child).subs).toBeUndefined();
+  });
+
+  it("disposes an effect created inside a computed when the computed re-evaluates", () => {
+    const runtime = createReactiveRuntime();
+    const input = runtime.signal(0);
+    const child = runtime.signal(0);
+    const live: number[] = [];
+    const derived = runtime.computed(() => {
+      const id = input.value;
+      runtime.effect(() => {
+        child.value;
+        live.push(id);
+        return () => live.splice(live.indexOf(id), 1);
+      });
+      return id;
+    });
+    const stop = runtime.effect(() => { derived.value; });
+    input.value = 1;
+    expect(live).toEqual([1]);
+    stop();
+    expect(live).toEqual([]);
   });
 
   it("composes nested effect lifetime through returned cleanup", () => {

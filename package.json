@@ -62,7 +62,7 @@
     "LICENSE-ALIEN-SIGNALS.txt"
   ],
   "dependencies": {
-    "alien-signals": "^3.2.1"
+    "alien-signals": "3.2.1"
   },
   "scripts": {
     "bench": "pnpm build:runtime && node --expose-gc benchmarks/core.mjs",
@@ -84,6 +84,7 @@
     "test:runtime": "vitest run",
     "test:transform": "pnpm --filter unplugin-react-fine-grained-signals test",
     "test:phase4-duplicate": "node tests/phase4-duplicate-smoke.mjs",
+    "test:mixed-version": "pnpm build:runtime && node tests/mixed-version-smoke.mjs",
     "test:coverage": "pnpm test:coverage:runtime && pnpm test:coverage:transform",
     "test:coverage:runtime": "vitest run --coverage",
     "test:coverage:transform": "pnpm --filter unplugin-react-fine-grained-signals test:coverage",
@@ -109,6 +110,7 @@
     "oxlint": "^1.86.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
+    "react-fine-grained-signals-v0.1": "npm:react-fine-grained-signals@0.1.1",
     "tsdown": "0.23.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.1",

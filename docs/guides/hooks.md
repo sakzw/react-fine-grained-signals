@@ -81,7 +81,7 @@ With the build plugin in your build you do not write this by hand: in its defaul
 
 ### Tracking boundary
 
-The collection window closes at the next `useSignalTracking()` call, at the commit-phase layout effect, or in a microtask after the current synchronous execution — not at the point the component returns.
+The collection window closes at the next `useSignalTracking()` call, when React starts committing (before any layout effect or ref callback runs), or in a microtask after the current synchronous execution — not at the point the component returns. Reads outside an open window, including the layout effects and refs of the component's own descendants, are ordinary reactive reads.
 
 That is why every reading component needs its own call: a read from a sibling or descendant that does not call `useSignalTracking()` can be attributed to another component's still-open window, and that signal then silently stops updating the component that actually read it.
 
@@ -121,6 +121,8 @@ useSignalValue<T>(source: ReadonlySignal<T>): T
 ```
 
 Subscribes to a single signal and returns its current value. This is the low-level explicit leaf subscription, for when you want one named subscription instead of a component-wide `useSignalTracking()` window.
+
+- It follows replacement of the signal's value only. A `deepSignal` is rejected by its type, because nested mutations would never re-render; use [`useDeepSignalValue`](#usedeepsignalvalue) to select from deep state.
 
 ## useDeepSignalValue
 

@@ -118,6 +118,8 @@ export interface AlienDerivedGraphRuntime {
   readonly signal: <T>(initialValue: T) => RuntimeWritable<T>;
   readonly computed: <T>(getter: () => T) => RuntimeReadable<T>;
   readonly effect: (callback: () => unknown) => () => void;
+  /** An effect that is never owned by the effect/computed running when it is created. */
+  readonly detachedEffect: (callback: () => unknown) => () => void;
   readonly batch: <T>(callback: () => T) => T;
   readonly untracked: <T>(callback: () => T) => T;
   readonly getNodeForReadable: (readable: object) => RuntimeNode | undefined;

@@ -53,7 +53,14 @@ export interface ReactFineGrainedSignalsOptions {
 // either invalid or reinterpreted as ESM, which makes `module` undefined at
 // runtime. Excluding them outright is the honest boundary -- an author who
 // wants the transform on that code can move it to `.mjs`/`.js`.
-const SCRIPT_MODULE = /\.m?[jt]sx?$/;
+//
+// Case-insensitive, to match the transform itself: it picks its parser plugins
+// with `/i` regexes (`App.TSX` gets `jsx` + `typescript`, exactly as `App.tsx`
+// does) and the esbuild loader map lower-cases the extension, so a
+// case-sensitive claim here was the one step that silently passed over
+// `App.JSX`/`App.TSX` -- the files a case-insensitive file system makes
+// perfectly ordinary. `.CJS`/`.CTS` stay excluded: the class cannot match a `c`.
+const SCRIPT_MODULE = /\.m?[jt]sx?$/i;
 
 export const pluginName = "unplugin-react-fine-grained-signals";
 
@@ -242,20 +249,53 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
     // esbuild hands a plugin its resolved build options through the `config`
     // hook, which is the only place a project's own `loader` map can be read.
     let configuredLoaders: Record<string, string> | undefined;
+    const transform = (code: string, id: string): InternalTransformResult | null =>
+      transformReactFineGrainedSignals(code, id, {
+        importSource: options.importSource ?? "react-fine-grained-signals",
+        reactImportSource: options.reactImportSource ?? "react",
+        mode: options.mode ?? "auto",
+        transform: options.transform ?? "managed",
+        reactCompiler: options.reactCompiler ?? "auto",
+      });
     return {
       name: pluginName,
       enforce: "pre",
       transformInclude(id) {
         return canTransform(id, options);
       },
-      transform(code, id): InternalTransformResult | null {
-        return transformReactFineGrainedSignals(code, id, {
-          importSource: options.importSource ?? "react-fine-grained-signals",
-          reactImportSource: options.reactImportSource ?? "react",
-          mode: options.mode ?? "auto",
-          transform: options.transform ?? "managed",
-          reactCompiler: options.reactCompiler ?? "auto",
-        });
+      transform,
+      // `enforce: "pre"` alone does not put this transform ahead of React
+      // Compiler under Vite. `@vitejs/plugin-react` 6 registers its compiler
+      // step (`vite:react-compiler`) with `enforce: "pre"` too, so the two land
+      // in the same group and Vite falls back to their order in the `plugins`
+      // array: `[react({ compiler: true }), signals()]` compiled every component
+      // first, memoized the JSX holding `count.value` behind the compiler's
+      // cache sentinel, and left this transform nothing to mark -- no
+      // `"use no memo"`, no boundary, and a UI that never updated after mount.
+      //
+      // Vite sorts each hook by its own `order` *within* the enforce-sorted
+      // list (`getSortedPluginsByHook`): every `order: "pre"` hook runs before
+      // every hook without one, in array order among themselves. That is what
+      // makes either array order work against a pre-enforced plugin that sets
+      // no `order` of its own, which is the case for plugin-react's compiler
+      // step. It is not an absolute guarantee: another plugin that also sets
+      // `order: "pre"` and is listed earlier still runs first, and the README
+      // says so.
+      //
+      // Expressed through unplugin's documented per-bundler override rather
+      // than an `order` field on the shared `transform` object: unplugin's own
+      // `ObjectHook` type carries only `filter`/`handler`, so an `order` there
+      // would survive only by accident of how its Vite adapter copies the hook.
+      // The override is merged onto the Vite plugin *after* unplugin wraps the
+      // shared hook, so it replaces that wrapper -- including the
+      // `transformInclude` check -- and has to apply `canTransform` itself.
+      vite: {
+        transform: {
+          order: "pre",
+          handler(code: string, id: string) {
+            return canTransform(id, options) ? transform(code, id) : null;
+          },
+        },
       },
       esbuild: {
         config(buildOptions: { loader?: Record<string, string> | undefined }) {

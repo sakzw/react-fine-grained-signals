@@ -57,6 +57,8 @@ Runs `fn` immediately, then again whenever a signal it read changes. Returns a d
 
 - A function returned from `fn` is its cleanup, run before the next execution and when the effect is disposed.
 - A thrown error is contained rather than propagated to the write that triggered the run.
+- An effect created while another effect (or a computed) runs is owned by it, as in v0.1: the owner's next run and its disposal dispose the nested effect, running its cleanup before the owner's own. Disposing a nested effect yourself is also fine.
+- An effect that calls its own disposer stops depending on everything, including signals it reads later in that same run.
 
 ### Error containment
 
@@ -80,7 +82,7 @@ Groups writes, deferring effect notifications until the callback completes, and 
 untracked<T>(fn: () => T): T
 ```
 
-Runs the callback without collecting reactive dependencies, and returns its result. Use it to read a signal from inside an effect or computed without subscribing to it.
+Runs the callback without collecting reactive dependencies, and returns its result. Use it to read a signal from inside an effect or computed without subscribing to it. It also suppresses tracking by another installed copy of this package, so a library that bundles its own copy can read your signals untracked.
 
 ## deepSignal
 
@@ -107,6 +109,9 @@ state.value.items.push("second");
 - `state.peek()` returns the untracked raw root and should be used for reads only.
 - The root must be a mutable plain object or array containing data properties. Accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1, as are non-extensible objects — they are rejected rather than made partially reactive.
 - Nested plain objects and arrays are reactive. Class instances, functions, `Date`, `Map`, `Set`, promises, and existing signals are treated as opaque values.
+- Array mutation methods (`push`, `splice`, `sort`, ...) do not subscribe the caller to the array they change; only the readers of the affected indices, `length`, and keys are notified. A `push` inside an effect therefore does not make that effect re-run on every later push.
+- Key enumeration and own-key checks (`Object.keys`, `for...in`, `Object.hasOwn`, `hasOwnProperty.call`) depend on which keys exist, not on their values. Reading a value through `Object.getOwnPropertyDescriptor(...).value` is not tracked as a value read; read the property itself.
+- Keys inherited from `Object.prototype` (`constructor`, `toString`, ...) stay reactive in dictionary-style objects: reading or checking one re-runs once it becomes an own property.
 
 ### Opaque Map and Set
 
@@ -126,7 +131,9 @@ Reports whether a value came from `signal`, `computed`, or `deepSignal`. The cus
 
 ### Cross-instance identification
 
-Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
+Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal.v2")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
+
+The key names the v0.2 generation. v0.1.x used `react-fine-grained-signals.signal`, and its signals cannot take part in v0.2 tracking (nor v0.2 signals in v0.1.x tracking), so the two generations deliberately do not recognize each other's signals: mixing them fails loudly in JSX instead of rendering a value that never updates. Keep a single major line of this package per page; see [the migration guide](../migration/v0.2.md#mixing-v01x-and-v02).
 
 Identity and reactivity use separate contracts. RFSG's `SIGNAL_BRAND` lets `isSignal()` recognize a public signal shape; the private `ReadableInteropV1` protocol carries reactive reads between RFSG package copies in the same global environment. Each copy owns its own runtime on `alien-signals/system`, so copies do not need one shared alien-signals module. Cross-copy batch calls are not one atomic transaction; see [the packaging note](../../development/design/packaging.md).
 

@@ -1,5 +1,5 @@
 import { coreRuntime } from "./core-runtime.js";
-import { SIGNAL_BRAND } from "./signal-brand.js";
+import { SIGNAL_BRAND, SIGNAL_BRAND_MIN_VERSION, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
 
 /** A readable reactive value. */
 export interface ReadonlySignal<T> {
@@ -15,11 +15,8 @@ export interface Signal<T> extends ReadonlySignal<T> {
 const signalInstances = new WeakSet<object>();
 
 // The brand carries a protocol version instead of `true` so a future instance
-// can tell which contract a foreign signal claims. A version only ever widens
-// the `{ value, peek() }` contract; a breaking change must take a new symbol
-// key, which is why anything from the minimum upwards is trusted here.
-const SIGNAL_BRAND_VERSION = 1;
-const SIGNAL_BRAND_MIN_VERSION = 1;
+// can tell which contract a foreign signal claims. See signal-brand.ts for why
+// v0.2 uses a different key from v0.1.x rather than a larger version number.
 
 /** Marks an internal signal implementation for the public identity guard. */
 export function registerSignal<T extends object>(value: T): T {
@@ -68,6 +65,16 @@ export function computed<T>(getter: () => T): ReadonlySignal<T> {
 /** Runs a reactive side effect and returns a disposer. */
 export function effect(fn: () => void | (() => void)): () => void {
   return coreRuntime.effect(fn);
+}
+
+/**
+ * Package-internal: an effect that is never owned by the effect or computed
+ * running when it is created. Hooks and JSX bindings create theirs from React
+ * commits, which can run synchronously inside a user effect (`flushSync`), and
+ * must not be disposed when that unrelated effect next re-runs.
+ */
+export function detachedEffect(fn: () => void | (() => void)): () => void {
+  return coreRuntime.detachedEffect(fn);
 }
 
 /** Groups writes, deferring effect notifications until the callback completes. */

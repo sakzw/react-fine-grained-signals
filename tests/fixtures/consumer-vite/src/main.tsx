@@ -5,6 +5,7 @@ import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/util
 const count = signal(0);
 const users = signal([{ id: "ada", name: "Ada" }]);
 const labels = signal(new Map([["ada", "Ada"]]));
+const tooltip = signal("spread");
 
 export function Counter() {
   return <output>{count.value}</output>;
@@ -18,6 +19,12 @@ export function ManagedBoundary() {
   } finally {
     signals.finish();
   }
+}
+
+// A key after a spread is the one shape the automatic runtime cannot express,
+// so compilers fall back to `createElement` from the package root.
+export function SpreadKey(props: { id: string }) {
+  return <p {...props} key="spread" title={tooltip} />;
 }
 
 export function Utilities() {

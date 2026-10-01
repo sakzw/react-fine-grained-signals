@@ -164,6 +164,7 @@ try {
   const entryContractPath = join(consumerRoot, "entry-contract.mjs");
   await writeFile(entryContractPath, `
     import { Fragment, jsxDEV } from "react-fine-grained-signals/jsx-dev-runtime";
+    import { createElement } from "react-fine-grained-signals";
     import generic, { pluginName, reactFineGrainedSignals } from "unplugin-react-fine-grained-signals";
     import vite from "unplugin-react-fine-grained-signals/vite";
     import rollup from "unplugin-react-fine-grained-signals/rollup";
@@ -174,6 +175,9 @@ try {
     if (typeof jsxDEV !== "function" || Fragment === undefined) {
       throw new Error("The packed jsx-dev-runtime must export jsxDEV and Fragment");
     }
+    if (typeof createElement !== "function") {
+      throw new Error("The packed root must export the classic createElement fallback");
+    }
     if (generic !== reactFineGrainedSignals || pluginName !== "unplugin-react-fine-grained-signals") {
       throw new Error("The generic unplugin entry must expose its named public plugin");
     }
@@ -181,11 +185,19 @@ try {
     if (raw.name !== pluginName || typeof raw.transform !== "function") {
       throw new Error("The generic unplugin entry must create a usable raw plugin");
     }
-    for (const [name, create] of [["vite", vite], ["rollup", rollup]]) {
-      const plugin = create({});
-      if (plugin.name !== pluginName || typeof plugin.transform !== "function") {
-        throw new Error(name + " entry must create a named transform plugin");
-      }
+    const rollupPlugin = rollup({});
+    if (rollupPlugin.name !== pluginName || typeof rollupPlugin.transform !== "function") {
+      throw new Error("rollup entry must create a named transform plugin");
+    }
+    // Vite gets an object hook with order "pre" so it runs ahead of other
+    // pre-enforced transforms such as @vitejs/plugin-react's React Compiler.
+    const vitePlugin = vite({});
+    if (
+      vitePlugin.name !== pluginName ||
+      vitePlugin.transform?.order !== "pre" ||
+      typeof vitePlugin.transform.handler !== "function"
+    ) {
+      throw new Error("vite entry must create a named transform plugin with an order: 'pre' hook");
     }
     for (const [name, create] of [["webpack", webpack], ["rspack", rspack]]) {
       if (typeof create({}).apply !== "function") {
@@ -218,6 +230,10 @@ try {
     "react-fine-grained-signals/runtime",
   ]) {
     if (!output.includes(entry)) throw new Error(`Consumer output did not retain ${entry}`);
+  }
+  // `<p {...props} key="spread" />` compiles to the root's classic factory.
+  if (!/import\s*\{[^}]*\bcreateElement\b[^}]*\}\s*from\s*["']react-fine-grained-signals["']/.test(output)) {
+    throw new Error("Consumer output must import createElement from the package root for a key after a spread");
   }
   // The fixture hand-writes one managed boundary (ManagedBoundary, opted out of
   // the transform) and leaves exactly one automatic candidate (Counter), so the

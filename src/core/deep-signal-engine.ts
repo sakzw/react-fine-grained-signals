@@ -26,6 +26,8 @@ export interface DeepSignalRuntimeAdapter {
   markWatched(source: DeepSignalSource<unknown>): void;
   hasSubscribers(source: DeepSignalSource<unknown>): boolean;
   batch<T>(callback: () => T): T;
+  /** Runs a callback without collecting dependencies, as the public `untracked`. */
+  untracked<T>(callback: () => T): T;
   isSignal(value: unknown): boolean;
   hasActiveSubscriber(): boolean;
   getBatchDepth(): number;
@@ -683,13 +685,24 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   };
 
   const track = (
+    metadata: PropertyMetadata,
     target: object,
     versions: Map<PropertyKey, VersionSignal>,
     indices: Set<number>,
     key: PropertyKey,
   ): void => {
     if (!shouldTrackDeepRead()) return;
-    if (isInheritedPrototypeMember(target, key)) return;
+    if (isInheritedPrototypeMember(target, key)) {
+      // An inherited member can only change by becoming (or ceasing to be) an
+      // own property, which is exactly what the iteration version reports.
+      // Plain objects subscribe to that, so dictionary-style state keyed by
+      // "constructor" or "toString" stays reactive without minting a version
+      // per inherited name. Arrays keep skipping: their inherited members are
+      // the methods every `.map()` reads, and an own data property named after
+      // one is not a supported shape.
+      if (!Array.isArray(target)) trackIterationOf(metadata);
+      return;
+    }
     if (isArrayIndex(key)) indices.add(Number(key));
     const version = getVersion(versions, key);
     // Records that something reactive depends on this key right now, which is
@@ -747,10 +760,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     if (prunable.size === 0) metadata.prunable = undefined;
   };
 
-  const trackIteration = (metadata: PropertyMetadata): void => {
-    if (!shouldTrackDeepRead()) return;
+  const trackIterationOf = (metadata: PropertyMetadata): void => {
     metadata.iteration ??= adapter.createVersionSignal(0);
     metadata.iteration.value;
+  };
+
+  const trackIteration = (metadata: PropertyMetadata): void => {
+    if (!shouldTrackDeepRead()) return;
+    trackIterationOf(metadata);
   };
 
   const notifyTruncatedIndices = (
@@ -827,7 +844,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         if (key === SIGNAL_BRAND && !Object.prototype.hasOwnProperty.call(target, key)) {
           return undefined;
         }
-        track(target, metadata.properties, metadata.propertyIndices, key);
+        track(metadata, target, metadata.properties, metadata.propertyIndices, key);
         const result = Reflect.get(target, key, receiver);
 
         if (
@@ -839,9 +856,15 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           if (cachedMethod?.method === result) return cachedMethod.wrapper;
 
           const method = result as (...args: unknown[]) => unknown;
+          // A mutator's own reads (`length`, the indices it shifts) are an
+          // implementation detail of the write, not something the caller
+          // depends on: tracked, `push` inside an effect would subscribe that
+          // effect to `length` and re-run it on every later push. Vue 3.6's
+          // array instrumentations pause tracking the same way. The writes
+          // still go through the proxy (`this`), so they notify as usual.
           const wrapper = function (this: unknown, ...args: unknown[]) {
             try {
-              return adapter.batch(() => Reflect.apply(method, this, args));
+              return adapter.batch(() => adapter.untracked(() => Reflect.apply(method, this, args)));
             } finally {
               sweepPrunedKeys(metadata, target);
             }
@@ -873,7 +896,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         return wrap(result);
       },
 
-      set(target, key, nextValue) {
+      set(target, key, nextValue, receiver) {
+        // A write that only reaches this proxy through the prototype chain
+        // (`Object.create(state).x = 1`) defines `x` on that receiver, as an
+        // ordinary [[Set]] would; it changes nothing in this deep state.
+        if (receiver !== metadata.proxy) return Reflect.set(target, key, nextValue, receiver);
         if (key === "__proto__") {
           throw new TypeError("deepSignal() does not support prototype mutation");
         }
@@ -898,7 +925,10 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
             notify(metadata.properties, key);
           }
-          if (existed !== existsNow) notify(metadata.existence, key);
+          // Existence versions back both `in` (any key in the chain) and own-key
+          // checks such as `Object.hasOwn` (see `getOwnPropertyDescriptor`), so
+          // either kind of change notifies them.
+          if (existed !== existsNow || owned !== ownedNow) notify(metadata.existence, key);
           if (owned !== ownedNow) notifyIteration(metadata);
 
           if (Array.isArray(target) && oldLength !== undefined) {
@@ -918,16 +948,15 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       },
 
       deleteProperty(target, key) {
-        const existed = Reflect.has(target, key);
         const owned = Object.prototype.hasOwnProperty.call(target, key);
         const succeeded = Reflect.deleteProperty(target, key);
         if (!succeeded || !owned) return succeeded;
 
         adapter.batch(() => {
           notify(metadata.properties, key);
-          if (existed !== Reflect.has(target, key)) {
-            notify(metadata.existence, key);
-          }
+          // An own key was removed, which own-key existence checks observe even
+          // when `in` still finds the key on the prototype.
+          notify(metadata.existence, key);
           notifyIteration(metadata);
           markPrunable(metadata, key);
         });
@@ -936,13 +965,16 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       },
 
       getOwnPropertyDescriptor(target, key) {
-        // `Object.getOwnPropertyDescriptor(state, key).value` is a read of the
-        // property, so it subscribes through the same per-key version signal the
-        // `get` trap uses and hands back the same wrapped value. Without this
-        // trap the descriptor carried the raw nested object: a read that never
-        // re-ran, and — via `Object.getOwnPropertyDescriptors` — every top-level
-        // raw reference in one call.
-        track(target, metadata.properties, metadata.propertyIndices, key);
+        // [[GetOwnProperty]] is what `Object.hasOwn`, `hasOwnProperty.call`,
+        // and the enumerability check inside `Object.keys`/`for...in` use, so it
+        // subscribes to the key's *existence*, not its value: tracking the value
+        // here made a keys-only reader re-run on every property write. Reads
+        // that need the value (`Object.entries`, spread, JSON) also go through
+        // [[Get]] and track it there; a value read through a descriptor alone
+        // (`Object.getOwnPropertyDescriptor(state, key).value`) does not re-run
+        // on value changes. The value is still wrapped so no raw nested object
+        // escapes through `Object.getOwnPropertyDescriptors`.
+        track(metadata, target, metadata.existence, metadata.existenceIndices, key);
         const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
         if (descriptor === undefined || !("value" in descriptor)) return descriptor;
 
@@ -964,7 +996,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       },
 
       has(target, key) {
-        track(target, metadata.existence, metadata.existenceIndices, key);
+        track(metadata, target, metadata.existence, metadata.existenceIndices, key);
         return Reflect.has(target, key);
       },
 

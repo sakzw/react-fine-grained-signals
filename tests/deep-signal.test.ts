@@ -11,7 +11,7 @@ function metadataOf(value: object) {
 
 // Spelled out rather than imported: the literal string is the cross-instance
 // wire format, so a second copy of the package can only agree by matching it.
-const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal");
+const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal.v2");
 
 /** Produces what a signal from a second copy of this package looks like here. */
 function brandForeign<T extends object>(value: T): T {

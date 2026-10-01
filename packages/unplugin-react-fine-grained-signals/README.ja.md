@@ -15,8 +15,18 @@ bundler integrationです。
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-`react-fine-grained-signals` はpeer dependencyです。このpackageはESM-onlyです。
-CommonJSの`require()`ではなく、ESM設定から`import`してください。
+`react-fine-grained-signals` はpeer dependencyです。Node.jsは
+`^22.18.0 || >=24.11.0` が必要です。変換が依存するBabel 8が宣言している範囲です。
+
+このpackageはESMだけを配布しており、CommonJS buildはありません。`import` を
+使うESMのbuild設定が基本ですが、CommonJSの設定ファイル（`"type": "module"` の
+ないprojectの `webpack.config.js` や `next.config.js`）からも `require()` で
+読み込めます。上記の範囲のNode.jsはすべて、組み込みの `require(esm)` によって
+ESMのentry pointを読み込むためです。plugin factoryは `default` exportです。
+
+```js
+const signals = require("unplugin-react-fine-grained-signals/webpack").default;
+```
 
 ## Vite
 
@@ -28,6 +38,37 @@ export default defineConfig({
   plugins: [signals({ mode: "auto" })],
 });
 ```
+
+### React Compilerと併用する場合
+
+React Compilerはこの変換の *後* に実行される必要があります。そうでないと、
+このpluginがcomponentに `"use no memo"` を付ける前に、compilerが `.value` の
+読み取りをmemoizationで消してしまい、そのcomponentは最初のrender以降、無言で
+更新されなくなります。compilerを実行するpluginより前に `signals()` を
+listしてください。
+
+```ts
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+import signals from "unplugin-react-fine-grained-signals/vite";
+
+export default defineConfig({
+  plugins: [signals({ mode: "auto" }), react({ compiler: true })],
+});
+```
+
+Viteでは、この順序をhookのレベルでも守っています。pluginは `enforce: "pre"`
+で、さらに `transform` hookが `order: "pre"` を宣言しており、Viteは
+`enforce: "pre"` のgroupの中でこの値に基づいて並べ替えます。そのため、
+`react()` を先にlistした場合でも、`@vitejs/plugin-react` 6のcompiler step
+（`react({ compiler: true })`。それ自体は `enforce: "pre"` でhookの `order` は
+なし）より先に実行されます。以前はこの順序だとcomponentが先にcompileされて
+いました。ただしこれはViteの並び順の規則であって、絶対的な保証ではありません。
+transformで同じく `order: "pre"` を宣言し、より前にlistされたpluginは、
+やはり先に実行されます。したがって `signals()` を先頭に置く構成が引き続き
+推奨であり、hookの順序が効かない場合は必須です。Rollupは配列内の位置だけで
+順序を決めますし、Babel経由の構成（`@rolldown/plugin-babel` と
+`reactCompilerPreset()`）はこのpluginとの組み合わせで検証していません。
 
 ## その他のbundler
 
@@ -142,6 +183,49 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
 始まりでない名前にするか、実際にcomponentとしてrenderされるときにだけ手動で
 opt-inします。
 
+## 関数として呼び出されるcomponent
+
+module内で通常の関数として呼び出されるPascalCaseの関数 — `Title()`、
+`Title?.()`、`Title!()`、objectに保持されたものなら `ns.Home()` — は、Reactが
+独立したcomponentとしてmountすることはなく、その本体は呼び出し元のrenderの
+中でそのまま実行されます。そのため、`all` を含むどのmodeでも独自のboundaryを
+持たず、そのJSXと `.value` 読み取りは、呼び出しを行うcomponentまたはcustom
+hookが収集します。
+
+```jsx
+function Title() { return <h1>{count.value}</h1>; }
+// Outerが変換されて `count` をsubscribeし、Titleはそのまま残ります。
+function Outer({ show }) { return <div>{show && Title()}</div>; }
+```
+
+`Title` の中にboundaryを置くと、`show` がtrueの間だけ実行されるhookが
+`Outer` に加わります。これはReactが拒否する条件付きのhook呼び出しです
+（"Rendered more hooks than during the previous render"）。event handler、
+`useEffect` / `useLayoutEffect` / `useInsertionEffect` / `useCallback` /
+`useMemo` のcallback、またはasync関数からの呼び出しはrenderの外で実行される
+ため、その読み取りは収集しません。custom hook（`useX`）はもともと関数として
+呼び出すものなので、従来どおり独自のboundaryを持ちます。
+
+既知の制約は次のとおりです。
+
+- 判定はmodule全体で行います。module内のどこか1か所でも通常の呼び出しが
+  あれば、その関数は独自のboundaryを失います。*さらに* `<Title />` としても
+  renderしている場合、そのinstanceは自分のsubscriptionを持たず、親が再render
+  したときにしか更新されません。この混在に対してpluginは警告を出します。
+  どちらか一方の形に統一してください。
+- 認識するのは、その関数自身のbinding、または定義されている正確なobjectの
+  key pathを通した呼び出しだけで、同じmodule内に限ります。alias
+  （`const T = Title; T()`）、`Title.call(…)`、別moduleからの呼び出しは
+  認識しません。
+- 読み取りを収集するのは、呼び出し元がcomponentまたは `useX` hookである場合
+  だけです。小文字のhelperを経由した呼び出し
+  （`function renderTitle() { return Title(); }`）はたどらないため、その
+  読み取りは誰もsubscribeしません。componentから直接呼び出すか、
+  `<Title />` としてrenderしてください。
+- keyで保持された関数（`ns.Home()`）を収集するのは、このmodule内で、root
+  に束縛されたobject literalの中に定義されている場合か、ちょうど1つのmember
+  代入（`Card.Header = …`）で定義されている場合だけです。
+
 ## Higher-order component (HOC)
 
 higher-order component（HOC）が返すcomponentは、自分自身の名前を持たなくても
@@ -191,9 +275,12 @@ componentに収集させてください。
 componentは、自分自身のbindingを持たなくても名前を得られる場合があります。
 objectやclassのproperty — `Card.Header = () => <p>{count.value}</p>` や、
 `class Holder { Row = () => <p>{count.value}</p> }` のようなfield — として
-保持されているcomponentは、`<Card.Header />` や `<ns.Row />` がそこへ到達する
-のと同じ、そのkeyから名前を得ます（小文字のkeyは、小文字のbindingと同様に
-除外されたままです）。また、名前を持たないdefault export
+保持されているcomponent、またはobject literalのmethodとして書かれた
+component（`export const ns = { Home() { return <p>{count.value}</p>; } }`）は、
+`<Card.Header />` や `<ns.Row />` がそこへ到達するのと同じ、そのkeyから名前を
+得ます（小文字のkeyは、小文字のbindingと同様に除外されたままです。getter、
+setter、async method、generator methodも除外され、instance経由でしか到達
+できないclassのmethodも対象外です）。また、名前を持たないdefault export
 （`export default (props) => <p>{count.value}</p>`）は、moduleのファイル名から
 名前を得ます。これは `import App from "./App"` が実際にそのcomponentへ与えて
 いる識別子そのものです。ただし、class内での `this.Row = …` という代入
@@ -237,14 +324,40 @@ managed storeの宣言と `try` / `finally` scopeに置き換わるため、関�
 どうしても現状のままbuildを通す必要がある場合は `transform: "inject"` を
 使うと、関数を書き換えずにこの呼び出しを受け入れます。
 
+引数のdefault値は関数本体より前に評価されるため、そこでのsignal読み取り
+（`function Label({ v = count.value })`）はboundaryが開く前に行われ、追跡
+されません。変換対象の関数にそうした引数がある場合、その引数と、評価順を
+保つためにそれ以降のすべての引数を生成した引数に置き換え、boundaryの中の
+最初の文として同じ `undefined` のときだけのdefault規則で束縛し直します。
+引数の個数は変わらないため、`forwardRef` の `(props, ref)` という形は保たれ
+ます。移動するdefault値が参照する名前を本体が宣言している場合や、移動する
+引数を本体が再宣言している場合は移動を行わず、その読み取りは追跡されない
+ままです。その場合はsignalを本体で読んでください。
+
 ## Buildへの組み込み
 
-いずれの変換モードも再適用するとno-opです。この変換は、対応するbundler
-（Vite、webpack、Rspack）では `enforce: "pre"` によって他のplugin変換より
-先に実行されます。Rollupにはこの概念がないため、このpluginを最初にlistして
-ください。また、依存関係やJavaScript/TypeScript以外のmoduleはskipします。
-`.ts` はJSXなしのTypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて
-解析します。
+いずれの変換モードも再適用するとno-opです。pluginは、対応するbundler
+（Vite、webpack、Rspack）では `enforce: "pre"` で登録され、Viteではさらに
+transform hookが `order: "pre"` を宣言します
+（[React Compilerと併用する場合](#react-compilerと併用する場合)を参照）。
+Rollupにはどちらの概念もないため、このpluginを最初にlistしてください。
+pluginやloaderの順序を自分で決められる場合は、React Compilerを実行するものや
+JSXを変換して消すものより前にこのpluginを置いてください。依存関係と
+JavaScript/TypeScript以外のmoduleはskipし、`.cjs` / `.cts` のmoduleには
+一切手を加えません。拡張子は大文字・小文字を区別せずに判定するため、
+`App.TSX` は `App.tsx` とまったく同様に扱います。`.ts` はJSXなしの
+TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析します。
+
+## React Server Components
+
+この変換はserver moduleとclient moduleを区別しません。`"use client"` /
+`"use server"` directiveも、bundlerのenvironmentやlayerも参照しないためです。
+したがって `.value` を読む同期のserver componentには、client専用のrender
+tracking hookが挿入され、serverでrenderした時点で失敗します（async関数は
+変換しないため、asyncのserver componentは変換されません）。RSC構成では、
+`exclude`（たとえばdirectory単位）でserver componentを変換対象から外すか、
+個別に `@noSignalTracking` コメントでopt-outするか、`mode: "manual"` を
+使ってください。
 
 ## License
 

@@ -1,9 +1,11 @@
-import { effect, isSignal, untracked } from "../core/index.js";
+import { isSignal, untracked } from "../core/index.js";
+import { detachedEffect } from "../core/base.js";
 import { subscribeReadableV1 } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
 import type { ReadonlySignal } from "../core/index.js";
+import type { NotDeepSignal } from "../core/deep-signal.js";
 import { useSignalValue } from "../react/hooks.js";
-import { createElement, Fragment, useLayoutEffect, useRef } from "react";
+import { createElement, Fragment } from "react";
 import type * as React from "react";
 
 /** The small set of DOM properties that support direct signal bindings. */
@@ -36,7 +38,7 @@ function isControlledTwoWayProp(tagName: string, name: string): boolean {
  * `<input checked>` is the only other two-way case — so `mountBinding` later
  * only has to dispatch on this already-known value instead of re-deriving the
  * same facts from the mounted DOM node's `tagName`. It is also half of a
- * binding's identity for `createReactiveHostBinder`'s re-render diff.
+ * binding's identity for `NodeBinder`'s re-attach diff.
  */
 type BindingKind = "style" | "select-value" | "text-value" | "checked" | "prop";
 
@@ -104,9 +106,19 @@ const MATHML_ELEMENTS = [
 
 type MathMlElement = (typeof MATHML_ELEMENTS)[number];
 type NonHtmlHostElement = SvgElement | MathMlElement;
-const NON_HTML_HOST_ELEMENTS = new Set<string>([...SVG_ELEMENTS, ...MATHML_ELEMENTS]);
+// Built without array spread: a bundler has to assume spreading may run an
+// iterator with side effects, which kept this module's tag lists in every
+// bundle that imports the package root (it re-exports `createElement` from
+// here) even when nothing from this module is used.
+const NON_HTML_HOST_ELEMENTS: ReadonlySet<string> = /* @__PURE__ */ (() => {
+  const tags = new Set<string>(SVG_ELEMENTS);
+  for (const tag of MATHML_ELEMENTS) tags.add(tag);
+  return tags;
+})();
 
-type SignalChild = React.ReactNode | ReadonlySignal<SignalChild> | readonly SignalChild[];
+// A deep signal is excluded from every position here: a child or host prop
+// observes root replacement only, so nested mutations would never show.
+type SignalChild = React.ReactNode | (ReadonlySignal<SignalChild> & NotDeepSignal) | readonly SignalChild[];
 type HostProps = Record<string, unknown>;
 type Binding = readonly [name: string, source: ReadonlySignal<unknown>, kind: BindingKind];
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
@@ -126,10 +138,27 @@ function normalizeChild(value: unknown): React.ReactNode {
   }
 
   if (Array.isArray(value)) {
-    return value.map(normalizeChild);
+    return value.map(normalizeArrayItem);
   }
 
   return value as React.ReactNode;
+}
+
+/**
+ * A signal inside an array child has no way to carry a key of its own, so the
+ * leaf it becomes is keyed by position. That is the identity such an array
+ * already has (a literal `[a, b]` never reorders), and it keeps React's
+ * missing-key warning for genuinely dynamic element lists intact. The prefix
+ * keeps these keys out of the way of keys on the array's other elements.
+ */
+function normalizeArrayItem(value: unknown, index: number): React.ReactNode {
+  if (isSignal(value)) {
+    return createElement(SignalValue, {
+      source: value as ReadonlySignal<SignalChild>,
+      key: `rfgs-signal:${index}`,
+    });
+  }
+  return normalizeChild(value);
 }
 
 function isReactiveHostProp(name: string, value: unknown): value is ReadonlySignal<unknown> {
@@ -137,8 +166,15 @@ function isReactiveHostProp(name: string, value: unknown): value is ReadonlySign
   return REACTIVE_PROP_NAMES.has(name) || name.startsWith("data-") || name.startsWith("aria-");
 }
 
-function readInitialValue(source: ReadonlySignal<unknown>): unknown {
-  return source.peek();
+function readInitialValue(source: ReadonlySignal<unknown>, kind: BindingKind): unknown {
+  const value = source.peek();
+  // React DOM freezes the style object it is given in development. The signal
+  // keeps owning its object (a `deepSignal`'s raw state, for one), so React gets
+  // a shallow copy rather than a reference it would freeze out from under it.
+  if (kind === "style" && typeof value === "object" && value !== null && !Array.isArray(value)) {
+    return { ...value };
+  }
+  return value;
 }
 
 /**
@@ -225,19 +261,23 @@ function applyBoundSignal<T>(
  * failure latch with a sibling read site (see `bindSelectValue`); otherwise
  * each binding gets its own.
  */
+/** A live binding subscription; `refresh` re-applies the current value. */
+type BindingSubscription = { readonly dispose: () => void; readonly refresh: () => void };
+
 function createBindingSubscription<T>(
   source: ReadonlySignal<T>,
   apply: (value: T) => void,
   episode: FailureEpisode = { hasReported: false },
-): () => void {
+): BindingSubscription {
   const update = () => applyBoundSignal(() => source.value, apply, episode);
+  const refresh = () => untracked(update);
   const unsubscribe = subscribeReadableV1(source, update);
   if (unsubscribe !== undefined) {
     // Subscribe before the initial read/apply so setup cannot miss an update.
     untracked(() => notifyListener(update));
-    return unsubscribe;
+    return { dispose: unsubscribe, refresh };
   }
-  return effect(update);
+  return { dispose: detachedEffect(update), refresh };
 }
 
 function setAttribute(node: Element, name: string, value: unknown): void {
@@ -302,18 +342,25 @@ function setDomProp(node: Element, name: string, value: unknown): void {
 function setControlledProp(node: Element, name: string, value: unknown): void {
   if (name === "value") {
     const select = node as HTMLSelectElement;
-    if (select.tagName === "SELECT" && select.multiple) {
-      setMultiSelectValue(select, value);
+    if (select.tagName === "SELECT") {
+      setSelectValue(select, value);
       return;
     }
     const next = value == null ? "" : String(value);
     const input = node as HTMLInputElement | HTMLTextAreaElement;
     if (input.value !== next) input.value = next;
+    // The default is what a form reset restores (`form.reset()`, a reset
+    // button, React 19's reset after a form action). Keeping it equal to the
+    // bound value makes a reset land on the signal's value, as React does for a
+    // controlled input by syncing its `value` attribute, instead of reverting to
+    // the first render's value and leaving the DOM and the signal disagreeing.
+    if (input.defaultValue !== next) input.defaultValue = next;
     return;
   }
   const next = Boolean(value);
   const input = node as HTMLInputElement;
   if (input.checked !== next) input.checked = next;
+  if (input.defaultChecked !== next) input.defaultChecked = next;
 }
 
 /**
@@ -323,13 +370,22 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
  * is per-`<option>` `.selected`, so an array-valued signal (React's own
  * typing for a multi-select) is applied that way instead.
  */
-function setMultiSelectValue(select: HTMLSelectElement, value: unknown): void {
+function setSelectValue(select: HTMLSelectElement, value: unknown): void {
+  const multiple = select.multiple;
   const values = new Set(
-    Array.isArray(value) ? value.map(String) : value == null ? [] : [String(value)],
+    Array.isArray(value) && multiple ? value.map(String) : value == null ? (multiple ? [] : [""]) : [String(value)],
   );
+  // A single select keeps going through `.value`, which also handles a value
+  // no option matches (nothing selected).
+  if (!multiple) {
+    const next = [...values][0]!;
+    if (select.value !== next) select.value = next;
+  }
   for (const option of select.options) {
     const selected = values.has(option.value);
-    if (option.selected !== selected) option.selected = selected;
+    if (multiple && option.selected !== selected) option.selected = selected;
+    // See `setControlledProp`: a form reset restores `defaultSelected`.
+    if (option.defaultSelected !== selected) option.defaultSelected = selected;
   }
 }
 
@@ -344,20 +400,22 @@ function setMultiSelectValue(select: HTMLSelectElement, value: unknown): void {
  * the signal's current value whenever its `<option>` list changes, closing
  * that gap without requiring the signal to change too.
  */
-function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unknown>): () => void {
+function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unknown>, apply: (value: unknown) => void): BindingSubscription {
   // Shared by both read sites below: a subscription-triggered failure and a
   // MutationObserver-triggered failure are the same underlying computed
   // erroring, so they report as one episode, not two.
   const episode: FailureEpisode = { hasReported: false };
-  const apply = (value: unknown) => setControlledProp(select, "value", value);
-  const unsubscribe = createBindingSubscription(source, apply, episode);
+  const subscription = createBindingSubscription(source, apply, episode);
   const observer = new MutationObserver(() => {
     applyBoundSignal(() => source.peek(), apply, episode);
   });
   observer.observe(select, { childList: true, subtree: true });
-  return () => {
-    unsubscribe();
-    observer.disconnect();
+  return {
+    dispose() {
+      subscription.dispose();
+      observer.disconnect();
+    },
+    refresh: subscription.refresh,
   };
 }
 
@@ -371,7 +429,11 @@ function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unkno
  * its own composition handlers, and a write requested while composing is
  * deferred until composition ends instead of applied immediately.
  */
-function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: ReadonlySignal<unknown>): () => void {
+function bindTextValue(
+  node: HTMLInputElement | HTMLTextAreaElement,
+  source: ReadonlySignal<unknown>,
+  write: (value: unknown) => void,
+): BindingSubscription {
   let composing = false;
   let hasPending = false;
   let pending: unknown;
@@ -384,7 +446,7 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
     composing = false;
     if (hasPending) {
       hasPending = false;
-      setControlledProp(node, "value", pending);
+      write(pending);
     }
   };
 
@@ -394,19 +456,22 @@ function bindTextValue(node: HTMLInputElement | HTMLTextAreaElement, source: Rea
   // A failed read must bail out before this touches `pending`/`hasPending` —
   // a stale or garbage value must never latch in. `createBindingSubscription`
   // already skips `apply` on a failed read, so that guard lives there once.
-  const unsubscribe = createBindingSubscription(source, (next) => {
+  const subscription = createBindingSubscription(source, (next) => {
     if (composing) {
       hasPending = true;
       pending = next;
       return;
     }
-    setControlledProp(node, "value", next);
+    write(next);
   }, episode);
 
-  return () => {
-    unsubscribe();
-    node.removeEventListener("compositionstart", onCompositionStart);
-    node.removeEventListener("compositionend", onCompositionEnd);
+  return {
+    dispose() {
+      subscription.dispose();
+      node.removeEventListener("compositionstart", onCompositionStart);
+      node.removeEventListener("compositionend", onCompositionEnd);
+    },
+    refresh: subscription.refresh,
   };
 }
 
@@ -470,11 +535,12 @@ function applyRef(ref: SupportedRef, node: Element | null): RefCleanup {
  * This is a getter, not a one-time snapshot, because a style binding's own
  * `previousKeys` keeps changing across its lifetime as its subscription updates; a
  * rebuild reads it just before disposing the binding, so it sees whatever the
- * binding last actually wrote, not what it started with. See `syncBindings`.
+ * binding last actually wrote, not what it started with. See `NodeBinder`.
  */
 type MountedBinding = {
   readonly binding: Binding;
   readonly dispose: () => void;
+  readonly refresh: () => void;
   readonly getStyleKeys: (() => readonly string[]) | undefined;
 };
 
@@ -486,11 +552,11 @@ function isSameBinding(a: Binding, b: Binding | undefined): boolean {
 }
 
 /** What `subscribeBinding` hands back to `mountBinding`. See `MountedBinding`. */
-type Subscription = { readonly dispose: () => void; readonly getStyleKeys: (() => readonly string[]) | undefined };
+type Subscription = BindingSubscription & { readonly getStyleKeys: (() => readonly string[]) | undefined };
 
 /**
  * Subscribes a single binding to `node` and returns its teardown. Split out of
- * the ref callback so `createReactiveHostBinder` can rebuild one binding on
+ * the ref callback so `NodeBinder` can rebuild one binding on
  * its own, without disturbing the siblings that did not change.
  *
  * `initialStyleKeys` seeds a `"style"` binding's own `previousKeys` — passed
@@ -505,131 +571,113 @@ function subscribeBinding(
   source: ReadonlySignal<unknown>,
   kind: BindingKind,
   initialStyleKeys: readonly string[] | undefined,
+  binder: NodeBinder,
 ): Subscription {
+  // Between a detach and its deferred teardown (see `NodeBinder`) the node is
+  // no longer React's, so writes are held back; a re-attach refreshes instead.
+  const whileAttached = <T,>(write: (value: T) => void) => (value: T) => {
+    if (binder.attached) write(value);
+  };
   switch (kind) {
     case "style": {
       let previousKeys: readonly string[] = initialStyleKeys ?? [];
-      const dispose = createBindingSubscription(source, (value) => {
+      const subscription = createBindingSubscription(source, whileAttached((value: unknown) => {
         previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
-      });
-      return { dispose, getStyleKeys: () => previousKeys };
+      }));
+      return { ...subscription, getStyleKeys: () => previousKeys };
     }
     case "select-value":
-      return { dispose: bindSelectValue(node as HTMLSelectElement, source), getStyleKeys: undefined };
+      return {
+        ...bindSelectValue(node as HTMLSelectElement, source, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        getStyleKeys: undefined,
+      };
     case "text-value":
-      return { dispose: bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source), getStyleKeys: undefined };
+      return {
+        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        getStyleKeys: undefined,
+      };
     case "checked":
-      return { dispose: createBindingSubscription(source, (value) => setControlledProp(node, name, value)), getStyleKeys: undefined };
+      return { ...createBindingSubscription(source, whileAttached((value: unknown) => setControlledProp(node, name, value))), getStyleKeys: undefined };
     case "prop":
-      return { dispose: createBindingSubscription(source, (value) => setDomProp(node, name, value)), getStyleKeys: undefined };
+      return { ...createBindingSubscription(source, whileAttached((value: unknown) => setDomProp(node, name, value))), getStyleKeys: undefined };
   }
 }
 
-function mountBinding(node: Element, binding: Binding, initialStyleKeys?: readonly string[]): MountedBinding {
-  const { dispose, getStyleKeys } = subscribeBinding(node, binding[0], binding[1], binding[2], initialStyleKeys);
-  return { binding, dispose, getStyleKeys };
+function mountBinding(node: Element, binding: Binding, binder: NodeBinder, initialStyleKeys?: readonly string[]): MountedBinding {
+  const { dispose, refresh, getStyleKeys } = subscribeBinding(node, binding[0], binding[1], binding[2], initialStyleKeys, binder);
+  return { binding, dispose, refresh, getStyleKeys };
 }
 
-type ReactiveHostBinder = {
-  /** The one callback-ref identity React ever sees for this element. */
-  readonly ref: (node: Element | null) => RefCleanup;
-  /** Reconciles the attached node against the latest rendered inputs. */
-  sync(bindings: readonly Binding[], userRef: SupportedRef): void;
-};
-
 /**
- * Owns everything one mounted `ReactiveHost` attaches to its DOM node: the
- * user's own ref, plus one live subscription per binding.
+ * Owns the direct bindings mounted on one DOM node.
  *
- * The ref callback is created once per binder, and a binder is created once
- * per mounted `ReactiveHost`, so React only ever sees a single ref identity
- * for the lifetime of that element. That is load-bearing: React responds to a
- * *changed* callback-ref identity by detaching the old ref and attaching the
- * new one on the very same, unchanged DOM node. While the ref closure was
- * rebuilt on every render — which it was, since `transformProps` hands
- * `ReactiveHost` a freshly allocated `bindings` array each time — every
- * unrelated re-render of the owning component (any state, context, or parent
- * update anywhere above this element) silently disconnected and recreated
- * `bindSelectValue`'s `MutationObserver`, removed and re-added
- * `bindTextValue`'s composition listeners *along with the closure-local
- * `composing`/`pending` state they guard* — resetting `composing` to `false`
- * mid-composition and letting the next write stomp in-flight IME input —
- * recreated every binding subscription, and called the user's own ref with
- * `null` and then the identical node again.
+ * Bindings are attached through a callback ref on the host element itself
+ * rather than through a wrapper component. A wrapper would change the element
+ * type whenever a prop switched between a signal and a plain value, and React
+ * remounts a subtree whose element type changes, losing descendant state and
+ * focus. With the ref, the element stays the same host type in both cases.
  *
- * Pinning the identity moves that reconciliation here: `sync` runs from
- * `ReactiveHost`'s layout effect after every commit and diffs the render's
- * bindings against the mounted ones by `(name, source, kind)`, tearing down
- * and rebuilding only the entries that actually changed. What is left in the
- * ref callback is exactly the part React's attach/detach protocol has to
- * drive: which node is current, and full teardown when there no longer is one.
+ * The binder is keyed by the node, not by the ref callback, because React
+ * replaces a callback ref whose identity changed by detaching the old one and
+ * attaching the new one to the same node within a single commit. Tearing the
+ * bindings down on that detach would recreate every subscription — and reset
+ * `bindTextValue`'s in-flight IME composition state — on unrelated re-renders.
+ * So a detach only schedules the teardown, and a re-attach of the same node in
+ * the same commit reconciles the bindings in place instead (`syncBindings`
+ * diffs by `(name, source, kind)`). A detach that is not followed by an attach
+ * (unmount, a hidden Activity or Suspense boundary) tears down in a microtask.
  *
- * The split is safe because of how React orders a commit. A host element's ref
- * is attached during the layout phase *before* the layout effects of the
- * component that rendered it, so `sync` always finds the node already
- * attached; and a ref is only ever (re)attached on a fiber React re-rendered,
- * which is also the only way `ReactiveHost`'s dependency-less layout effect
- * can fail to re-run — so no attach can slip past a `sync`.
+ * The user's own ref is forwarded synchronously on every attach and detach,
+ * which is exactly what React would do with it directly; `getBindingRef` keeps
+ * the callback's identity stable whenever the inputs are, so a stable user ref
+ * is not churned.
  */
-function createReactiveHostBinder(): ReactiveHostBinder {
-  let node: Element | null = null;
-  let mounted: MountedBinding[] = [];
-  let attachedUserRef: SupportedRef;
-  let userCleanup: RefCleanup;
-  let activeCleanup: (() => void) | undefined;
+class NodeBinder {
+  #node: Element;
+  #mounted: MountedBinding[] = [];
+  #token = 0;
+  #detached = false;
 
-  const attachUserRef = (target: Element, userRef: SupportedRef): void => {
-    attachedUserRef = userRef;
-    userCleanup = applyRef(userRef, target);
-  };
+  constructor(node: Element) {
+    this.#node = node;
+  }
 
-  // React 19 callback refs may return a cleanup function; a user ref that did
-  // is torn down through it instead of through the `null` call React 18 used.
-  const detachUserRef = (): void => {
-    const cleanup = userCleanup;
-    const detached = attachedUserRef;
-    userCleanup = undefined;
-    attachedUserRef = undefined;
-    if (typeof cleanup === "function") cleanup();
-    else applyRef(detached, null);
-  };
+  /** Whether React currently has this node attached through a binding ref. */
+  get attached(): boolean {
+    return !this.#detached;
+  }
 
-  const disposeActive = (): void => {
-    const cleanup = activeCleanup;
-    activeCleanup = undefined;
-    cleanup?.();
-  };
-
-  const ref = (target: Element | null): RefCleanup => {
-    // React 18 clears callback refs with `null`, while React 19 can invoke the
-    // returned cleanup.  A node replacement can use either order, so every
-    // entry point first disposes whichever node is currently attached.
-    disposeActive();
-
-    if (target == null) {
-      return;
-    }
-
-    node = target;
-
-    let isDisposed = false;
-    const cleanup = () => {
-      if (isDisposed) return;
-      isDisposed = true;
-      if (activeCleanup === cleanup) activeCleanup = undefined;
-      for (const binding of mounted) binding.dispose();
-      mounted = [];
-      detachUserRef();
-      node = null;
+  attach(bindings: readonly Binding[], userRef: SupportedRef): () => void {
+    const token = ++this.#token;
+    const wasDetached = this.#detached;
+    this.#detached = false;
+    // Kept bindings may have skipped a write while detached.
+    if (wasDetached) for (const binding of this.#mounted) binding.refresh();
+    this.#sync(bindings);
+    const userCleanup = applyRef(userRef, this.#node);
+    return () => {
+      if (typeof userCleanup === "function") userCleanup();
+      else applyRef(userRef, null);
+      // React detaches the old ref before attaching the new one, so a newer
+      // attach can only exist here if this cleanup is stale.
+      if (token !== this.#token) return;
+      this.#detached = true;
+      queueMicrotask(() => {
+        if (this.#detached && token === this.#token) this.#dispose();
+      });
     };
+  }
 
-    activeCleanup = cleanup;
-    return cleanup;
-  };
+  #dispose(): void {
+    const mounted = this.#mounted;
+    this.#mounted = [];
+    for (const binding of mounted) binding.dispose();
+  }
 
-  const syncBindings = (target: Element, bindings: readonly Binding[]): void => {
-    // The overwhelmingly common case — a re-render that changed nothing about
-    // the bindings — costs one walk and allocates nothing.
+  #sync(bindings: readonly Binding[]): void {
+    const mounted = this.#mounted;
+    // The common re-attach — a re-render that changed nothing about the
+    // bindings — costs one walk and allocates nothing.
     if (
       mounted.length === bindings.length
       && mounted.every((entry, index) => isSameBinding(entry.binding, bindings[index]))
@@ -649,18 +697,10 @@ function createReactiveHostBinder(): ReactiveHostBinder {
       return candidate;
     });
 
-    // A stale binding being replaced under the same prop name (its source or
-    // kind changed — see `isSameBinding`) is disposed just below. For a
-    // `"style"` binding specifically, that disposal would otherwise discard
-    // the one thing that makes `applyStyle`'s clearing logic work: the CSS
-    // property keys it actually last wrote to `node.style`. Nothing else
-    // remembers that set — the node itself can hold keys today's rendered
-    // value never mentions (an off-render signal write applied a value React
-    // never saw), and the fresh binding about to replace this one would
-    // otherwise start its own `previousKeys` at `[]`, with no memory of them
-    // either. Snapshotting it here, before `dispose()` tears down the closure
-    // that holds it, lets the replacement start already knowing what is
-    // really on the node, so it can still clear it on its first write.
+    // A `"style"` binding being replaced under the same name is the only record
+    // of which CSS properties it actually wrote to the node (an off-render
+    // write may have applied keys React never saw). Its replacement starts from
+    // that set so its first write can still clear them.
     const staleStyleKeys = new Map<string, readonly string[]>();
     for (const stale of reusable.values()) {
       if (stale.getStyleKeys !== undefined) staleStyleKeys.set(stale.binding[0], stale.getStyleKeys());
@@ -669,99 +709,66 @@ function createReactiveHostBinder(): ReactiveHostBinder {
     // Everything stale is disposed before anything replacing it is mounted, so
     // a rebuilt binding never briefly holds two live subscriptions on one node.
     for (const stale of reusable.values()) stale.dispose();
-    mounted = bindings.map(
-      (binding, index) => reused[index] ?? mountBinding(target, binding, staleStyleKeys.get(binding[0])),
+    const node = this.#node;
+    this.#mounted = bindings.map(
+      (binding, index) => reused[index] ?? mountBinding(node, binding, this, staleStyleKeys.get(binding[0])),
     );
-  };
-
-  return {
-    ref,
-    sync(bindings, userRef) {
-      const target = node;
-      if (target == null) return;
-      if (userRef !== attachedUserRef) {
-        detachUserRef();
-        attachUserRef(target, userRef);
-      }
-      syncBindings(target, bindings);
-    },
-  };
-}
-
-/**
- * Hands `ReactiveHost` its one stable ref callback and drives the binder's
- * post-commit reconciliation.
- *
- * The layout effect deliberately declares no dependency array and returns no
- * cleanup: it must run after every commit (that is what makes it impossible
- * for a ref attach to happen without a following `sync`), and its teardown
- * belongs to the ref callback, which React already invokes on unmount, on
- * node replacement, and on StrictMode's ref replay. Giving it a cleanup here
- * would tear the whole element down again on every re-render — precisely the
- * churn this exists to remove.
- */
-function useReactiveHostBinder(
-  bindings: readonly Binding[],
-  userRef: SupportedRef,
-): (node: Element | null) => RefCleanup {
-  const binderRef = useRef<ReactiveHostBinder | undefined>(undefined);
-  if (binderRef.current === undefined) {
-    binderRef.current = createReactiveHostBinder();
   }
-  const binder = binderRef.current;
-  useLayoutEffect(() => {
-    binder.sync(bindings, userRef);
-  });
-  return binder.ref;
 }
 
-/**
- * A host element with DOM-only signal subscriptions attached via its ref.
- *
- * The subscriptions themselves are owned by a per-instance binder
- * (`useReactiveHostBinder`) rather than rebuilt inline here, so this
- * component's ref prop keeps one identity for the element's whole lifetime
- * and an unrelated re-render costs nothing — see `createReactiveHostBinder`.
- *
- * `children` arrives as ReactiveHost's own top-level prop (see
- * `createJsxWrapper` below) rather than folded into `props`/`hostProps`,
- * purely so the *outer* `factory(ReactiveHost, { ..., children }, key)` call
- * that constructs this element — the very same real `jsx`/`jsxs`/`jsxDEV`
- * that would have validated the original host element's children had this
- * wrapper not intercepted it — runs React's dev-mode key validation on it.
- * That validation is a flag React stamps onto each child element itself
- * (`element._store.validated`), not onto the array or onto whichever
- * component currently holds it, so it survives being read back out of props
- * here and re-embedded via `createElement` below. Skip this indirection —
- * i.e. leave `children` folded into `hostProps` before any real jsx/jsxs call
- * ever sees it — and a signal-bound host element with 2+ static, unkeyed JSX
- * children spuriously trips React's "missing key" warning: `createElement`'s
- * children-as-prop path never validates children (only its children-as-rest-
- * args path does), and neither did the `factory(ReactiveHost, ...)` call
- * itself, since `children` wasn't its own prop at that call site.
- */
-export function ReactiveHost({
-  elementType,
-  props,
-  bindings,
-  children,
-}: {
-  elementType: string;
-  props: HostProps;
-  bindings: readonly Binding[];
-  children?: React.ReactNode;
-}): React.ReactElement {
-  const { ref: userRef, ...hostProps } = props;
-  const ref = useReactiveHostBinder(bindings, userRef as SupportedRef);
-  return createElement(elementType, {
-    ...hostProps,
-    // `elementType` is a runtime string, so this can't be written as JSX; the
-    // lint rule assumes a literal `<Foo children={x}/>` authoring mistake,
-    // which doesn't apply to a dynamic-host-element createElement call.
-    // oxlint-disable-next-line react/no-children-prop
-    children,
-    ref,
-  });
+const nodeBinders = new WeakMap<Element, NodeBinder>();
+
+function createBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (node: Element | null) => RefCleanup {
+  return (node) => {
+    // React 19 detaches through the returned cleanup; a `null` call only comes
+    // from a host that ignores cleanups, where the next attach reconciles.
+    if (node == null) return;
+    let binder = nodeBinders.get(node);
+    if (binder === undefined) {
+      binder = new NodeBinder(node);
+      nodeBinders.set(node, binder);
+    }
+    return binder.attach(bindings, userRef);
+  };
+}
+
+type BindingRefEntry = {
+  readonly bindings: readonly Binding[];
+  readonly userRef: SupportedRef;
+  readonly ref: (node: Element | null) => RefCleanup;
+};
+
+// Recently created binding refs, so re-rendering an element with the same
+// signals and the same user ref hands React the same callback and React does
+// not detach and re-attach it at all. Keyed weakly by the user ref when there
+// is one (so the cache lives exactly as long as that ref) and otherwise by the
+// first bound signal, with a small bound per key so an element whose bindings
+// keep changing cannot grow it.
+const bindingRefs = new WeakMap<object, BindingRefEntry[]>();
+const BINDING_REF_CACHE_LIMIT = 8;
+
+function haveSameBindings(a: readonly Binding[], b: readonly Binding[]): boolean {
+  return a.length === b.length && a.every((binding, index) => isSameBinding(binding, b[index]));
+}
+
+function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (node: Element | null) => RefCleanup {
+  // A user ref is an object or function, never one of the bound signals, so
+  // the two kinds of key cannot collide in one map.
+  const cacheKey: object = userRef ?? bindings[0]![1];
+  const cache = bindingRefs;
+  let entries = cache.get(cacheKey);
+  if (entries !== undefined) {
+    for (const entry of entries) {
+      if (entry.userRef === userRef && haveSameBindings(entry.bindings, bindings)) return entry.ref;
+    }
+  } else {
+    entries = [];
+    cache.set(cacheKey, entries);
+  }
+  const ref = createBindingRef(bindings, userRef);
+  if (entries.length >= BINDING_REF_CACHE_LIMIT) entries.shift();
+  entries.push({ bindings, userRef, ref });
+  return ref;
 }
 
 type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) => React.ReactElement;
@@ -785,7 +792,7 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
 /**
  * Transforms a native host element's (`<div>`, `<svg>`, ...) props: replaces
  * any directly-bound prop with its initial, non-reactive value (`bindings`
- * carries the reactive ones for `ReactiveHost` to mount later — see
+ * carries the reactive ones for the binding ref to mount later — see
  * `createJsxWrapper`) and normalizes a signal/array `children` the same way
  * `Fragment` does.
  *
@@ -830,9 +837,9 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
       // React only ever reads it once, at mount, and never touches this
       // property again — see docs/direct-binding-value-checked-style.md.
       delete props[name];
-      props[uncontrolledName] = readInitialValue(value);
+      props[uncontrolledName] = readInitialValue(value, kind);
     } else {
-      props[name] = readInitialValue(value);
+      props[name] = readInitialValue(value, kind);
     }
   }
   return { props, bindings };
@@ -857,22 +864,25 @@ function transformFragmentProps(input: unknown): unknown {
   return { ...props, children: normalizeChild(props.children) };
 }
 
+/**
+ * A host element's final props: the transformed copy with the binding ref in
+ * place of the user's own ref, which the binding ref forwards to. `props` is
+ * always a fresh copy whenever there are bindings (see `transformHostProps`).
+ */
+function withBindingRef(props: HostProps, bindings: readonly Binding[]): HostProps {
+  if (bindings.length > 0) props.ref = getBindingRef(bindings, props.ref as SupportedRef);
+  return props;
+}
+
 /** Creates a JSX wrapper while letting each module supply React's JSX factory. */
 export function createJsxWrapper(factory: CreateElement): CreateElement {
   return (type, input, key) => {
     if (typeof type === "string") {
+      // The element keeps its own host type whether or not any prop is a
+      // signal, and its key is passed straight through, so React reconciles it
+      // exactly as it would the plain element.
       const { props, bindings } = transformHostProps(type, input);
-      if (bindings.length > 0) {
-        // `children` is lifted out to be `factory`'s own top-level prop (see
-        // the comment on ReactiveHost) instead of staying nested inside
-        // `props`, so `factory` — the real jsx/jsxs/jsxDEV already correctly
-        // wired to know whether this call site's children are a static JSX
-        // list — validates them exactly as it would have for the
-        // un-intercepted host element.
-        const { children, ...hostProps } = props;
-        return factory(ReactiveHost, { elementType: type, props: hostProps, bindings, children }, key);
-      }
-      return factory(type, props, key);
+      return factory(type, withBindingRef(props, bindings), key);
     }
 
     if (type === Fragment) {
@@ -889,7 +899,30 @@ export function createJsxWrapper(factory: CreateElement): CreateElement {
   };
 }
 
-type Signalable<T> = T | ReadonlySignal<T>;
+/**
+ * The classic-runtime `createElement` that the automatic runtime falls back to
+ * for `<div {...props} key="k" />` — TypeScript, Babel and Oxc all import it
+ * from the package root of `jsxImportSource`. It applies the same host-prop
+ * bindings and child normalization as `jsx`, and leaves `key` (and `ref`) in
+ * the config for React's own `createElement` to extract.
+ */
+export function createSignalAwareElement(
+  type: React.ElementType,
+  config?: Record<string, unknown> | null,
+  ...children: unknown[]
+): React.ReactElement {
+  if (typeof type !== "string" && type !== Fragment) {
+    return createElement(type, config, ...(children as React.ReactNode[]));
+  }
+  const normalizedChildren = children.map((child) => normalizeChild(child)) as React.ReactNode[];
+  if (typeof type !== "string") {
+    return createElement(type, config, ...normalizedChildren);
+  }
+  const { props, bindings } = transformHostProps(type, config ?? {});
+  return createElement(type, withBindingRef(props, bindings), ...normalizedChildren);
+}
+
+type Signalable<T> = T | (ReadonlySignal<T> & NotDeepSignal);
 type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style" | "value" | "checked";
 type AriaPropName = `aria-${string}`;
 type AddSignalChildren<P> = Omit<P, "children"> & {
@@ -914,9 +947,14 @@ export namespace JSX {
   export type LibraryManagedAttributes<C, P> = React.JSX.LibraryManagedAttributes<C, P>;
   export interface IntrinsicAttributes extends React.JSX.IntrinsicAttributes {}
   export interface IntrinsicClassAttributes<T> extends React.JSX.IntrinsicClassAttributes<T> {}
-  export type IntrinsicElements = {
-    [Tag in keyof React.JSX.IntrinsicElements]: Tag extends NonHtmlHostElement
-      ? AddSignalChildren<React.JSX.IntrinsicElements[Tag]>
-      : AddHtmlSignalProps<React.JSX.IntrinsicElements[Tag]>;
-  };
+  // An interface (rather than the mapped type itself) so consumers can merge
+  // their own elements into it, as they can into React's. Elements added to
+  // React's own `JSX.IntrinsicElements` flow through the mapped type as well.
+  export interface IntrinsicElements extends SignalIntrinsicElements {}
 }
+
+type SignalIntrinsicElements = {
+  [Tag in keyof React.JSX.IntrinsicElements]: Tag extends NonHtmlHostElement
+    ? AddSignalChildren<React.JSX.IntrinsicElements[Tag]>
+    : AddHtmlSignalProps<React.JSX.IntrinsicElements[Tag]>;
+};

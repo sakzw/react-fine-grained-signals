@@ -66,7 +66,7 @@ Prototype A currently lives in `benchmarks/prototypes/lean-runtime.ts`; its fact
 | cleanup ordering and disposal | Equivalent | cleanup/lifecycle tests |
 | self-disposal | Equivalent | production and Prototype A lifecycle tests |
 | dynamic dependencies and pruning | Equivalent | runtime/deep tests |
-| flat nested effects | Equivalent | nested ownership tests; returned disposer remains opt-in cleanup ownership |
+| flat nested effects | Equivalent (superseded: v0.1.1 owned nested effects through Alien's high-level `effect`; ownership was restored in the [pre-M3 closure](../phases/phase9/pre-m3-closure.md)) | nested ownership tests; returned disposer remains opt-in cleanup ownership |
 | local computed cycles and recovery | Equivalent | runtime tests |
 | React render tracking | Equivalent | production and Prototype A real-React suites |
 | first-observed revisions | Equivalent | render race/change-and-revert tests |

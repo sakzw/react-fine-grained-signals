@@ -392,3 +392,7 @@ The clean matrix preserved ordinary-write recovery (`source/unobserved-write` `1
 ### M2 — Release hardening closure
 
 M2 closed the v0.1.1 API migration, migration documentation, and packed-consumer entry-point findings without changing runtime behavior or package versions. Focused contract tests restore root coverage above its frozen thresholds, and Test/E2E succeeded on validation commit `84c6f4f`; the final closure-record commit must also pass both workflows. Evidence is recorded in [m2.md](./m2.md). M3 has not begun. No benchmark was run in M2.
+
+### Pre-M3 correctness and compatibility closure
+
+The v0.2.0 release review's findings (createElement fallback, bare-scope speculative cache, cross-copy activation/refresh/untracked, generation brand, DeepSignal tracking, host identity, form reset, deep-signal positions, transform plain calls and React Compiler ordering, dependency pin, nested-effect ownership, and the smaller items) are fixed, narrowed, documented, or disproved in [pre-m3-closure.md](./pre-m3-closure.md), with paired performance and size deltas against the clean `91ad17f` baseline. Package versions are unchanged and M3 has not begun.

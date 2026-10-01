@@ -5,12 +5,14 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { computed, deepSignal, effect, signal, untracked } from "../core/index.js";
+import { computed, deepSignal, signal, untracked } from "../core/index.js";
+import { detachedEffect } from "../core/base.js";
 import type {
   DeepSignal,
   ReadonlySignal,
   Signal,
 } from "../core/index.js";
+import type { NotDeepSignal } from "../core/deep-signal.js";
 import { untrackedRender } from "../core/render-tracking.js";
 import { subscribeReadableV1 } from "../core/readable-subscription.js";
 import type { DependencyList } from "react";
@@ -64,7 +66,7 @@ function createEffectBackedStoreSubscription(
 ): (notify: () => void) => () => void {
   return (notify: () => void): (() => void) => {
     let isInitialRun = true;
-    return effect(() => {
+    return detachedEffect(() => {
       let changed: boolean;
       try {
         changed = onEvaluate();
@@ -277,7 +279,7 @@ export function useSignalEffect(
   callback: () => void | (() => void),
   dependencies?: DependencyList,
 ): void {
-  useReactEffect(() => effect(callback), dependencies ?? EMPTY_DEPENDENCIES);
+  useReactEffect(() => detachedEffect(callback), dependencies ?? EMPTY_DEPENDENCIES);
 }
 
 /**
@@ -289,8 +291,12 @@ export function useSignalEffect(
  * read that throws (a computed whose cached error `.value` rethrows) remains
  * for the render-time `getSnapshot` to surface to an Error Boundary; only the
  * structural-readable fallback needs an effect to contain background errors.
+ *
+ * A `deepSignal` is rejected at compile time: this subscribes to root
+ * replacement only, so nested mutations would never re-render. Read deep state
+ * with `useDeepSignalValue` or inside a tracked component instead.
  */
-export function useSignalValue<T>(source: ReadonlySignal<T>): T {
+export function useSignalValue<T>(source: ReadonlySignal<T> & NotDeepSignal): T {
   const subscribe = useCallback((notify: () => void) => {
     const unsubscribe = subscribeReadableV1(source, notify);
     if (unsubscribe !== undefined) return unsubscribe;

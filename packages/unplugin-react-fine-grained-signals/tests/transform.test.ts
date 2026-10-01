@@ -922,9 +922,16 @@ describe("managed render transform", () => {
     },
   );
 
-  it("keeps a component called from an event handler inside a render callback eligible", () => {
-    // The call sits in an onClick handler, not in the render callback's own
-    // body, so it is not a per-item render call and Row keeps its own boundary.
+  it("keeps a component called from an event handler off a boundary without folding its reads", () => {
+    // This used to pin the opposite: the call sits in an onClick handler rather
+    // than in the render callback's own body, so it is not a per-item render
+    // call, and Row kept its own boundary. But `Row(i)` is still a plain call --
+    // React never mounts Row here -- and a boundary inside it would be three
+    // hooks called from an event handler, which throws "Invalid hook call" on
+    // the first click. The plain-call rule (`isPlainCalledComponent`) now keeps
+    // Row off a boundary wherever it is called, and because the call runs after
+    // render (`isDeferredReadContext`), its reads are not folded into List
+    // either: nothing in this module reads a signal during a render.
     const output = compile(`
       const count = { value: 1 };
       const items = [1];
@@ -934,7 +941,8 @@ describe("managed render transform", () => {
       }
     `, "auto");
 
-    expect(output).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).not.toContain("_signals");
+    expect(output).toContain("const Row = (item) => <li>{count.value}</li>;");
   });
 
   it("documents the JSX render-prop limitation and the inline workaround", () => {
@@ -2111,13 +2119,16 @@ describe("components held in keyed slots", () => {
     expect(compile(source, "all")).toBe(source);
   });
 
-  it("leaves object and class methods out of the keyed-slot widening", () => {
-    // A method is far likelier to be called as one (`config.Header()`) than
-    // rendered as a component, and no name shape separates the two -- so the
-    // widening deliberately stops at properties and fields holding a function.
+  it("leaves class methods out of the keyed-slot widening", () => {
+    // Object methods used to be excluded here too, on the grounds that a method
+    // is far likelier to be called as one (`config.Header()`) than rendered as
+    // a component. That call is now exactly what disqualifies a keyed slot
+    // (`isPlainCalledComponent`), so `{ Home() {} }` is treated like its
+    // `{ Home: () => ... }` twin -- see "object-method shorthand components".
+    // A class method is still reached only through an instance, which no
+    // binding walk can follow, so it stays out.
     const source = `
       const count = { value: 1 };
-      export const ns = { Home() { return <p>{count.value}</p>; } };
       export class Holder { Row() { return <p>{count.value}</p>; } }
     `;
 
@@ -2304,5 +2315,350 @@ describe("parse failures", () => {
     // The original Babel error, and its code frame, stay reachable.
     expect(message).toContain("Unexpected token");
     expect((thrown as Error).cause).toBeInstanceOf(Error);
+  });
+});
+
+/** Does the generated `function <name>(...)` open with a managed boundary? */
+function hasBoundary(output: string, name: string): boolean {
+  return new RegExp(
+    `function ${name}\\([^)]*\\) \\{\\s+(?:"use no memo";\\s+)?const _signals`,
+  ).test(output);
+}
+
+describe("component-named functions called as plain functions", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("keeps a conditionally called component off a boundary and tracks it in the caller", () => {
+    // The reported shape: `Title()` runs inside Outer's render, only when
+    // `show` is true. A boundary in Title would be three hooks called
+    // conditionally *in Outer* ("Rendered more hooks than during the previous
+    // render"); instead Title stays a plain function and Outer subscribes to
+    // the read Title performs for it.
+    const output = compile(`
+      const count = { value: 1 };
+      function Title() { return <h1>{count.value}</h1>; }
+      export function Outer({ show }) { return <div>{show && Title()}</div>; }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/function Title\(\) \{\s+return <h1>\{count\.value\}<\/h1>;/);
+    expect(hasBoundary(output, "Outer")).toBe(true);
+  });
+
+  it.each(["Title?.()", "Title!()", "(Title as () => JSX.Element)()"])(
+    "recognizes the optional-chained or TypeScript-wrapped call %s",
+    (call) => {
+      const output = compile(`
+        const count = { value: 1 };
+        function Title() { return <h1>{count.value}</h1>; }
+        export function Outer() { return <div>{${call}}</div>; }
+      `, "auto");
+
+      expect(hasBoundary(output, "Title")).toBe(false);
+      expect(hasBoundary(output, "Outer")).toBe(true);
+    },
+  );
+
+  it("covers arrow-bound components and all mode alike", () => {
+    const output = compile(`
+      const Title = () => <h1>static</h1>;
+      export function Outer() { return <div>{Title()}</div>; }
+    `, "all");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain("const Title = () => <h1>static</h1>;");
+    expect(hasBoundary(output, "Outer")).toBe(true);
+  });
+
+  it("keeps a component that is only mounted through JSX on its own boundary", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      function Title() { return <h1>{count.value}</h1>; }
+      export function Outer() { return <div><Title /></div>; }
+    `, "auto");
+
+    expect(hasBoundary(output, "Title")).toBe(true);
+    expect(hasBoundary(output, "Outer")).toBe(false);
+  });
+
+  it("leaves hooks called as functions exactly as they were", () => {
+    // A hook is called as a function by definition, and its boundary is valid
+    // because React runs it inside a render already in progress.
+    const output = compile(`
+      const count = { value: 1 };
+      function useTotal() { return count.value + 1; }
+      export function Counter() { return <p>{useTotal()}</p>; }
+    `, "auto");
+
+    expect(hasBoundary(output, "useTotal")).toBe(true);
+    expect(hasBoundary(output, "Counter")).toBe(false);
+  });
+
+  it("folds a plain-called component's reads into a hook that calls it", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      function Title() { return <h1>{count.value}</h1>; }
+      export function useTitle() { return Title(); }
+    `, "auto");
+
+    expect(hasBoundary(output, "Title")).toBe(false);
+    expect(hasBoundary(output, "useTitle")).toBe(true);
+  });
+
+  it("does not fold a call made from an event handler or an effect", () => {
+    // Those calls run after the render has finished collecting, so they are no
+    // evidence that the caller subscribes -- and the callee, being called, is
+    // still no component of its own.
+    const output = compile(`
+      import { useEffect } from "react";
+      const count = { value: 1 };
+      function Title() { return <h1>{count.value}</h1>; }
+      export function Outer() {
+        useEffect(() => { Title(); }, []);
+        return <button onClick={() => Title()}>go</button>;
+      }
+    `, "auto");
+
+    expect(output).not.toContain("_signals");
+  });
+
+  it("treats a component defined and called inside its caller as part of that caller", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function Outer({ show }) {
+        function Title() { return <h1>{count.value}</h1>; }
+        return <div>{show ? Title() : null}</div>;
+      }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(hasBoundary(output, "Outer")).toBe(true);
+    expect(hasBoundary(output, "Title")).toBe(false);
+  });
+
+  it("only lets the function's own binding disqualify it", () => {
+    // The `Title()` call inside `helper` reaches its own parameter, not the
+    // module-level component, which is only ever mounted through JSX.
+    const output = compile(`
+      const count = { value: 1 };
+      function Title() { return <h1>{count.value}</h1>; }
+      function helper(Title) { return Title(); }
+      export function Outer() { return <div><Title />{helper(() => null)}</div>; }
+    `, "auto");
+
+    expect(hasBoundary(output, "Title")).toBe(true);
+  });
+
+  it("keeps a keyed component that is called through its slot off a boundary", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export const ns = { Home: () => <p>{count.value}</p> };
+      export const Card = {};
+      Card.Header = () => <h1>{count.value}</h1>;
+      export function Page() { return <main>{ns.Home()}{Card.Header?.()}</main>; }
+    `, "auto");
+
+    // The called slots lose their own boundaries, and their reads are folded
+    // into Page through the keyed definition (`resolveKeyedFunction`).
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toContain("Home: () => <p>{count.value}</p>");
+    expect(output).toContain("Card.Header = () => <h1>{count.value}</h1>;");
+    expect(hasBoundary(output, "Page")).toBe(true);
+  });
+
+  it("does not fold a keyed slot that is assigned more than one function", () => {
+    // Which function `Card.Header` holds when Page renders is a runtime
+    // decision, so neither assignment speaks for the call.
+    const output = compile(`
+      const count = { value: 1 };
+      export const Card = {};
+      Card.Header = () => <h1>{count.value}</h1>;
+      if (globalThis.alt) Card.Header = () => <h2>{count.value}</h2>;
+      export function Page() { return <main>{Card.Header()}</main>; }
+    `, "auto");
+
+    expect(output).not.toContain("_signals");
+  });
+
+  it("warns when a component is both called and mounted through JSX", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const output = compile(`
+      const count = { value: 1 };
+      function Title() { return <h1>{count.value}</h1>; }
+      export function Outer() { return <div><Title />{Title()}</div>; }
+    `, "auto");
+
+    expect(hasBoundary(output, "Title")).toBe(false);
+    expect(hasBoundary(output, "Outer")).toBe(true);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(String(warn.mock.calls[0]?.[0])).toContain(
+      "Title is called as a plain function (Title()) and also rendered as <Title />",
+    );
+  });
+
+  it("stays quiet about a called component that has nothing to subscribe to", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    compile(`
+      function Title() { return <h1>static</h1>; }
+      export function Outer() { return <div><Title />{Title()}</div>; }
+    `, "auto");
+
+    expect(warn).not.toHaveBeenCalled();
+  });
+});
+
+describe("signal reads in parameter defaults", () => {
+  it("moves a destructured parameter with a tracked default behind the managed boundary", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function C({ v = count.value }) { return <p>{v}</p>; }
+    `, "auto");
+
+    expect(output).toMatch(
+      /function C\(_param\) \{\s+"use no memo";\s+const _signals = _useManagedSignals\(\);\s+try \{\s+let \{\s+v = count\.value\s+\} = _param;\s+return <p>\{v\}<\/p>;/,
+    );
+  });
+
+  it("keeps a plain default's undefined-only rule", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export const C = (n = count.value) => <p>{n}</p>;
+    `, "auto");
+
+    expect(output).toContain("let n = _param === undefined ? count.value : _param;");
+    expect(output).toMatch(/const C = _param => \{/);
+  });
+
+  it("moves the parameter behind a bare injected useSignalTracking() call too", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function C({ v = count.value }) { return <p>{v}</p>; }
+    `, "auto", "inject");
+
+    expect(output).toMatch(
+      /function C\(_param\) \{\s+"use no memo";\s+_useSignalTracking\(\);\s+let \{\s+v = count\.value\s+\} = _param;/,
+    );
+  });
+
+  it("keeps forwardRef's two-parameter shape", () => {
+    const output = compile(`
+      import { forwardRef } from "react";
+      const count = { value: 1 };
+      export const Field = forwardRef(({ v = count.value }, ref) => <p ref={ref}>{v}</p>);
+    `, "auto");
+
+    expect(output).toMatch(/forwardRef\(\(_param, _param2\) => \{/);
+    expect(output).toMatch(/let \{\s+v = count\.value\s+\} = _param;\s+let ref = _param2;/);
+  });
+
+  it("moves every later parameter too, so defaults keep their evaluation order", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function C(label, n = count.value, m = n, ...rest) { return <p>{label}{m}{rest}</p>; }
+    `, "auto");
+
+    expect(output).toContain("function C(label, _param, _param2, ..._param3)");
+    expect(output).toMatch(
+      /let n = _param === undefined \? count\.value : _param;\s+let m = _param2 === undefined \? n : _param2;\s+let rest = _param3;/,
+    );
+  });
+
+  it("carries a type annotation over to the generated parameter", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      interface Props { v?: number }
+      export function C({ v = count.value }: Props) { return <p>{v}</p>; }
+    `, "auto");
+
+    expect(output).toContain("function C(_param: Props)");
+    expect(output).toMatch(/let \{\s+v = count\.value\s+\} = _param;/);
+  });
+
+  it("leaves parameters alone when no default reads a signal", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function C({ v = 1 }, other) { return <p>{v}{count.value}</p>; }
+      export function D({ format = () => count.value }) { return <p>{format()}</p>; }
+    `, "auto");
+
+    expect(output).toMatch(/function C\(\{\s+v = 1\s+\}, other\)/);
+    // A closure created by a default runs inside the body, behind the boundary.
+    expect(output).toMatch(/function D\(\{\s+format = \(\) => count\.value\s+\}\)/);
+    expect(output.match(/finally/g)).toHaveLength(2);
+  });
+
+  it("declines the move when the body would capture a name the default uses", () => {
+    // In the parameter list `count` is the module binding; moved into the body
+    // it would hit the body's own `const count` (and its dead zone). A `var`
+    // re-declaring a moved parameter would collide with the emitted `let`.
+    const output = compile(`
+      const count = { value: 1 };
+      export function C({ v = count.value }) { const count = 2; return <p>{v}{count}</p>; }
+      export function D(v = count.value) { var v; return <p>{v}</p>; }
+    `, "auto");
+
+    expect(output).toMatch(/function C\(\{\s+v = count\.value\s+\}\)/);
+    expect(output).toMatch(/function D\(v = count\.value\)/);
+    expect(output.match(/finally/g)).toHaveLength(2);
+  });
+});
+
+describe("object-method shorthand components", () => {
+  it("transforms a method exactly like the equivalent keyed property", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export const ns = {
+        Home() { return <p>{count.value}</p>; },
+        ["Away"]() { return <p>{count.value}</p>; },
+        useTotal() { return count.value + 1; },
+      };
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(3);
+    expect(output).toMatch(/Home\(\) \{\s+"use no memo";\s+const _signals/);
+    expect(output).toMatch(/\["Away"\]\(\) \{\s+"use no memo";\s+const _signals/);
+    expect(output).toMatch(/useTotal\(\) \{\s+"use no memo";\s+const _signals/);
+  });
+
+  it("leaves accessors, async and generator methods, and lowercase or runtime keys alone", () => {
+    const source = `
+      const count = { value: 1 };
+      const key = "Dyn";
+      export const ns = {
+        get Home() { return <p>{count.value}</p>; },
+        set Home(v) {},
+        async Pending() { return <p>{count.value}</p>; },
+        *Rows() { yield <p>{count.value}</p>; },
+        render() { return <p>{count.value}</p>; },
+        [key]() { return <p>{count.value}</p>; },
+      };
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+  });
+
+  it("keeps a method handed to an iteration method off a boundary", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export const ns = { Row(item) { return <li>{count.value}{item}</li>; } };
+      export function List({ items }) { return <ul>{items.map(ns.Row)}</ul>; }
+    `, "auto");
+
+    expect(output).toMatch(/Row\(item\) \{\s+return <li>/);
+  });
+
+  it("keeps a method called through its slot off a boundary", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export const ns = { Home() { return <p>{count.value}</p>; } };
+      export const deep = { a: { Home() { return <p>{count.value}</p>; } } };
+      export function Page() { return <main>{ns.Home()}{deep.a.Home?.()}</main>; }
+    `, "auto");
+
+    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output).toMatch(/Home\(\) \{\s+return <p>/);
+    expect(hasBoundary(output, "Page")).toBe(true);
   });
 });

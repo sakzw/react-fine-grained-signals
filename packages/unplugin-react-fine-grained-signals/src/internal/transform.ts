@@ -223,11 +223,39 @@ function isKnownComponentWrapper(
  * `getReadPropertyName` reads `items["map"]`; anything else is decided at
  * runtime and stays unnamed, which leaves the function untransformed.
  */
-function getPropertyKeyName(node: t.ObjectProperty | t.ClassProperty): string | undefined {
+function getPropertyKeyName(
+  node: t.ObjectProperty | t.ObjectMethod | t.ClassProperty,
+): string | undefined {
   const key = unwrapTransparent(node.key);
   if (node.computed) return t.isStringLiteral(key) ? key.value : undefined;
   if (t.isIdentifier(key)) return key.name;
   return t.isStringLiteral(key) ? key.value : undefined;
+}
+
+/**
+ * The identity an object-literal method takes from its key -- the shorthand
+ * twin of a keyed `ObjectProperty`:
+ *
+ * ```js
+ * export const ns = { Home() { return <p>{count.value}</p>; } };   // this
+ * export const ns = { Home: () => <p>{count.value}</p> };          // == this
+ * ```
+ *
+ * The two spellings put the same function at the same `ns.Home` slot, and the
+ * rest of the module reaches both through `<ns.Home />`, so they have to resolve
+ * to the same identity -- while only the property form did, the method form was
+ * passed over in silence. Unlike a property, the method *is* the function node,
+ * so there is no enclosing slot to climb to: its own key is read directly.
+ *
+ * Only a plain `kind: "method"` qualifies. A getter or setter is an accessor
+ * React never calls as a component, and an async or generator method can never
+ * carry a boundary (`decideTransform` refuses them anyway), so all four resolve
+ * to no identity at all rather than to a name that could only ever be rejected
+ * later or, under an annotation, turned into a build error.
+ */
+function getObjectMethodIdentityName(node: t.ObjectMethod): string | undefined {
+  if (node.kind !== "method" || node.async || node.generator) return undefined;
+  return getPropertyKeyName(node);
 }
 
 /**
@@ -323,6 +351,9 @@ function getBindingIdentityName(
   // before.
   climbedParent: NodePath | null = climbComponentWrappers(path, reactImportSource).parentPath,
 ): string | undefined {
+  // An object method is its own keyed slot -- no wrapper can sit around it and
+  // no binding encloses it, so its key is the whole answer.
+  if (path.isObjectMethod()) return getObjectMethodIdentityName(path.node);
   const parent = climbedParent;
   // The enclosing binding -- reached through zero or more memo()/forwardRef()
   // wrappers -- is the function's real identity and always wins. A function
@@ -929,6 +960,10 @@ function getOwnBindingName(path: NodePath<t.Function>): string | undefined {
  *
  * A class field is deliberately absent -- it is reached through an instance
  * (`new Holder().Row`), which no binding walk can follow.
+ *
+ * An object *method* (`{ Row() {...} }`) is passed in as its own `parent`: it is
+ * the function and the slot at once, and it sits in its object literal exactly
+ * where the equivalent `{ Row: ... }` property would, so the same climb applies.
  */
 function getKeyedAccessPath(
   parent: NodePath,
@@ -939,7 +974,7 @@ function getKeyedAccessPath(
     const path = getStaticMemberPath(left);
     return path === undefined ? undefined : { origin: parent, ...path };
   }
-  if (!parent.isObjectProperty()) return undefined;
+  if (!parent.isObjectProperty() && !parent.isObjectMethod()) return undefined;
   const key = getPropertyKeyName(parent.node);
   if (key === undefined) return undefined;
   const keys = [key];
@@ -988,25 +1023,144 @@ function getKeyedAccessPath(
 function isKeyedRenderCallback(parent: NodePath): boolean {
   const access = getKeyedAccessPath(parent);
   if (access === undefined) return false;
+  return getKeyedSlotUses(access).some((slot) =>
+    slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)
+  );
+}
+
+/**
+ * Every place the module reads the exact keyed slot `access` describes, as the
+ * path of the syntactic slot that read occupies (past transparent TypeScript
+ * wrappers, so `ns.Row!` hands back the wrapper that actually sits in an
+ * argument list or callee position).
+ *
+ * The walk goes through the *root* binding, then follows the same chain of keys
+ * back down from each reference; a reference that turns off the chain anywhere
+ * (`ns.Other`, `ns[k]`, `ns` passed whole) is not a use of this slot. Both
+ * by-key exclusions -- the render-callback one above and the plain-call one in
+ * `isPlainCalledComponent` -- ask their question of this one list, so they
+ * cannot disagree about which reads count as reaching the slot.
+ */
+function getKeyedSlotUses(access: { origin: NodePath; root: string; keys: string[] }): NodePath[] {
   const binding = access.origin.scope.getBinding(access.root);
-  if (binding === undefined) return false;
-  return binding.referencePaths.some((rootPath) => {
-    let current: NodePath = rootPath;
+  if (binding === undefined) return [];
+  const uses: NodePath[] = [];
+  for (const rootPath of binding.referencePaths) {
+    let current: NodePath | undefined = rootPath;
     for (const key of access.keys) {
-      const member = current.parentPath;
+      const member: NodePath | null = current.parentPath;
       if (
         member === null ||
         !member.isMemberExpression() ||
         member.node.object !== current.node ||
         getReadPropertyName(member.node) !== key
       ) {
-        return false;
+        current = undefined;
+        break;
       }
       current = member;
     }
-    const slot = climbTransparentWrappers(current);
-    return slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node);
-  });
+    if (current !== undefined) uses.push(climbTransparentWrappers(current));
+  }
+  return uses;
+}
+
+/** Is `slot` the callee of a plain or optional-chained call -- `Row()`, `Row?.()`, `ns.Row!()`? */
+function isPlainCallee(slot: NodePath): boolean {
+  const call = slot.parentPath;
+  if (call === null) return false;
+  const parts = getCallParts(call.node);
+  return parts !== undefined && parts.callee === slot.node;
+}
+
+/**
+ * Is `path` a component-named function that the module invokes as a plain
+ * function -- `Title()`, `Title?.()`, `Title!()`, `ns.Home()` -- rather than
+ * (only) mounting it through JSX?
+ *
+ * ```jsx
+ * function Title() { return <h1>{count.value}</h1>; }
+ * function Outer({ show }) { return <div>{show && Title()}</div>; }
+ * ```
+ *
+ * `Title` reads exactly like a component, but a plain call never mounts a
+ * fiber: React sees only `Outer`, and `Title`'s body simply runs inside
+ * `Outer`'s render. A boundary injected into it is therefore three more hooks
+ * *in `Outer`*, and here they run only when `show` is true -- the conditional
+ * hook call the Rules of Hooks forbid, which React reports as "Rendered more
+ * hooks than during the previous render" (or "Expected static flag was
+ * missing") the first time `show` flips. The render-callback exclusion
+ * (`isRenderCallback`) already handled the looped variant of this -- `Row`
+ * called once per item from inside `items.map(...)` -- and this is the same
+ * fact stated for every call site, not just the ones inside a loop: a function
+ * that is called is not a component, whatever it is named.
+ *
+ * The exclusion is decided from the module as a whole -- *any* plain call of the
+ * function's own binding (or of its exact keyed slot) disqualifies it -- because
+ * a boundary is a property of the function, not of one call site: once one
+ * caller runs the body inline, a boundary inside it is wrong for that caller no
+ * matter what the others do. The reads are not lost; `inspectFunction` folds
+ * them into the function that makes the call (`foldDirectlyCalledRenderCallbacks`),
+ * so `Outer` is the one that gets transformed and subscribes -- which is right,
+ * since `Outer` is the fiber that re-renders and re-runs `Title()`.
+ *
+ * Deliberately narrow, in both directions:
+ *
+ * - Only a *component* name is affected. A `useX` hook is called as a function
+ *   by definition, and its boundary is valid precisely because React runs it
+ *   inside a render already in progress; hooks keep their handling unchanged.
+ * - Only the function's *own* binding counts, as in `isRenderCallback`: a
+ *   same-named binding in another scope cannot disqualify it, and an alias
+ *   (`const T = Title; T()`) is not followed. Neither is `Title.call(...)` or
+ *   `new Title()`, which are not plain calls of the binding.
+ */
+function isPlainCalledComponent(path: NodePath<t.Function>): boolean {
+  const slot = climbTransparentWrappers(path);
+  // A method is its own slot; every other function sits in its parent's.
+  const holder = path.isObjectMethod() ? path : slot.parentPath;
+  if (holder === null) return false;
+  const access = getKeyedAccessPath(holder);
+  if (access !== undefined) {
+    const key = access.keys.at(-1);
+    return key !== undefined && isComponentName(key) && getKeyedSlotUses(access).some(isPlainCallee);
+  }
+  return getOwnBindingReferences(path, holder)?.some((reference) =>
+    isPlainCallee(climbTransparentWrappers(reference))
+  ) ?? false;
+}
+
+/**
+ * The reference paths of `path`'s own component-named binding, or `undefined`
+ * when it has none -- no own binding, a non-component name, or a same-named
+ * binding that belongs to some other function. `holder` is the climbed parent
+ * the binding is looked up from, matching `isRenderCallback`'s own lookup.
+ */
+function getOwnBindingReferences(
+  path: NodePath<t.Function>,
+  holder: NodePath,
+): NodePath[] | undefined {
+  const name = getOwnBindingName(path);
+  if (name === undefined || !isComponentName(name)) return undefined;
+  const binding = holder.scope.getBinding(name);
+  if (binding === undefined) return undefined;
+  if (binding.path.node !== path.node && binding.path.node !== holder.node) return undefined;
+  return binding.referencePaths;
+}
+
+/**
+ * Is `path` -- already known to be plain-called -- *also* mounted through JSX
+ * by its own binding (`<Title />`)? That instance loses its own boundary along
+ * with the plain-called one, so `decideTransform` reports the mix rather than
+ * leaving the `<Title />` instance to go stale in silence. Babel records a JSX
+ * tag as an ordinary reference to the binding it names, which is what makes
+ * this a plain reference walk.
+ */
+function isAlsoMountedThroughJsx(path: NodePath<t.Function>): boolean {
+  const holder = climbTransparentWrappers(path).parentPath;
+  if (holder === null || path.isObjectMethod()) return false;
+  return getOwnBindingReferences(path, holder)?.some((reference) =>
+    reference.isJSXIdentifier()
+  ) ?? false;
 }
 
 // A function handed to an array iteration method runs a variable number of
@@ -1034,7 +1188,11 @@ function isRenderCallback(
   const argument = climbTransparentWrappers(path);
   const enclosing = argument.parentPath;
   if (enclosing !== null && isRenderCallbackInvocation(enclosing.node, argument.node)) return true;
-  if (enclosing !== null && isKeyedRenderCallback(enclosing)) return true;
+  // An object method is its own keyed slot (see `getKeyedAccessPath`), so it is
+  // checked as the holder itself; `items.map(ns.Row)` disqualifies `{ Row() {} }`
+  // exactly as it does `{ Row: () => ... }`.
+  const keyedHolder = path.isObjectMethod() ? path : enclosing;
+  if (keyedHolder !== null && isKeyedRenderCallback(keyedHolder)) return true;
 
   const name = getOwnBindingName(path);
   if (name === undefined || enclosing === null) return false;
@@ -1102,6 +1260,74 @@ function resolveReferencedFunction(
 }
 
 /**
+ * The keyed-slot twin of `resolveReferencedFunction`: the function a static
+ * member callee such as `ns.Home` / `deep.a.Home` / `Card.Header` reaches, when
+ * this module defines it in one of the keyed shapes `getKeyedAccessPath`
+ * names -- an object literal bound to the root (`const ns = { Home() {} }`,
+ * `{ Home: () => ... }`, nested to any depth) or a member assignment
+ * (`Card.Header = () => ...`).
+ *
+ * Needed because `isPlainCalledComponent` takes the boundary away from such a
+ * slot the moment it is called (`ns.Home()`), and without resolving it here its
+ * reads would reach nobody: the slot no longer subscribes, and the caller never
+ * learns what it read. Anything this cannot resolve unambiguously -- a spread,
+ * a computed runtime key, an import -- resolves to nothing, which leaves the
+ * caller exactly as it would otherwise have been.
+ */
+function resolveKeyedFunction(
+  origin: NodePath,
+  callee: t.MemberExpression,
+): NodePath<t.Function> | undefined {
+  const access = getStaticMemberPath(callee);
+  if (access === undefined) return undefined;
+  const binding = origin.scope.getBinding(access.root);
+  if (binding === undefined) return undefined;
+  // An object literal bound directly to the root: walk the keys down through
+  // nested literals. The *last* matching property wins, as it does at runtime.
+  if (binding.path.isVariableDeclarator()) {
+    let container: NodePath | undefined = unwrapTransparentPath(binding.path.get("init") as NodePath);
+    for (const key of access.keys) {
+      if (container === undefined || !container.isObjectExpression()) {
+        container = undefined;
+        break;
+      }
+      const match: NodePath | undefined = container
+        .get("properties")
+        .filter((property) =>
+          (property.isObjectProperty() || property.isObjectMethod()) &&
+          getPropertyKeyName(property.node) === key
+        )
+        .at(-1);
+      container = match?.isObjectProperty()
+        ? unwrapTransparentPath(match.get("value") as NodePath)
+        : match;
+    }
+    if (container !== undefined) {
+      if (container.isObjectMethod()) return container;
+      if (container.isArrowFunctionExpression() || container.isFunctionExpression()) return container;
+    }
+  }
+  // A member assignment (`Card.Header = () => ...`) anywhere in the module.
+  // Only an assignment of the one exact slot counts, and only a single one:
+  // two different functions assigned to the same slot are a runtime decision.
+  const assigned: NodePath<t.AssignmentExpression>[] = [];
+  for (const slot of getKeyedSlotUses({ origin, ...access })) {
+    const parent = slot.parentPath;
+    if (
+      parent !== null &&
+      parent.isAssignmentExpression({ operator: "=" }) &&
+      parent.node.left === slot.node
+    ) {
+      assigned.push(parent);
+    }
+  }
+  const only = assigned.length === 1 ? assigned[0] : undefined;
+  if (only === undefined) return undefined;
+  const value = unwrapTransparentPath(only.get("right"));
+  return value.isArrowFunctionExpression() || value.isFunctionExpression() ? value : undefined;
+}
+
+/**
  * Is `path` a component defined inline as a call argument --
  * `observer(function App() { return <p>{count.value}</p>; })`?
  *
@@ -1156,7 +1382,16 @@ function isAutomaticTransformCandidate(
   climbedParent?: NodePath | null,
 ): boolean {
   if (isRenderCallback(path)) return false;
-  if (path.isFunctionDeclaration()) return true;
+  // Called as a plain function somewhere in the module, so never mounted as a
+  // fiber of its own -- see `isPlainCalledComponent`. Its reads are folded into
+  // the caller instead, which is why this is a candidacy question (it also
+  // keeps the function from being skipped as a nested boundary) rather than a
+  // late veto in `decideTransform`.
+  if (isPlainCalledComponent(path)) return false;
+  // An object method sits in a keyed slot just like `{ Home: () => ... }`, and
+  // `getObjectMethodIdentityName` has already narrowed it to a plain method;
+  // the naming conventions still decide whether it is transformed.
+  if (path.isFunctionDeclaration() || path.isObjectMethod()) return true;
 
   const parent = climbedParent === undefined
     ? climbComponentWrappers(path, reactImportSource).parentPath
@@ -1321,6 +1556,23 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
   return false;
 }
 
+/**
+ * Is `node` (at `path`) a `.value` read that counts as part of `functionPath`'s
+ * render -- the one rule both `inspectFunction` (does this function subscribe
+ * at all?) and `relocateTrackedParameters` (does this parameter have to move
+ * behind the boundary?) apply, so the two can never disagree about what a
+ * tracked read is.
+ */
+function isTrackedValueRead(
+  node: t.MemberExpression | t.OptionalMemberExpression,
+  path: NodePath,
+  functionPath: NodePath<t.Function>,
+): boolean {
+  if (getReadPropertyName(node) !== "value") return false;
+  if (isNonSignalValueReceiver(node.object)) return false;
+  return !isDeferredReadContext(path, functionPath);
+}
+
 function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
@@ -1376,6 +1628,11 @@ function inspectFunction(
   // runs `Row` inside this render without React ever mounting it, so `Row` is
   // kept off a boundary of its own (see `isCalledFromRenderCallback`) and its
   // reads have to reach the component that actually runs them.
+  //
+  // The same holds for a component-named function called anywhere else in this
+  // render -- `{show && Title()}` -- which `isPlainCalledComponent` keeps off a
+  // boundary for the same reason: the call runs `Title`'s body as part of this
+  // function, so this function is the one that has to subscribe to its reads.
   const foldDirectlyCalledRenderCallbacks = (
     call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
   ): void => {
@@ -1391,15 +1648,36 @@ function inspectFunction(
     // lowercase callee is deliberately still skipped: it was never a candidate
     // to begin with, so it is an ordinary helper call, which this transform
     // does not follow anywhere else either.
-    if (
-      !t.isIdentifier(callee) ||
-      (!isComponentName(callee.name) && !isHookName(callee.name))
-    ) {
-      return;
-    }
+    //
+    // A static member callee (`ns.Home()`) is the keyed-slot form of the same
+    // call, and is read for its last key. Only the plain-called-component route
+    // reaches it: the render-callback demotion of a hook is by own binding
+    // (`isCalledFromRenderCallback`), so a keyed `ns.useX()` keeps its boundary.
+    const name = t.isIdentifier(callee)
+      ? callee.name
+      : t.isMemberExpression(callee)
+        ? getStaticMemberPath(callee)?.keys.at(-1)
+        : undefined;
+    if (name === undefined || (!isComponentName(name) && !isHookName(name))) return;
+    if (!t.isIdentifier(callee) && !isComponentName(name)) return;
     const owner = call.getFunctionParent();
-    if (owner === null || owner.node === functionPath.node || !isRenderCallback(owner)) return;
-    const target = resolveReferencedFunction(call, callee.name);
+    if (owner === null) return;
+    if (owner.node === functionPath.node || !isRenderCallback(owner)) {
+      // Not inside a render callback, so only the plain-called-component route
+      // can apply. A hook-shaped callee keeps its own boundary there (only the
+      // render-callback position demotes a hook), so it has nothing to fold.
+      if (!isComponentName(name)) return;
+      // A call from an event handler, an effect, or an async body runs after
+      // this render has finished collecting, so its reads are no more this
+      // render's than a `.value` read written there directly would be
+      // (`recordValueRead` applies the same test).
+      if (isDeferredReadContext(call, functionPath)) return;
+    }
+    const target = t.isIdentifier(callee)
+      ? resolveReferencedFunction(call, callee.name)
+      : t.isMemberExpression(callee)
+        ? resolveKeyedFunction(call, callee)
+        : undefined;
     if (target === undefined || target.isDescendant(functionPath)) return;
     if (visited.has(target.node)) return;
     visited.add(target.node);
@@ -1418,10 +1696,7 @@ function inspectFunction(
     node: t.MemberExpression | t.OptionalMemberExpression,
     path: NodePath,
   ): void => {
-    if (getReadPropertyName(node) !== "value") return;
-    if (isNonSignalValueReceiver(node.object)) return;
-    if (isDeferredReadContext(path, functionPath)) return;
-    inspection.readsValue = true;
+    if (isTrackedValueRead(node, path, functionPath)) inspection.readsValue = true;
   };
 
   functionPath.traverse({
@@ -1658,6 +1933,19 @@ function warnUnnamedDefaultExport(path: NodePath<t.Function>): void {
   console.warn(warning.message);
 }
 
+// See the call site in `decideTransform`: the mixed call-and-mount shape that
+// `isPlainCalledComponent` cannot give a boundary to without breaking the call.
+function warnPlainCalledComponentAlsoMounted(path: NodePath<t.Function>, name: string): void {
+  const warning = path.buildCodeFrameError(
+    `${name} is called as a plain function (${name}()) and also rendered as <${name} />. ` +
+      "A plain call runs its body inside the caller's render, so it gets no tracking boundary " +
+      "of its own (its signal reads are tracked by the calling component instead), and the " +
+      `<${name} /> instance therefore only updates when its parent re-renders. Use one form ` +
+      `consistently -- render it only as <${name} />, or only call it -- to remove the ambiguity.`,
+  );
+  console.warn(warning.message);
+}
+
 function shouldAutomaticallyTransform(
   mode: ReactFineGrainedSignalsMode,
   inspection: FunctionInspection,
@@ -1840,6 +2128,25 @@ function decideTransform(
   ) {
     warnUnnamedDefaultExport(path);
   }
+  // A component that is both called (`Title()`) and mounted (`<Title />`) can
+  // only be given one answer, and the plain call forces it: a boundary would be
+  // a conditional hook call inside the caller. The `<Title />` instance then has
+  // no subscription of its own and only refreshes when its parent re-renders --
+  // a stale-UI risk this file reports rather than leaves silent. Only raised
+  // where the function would otherwise have been transformed, so a component
+  // with nothing to subscribe to stays quiet.
+  if (
+    !candidate &&
+    !explicit &&
+    !annotated &&
+    !isFactory &&
+    shouldAutomaticallyTransform(options.mode, inspection, identity) &&
+    isComponentIdentity(identity) &&
+    isPlainCalledComponent(path) &&
+    isAlsoMountedThroughJsx(path)
+  ) {
+    warnPlainCalledComponentAlsoMounted(path, identity?.name ?? "component");
+  }
   const automatic =
     !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
@@ -1883,6 +2190,190 @@ function decideTransform(
   };
 }
 
+/**
+ * Does `param` itself evaluate a tracked `.value` read when the function is
+ * called -- i.e. in a default value (`{ v = count.value }`, `n = count.value`)?
+ *
+ * Reads inside a nested function are skipped: a closure created by a default
+ * (`format = () => count.value`) does not run during parameter binding, and if
+ * the body calls it during render, it runs after the boundary is open anyway.
+ */
+function parameterReadsTrackedValue(
+  param: NodePath,
+  functionPath: NodePath<t.Function>,
+): boolean {
+  // A bare identifier has no default to evaluate -- the overwhelmingly common
+  // `(props)` case never needs the walk.
+  if (param.isIdentifier()) return false;
+  let found = false;
+  const visit = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
+    if (isTrackedValueRead(path.node, path, functionPath)) {
+      found = true;
+      path.stop();
+    }
+  };
+  param.traverse({
+    Function(nested) {
+      nested.skip();
+    },
+    MemberExpression: visit,
+    OptionalMemberExpression: visit,
+  });
+  return found;
+}
+
+/**
+ * Would moving `moved` from the parameter list into the body change what any
+ * name in them means? Two shapes do, and both are rare enough that the honest
+ * answer is to leave the parameters exactly where they were:
+ *
+ * - A default refers to a name the body itself declares
+ *   (`({ v = count.value }) => { const count = ...; }`). In the parameter list
+ *   that name is the *outer* binding, because parameters get a scope of their
+ *   own; moved into the body it would hit the body's declaration instead (and
+ *   its temporal dead zone). Babel models parameters and body-level
+ *   declarations as one function scope, which is precisely what makes this
+ *   detectable: such a name resolves to an own binding that is not a parameter.
+ * - A moved parameter is re-declared in the body (`var v;`, `function v() {}`),
+ *   which is legal next to a parameter but a redeclaration error next to the
+ *   `let` the move would emit. Babel records those as constant violations of
+ *   the parameter binding.
+ */
+function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): boolean {
+  for (const param of moved) {
+    for (const name of Object.keys(t.getBindingIdentifiers(param.node))) {
+      const binding = path.scope.getOwnBinding(name);
+      if (
+        binding?.constantViolations.some((violation) =>
+          violation.isVariableDeclarator() ||
+          violation.isFunctionDeclaration() ||
+          violation.isClassDeclaration()
+        )
+      ) {
+        return true;
+      }
+    }
+    let conflict = false;
+    param.traverse({
+      ReferencedIdentifier(reference) {
+        if (!reference.isIdentifier()) return;
+        const binding = path.scope.getOwnBinding(reference.node.name);
+        if (binding !== undefined && binding.kind !== "param") {
+          conflict = true;
+          reference.stop();
+        }
+      },
+    });
+    if (conflict) return true;
+  }
+  return false;
+}
+
+/**
+ * Moves the parameters whose defaults read a signal behind the boundary,
+ * returning the statements that bind them again, for the caller to place as
+ * the first statements *after* the hook call.
+ *
+ * Parameter defaults are evaluated before the first statement of the body runs,
+ * so in `function C({ v = count.value })` the read happens before the injected
+ * `useManagedSignals()` / `useSignalTracking()` call has opened the render
+ * collection -- the read is real, `inspectFunction` rightly counts it and
+ * transforms the component, and yet the boundary never sees it, so the
+ * component does not re-render when `count` changes. Moving the pattern into
+ * the body is the only placement that runs it after the hook:
+ *
+ * ```js
+ * function C(_param) {
+ *   const _signals = _useManagedSignals();
+ *   try {
+ *     let { v = count.value } = _param;
+ *     ...
+ * ```
+ *
+ * The rewrite is kept as small as it can be while staying faithful:
+ *
+ * - Nothing happens unless a parameter actually reads a signal; every other
+ *   function keeps its parameter list untouched.
+ * - From the first such parameter *onward*, every parameter moves, in order. A
+ *   later default may refer to an earlier parameter (`(a = count.value, b =
+ *   a)`), and it may have side effects whose order matters, so moving one
+ *   parameter alone could change what the others see.
+ * - Each moved parameter is replaced one-for-one by a generated identifier
+ *   rather than removed, so the parameter *count* is unchanged and a
+ *   `forwardRef` render function keeps its two-parameter `(props, ref)` shape
+ *   (`length` can change where a default used to end the count, which React
+ *   only inspects to warn about a `forwardRef` arity other than 0 or 2).
+ * - A default still applies only on `undefined`: `v = count.value` becomes
+ *   `let v = _param === undefined ? count.value : _param`, which is the exact
+ *   rule a parameter default follows; a destructuring pattern's own nested
+ *   defaults keep their meaning by moving verbatim.
+ * - A type annotation travels to the generated parameter, so the signature
+ *   still says what it accepts; `?` optional markers have no meaning on a
+ *   `let` and are dropped from the moved pattern.
+ *
+ * When the move cannot be done without changing meaning
+ * (`hasRelocationConflict`), or a parameter is a TypeScript parameter property
+ * (constructor-only, never a component), nothing moves and the read stays
+ * untracked exactly as before -- an edge this declines rather than miscompiles.
+ */
+function relocateTrackedParameters(path: NodePath<t.Function>): t.Statement[] {
+  const params = path.get("params");
+  const first = params.findIndex((param) => parameterReadsTrackedValue(param, path));
+  if (first === -1) return [];
+  const moved = params.slice(first);
+  // Planned in full before anything is mutated, so a shape this does not know
+  // how to move (a TypeScript parameter property, or anything unexpected)
+  // leaves the whole parameter list exactly as it was rather than half-moved.
+  const plan: { param: NodePath; pattern: BindablePattern; fallback?: t.Expression; rest?: t.RestElement }[] = [];
+  for (const param of moved) {
+    const node = param.node;
+    if (t.isRestElement(node)) {
+      if (!isBindablePattern(node.argument)) return [];
+      plan.push({ param, pattern: node.argument, rest: node });
+    } else if (t.isAssignmentPattern(node)) {
+      if (!isBindablePattern(node.left)) return [];
+      plan.push({ param, pattern: node.left, fallback: node.right });
+    } else if (isBindablePattern(node)) {
+      plan.push({ param, pattern: node });
+    } else {
+      return [];
+    }
+  }
+  if (hasRelocationConflict(path, moved)) return [];
+  const declarations: t.Statement[] = [];
+  for (const { param, pattern, fallback, rest } of plan) {
+    const local = path.scope.generateUidIdentifier("param");
+    const init = fallback === undefined
+      ? t.cloneNode(local)
+      : t.conditionalExpression(
+        t.binaryExpression("===", t.cloneNode(local), t.identifier("undefined")),
+        fallback,
+        t.cloneNode(local),
+      );
+    let replacement: t.Identifier | t.RestElement = local;
+    if (rest !== undefined) {
+      // A rest parameter's annotation sits on the `RestElement` itself.
+      replacement = t.restElement(t.cloneNode(local));
+      replacement.typeAnnotation = rest.typeAnnotation ?? null;
+    } else if (pattern.typeAnnotation !== null && pattern.typeAnnotation !== undefined) {
+      // The signature keeps its type; the `let` gets the bare pattern.
+      local.typeAnnotation = pattern.typeAnnotation;
+    }
+    pattern.typeAnnotation = null;
+    pattern.optional = null;
+    declarations.push(t.variableDeclaration("let", [t.variableDeclarator(pattern, init)]));
+    param.replaceWith(replacement);
+  }
+  return declarations;
+}
+
+/** The binding patterns a `let` declarator accepts, which is every shape a parameter binds through. */
+type BindablePattern = t.Identifier | t.ObjectPattern | t.ArrayPattern;
+
+function isBindablePattern(node: t.Node): node is BindablePattern {
+  return t.isIdentifier(node) || t.isObjectPattern(node) || t.isArrayPattern(node);
+}
+
 /** Codegen: inject a bare `useSignalTracking()` call at the top of the function body. */
 function applyInject(
   path: NodePath<t.Function>,
@@ -1893,12 +2384,15 @@ function applyInject(
   const call = t.expressionStatement(
     t.callExpression(t.cloneNode(runtimeImport.identifier), []),
   );
+  // Bound again right after the call, so a default's read is collected too.
+  const relocated = relocateTrackedParameters(path);
   if (body.isBlockStatement()) {
-    body.unshiftContainer("body", call);
+    body.unshiftContainer("body", [call, ...relocated]);
   } else {
     body.replaceWith(
       t.blockStatement([
         call,
+        ...relocated,
         t.returnStatement(body.node as t.Expression),
       ]),
     );
@@ -1930,10 +2424,13 @@ function applyManaged(
   const originalStatements = body.isBlockStatement()
     ? statements.slice(explicit ? 1 : 0).map((statement) => statement.node)
     : [t.returnStatement(body.node as t.Expression)];
+  // Inside the `try`, not between the hook and it: a default that throws must
+  // still reach `finish()`, exactly as a throw from the original body does.
+  const relocated = relocateTrackedParameters(path);
   const transformedBody = t.blockStatement([
     declaration,
     t.tryStatement(
-      t.blockStatement(originalStatements),
+      t.blockStatement([...relocated, ...originalStatements]),
       null,
       t.blockStatement([
         t.expressionStatement(

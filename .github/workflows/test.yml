@@ -49,6 +49,9 @@ jobs:
         wait: build
       - run: node scripts/check-size.mjs
       - run: node tests/consumer-smoke.mjs
+      # The published v0.1.1 artifact next to this build: the two generations
+      # must refuse each other's signals rather than render stale values.
+      - run: node tests/mixed-version-smoke.mjs
 
       - name: Wait for lint, typecheck and the test suites
         wait-all:

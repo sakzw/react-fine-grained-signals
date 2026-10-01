@@ -6,7 +6,6 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Fragment, jsx, jsxs } from "../src/jsx-runtime.js";
 import { jsxDEV } from "../src/jsx-dev-runtime.js";
-import { ReactiveHost } from "../src/runtime/jsx.js";
 import { signal } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -346,11 +345,12 @@ describe("JSX pragma: uncopied-props fast path", () => {
     const original: Record<string, unknown> = { "aria-label": "reactive box", disabled };
 
     const element = jsx("button", original, undefined);
-    // A binding was found, so this call is routed through `ReactiveHost`
-    // instead of straight to the host factory -- proving the fast path was
-    // correctly skipped, not merely that some object happens to differ.
-    expect(element.type).toBe(ReactiveHost);
-    expect((element.props as { props: unknown }).props).not.toBe(original);
+    // A binding was found, so the element keeps its host type but gets a
+    // transformed props copy carrying the binding ref -- proving the fast path
+    // was correctly skipped, not merely that some object happens to differ.
+    expect(element.type).toBe("button");
+    expect(element.props).not.toBe(original);
+    expect(typeof (element.props as { ref?: unknown }).ref).toBe("function");
     // The original object itself must never be mutated, even though a copy
     // was required.
     expect(original.disabled).toBe(disabled);

@@ -16,8 +16,19 @@ supported bundlers.
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-`react-fine-grained-signals` is a peer dependency. This package is ESM-only:
-use an ESM build configuration and `import`, not CommonJS `require()`.
+`react-fine-grained-signals` is a peer dependency. Node.js `^22.18.0 || >=24.11.0`
+is required — the range Babel 8, which the transform runs on, declares.
+
+This package ships ESM only; there is no CommonJS build. An ESM build
+configuration that uses `import` is the primary setup, but a CommonJS
+configuration file (a `webpack.config.js` or `next.config.js` in a project
+without `"type": "module"`) can still load it with `require()`: every Node.js
+version in the range above loads the ESM entry points through its built-in
+`require(esm)` support. The plugin factory is the `default` export:
+
+```js
+const signals = require("unplugin-react-fine-grained-signals/webpack").default;
+```
 
 ## Vite
 
@@ -29,6 +40,36 @@ export default defineConfig({
   plugins: [signals({ mode: "auto" })],
 });
 ```
+
+### With React Compiler
+
+React Compiler must run *after* this transform: it would otherwise memoize away
+the `.value` reads before this plugin could mark the component `"use no memo"`,
+and the component would silently stop updating after its first render. List
+`signals()` before the plugin that runs the compiler:
+
+```ts
+import react from "@vitejs/plugin-react";
+import { defineConfig } from "vite";
+import signals from "unplugin-react-fine-grained-signals/vite";
+
+export default defineConfig({
+  plugins: [signals({ mode: "auto" }), react({ compiler: true })],
+});
+```
+
+Under Vite the order is also defended at the hook level. The plugin is
+`enforce: "pre"`, and its `transform` hook additionally declares
+`order: "pre"`, which Vite sorts on within the pre-enforced group. That makes it
+run ahead of `@vitejs/plugin-react` 6's compiler step (`react({ compiler: true })`,
+itself `enforce: "pre"` with no hook order) even when `react()` is listed first —
+before this, that order compiled the component first. This is Vite's ordering,
+not an absolute guarantee: a plugin whose transform also declares
+`order: "pre"` and is listed earlier still runs first. Keeping `signals()`
+first is therefore still the recommended configuration, and it is required
+wherever hook ordering does not apply: Rollup orders by array position alone,
+and the Babel route (`@rolldown/plugin-babel` with `reactCompilerPreset()`) has
+not been verified against this plugin.
 
 ## Other bundlers
 
@@ -151,6 +192,49 @@ When in doubt, keep such helpers explicit: name them lowercase and without a
 `use` prefix, or opt them in manually only when they are genuinely rendered as
 components.
 
+## Components called as plain functions
+
+A PascalCase function that the module calls as a plain function — `Title()`,
+`Title?.()`, `Title!()`, or `ns.Home()` for one held in an object — is never
+mounted by React as a component of its own: its body simply runs inside the
+caller's render. It therefore never gets a boundary of its own, in any mode
+including `all`, and its JSX and `.value` reads are collected by the component
+or custom hook that makes the call:
+
+```jsx
+function Title() { return <h1>{count.value}</h1>; }
+// Outer is transformed and subscribes to `count`; Title is left as it is.
+function Outer({ show }) { return <div>{show && Title()}</div>; }
+```
+
+A boundary inside `Title` would add hooks to `Outer` that run only while `show`
+is true — a conditional hook call that React rejects ("Rendered more hooks than
+during the previous render"). A call made from an event handler, from the
+callback of `useEffect` / `useLayoutEffect` / `useInsertionEffect` /
+`useCallback` / `useMemo`, or from an async function runs outside the render,
+so its reads are not collected. Custom hooks (`useX`) are called as functions
+by design and keep their own boundary exactly as before.
+
+Known limitations:
+
+- The decision is module-wide: a single plain call anywhere in the module takes
+  away the function's own boundary. If it is *also* rendered as `<Title />`,
+  that instance has no subscription of its own and only refreshes when its
+  parent re-renders; the plugin prints a warning for this mix. Use one form
+  consistently.
+- Only calls through the function's own binding, or through the exact object
+  key path it is defined at, are recognized, and only within the module. An
+  alias (`const T = Title; T()`), `Title.call(…)`, and calls from other modules
+  are not.
+- The reads are collected only when the caller is itself a component or a
+  `useX` hook. A call routed through a lowercase helper
+  (`function renderTitle() { return Title(); }`) is not followed, so nothing
+  subscribes to those reads; call the function directly from the component, or
+  render it as `<Title />`.
+- A keyed function (`ns.Home()`) is collected only when this module defines it
+  in an object literal bound to the root, or with exactly one member assignment
+  (`Card.Header = …`).
+
 ## Higher-order components
 
 A component a higher-order component returns is recognized even though it has no
@@ -200,9 +284,12 @@ collects it.
 
 A component can also carry no binding of its own and still be named: one held
 as an object or class property — `Card.Header = () => <p>{count.value}</p>`, or
-a `class Holder { Row = () => <p>{count.value}</p> }` field — is named by its
-key, the same way `<Card.Header />` or `<ns.Row />` reaches it (a lowercase key
-stays excluded, exactly as a lowercase binding does), and a nameless default
+a `class Holder { Row = () => <p>{count.value}</p> }` field — or written as an
+object-literal method (`export const ns = { Home() { return <p>{count.value}</p>; } }`)
+is named by its key, the same way `<Card.Header />` or `<ns.Row />` reaches it
+(a lowercase key stays excluded, exactly as a lowercase binding does; getters,
+setters, async and generator methods are excluded, and so are class methods,
+which only an instance reaches), and a nameless default
 export (`export default (props) => <p>{count.value}</p>`) is named after the
 module's own file — the identity an `import App from "./App"` already gives it.
 A `this.Row = …` assignment inside a class is deliberately excluded, though —
@@ -248,14 +335,41 @@ combination is already invalid React — hooks require a synchronous function
 component — so prefer fixing the function; `transform: "inject"` accepts it
 without rewriting the function, if the file must keep building unchanged.
 
+Parameter defaults are evaluated before the function body runs, so a signal
+read in one — `function Label({ v = count.value })` — would happen before the
+boundary opens and never be tracked. When a transformed function has such a
+parameter, that parameter and every parameter after it (to keep their
+evaluation order) are replaced by generated ones and bound again as the first
+statements inside the boundary, with the same `undefined`-only default rule.
+The parameter count is unchanged, so `forwardRef`'s `(props, ref)` shape is
+kept. If the body declares a name a moved default refers to, or re-declares a
+moved parameter, the move is skipped and that read stays untracked; read the
+signal in the body instead.
+
 ## Build integration
 
-Reapplying either transform mode is a no-op. The transform runs before other
-plugin transforms via `enforce: "pre"` on bundlers that support it (Vite,
-webpack, Rspack) — Rollup has no such concept, so list this plugin first there
-instead — and skips dependencies and non-JavaScript/TypeScript modules.
-Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`, `.jsx`,
-and JavaScript files may use JSX.
+Reapplying either transform mode is a no-op. The plugin is registered with
+`enforce: "pre"` on bundlers that support it (Vite, webpack, Rspack), and under
+Vite its transform hook also declares `order: "pre"` (see
+[With React Compiler](#with-react-compiler)). Rollup has neither concept, so
+list this plugin first there. Wherever the order of plugins or loaders is in
+your hands, put this plugin before anything that runs React Compiler or
+compiles JSX away. The transform skips dependencies and
+non-JavaScript/TypeScript modules, and never touches `.cjs` / `.cts` modules.
+Extensions are matched case-insensitively, so `App.TSX` is handled exactly like
+`App.tsx`. Plain `.ts` files are parsed as TypeScript without JSX, while
+`.tsx`, `.jsx`, and JavaScript files may use JSX.
+
+## React Server Components
+
+The transform does not tell server modules from client modules: it reads
+neither `"use client"` / `"use server"` directives nor the bundler's
+environment or layer. A synchronous server component that reads `.value` would
+therefore receive the client-only render-tracking hook and fail when it renders
+on the server (async server components are never transformed, because async
+functions never are). In an RSC setup, keep server components out of the
+transform with `exclude` (for example by directory), opt individual ones out
+with a `@noSignalTracking` comment, or use `mode: "manual"`.
 
 ## License
 

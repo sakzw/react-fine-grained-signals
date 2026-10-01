@@ -27,31 +27,40 @@
     "alien-signals"
   ],
   "type": "module",
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
+  },
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./vite": {
       "types": "./dist/vite.d.ts",
-      "import": "./dist/vite.js"
+      "import": "./dist/vite.js",
+      "default": "./dist/vite.js"
     },
     "./rollup": {
       "types": "./dist/rollup.d.ts",
-      "import": "./dist/rollup.js"
+      "import": "./dist/rollup.js",
+      "default": "./dist/rollup.js"
     },
     "./webpack": {
       "types": "./dist/webpack.d.ts",
-      "import": "./dist/webpack.js"
+      "import": "./dist/webpack.js",
+      "default": "./dist/webpack.js"
     },
     "./rspack": {
       "types": "./dist/rspack.d.ts",
-      "import": "./dist/rspack.js"
+      "import": "./dist/rspack.js",
+      "default": "./dist/rspack.js"
     },
     "./esbuild": {
       "types": "./dist/esbuild.d.ts",
-      "import": "./dist/esbuild.js"
+      "import": "./dist/esbuild.js",
+      "default": "./dist/esbuild.js"
     },
     "./package.json": "./package.json"
   },

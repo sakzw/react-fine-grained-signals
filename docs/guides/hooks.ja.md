@@ -81,7 +81,7 @@ build pluginをbuildに入れている場合、これを手で書く必要はあ
 
 ### 追跡境界
 
-収集ウィンドウが閉じるのは、次の `useSignalTracking()` 呼び出し時、コミット時のlayout effect、または現在の同期実行後のmicrotaskであり、コンポーネントがreturnした時点ではありません。
+収集ウィンドウが閉じるのは、次の `useSignalTracking()` 呼び出し時、Reactがコミットを始めた時点(layout effectやref callbackが走る前)、または現在の同期実行後のmicrotaskであり、コンポーネントがreturnした時点ではありません。開いたウィンドウの外での読み取りは、そのコンポーネント自身の子孫のlayout effectやrefも含めて、通常のreactiveな読み取りです。
 
 読むコンポーネントがすべて自分で呼ぶ必要があるのはこのためです。呼んでいない兄弟・子孫コンポーネントの読み取りは、別のコンポーネントの開いたままのウィンドウに帰属してしまうことがあり、その場合、実際に読んだコンポーネントはそのsignalに対して無言で更新されなくなります。
 
@@ -121,6 +121,8 @@ useSignalValue<T>(source: ReadonlySignal<T>): T
 ```
 
 1つのsignalを購読し、現在の値を返します。コンポーネント全体の `useSignalTracking()` ウィンドウではなく、名前の付いた購読を1つだけ張りたい場合の低レベルAPIです。
+
+- 追うのはsignalの値の置き換えだけです。ネストした変更では再レンダーされないため、`deepSignal` は型でエラーになります。deepな状態から値を選ぶには [`useDeepSignalValue`](#usedeepsignalvalue) を使ってください。
 
 ## useDeepSignalValue
 

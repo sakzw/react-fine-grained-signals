@@ -39,7 +39,7 @@ export default {
 };
 ```
 
-どちらの場合も2つのentry pointが使われます。productionビルドでは `jsx-runtime`、開発時には `jsx-dev-runtime` で、本パッケージは両方を提供しています。
+どちらの場合も2つのentry pointが使われます。productionビルドでは `jsx-runtime`、開発時には `jsx-dev-runtime` で、本パッケージは両方を提供しています。自動runtimeでは表現できない唯一の形 — prop spreadの後に `key` を書く `<div {...props} key="k" />` — では、TypeScript、Babel、Oxcはpackage rootから `createElement` をimportする形にフォールバックします。本パッケージは、同じsignal bindingを持つ `createElement` もrootから提供しています。
 
 どちらの形式でも選択されるruntimeは同じで、pragmaは適用範囲を絞るだけです。[`examples/react-router`](../../examples/react-router)は `tsconfig.json` に `jsx` だけを設定して `jsxImportSource` は置かず、2つのコンポーネントをpragmaで有効化しています。
 
@@ -94,12 +94,15 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 
 - `value` にbindingされた*派生*値(例えばユーザーの入力をtrimしたりupper-caseしたりするsignal)は、派生後の文字列が入力と異なる場合、caretが動くことがあります。この部分はここでは解決していません。
 - 他の要素の `value`/`checked`(`<li value>`、`<option value>`、`<meter value>` など)は双方向bindingではない単なるwrite-only属性なので、`title`/`disabled` と同じdirect attribute bindingを使います。
+- formのresetでもsignalが値の正です。bindingは要素のdefault(`defaultValue`、`defaultChecked`、optionの `defaultSelected`)をbindingした値と常に一致させるため、`form.reset()`、resetボタン、`<form action>` 実行後のReact 19の自動resetは、初回レンダーの値ではなくsignalの現在値に戻します。これはReactがcontrolled inputに対して行う挙動と同じです。reset時にfieldを空にしたい場合は、signalへ書き込んでください。
 
 ## 制約
 
 - allowlistにないevent handler、SVG props、その他のhost propsはdirect bindingされません。
 - direct bindingの書き込みはReactのschedulerの外で行われ、実験的な最適化のままです。
-- host propをbindingするかどうかは、要素の生存期間中は固定してください。素の値とsignalを切り替えるとwrapperの型が変わり、DOMのsubtreeが再マウントされます。
+- host propはレンダーごとに素の値とsignalを切り替えられます。要素の型は変わらず、子のstateも保たれます。切り替わるのはbindingの付け外しだけです(ただし `value`/`checked` をsignalと素の値で切り替えると、inputはReactのuncontrolled/controlledの間で切り替わり、React標準の警告が出ます)。
+- bindingはhost要素自身のrefを通じて付けられます。渡したrefは、Reactが直接呼ぶ場合とまったく同じように要素を受け取ります。refが安定していれば、無関係な再レンダーで呼び直されることはありません。
+- `deepSignal` はsignal childやbindingするpropには使えません。これらの位置はrootの置き換えしか追わないため、ネストした変更は表示に反映されません。TypeScriptはこれをエラーにします。deepな状態は追跡されたコンポーネント内で読むか、[`useDeepSignalValue`](./hooks.ja.md#usedeepsignalvalue) でprimitiveを選択してください。
 - SSRとhydrationでは、signalの初期値がサーバーとクライアントで一致するようにしてください。リクエスト固有のsignalを共有のmodule scopeへ置かず、リクエストごとに生成してください。
 - bindingしたcomputed signalのgetterが例外を投げた場合、そのサイクルのDOM書き込みはスキップされ、`console.error` にエラーが記録されます。記録は書き込みごとではなく、連続した失敗のエピソードごとに1回です。メッセージは `"react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` で、`{ cause: error }` が付きます。direct bindingはReactのrenderサイクルを経由しないため、投げられたエラーを捕まえるError Boundaryはありません。失敗するcomputedにError Boundaryのセマンティクスが必要な場合は [`useSignalValue`](./hooks.ja.md#usesignalvalue) を使ってください。
 - `value`/`checked`/`style` については2点が未解決です。現状は[直接バインディングの設計検討docs](../../development/design/direct-binding-value-checked-style.ja.md)を参照してください: *派生* `value` におけるcaretの維持と、per-propertyの細かい `style` 追跡(`style={{ color: signal }}`)です。

@@ -33,10 +33,12 @@ function transformSource(
   source: string,
   options: ReactFineGrainedSignalsOptions,
 ): string | undefined {
+  // The Vite plugin's transform is an `order: "pre"` object hook (see
+  // `src/unplugin.ts`); its handler is the same transform every adapter runs.
   const plugin = reactFineGrainedSignals.vite(options) as unknown as {
-    transform(code: string, id: string): { code: string } | null;
+    transform: { handler(code: string, id: string): { code: string } | null };
   };
-  return plugin.transform(source, "/project/src/App.tsx")?.code;
+  return plugin.transform.handler(source, "/project/src/App.tsx")?.code;
 }
 
 function transformCounter(options: ReactFineGrainedSignalsOptions): string | undefined {
@@ -81,6 +83,24 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(canTransform("/project/src/legacy.cts", {})).toBe(false);
     expect(canTransform("/project/src/modern.mjs", {})).toBe(true);
     expect(canTransform("/project/src/modern.mts", {})).toBe(true);
+  });
+
+  it("claims upper-case script extensions, as the transform's own parser choice does", () => {
+    // The transform picks its parser plugins case-insensitively, so an
+    // upper-case extension parses exactly like its lower-case twin; the claim
+    // used to be the one case-sensitive step and skipped these outright.
+    const upperCase = ["/p/App.TSX", "/p/App.JSX", "/p/state.TS", "/p/main.JS", "/p/m.MJS", "/p/m.MTS"];
+    expect(upperCase.filter((id) => !canTransform(id, {}))).toEqual([]);
+    expect(canTransform("/p/legacy.CJS", {})).toBe(false);
+    expect(canTransform("/p/legacy.CTS", {})).toBe(false);
+
+    const output = transformReactFineGrainedSignals(
+      "const count = { value: 1 }; export const App = (p: { n?: number }) => <p>{count.value}</p>;",
+      "/project/src/App.TSX",
+      internalOptions,
+    )?.code;
+    expect(output).toContain("_useManagedSignals()");
+    expect(resolveEsbuildLoader("/project/src/App.TSX")).toBe("tsx");
   });
 
   it("decides on the module id the transform will actually parse", () => {
@@ -143,6 +163,25 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(plugin.transformInclude("/project/src/legacy.cjs")).toBe(false);
     expect(plugin.transformInclude("/project/src/legacy.cts")).toBe(false);
     expect(plugin.transformInclude("/project/src/App.tsx")).toBe(true);
+  });
+
+  it("applies the same gate inside the Vite override, which bypasses transformInclude", () => {
+    // unplugin merges the `vite` override over its own wrapped hook, so the
+    // `order: "pre"` handler has to refuse what `transformInclude` refuses.
+    const plugin = reactFineGrainedSignals.vite({
+      mode: "auto",
+      exclude: (id) => id.includes("/excluded/"),
+    }) as unknown as {
+      transform: { handler(code: string, id: string): { code: string } | null };
+    };
+    const cjs = "const count = { value: 1 }; module.exports = () => <p>{count.value}</p>;";
+
+    expect(plugin.transform.handler(cjs, "/project/src/legacy.cjs")).toBeNull();
+    expect(plugin.transform.handler(counterSource, "/project/node_modules/pkg/App.tsx")).toBeNull();
+    expect(plugin.transform.handler(counterSource, "/project/excluded/App.tsx")).toBeNull();
+    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain(
+      "_useManagedSignals()",
+    );
   });
 
   it("accepts the public auto mode option", () => {
@@ -313,16 +352,26 @@ describe("bundler adapters", () => {
   // Each package entry point re-exports its own bundler's factory, and those
   // are what a consumer actually imports -- so the shape assertions go through
   // them rather than through `reactFineGrainedSignals[bundler]`.
-  it.each([
-    ["vite", viteAdapter],
-    ["rollup", rollupAdapter],
-  ] as const)("creates a %s transform plugin from its entry point", (_bundler, create) => {
-    const plugin = create(options) as unknown as Record<string, unknown>;
+  it("creates a rollup transform plugin from its entry point", () => {
+    const plugin = rollupAdapter(options) as unknown as Record<string, unknown>;
 
     expect(plugin.name).toBe(pluginName);
     expect(plugin.enforce).toBe("pre");
     expect(typeof plugin.transform).toBe("function");
     expect(typeof plugin.transformInclude).toBe("function");
+  });
+
+  it("creates a vite plugin whose transform is ordered ahead of other pre plugins", () => {
+    // `enforce: "pre"` alone ties with @vitejs/plugin-react's own pre-enforced
+    // React Compiler step and leaves the outcome to array order; the hook-level
+    // `order: "pre"` is what Vite sorts on within that group.
+    const plugin = viteAdapter(options) as unknown as Record<string, unknown>;
+    const transform = plugin.transform as { order?: unknown; handler?: unknown };
+
+    expect(plugin.name).toBe(pluginName);
+    expect(plugin.enforce).toBe("pre");
+    expect(transform.order).toBe("pre");
+    expect(typeof transform.handler).toBe("function");
   });
 
   it.each([
