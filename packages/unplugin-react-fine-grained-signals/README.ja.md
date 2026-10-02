@@ -75,6 +75,31 @@ transformで同じく `order: "pre"` を宣言し、より前にlistされたplu
 順序を決めますし、Babel経由の構成（`@rolldown/plugin-babel` と
 `reactCompilerPreset()`）はこのpluginとの組み合わせで検証していません。
 
+React Compilerとの組み合わせには、次の2つの既知の制約があります。どちらも
+v0.1.1から存在するものです。
+
+- **inlineのrender helperがcompilerにmemoizeされることがある。** このplugin
+  が呼び出し元のrenderの一部として扱う関数には、独自のboundaryも
+  `"use no memo"` も付きません。例は、通常の関数として呼び出すPascalCaseの
+  helper（`Title()`）や、`items.map(Row)` のようなrender callbackです。React
+  Compilerはそのhelper単体をcompileすることがあります。helperのJSXに、
+  compilerから見える依存がない場合（module scopeのsignalの読み取りは依存に
+  なりません）、compilerはそのJSXをcacheし、呼び出し元のcomponentが再render
+  してもhelperの出力は古いままになります。helperの本体に `"use no memo"` を
+  書くか、componentとして（`<Title />`）renderしてください。
+- **作者が書いた `"use memo"` はそのまま残る。** すでにmemoizationの
+  directiveを持つ関数には、pluginは `"use no memo"` を追加しません。
+  `babel-plugin-react-compiler` 1.0で確認した動作は次のとおりです。
+  - managed変換では、compilerは生成された `try` / `finally` をcompileしません。
+    既定の `panicThreshold` ではその関数をskipし、
+    `panicThreshold: "all_errors"` ではbuildが失敗します（"Handle TryStatement
+    without a catch clause"）。
+  - `transform: "inject"` では、compilerがその関数をcompileし、signalの
+    読み取りをmemoizationで消してしまうことがあるため、componentが更新され
+    なくなることがあります。
+
+  signalを読む関数では `"use memo"` を使わないでください。
+
 ## その他のbundler
 
 対応するentry pointを同様の要領で使用します。
@@ -233,6 +258,16 @@ function Outer({ show }) { return <div>{show && Title()}</div>; }
   key pathを通した呼び出しだけで、同じmodule内に限ります。alias
   （`const T = Title; T()`）、`Title.call(…)`、別moduleからの呼び出しは
   認識しません。
+- objectに保持された関数には、computed keyを通しても到達できます
+  （`renderers[node.type](node)`、`renderers[key]?.(arg)`、
+  `items.map(renderers[key])`）。そうしたaccessが到達しうるslot（同じ深さで、
+  同じ静的なprefixの下にあるもの）には、独自のboundaryを付けません。そこに
+  boundaryがあると、呼び出し元の中で可変回数実行されるためです。keyは実行時に
+  しか決まらないので、そのslotの読み取りは呼び出し元に収集 *されません*。
+  そのため、自分ではsignalを読まない呼び出し元は変換されず、slotが読むsignalの
+  変更では更新されません。呼び出し元でsignalを読むか、呼び出し元に
+  `@signalTracking` を付けてください。同じslotをmodule内で
+  `<renderers.User />` としてrenderしている場合も同様です。
 - 読み取りを収集するのは、呼び出し元がcomponentまたは `useX` hookである場合
   だけです。小文字のhelperを経由した呼び出し
   （`function renderTitle() { return Title(); }`）はたどらないため、その
@@ -355,6 +390,14 @@ managed storeの宣言と `try` / `finally` scopeに置き換わるため、関�
 引数を本体が再宣言している場合は移動を行わず、その読み取りは追跡されない
 ままです。その場合はsignalを本体で読んでください。
 
+この移動では、default値の規則と評価順は変わりません。TypeScriptでは、生成
+した引数が元の型とoptionalかどうかを引き継ぐため、出力は有効なTypeScriptの
+ままです。ただし、関数の `length` は変わることがあります。default値を持つ
+引数は `length` に数えられませんが、それを置き換えた生成引数は数えられる
+ためです。たとえば `function useLabel(prefix?: string, value = count.value)`
+の `length` は、sourceでは1、変換後は2です。変換された関数の `length` には
+依存しないでください。
+
 ## Buildへの組み込み
 
 いずれの変換モードも再適用するとno-opです。pluginは、対応するbundler
@@ -368,6 +411,17 @@ JavaScript/TypeScript以外のmoduleはskipし、`.cjs` / `.cts` のmoduleには
 一切手を加えません。拡張子は大文字・小文字を区別せずに判定するため、
 `App.TSX` は `App.tsx` とまったく同様に扱います。`.ts` はJSXなしの
 TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析します。
+
+## Fast Refresh
+
+この制約はv0.1.1から存在します。既定のmanaged変換とViteのOxcベースのFast
+Refreshの組み合わせでは、変換されたcomponentのhookを変更する（hookを追加、
+削除、並べ替える）と、Fast Refreshのstateは保持されません。refreshは
+"Rendered more hooks than during the previous render"（または "fewer"）で
+失敗し、pageの完全なreloadが必要になります。managed変換のboundaryは
+componentのhookを `try` blockの中に置くため、Fast Refreshはそれらのhookを
+componentのhook signatureに含めません。検証したfixtureでは、
+`transform: "inject"` にこの制約はありませんでした。
 
 ## React Server Components
 

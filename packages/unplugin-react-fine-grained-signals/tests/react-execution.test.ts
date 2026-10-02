@@ -20,8 +20,13 @@ import { transformWithOxc } from "vite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
+import * as libraryJsxRuntime from "../../../src/jsx-runtime.js";
 import * as libraryRuntime from "../../../src/runtime.js";
-import { transformReactFineGrainedSignals } from "../src/internal/transform.js";
+import {
+  transformReactFineGrainedSignals,
+  type ReactFineGrainedSignalsMode,
+  type ReactFineGrainedSignalsTransform,
+} from "../src/internal/transform.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
   true;
@@ -32,6 +37,7 @@ const EXPORTS = "__exports";
 const moduleRegistry: Record<string, unknown> = {
   "react/jsx-runtime": reactJsxRuntime,
   "react-fine-grained-signals": library,
+  "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
   "react-fine-grained-signals/runtime": libraryRuntime,
 };
 
@@ -94,17 +100,27 @@ const moduleLinker: PluginObject = {
 
 async function loadModule(
   source: string,
-  { transform = true }: { transform?: boolean } = {},
+  {
+    transform = true,
+    mode = "auto",
+    codegen = "managed",
+  }: {
+    transform?: boolean;
+    mode?: ReactFineGrainedSignalsMode;
+    codegen?: ReactFineGrainedSignalsTransform;
+  } = {},
 ): Promise<Record<string, unknown>> {
   const transformed = transform
     ? transformReactFineGrainedSignals(source, "Fixture.jsx", {
       importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
+      mode,
+      transform: codegen,
       reactCompiler: "auto",
       reactImportSource: "react",
     })?.code ?? source
     : source;
+  // `importSource: "react"` is the project-wide default a per-file
+  // `@jsxImportSource` pragma overrides, exactly as under Vite.
   const jsx = await transformWithOxc(transformed, "Fixture.jsx", {
     lang: "jsx",
     jsx: { runtime: "automatic", importSource: "react" },
@@ -387,4 +403,176 @@ export function List() {
     write(module, "count", 1);
     expect(container.textContent).toBe("1:11:21:3");
   });
+});
+
+function writeSignal<T>(target: Signal<T>, next: T): void {
+  act(() => {
+    target.value = next;
+  });
+}
+
+interface BadgeProps {
+  count: Signal<number>;
+  label: Signal<string>;
+}
+
+describe("an import-free file opted into the JSX runtime by a first-line pragma", () => {
+  // Signals arrive through props, so the file has no import for the transform
+  // to put its own after.
+  const source = `/** @jsxImportSource react-fine-grained-signals */
+export function Badge({ count, label }) {
+  return <p title={label}>{count.value > 9 ? "many" : "few"}: {label}</p>;
+}
+`;
+
+  it("control: a generated import above the pragma hands the signal child to React's runtime", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const module = await loadModule(
+      `import { useSignalTracking } from "react-fine-grained-signals";\n${source.replace(
+        "{\n  return",
+        '{\n  "use no memo";\n  useSignalTracking();\n  return',
+      )}`,
+      { transform: false },
+    );
+    const count = library.signal(1);
+    const label = library.signal("hello");
+
+    expect(() => mount(() => createElement(module.Badge as FunctionComponent<BadgeProps>, { count, label })))
+      .toThrow(/not valid as a React child/);
+  });
+
+  for (const codegen of ["managed", "inject"] as const) {
+    it(`binds the signal child and host prop through the pragma's runtime (${codegen})`, async () => {
+      const module = await loadModule(source, { codegen });
+      const count = library.signal(1);
+      const label = library.signal("hello");
+      const container = mount(() =>
+        createElement(module.Badge as FunctionComponent<BadgeProps>, { count, label })
+      );
+      const paragraph = container.querySelector("p")!;
+      expect(paragraph.textContent).toBe("few: hello");
+      expect(paragraph.title).toBe("hello");
+
+      writeSignal(label, "world");
+      expect(paragraph.textContent).toBe("few: world");
+      expect(paragraph.title).toBe("world");
+
+      // The boundary the transform added still tracks the `.value` read.
+      writeSignal(count, 10);
+      expect(container.querySelector("p")!.textContent).toBe("many: world");
+    });
+  }
+});
+
+describe("object-method components reached through dynamic member dispatch", () => {
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const suffix = signal("!");
+export const nodes = signal([
+  { id: 1, type: "User", name: "ada" },
+  { id: 2, type: "Repo", name: "rfgs" },
+]);
+export const show = signal(false);
+export const kind = signal("Details");
+
+const renderers = {
+  User(node) {
+    return <li key={node.id}>{node.name}{suffix.value}</li>;
+  },
+  Repo(node) {
+    return <li key={node.id}>{node.name}</li>;
+  },
+};
+
+export function Feed() {
+  return <ul>{nodes.value.map((node) => renderers[node.type](node))}</ul>;
+}
+
+const panels = {
+  Details(arg) {
+    return <p>{arg}{suffix.value}</p>;
+  },
+};
+
+export function Panel() {
+  return <div>{show.value && panels[kind.value]("x")}</div>;
+}
+`;
+
+  // What the transform emitted for `User` before dynamic dispatch was
+  // recognized: a boundary that runs once per matching item inside Feed.
+  const previousOutput = `
+import { signal } from "react-fine-grained-signals";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
+
+export const suffix = signal("!");
+export const nodes = signal([
+  { id: 1, type: "User", name: "ada" },
+  { id: 2, type: "Repo", name: "rfgs" },
+]);
+
+const renderers = {
+  User(node) {
+    "use no memo";
+    const store = useManagedSignals();
+    try {
+      return <li key={node.id}>{node.name}{suffix.value}</li>;
+    } finally {
+      store.finish();
+    }
+  },
+  Repo(node) {
+    return <li key={node.id}>{node.name}</li>;
+  },
+};
+
+export function Feed() {
+  "use no memo";
+  const store = useManagedSignals();
+  try {
+    return <ul>{nodes.value.map((node) => renderers[node.type](node))}</ul>;
+  } finally {
+    store.finish();
+  }
+}
+`;
+
+  const grown = [
+    { id: 1, type: "User", name: "ada" },
+    { id: 2, type: "Repo", name: "rfgs" },
+    { id: 3, type: "User", name: "bob" },
+  ];
+
+  it("control: a boundary inside the dispatched method breaks Feed's hook count", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const module = await loadModule(previousOutput, { transform: false });
+    mount(module.Feed);
+
+    expect(() => write(module, "nodes", grown)).toThrow(/hooks/i);
+  });
+
+  for (const mode of ["auto", "all"] as const) {
+    for (const codegen of ["managed", "inject"] as const) {
+      it(`survives list-length changes and conditional dispatch (${mode}, ${codegen})`, async () => {
+        const module = await loadModule(source, { mode, codegen });
+        const feed = mount(module.Feed);
+        expect(feed.textContent).toBe("ada!rfgs");
+
+        write(module, "nodes", grown);
+        expect(feed.textContent).toBe("ada!rfgsbob!");
+        write(module, "nodes", grown.slice(0, 1));
+        expect(feed.textContent).toBe("ada!");
+
+        const panel = mount(module.Panel);
+        expect(panel.textContent).toBe("");
+        write(module, "show", true);
+        expect(panel.textContent).toBe("x!");
+        write(module, "show", false);
+        expect(panel.textContent).toBe("");
+        write(module, "show", true);
+        expect(panel.textContent).toBe("x!");
+      });
+    }
+  }
 });

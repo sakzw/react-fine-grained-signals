@@ -1023,3 +1023,144 @@ Coverage, with thresholds unchanged:
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The fix is one commit on top of `7a84712`. No tag, publish, or GitHub Release was performed.
 - The release is not ready yet: the transform audit's remediation and the independent A'/B'/C' re-audits are still outstanding.
+
+## Transform / packaging audit remediation
+
+### Starting point and scope
+
+- Starting commit: `f37f0d861091c3e1746d83d20709b599ebbaaaec` (`fix: close react jsx release audit findings`). `main` and `origin/main` both pointed to it, the working tree was clean, and its Test and E2E runs were green.
+- Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+- The transform plugin was unchanged between the audited `7d87999` and `f37f0d8`.
+
+An independent transform / packaging release-blocker audit of `7d87999` found no blocker under its criteria. It found two transform defects worth fixing before the release, C1 and C2, and four behaviors that only need documentation. It found the packed artifacts releasable as-is. This pass fixes C1 and C2 and makes the documentation changes. It does not change the React Compiler integration, Fast Refresh, the other callback false positives the audit listed (`Children.map(children, Row)`, `items.map(cond ? Row : Alt)`, a PascalCase-named `memo` comparator under an annotation), Rollup's typing, the public helper exports, deferred parser syntax, packaging, or the runtime.
+
+### C1 — an injected import displaced a first-line JSX pragma
+
+**Reproduction.** An import-free file opted into the JSX runtime with the per-file pragma the README recommends:
+
+```jsx
+/** @jsxImportSource react-fine-grained-signals */
+export function Badge({ count, label }) {
+  return <p title={label}>{count.value > 9 ? "many" : "few"}: {label}</p>;
+}
+```
+
+- The transform put its runtime import (`useManagedSignals` or `useSignalTracking`) above the pragma comment.
+- Vite 8.3.1 / Oxc only honors a JSX pragma that comes before the first statement, so it compiled the file against `react/jsx-runtime`.
+- Mounting `Badge` with signal props threw "Objects are not valid as a React child". The same file without the plugin worked.
+- `0.1.1` behaves the same way. Files with any import declaration of their own (including `import type`), and files with a `"use client"` prologue, were not affected.
+
+**Root cause.** With no import to insert after, `addRuntimeImport` uses `unshiftContainer("body", …)`. Babel keeps the author's leading comments attached to the statement they were written above, so the pragma was printed after the generated import.
+
+**Fix** (`keepJsxPragmasFirst` in `transform.ts`, called at `Program.exit`):
+- If the file had no import of its own, the first authored statement's leading comments, up to and including the last JSX pragma comment (`@jsxImportSource`, `@jsxRuntime`, `@jsx`, `@jsxFrag`), move onto the first generated import, in order.
+- Comments after the last pragma, typically the statement's own doc comment, stay on the statement. A file without a pragma is unchanged.
+- After a shebang, Babel also records these comments as trailing comments of the `#!` line and prints them from there. The comments that stay with the statement are removed from that copy, so they are not printed above the import.
+- The move runs at `Program.exit`, after every function has been decided, because `@signalTracking` / `@noSignalTracking` are read from the same leading comments. Nothing is done to the printed text, and any pragma value is preserved.
+
+**Vite/Oxc verification.** Each case is transformed, lowered with Vite's `transformWithOxc`, and checked for the JSX runtime module the result imports:
+- block and line pragmas in import-free `.jsx`, managed and inject: `react-fine-grained-signals/jsx-runtime`;
+- import-free `.tsx`: the same, and `react-fine-grained-signals/jsx-dev-runtime` in development;
+- an arbitrary source (`@acme/jsx`): `@acme/jsx/jsx-runtime`;
+- `"use client"` before the pragma: the directive stays first, and the runtime is correct;
+- a shebang, a license comment before the pragma, and a doc comment after it: the order is shebang, license, pragma, import, doc comment, statement;
+- a file with an existing value import or only an `import type`: unchanged ordering, correct runtime.
+
+### C2 — dynamic keyed dispatch gave an object-literal method a boundary
+
+**Reproduction.**
+
+```jsx
+const renderers = {
+  User(node) { return <li>{node.name}{suffix.value}</li>; },
+};
+export function Feed({ nodes }) {
+  return <ul>{nodes.map((node) => renderers[node.__typename](node))}</ul>;
+}
+```
+
+- v0.2 injected a hook boundary into `User`. `renderers[node.__typename](node)` calls it as a plain function once per matching item inside `Feed`'s render.
+- When the list grew, React threw "Rendered more hooks than during the previous render".
+- `0.1.1` did not transform the method spelling, so this crash is new in v0.2. The arrow-property spelling (`User: (node) => …`) has crashed the same way since `0.1.1`.
+
+**Why.** v0.2 made object-literal methods transform targets, named by their key like the keyed property spelling. The exclusions that keep a keyed slot off a boundary (`isPlainCalledComponent` for plain calls, `isKeyedRenderCallback` for iteration callbacks) find uses by walking the root binding's references down the slot's exact static key path. A computed link whose key is decided at runtime turned off that path, so the dispatch was not seen as a use.
+
+**Safety rule.** `getKeyedSlotUses` takes an `includeDynamic` flag, and only those two exclusions set it:
+- A computed link whose key cannot be read statically (`renderers[node.type]`, or the optional `renderers?.[key]`) matches any key at that position.
+- Static links still have to name the key exactly. So a dispatch reaches only the slots at its depth, under its static prefix. `renderers[k](node)` reaches `renderers.User` but not `renderers.group.Nested`, and `registry.users[k]()` reaches only the slots under `registry.users`.
+- If such a use is a plain or optional call (including `renderers[k]!(x)` and `(renderers[k] as Fn)(x)`) or the callback argument of `map`/`flatMap`/`forEach`/`Array.from`, the slot gets no boundary of its own. This holds in every mode, including `all`, in both spellings.
+- `resolveKeyedFunction`, which credits a statically called slot's reads to its caller, keeps the strict static walk. A dynamically dispatched slot's reads are therefore not credited to the caller, and a caller that reads no signal itself does not update on them. That stale outcome is the documented trade-off for avoiding an invalid hook call.
+- The check rides on the reference walk the static exclusions already performed, so no traversal was added.
+
+**Preserved static behavior.** The following keep their boundary: `<jsx.User />`, `<arrows.Card />`, and nested `<registry.users.Member />`, including next to a dynamic call on an unrelated root. These stay excluded as before: static `called.Title()` and `items.map(mapped.Row)`. Checked in auto and all, managed and inject. The audit's shape matrix rows for keyed slots (`objProp`, `objMethod`, `memberAssign`, `objSlot`, `destrSlot`, `renamedSlot`, `nestedSlot`, `nsCall`, `destrCall`, `jsxPropSlots`) produce exactly the audit's results.
+
+### Regression coverage
+
+- `packages/unplugin-react-fine-grained-signals/tests/transform.test.ts`:
+  - "a JSX pragma in a file the transform adds the first import to" covers each C1 case above for managed and inject, through `transformWithOxc`. It also checks that an annotation written next to the pragma is still honored.
+  - "keyed slots reached through dynamic member dispatch" covers per-item and conditional dispatch (auto/all × managed/inject), optional, TypeScript-wrapped and arrow-property dispatch, a dynamic iteration callback, depth and prefix, and the static guards (auto/all × managed/inject).
+- `packages/unplugin-react-fine-grained-signals/tests/react-execution.test.ts`:
+  - C1: the pragma file mounts with signal props, and its signal child and bound `title` update, managed and inject. A control with the old import placement throws "not valid as a React child".
+  - C2: the dynamic list grows and shrinks and a conditional dynamic call toggles without a hook error (auto/all × managed/inject). A control with the old boundary in the method throws on the list growing.
+- 40 new tests. Against the `f37f0d8` transform, 28 fail. The 12 that pass are guards: the four static-key guard runs, the two controls, and the `"use client"`, existing-import, and no-pragma cases for each transform.
+
+### Documentation-only outcomes
+
+Investigated in the audit and deliberately not implemented in this remediation. All of them were present in `0.1.1`, except that the parameter relocation is new in v0.2.
+
+- **React Compiler and demoted functions.** A plain-called PascalCase helper or a render callback has no boundary and no `"use no memo"`, so React Compiler can cache its JSX and leave it stale. The plugin README (EN/JA, "With React Compiler") and the release-note draft document this with the workaround (`"use no memo"` in the helper, or render it as a component). No automatic directive was added.
+- **Author-written `"use memo"`.** The plugin keeps it. With `babel-plugin-react-compiler` 1.0, managed plus `panicThreshold: "all_errors"` fails on the generated `try` / `finally`, and inject can be compiled and go stale. Documented in the same places.
+- **Managed Fast Refresh.** Under Vite's Oxc refresh, adding, removing, or reordering a hook in a managed-transformed component does not preserve state and needs a full reload; inject did not show it in the audited fixture. The release-note wording was sharpened from "can fail", and the plugin README (EN/JA) has a new "Fast Refresh" section. Fast Refresh itself was not changed.
+- **Parameter relocation and `function.length`.** The default rule, the evaluation order, and TypeScript validity are preserved, but `length` can change. Documented in the plugin README (EN/JA), the migration guide (EN/JA), and the release-note draft. The transform was not changed.
+- **Dynamic keyed dispatch.** The README's plain-call limitations, the migration guide, and the release notes state that such slots get no boundary and that their reads are not credited to the caller.
+
+### Performance
+
+The transform is compile-time only. The plugin was built from `f37f0d8` and from the fix, and both were run in one process: 21 rounds in alternating order after warmup, both module load orders. The table shows the order-balanced geometric mean ratio, fixed / `f37f0d8`:
+
+| Workload | Ratio |
+| --- | ---: |
+| 120 components (the benchmark's mixed shape) | 1.01 |
+| One object with 120 method slots, each rendered as `<ns.ItemN />` (identical output) | 1.06 |
+| 1 component | 1.05 |
+
+Every quartile range spans 1.0, so no change was measurable. A variant with a dynamic call over the same 120 slots ran about 1.8× faster, only because those slots no longer receive boundary code.
+
+### Size
+
+The runtime is unchanged, and every runtime size budget passed without a change. The plugin's main chunk grew from 88,244 to 92,317 raw bytes (25,780 to 27,047 gzip), mostly the new explanatory comments, which the build keeps. The plugin has no size budget.
+
+### Validation
+
+The complete gate ran on the final code without worker limits and with no threshold changes.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 34 files / 456 tests; transform 5 files / 315 passed, 3 skipped (previously 275 / 3) |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed: 3 independent Alien systems |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 39/39 |
+| `pnpm size` | passed with unchanged budgets |
+| `git diff --check` | passed |
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.50% | 88.12% | 97.87% | 95.67% |
+| Transform (thresholds 92/90/92/95) | 93.05% | 91.17% | 95.59% | 96.79% |
+
+The audit's packed-tarball checks were also run again on newly packed tarballs in a clean consumer. The peer range is still `^0.2.0`. The C1 pragma file built with Vite mounts and updates in both modes. The C2 dynamic list grows without a hook error. The audit's fixture still builds, runs, and stays fresh under Vite, Rollup, esbuild, webpack, and Rspack, managed and inject.
+
+### State after the transform remediation
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The fix is one commit on top of `f37f0d8`. No tag, publish, or GitHub Release was performed.
+- Final release readiness still requires the independent A'/B'/C' re-audits of this commit.

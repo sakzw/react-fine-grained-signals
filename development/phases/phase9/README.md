@@ -447,3 +447,8 @@ The chronology after the freeze is:
    - B2: a new `style={signal}` binding could leave CSS keys from its render-time snapshot on the element, for example after an Activity or Suspense reveal.
 
    The JSX bindings guides now exclude `<title>`, `<textarea>`, and `<style>` from signal children and document that a bound `value`/`checked` does not snap back when `onChange` rejects an edit. No size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. The transform audit's remediation and the independent re-audits are still outstanding.
+9. A transform / packaging release-blocker audit of `7d87999` found no blocker and judged the packed artifacts releasable. Two transform defects it found are fixed (see the [closure record](./post-m3-release-review-closure.md#transform--packaging-audit-remediation)):
+   - C1: in a file with no imports, the generated runtime import pushed a first-line `@jsxImportSource` pragma below it, so Oxc/Vite compiled the file against React's JSX runtime and a signal child crashed on mount (also in `0.1.1`);
+   - C2: an object-literal component reached through a computed key (`renderers[node.type](node)`) received a hook boundary, which crashed when the number of calls changed.
+
+   React Compiler with demoted helpers or an author-written `"use memo"`, managed-mode Fast Refresh, and the parameter-relocation `function.length` change are documented, not changed. No size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. Final release readiness still requires the independent A'/B'/C' re-audits.

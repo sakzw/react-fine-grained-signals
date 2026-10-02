@@ -77,6 +77,29 @@ wherever hook ordering does not apply: Rollup orders by array position alone,
 and the Babel route (`@rolldown/plugin-babel` with `reactCompilerPreset()`) has
 not been verified against this plugin.
 
+Two known limitations apply with React Compiler. Both were present in v0.1.1.
+
+- **Inline render helpers can be memoized by the compiler.** A function this
+  plugin treats as part of its caller's render gets no boundary and no
+  `"use no memo"` of its own. Examples are a PascalCase helper called as a
+  plain function (`Title()`) and a render callback such as `items.map(Row)`.
+  React Compiler can still compile that helper by itself. If the helper's JSX
+  has no dependency the compiler can see (a module-level signal read is not
+  one), the compiler caches the JSX, and the helper's output stays stale even
+  though the calling component re-renders. Put `"use no memo"` in the helper's
+  body, or render it as a component (`<Title />`) instead.
+- **An author-written `"use memo"` is kept.** The plugin does not add
+  `"use no memo"` to a function that already states a memoization directive.
+  Tested with `babel-plugin-react-compiler` 1.0:
+  - With the managed transform, the compiler does not compile the generated
+    `try` / `finally`. With the default `panicThreshold` it skips the function.
+    With `panicThreshold: "all_errors"` the build fails ("Handle TryStatement
+    without a catch clause").
+  - With `transform: "inject"`, the compiler compiles the function and can
+    memoize away its signal reads, so the component can stop updating.
+
+  Do not use `"use memo"` in functions that read signals.
+
 ## Other bundlers
 
 Use the matching entry point in the same way:
@@ -243,6 +266,16 @@ Known limitations:
   key path it is defined at, are recognized, and only within the module. An
   alias (`const T = Title; T()`), `Title.call(…)`, and calls from other modules
   are not.
+- A function held in an object can also be reached through a computed key:
+  `renderers[node.type](node)`, `renderers[key]?.(arg)`, or
+  `items.map(renderers[key])`. Every slot that such an access can reach (the
+  same depth, under the same static prefix) gets no boundary of its own,
+  because a boundary there would run a variable number of times inside the
+  caller. Its reads are *not* collected by the caller, because the key is only
+  known at runtime. So a caller that reads no signal itself is not transformed
+  and does not update on the slot's signals. Read the signal in the caller, or
+  add `@signalTracking` to the caller. This also applies when the module
+  renders the same slot as `<renderers.User />`.
 - The reads are collected only when the caller is itself a component or a
   `useX` hook. A call routed through a lowercase helper
   (`function renderTitle() { return Title(); }`) is not followed, so nothing
@@ -369,6 +402,15 @@ kept. If the body declares a name a moved default refers to, or re-declares a
 moved parameter, the move is skipped and that read stays untracked; read the
 signal in the body instead.
 
+The move keeps the default rule and the evaluation order. In TypeScript the
+generated parameter keeps the original's type and optionality, so the output
+stays valid TypeScript. The function's `length` can change, though. A
+parameter with a default does not count toward `length`, but the generated
+parameter that replaces it does. For example,
+`function useLabel(prefix?: string, value = count.value)` has a `length` of 1
+in the source and 2 after the transform. Do not rely on the `length` of a
+transformed function.
+
 ## Build integration
 
 Reapplying either transform mode is a no-op. The plugin is registered with
@@ -382,6 +424,17 @@ non-JavaScript/TypeScript modules, and never touches `.cjs` / `.cts` modules.
 Extensions are matched case-insensitively, so `App.TSX` is handled exactly like
 `App.tsx`. Plain `.ts` files are parsed as TypeScript without JSX, while
 `.tsx`, `.jsx`, and JavaScript files may use JSX.
+
+## Fast Refresh
+
+This limitation was present in v0.1.1. With the default managed transform and
+Vite's Oxc-based Fast Refresh, changing a transformed component's hooks
+(adding, removing, or reordering a hook) does not preserve Fast Refresh state.
+The refresh fails with "Rendered more hooks than during the previous render"
+(or "fewer"), and the page needs a full reload. The managed boundary puts the
+component's hooks inside a `try` block, where Fast Refresh does not include
+them in the component's hook signature. In the tested fixture,
+`transform: "inject"` did not have this limitation.
 
 ## React Server Components
 

@@ -2857,3 +2857,281 @@ describe("render callbacks reached through Array.from or a destructured keyed sl
     expect(output).toMatch(/Row: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 });
+
+/**
+ * Transforms `source` in `auto` mode and lowers the result with Vite's Oxc
+ * transform -- the step that reads a per-file JSX pragma -- returning the JSX
+ * runtime module the lowered code imports from.
+ */
+async function lowerJsx(
+  source: string,
+  id: string,
+  transform: ReactFineGrainedSignalsTransform,
+  development = false,
+): Promise<{ output: string; runtime: string | undefined }> {
+  const output = transformReactFineGrainedSignals(source, id, {
+    importSource: "react-fine-grained-signals",
+    mode: "auto",
+    transform,
+    reactCompiler: "auto",
+    reactImportSource: "react",
+  })?.code;
+  if (output === undefined) throw new Error(`${id} was not transformed`);
+  const lowered = await transformWithOxc(output, id, {
+    jsx: { runtime: "automatic", importSource: "react", development },
+  });
+  return { output, runtime: /from "([^"]+\/jsx-(?:dev-)?runtime)"/.exec(lowered.code)?.[1] };
+}
+
+describe("a JSX pragma in a file the transform adds the first import to", () => {
+  const badge = `
+export function Badge({ count, label }) {
+  return <p title={label}>{count.value > 9 ? "many" : "few"}: {label}</p>;
+}
+`;
+  const rfgsRuntime = "react-fine-grained-signals/jsx-runtime";
+
+  for (const transform of ["managed", "inject"] as const) {
+    describe(`${transform} transform`, () => {
+      it("keeps a block pragma ahead of the generated import in an import-free .jsx file", async () => {
+        const { output, runtime } = await lowerJsx(
+          `/** @jsxImportSource react-fine-grained-signals */\n${badge}`,
+          "Badge.jsx",
+          transform,
+        );
+        expect(output.indexOf("@jsxImportSource")).toBeLessThan(output.indexOf("import "));
+        expect(runtime).toBe(rfgsRuntime);
+      });
+
+      it("keeps a line pragma ahead of the generated import", async () => {
+        const { runtime } = await lowerJsx(
+          `// @jsxImportSource react-fine-grained-signals\n${badge}`,
+          "Badge.jsx",
+          transform,
+        );
+        expect(runtime).toBe(rfgsRuntime);
+      });
+
+      it("keeps the pragma in an import-free .tsx file, and in development builds", async () => {
+        const source = `/** @jsxImportSource react-fine-grained-signals */
+export function Badge({ count }: { count: { value: number } }) {
+  return <p>{count.value}</p>;
+}
+`;
+        expect((await lowerJsx(source, "Badge.tsx", transform)).runtime).toBe(rfgsRuntime);
+        expect((await lowerJsx(source, "Badge.tsx", transform, true)).runtime).toBe(
+          "react-fine-grained-signals/jsx-dev-runtime",
+        );
+      });
+
+      it("keeps any import source the pragma names, not only this package", async () => {
+        const { runtime } = await lowerJsx(`/** @jsxImportSource @acme/jsx */\n${badge}`, "Badge.jsx", transform);
+        expect(runtime).toBe("@acme/jsx/jsx-runtime");
+      });
+
+      it("keeps a pragma after a directive prologue, and the directive first", async () => {
+        const { output, runtime } = await lowerJsx(
+          `"use client";\n/** @jsxImportSource react-fine-grained-signals */\n${badge}`,
+          "Badge.jsx",
+          transform,
+        );
+        expect(output.startsWith('"use client";')).toBe(true);
+        expect(runtime).toBe(rfgsRuntime);
+      });
+
+      it("keeps a shebang first and ordinary comments in their original order", async () => {
+        const { output, runtime } = await lowerJsx(
+          `#!/usr/bin/env node
+// Copyright header
+/** @jsxImportSource react-fine-grained-signals */
+/** Renders the badge. */
+${badge}`,
+          "Badge.jsx",
+          transform,
+        );
+        expect(output.startsWith("#!/usr/bin/env node")).toBe(true);
+        const order = ["Copyright header", "@jsxImportSource", "import ", "Renders the badge.", "export function Badge"]
+          .map((text) => output.indexOf(text));
+        expect(order.every((position) => position !== -1)).toBe(true);
+        expect(order.every((position, index) => index === 0 || order[index - 1]! < position)).toBe(true);
+        expect(runtime).toBe(rfgsRuntime);
+      });
+
+      it("leaves a file whose imports already precede the generated one unchanged in order", async () => {
+        const withImport = await lowerJsx(
+          `/** @jsxImportSource react-fine-grained-signals */
+import { signal } from "react-fine-grained-signals";
+export const count = signal(0);
+export function Badge() { return <p>{count.value}</p>; }
+`,
+          "Badge.jsx",
+          transform,
+        );
+        expect(withImport.output.indexOf("@jsxImportSource")).toBeLessThan(
+          withImport.output.indexOf('import { signal }'),
+        );
+        expect(withImport.runtime).toBe(rfgsRuntime);
+
+        const typeOnly = await lowerJsx(
+          `/** @jsxImportSource react-fine-grained-signals */
+import type { Signal } from "react-fine-grained-signals";
+export function Badge({ count }: { count: Signal<number> }) { return <p>{count.value}</p>; }
+`,
+          "Badge.tsx",
+          transform,
+        );
+        expect(typeOnly.runtime).toBe(rfgsRuntime);
+      });
+
+      it("does not move a first statement's comments when the file has no pragma", async () => {
+        const { output } = await lowerJsx(`/** Renders the badge. */\n${badge}`, "Badge.jsx", transform);
+        expect(output.indexOf("import ")).toBeLessThan(output.indexOf("Renders the badge."));
+      });
+    });
+  }
+
+  it("still honors an annotation written next to the pragma on the first statement", () => {
+    // The pragma and annotation move together, but only once every function
+    // under that statement has read the annotation.
+    const output = compile(`/** @signalTracking */
+/** @jsxImportSource react-fine-grained-signals */
+export const ns = {
+  Home() { return <p>home</p>; },
+  Away() { return <p>away</p>; },
+};
+`);
+    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.indexOf("@jsxImportSource")).toBeLessThan(output.indexOf("import "));
+  });
+});
+
+/** Does the keyed slot `key` (a method or an arrow property) open a boundary of its own? */
+function slotHasBoundary(output: string, key: string): boolean {
+  return new RegExp(
+    `\\b${key}(?:\\([^)]*\\)|: \\(?[\\w, ]*\\)? =>) \\{\\s+(?:"use no memo";\\s+)?(?:const _signals|_useSignalTracking\\(\\))`,
+  ).test(output);
+}
+
+describe("keyed slots reached through dynamic member dispatch", () => {
+  const modes = ["auto", "all"] as const;
+  const transforms = ["managed", "inject"] as const;
+  const forEachCombination = (
+    run: (mode: ReactFineGrainedSignalsMode, transform: ReactFineGrainedSignalsTransform) => void,
+  ): void => {
+    for (const mode of modes) for (const transform of transforms) run(mode, transform);
+  };
+
+  forEachCombination((mode, transform) => {
+    it(`keeps a method dispatched per item off a boundary (${mode}, ${transform})`, () => {
+      const output = compile(`
+        const suffix = { value: "!" };
+        const renderers = {
+          User(node) { return <li>{node.name}{suffix.value}</li>; },
+          Repo(node) { return <li>{node.name}</li>; },
+        };
+        export function Feed({ nodes }) {
+          return <ul>{nodes.map((node) => renderers[node.__typename](node))}</ul>;
+        }
+      `, mode, transform);
+
+      expect(slotHasBoundary(output, "User")).toBe(false);
+      expect(slotHasBoundary(output, "Repo")).toBe(false);
+    });
+
+    it(`keeps a conditionally, dynamically called method off a boundary (${mode}, ${transform})`, () => {
+      const output = compile(`
+        const count = { value: 1 };
+        const panels = { Details(arg) { return <p>{count.value}{arg}</p>; } };
+        export function Panel({ show, kind }) { return <div>{show && panels[kind]("x")}</div>; }
+      `, mode, transform);
+
+      expect(slotHasBoundary(output, "Details")).toBe(false);
+    });
+  });
+
+  it("recognizes optional, TypeScript-wrapped and arrow-property dispatch", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      type Fn = (arg: string) => unknown;
+      const a = { One(arg: string) { return <p>{count.value}{arg}</p>; } };
+      const b = { Two(arg: string) { return <p>{count.value}{arg}</p>; } };
+      const c = { Three(arg: string) { return <p>{count.value}{arg}</p>; } };
+      const d = { Four(arg: string) { return <p>{count.value}{arg}</p>; } };
+      const e = { Five: (arg: string) => <p>{count.value}{arg}</p> };
+      export function P({ k }: { k: string }) {
+        return <div>{a[k]?.("x")}{b?.[k]("x")}{c[k]!("x")}{(d[k] as Fn)("x")}{e[k]("x")}</div>;
+      }
+    `, "all");
+
+    for (const key of ["One", "Two", "Three", "Four", "Five"]) {
+      expect(slotHasBoundary(output, key)).toBe(false);
+    }
+  });
+
+  it("keeps a method handed to an iteration method through a dynamic key off a boundary", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      const renderers = { Row(item) { return <li>{count.value}{item}</li>; } };
+      export function List({ items, kind }) { return <ul>{items.map(renderers[kind])}</ul>; }
+    `, "all");
+
+    expect(slotHasBoundary(output, "Row")).toBe(false);
+  });
+
+  it("only reaches slots at the depth and under the static prefix the dispatch names", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      const registry = {
+        users: { User() { return <p>{count.value}</p>; } },
+        repos: { Repo() { return <p>{count.value}</p>; } },
+      };
+      const renderers = {
+        Flat() { return <p>{count.value}</p>; },
+        group: { Nested() { return <p>{count.value}</p>; } },
+      };
+      export function P({ k }) {
+        return <div>{registry.users[k]()}{renderers[k]()}</div>;
+      }
+    `, "auto");
+
+    expect(slotHasBoundary(output, "User")).toBe(false);
+    expect(slotHasBoundary(output, "Flat")).toBe(false);
+    // Not reachable by either dispatch: `registry.repos` is another prefix,
+    // and `renderers[k]()` calls a direct member, never `renderers.group.Nested`.
+    expect(slotHasBoundary(output, "Repo")).toBe(true);
+    expect(slotHasBoundary(output, "Nested")).toBe(true);
+  });
+
+  forEachCombination((mode, transform) => {
+    it(`keeps the static keyed behaviors unchanged (${mode}, ${transform})`, () => {
+      const output = compile(`
+        const count = { value: 1 };
+        const other = { Unrelated() { return null; } };
+        const jsx = { User() { return <p>{count.value}</p>; } };
+        const arrows = { Card: () => <p>{count.value}</p> };
+        const registry = { users: { Member() { return <p>{count.value}</p>; } } };
+        const called = { Title() { return <h1>{count.value}</h1>; } };
+        const mapped = { Row(item) { return <li>{count.value}{item}</li>; } };
+        export function P({ items, k }) {
+          return (
+            <div>
+              <jsx.User /><arrows.Card /><registry.users.Member />
+              {called.Title()}
+              {items.map(mapped.Row)}
+              {other[k]()}
+            </div>
+          );
+        }
+      `, mode, transform);
+
+      // Mounted only through JSX (static paths, nested included): boundary kept,
+      // and a dynamic call on an unrelated root does not reach them.
+      expect(slotHasBoundary(output, "User")).toBe(true);
+      expect(slotHasBoundary(output, "Card")).toBe(true);
+      expect(slotHasBoundary(output, "Member")).toBe(true);
+      // Static plain call and static render callback stay excluded.
+      expect(slotHasBoundary(output, "Title")).toBe(false);
+      expect(slotHasBoundary(output, "Row")).toBe(false);
+    });
+  });
+});

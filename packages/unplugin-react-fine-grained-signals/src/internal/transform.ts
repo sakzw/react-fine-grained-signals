@@ -55,6 +55,13 @@ interface PluginState extends PluginPass {
   absorbedImports: NodePath<t.ImportSpecifier>[];
   /** Whether the file was parsed as TypeScript, so generated code may use its syntax. */
   typeScript: boolean;
+  /**
+   * Whether the file had no import declaration of its own when the walk began.
+   * Only then does `addRuntimeImport` put the generated import in front of the
+   * author's first statement, which `Program.exit` has to account for -- see
+   * `keepJsxPragmasFirst`.
+   */
+  importFree: boolean;
 }
 
 interface FunctionInspection {
@@ -1047,7 +1054,7 @@ function getKeyedAccessPath(
 function isKeyedRenderCallback(parent: NodePath): boolean {
   const access = getKeyedAccessPath(parent);
   if (access === undefined) return false;
-  return getKeyedSlotUses(access).some((slot) =>
+  return getKeyedSlotUses(access, true).some((slot) =>
     slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)
   );
 }
@@ -1060,12 +1067,20 @@ function isKeyedRenderCallback(parent: NodePath): boolean {
  *
  * The walk goes through the *root* binding, then follows the same chain of keys
  * back down from each reference; a reference that turns off the chain anywhere
- * (`ns.Other`, `ns[k]`, `ns` passed whole) is not a use of this slot. Both
+ * (`ns.Other`, `ns` passed whole -- or `ns[k]` unless `includeDynamic` is set)
+ * is not a use of this slot. Both
  * by-key exclusions -- the render-callback one above and the plain-call one in
  * `isPlainCalledComponent` -- ask their question of this one list, so they
  * cannot disagree about which reads count as reaching the slot.
  */
-function getKeyedSlotUses(access: { origin: NodePath; root: string; keys: string[] }): NodePath[] {
+function getKeyedSlotUses(
+  access: { origin: NodePath; root: string; keys: string[] },
+  // Also count a computed link whose key cannot be read statically
+  // (`renderers[node.type]`) as one that may reach this slot -- see
+  // `matchesKeyedLink`. Only the two safety exclusions ask for this;
+  // `resolveKeyedFunction` must keep naming exactly one static slot.
+  includeDynamic = false,
+): NodePath[] {
   const binding = access.origin.scope.getBinding(access.root);
   if (binding === undefined) return [];
   const uses: NodePath[] = [];
@@ -1073,12 +1088,7 @@ function getKeyedSlotUses(access: { origin: NodePath; root: string; keys: string
     let current: NodePath | undefined = rootPath;
     for (const [index, key] of access.keys.entries()) {
       const member: NodePath | null = current.parentPath;
-      if (
-        member === null ||
-        !member.isMemberExpression() ||
-        member.node.object !== current.node ||
-        getReadPropertyName(member.node) !== key
-      ) {
+      if (member === null || !matchesKeyedLink(member, current, key, includeDynamic)) {
         // `const { Row } = parts` reads the last key into a binding of its
         // own, so that binding's references reach the slot just as
         // `parts.Row` does -- `items.map(Row)` then runs the keyed function
@@ -1093,6 +1103,50 @@ function getKeyedSlotUses(access: { origin: NodePath; root: string; keys: string
     if (current !== undefined) uses.push(climbTransparentWrappers(current));
   }
   return uses;
+}
+
+/**
+ * Does `member` read `key` off `object` -- one link of a keyed-slot path?
+ *
+ * A static link has to name the key exactly. With `includeDynamic`, a computed
+ * link whose key is decided at runtime (`renderers[node.type]`,
+ * `renderers?.[key]`) matches too, because nothing rules out that it names this
+ * slot. That is what keeps an object-literal component off a boundary of its
+ * own when the module dispatches to it dynamically:
+ *
+ * ```jsx
+ * const renderers = { User(node) { return <li>{suffix.value}</li>; } };
+ * nodes.map((node) => renderers[node.__typename](node));
+ * ```
+ *
+ * `User` is called once per item inside the caller's render, exactly like
+ * `renderers.User(node)` would be, so a boundary in it is a variable number of
+ * hooks in the caller -- "Rendered more hooks than during the previous render"
+ * as soon as the list grows. The static spelling of that call was already
+ * excluded; the dynamic one could not be named, so the slot kept its boundary.
+ *
+ * Only a link at the right depth counts, so `renderers[key](node)` reaches
+ * `renderers.User` but not `renderers.group.User`, and `registry.users[key]`
+ * reaches only the slots under `registry.users`. Unlike the static links (where
+ * the optional spelling has never been matched), an optional dynamic link is
+ * accepted: it is just as able to reach the slot, and missing it costs a crash.
+ */
+function matchesKeyedLink(
+  member: NodePath,
+  object: NodePath,
+  key: string,
+  includeDynamic: boolean,
+): boolean {
+  if (member.isMemberExpression() && member.node.object === object.node) {
+    const name = getReadPropertyName(member.node);
+    return name === key || (includeDynamic && name === undefined);
+  }
+  return (
+    includeDynamic &&
+    member.isOptionalMemberExpression() &&
+    member.node.object === object.node &&
+    getReadPropertyName(member.node) === undefined
+  );
 }
 
 /**
@@ -1176,7 +1230,7 @@ function isPlainCalledComponent(path: NodePath<t.Function>): boolean {
   const access = getKeyedAccessPath(holder);
   if (access !== undefined) {
     const key = access.keys.at(-1);
-    return key !== undefined && isComponentName(key) && getKeyedSlotUses(access).some(isPlainCallee);
+    return key !== undefined && isComponentName(key) && getKeyedSlotUses(access, true).some(isPlainCallee);
   }
   return getOwnBindingReferences(path, holder)?.some((reference) =>
     isPlainCallee(climbTransparentWrappers(reference))
@@ -2551,6 +2605,57 @@ function removeAbsorbedImports(programPath: NodePath<t.Program>, state: PluginSt
   state.absorbedImports = [];
 }
 
+// The per-file JSX pragmas every JSX compiler reads from a comment:
+// `@jsxImportSource`, `@jsxRuntime`, `@jsx` and `@jsxFrag`.
+const jsxPragmaComment = /@jsx(?:ImportSource|Runtime|Frag)?(?![\w$])/;
+
+/**
+ * Puts a per-file JSX pragma back in front of the code once a generated import
+ * has been placed ahead of it.
+ *
+ * In a file with no import of its own, `addRuntimeImport` has to put the
+ * runtime import first, and Babel keeps the author's leading comments attached
+ * to the statement they were written above -- so a first-line
+ * `/** @jsxImportSource react-fine-grained-signals *\/` ends up printed after
+ * that import. Oxc (and so Vite) only honors a JSX pragma that comes before the
+ * first statement, so the pragma was silently ignored: the file compiled against
+ * `react/jsx-runtime`, and a signal child then reached React as an object and
+ * threw on mount.
+ *
+ * Every leading comment up to and including the last pragma moves onto the
+ * first generated import, in order, so a license header above the pragma stays
+ * above it; comments after the last pragma -- typically the first statement's
+ * own doc comment -- stay where they were. A file without a pragma is left
+ * exactly as it was. This runs at `Program.exit`, after every function has been
+ * decided, because `@signalTracking` / `@noSignalTracking` are read from those
+ * same leading comments.
+ */
+function keepJsxPragmasFirst(programPath: NodePath<t.Program>, state: PluginState): void {
+  if (!state.importFree) return;
+  const body = programPath.node.body;
+  // The file had no imports, so any at the top are the ones this walk added.
+  const authored = body.findIndex((statement) => !t.isImportDeclaration(statement));
+  if (authored <= 0) return;
+  const comments = body[authored]!.leadingComments;
+  if (comments === null || comments === undefined) return;
+  let lastPragma = -1;
+  for (const [index, comment] of comments.entries()) {
+    if (jsxPragmaComment.test(comment.value)) lastPragma = index;
+  }
+  if (lastPragma === -1) return;
+  const generated = body[0]!;
+  const staying = comments.slice(lastPragma + 1);
+  generated.leadingComments = [...(generated.leadingComments ?? []), ...comments.slice(0, lastPragma + 1)];
+  body[authored]!.leadingComments = staying;
+  // After a shebang, Babel also records these comments as trailing comments of
+  // the `#!` line, and prints them from there first; the ones that stay with the
+  // statement have to go from that copy too, or they print above the import.
+  const interpreter = programPath.node.interpreter;
+  if (interpreter?.trailingComments) {
+    interpreter.trailingComments = interpreter.trailingComments.filter((comment) => !staying.includes(comment));
+  }
+}
+
 const babelTransform = declare<PluginState, InternalTransformOptions>((api, options) => {
   api.assertVersion(8);
   const managedRuntimeSource = `${options.importSource}/runtime`;
@@ -2570,10 +2675,12 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
           state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
           state.absorbedImports = [];
           state.typeScript = state.file.opts.parserOpts?.plugins?.includes("typescript") === true;
+          state.importFree = !path.node.body.some((statement) => t.isImportDeclaration(statement));
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
         exit(path, state) {
           removeAbsorbedImports(path, state);
+          keepJsxPragmasFirst(path, state);
         },
       },
       Function(path, state) {
