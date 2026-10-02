@@ -15,6 +15,12 @@ export interface GraphExecutionOwnerV2 {
   readonly kind: "graph";
   readonly runtimeToken: object;
   add(protocol: ReadableProtocolV1, revision: number): void;
+  /**
+   * Adopts an effect another copy created while this owner's effect or
+   * computed runs: `dispose` is called when that owner next re-runs or is
+   * disposed. Optional so an owner without it leaves the effect unowned.
+   */
+  own?(dispose: () => void): void;
 }
 
 export interface RenderExecutionOwnerV2 {
@@ -26,6 +32,8 @@ export interface RenderExecutionOwnerV2 {
   add(protocol: ReadableProtocolV1, revision: number): void;
   isSpeculative?(): boolean;
   markSpeculativeDeepRead?(): void;
+  /** As on the graph owner: adopts an effect created by a speculative getter. */
+  own?(dispose: () => void): void;
 }
 
 export interface ReadableProtocolV1 {

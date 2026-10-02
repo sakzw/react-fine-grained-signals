@@ -2,6 +2,8 @@
 import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
 import type { RenderExecutionOwnerV2 } from "./execution-owner.js";
 import { activeRenderCollector, setActiveRenderCollector } from "./render-tracking.js";
+import { isReadableProtocol } from "./foreign-readable-v1.mjs";
+import { READABLE_INTEROP_V1 } from "./interop-context.mjs";
 import type { RenderCollector } from "./render-tracking.js";
 import type { AlienDerivedGraphRuntime, RenderAttempt, RenderReadableDependency, RuntimeComputed, RuntimeNode, RuntimeReadable, RuntimeSource, SpeculativeComputedEntry } from "./alien-derived-types.js";
 
@@ -63,14 +65,12 @@ function readComputed(readable: object, node: RuntimeComputed, attempt: RenderAt
   const previous = activeSpeculativeComputed;
   activeSpeculativeComputed = entry;
   const deepReadEpoch = attempt.speculativeDeepReadEpoch;
+  let createdEffects = false;
   try {
-    entry.value = node.getter(node.value);
-  } catch (error) {
-    entry.error = error;
-    entry.hasError = true;
+    createdEffects = core.evaluateSpeculatively(node, entry);
   } finally {
     activeSpeculativeComputed = previous;
-    entry.canPromote = deepReadEpoch === attempt.speculativeDeepReadEpoch;
+    entry.canPromote = !createdEffects && deepReadEpoch === attempt.speculativeDeepReadEpoch;
   }
   if (entry.hasError) throw entry.error;
   return entry.value;
@@ -84,7 +84,7 @@ function isEntryCurrent(entry: SpeculativeComputedEntry): boolean {
   for (const [dependency, revision] of entry.dependencies) {
     const node = core.getNodeForReadable(dependency);
     if (node === undefined) {
-      if ((dependency as { getRevision(): number }).getRevision() !== revision) return false;
+      if (core.getDependencyRevision(dependency) !== revision) return false;
     } else if (node.renderRevision !== revision || (node.kind === "computed" && !core.isComputedClean(node))) {
       return false;
     }
@@ -115,6 +115,7 @@ function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bar
     add(protocol, revision) { addDependency(attempt, protocol, revision); },
     isSpeculative() { return activeSpeculativeComputed !== undefined; },
     markSpeculativeDeepRead() { attempt.markSpeculativeDeepRead(); },
+    own: core.adopt,
   };
 }
 
@@ -179,10 +180,8 @@ function settleRenderAttempt(attempt: RenderAttempt): boolean {
 }
 
 function getRenderVersion(readable: object): number {
-  if (Reflect.get(readable, "version") === 1 && typeof Reflect.get(readable, "getRevision") === "function" &&
-      typeof Reflect.get(readable, "subscribe") === "function") return (Reflect.get(readable, "getRevision") as () => number).call(readable);
-  if (core.getNodeForReadable(readable) !== undefined || Reflect.get(readable, Symbol.for("react-fine-grained-signals.readable-interop.v1")) !== undefined) {
-    return core.getReadableRevision(readable);
+  if (isReadableProtocol(readable) || core.getNodeForReadable(readable) !== undefined || Reflect.get(readable, READABLE_INTEROP_V1) !== undefined) {
+    return core.getDependencyRevision(readable);
   }
   const getVersion = Reflect.get(readable, "getRenderVersion");
   if (typeof getVersion === "function") return getVersion.call(readable) as number;

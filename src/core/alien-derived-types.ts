@@ -15,7 +15,7 @@ export interface RuntimeNode extends Omit<ReactiveNode, "deps" | "depsTail" | "s
   renderRevision: number;
   currentValue?: unknown | undefined;
   pendingValue?: unknown | undefined;
-  getter?: ((previousValue: unknown) => unknown) | undefined;
+  getter?: (() => unknown) | undefined;
   value?: unknown | undefined;
   error?: unknown | undefined;
   hasError?: boolean | undefined;
@@ -40,7 +40,7 @@ export interface RuntimeSource extends RuntimeNode {
 
 export interface RuntimeComputed extends RuntimeNode {
   kind: "computed";
-  getter: (previousValue: unknown) => unknown;
+  getter: () => unknown;
   value: unknown;
   error: unknown;
   hasError: boolean;
@@ -124,8 +124,13 @@ export interface AlienDerivedGraphRuntime {
   readonly untracked: <T>(callback: () => T) => T;
   readonly getNodeForReadable: (readable: object) => RuntimeNode | undefined;
   readonly getReadableRevision: (readable: object) => number;
+  readonly getDependencyRevision: (dependency: object) => number;
   readonly isComputedClean: (node: RuntimeNode) => boolean;
   readonly promoteComputed: (readable: object, node: RuntimeNode, entry: SpeculativeComputedEntry) => boolean;
+  /** Runs a computed's getter for a render attempt; true when it created effects. */
+  readonly evaluateSpeculatively: (node: RuntimeComputed, entry: SpeculativeComputedEntry) => boolean;
+  /** Owns an effect for the running subscriber or speculative getter. */
+  readonly adopt: (dispose: () => void) => void;
   readonly hasSubscribers: (readable: object) => boolean;
   readonly hasActiveSubscriber: () => boolean;
   readonly getBatchDepth: () => number;
@@ -151,10 +156,12 @@ export interface ForeignReadableAdapterOptions {
   readonly getActiveSubscriber: () => RuntimeNode | undefined;
   readonly link: (node: RuntimeNode, subscriber: RuntimeNode) => void;
   readonly propagate: (link: Link, innerWrite: boolean) => void;
+  readonly shallowPropagate: (link: Link) => void;
   readonly flush: () => void;
   readonly isRunning: () => boolean;
   readonly isBatching: () => boolean;
   readonly effect: (callback: () => unknown) => () => void;
+  readonly own: (dispose: () => void) => void;
 }
 
 export interface RenderReadableDependency {

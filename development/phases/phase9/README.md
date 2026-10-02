@@ -433,3 +433,12 @@ The chronology after the freeze is:
    - P3: the transform could emit a required parameter after an optional one, which Oxc rejects.
 
    The related form-reset claim was narrowed in the docs. The `signal-only` size budget grew by one 64-byte step. A [release-note draft](./v0.2.0-release-notes.md) was added. The fix commit needs its own Test/E2E pass before tagging. Versions stay `0.2.0`; nothing was tagged, published, or released.
+7. A core runtime release-blocker audit of `7d87999` confirmed six more blockers, all fixed (see the [closure record](./post-m3-release-review-closure.md#core-runtime-audit-remediation)):
+   - A1: promoting a speculative computed that read another copy threw `Unknown candidate readable`;
+   - A2: a later render attempt that promoted a computed first could leave an earlier one committed with a different value;
+   - A3: cross-copy graphs could expose states no write produced, and the same bookkeeping could drop an update or recompute on every read;
+   - A4: computed getters received the previous value and the internal node;
+   - A5: effects created under another copy's owner were never owned;
+   - A6: re-subscribing to a foreign readable ran the new effect twice.
+
+   Effects created by a speculatively evaluated getter are now disposed with that evaluation, and server rendering reads a foreign dependency's current value. Five size budgets grew by one 64-byte step. Versions stay `0.2.0`; nothing was tagged, published, or released.

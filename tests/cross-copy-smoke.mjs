@@ -591,19 +591,20 @@ try {
     });
     assert.equal(screen.getByLabelText("tracked cross-copy computed").textContent, "AFTER");
 
+    // A's speculative getter creates a B effect. Its initial read runs outside
+    // A's speculative scope, and it is disposed with that evaluation (which may
+    // never commit); the committed evaluation creates the durable one, owned by
+    // A's computed through the shared owner.
     const speculativeState = copyB.deepSignal({ user: { name: "Ada" } });
     const effectValues = [];
-    let disposeEffect;
-    let effectRuns = 0;
+    let effectCleanups = 0;
     let outerEvaluations = 0;
     const outer = copyA.computed(() => {
       outerEvaluations += 1;
-      if (disposeEffect === undefined) {
-        disposeEffect = copyB.effect(() => {
-          effectRuns += 1;
-          effectValues.push(speculativeState.value.user.name);
-        });
-      }
+      copyB.effect(() => {
+        effectValues.push(speculativeState.value.user.name);
+        return () => { effectCleanups += 1; };
+      });
       return "outer-ready";
     });
     const speculativeRenders = [];
@@ -620,35 +621,39 @@ try {
     const sharedInteropContext = interopA.getSharedInteropContext();
     const speculativeDepth = sharedInteropContext.speculativeDepth;
     const speculativeEpoch = sharedInteropContext.speculativeDeepReadEpoch;
-    render(React.createElement(SpeculativeReader));
+    const speculativeView = render(React.createElement(SpeculativeReader));
     assert.equal(screen.getByLabelText("cross-copy speculative deep effect").textContent, "outer-ready");
-    assert.deepEqual(effectValues, ["Ada"], "the B effect performs its initial durable read during A's speculative getter");
-    assert.equal(effectRuns, 1);
-    assert.equal(outerEvaluations, 1);
+    assert.deepEqual(effectValues, ["Ada", "Ada"], "the speculative and the committed evaluation each create one B effect");
+    assert.equal(effectCleanups, 1, "the speculative evaluation's B effect is disposed with it");
+    assert.equal(outerEvaluations, 2);
     const speculativeRenderCount = speculativeRenders.length;
     assert.equal(
       sharedInteropContext.speculativeDeepReadEpoch,
       speculativeEpoch,
-      "the durable B effect's deep read does not advance A's speculative deep-read epoch",
+      "the B effect's deep read does not advance A's speculative deep-read epoch",
     );
     assert.equal(sharedInteropContext.speculativeDepth, speculativeDepth, "A's speculative scope is restored after render");
 
     await act(async () => {
       speculativeState.value.user.name = "Grace";
     });
-    assert.deepEqual(effectValues, ["Ada", "Grace"], "the B effect retains its durable fine-grained deep dependency");
-    assert.equal(outerEvaluations, 1, "the B deep dependency does not leak into A's speculative computed");
+    assert.deepEqual(effectValues, ["Ada", "Ada", "Grace"], "the committed B effect retains its durable fine-grained deep dependency");
+    assert.equal(effectCleanups, 2);
+    assert.equal(outerEvaluations, 2, "the B deep dependency does not leak into A's computed");
     assert.equal(speculativeRenders.length, speculativeRenderCount, "the B deep dependency does not rerender A's component");
     assert.equal(sharedInteropContext.speculativeDeepReadEpoch, speculativeEpoch);
     assert.equal(sharedInteropContext.speculativeDepth, speculativeDepth);
 
-    disposeEffect();
+    await act(async () => {
+      speculativeView.unmount();
+    });
+    await Promise.resolve();
+    assert.equal(effectCleanups, 3, "unmounting releases A's computed, which disposes the B effect it owns");
     await act(async () => {
       speculativeState.value.user.name = "Lin";
     });
-    assert.deepEqual(effectValues, ["Ada", "Grace"], "disposing B's effect releases its deep dependency");
-    assert.equal(outerEvaluations, 1);
-    assert.equal(speculativeRenders.length, speculativeRenderCount);
+    assert.deepEqual(effectValues, ["Ada", "Ada", "Grace"]);
+    assert.equal(outerEvaluations, 2);
     assert.equal(sharedInteropContext.speculativeDepth, speculativeDepth);
   } finally {
     cleanup();

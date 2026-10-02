@@ -619,3 +619,267 @@ A draft of the v0.2.0 GitHub Release notes is in [`v0.2.0-release-notes.md`](./v
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The fixes are one local commit on top of `05fa6fb`. It was not pushed, and it needs its own GitHub Actions Test/E2E pass before tagging.
 - No tag, publish, or GitHub Release was performed.
+
+## Core runtime audit remediation
+
+### Starting point and scope
+
+- Starting commit: `7d8799944222f880f95c2c3634c073bc7479afaa` (`fix: close final v0.2.0 release blockers`), the commit the targeted validation above produced. `main` and `origin/main` both pointed to it, and the working tree was clean.
+- Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+
+An independent release-blocker audit of the core reactive runtime treated `7d87999` as a fresh RC and compared it with the published `0.1.1` and with Alien Signals 3.2.1. It confirmed six blockers (A1–A6) and two related follow-up checks. This pass fixes exactly those. React/JSX binding and transform findings from other audits are not touched here.
+
+The audit used two baselines for `0.1.1`:
+- Single-copy behaviour is the published `0.1.1` artifact.
+- Multi-copy behaviour is two `0.1.1` copies resolving one shared `alien-signals`. That is what `0.1.1`'s peer dependency produced, and it behaves exactly like one copy in all 25 cross-copy scenarios the audit ran.
+
+### A1 — promoting a speculative computed that read another copy crashed
+
+**Reproduction.**
+
+```ts
+const count = library.signal(1);                // another RFSG v0.2 copy
+const doubled = computed(() => count.value * 2); // this copy, never read before
+// A tracked component renders doubled.value.
+```
+
+- `7d87999`: the commit threw `TypeError: Unknown candidate readable` from the layout effect, and the error boundary rendered it.
+- `0.1.1`: rendered `doubled=2`, then `doubled=10` after `count.value = 5`.
+
+**Cause.**
+1. During the speculative evaluation, the foreign getter publishes its read to the render owner (`owner.add(protocol, revision)`).
+2. So the entry's dependency map is keyed by the other copy's `ReadableProtocolV1` object, not by a readable.
+3. `promoteComputed` passed every key to `getReadableRevision`, which accepts only readables, and so threw.
+
+`isEntryCurrent` had its own, different protocol assumption.
+
+**Fix.**
+- `isReadableProtocol` (in `foreign-readable-v1.mts`) is now the one shape check for this distinction.
+- `getDependencyRevision` reads a protocol key's revision from the protocol itself, and a readable key's from its readable. `promoteComputed`, `isEntryCurrent`, and the render adapter's `getRenderVersion` all use it.
+- Promotion validates every revision before touching the graph. It then hands a protocol key straight to `ensureForeignNode` while linking. The protocol is never rediscovered through a readable, and revision validation is unchanged.
+
+### A2 — a later render attempt that promoted first could leave an earlier one torn
+
+**Reproduction.**
+1. A parent renders a cold `computed(() => a.value * 10)` and gets `10`.
+2. React yields, an event writes `a.value = 2`, and the child renders the same computed as `20`.
+3. The child's layout effect commits first.
+
+- `7d87999`: the parent committed `10` and the child `20`. Nothing re-rendered the parent.
+- `0.1.1`: re-rendered the parent, and both showed `20`.
+
+This was reproduced through real React with `scheduler/unstable_mock`.
+
+**Cause.**
+- The child's promotion initialized the computed without advancing `renderRevision`.
+- The parent's promotion then returned `true` for an already-initialized node.
+- `settleRenderAttempt` only compares an attempt's speculative value with the node's when the recorded revision moved, so the parent settled as stable.
+
+**Fix.** Promotion now participates in the revision model. Initializing a computed is a value change, exactly as in `updateComputed`, so it advances `renderRevision`. Any other attempt that read the computed before it existed then sees a moved revision, and settle compares its value/error state with the node's.
+
+This is the invariant itself, not a special case. It covers equal values (stable), errors (compared by error state), either commit order, a computed that was warm before both renders (already handled by the real evaluation's revision bump), and aborted attempts (never promoted).
+
+### A3 — cross-copy graphs exposed states no write produced
+
+**Reproduction.**
+
+```ts
+const qty = library.signal(1);
+const subtotal = library.computed(() => qty.value * 10);
+const label = computed(() => `${qty.value} items`);
+const summary = computed(() => `${label.value} = $${subtotal.value}`);
+effect(() => seen.push(summary.value));
+qty.value = 2;
+qty.value = 3;
+```
+
+- `7d87999`: `["1 items = $10", "1 items = $20", "2 items = $20", "2 items = $30", "3 items = $30"]`, 5 runs.
+- `0.1.1`: `["1 items = $10", "2 items = $20", "3 items = $30"]`, 3 runs.
+
+The same cause made a read inside the other copy's `batch()` return the value from before that batch's write.
+
+**Cause.**
+1. An active bridge (a foreign readable an effect watches) was trusted to be current from its subscription pushes alone. `readComputed` polled only inactive bridges.
+2. The other copy delivers those pushes in its own flush order. When `subtotal`'s push arrived first, `summary` re-ran against a `label` that was clean but stale.
+
+While fixing this, two further defects with the same root showed up in the bridge's revision bookkeeping:
+- **Lost update.** A read that observed a new revision advanced `pendingRevision` without propagating. The later push for that revision was then ignored. An effect that read the foreign signal directly, inside the other copy's batch, never re-ran: `[0]` instead of `[0, 1]`.
+- **Wasted recomputation.** A cold bridge's committed revision never caught up. After one foreign write, its computed re-evaluated on every read.
+
+**Fix.** A bridge is now treated as a source whose value is the other copy's revision:
+- Every newly learned revision — pushed, read, polled, or found by the subscription handshake — goes through `advance`. That marks the bridge Dirty and propagates to its subscribers, as a source write does, so `pendingRevision` never advances silently.
+- A revision learned by a read or a poll is also settled at once (`observeForeignRevision`): commit, then `shallowPropagate`, as Alien's own signal read settles a pending write. The reader is never invalidated by what it just read, and no spurious re-run is left behind.
+- Effects that a read queued run when the push arrives. The push listener now flushes even when the revision is already known.
+- `readComputed` and `isComputedClean` poll every bridge reached through a foreign-dependent computed (`refreshForeignDependencies`), active or cold. A newer revision then invalidates the graph between the bridge and the reader before it returns.
+- `update()` for a bridge commits the already-propagated `pendingRevision` instead of re-polling.
+
+Local, non-foreign paths are unchanged. Only computeds with foreign dependencies poll, and they poll only when read.
+
+### A4 — computed getters received the previous value and the internal node
+
+**Reproduction.**
+
+```ts
+function total(offset = 100) { return s.value + offset; } // valid for () => T
+const c = computed(total); // read, s=1, read, s=2, read
+```
+
+- `7d87999`: `100, 101, 103`. `this` was the live `RuntimeNode`; writing to it corrupted a later flush.
+- `0.1.1`: `100, 101, 102`, with `this` `undefined` and no arguments.
+
+**Cause.**
+- `updateComputed` called `withGraphOwner(computed.getter, previousValue, computed)`.
+- The speculative path called `node.getter(node.value)`.
+
+**Fix.**
+- `withGraphOwner` takes only a callback and calls it as `callback()`. Its argument and `this` plumbing existed only for the getter, and is removed.
+- The speculative path calls a local copy of the getter with no arguments.
+- The internal getter type is now `() => unknown`.
+
+### A5 — effects created under another copy's owner were never owned
+
+**Reproduction.**
+
+```ts
+const stop = appEffect(() => {
+  const r = route.value;
+  libraryEffect(() => log.push(r + tick.value));
+});
+route.value = "b"; route.value = "c"; tick.value = 1;
+stop(); tick.value = 2;
+```
+
+- `7d87999`: `[a0, b0, c0, a1, b1, c1, a2, b2, c2]`. Every child survived its owner's re-runs and disposal, and no cleanup ran.
+- `0.1.1`: `[a0, b0, c0, c1]`.
+
+**Cause.** `effect()` linked ownership only to its own copy's `activeSub`. It ignored another copy's graph owner in the shared execution context.
+
+**Fix.** The shared owner protocol gains one optional operation, `own(dispose)`, on `GraphExecutionOwnerV2` (and on `RenderExecutionOwnerV2`, for the follow-up below). Its meaning: register this child so it is disposed when the running owner next re-runs or is disposed.
+- `effect()` calls it only when no same-copy owner applies and the current owner belongs to another copy. Same-copy ownership is never doubled.
+- The owning copy implements it with `adopt`. A childless stand-in effect takes the child's place in the running subscriber's dependency list, exactly where a local child sits, so the existing child-disposal paths unlink it and its cleanup calls the disposer.
+- Only a disposer callback crosses the copy boundary; no node, link, or private function does.
+- Detached effects and effects created under `untracked()` stay unowned.
+- A child the user already disposed is disposed again harmlessly, because disposal is idempotent.
+
+### A6 — re-subscribing to a foreign readable ran the new effect twice
+
+**Reproduction.** Subscribe to a foreign signal, dispose, write the signal, subscribe a new effect.
+
+- `7d87999`: the new effect ran twice; also through a foreign computed.
+- `0.1.1`: once.
+
+**Cause.**
+1. The reused inactive bridge got `pendingRevision = observed`, but its committed `revision` stayed stale.
+2. The subscription handshake compared the subscription's revision with that stale value.
+3. It mistook the current revision for a race, and set the stale-read retry bit.
+
+**Fix.** This follows from the A3 bookkeeping:
+- `ensureForeignNode` learns the observed revision through `observeForeignRevision` before it links the reader.
+- The handshake compares the subscription's revision with the revision this copy last observed, through `advance`.
+
+The retry still fires when the subscription reports a revision newer than the read, and that case is covered.
+
+The audit's suggested narrower direction was to copy the observed revision into `revision` on reuse. It was not used: with another cold computed still on the bridge, that would hide the change from it.
+
+### Follow-up 1 — effects created by a speculatively evaluated getter
+
+**Before.** A getter's effect created during a speculative render evaluation had no owner. It survived unmount (1 alive versus 0 in `0.1.1`) and survived aborted attempts.
+
+**Fix.** A small extension of A5. `evaluateSpeculatively` runs the getter with no running subscriber and collects every effect it creates, including another copy's through the render owner's `own`. It disposes them when the evaluation returns. A result that created effects is not promoted, so the committed computed runs its getter for real and owns exactly one child.
+
+**Results.**
+- An aborted attempt leaves nothing alive.
+- A committed one has one owned child.
+- Unmount disposes it.
+- The speculative child's initial run still happens outside the speculative scope (the deep-read epoch is unchanged).
+
+**Two existing tests pinned the old contract** and were updated:
+- `tests/react-deep-signal.test.tsx`, "isolates an initial effect created by a speculative getter";
+- the speculative block of `tests/cross-copy-smoke.mjs`.
+
+Both expected the speculative getter's effect to stay alive behind an "already created" guard, and the getter to run only once. That behaviour is exactly this leak: an aborted attempt's effect would survive forever. Both tests now assert the new contract and keep their isolation assertions: one speculative run and its cleanup, one durable owned child, and the deep-read epoch and speculative depth restored. As before, v0.2 may evaluate a getter speculatively and again for real.
+
+### Follow-up 2 — SSR with a foreign dependency
+
+**Reproduction.** A warm local computed over another copy's signal or computed, whose revision moved before the server read.
+
+`7d87999` emitted the stale value from both `renderToString` and `renderToPipeableStream`. On the client, commit-time settling had hidden the same staleness behind an extra render. The server has no commit, so it shipped the stale HTML.
+
+**Fix.** It falls under the A3 invariant. `isComputedClean`, which the render path uses before reusing a computed's value, now polls foreign dependencies first. Both server APIs emit the current value, and the client no longer needs the corrective render.
+
+### Regression coverage
+
+- `tests/core-runtime-audit-regressions.test.tsx` — 43 tests: A1 (managed and bare, foreign signal and computed, adapter and React), A2, A3, A4, A5, A6, both follow-ups, and both SSR APIs. On `7d87999`, 33 fail. The 10 that pass are deliberate guards:
+  - the opposite commit order, a warm computed, and equal values;
+  - an aborted attempt;
+  - a cold bridge read inside a batch, and two cold readers of one bridge;
+  - same-copy single disposal, detached effects, and `untracked()`;
+  - a genuine handshake race that must still retry.
+- `tests/core-runtime-audit-concurrent.test.tsx` — the parent/child tear through real React with `scheduler/unstable_mock`, installed in Node's require cache in that file's own worker. The cold case fails on `7d87999`; the warm case is a guard.
+
+### Performance
+
+Bundles of `7d87999` and of the fix were interleaved in one process, two copies each: alternating order, `--expose-gc`, warmup, and 41/81/81 paired rounds. Ratios are fixed / `7d87999`, as the per-round paired median:
+
+| Path | Ratios across the three runs | Reading |
+| --- | --- | --- |
+| Local source read/write | 1.00, 1.00, 0.96 | unchanged (code-identical; one 25-round run read 0.81, which is noise) |
+| Local computed clean read | 1.00, 1.01, 1.01 | unchanged |
+| Local computed dirty recompute | 1.13, 0.99, 1.03 | unchanged (IQR spans 1) |
+| Watched local chain + effect | 1.04, 1.07, 0.92 | unchanged |
+| Render promotion | 1.12, 1.03, 1.07 | no material change (IQR spans 1). A first version that checked the protocol shape three times per dependency measured 1.18; it was tightened. |
+| Foreign-dependent computed read, cold | 1.00, 0.99, 1.00 | unchanged |
+| Foreign-dependent computed read, watched | 1.44, 1.33, 1.44 | intended: A3's revision poll on read, about 40 ns per read |
+| Foreign effect update | 0.99, 1.02, 0.99 | unchanged |
+
+### Size
+
+Exact gzip bytes:
+
+| Scenario | `7d87999` | Now | Budget |
+| --- | ---: | ---: | ---: |
+| signal-only | 7054 | 7252 | 7296 (was 7104) |
+| core | 7093 | 7291 | 7296 (was 7104) |
+| core+hooks | 8718 | 8903 | 8960 (was 8768) |
+| deep | 11998 | 12190 | 12224 (was 12032) |
+| index-full | 16758 | 16970 | 17280 |
+| jsx-runtime | 10895 | 11091 | 11264 |
+| utils | 8566 | 8754 | 8768 (was 8640) |
+
+The +185 to +212 bytes are the fixes themselves: bridge advance/settle and polling, cross-copy and speculative ownership, protocol-keyed promotion, and the promotion revision bump.
+- The ownership paths were merged into one `adopt`, which saved about 20 bytes.
+- The five exceeded budgets were raised to the next 64-byte step above the measured size. That is the file's granularity, and it gives less than the 5% headroom `size:update` would add.
+- `index-full` and `jsx-runtime` stayed within budget and were not changed.
+
+### Validation
+
+The complete gate ran on the final code without worker limits, and with no threshold change.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 33 files / 443 tests (previously 31 / 398); transform 5 files / 275 passed, 3 skipped |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed: 3 independent Alien systems |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed, after the smoke update in follow-up 1 (its first run failed on exactly that pinned assertion) |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 27/27 |
+| `pnpm size` | passed with the budgets above |
+| `git diff --check` | passed |
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.41% | 88.09% | 97.86% | 95.65% |
+| Transform (thresholds 92/90/92/95) | 92.70% | 90.81% | 95.45% | 96.69% |
+
+### State after the core runtime remediation
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The multi-copy contract ("several copies of v0.2 on one page interoperate") now holds for the cases the audit found broken. Nothing in it was narrowed. Cross-copy batches are still not one atomic transaction, as documented; a read inside the other copy's batch now sees that batch's writes.
+- The fix is one commit on top of `7d87999`. No tag, publish, or GitHub Release was performed.

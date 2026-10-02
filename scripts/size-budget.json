@@ -1,15 +1,15 @@
 {
   "signal-only": {
-    "gzip": 7104
+    "gzip": 7296
   },
   "core": {
-    "gzip": 7104
+    "gzip": 7296
   },
   "core+hooks": {
-    "gzip": 8768
+    "gzip": 8960
   },
   "deep": {
-    "gzip": 12032
+    "gzip": 12224
   },
   "index-full": {
     "gzip": 17280
@@ -18,6 +18,6 @@
     "gzip": 11264
   },
   "utils": {
-    "gzip": 8640
+    "gzip": 8768
   }
 }

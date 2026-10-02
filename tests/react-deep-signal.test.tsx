@@ -64,13 +64,15 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
-  it("isolates an initial effect created by a speculative getter", () => {
+  it("isolates an initial effect created by a speculative getter", async () => {
+    // The speculative evaluation's child effect runs outside the speculative
+    // scope and is disposed when that evaluation returns (it may never be
+    // committed); the committed computed then owns exactly one live child.
     const state = deepSignal({ user: { name: "Ada" } });
     const seen: string[] = [];
     let cleanupRuns = 0;
-    let stop: (() => void) | undefined;
     const outer = computed(() => {
-      stop ??= effect(() => {
+      effect(() => {
         seen.push(state.value.user.name);
         return () => { cleanupRuns += 1; };
       });
@@ -84,21 +86,23 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     }
 
     const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
-    render(<Reader />);
-    expect(seen).toEqual(["Ada"]);
+    const view = render(<Reader />);
+    expect(seen).toEqual(["Ada", "Ada"]);
+    expect(cleanupRuns).toBe(1);
     expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
     const renderCount = renders.mock.calls.length;
 
     act(() => { state.value.user.name = "Grace"; });
-    expect(seen).toEqual(["Ada", "Grace"]);
+    expect(seen).toEqual(["Ada", "Ada", "Grace"]);
     expect(renders).toHaveBeenCalledTimes(renderCount);
-    expect(cleanupRuns).toBe(1);
+    expect(cleanupRuns).toBe(2);
     expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
 
-    stop!();
-    expect(cleanupRuns).toBe(2);
+    view.unmount();
+    await Promise.resolve();
+    expect(cleanupRuns).toBe(3);
     act(() => { state.value.user.name = "Lin"; });
-    expect(seen).toEqual(["Ada", "Grace"]);
+    expect(seen).toEqual(["Ada", "Ada", "Grace"]);
   });
 
   it("keeps a speculative deep computed fresh without looping when it returns a new object", () => {
