@@ -1164,3 +1164,137 @@ The audit's packed-tarball checks were also run again on newly packed tarballs i
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The fix is one commit on top of `f37f0d8`. No tag, publish, or GitHub Release was performed.
 - Final release readiness still requires the independent A'/B'/C' re-audits of this commit.
+
+## A' core re-audit remediation
+
+### Starting point and scope
+
+- Starting commit: `aca0d30ac11163a8df7e1dbedd25fd2758031034` (`fix: close transform release audit findings`). `main` and `origin/main` both pointed to it, and the working tree was clean.
+- Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+
+An independent A' re-audit of the core runtime at `aca0d30` found one release blocker, and only that is fixed here. It covered single-copy semantics, render integration, multi-copy interop, foreign revision ordering, SSR, speculative side effects, and cycles; everything else it checked was clean. The B' (React / JSX) and C' (transform) re-audit remediations are not part of this pass and still remain.
+
+### A'1 — a cross-copy round-trip read subscribed the outer copy's running effect
+
+**Reproduction.** A and B are independent copies (separately bundled packages, or two `createReactiveRuntime()` graphs):
+
+```ts
+const x = B.signal(1);
+const parity = A.computed(() => x.value % 2);
+let runs = 0;
+B.effect(() => { parity.value; runs += 1; });
+x.value = 3;
+x.value = 5; // parity stays 1
+// aca0d30: runs === 3; expected 1
+
+const s = B.signal(0);
+const y = B.signal(0);
+let parent = 0;
+let child = 0;
+B.effect(() => {
+  s.value;
+  parent += 1;
+  A.effect(() => { y.value; child += 1; });
+});
+y.value = 1;
+y.value = 2;
+// aca0d30: [parent, child] === [3, 3]; expected [1, 3]
+```
+
+- The B effect ran on every write to `x`, ignoring A's equality cutoff.
+- Writes to the child's dependency re-ran the parent, which disposed and recreated the child.
+
+The bug was symmetric between copies. It needed a round trip: an observer in one copy reading something from another copy that reads a source back in the first copy. Two `0.1.1` copies shared one `alien-signals` graph and gave the expected results, as does a single v0.2 copy.
+
+**Root cause.** In `src/core/alien-derived-runtime-core.mts`, the `.value` getters of `HelperBrandSignal`, `DeepSignalRuntimeSource`, and `HelperBrandComputed` recognized another copy's graph or render owner only after a normal tracked read (`readSource(node)`, or `readComputed(node, true)`). During `B effect -> A computed -> B signal`, the shared lexical owner is A's, but B's private `activeSub` is still the outer B effect. So the B source linked straight to that effect, in addition to the dependency A's owner records through `publishForeignReadable`. The same leak also linked reads made during a B subscription's notification into B's internal protocol watchers, which caused redundant listener calls.
+
+**Fix.** A single `isForeignOwner(owner)` predicate (a graph or render owner whose `runtimeToken` is not this copy's) now picks the no-link read:
+
+- The two source getters use `readSourceUntracked` and then publish to the foreign owner.
+- The computed getter calls `readComputed(node, false)` and still publishes from its `finally`, so an erroring computed stays observable and can recover.
+
+Same-copy, owner-free, untracked, and render-attempt reads take the same paths as before. Another copy's `activeSub` is never touched.
+
+### Regression coverage
+
+`tests/core-reaudit-regressions.test.ts` (13 tests, two independent `createReactiveRuntime()` graphs, both directions):
+
+- an equality cutoff of a foreign computed over the observer's own source;
+- a threshold computed that many writes leave unchanged;
+- a foreign child effect re-running without its parent, and the child's disposal with the parent;
+- one effect reading two foreign sources gets exactly one listener call per write;
+- a foreign computed that throws and later recovers;
+- a three-copy round trip (A source → B computed → C computed → A effect);
+- an `untracked()` interaction guard in both directions.
+
+Against `aca0d30`'s source, 11 of the 13 fail: every blocker test in both directions, plus the three-copy round trip. The two `untracked()` guards pass on both, by design.
+
+The audit's scratch batteries were re-run on separately bundled copies of the fix, and all passed:
+
+- cross-copy consistency, ordering, ownership, cycles, and resubscription without leaked subscriptions;
+- cross-copy render tracking in bare and managed scopes, cold and warm, under React's mock scheduler;
+- speculative child effects;
+- `renderToString` and `renderToPipeableStream` with local and foreign dependencies, errors, and recovery.
+
+### Performance
+
+Bundles of `aca0d30` and of the fix, two copies each, were interleaved in one process. Each copy had its own compiled benchmark functions, because a call site shared between copies measured whichever copy ran first about 2× slower, even old against old. First-run order was alternated across four processes. Ratios are fixed / `aca0d30`, as the median of 12 rounds after 4 warmup rounds:
+
+| Path | Ratios across the four runs |
+| --- | --- |
+| Same-copy source read | 0.96, 1.11, 0.98, 1.02 |
+| Same-copy computed read | 1.04, 0.96, 0.97, 0.95 |
+| Same-copy effect update | 0.93, 1.06, 1.04, 0.83 |
+| Cross-copy round trip, unchanged result | 0.97, 1.02, 0.99, 0.92 |
+| Cross-copy round trip, changing result | 1.14, 0.90, 0.96, 1.09 |
+
+No path changed measurably. In the unchanged-result round trip, the fix also removes the user-visible work: over 50,000 parity-preserving writes, the B effect ran 50,001 times at `aca0d30` and once with the fix.
+
+### Size
+
+Exact gzip bytes (`pnpm size --exact`):
+
+| Scenario | `aca0d30` | Now | Budget |
+| --- | ---: | ---: | ---: |
+| signal-only | 7252 | 7266 | 7296 |
+| core | 7290 | 7295 | 7296 |
+| core+hooks | 8903 | 8910 | 8960 |
+| deep | 12190 | 12192 | 12224 |
+| index-full | 17068 | 17086 | 17280 |
+| jsx-runtime | 11172 | 11190 | 11264 |
+| utils | 8753 | 8764 | 8768 |
+
+The fix adds 2 to 18 bytes per scenario, for the shared predicate and the split branches. No budget changed. `core` now has 1 byte of headroom and `utils` 4, so the next core change will likely need the next 64-byte step.
+
+### Validation
+
+The complete gate ran on the final code without worker limits, and with no threshold or budget change.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 35 files / 469 tests (previously 34 / 456); transform 5 files / 315 passed, 3 skipped |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed: 3 independent Alien systems |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 39/39 |
+| `pnpm size` | passed with unchanged budgets |
+| `git diff --check` | passed |
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.41% | 88.34% | 97.88% | 95.57% |
+| Transform (thresholds 92/90/92/95) | 93.05% | 91.17% | 95.59% | 96.79% |
+
+### State after the A' core re-audit remediation
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The fix is one commit on top of `aca0d30`. No tag, publish, or GitHub Release was performed.
+- The B' (React / JSX) and C' (transform) re-audit remediations still remain.

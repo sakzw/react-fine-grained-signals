@@ -8,7 +8,7 @@ import type { Link, ReactiveFlags, ReactiveNode } from "alien-signals/system";
 import { UNTRACKED_OWNER, executionContext, isGraphExecutionOwner, isRenderExecutionOwner, withSynchronousExecutionOwner } from "./execution-owner.js";
 import { createForeignReadableAdapter, isReadableProtocol } from "./foreign-readable-v1.mjs";
 import { READABLE_INTEROP_V1 } from "./interop-context.mjs";
-import type { ReadableProtocolV1 } from "./execution-owner.js";
+import type { ExecutionContextOwnerV2, ExecutionOwnerV2, ReadableProtocolV1 } from "./execution-owner.js";
 import { activeRenderCollector, trackRenderDependency } from "./render-tracking.js";
 import { SIGNAL_BRAND, SIGNAL_BRAND_MIN_VERSION, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
 import type { AlienDerivedGraphRuntime, RenderAdapterForCore, RenderAttempt, RuntimeNode, RuntimeSource, RuntimeComputed, RuntimeEffect, RuntimeReadable, RuntimeWritable, SpeculativeComputedEntry } from "./alien-derived-types.js";
@@ -160,6 +160,14 @@ function readSourceUntracked(source: RuntimeNode): unknown {
     if (source.subs !== undefined) shallowPropagate(source.subs);
   }
   return source.currentValue;
+}
+
+// Another copy's graph or render owner is reading. That copy records the read
+// through `publishForeignReadable`; this copy's `activeSub` may still be an
+// outer frame (B effect -> A computed -> B signal) that never read the value,
+// so such a read must not link to it.
+function isForeignOwner(owner: ExecutionContextOwnerV2 | undefined): owner is ExecutionOwnerV2 {
+  return (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken;
 }
 
 const attachProtocol = foreignAdapter.attachProtocol;
@@ -718,11 +726,12 @@ class HelperBrandSignal<T = unknown> {
       return renderAdapter.readSource(this, node, attempt) as T;
     }
     if (currentOwner === UNTRACKED_OWNER) return readSourceUntracked(node) as T;
-    const value = readSource(node);
-    if ((isGraphExecutionOwner(currentOwner) || isRenderExecutionOwner(currentOwner)) && currentOwner.runtimeToken !== runtimeToken) {
+    if (isForeignOwner(currentOwner)) {
+      const value = readSourceUntracked(node);
       foreignAdapter.publishForeignReadable(this, node, currentOwner);
+      return value as T;
     }
-    return value as T;
+    return readSource(node) as T;
   }
   set value(value: T) { inlineWrite(this.#node, value); }
   peek(): T { return this.#node.pendingValue as T; }
@@ -755,11 +764,12 @@ class DeepSignalRuntimeSource<T = unknown> {
       return renderAdapter.readSource(this, node, attempt) as T;
     }
     if (currentOwner === UNTRACKED_OWNER) return readSourceUntracked(node) as T;
-    const value = readSource(node);
-    if ((isGraphExecutionOwner(currentOwner) || isRenderExecutionOwner(currentOwner)) && currentOwner.runtimeToken !== runtimeToken) {
+    if (isForeignOwner(currentOwner)) {
+      const value = readSourceUntracked(node);
       foreignAdapter.publishForeignReadable(this, node, currentOwner);
+      return value as T;
     }
-    return value as T;
+    return readSource(node) as T;
   }
   set value(value: T) { inlineDeepSignalWrite(this.#node, value); }
   peek(): T { return this.#node.pendingValue as T; }
@@ -784,12 +794,15 @@ class HelperBrandComputed<T = unknown> {
       return renderAdapter.readComputed(this, node, attempt) as T;
     }
     const owner = currentOwner;
+    // A foreign owner records this read itself (from `finally`, so an erroring
+    // computed stays observable); it must not link to this copy's `activeSub`.
+    const foreign = owner !== undefined && isForeignOwner(owner);
     try {
-      return readComputed(node, owner !== UNTRACKED_OWNER) as T;
+      return readComputed(node, owner !== UNTRACKED_OWNER && !foreign) as T;
     } finally {
       if (owner === undefined) {
         if (activeRenderCollector !== undefined) trackRenderDependency(getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency);
-      } else if ((isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken) {
+      } else if (foreign) {
         foreignAdapter.publishForeignReadable(this, node, owner);
       }
     }

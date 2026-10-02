@@ -452,3 +452,7 @@ The chronology after the freeze is:
    - C2: an object-literal component reached through a computed key (`renderers[node.type](node)`) received a hook boundary, which crashed when the number of calls changed.
 
    React Compiler with demoted helpers or an author-written `"use memo"`, managed-mode Fast Refresh, and the parameter-relocation `function.length` change are documented, not changed. No size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. Final release readiness still requires the independent A'/B'/C' re-audits.
+10. The independent A' core re-audit of `aca0d30` found one release blocker, now fixed (see the [closure record](./post-m3-release-review-closure.md#a-core-re-audit-remediation)):
+   - A'1: a read made for another copy's owner also linked to this copy's still-running `activeSub`. In a cross-copy round trip, an effect then re-ran on writes its foreign computed cut off, and a parent effect re-ran (recreating its child) whenever a foreign child's dependency changed.
+
+   Versions stay `0.2.0`; nothing was tagged, published, or released. The B' and C' re-audit remediations still remain.
