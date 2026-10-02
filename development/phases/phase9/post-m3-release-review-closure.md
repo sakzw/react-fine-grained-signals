@@ -883,3 +883,143 @@ Coverage, with thresholds unchanged:
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The multi-copy contract ("several copies of v0.2 on one page interoperate") now holds for the cases the audit found broken. Nothing in it was narrowed. Cross-copy batches are still not one atomic transaction, as documented; a read inside the other copy's batch now sees that batch's writes.
 - The fix is one commit on top of `7d87999`. No tag, publish, or GitHub Release was performed.
+
+## React / JSX audit remediation
+
+### Starting point and scope
+
+- Starting commit: `7a84712f71d748e2607dff4150f9826159efb451` (`fix: close core runtime release audit findings`). `main` and `origin/main` both pointed to it, the working tree was clean, and its Test and E2E runs were green.
+- Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+
+An independent React / JSX release-blocker audit of `7d87999` found one blocker (B1) and confirmed a stale-style problem (B2) that dates back to `0.1.1`. It also found two limitations that only need documentation. `src/runtime/jsx.ts` was unchanged between `7d87999` and `7a84712`. This pass fixes B1 and B2 and makes the two documentation changes. It does not touch core runtime findings A1–A6 or the transform audit's findings.
+
+### B1 — a throwing user ref leaked the element's bindings
+
+**Reproduction.** Same results in jsdom and Chromium, with and without an error boundary:
+
+```tsx
+const cls = signal("a");
+const ref = (node: Element | null) => {
+  if (node) return () => { throw new Error("boom"); };
+};
+// <div className={cls} ref={ref} /> mounted, then unmounted
+cls.value = "after-unmount"; // the removed node's class became "after-unmount"
+```
+
+- **Cleanup throws.** A user ref cleanup that throws on unmount, or while a bound prop switches from a signal to a plain value, left the binding subscribed. Later writes kept changing the removed node.
+- **Attach throws.** A user ref that throws while attaching (`if (node) throw ...`) left the binding subscribed after the error boundary removed the element.
+- **`0.1.1`.** Neither case leaked, because `0.1.1` disposed its bindings before it called the user's ref.
+
+**Root cause.**
+- `NodeBinder.attach`'s returned cleanup called the user's cleanup first, with nothing around it. A throw skipped everything after it: marking the binder detached, restoring the snapshot, and scheduling disposal.
+- On attach, `#sync` subscribed the bindings before `applyRef` called the user's ref. When that call threw, React received no cleanup. It later calls the ref with `null` instead, and the binding ref ignores `null` because it carries no node.
+
+**Fix.** The detach transition moved into one private method, `NodeBinder.#detach(token, bindings)`. It is token-checked, marks the binder detached, restores the snapshot, and schedules disposal in a microtask.
+- An ordinary detach calls the user's cleanup (or the user's ref with `null`) in a `try` and runs `#detach` in `finally`.
+- A user ref that throws during attach is caught around `applyRef`. `#detach` runs synchronously and the original error is rethrown. Writes are held back from that moment, and the bindings are disposed in the next microtask.
+- The error is never swallowed, wrapped, or turned into a warning. Successful ref lifecycles behave exactly as before, and nothing remounts.
+
+**React error propagation.**
+- jsdom: `onCaughtError` receives the identical thrown object, and the boundary renders its fallback.
+- Chromium, Firefox, and WebKit: the boundary renders the original error's message, and React's own caught-error report is the only console error. Chromium includes the message in that report; Firefox prints only `Error`.
+- In the signal→plain switch case, React attaches the user's ref again through the new binding ref. The boundary's later unmount therefore runs, and throws from, that cleanup a second time. Plain React does the same, and the test accepts it.
+
+### B2 — a new `style={signal}` binding could leave snapshot keys stale
+
+**Reproduction.**
+- Render the element with snapshot `{ color: "red", display: "grid" }`.
+- Before the binding attaches, write `{ color: "blue" }` to the signal: from an earlier sibling's layout effect, during a plain→signal switch, while a memoized element is hidden by `<Activity>`, or while Suspense hides the element.
+- Result: `color` becomes blue but `display: grid` stays. Chromium kept the element laid out as a grid after the Suspense reveal. `0.1.1` behaves the same way.
+
+**Root cause.** A new style binding seeded its `previousKeys` only from a binding it replaced under the same name. It never accounted for the keys React had just written from the binding's own render-time snapshot.
+
+**Fix.** `mountBinding` seeds a new `"style"` binding with `getInitialStyleKeys(staleKeys, snapshot)`: the snapshot's keys plus any keys from a replaced binding. The binding's first write can then clear every key React or the old binding put on the node.
+- Style values are still applied as a whole object, and style is not tracked per property or deeply.
+- Number units and custom properties work as before.
+- The only extra work is one `Object.keys` call on the snapshot when a style binding mounts. Writes and non-style bindings run the same code as before.
+
+**Activity and Suspense.** In jsdom and in the three browsers, revealing the element leaves only the signal's current keys: `outline` is cleared after an Activity reveal, and `display` falls back to `block` after a Suspense reveal.
+
+### Regression coverage
+
+- `tests/react-jsx-audit-regressions.test.tsx`, 13 tests in jsdom.
+  - B1: cleanup throws on unmount; cleanup throws during a signal→plain switch; attach throws; the StrictMode attach/detach/attach/detach cycle; a throwing cleanup on StrictMode's replayed detach and on its final detach.
+  - Each B1 test checks three things: the identical error object reaches React; the removed node stays unchanged; a counted `computed` source is not evaluated again, so no subscription remains.
+  - B2: the initial-mount race; a custom property (`--x`); adding and removing keys; plain→signal on the same node (child state kept); signal A→B, where A had written a key React never saw; Activity with a memoized element; Suspense re-suspend and reveal.
+  - On `7a84712`, 9 of the 13 fail. The 4 that pass are guards: the successful StrictMode cycle, the replayed-detach throw (a later successful detach cleans up), adding and removing keys, and A→B, which the existing stale-key path already handled.
+- `e2e/browser.spec.ts`, 4 tests run in Chromium, Firefox, and WebKit against new `examples/browser` sections: cleanup throws on unmount, attach throws, Activity reveal, Suspense reveal. All four fail in Chromium on `7a84712`.
+
+### Documentation-only outcomes
+
+- **Special host children.** The JSX bindings guides (EN/JA) now limit signal children to ordinary child positions.
+  - `<title>`, `<textarea>`, and `<style>` are excluded. React treats their children as text, so a signal child warns, renders empty, or renders `[object Object]`, including during SSR.
+  - `<option>{signal}</option>` works.
+  - No runtime support was added. The release-note draft lists this as a known limitation.
+- **Rejected `onChange`.** The guides' `value and checked` section now states the following:
+  - A bound `value`/`checked` does not reject edits the way a React-controlled input does, and `onChange` is untouched.
+  - If `onChange` declines an edit by not writing the signal, the DOM keeps the user's input.
+  - Code that needs the field to snap back must restore it itself, for example with `event.target.value = signal.peek()`. Verified in Chromium. Writing the signal its unchanged value does not run the binding. Alternatively, use a React-controlled input.
+  - This is documented separately from the form-reset limitation. The release-note bullet now says the same.
+- The style section of the guides now states that keys React wrote from the rendered value are cleared too, which is the B2 behavior. The release-note draft records it as a fix.
+
+### Performance
+
+Two copies of `jsx.ts` (`7a84712` and the fix) ran in one jsdom process: 41 rounds in alternating order after warmup, 400 bound elements per scenario. The table shows the paired median ratio, fixed / `7a84712`, with its IQR:
+
+| Path | Ratio | IQR |
+| --- | ---: | --- |
+| Style binding mount | 0.91 | 0.75–1.10 |
+| Style binding writes | 0.85 | 0.68–1.07 |
+| `className` binding mount | 0.99 | 0.83–1.12 |
+| `className` binding writes | 0.97 | 0.84–1.17 |
+
+Every IQR spans 1.0, so none of these paths changed measurably.
+
+### Size
+
+Exact gzip bytes:
+
+| Scenario | `7a84712` | Now | Budget |
+| --- | ---: | ---: | ---: |
+| signal-only | 7252 | 7252 | 7296 |
+| core | 7291 | 7290 | 7296 |
+| core+hooks | 8903 | 8903 | 8960 |
+| deep | 12189 | 12190 | 12224 |
+| index-full | 16970 | 17067 | 17280 |
+| jsx-runtime | 11091 | 11172 | 11264 |
+| utils | 8753 | 8754 | 8768 |
+
+The +97 and +81 bytes come from the shared detach path, the attach-time `try`/`catch`, and `getInitialStyleKeys`. No budget was changed.
+
+### Validation
+
+The complete gate ran on the final code without worker limits and with no threshold changes.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 34 files / 456 tests (previously 33 / 443); transform 5 files / 275 passed, 3 skipped |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed: 3 independent Alien systems |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 39/39 (previously 27). The first run failed the two new ref-error tests in Firefox only, because Firefox's console text for React's report omits the error message. The assertion now checks the boundary's rendered message and that React's report is the only console error. |
+| `pnpm size` | passed with unchanged budgets |
+| `git diff --check` | passed |
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.50% | 88.12% | 97.87% | 95.67% |
+| Transform (thresholds 92/90/92/95) | 92.70% | 90.81% | 95.45% | 96.69% |
+
+### State after the React / JSX remediation
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The fix is one commit on top of `7a84712`. No tag, publish, or GitHub Release was performed.
+- The release is not ready yet: the transform audit's remediation and the independent A'/B'/C' re-audits are still outstanding.

@@ -442,3 +442,8 @@ The chronology after the freeze is:
    - A6: re-subscribing to a foreign readable ran the new effect twice.
 
    Effects created by a speculatively evaluated getter are now disposed with that evaluation, and server rendering reads a foreign dependency's current value. Five size budgets grew by one 64-byte step. Versions stay `0.2.0`; nothing was tagged, published, or released.
+8. A React / JSX release-blocker audit of `7d87999` found one blocker and one stale-style problem dating back to `0.1.1`. Both are fixed (see the [closure record](./post-m3-release-review-closure.md#react--jsx-audit-remediation)):
+   - B1: a user ref that threw in its cleanup or while attaching left the element's direct bindings subscribed, so later writes kept changing the removed node;
+   - B2: a new `style={signal}` binding could leave CSS keys from its render-time snapshot on the element, for example after an Activity or Suspense reveal.
+
+   The JSX bindings guides now exclude `<title>`, `<textarea>`, and `<style>` from signal children and document that a bound `value`/`checked` does not snap back when `onChange` rejects an edit. No size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. The transform audit's remediation and the independent re-audits are still outstanding.

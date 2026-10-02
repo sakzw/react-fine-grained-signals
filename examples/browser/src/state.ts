@@ -15,6 +15,16 @@ export function createDemoState() {
       background: "steelblue",
     }),
     imeText: signal("initial"),
+    refErrorTitle: signal("ref initial"),
+    activityStyle: signal<Record<string, string>>({
+      width: "80px",
+      height: "40px",
+      outline: "3px solid crimson",
+    }),
+    suspenseStyle: signal<Record<string, string>>({
+      display: "flex",
+      color: "rgb(0, 0, 255)",
+    }),
   };
 }
 

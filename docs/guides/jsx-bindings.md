@@ -57,6 +57,8 @@ export function Heading() {
 }
 ```
 
+This covers ordinary child positions, where React renders children as DOM nodes. It does not cover host elements whose children React handles in an element-specific way, including `<title>`, `<textarea>`, and `<style>`. A signal child there becomes a React element where React expects text, so React warns, the element ends up empty, or `[object Object]` is rendered, including during SSR. For those elements, read the value in a tracked component (`<title>{title.value}</title>`) or, for a text field, bind `value` instead. `<option>{signal}</option>` works like an ordinary child.
+
 ## Bound host props
 
 The same runtime supports direct bindings only for these native HTML props:
@@ -86,7 +88,7 @@ export function Field() {
 
 ## style
 
-A number bound to a CSS property is written with a `px` suffix unless the property is one of the small set (`opacity`, `zIndex`, `flexGrow`, and similar) that React also treats as unitless. A key starting with `--` is written as a CSS custom property via `setProperty`. A key present in a previous style object but absent from the next one is cleared, not left stale.
+A number bound to a CSS property is written with a `px` suffix unless the property is one of the small set (`opacity`, `zIndex`, `flexGrow`, and similar) that React also treats as unitless. A key starting with `--` is written as a CSS custom property via `setProperty`. A key present in a previous style object but absent from the next one is cleared, not left stale. That includes keys React wrote from the value the element rendered with, when the signal drops them before the binding attaches, for example while an `<Activity>` or Suspense boundary hides the element.
 
 ## value and checked
 
@@ -94,6 +96,7 @@ A number bound to a CSS property is written with a `px` suffix unless the proper
 
 - A *derived* value bound to `value` (for example a signal that trims or upper-cases what the user typed) can still move the caret when the derived string differs from what was typed. That part is not solved here.
 - `value`/`checked` on other elements (`<li value>`, `<option value>`, `<meter value>`, ...) are plain write-only attributes, not two-way bound, so they use the same direct-attribute binding as `title`/`disabled`.
+- A bound `value`/`checked` does not reject edits the way a React-controlled input does. The binding only follows the signal, and `onChange` is left untouched, so if `onChange` declines an edit by not writing the signal, the browser keeps what the user entered: an input shows `123a` while the signal still holds `123`, or a checkbox shows checked while the signal is `false`. Input masks and validation that need the field to snap back must restore it themselves, for example with `event.target.value = signal.peek()` (or `event.target.checked = signal.peek()`) in `onChange`, since writing the signal its unchanged value does not run the binding. Alternatively, use a React-controlled input with a plain `value`/`checked` for that field. This is separate from the form-reset behavior below.
 - A form reset restores the element's default (`defaultValue`, `defaultChecked`, an option's `defaultSelected`). Every signal write the binding applies sets that default to the written value too, so after a write — in a `<form action>`, in an `onReset` handler, or anywhere else — `form.reset()`, a reset button, and React 19's automatic reset after a `<form action>` restore the signal's value. That does not hold after the user edits the field: React's own handling of the change event sets the default back to the value the owner last rendered, even when `onChange` writes the signal, so a reset then restores that rendered value and the field and the signal disagree. To decide what a reset shows, write the signal when it resets, for example in the action or in `onReset`.
 
 ## Constraints

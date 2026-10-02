@@ -131,3 +131,95 @@ test("keeps real-browser IME composition text intact across an external signal w
   await expect(input).toHaveValue("external update");
   expect(errors).toEqual([]);
 });
+
+/**
+ * The page logged React's report of the error the boundary caught, and
+ * nothing else. Chromium includes the error's message in that report while
+ * Firefox only prints `Error`, so the boundary's rendered message is what
+ * shows the original error reached React.
+ */
+function expectOnlyBoundaryReport(errors: string[], expected: string) {
+  expect(errors.some((message) => message.includes("RefErrorBoundary"))).toBe(true);
+  expect(
+    errors.filter(
+      (message) => !message.includes(expected) && !message.includes("RefErrorBoundary"),
+    ),
+  ).toEqual([]);
+}
+
+test("stops following a signal after a user ref cleanup throws on unmount", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const target = page.locator("#ref-cleanup-target");
+  const handle = await target.elementHandle();
+  await expect(target).toHaveAttribute("title", "ref initial");
+
+  await page.locator("#unmount-ref-cleanup-target").click();
+  // React still receives the user's error, through the error boundary.
+  await expect(page.locator("#ref-cleanup-error")).toHaveText("ref cleanup boom");
+  await page.locator("#write-ref-error-signal").click();
+
+  expect(await handle?.evaluate((element) => element.getAttribute("title"))).toBe("ref initial");
+  expectOnlyBoundaryReport(errors, "ref cleanup boom");
+});
+
+test("stops following a signal after a user ref throws while attaching", async ({ page }) => {
+  const errors = await openHydrated(page);
+  // The element is gone again by the time the boundary renders; keep it.
+  await page.evaluate(() => {
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node instanceof Element && node.id === "ref-attach-target") {
+            (window as unknown as { attachTarget: Element }).attachTarget = node;
+          }
+        }
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+  });
+
+  await page.locator("#mount-ref-attach-target").click();
+  await expect(page.locator("#ref-attach-error")).toHaveText("ref attach boom");
+  await page.locator("#write-ref-error-signal").click();
+
+  const title = await page.evaluate(
+    () => (window as unknown as { attachTarget?: Element }).attachTarget?.getAttribute("title"),
+  );
+  expect(title).toBe("ref initial");
+  expectOnlyBoundaryReport(errors, "ref attach boom");
+});
+
+test("clears a style key dropped while an Activity boundary hid the element", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const box = page.locator("#activity-box");
+  await expect(box).toHaveCSS("outline-style", "solid");
+
+  await page.locator("#hide-activity-box").click();
+  await expect(box).toBeHidden();
+  await page.locator("#drop-activity-key").click();
+  await page.locator("#reveal-activity-box").click();
+
+  await expect(box).toBeVisible();
+  await expect(box).toHaveCSS("outline-style", "none");
+  await expect(box).toHaveCSS("width", "80px");
+  expect(await box.getAttribute("style")).toBe("width: 80px; height: 40px;");
+  expect(errors).toEqual([]);
+});
+
+test("clears a style key dropped while a Suspense boundary hid the element", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const box = page.locator("#suspense-box");
+  await expect(box).toHaveCSS("display", "flex");
+
+  await page.locator("#suspend-box").click();
+  await expect(page.locator("#suspense-box-fallback")).toBeVisible();
+  await expect(box).toBeHidden();
+  await page.locator("#drop-suspense-display").click();
+  await page.locator("#resume-box").click();
+
+  await expect(page.locator("#suspense-box-fallback")).toHaveCount(0);
+  await expect(box).toBeVisible();
+  await expect(box).toHaveCSS("display", "block");
+  await expect(box).toHaveCSS("color", "rgb(0, 128, 0)");
+  expect(errors).toEqual([]);
+});

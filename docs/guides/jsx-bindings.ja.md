@@ -57,6 +57,8 @@ export function Heading() {
 }
 ```
 
+対象になるのは、Reactが子要素をDOMノードとして描画する通常の子要素の位置です。`<title>`、`<textarea>`、`<style>` など、Reactが子要素を要素ごとの特別な方法で扱うhost要素は対象外です。そこに置いたsignalの子要素は、Reactがテキストを期待する位置でReact要素になるため、Reactが警告を出す、要素が空になる、または `[object Object]` が描画される、のいずれかになります(SSRでも同様です)。これらの要素では、追跡されたコンポーネント内で値を読む(`<title>{title.value}</title>`)か、テキスト入力欄であれば代わりに `value` をbindingしてください。`<option>{signal}</option>` は通常の子要素と同じように動作します。
+
 ## bindingできるhost props
 
 同じランタイムがDOMへ直接バインドできるネイティブHTML propsは次のものだけです。
@@ -86,7 +88,7 @@ export function Field() {
 
 ## style
 
-CSS propertyへbindingした数値は、Reactもunitless扱いする一部のproperty(`opacity`、`zIndex`、`flexGrow` など)を除き、`px` suffixを付けて書き込まれます。`--` で始まるkeyは `setProperty` を通じてCSS custom propertyとして書き込まれます。前回のstyle objectにはあり今回にはないkeyは、値を残さずclearされます。
+CSS propertyへbindingした数値は、Reactもunitless扱いする一部のproperty(`opacity`、`zIndex`、`flexGrow` など)を除き、`px` suffixを付けて書き込まれます。`--` で始まるkeyは `setProperty` を通じてCSS custom propertyとして書き込まれます。前回のstyle objectにはあり今回にはないkeyは、値を残さずclearされます。要素がレンダーされたときの値からReactが書き込んだkeyを、bindingが付く前にsignalが落とした場合(例えば `<Activity>` やSuspense境界が要素を隠している間)も同様です。
 
 ## value と checked
 
@@ -94,6 +96,7 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 
 - `value` にbindingされた*派生*値(例えばユーザーの入力をtrimしたりupper-caseしたりするsignal)は、派生後の文字列が入力と異なる場合、caretが動くことがあります。この部分はここでは解決していません。
 - 他の要素の `value`/`checked`(`<li value>`、`<option value>`、`<meter value>` など)は双方向bindingではない単なるwrite-only属性なので、`title`/`disabled` と同じdirect attribute bindingを使います。
+- bindingした `value`/`checked` は、Reactのcontrolled inputのように編集を拒否しません。bindingはsignalに従うだけで、`onChange` もそのまま残るため、`onChange` がsignalへ書き込まないことで編集を拒否しても、ブラウザはユーザーが入力した内容を保持します。例えば入力欄は `123a` を表示したままsignalは `123` のまま、あるいはcheckboxはチェックされた表示のままsignalは `false` のまま、となります。入力マスクやvalidationで入力欄を元に戻す必要がある場合は、`onChange` の中で `event.target.value = signal.peek()`(checkboxなら `event.target.checked = signal.peek()`)のように自分で戻してください。signalに変わらない値を書き込んでもbindingは実行されません。あるいは、その入力欄には素の `value`/`checked` を使ったReactのcontrolled inputを使ってください。これは次のform resetの挙動とは別の話です。
 - formのresetは要素のdefault(`defaultValue`、`defaultChecked`、optionの `defaultSelected`)に戻します。bindingはsignalへの書き込みを反映するたびにdefaultも書き込んだ値へそろえるため、書き込みの後であれば(`<form action>` の中でも、`onReset` handlerの中でも、それ以外の場所でも)、`form.reset()`、resetボタン、`<form action>` 実行後のReact 19の自動resetはsignalの値に戻します。ただし、ユーザーがfieldを編集した後はこの限りではありません。`onChange` がsignalへ書き込んでいても、change eventに対するReact自身の処理がdefaultをownerが最後にレンダーした値へ戻すため、resetはそのレンダー時の値に戻り、fieldとsignalの値が食い違います。resetで表示する値を決めたい場合は、actionの中や `onReset` など、resetする時点でsignalへ書き込んでください。
 
 ## 制約

@@ -1,6 +1,16 @@
 /** @jsxImportSource react-fine-grained-signals */
 
-import { StrictMode, useEffect, useRef, useState } from "react";
+import {
+  Activity,
+  Component,
+  StrictMode,
+  Suspense,
+  memo,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import {
   isSignal,
   type ReadonlySignal,
@@ -56,6 +66,153 @@ function BindingLifecycle({ source }: { source: Signal<string> }) {
         }}
       >
         Update detached signal
+      </button>
+    </section>
+  );
+}
+
+class RefErrorBoundary extends Component<
+  { id: string; children: ReactNode },
+  { message: string | null }
+> {
+  override state = { message: null as string | null };
+  static getDerivedStateFromError(error: Error) {
+    return { message: error.message };
+  }
+  override render() {
+    return this.state.message === null ? (
+      this.props.children
+    ) : (
+      <output id={this.props.id}>{this.state.message}</output>
+    );
+  }
+}
+
+const throwingCleanupRef = (node: Element | null) => {
+  if (node) {
+    return () => {
+      throw new Error("ref cleanup boom");
+    };
+  }
+};
+
+const throwingAttachRef = (node: Element | null) => {
+  if (node) throw new Error("ref attach boom");
+};
+
+/** User refs that throw must not leave the element's bindings subscribed. */
+function ThrowingRefs({ source }: { source: Signal<string> }) {
+  const [cleanupTargetVisible, setCleanupTargetVisible] = useState(true);
+  const [attachTargetVisible, setAttachTargetVisible] = useState(false);
+  return (
+    <section aria-labelledby="ref-errors-heading">
+      <h2 id="ref-errors-heading">Throwing user refs</h2>
+      <RefErrorBoundary id="ref-cleanup-error">
+        {cleanupTargetVisible ? (
+          <output id="ref-cleanup-target" title={source} ref={throwingCleanupRef}>
+            cleanup target
+          </output>
+        ) : null}
+      </RefErrorBoundary>
+      <RefErrorBoundary id="ref-attach-error">
+        {attachTargetVisible ? (
+          <output id="ref-attach-target" title={source} ref={throwingAttachRef}>
+            attach target
+          </output>
+        ) : null}
+      </RefErrorBoundary>
+      <button id="unmount-ref-cleanup-target" onClick={() => setCleanupTargetVisible(false)}>
+        Unmount cleanup target
+      </button>
+      <button id="mount-ref-attach-target" onClick={() => setAttachTargetVisible(true)}>
+        Mount attach target
+      </button>
+      <button
+        id="write-ref-error-signal"
+        onClick={() => {
+          source.value = "ref after error";
+        }}
+      >
+        Write ref signal
+      </button>
+    </section>
+  );
+}
+
+// Memoized so revealing the Activity does not re-render the bound element:
+// the binding has to clear the dropped key on its own.
+const ActivityStyledBox = memo(function ActivityStyledBox({
+  source,
+}: {
+  source: Signal<Record<string, string>>;
+}) {
+  return <div id="activity-box" style={source} />;
+});
+
+let resumeSuspendedBox: (() => void) | undefined;
+let suspendedBoxPromise: Promise<void> | undefined;
+
+function SuspendWhilePending() {
+  if (suspendedBoxPromise !== undefined) throw suspendedBoxPromise;
+  return null;
+}
+
+/** A new style binding clears keys React wrote from its render-time snapshot. */
+function StyleOwnership({ state }: { state: DemoState }) {
+  const [mode, setMode] = useState<"visible" | "hidden">("visible");
+  const [attempt, setAttempt] = useState(0);
+  return (
+    <section aria-labelledby="style-ownership-heading">
+      <h2 id="style-ownership-heading">Style ownership</h2>
+      <Activity mode={mode}>
+        <ActivityStyledBox source={state.activityStyle} />
+      </Activity>
+      <button id="hide-activity-box" onClick={() => setMode("hidden")}>
+        Hide box
+      </button>
+      <button
+        id="drop-activity-key"
+        onClick={() => {
+          state.activityStyle.value = { width: "80px", height: "40px" };
+        }}
+      >
+        Drop outline
+      </button>
+      <button id="reveal-activity-box" onClick={() => setMode("visible")}>
+        Reveal box
+      </button>
+
+      <Suspense fallback={<span id="suspense-box-fallback">loading</span>}>
+        <div id="suspense-box" style={state.suspenseStyle}>
+          suspense box
+        </div>
+        <SuspendWhilePending key={attempt} />
+      </Suspense>
+      <button
+        id="suspend-box"
+        onClick={() => {
+          state.suspenseStyle.value = { display: "grid", color: "rgb(0, 0, 255)" };
+          suspendedBoxPromise = new Promise<void>((resolve) => {
+            resumeSuspendedBox = () => {
+              suspendedBoxPromise = undefined;
+              resolve();
+            };
+          });
+          setAttempt((current) => current + 1);
+        }}
+      >
+        Suspend box
+      </button>
+      <button
+        id="drop-suspense-display"
+        onClick={() => {
+          state.suspenseStyle.value = { color: "rgb(0, 128, 0)" };
+        }}
+      >
+        Drop display
+      </button>
+      <button id="resume-box" onClick={() => resumeSuspendedBox?.()}>
+        Resume box
       </button>
     </section>
   );
@@ -161,6 +318,9 @@ export function App({ state }: { state: DemoState }) {
       <StrictMode>
         <BindingLifecycle source={state.lifecycleTitle} />
       </StrictMode>
+
+      <ThrowingRefs source={state.refErrorTitle} />
+      <StyleOwnership state={state} />
     </main>
   );
 }

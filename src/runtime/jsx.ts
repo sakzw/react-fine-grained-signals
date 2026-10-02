@@ -584,11 +584,10 @@ type Subscription = BindingSubscription & {
  * the ref callback so `NodeBinder` can rebuild one binding on
  * its own, without disturbing the siblings that did not change.
  *
- * `initialStyleKeys` seeds a `"style"` binding's own `previousKeys` — passed
- * by `syncBindings` when this binding is replacing a disposed style binding,
- * so the fresh one starts already knowing which CSS properties are actually
- * on the node, instead of starting from an empty set and never clearing them.
- * Ignored for every other kind.
+ * `initialStyleKeys` seeds a `"style"` binding's own `previousKeys` (see
+ * `getInitialStyleKeys`), so the fresh binding starts already knowing which
+ * CSS properties may be on the node, instead of starting from an empty set
+ * and never clearing them. Ignored for every other kind.
  */
 function subscribeBinding(
   node: Element,
@@ -650,7 +649,22 @@ function subscribeBinding(
   }
 }
 
-function mountBinding(node: Element, binding: Binding, binder: NodeBinder, initialStyleKeys?: readonly string[]): MountedBinding {
+/**
+ * The CSS properties a new `"style"` binding may find on the node: React wrote
+ * this binding's render-time snapshot, and a replaced binding (`staleKeys`) may
+ * have written keys React never saw. The signal can drop any of them before the
+ * binding attaches (a write between render and commit, an Activity or Suspense
+ * reveal), so the first write must be able to clear all of them.
+ */
+function getInitialStyleKeys(staleKeys: readonly string[] | undefined, snapshot: unknown): readonly string[] {
+  const keys = typeof snapshot === "object" && snapshot !== null && !Array.isArray(snapshot) ? Object.keys(snapshot) : [];
+  if (staleKeys === undefined) return keys;
+  for (const key of staleKeys) if (!keys.includes(key)) keys.push(key);
+  return keys;
+}
+
+function mountBinding(node: Element, binding: Binding, binder: NodeBinder, staleStyleKeys?: readonly string[]): MountedBinding {
+  const initialStyleKeys = binding[2] === "style" ? getInitialStyleKeys(staleStyleKeys, binding[3]) : undefined;
   const { dispose, refresh, getStyleKeys, restore } = subscribeBinding(node, binding[0], binding[1], binding[2], initialStyleKeys, binder);
   return { binding, dispose, refresh, getStyleKeys, restore };
 }
@@ -701,26 +715,49 @@ class NodeBinder {
     // Kept bindings may have skipped a write while detached.
     if (wasDetached) for (const binding of this.#mounted) binding.refresh();
     this.#sync(bindings);
-    const userCleanup = applyRef(userRef, this.#node);
+    let userCleanup: RefCleanup;
+    try {
+      userCleanup = applyRef(userRef, this.#node);
+    } catch (error) {
+      // React gets no cleanup from a ref that threw, and later only calls it
+      // with `null`, which carries no node. Detach now so the bindings just
+      // subscribed do not outlive the element; the error is React's to handle.
+      this.#detach(token, bindings);
+      throw error;
+    }
     return () => {
-      if (typeof userCleanup === "function") userCleanup();
-      else applyRef(userRef, null);
-      // React detaches the old ref before attaching the new one, so a newer
-      // attach can only exist here if this cleanup is stale.
-      if (token !== this.#token) return;
-      this.#detached = true;
-      // React detaches a host's ref right before it diffs the host's props, and
-      // that diff starts from the snapshot it was handed, not from what the
-      // bindings wrote since. Hand the node back to that snapshot, or a plain
-      // value equal to it is skipped and the signal's last value stays in the
-      // DOM. `#mounted` lines up with `bindings` (see `#sync`), and a snapshot
-      // change gives the element a new ref (`getBindingRef`), so this is the
-      // committed one. A re-attach in the same commit refreshes right after.
-      this.#mounted.forEach((entry, index) => entry.restore?.(bindings[index]![3]));
-      queueMicrotask(() => {
-        if (this.#detached && token === this.#token) this.#dispose();
-      });
+      // A throwing user cleanup is still reported by React, but must not keep
+      // the bindings subscribed to an element React is letting go of.
+      try {
+        if (typeof userCleanup === "function") userCleanup();
+        else applyRef(userRef, null);
+      } finally {
+        this.#detach(token, bindings);
+      }
     };
+  }
+
+  /**
+   * Hands the node back to React for the attach identified by `token`: writes
+   * are held back from now on, and the bindings are disposed in a microtask
+   * unless the same node is attached again first (see the class doc).
+   */
+  #detach(token: number, bindings: readonly Binding[]): void {
+    // React detaches the old ref before attaching the new one, so a newer
+    // attach can only exist here if this detach is stale.
+    if (token !== this.#token) return;
+    this.#detached = true;
+    // React detaches a host's ref right before it diffs the host's props, and
+    // that diff starts from the snapshot it was handed, not from what the
+    // bindings wrote since. Hand the node back to that snapshot, or a plain
+    // value equal to it is skipped and the signal's last value stays in the
+    // DOM. `#mounted` lines up with `bindings` (see `#sync`), and a snapshot
+    // change gives the element a new ref (`getBindingRef`), so this is the
+    // committed one. A re-attach in the same commit refreshes right after.
+    this.#mounted.forEach((entry, index) => entry.restore?.(bindings[index]![3]));
+    queueMicrotask(() => {
+      if (this.#detached && token === this.#token) this.#dispose();
+    });
   }
 
   #dispose(): void {
@@ -755,7 +792,8 @@ class NodeBinder {
     // A `"style"` binding being replaced under the same name is the only record
     // of which CSS properties it actually wrote to the node (an off-render
     // write may have applied keys React never saw). Its replacement starts from
-    // that set so its first write can still clear them.
+    // that set, plus its own snapshot's keys, so its first write can still
+    // clear them.
     const staleStyleKeys = new Map<string, readonly string[]>();
     for (const stale of reusable.values()) {
       if (stale.getStyleKeys !== undefined) staleStyleKeys.set(stale.binding[0], stale.getStyleKeys());
