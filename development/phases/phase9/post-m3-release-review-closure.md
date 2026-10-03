@@ -1298,3 +1298,201 @@ Coverage, with thresholds unchanged:
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The fix is one commit on top of `aca0d30`. No tag, publish, or GitHub Release was performed.
 - The B' (React / JSX) and C' (transform) re-audit remediations still remain.
+
+## B' React / JSX re-audit remediation
+
+### Starting point and scope
+
+- Starting commit: `6f200aadec87849acac3016b0162b262b3088cd3` (`fix: close core re-audit blocker`), the A' remediation, one commit on top of `aca0d30`. `main` and `origin/main` both pointed to it, and the working tree was clean.
+- Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+
+An independent B' re-audit of the React / JSX runtime at `aca0d30` found two release blockers. Only those two are fixed here. `src/runtime/jsx.ts` and `src/react/react-adapter.mts` are identical in `aca0d30` and `6f200aa`, so the A' change does not affect either blocker.
+
+The re-audit's other findings stay as they were:
+
+- a stable user callback ref is re-invoked when a bound prop's rendered value changes, which the JSX bindings guide documents;
+- a `style` value of `false` does not clear the property the way React does; TypeScript's `CSSProperties` rejects it.
+
+The C' (transform) re-audit remediation is not part of this pass and still remains.
+
+### B'1 — a kept style binding forgot keys from a newer render snapshot
+
+**Reproduction.**
+
+```tsx
+const S = signal<CSSProperties>({ color: "red" });
+let trigger = false;
+
+function Child({ n }: { n: number }) {
+  useLayoutEffect(() => {
+    if (trigger) {
+      trigger = false;
+      S.value = { color: "red" };
+    }
+  }, [n]);
+  return null;
+}
+
+function App() {
+  const [n, setN] = useState(0);
+  return <div data-n={n} style={S}><Child n={n} /></div>;
+}
+
+// S.value = { color: "red", width: 10 }; trigger = true; setN(1);
+// aca0d30: "color: red; width: 10px;", and still "color: blue; width: 10px;" after S.value = { color: "blue" }
+```
+
+The same stale key appears when a timer writes the signal while a transition render is yielding, after the owner took its snapshot and before the commit. That variant also exists in `0.1.1`. The layout-effect variant is a v0.2 regression, because `0.1.1` passes it. Both reproduced in jsdom and in Chromium, Firefox, and WebKit.
+
+**Root cause.** The binding ref changes whenever the snapshot changes. For a binding kept across that change, `src/runtime/jsx.ts` ran these steps in order:
+
+1. `NodeBinder.#detach` restored the old snapshot, and `applyStyle` narrowed the binding's `previousKeys` to that snapshot's keys.
+2. React's prop diff then wrote the new snapshot, adding keys such as `width`.
+3. A write made before re-attach was held back by `whileAttached`.
+4. The re-attach `refresh()` applied the current value with keys that never included `width`. Nothing cleared it then or on any later write.
+
+New and rebuilt style bindings already started from their snapshot's keys (`getInitialStyleKeys`). The kept-binding path did not.
+
+**Fix.**
+
+- A style binding's `refresh` now takes the snapshot React committed for its prop and widens `previousKeys` with `getInitialStyleKeys(previousKeys, snapshot)` before re-applying the value.
+- `NodeBinder.attach` passes each kept binding the snapshot of the incoming binding with the same prop name.
+- Other binding kinds ignore the argument.
+- Ordinary writes are unchanged, the subscription is not rebuilt, and the node is not remounted.
+
+### B'2 — a tracked component deleted inside a hidden Activity kept its subscriptions
+
+**Reproduction.**
+
+```tsx
+const src = signal(0);
+let evaluations = 0;
+const c = computed(() => { evaluations += 1; return src.value; });
+function Reader() { useSignalTracking(); return <span>{c.value}</span>; } // or useManagedSignals()
+
+// <Activity mode={mode}>{shown ? <Reader /> : null}</Activity>
+// startTransition(() => setMode("hidden")); then setShown(false); then write src
+// aca0d30: `evaluations` keeps rising on every write, even after root.unmount()
+```
+
+This reproduced for both `useSignalTracking()` and `useManagedSignals()` when the hide was a transition or a default-lane update:
+
+- every such case leaked in Chromium and WebKit, and three of the four did in Firefox;
+- a hide from a discrete click did not leak in browsers, because React then flushes passive effects synchronously, but it leaked under jsdom's `act()`;
+- `useSignalValue`, signal children, and host bindings did not leak;
+- both `0.1.1` `useSignals` APIs show no evaluations in the same tests.
+
+**Root cause.** `RenderStore` in `src/react/react-adapter.mts` used one `#epoch` both for render attempts and for the passive lifecycle:
+
+1. Hiding runs the passive cleanup, which calls `scheduleDispose()` and checks the epoch in a microtask.
+2. React then pre-renders the hidden subtree. That render's `begin()` also advanced the epoch, which cancelled the pending dispose.
+3. A hidden tree never runs the layout `commit()` or the passive `activate()`, and a deletion while hidden runs no second passive cleanup. Nothing disposed the subscriptions.
+
+A `memo` reader that skips the hidden pre-render did not leak, which confirmed the cause.
+
+**Fix.** `#epoch` is replaced by `#lifecycle`, which only real lifecycle events advance: the layout `commit()` (a visible commit or a reveal) and the passive `activate()`.
+
+- `begin()` no longer touches it, so a render, including a hidden pre-render, cannot cancel a scheduled dispose.
+- `scheduleDispose()` disposes unless one of those events happened after it.
+- A reveal that commits after the dispose ran subscribes again through the layout `commit()`, which already did that.
+
+### Regression coverage
+
+`tests/react-jsx-reaudit-regressions.test.tsx` has 48 tests.
+
+B'1:
+
+- the layout-effect race, with and without StrictMode, followed by later writes that still add and clear keys;
+- the render-to-commit write race, both synchronous and as a transition, with and without StrictMode;
+- a custom property;
+- a same-signal re-attach for a new snapshot and a new user ref, with no extra subscription;
+- A → B, plain → signal, and signal → plain around a same-commit write;
+- an Activity hide, re-render, write, and reveal in one task;
+- a Suspense re-suspend of an element that re-rendered;
+- a throwing callback-ref attach on the re-attach, and a throwing ref cleanup on unmount, leaving no subscription and no later DOM write.
+
+B'2, for `useSignalTracking()` and `useManagedSignals()`:
+
+- transition, default-lane, and discrete-click hides, each followed by deletion while hidden;
+- `memo` and non-`memo` readers, with and without StrictMode;
+- no evaluation after the deletion or after the root unmounts;
+- hidden but not deleted: no subscription while hidden, the latest value on reveal, and a live subscription after it;
+- a foreign-copy computed from an independent `createReactiveRuntime()`: its protocol subscription is released while hidden and after deletion, and the reveal shows its fresh value;
+- a StrictMode visible re-render guard.
+
+Against an isolated `aca0d30` worktree, 28 of the 48 fail: every B'1 blocker test and every non-`memo` B'2 test. That includes the discrete-click case, which leaks under `act()`, and the hidden-but-not-deleted case, which stayed subscribed while hidden. The 20 guards pass on both.
+
+`e2e/browser.spec.ts` gained three tests, backed by new `StyleReattach` and `HiddenTrackedReaders` fixtures in `examples/browser`:
+
+- a layout effect drops an outline while the kept binding re-attaches;
+- plugin-managed and `@noSignalTracking` bare readers hidden by a transition and deleted while hidden do not re-evaluate;
+- the same readers hidden by a transition reveal the latest value.
+
+With `aca0d30`'s two source files, all nine runs fail (three tests × Chromium, Firefox, WebKit). With the fix, all pass.
+
+### Performance
+
+The old modules were copied next to the new ones and run interleaved in one process, under jsdom with production React and alternating order. Ratios are new / `aca0d30`, as the median of 12 rounds after 4 warmup rounds, from four separate runs:
+
+| Path | Ratios across the four runs |
+| --- | --- |
+| Style binding re-attach (snapshot change per render) | 0.99, 1.02, 1.05, 0.98 |
+| `title` / `className` re-attach | 1.02, 1.09, 0.96, 1.00 |
+| Style write without a render (unchanged code, noise control) | 0.99, 1.21, 0.91, 0.98 |
+| Tracked component re-render | 1.03, 0.91, 0.89, 1.16 |
+
+No path changed measurably. The control row's code did not change, so it shows the noise level.
+
+- The new B'1 work runs only when a kept binding re-attaches after a detach: one lookup per kept binding, plus a key union for style bindings.
+- The B'2 change moves one counter increment from `begin()` to `commit()`.
+
+### Size
+
+Exact gzip bytes (`pnpm size --exact`). Repeated builds vary by 1–2 bytes.
+
+| Scenario | `6f200aa` | Now | Budget |
+| --- | ---: | ---: | ---: |
+| signal-only | 7266 | 7266 | 7296 |
+| core | 7295 | 7295 | 7296 |
+| core+hooks | 8910 | 8908 | 8960 |
+| deep | 12191 | 12191 | 12224 |
+| index-full | 17086 | 17117 | 17280 |
+| jsx-runtime | 11190 | 11229 | 11264 |
+| utils | 8764 | 8762 | 8768 |
+
+The fix adds 39 bytes to `jsx-runtime` and 31 to `index-full`, for the re-attach snapshot lookup and the style `refresh`. No budget changed. `jsx-runtime` has 35 bytes of headroom left.
+
+### Validation
+
+The complete gate ran on the final code, with no threshold or budget change.
+
+On this machine, `node` is a Volta shim. It puts Volta's default pnpm (12.3.4, which is missing its `bin/pnpm.cjs`) first on child processes' `PATH`, and that broke the browser web servers' `pnpm` calls. The gate therefore ran with Volta's Node 24.21.0 image directory first on `PATH`. This is a local toolchain issue, not a repository change.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 36 files / 517 tests (previously 35 / 469); transform 5 files / 315 passed, 3 skipped |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed: 3 independent Alien systems |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 48/48 (previously 39) |
+| `pnpm size` | passed with unchanged budgets |
+| `git diff --check` | passed |
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.47% | 88.34% | 98.12% | 95.58% |
+| Transform (thresholds 92/90/92/95) | 93.05% | 91.17% | 95.59% | 96.79% |
+
+### State after the B' React / JSX re-audit remediation
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The fix is one commit on top of `6f200aa`. No tag, publish, or GitHub Release was performed.
+- The C' (transform) re-audit remediation still remains.

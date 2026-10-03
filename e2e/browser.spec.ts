@@ -223,3 +223,70 @@ test("clears a style key dropped while a Suspense boundary hid the element", asy
   await expect(box).toHaveCSS("color", "rgb(0, 128, 0)");
   expect(errors).toEqual([]);
 });
+
+test("clears a style key a layout effect drops while a kept binding re-attaches", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const box = page.locator("#reattach-box");
+
+  await page.locator("#add-reattach-outline").click();
+  await expect(box).toHaveCSS("outline-style", "solid");
+  // The owner re-renders with the outline in its snapshot, and a child's
+  // layout effect drops it again in the same commit.
+  await page.locator("#rerender-and-drop-outline").click();
+  await expect(box).toHaveAttribute("data-renders", "1");
+
+  await expect(box).toHaveCSS("outline-style", "none");
+  expect(await box.getAttribute("style")).toBe("width: 80px; height: 40px;");
+  expect(errors).toEqual([]);
+});
+
+async function readEvaluations(page: Page) {
+  return page.evaluate(() => ({
+    ...(globalThis as { rfgsEvaluations?: Record<string, number> }).rfgsEvaluations,
+  }));
+}
+
+test("releases tracked readers deleted inside an Activity hidden by a transition", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const bare = page.locator("#hidden-bare-value");
+  const managed = page.locator("#hidden-managed-value");
+
+  await page.locator("#write-tracked-source").click();
+  await expect(bare).toHaveText("1");
+  await expect(managed).toHaveText("1");
+
+  await page.locator("#hide-tracked-readers").click();
+  await expect(bare).toBeHidden();
+  await expect(managed).toBeHidden();
+  await page.locator("#delete-tracked-readers").click();
+  await expect(bare).toHaveCount(0);
+  await expect(managed).toHaveCount(0);
+
+  const before = await readEvaluations(page);
+  await page.locator("#write-tracked-source").click();
+  await page.locator("#write-tracked-source").click();
+  expect(await readEvaluations(page)).toEqual(before);
+  expect(errors).toEqual([]);
+});
+
+test("reveals tracked readers hidden by a transition with the latest value", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const bare = page.locator("#hidden-bare-value");
+  const managed = page.locator("#hidden-managed-value");
+
+  await page.locator("#hide-tracked-readers").click();
+  await expect(bare).toBeHidden();
+  const before = await readEvaluations(page);
+  await page.locator("#write-tracked-source").click();
+  await page.locator("#write-tracked-source").click();
+  // Nothing is subscribed while hidden.
+  expect(await readEvaluations(page)).toEqual(before);
+
+  await page.locator("#reveal-tracked-readers").click();
+  await expect(bare).toHaveText("2");
+  await expect(managed).toHaveText("2");
+  await page.locator("#write-tracked-source").click();
+  await expect(bare).toHaveText("3");
+  await expect(managed).toHaveText("3");
+  expect(errors).toEqual([]);
+});

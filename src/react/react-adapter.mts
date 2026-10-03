@@ -46,7 +46,12 @@ class RenderStore {
   #combinedDependencies = new Set<object>();
   #listeners = new Set<() => void>();
   #version = 0;
-  #epoch = 0;
+  // Advanced only by lifecycle events that prove the component is mounted and
+  // visible again: a layout commit and a passive (re)activation. A render on
+  // its own, such as a hidden Activity prerender, must not cancel a scheduled
+  // dispose: a hidden tree never commits or activates, and one deleted while
+  // hidden gets no second passive cleanup.
+  #lifecycle = 0;
 
   constructor(mode: SubscriptionMode) { this.#mode = mode; }
   getSnapshot = () => this.#version;
@@ -57,7 +62,6 @@ class RenderStore {
   begin(scopePolicy: ScopePolicy): RenderAttempt {
     const attempt = render.createRenderAttempt();
     attempt.restoreScope = render.pushRenderScope(attempt, scopePolicy);
-    this.#epoch += 1;
     queueMicrotask(() => this.finish(attempt));
     return attempt;
   }
@@ -66,6 +70,7 @@ class RenderStore {
     attempt.restoreScope = undefined;
   }
   commit(attempt: RenderAttempt): void {
+    this.#lifecycle += 1;
     this.finish(attempt);
     let changedDuringRender = !render.promoteRenderAttempt(attempt);
     const desired = attempt.dependencies;
@@ -116,10 +121,10 @@ class RenderStore {
     this.#combinedDependencies.clear();
   }
   scheduleDispose(): void {
-    const epoch = ++this.#epoch;
-    queueMicrotask(() => { if (this.#epoch === epoch) this.dispose(); });
+    const lifecycle = ++this.#lifecycle;
+    queueMicrotask(() => { if (this.#lifecycle === lifecycle) this.dispose(); });
   }
-  activate(): void { this.#epoch += 1; }
+  activate(): void { this.#lifecycle += 1; }
 }
 
 function createReactAdapter(

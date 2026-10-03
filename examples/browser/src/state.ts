@@ -1,7 +1,23 @@
-import { signal } from "react-fine-grained-signals";
+import { computed, signal } from "react-fine-grained-signals";
+
+/** Counts how often a tracked reader's computed is re-evaluated (client only). */
+function countedComputed(source: { readonly value: number }, name: string) {
+  return computed(() => {
+    if (typeof document !== "undefined") {
+      const counts = ((globalThis as { rfgsEvaluations?: Record<string, number> }).rfgsEvaluations ??= {});
+      counts[name] = (counts[name] ?? 0) + 1;
+    }
+    return source.value;
+  });
+}
 
 export function createDemoState() {
+  const hiddenTrackedSource = signal(0);
   return {
+    reattachStyle: signal<Record<string, string>>({ width: "80px", height: "40px" }),
+    hiddenTrackedSource,
+    hiddenBare: countedComputed(hiddenTrackedSource, "bare"),
+    hiddenManaged: countedComputed(hiddenTrackedSource, "managed"),
     count: signal(0),
     title: signal("initial title"),
     hidden: signal(false),

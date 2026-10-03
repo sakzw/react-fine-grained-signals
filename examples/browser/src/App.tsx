@@ -6,13 +6,16 @@ import {
   StrictMode,
   Suspense,
   memo,
+  startTransition,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import {
   isSignal,
+  useSignalTracking,
   type ReadonlySignal,
   type Signal,
 } from "react-fine-grained-signals";
@@ -218,6 +221,97 @@ function StyleOwnership({ state }: { state: DemoState }) {
   );
 }
 
+let dropReattachOutline = false;
+
+/**
+ * Drops the outline in its layout effect, during the owner's re-render commit.
+ * No dependency array: it runs in every commit that re-renders it.
+ */
+function DropOutlineOnLayout({ source }: { source: Signal<Record<string, string>> }) {
+  useLayoutEffect(() => {
+    if (!dropReattachOutline) return;
+    dropReattachOutline = false;
+    source.value = { width: "80px", height: "40px" };
+  });
+  return null;
+}
+
+/** A kept style binding clears keys from the snapshot it re-attaches for. */
+function StyleReattach({ source }: { source: Signal<Record<string, string>> }) {
+  const [renders, setRenders] = useState(0);
+  return (
+    <section aria-labelledby="style-reattach-heading">
+      <h2 id="style-reattach-heading">Style re-attach</h2>
+      <div id="reattach-box" data-renders={renders} style={source}>
+        <DropOutlineOnLayout source={source} />
+      </div>
+      <button
+        id="add-reattach-outline"
+        onClick={() => {
+          source.value = { width: "80px", height: "40px", outline: "3px solid crimson" };
+        }}
+      >
+        Add outline
+      </button>
+      <button
+        id="rerender-and-drop-outline"
+        onClick={() => {
+          dropReattachOutline = true;
+          setRenders((current) => current + 1);
+        }}
+      >
+        Re-render and drop outline
+      </button>
+    </section>
+  );
+}
+
+/** @noSignalTracking */
+function BareHiddenReader({ source }: { source: ReadonlySignal<number> }) {
+  useSignalTracking();
+  return <output id="hidden-bare-value">{source.value}</output>;
+}
+
+function ManagedHiddenReader({ source }: { source: ReadonlySignal<number> }) {
+  return <output id="hidden-managed-value">{source.value}</output>;
+}
+
+/** Tracked readers deleted inside a hidden Activity release their subscriptions. */
+function HiddenTrackedReaders({ state }: { state: DemoState }) {
+  const [mode, setMode] = useState<"visible" | "hidden">("visible");
+  const [shown, setShown] = useState(true);
+  return (
+    <section aria-labelledby="hidden-tracked-heading">
+      <h2 id="hidden-tracked-heading">Hidden tracked readers</h2>
+      <Activity mode={mode}>
+        {shown ? (
+          <>
+            <BareHiddenReader source={state.hiddenBare} />
+            <ManagedHiddenReader source={state.hiddenManaged} />
+          </>
+        ) : null}
+      </Activity>
+      <button id="hide-tracked-readers" onClick={() => startTransition(() => setMode("hidden"))}>
+        Hide readers
+      </button>
+      <button id="delete-tracked-readers" onClick={() => setShown(false)}>
+        Delete readers
+      </button>
+      <button id="reveal-tracked-readers" onClick={() => setMode("visible")}>
+        Reveal readers
+      </button>
+      <button
+        id="write-tracked-source"
+        onClick={() => {
+          state.hiddenTrackedSource.value += 1;
+        }}
+      >
+        Write tracked source
+      </button>
+    </section>
+  );
+}
+
 export function App({ state }: { state: DemoState }) {
   const renders = useRef(0);
   renders.current += 1;
@@ -321,6 +415,8 @@ export function App({ state }: { state: DemoState }) {
 
       <ThrowingRefs source={state.refErrorTitle} />
       <StyleOwnership state={state} />
+      <StyleReattach source={state.reattachStyle} />
+      <HiddenTrackedReaders state={state} />
     </main>
   );
 }

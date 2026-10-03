@@ -264,8 +264,12 @@ function applyBoundSignal<T>(
  * failure latch with a sibling read site (see `bindSelectValue`); otherwise
  * each binding gets its own.
  */
-/** A live binding subscription; `refresh` re-applies the current value. */
-type BindingSubscription = { readonly dispose: () => void; readonly refresh: () => void };
+/**
+ * A live binding subscription; `refresh` re-applies the current value. A
+ * `"style"` binding also takes the render snapshot it is re-attached for (see
+ * `subscribeBinding`); every other kind ignores it.
+ */
+type BindingSubscription = { readonly dispose: () => void; readonly refresh: (snapshot?: unknown) => void };
 
 function createBindingSubscription<T>(
   source: ReadonlySignal<T>,
@@ -543,7 +547,7 @@ function applyRef(ref: SupportedRef, node: Element | null): RefCleanup {
 type MountedBinding = {
   readonly binding: Binding;
   readonly dispose: () => void;
-  readonly refresh: () => void;
+  readonly refresh: (snapshot?: unknown) => void;
   readonly getStyleKeys: (() => readonly string[]) | undefined;
   readonly restore: ((snapshot: unknown) => void) | undefined;
 };
@@ -610,8 +614,18 @@ function subscribeBinding(
         applied = value;
         previousKeys = applyStyle(node as HTMLElement, value, previousKeys);
       };
+      const subscription = createBindingSubscription(source, whileAttached(write));
       return {
-        ...createBindingSubscription(source, whileAttached(write)),
+        ...subscription,
+        // Kept across a re-attach for a newer render: React's diff has just
+        // written that render's snapshot, whose keys the detach's `restore`
+        // did not know about. The signal may already have dropped some of
+        // them (a write while detached is held back), so the refresh must be
+        // able to clear them.
+        refresh: (snapshot) => {
+          previousKeys = getInitialStyleKeys(previousKeys, snapshot);
+          subscription.refresh();
+        },
         getStyleKeys: () => previousKeys,
         restore: (snapshot) => { if (!isSameStyle(applied, snapshot)) write(snapshot); },
       };
@@ -654,7 +668,8 @@ function subscribeBinding(
  * this binding's render-time snapshot, and a replaced binding (`staleKeys`) may
  * have written keys React never saw. The signal can drop any of them before the
  * binding attaches (a write between render and commit, an Activity or Suspense
- * reveal), so the first write must be able to clear all of them.
+ * reveal), so the first write must be able to clear all of them. A kept
+ * binding re-attached for a newer render widens its own keys the same way.
  */
 function getInitialStyleKeys(staleKeys: readonly string[] | undefined, snapshot: unknown): readonly string[] {
   const keys = typeof snapshot === "object" && snapshot !== null && !Array.isArray(snapshot) ? Object.keys(snapshot) : [];
@@ -712,8 +727,12 @@ class NodeBinder {
     const token = ++this.#token;
     const wasDetached = this.#detached;
     this.#detached = false;
-    // Kept bindings may have skipped a write while detached.
-    if (wasDetached) for (const binding of this.#mounted) binding.refresh();
+    // Kept bindings may have skipped a write while detached. Each is handed the
+    // snapshot React just committed for its prop (matched by name, which is
+    // unique per element), so a style binding can clear that snapshot's keys.
+    if (wasDetached) {
+      for (const entry of this.#mounted) entry.refresh(bindings.find((binding) => binding[0] === entry.binding[0])?.[3]);
+    }
     this.#sync(bindings);
     let userCleanup: RefCleanup;
     try {

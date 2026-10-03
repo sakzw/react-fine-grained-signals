@@ -456,3 +456,8 @@ The chronology after the freeze is:
    - A'1: a read made for another copy's owner also linked to this copy's still-running `activeSub`. In a cross-copy round trip, an effect then re-ran on writes its foreign computed cut off, and a parent effect re-ran (recreating its child) whenever a foreign child's dependency changed.
 
    Versions stay `0.2.0`; nothing was tagged, published, or released. The B' and C' re-audit remediations still remain.
+11. The independent B' React / JSX re-audit of `aca0d30` found two release blockers, both now fixed (see the [closure record](./post-m3-release-review-closure.md#b-react--jsx-re-audit-remediation)):
+   - B'1: a `style={signal}` binding kept across a re-render whose snapshot changed did not know the keys React wrote from the new snapshot. A key the signal dropped before the binding re-attached stayed on the element.
+   - B'2: a `useSignalTracking()` or `useManagedSignals()` component deleted inside an `<Activity>` hidden by a transition or a default-lane update kept its signal subscriptions forever. The hidden pre-render cancelled their scheduled disposal.
+
+   The `jsx-runtime` bundle grew by 39 bytes; no size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. The C' re-audit remediation still remains.
