@@ -62,6 +62,12 @@ export default defineConfig({
 });
 ```
 
+検証した構成（Vite 8、`@vitejs/plugin-react` 6.1）では、
+`react({ compiler: true })` にはplugin-reactのoptionalな
+`oxc-transform-react` packageも必要です。`babel-plugin-react-compiler` と
+一緒にinstallしてください。ない場合、buildはplugin-react自身の
+「optionalな `oxc-transform-react` packageが必要」というerrorで止まります。
+
 Viteでは、この順序をhookのレベルでも守っています。pluginは `enforce: "pre"`
 で、さらに `transform` hookが `order: "pre"` を宣言しており、Viteは
 `enforce: "pre"` のgroupの中でこの値に基づいて並べ替えます。そのため、
@@ -199,10 +205,18 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   hook挿入は安全ではありません）でも、`Row` を独立したcomponentとしてinstance化
   する場合（hook挿入こそが更新を成立させます）でも構文が同一で、そのファイルだけ
   では区別できません。そのため `Row` は、単独で変換条件を満たすなら自分のhookを
-  持ったままになります。呼び出し箇所にcallbackをinlineで書くか
-  （`<Grid renderItem={(item) => <li>{item.value}</li>} />`。上記のinline検出が
-  呼び出し元componentに正しく帰属させます）、参照先の関数に `@signalTracking` /
+  持ったままになります。参照先の関数に `@signalTracking` /
   `@noSignalTracking` コメントで意図を明示してください。
+
+  callbackをinlineで書くこと
+  （`<Grid renderItem={(item) => <li>{item.value}</li>} />`）は、一般的な解決策
+  ではありません。その読み取りは呼び出し元componentに帰属するので呼び出し元は
+  変換されますが、`Grid` は `renderItem` を *自分の* render中、つまり呼び出し元の
+  関数がreturnした後に呼びます。既定のmanaged変換では、その時点で呼び出し元の
+  boundaryはすでに閉じているため、`Grid` 自身がboundaryを持つ場合にしか読み取りは
+  追跡されず、そうでなければrenderされた項目は古いままになります。`Grid` が
+  自分のcomponentなら、`@signalTracking` でopt-inしてください（または `Grid`
+  自身でsignalを読んでください）。
 - 別moduleからimportしたcallbackはたどりません。変換は1ファイルずつ処理する
   ためです。
 - objectのkey経由で渡すcallback（`items.map(parts.Row)`、または先に
@@ -227,7 +241,8 @@ opt-inします。
 ## 関数として呼び出されるcomponent
 
 module内で通常の関数として呼び出されるPascalCaseの関数 — `Title()`、
-`Title?.()`、`Title!()`、objectに保持されたものなら `ns.Home()` — は、Reactが
+`Title?.()`、`Title!()`、objectに保持されたものなら `ns.Home()`、
+`ns?.group?.Home()`、または兄弟memberからの `this.Home()` — は、Reactが
 独立したcomponentとしてmountすることはなく、その本体は呼び出し元のrenderの
 中でそのまま実行されます。そのため、`all` を含むどのmodeでも独自のboundaryを
 持たず、そのJSXと `.value` 読み取りは、呼び出しを行うcomponentまたはcustom
@@ -255,12 +270,16 @@ function Outer({ show }) { return <div>{show && Title()}</div>; }
   したときにしか更新されません。この混在に対してpluginは警告を出します。
   どちらか一方の形に統一してください。
 - 認識するのは、その関数自身のbinding、または定義されている正確なobjectの
-  key pathを通した呼び出しだけで、同じmodule内に限ります。alias
-  （`const T = Title; T()`）、`Title.call(…)`、別moduleからの呼び出しは
-  認識しません。
+  key pathを通した呼び出しだけで、同じmodule内に限ります。そのpathのどの
+  linkがoptionalでもかまいません（`ns?.group.Home()`）。同じobject literalの
+  memberの中では、`this` がそのpathとして扱われます。method、accessor、
+  `function` のproperty値、およびそれらの中に入れ子になったarrowでの
+  `this.Home()` が該当します。入れ子の `function` やclassは独自の `this` を
+  持つため、たどりません。alias（`const T = Title; T()`）、`Title.call(…)`、
+  別moduleからの呼び出しは認識しません。
 - objectに保持された関数には、computed keyを通しても到達できます
   （`renderers[node.type](node)`、`renderers[key]?.(arg)`、
-  `items.map(renderers[key])`）。そうしたaccessが到達しうるslot（同じ深さで、
+  `items.map(renderers[key])`、兄弟memberからの `this[key](arg)`）。そうしたaccessが到達しうるslot（同じ深さで、
   同じ静的なprefixの下にあるもの）には、独自のboundaryを付けません。そこに
   boundaryがあると、呼び出し元の中で可変回数実行されるためです。keyは実行時に
   しか決まらないので、そのslotの読み取りは呼び出し元に収集 *されません*。
@@ -275,7 +294,20 @@ function Outer({ show }) { return <div>{show && Title()}</div>; }
   `<Title />` としてrenderしてください。
 - keyで保持された関数（`ns.Home()`）を収集するのは、このmodule内で、root
   に束縛されたobject literalの中に定義されている場合か、ちょうど1つのmember
-  代入（`Card.Header = …`）で定義されている場合だけです。
+  代入（`Card.Header = …`）で定義されている場合だけです。兄弟memberからの
+  `this.Home()` は、そのmemberが属するobject literalから収集します。
+- 呼び出されていることを変換が把握できないobjectのmemberは、独自のboundaryを
+  持ったままになります。parameter経由
+  （`function render(set, key) { return set[key](); }`）、alias経由
+  （`const R = renderers[key]; R(arg)`）、computedな分割代入経由
+  （`const { [key]: R } = renderers`）、配列内のobjectから
+  （`columns.map((c) => c.Cell(row))`）、別moduleから、といった到達経路が
+  該当します。そうしたmemberをinlineで呼ぶと呼び出し元の中のhook呼び出しになり、
+  呼び出し回数が変わった時点でクラッシュします。memberに `@noSignalTracking` を
+  付けてください。memberは独自のboundaryを持たなくなり、読み取りは呼び出し元の
+  render中に実行されるため、変換された呼び出し元がそれを追跡します。その場合、
+  そのmemberを要素としてrenderすると（`<icons.Check />`）、その要素は独自の
+  subscriptionを持ちません。
 
 ## Higher-order component (HOC)
 
@@ -408,8 +440,11 @@ Rollupにはどちらの概念もないため、このpluginを最初にlistし�
 pluginやloaderの順序を自分で決められる場合は、React Compilerを実行するものや
 JSXを変換して消すものより前にこのpluginを置いてください。依存関係と
 JavaScript/TypeScript以外のmoduleはskipし、`.cjs` / `.cts` のmoduleには
-一切手を加えません。拡張子は大文字・小文字を区別せずに判定するため、
-`App.TSX` は `App.tsx` とまったく同様に扱います。`.ts` はJSXなしの
+一切手を加えません。pluginは拡張子を大文字・小文字を区別せずに判定するため、
+`App.TSX` を `App.tsx` とまったく同様に変換します。ただし、その後bundlerが
+そのファイルを同じようにcompileするかはbundler次第で、保証はありません。
+Vite 8は `.JSX` / `.TSX` をJSX / TSXとしてcompileせず、このpluginの有無に
+かかわらず解析に失敗します。`.ts` はJSXなしの
 TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析します。
 
 ## Fast Refresh

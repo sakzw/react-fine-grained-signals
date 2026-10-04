@@ -328,17 +328,30 @@ function getKeyedIdentityName(parent: NodePath): string | undefined {
  * match a use site against the definition site: a one-level walk saw
  * `const a = { b: { Row } }` handed to `items.map(a.b.Row)` as an unrelated
  * reference and let the per-item callback keep a hook boundary of its own.
+ *
+ * An optional link reads the same key: `ns?.group.Home`, `ns.group?.Home` and
+ * `ns.group.Home` all name one slot, so each link may be either member form.
  */
-function getStaticMemberPath(node: t.MemberExpression): { root: string; keys: string[] } | undefined {
+function getStaticMemberPath(
+  node: t.MemberExpression | t.OptionalMemberExpression,
+): { root: string; keys: string[] } | undefined {
+  const chain = getStaticMemberChain(node);
+  return chain !== undefined && t.isIdentifier(chain.root) ? { root: chain.root.name, keys: chain.keys } : undefined;
+}
+
+/** `getStaticMemberPath` without the root restriction: the innermost object node and the static keys. */
+function getStaticMemberChain(
+  node: t.MemberExpression | t.OptionalMemberExpression,
+): { root: t.Node; keys: string[] } | undefined {
   const keys: string[] = [];
   let current: t.Node = node;
-  while (t.isMemberExpression(current)) {
+  while (t.isMemberExpression(current) || t.isOptionalMemberExpression(current)) {
     const key = getReadPropertyName(current);
     if (key === undefined) return undefined;
     keys.unshift(key);
     current = current.object;
   }
-  return t.isIdentifier(current) ? { root: current.name, keys } : undefined;
+  return { root: current, keys };
 }
 
 // Named `getBindingIdentityName` -- not `getBindingName` -- to keep it
@@ -1052,9 +1065,7 @@ function getKeyedAccessPath(
  * genuine compound component keeps its boundary.
  */
 function isKeyedRenderCallback(parent: NodePath): boolean {
-  const access = getKeyedAccessPath(parent);
-  if (access === undefined) return false;
-  return getKeyedSlotUses(access, true).some((slot) =>
+  return getKeyedSafetyUses(parent).some((slot) =>
     slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)
   );
 }
@@ -1070,8 +1081,9 @@ function isKeyedRenderCallback(parent: NodePath): boolean {
  * (`ns.Other`, `ns` passed whole -- or `ns[k]` unless `includeDynamic` is set)
  * is not a use of this slot. Both
  * by-key exclusions -- the render-callback one above and the plain-call one in
- * `isPlainCalledComponent` -- ask their question of this one list, so they
- * cannot disagree about which reads count as reaching the slot.
+ * `isPlainCalledComponent` -- ask their question of this list (joined with the
+ * `this` uses in `getKeyedSafetyUses`), so they cannot disagree about which
+ * reads count as reaching the slot.
  */
 function getKeyedSlotUses(
   access: { origin: NodePath; root: string; keys: string[] },
@@ -1085,23 +1097,161 @@ function getKeyedSlotUses(
   if (binding === undefined) return [];
   const uses: NodePath[] = [];
   for (const rootPath of binding.referencePaths) {
-    let current: NodePath | undefined = rootPath;
-    for (const [index, key] of access.keys.entries()) {
-      const member: NodePath | null = current.parentPath;
-      if (member === null || !matchesKeyedLink(member, current, key, includeDynamic)) {
-        // `const { Row } = parts` reads the last key into a binding of its
-        // own, so that binding's references reach the slot just as
-        // `parts.Row` does -- `items.map(Row)` then runs the keyed function
-        // per item. Only this one-step destructuring of the final key is
-        // followed; deeper patterns and re-assigned aliases are not.
-        if (index === access.keys.length - 1) uses.push(...getDestructuredSlotUses(current, key));
-        current = undefined;
-        break;
-      }
-      current = member;
-    }
-    if (current !== undefined) uses.push(climbTransparentWrappers(current));
+    followKeyedChain(rootPath, access.keys, includeDynamic, uses);
   }
+  return uses;
+}
+
+/**
+ * Follows `keys` down from `start` -- a reference to the root binding, or a
+ * `this` that stands for the object holding the slot -- and records the use it
+ * reaches in `uses`. A chain that turns off the path records nothing.
+ */
+function followKeyedChain(
+  start: NodePath,
+  keys: readonly string[],
+  includeDynamic: boolean,
+  uses: NodePath[],
+): void {
+  let current = start;
+  for (const [index, key] of keys.entries()) {
+    const member = current.parentPath;
+    if (member === null || !matchesKeyedLink(member, current, key, includeDynamic)) {
+      // `const { Row } = parts` reads the last key into a binding of its
+      // own, so that binding's references reach the slot just as
+      // `parts.Row` does -- `items.map(Row)` then runs the keyed function
+      // per item. Only this one-step destructuring of the final key is
+      // followed; deeper patterns and re-assigned aliases are not.
+      if (index === keys.length - 1) uses.push(...getDestructuredSlotUses(current, key));
+      return;
+    }
+    current = member;
+  }
+  uses.push(climbTransparentWrappers(current));
+}
+
+/**
+ * Every place a sibling reaches the object-literal slot `holder` through
+ * `this`:
+ *
+ * ```jsx
+ * const renderers = {
+ *   Leaf(i) { return <li>{suffix.value}</li>; },
+ *   Tree(count) { return <ul>{Array.from({ length: count }, (_, i) => this.Leaf(i))}</ul>; },
+ * };
+ * ```
+ *
+ * `this.Leaf(i)` runs `Leaf` once per item inside whatever render called
+ * `Tree`, exactly as `renderers.Leaf(i)` would, but `this` is not a binding,
+ * so the root-reference walk in `getKeyedSlotUses` never sees it -- and a
+ * boundary in `Leaf` was then a variable number of hooks in the caller.
+ *
+ * `this` is only followed where its identity is syntactic: inside a function
+ * that is itself a non-arrow member of the object literal (a method, accessor,
+ * or `function` property value), and inside arrows nested in it, which inherit
+ * that `this`. A nested `function` or class rebinds `this` and is skipped. Each
+ * enclosing object literal is its own level, so `this.Leaf` in a method of the
+ * object holding `Leaf` reaches it, `this.group.Leaf` in a method of the outer
+ * object reaches it through `group`, and a same-named slot in another object
+ * literal is never touched. A computed `this[key]` reaches every slot at its
+ * depth, like `renderers[key]` does.
+ *
+ * Only the object literals around this one slot are walked, never the
+ * program, so the cost stays with the object that holds the slot.
+ */
+function getThisSlotUses(holder: NodePath): NodePath[] {
+  if (!holder.isObjectProperty() && !holder.isObjectMethod()) return [];
+  const key = getPropertyKeyName(holder.node);
+  if (key === undefined) return [];
+  const keys = [key];
+  const uses: NodePath[] = [];
+  for (let container: NodePath | null = holder.parentPath; container?.isObjectExpression(); ) {
+    for (const reference of getObjectThisReferences(container)) {
+      followKeyedChain(reference, keys, true, uses);
+    }
+    const outer: NodePath | null = container.parentPath;
+    if (outer === null || !outer.isObjectProperty() || outer.node.value !== container.node) break;
+    const outerKey = getPropertyKeyName(outer.node);
+    if (outerKey === undefined) break;
+    keys.unshift(outerKey);
+    container = outer.parentPath;
+  }
+  return uses;
+}
+
+/**
+ * `getObjectThisReferences` results, per object literal. One function's
+ * decision asks for the same object's references many times over -- every
+ * candidacy check of every nested function lands here -- so they are collected
+ * once. Keyed by node, so nothing outlives the file being transformed.
+ *
+ * A rewrite moves the rewritten function's statements under new parents, and a
+ * cached path inside it would then describe a tree that no longer exists, so
+ * `invalidateThisReferences` drops every entry whose references could lie
+ * inside that function: the object literals within it, and -- only when it
+ * contains a `this` at all -- the object literals around it. Every other entry
+ * stays valid, which matters in a module where most object members are
+ * transformed one after another and only a few of them use `this`.
+ */
+const thisReferenceCache = new WeakMap<t.ObjectExpression, NodePath<t.ThisExpression>[]>();
+
+function invalidateThisReferences(rewritten: NodePath<t.Function>): void {
+  let containsThis = false;
+  rewritten.traverse({
+    ObjectExpression(object) {
+      thisReferenceCache.delete(object.node);
+    },
+    ThisExpression() {
+      containsThis = true;
+    },
+  });
+  if (!containsThis) return;
+  for (let parent: NodePath | null = rewritten.parentPath; parent !== null; parent = parent.parentPath) {
+    if (parent.isObjectExpression()) thisReferenceCache.delete(parent.node);
+  }
+}
+
+/** The `this` expressions that stand for `object` itself, inside its own non-arrow members. */
+function getObjectThisReferences(object: NodePath<t.ObjectExpression>): NodePath<t.ThisExpression>[] {
+  const cached = thisReferenceCache.get(object.node);
+  if (cached !== undefined) return cached;
+  const references: NodePath<t.ThisExpression>[] = [];
+  thisReferenceCache.set(object.node, references);
+  for (const property of object.get("properties")) {
+    let member: NodePath | undefined;
+    if (property.isObjectMethod()) {
+      member = property;
+    } else if (property.isObjectProperty()) {
+      const value = unwrapTransparentPath(property.get("value") as NodePath);
+      if (value.isFunctionExpression()) member = value;
+    }
+    member?.traverse({
+      Function(nested) {
+        if (!nested.isArrowFunctionExpression()) nested.skip();
+      },
+      Class(nested) {
+        nested.skip();
+      },
+      ThisExpression(reference) {
+        references.push(reference);
+      },
+    });
+  }
+  return references;
+}
+
+/**
+ * Every use that can run the keyed slot `holder` inline: reads through its root
+ * binding, computed keys included (`getKeyedSlotUses`), and reads through
+ * `this` from a sibling member of the same object literal (`getThisSlotUses`).
+ * Both safety exclusions -- per-item callback and plain call -- ask this list.
+ */
+function getKeyedSafetyUses(
+  holder: NodePath,
+  access = getKeyedAccessPath(holder),
+): NodePath[] {
+  const uses = access === undefined ? [] : getKeyedSlotUses(access, true);
+  uses.push(...getThisSlotUses(holder));
   return uses;
 }
 
@@ -1127,9 +1277,12 @@ function getKeyedSlotUses(
  *
  * Only a link at the right depth counts, so `renderers[key](node)` reaches
  * `renderers.User` but not `renderers.group.User`, and `registry.users[key]`
- * reaches only the slots under `registry.users`. Unlike the static links (where
- * the optional spelling has never been matched), an optional dynamic link is
- * accepted: it is just as able to reach the slot, and missing it costs a crash.
+ * reaches only the slots under `registry.users`.
+ *
+ * An optional link (`ns?.Home`, `renderers?.[key]`) is matched exactly like
+ * the plain one, static or dynamic: it reaches the very same slot, and missing
+ * it costs a crash -- `{show && ns?.Home()}` is as much a conditional call
+ * inside the caller as `{show && ns.Home()}` is.
  */
 function matchesKeyedLink(
   member: NodePath,
@@ -1137,16 +1290,10 @@ function matchesKeyedLink(
   key: string,
   includeDynamic: boolean,
 ): boolean {
-  if (member.isMemberExpression() && member.node.object === object.node) {
-    const name = getReadPropertyName(member.node);
-    return name === key || (includeDynamic && name === undefined);
-  }
-  return (
-    includeDynamic &&
-    member.isOptionalMemberExpression() &&
-    member.node.object === object.node &&
-    getReadPropertyName(member.node) === undefined
-  );
+  if (!member.isMemberExpression() && !member.isOptionalMemberExpression()) return false;
+  if (member.node.object !== object.node) return false;
+  const name = getReadPropertyName(member.node);
+  return name === key || (includeDynamic && name === undefined);
 }
 
 /**
@@ -1228,9 +1375,12 @@ function isPlainCalledComponent(path: NodePath<t.Function>): boolean {
   const holder = path.isObjectMethod() ? path : slot.parentPath;
   if (holder === null) return false;
   const access = getKeyedAccessPath(holder);
-  if (access !== undefined) {
-    const key = access.keys.at(-1);
-    return key !== undefined && isComponentName(key) && getKeyedSlotUses(access, true).some(isPlainCallee);
+  // An object-literal slot with no root binding (an array element, a call
+  // argument) can still be reached through `this` by a sibling member.
+  const key = access?.keys.at(-1) ??
+    (holder.isObjectProperty() || holder.isObjectMethod() ? getPropertyKeyName(holder.node) : undefined);
+  if (key !== undefined) {
+    return isComponentName(key) && getKeyedSafetyUses(holder, access).some(isPlainCallee);
   }
   return getOwnBindingReferences(path, holder)?.some((reference) =>
     isPlainCallee(climbTransparentWrappers(reference))
@@ -1384,36 +1534,24 @@ function resolveReferencedFunction(
  */
 function resolveKeyedFunction(
   origin: NodePath,
-  callee: t.MemberExpression,
+  callee: t.MemberExpression | t.OptionalMemberExpression,
 ): NodePath<t.Function> | undefined {
+  // `this.Leaf()` from a sibling member: `this` is the object literal that
+  // member belongs to (see `getThisSlotUses` for when that is syntactic).
+  const chain = getStaticMemberChain(callee);
+  if (chain !== undefined && t.isThisExpression(chain.root)) {
+    const object = getThisObject(origin);
+    return object === undefined ? undefined : resolveObjectLiteralSlot(object, chain.keys);
+  }
   const access = getStaticMemberPath(callee);
   if (access === undefined) return undefined;
   const binding = origin.scope.getBinding(access.root);
   if (binding === undefined) return undefined;
   // An object literal bound directly to the root: walk the keys down through
-  // nested literals. The *last* matching property wins, as it does at runtime.
+  // nested literals.
   if (binding.path.isVariableDeclarator()) {
-    let container: NodePath | undefined = unwrapTransparentPath(binding.path.get("init") as NodePath);
-    for (const key of access.keys) {
-      if (container === undefined || !container.isObjectExpression()) {
-        container = undefined;
-        break;
-      }
-      const match: NodePath | undefined = container
-        .get("properties")
-        .filter((property) =>
-          (property.isObjectProperty() || property.isObjectMethod()) &&
-          getPropertyKeyName(property.node) === key
-        )
-        .at(-1);
-      container = match?.isObjectProperty()
-        ? unwrapTransparentPath(match.get("value") as NodePath)
-        : match;
-    }
-    if (container !== undefined) {
-      if (container.isObjectMethod()) return container;
-      if (container.isArrowFunctionExpression() || container.isFunctionExpression()) return container;
-    }
+    const found = resolveObjectLiteralSlot(unwrapTransparentPath(binding.path.get("init") as NodePath), access.keys);
+    if (found !== undefined) return found;
   }
   // A member assignment (`Card.Header = () => ...`) anywhere in the module.
   // Only an assignment of the one exact slot counts, and only a single one:
@@ -1433,6 +1571,56 @@ function resolveKeyedFunction(
   if (only === undefined) return undefined;
   const value = unwrapTransparentPath(only.get("right"));
   return value.isArrowFunctionExpression() || value.isFunctionExpression() ? value : undefined;
+}
+
+/**
+ * The function at `keys` inside the object literal `object`, walking down
+ * through nested literals. The *last* matching property wins, as it does at
+ * runtime; anything that is not a literal or not a function resolves to nothing.
+ */
+function resolveObjectLiteralSlot(object: NodePath, keys: readonly string[]): NodePath<t.Function> | undefined {
+  let container: NodePath | undefined = object;
+  for (const key of keys) {
+    if (container === undefined || !container.isObjectExpression()) return undefined;
+    const match: NodePath | undefined = container
+      .get("properties")
+      .filter((property) =>
+        (property.isObjectProperty() || property.isObjectMethod()) &&
+        getPropertyKeyName(property.node) === key
+      )
+      .at(-1);
+    container = match?.isObjectProperty()
+      ? unwrapTransparentPath(match.get("value") as NodePath)
+      : match;
+  }
+  if (container === undefined) return undefined;
+  if (container.isObjectMethod()) return container;
+  if (container.isArrowFunctionExpression() || container.isFunctionExpression()) return container;
+  return undefined;
+}
+
+/**
+ * The object literal a `this` written at `origin` stands for, when that is
+ * syntactic: the nearest non-arrow function is a member of an object literal
+ * (a method, accessor, or `function` property value) and no class sits in
+ * between. The inverse of the walk `getObjectThisReferences` does.
+ */
+function getThisObject(origin: NodePath): NodePath<t.ObjectExpression> | undefined {
+  let owner = origin.getFunctionParent();
+  while (owner !== null && owner.isArrowFunctionExpression()) owner = owner.getFunctionParent();
+  if (owner === null) return undefined;
+  const blocker = origin.findParent((parent) => parent.node === owner!.node || parent.isClass());
+  if (blocker === null || blocker.node !== owner.node) return undefined;
+  if (owner.isObjectMethod()) {
+    const object = owner.parentPath;
+    return object.isObjectExpression() ? object : undefined;
+  }
+  if (!owner.isFunctionExpression()) return undefined;
+  const property = climbTransparentWrappers(owner);
+  const holder = property.parentPath;
+  if (holder === null || !holder.isObjectProperty() || holder.node.value !== property.node) return undefined;
+  const object = holder.parentPath;
+  return object.isObjectExpression() ? object : undefined;
 }
 
 /**
@@ -1762,14 +1950,17 @@ function inspectFunction(
     // to begin with, so it is an ordinary helper call, which this transform
     // does not follow anywhere else either.
     //
-    // A static member callee (`ns.Home()`) is the keyed-slot form of the same
-    // call, and is read for its last key. Only the plain-called-component route
-    // reaches it: the render-callback demotion of a hook is by own binding
+    // A static member callee (`ns.Home()`, `ns?.Home()`, a sibling's
+    // `this.Home()`) is the keyed-slot form of the same call, and is read for
+    // its last key. Only the plain-called-component route reaches it: the
+    // render-callback demotion of a hook is by own binding
     // (`isCalledFromRenderCallback`), so a keyed `ns.useX()` keeps its boundary.
+    const member = t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee) ? callee : undefined;
+    const chain = member === undefined ? undefined : getStaticMemberChain(member);
     const name = t.isIdentifier(callee)
       ? callee.name
-      : t.isMemberExpression(callee)
-        ? getStaticMemberPath(callee)?.keys.at(-1)
+      : chain !== undefined && (t.isIdentifier(chain.root) || t.isThisExpression(chain.root))
+        ? chain.keys.at(-1)
         : undefined;
     if (name === undefined || (!isComponentName(name) && !isHookName(name))) return;
     if (!t.isIdentifier(callee) && !isComponentName(name)) return;
@@ -1788,8 +1979,8 @@ function inspectFunction(
     }
     const target = t.isIdentifier(callee)
       ? resolveReferencedFunction(call, callee.name)
-      : t.isMemberExpression(callee)
-        ? resolveKeyedFunction(call, callee)
+      : member !== undefined
+        ? resolveKeyedFunction(call, member)
         : undefined;
     if (target === undefined || target.isDescendant(functionPath)) return;
     if (visited.has(target.node)) return;
@@ -2529,6 +2720,7 @@ function applyInject(
     addNoMemoDirective(injectedBody);
   }
   path.scope.crawl();
+  invalidateThisReferences(path);
   markTransformed(state);
 }
 
@@ -2573,6 +2765,7 @@ function applyManaged(
   if (options.reactCompiler === "auto") addNoMemoDirective(transformedBody);
   body.replaceWith(transformedBody);
   path.scope.crawl();
+  invalidateThisReferences(path);
   // The author's own call is gone; whether its import is now dead can only be
   // answered once every function in the file has been visited, so record it and
   // let `Program.exit` decide.

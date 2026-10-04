@@ -64,6 +64,12 @@ export default defineConfig({
 });
 ```
 
+In the setup this was tested with (Vite 8, `@vitejs/plugin-react` 6.1),
+`react({ compiler: true })` also needs plugin-react's optional
+`oxc-transform-react` package. Install it next to `babel-plugin-react-compiler`;
+without it the build stops with plugin-react's own "requires the optional
+`oxc-transform-react` package" error.
+
 Under Vite the order is also defended at the hook level. The plugin is
 `enforce: "pre"`, and its `transform` hook additionally declares
 `order: "pre"`, which Vite sorts on within the pre-enforced group. That makes it
@@ -206,11 +212,17 @@ This detection has five known limitations:
   where hook injection is unsafe) or instantiates `Row` as its own component
   (where hook injection is what makes it update), and nothing in the file says
   which — so `Row` keeps its own hook whenever it is independently eligible.
-  Prefer inlining the callback at the call site
-  (`<Grid renderItem={(item) => <li>{item.value}</li>} />`), which the inline
-  detection above already attributes to the owning component, or state the
-  intent explicitly on the referenced function with a `@signalTracking` /
-  `@noSignalTracking` comment.
+  State the intent explicitly on the referenced function with a
+  `@signalTracking` / `@noSignalTracking` comment.
+
+  Writing the callback inline (`<Grid renderItem={(item) => <li>{item.value}</li>} />`)
+  is not a general fix. Its reads are attributed to the owning component, so
+  the owner is transformed, but `Grid` calls `renderItem` during its *own*
+  render, after the owner's function has returned. With the default managed
+  transform the owner's boundary is already closed by then, so the reads are
+  tracked only if `Grid` has a boundary of its own; otherwise the rendered items
+  stay stale. If `Grid` is your own component, opt it in with
+  `@signalTracking` (or have it read the signal itself).
 - A callback imported from another module is not followed, because the
   transform sees one file at a time.
 - A callback reached through an object key (`items.map(parts.Row)`, or
@@ -235,7 +247,8 @@ components.
 ## Components called as plain functions
 
 A PascalCase function that the module calls as a plain function — `Title()`,
-`Title?.()`, `Title!()`, or `ns.Home()` for one held in an object — is never
+`Title?.()`, `Title!()`, or, for one held in an object, `ns.Home()`,
+`ns?.group?.Home()`, or `this.Home()` from a sibling member — is never
 mounted by React as a component of its own: its body simply runs inside the
 caller's render. It therefore never gets a boundary of its own, in any mode
 including `all`, and its JSX and `.value` reads are collected by the component
@@ -263,12 +276,17 @@ Known limitations:
   parent re-renders; the plugin prints a warning for this mix. Use one form
   consistently.
 - Only calls through the function's own binding, or through the exact object
-  key path it is defined at, are recognized, and only within the module. An
-  alias (`const T = Title; T()`), `Title.call(…)`, and calls from other modules
-  are not.
+  key path it is defined at, are recognized, and only within the module. Any
+  link of that path may be optional (`ns?.group.Home()`). Inside a member of
+  the same object literal, `this` counts as that path: `this.Home()` in a
+  method, an accessor, a `function` property value, or an arrow nested in one
+  of those. A nested `function` or class has a `this` of its own and is not
+  followed. An alias (`const T = Title; T()`), `Title.call(…)`, and calls from
+  other modules are not recognized.
 - A function held in an object can also be reached through a computed key:
-  `renderers[node.type](node)`, `renderers[key]?.(arg)`, or
-  `items.map(renderers[key])`. Every slot that such an access can reach (the
+  `renderers[node.type](node)`, `renderers[key]?.(arg)`,
+  `items.map(renderers[key])`, or `this[key](arg)` from a sibling member.
+  Every slot that such an access can reach (the
   same depth, under the same static prefix) gets no boundary of its own,
   because a boundary there would run a variable number of times inside the
   caller. Its reads are *not* collected by the caller, because the key is only
@@ -283,7 +301,20 @@ Known limitations:
   render it as `<Title />`.
 - A keyed function (`ns.Home()`) is collected only when this module defines it
   in an object literal bound to the root, or with exactly one member assignment
-  (`Card.Header = …`).
+  (`Card.Header = …`). A sibling's `this.Home()` is collected from the object
+  literal that member belongs to.
+- An object member the transform cannot see being called keeps its own
+  boundary. That covers a member reached through a parameter
+  (`function render(set, key) { return set[key](); }`), through an alias
+  (`const R = renderers[key]; R(arg)`), through computed destructuring
+  (`const { [key]: R } = renderers`), from an object inside an array
+  (`columns.map((c) => c.Cell(row))`), or from another module. Calling such a
+  member inline is then a hook call inside the caller, which crashes as soon
+  as the number of calls changes. Put `@noSignalTracking` on the member: it
+  then has no boundary of its own, and a transformed caller tracks its reads
+  because they run during the caller's render. Rendering that member as an
+  element (`<icons.Check />`) then gives the element no subscription of its
+  own.
 
 ## Higher-order components
 
@@ -421,9 +452,12 @@ list this plugin first there. Wherever the order of plugins or loaders is in
 your hands, put this plugin before anything that runs React Compiler or
 compiles JSX away. The transform skips dependencies and
 non-JavaScript/TypeScript modules, and never touches `.cjs` / `.cts` modules.
-Extensions are matched case-insensitively, so `App.TSX` is handled exactly like
-`App.tsx`. Plain `.ts` files are parsed as TypeScript without JSX, while
-`.tsx`, `.jsx`, and JavaScript files may use JSX.
+The plugin matches extensions case-insensitively, so it transforms `App.TSX`
+exactly like `App.tsx`. Whether the bundler then compiles such a file the same
+way is up to the bundler, and is not guaranteed: Vite 8 does not compile
+`.JSX` / `.TSX` as JSX / TSX and fails to parse them, with or without this
+plugin. Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`,
+`.jsx`, and JavaScript files may use JSX.
 
 ## Fast Refresh
 

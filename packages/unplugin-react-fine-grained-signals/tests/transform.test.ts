@@ -3135,3 +3135,104 @@ describe("keyed slots reached through dynamic member dispatch", () => {
     });
   });
 });
+
+describe("keyed slots reached through a sibling's this or an optional static path", () => {
+  const combinations = (["auto", "all"] as const).flatMap((mode) =>
+    (["managed", "inject"] as const).map((transform) => [mode, transform] as const)
+  );
+
+  for (const [mode, transform] of combinations) {
+    it(`follows this only where it is the object literal itself (${mode}, ${transform})`, () => {
+      const output = compile(`
+        const count = { value: 1 };
+        const a = {
+          Destructured() { return <p>{count.value}</p>; },
+          Getter() { return <p>{count.value}</p>; },
+          Via: function () { const { Destructured } = this; return Destructured(); },
+          get view() { return this.Getter(); },
+        };
+        const b = {
+          Deep() { return <p>{count.value}</p>; },
+          Shallow() { return <p>{count.value}</p>; },
+          group: { Deep() { return null; } },
+          Tree() { return this?.group?.Deep?.(); },
+        };
+        const c = {
+          InClass() { return <p>{count.value}</p>; },
+          InFunction() { return <p>{count.value}</p>; },
+          Arrow: () => this.InArrowProp(),
+          InArrowProp() { return <p>{count.value}</p>; },
+          Tree() {
+            class Holder { render() { return this.InClass(); } }
+            return [function () { return this.InFunction(); }, Holder];
+          },
+        };
+        export function P() {
+          return <div>{a.Via()}{a.view}{b.Tree()}<b.Deep /><b.Shallow /><c.InClass /><c.InFunction /><c.InArrowProp />{c.Tree()}</div>;
+        }
+      `, mode, transform);
+
+      // Destructured from `this` and called, or called from an accessor or a
+      // `function` property value: each runs inline.
+      expect(slotHasBoundary(output, "Destructured")).toBe(false);
+      expect(slotHasBoundary(output, "Getter")).toBe(false);
+      // `this?.group?.Deep` reaches only the nested slot.
+      expect(slotHasBoundary(output, "Deep")).toBe(true);
+      expect(slotHasBoundary(output, "Shallow")).toBe(true);
+      // A class, a nested `function` and an arrow property each have a
+      // `this` of their own.
+      expect(slotHasBoundary(output, "InClass")).toBe(true);
+      expect(slotHasBoundary(output, "InFunction")).toBe(true);
+      expect(slotHasBoundary(output, "InArrowProp")).toBe(true);
+    });
+
+    it(`treats every optional spelling of a static path as that path (${mode}, ${transform})`, () => {
+      const output = compile(`
+        const count = { value: 1 };
+        const ns = {
+          One() { return <p>{count.value}</p>; },
+          Two() { return <p>{count.value}</p>; },
+          Three() { return <p>{count.value}</p>; },
+          group: {
+            Four() { return <p>{count.value}</p>; },
+            Five: () => <p>{count.value}</p>,
+            Six() { return <p>{count.value}</p>; },
+          },
+          Seven: (item) => <li>{count.value}{item}</li>,
+          Mounted() { return <p>{count.value}</p>; },
+        };
+        export function P({ show, items }) {
+          return (
+            <div>
+              {show && ns?.One()}{show && ns.Two?.()}{show && ns?.Three?.()}
+              {show && ns.group?.Four()}{show && ns?.group.Five()}{show && ns?.group?.Six?.()}
+              {items.map(ns?.Seven)}
+              <ns.Mounted />
+            </div>
+          );
+        }
+      `, mode, transform);
+
+      for (const key of ["One", "Two", "Three", "Four", "Five", "Six", "Seven"]) {
+        expect(slotHasBoundary(output, key)).toBe(false);
+      }
+      expect(slotHasBoundary(output, "Mounted")).toBe(true);
+    });
+  }
+
+  it("credits a caller that reads nothing itself with an optional call's reads", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      const ns = { Home() { return <p>{count.value}</p>; } };
+      const tree = {
+        Leaf() { return <i>{count.value}</i>; },
+        Tree() { return <p>{this.Leaf()}</p>; },
+      };
+      export function Optional() { return <div>{ns?.Home()}</div>; }
+      export function ViaThis() { return <div>{tree.Tree()}</div>; }
+    `, "auto");
+
+    expect(output).toMatch(/function Optional\(\) \{\s+"use no memo";\s+const _signals/);
+    expect(output).toMatch(/function ViaThis\(\) \{\s+"use no memo";\s+const _signals/);
+  });
+});

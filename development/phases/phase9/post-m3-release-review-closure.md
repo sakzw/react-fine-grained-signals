@@ -1496,3 +1496,177 @@ Coverage, with thresholds unchanged:
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The fix is one commit on top of `6f200aa`. No tag, publish, or GitHub Release was performed.
 - The C' (transform) re-audit remediation still remains.
+
+## C' Transform re-audit remediation
+
+### Starting point and scope
+
+- Starting commit: `50b5fdfaf031315535a482848d2fdae14fbf4bc9` (`fix: close react jsx re-audit blockers`), the B' remediation. The A' remediation is directly below it, and both sit on top of `aca0d30`. `main` and `origin/main` both pointed to it, and the working tree was clean.
+- Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+- The A' and B' changes touched only runtime and React files. `packages/unplugin-react-fine-grained-signals/src` is identical in `aca0d30` and `50b5fdf`.
+
+An independent C' re-audit of the transform plugin, bundler integrations and package surface at `aca0d30` found two release blockers. Both come from v0.2's new object-method targeting (`{ Home() { … } }`), which `0.1.1` left untransformed. Only those two are fixed in code. The audit's other findings are documentation corrections, listed under "Documentation-only outcomes".
+
+### C'1 — a member called through a sibling's `this` received a hook boundary
+
+**Reproduction.**
+
+```jsx
+const renderers = {
+  Leaf(i) { return <li>L{i}{s.value}</li>; },
+  Tree(count) { return <ul>{Array.from({ length: count }, (_, i) => this.Leaf(i))}</ul>; },
+};
+export function App() { return <div>{renderers.Tree(n.value)}</div>; }
+// aca0d30: "Rendered more hooks than during the previous render" when n goes from 1 to 3
+```
+
+`Tree` was correctly kept off a boundary because of `renderers.Tree()`. `Leaf` received one, but `this.Leaf(i)` runs it once per item inside `App`'s render. The crash reproduced in `auto` and `all`, with `managed` and `inject`. `0.1.1` rendered and updated correctly, because it did not transform methods.
+
+**Root cause.** The keyed-slot use walk (`getKeyedSlotUses`) follows references to the object's root binding (`renderers.Leaf`, `renderers[key]`). `this` is not a binding, so `this.Leaf` and `this[key]` inside another member of the same object literal were never seen. Class fields and `this.Row = …` were already excluded for exactly this reason. Object methods became targets without the matching use walk.
+
+**Fix.**
+
+- `getThisSlotUses(holder)` collects the uses of an object-literal slot reached through `this`. `this` counts only where its identity is syntactic:
+  - inside a non-arrow member of that object literal: a method, an accessor, or a `function` property value;
+  - inside arrows nested in such a member, which inherit its `this`.
+
+  A nested `function` or class rebinds `this` and is skipped. Each enclosing object literal is its own level. `this.Leaf` in a member of the object holding `Leaf` reaches it, and `this.group.Leaf` in a member of the outer object reaches it through `group`. A same-named slot in another object literal is never touched. A computed `this[key]` reaches every slot at its depth, like `renderers[key]` does.
+- The chain-following part of `getKeyedSlotUses` became `followKeyedChain`, shared by root references and `this` references. A one-step `const { Leaf } = this` is followed exactly as `const { Leaf } = renderers` already was.
+- `getKeyedSafetyUses` joins the root-binding uses (computed keys included) with the `this` uses. Both safety exclusions, per-item callback (`isKeyedRenderCallback`) and plain call (`isPlainCalledComponent`), now ask it. A slot in an unrooted object literal (an array element, a call argument) is also checked for `this` uses.
+- `resolveKeyedFunction` resolves a static `this.Key` callee through the object literal that `this` stands for (`getThisObject`, then `resolveObjectLiteralSlot`). The caller then collects the member's reads, as it does for `ns.Home()`. Reads through a computed `this[key]` are not collected, matching `renderers[key]`.
+- Each object literal's `this` references are collected once into a node-keyed `WeakMap`. When a function is rewritten, `invalidateThisReferences` drops the entries of object literals inside it, and those around it if it contains a `this`. No test distinguishes this invalidation: with it disabled, all tests still pass, because Babel re-sets-up the reused expression paths. It is kept as a cheap safety net.
+
+### C'2 — a member called through an optional static key path received a hook boundary
+
+**Reproduction.**
+
+```jsx
+const ns = { Home() { return <b>H{s.value}</b>; } };
+export function App() { return <div>{n.value}{show.value && ns?.Home()}</div>; }
+// aca0d30: "Rendered more hooks than during the previous render" when show becomes true
+```
+
+`ns.group?.Home()` crashed the same way. `ns.Home?.()` was already handled, because only its call is optional. The arrow-property spelling crashed in `0.1.1` too. The method spelling is a v0.2 regression.
+
+**Root cause.** Static key-path handling accepted only `MemberExpression` links:
+
+- `matchesKeyedLink` accepted an `OptionalMemberExpression` only for a dynamic key;
+- `getStaticMemberPath` and `resolveKeyedFunction` accepted only `MemberExpression`;
+- the plain-call read fold resolved only `MemberExpression` callees.
+
+**Fix.** Every link may be either member form when its key is statically readable:
+
+- `matchesKeyedLink` matches `MemberExpression` and `OptionalMemberExpression` alike, for static and dynamic keys;
+- `getStaticMemberPath` (now built on `getStaticMemberChain`) walks both forms;
+- `resolveKeyedFunction` and `foldDirectlyCalledRenderCallbacks` accept an optional-member callee.
+
+`ns.Home`, `ns?.Home`, `ns.Home?.()`, `ns?.Home?.()`, `ns.group.Home`, `ns?.group.Home`, `ns.group?.Home` and `ns?.group?.Home` now resolve to the same slot. The dynamic-key safety logic is unchanged.
+
+### Regression coverage
+
+`tests/react-execution.test.ts` (transform, Oxc, in-memory link, React under jsdom) gained 30 tests:
+
+- C'1: static `this.Leaf()`, `this?.Leaf()`, `this[key]()`, `this?.[key]?.()`, `items.map(this.Row)` and `Array.from(n, this.Row)`, through list growth and shrink and a conditional call;
+- C'1 isolation: `this.inner.Leaf()` reaches only the nested slot. The outer `Leaf`, a JSX-only `<this.Panel />` member, a member a nested `function` names through its own `this`, and a same-named slot in another object keep their boundaries and stay reactive;
+- C'1 rewrite order: a `this`-using keyed hook (`parts.useRows()`) rewritten before its sibling is decided;
+- C'2: `ns?.Home()`, `ns.Home?.()`, `ns?.Home?.()`, `ns.group?.Home()`, `ns?.group.Home()`, `ns?.group?.Home()`, `ns?.group?.Deep?.()` and `items.map(ns?.Row)`, for the method and arrow spellings, toggled and through list changes. A JSX-only member next to `jsxOnly?.Other()` keeps its boundary, and a caller that reads no signal of its own is credited with `solo?.Home()`'s reads;
+- interaction: a member reached by both `this.Leaf()` and `ns?.Leaf()`;
+- a control per blocker running the old output by hand;
+- the `@noSignalTracking` workaround for an object member reached through a parameter, an alias and an array of objects, with an unannotated control that crashes;
+- the inline render prop: a control that stays stale under `managed`, and `@signalTracking` on the receiving component fixing it under `managed` and `inject`.
+
+Each matrix runs `auto` and `all`, `managed` and `inject`. `tests/transform.test.ts` gained 9 transform-output tests: destructured `this`, accessors, `function` property values, class / nested-function / arrow-property `this` isolation, every optional spelling of a static path, and read crediting.
+
+Against the `aca0d30` transform (identical to `50b5fdf`'s), 29 of the 39 new tests fail. The 10 that pass on both are the two hand-written controls, the three render-prop tests and the five `@noSignalTracking` tests, none of which depend on the fix.
+
+The re-audit's scratch matrices were re-run against tarballs packed from the final tree, in a clean consumer:
+
+| Matrix | `aca0d30` | Final |
+| --- | --- | --- |
+| Dynamic / keyed / plain-call / render-callback execution (124 runs) | 96 pass | 108 pass |
+| Function-shape targeting (428 runs) | 423 pass | 423 pass |
+| Parameter relocation (44 runs) | 40 pass | 40 pass |
+| JSX pragma through Vite 8 / Oxc | all pass | all pass |
+
+The remaining dispatch failures are the four alias / parameter / array / computed-destructuring shapes listed under "Documentation-only outcomes". The shape failures are the inline render prop under `managed`, and the relocation failures are the two documented skip cases.
+
+**Bundlers.** Vite 8.3, Rollup 4.63, webpack 5.111, Rspack 2.2 and esbuild 0.28 built and executed the same fixtures from the packed tarballs, with `managed` and `inject`: StrictMode, list growth and shrink, keyed callbacks, plain calls, dynamic keyed dispatch, a JSX-only object-method guard, the sibling `this` call, optional static calls, a JSX pragma file, TypeScript, and `.TSX` (except under Vite). All 78 runs passed.
+
+### Performance
+
+The packed `aca0d30` and final plugins ran interleaved in one process, in alternating order, as the median of 100 rounds after warmup:
+
+| Corpus | `aca0d30` | Final | Change |
+| --- | ---: | ---: | ---: |
+| 120 components (the existing benchmark's shape; no object members) | 50.3 ms | 53.9 ms | +7.3% |
+| 400 object members, none using `this` (identical output) | 215.0 ms | 236.2 ms | +9.9% |
+| 40 objects × 20 members with `this` and optional calls | 372.4 ms | 163.1 ms | −56.2% |
+| Mixed file | 47.8 ms | 35.6 ms | −25.6% |
+
+The first corpus never reaches the new code, so its change is the noise level; repeated runs ranged from −12% to +23%. The identical-output member corpus is the like-for-like cost of the new analysis, and it is within that noise. The `this`-heavy corpora got faster because their members no longer receive boundaries, so far fewer functions are rewritten.
+
+Before the cache, the identical-output member corpus measured +80–95%: every candidacy check re-scanned the object's members. Clearing the whole cache on each rewrite still cost +75–95% there, which is why invalidation is targeted.
+
+### Size
+
+The plugin has no size budget. Its main chunk (`dist/unplugin-*.js`) grew from 92,317 to 99,846 bytes raw (+8.2%) and from 26,982 to 29,050 bytes gzip -9 (+7.7%). Most of the growth is the new doc comments, which the build keeps. The runtime bundles are unchanged, and `pnpm size` passes with unchanged budgets.
+
+### Documentation-only outcomes
+
+- **Object-method migration hazard.** The plugin only recognizes inline calls it can resolve in the same file. A method-spelled member that worked in `0.1.1` because it was never transformed can now crash if the module calls it another way:
+  - through a parameter (`function render(set, key) { return set[key](); }`);
+  - through an alias (`const R = renderers[key]; R(arg)`);
+  - through computed destructuring (`const { [key]: R } = renderers`);
+  - from an array of config objects (`columns.map((c) => c.Cell(row))`);
+  - from another module.
+
+  No alias, interprocedural, or cross-module analysis was added. The migration guide and the plugin README now describe the hazard and the recognized call forms. They recommend `@noSignalTracking` on such a member, which the new tests verify for the parameter, alias and array shapes. A transformed caller then tracks the member's reads.
+- **Inline render props.** The README recommended `<Grid renderItem={(item) => …} />` as a workaround. Under the default `managed` transform it can stay stale: the owner is transformed, but `Grid` calls the callback in its own render, after the owner's boundary has closed. This was also true in `0.1.1`. The README now describes this, and recommends `@signalTracking` on the receiving component, which a test verifies.
+- **Uppercase extensions.** The plugin transforms `App.TSX` like `App.tsx`, but Vite 8 does not compile `.JSX` / `.TSX` as JSX / TSX, with or without the plugin. The README and the migration guide now say so and make no cross-bundler guarantee.
+- **React Compiler prerequisite.** In the tested Vite 8 / `@vitejs/plugin-react` 6.1 setup, `react({ compiler: true })` also needs plugin-react's optional `oxc-transform-react` package. The README now says so, scoped to that setup.
+
+All four corrections are made in English and Japanese, in `packages/unplugin-react-fine-grained-signals/README*.md` and `docs/migration/v0.2*.md`.
+
+### Validation
+
+The complete gate ran on the final code, with no threshold, budget, or worker-limit change. As in B', the browser gate ran with Volta's Node 24.21.0 image directory first on `PATH`.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 36 files / 517 tests; transform 5 files / 354 passed, 3 skipped (previously 315) |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed: 3 independent Alien systems |
+| `pnpm test:mixed-version` | passed against the published `0.1.1` |
+| `pnpm test:consumer` | passed |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 48/48 (see below) |
+| `pnpm size` | passed with unchanged budgets |
+| `git diff --check` | passed |
+
+The first `pnpm test:coverage` run lost 15 runtime test files to vitest worker start-up timeouts on this machine and failed the thresholds on the partial data. The unmodified command was re-run and passed with every file.
+
+The first `pnpm test:browser` run failed one test: WebKit's "reveals tracked readers hidden by a transition with the latest value", from B'. The re-run passed 48/48. The test is intermittent on WebKit regardless of this change:
+
+- the transform emits byte-identical output for every file in `examples/browser/src`, `src/` and `e2e/` before and after the change;
+- in three interleaved cycles of ten repeats, `50b5fdf` failed 2 of 30 and the final tree failed 2 of 30.
+
+The test waits for the bare reader to hide and then snapshots evaluation counts, so a managed reader still mid-transition can re-evaluate. It is left unchanged, because it belongs to B'.
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.47% | 88.34% | 98.12% | 95.58% |
+| Transform (thresholds 92/90/92/95) | 93.52% | 91.32% | 96.53% | 97.15% |
+
+`src/internal/transform.ts` went from 93.93 / 91.66 / 96.87 / 97.76% to 94.38 / 91.78 / 97.88 / 98.09%.
+
+### State after the C' transform re-audit remediation
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The fix is one commit on top of `50b5fdf`. No tag, publish, or GitHub Release was performed.
+- Implementation remediation of the A', B' and C' re-audits is complete. A fresh targeted independent closure verification remains before release.

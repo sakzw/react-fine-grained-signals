@@ -576,3 +576,578 @@ export function Feed() {
     }
   }
 });
+
+function transformedCode(
+  source: string,
+  mode: ReactFineGrainedSignalsMode,
+  codegen: ReactFineGrainedSignalsTransform,
+): string {
+  return transformReactFineGrainedSignals(source, "Fixture.jsx", {
+    importSource: "react-fine-grained-signals",
+    mode,
+    transform: codegen,
+    reactCompiler: "auto",
+    reactImportSource: "react",
+  })?.code ?? source;
+}
+
+/**
+ * The emitted text of the member that starts with `head` inside
+ * `const object = {`, up to the next member at the same indentation.
+ */
+function memberSource(code: string, object: string, head: string): string {
+  const start = code.indexOf(head, code.indexOf(`const ${object} = {`));
+  const indent = code.slice(code.lastIndexOf("\n", start) + 1, start);
+  const end = code.indexOf(`\n${indent}}`, start);
+  return code.slice(start, end === -1 ? undefined : end);
+}
+
+const HOOK = /_useManagedSignals\(\)|_useSignalTracking\(\)/;
+
+const THIS_LISTS = ["L", "O", "D", "Q", "M", "F"];
+const OPTIONAL_ROWS = ["R", "r"];
+
+/** The text of the toggled block in the optional-path fixture's `Calls`. */
+function optionalCallsText(suffix: string): string {
+  return `1${["H", "H", "H", "G", "G", "G", "D", "A", "g", "g"].map((prefix) => prefix + suffix).join("")}`;
+}
+
+/** `${prefix}${index}${suffix}` for each of `count` items, list after list. */
+function itemText(prefixes: string[], count: number, suffix: string): string {
+  return prefixes
+    .map((prefix) => Array.from({ length: count }, (_, i) => `${prefix}${i}${suffix}`).join(""))
+    .join("");
+}
+
+describe("object-literal members reached through a sibling's `this`", () => {
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const suffix = signal("!");
+export const count = signal(1);
+export const show = signal(false);
+export const kind = signal("Leaf");
+
+const plain = {
+  Leaf(i) { return <li key={i}>L{i}{suffix.value}</li>; },
+  Tree(n) { return <ul>{Array.from({ length: n }, (_, i) => this.Leaf(i))}</ul>; },
+};
+const optional = {
+  Leaf(i) { return <li key={i}>O{i}{suffix.value}</li>; },
+  Tree(n) { return <ul>{Array.from({ length: n }, (_, i) => this?.Leaf(i))}</ul>; },
+};
+const dynamic = {
+  Leaf(i) { return <li key={i}>D{i}{suffix.value}</li>; },
+  Tree(n, k) { return <ul>{Array.from({ length: n }, (_, i) => this[k](i))}</ul>; },
+};
+const optionalDynamic = {
+  Leaf(i) { return <li key={i}>Q{i}{suffix.value}</li>; },
+  Tree(n, k) { return <ul>{Array.from({ length: n }, (_, i) => this?.[k]?.(i))}</ul>; },
+};
+const mapped = {
+  Row: (i) => <li key={i}>M{i}{suffix.value}</li>,
+  List(n) { return <ul>{Array.from({ length: n }, (_, i) => i).map(this.Row)}</ul>; },
+};
+const fromed = {
+  Row(_, i) { return <li key={i}>F{i}{suffix.value}</li>; },
+  List(n) { return <ul>{Array.from({ length: n }, this.Row)}</ul>; },
+};
+const conditional = {
+  Badge() { return <b>B{suffix.value}</b>; },
+  Card() { return <p>{show.value && this.Badge()}</p>; },
+};
+
+export function Lists() {
+  return (
+    <div>
+      {plain.Tree(count.value)}
+      {optional.Tree(count.value)}
+      {dynamic.Tree(count.value, kind.value)}
+      {optionalDynamic.Tree(count.value, kind.value)}
+      {mapped.List(count.value)}
+      {fromed.List(count.value)}
+    </div>
+  );
+}
+
+export function Conditional() {
+  return <div>{conditional.Card()}</div>;
+}
+`;
+
+  // What the transform emitted for `plain.Leaf` before `this` was followed.
+  const previousOutput = `
+import { signal } from "react-fine-grained-signals";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
+
+export const suffix = signal("!");
+export const count = signal(1);
+
+const plain = {
+  Leaf(i) {
+    "use no memo";
+    const store = useManagedSignals();
+    try {
+      return <li key={i}>L{i}{suffix.value}</li>;
+    } finally {
+      store.finish();
+    }
+  },
+  Tree(n) { return <ul>{Array.from({ length: n }, (_, i) => this.Leaf(i))}</ul>; },
+};
+
+export function Lists() {
+  "use no memo";
+  const store = useManagedSignals();
+  try {
+    return <div>{plain.Tree(count.value)}</div>;
+  } finally {
+    store.finish();
+  }
+}
+`;
+
+
+  it("control: a boundary in the member a sibling calls through this breaks the caller's hook count", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const module = await loadModule(previousOutput, { transform: false });
+    mount(module.Lists);
+
+    expect(() => write(module, "count", 3)).toThrow(/hooks/i);
+  });
+
+  for (const mode of ["auto", "all"] as const) {
+    for (const codegen of ["managed", "inject"] as const) {
+      it(`keeps every this-reached member off a boundary (${mode}, ${codegen})`, async () => {
+        const code = transformedCode(source, mode, codegen);
+        for (const [object, head] of [
+          ["plain", "Leaf("],
+          ["optional", "Leaf("],
+          ["dynamic", "Leaf("],
+          ["optionalDynamic", "Leaf("],
+          ["mapped", "Row:"],
+          ["fromed", "Row("],
+          ["conditional", "Badge("],
+        ] as const) {
+          expect(memberSource(code, object, head)).not.toMatch(HOOK);
+        }
+
+        const module = await loadModule(source, { mode, codegen });
+        const container = mount(module.Lists);
+        expect(container.textContent).toBe(itemText(THIS_LISTS, 1, "!"));
+        write(module, "count", 3);
+        expect(container.textContent).toBe(itemText(THIS_LISTS, 3, "!"));
+        write(module, "suffix", "?");
+        expect(container.textContent).toBe(itemText(THIS_LISTS, 3, "?"));
+        write(module, "count", 1);
+        expect(container.textContent).toBe(itemText(THIS_LISTS, 1, "?"));
+
+        const card = mount(module.Conditional);
+        expect(card.textContent).toBe("");
+        write(module, "show", true);
+        expect(card.textContent).toBe("B?");
+        write(module, "show", false);
+        expect(card.textContent).toBe("");
+        write(module, "show", true);
+        expect(card.textContent).toBe("B?");
+      });
+    }
+  }
+
+  const isolation = `
+import { signal } from "react-fine-grained-signals";
+
+export const suffix = signal("!");
+
+const outer = {
+  inner: {
+    Leaf() { return <i>I{suffix.value}</i>; },
+  },
+  Leaf() { return <b>X{suffix.value}</b>; },
+  Panel() { return <u>P{suffix.value}</u>; },
+  Tree() { return <p>{this.inner.Leaf()}<this.Panel /></p>; },
+};
+const rebinding = {
+  Leaf() { return <s>R{suffix.value}</s>; },
+  Tree() { return [0].map(function () { return this.Leaf; }); },
+};
+const unrelated = {
+  Leaf() { return <em>U{suffix.value}</em>; },
+};
+
+export function Tree() {
+  return <div>{outer.Tree()}</div>;
+}
+
+export function Shell() {
+  return <div><outer.Leaf /><outer.Panel /><rebinding.Leaf /><unrelated.Leaf /></div>;
+}
+`;
+
+  for (const mode of ["auto", "all"] as const) {
+    for (const codegen of ["managed", "inject"] as const) {
+      it(`limits this to its own object literal and keeps JSX-only members reactive (${mode}, ${codegen})`, async () => {
+        const code = transformedCode(isolation, mode, codegen);
+        // `this.inner.Leaf()` reaches the nested slot only.
+        expect(memberSource(code, "outer", "inner:")).not.toMatch(HOOK);
+        // The outer `Leaf`, the JSX-only `Panel`, a member a nested `function`
+        // names through its own `this`, and a same-named slot in another
+        // object keep their boundaries.
+        expect(memberSource(code, "outer", "\n  Leaf(")).toMatch(HOOK);
+        expect(memberSource(code, "outer", "Panel(")).toMatch(HOOK);
+        expect(memberSource(code, "rebinding", "Leaf(")).toMatch(HOOK);
+        expect(memberSource(code, "unrelated", "Leaf(")).toMatch(HOOK);
+
+        const module = await loadModule(isolation, { mode, codegen });
+        const tree = mount(module.Tree);
+        const shell = mount(module.Shell);
+        expect(tree.textContent).toBe("I!P!");
+        expect(shell.textContent).toBe("X!P!R!U!");
+        write(module, "suffix", "?");
+        expect(tree.textContent).toBe("I?P?");
+        expect(shell.textContent).toBe("X?P?R?U?");
+      });
+    }
+  }
+});
+
+describe("a this-using member rewritten before its sibling is decided", () => {
+  // `useRows` is a keyed hook, so it keeps its own boundary and is rewritten --
+  // and it is visited before `Leaf`. The rewrite moves the statements holding
+  // `this` under a new block; `Leaf` must still see both reads through `this`.
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const suffix = signal("!");
+export const count = signal(1);
+
+const parts = {
+  useRows() {
+    const { Leaf } = this;
+    const items = Array.from({ length: count.value }, (_, i) => i);
+    return [...items.map(Leaf), ...items.map((i) => this.Leaf(i + 10))];
+  },
+  Leaf(i) { return <li key={i}>{i}{suffix.value}</li>; },
+};
+
+export function Page() {
+  return <ul>{parts.useRows()}</ul>;
+}
+`;
+
+  for (const mode of ["auto", "all"] as const) {
+    for (const codegen of ["managed", "inject"] as const) {
+      it(`keeps the sibling off a boundary (${mode}, ${codegen})`, async () => {
+        const code = transformedCode(source, mode, codegen);
+        expect(memberSource(code, "parts", "useRows(")).toMatch(HOOK);
+        expect(memberSource(code, "parts", "\n  Leaf(")).not.toMatch(HOOK);
+
+        const module = await loadModule(source, { mode, codegen });
+        const page = mount(module.Page);
+        expect(page.textContent).toBe("0!10!");
+        write(module, "count", 3);
+        expect(page.textContent).toBe("0!1!2!10!11!12!");
+        write(module, "suffix", "?");
+        expect(page.textContent).toBe("0?1?2?10?11?12?");
+        write(module, "count", 1);
+        expect(page.textContent).toBe("0?10?");
+      });
+    }
+  }
+});
+
+describe("object-literal members called through an optional static key path", () => {
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const suffix = signal("!");
+export const count = signal(1);
+export const show = signal(false);
+
+const ns = {
+  Home() { return <b>H{suffix.value}</b>; },
+  group: {
+    Home: () => <i>G{suffix.value}</i>,
+    Deep() { return <s>D{suffix.value}</s>; },
+  },
+  Row(i) { return <li key={i}>R{i}{suffix.value}</li>; },
+};
+const arrows = {
+  Home: () => <b>A{suffix.value}</b>,
+  group: { Home() { return <i>g{suffix.value}</i>; } },
+  Row: (i) => <li key={i}>r{i}{suffix.value}</li>,
+};
+const solo = {
+  Home() { return <em>S{suffix.value}</em>; },
+};
+const jsxOnly = {
+  Panel() { return <u>P{suffix.value}</u>; },
+  Other() { return null; },
+};
+
+export function Calls() {
+  return (
+    <div>
+      {count.value}
+      {show.value && (
+        <>
+          {ns?.Home()}{ns.Home?.()}{ns?.Home?.()}
+          {ns.group?.Home()}{ns?.group.Home()}{ns?.group?.Home()}{ns?.group?.Deep?.()}
+          {arrows?.Home()}{arrows.group?.Home()}{arrows?.group?.Home?.()}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function Rows() {
+  const items = Array.from({ length: count.value }, (_, i) => i);
+  return <ul>{items.map(ns?.Row)}{items.map(arrows?.Row)}</ul>;
+}
+
+export function Credited() {
+  return <div>{solo?.Home()}</div>;
+}
+
+export function Guard() {
+  return <div><jsxOnly.Panel />{jsxOnly?.Other()}</div>;
+}
+`;
+
+  // What the transform emitted for `ns.Home` before optional static links were matched.
+  const previousOutput = `
+import { signal } from "react-fine-grained-signals";
+import { useManagedSignals } from "react-fine-grained-signals/runtime";
+
+export const suffix = signal("!");
+export const show = signal(false);
+
+const ns = {
+  Home() {
+    "use no memo";
+    const store = useManagedSignals();
+    try {
+      return <b>H{suffix.value}</b>;
+    } finally {
+      store.finish();
+    }
+  },
+};
+
+export function Calls() {
+  "use no memo";
+  const store = useManagedSignals();
+  try {
+    return <div>{show.value && ns?.Home()}</div>;
+  } finally {
+    store.finish();
+  }
+}
+`;
+
+  it("control: a boundary in an optional-called member is a conditional hook in the caller", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const module = await loadModule(previousOutput, { transform: false });
+    mount(module.Calls);
+
+    expect(() => write(module, "show", true)).toThrow(/hooks/i);
+  });
+
+
+  for (const mode of ["auto", "all"] as const) {
+    for (const codegen of ["managed", "inject"] as const) {
+      it(`survives toggled optional calls and per-item optional callbacks (${mode}, ${codegen})`, async () => {
+        const code = transformedCode(source, mode, codegen);
+        for (const [object, head] of [
+          ["ns", "Home("],
+          ["ns", "Home:"],
+          ["ns", "Deep("],
+          ["ns", "Row("],
+          ["arrows", "Home:"],
+          ["arrows", "group:"],
+          ["arrows", "Row:"],
+        ] as const) {
+          expect(memberSource(code, object, head)).not.toMatch(HOOK);
+        }
+        expect(memberSource(code, "jsxOnly", "Panel(")).toMatch(HOOK);
+
+        const module = await loadModule(source, { mode, codegen });
+        const calls = mount(module.Calls);
+        expect(calls.textContent).toBe("1");
+        write(module, "show", true);
+        expect(calls.textContent).toBe(optionalCallsText("!"));
+        write(module, "suffix", "?");
+        expect(calls.textContent).toBe(optionalCallsText("?"));
+        write(module, "show", false);
+        expect(calls.textContent).toBe("1");
+        write(module, "show", true);
+        expect(calls.textContent).toBe(optionalCallsText("?"));
+
+        const list = mount(module.Rows);
+        expect(list.textContent).toBe(itemText(OPTIONAL_ROWS, 1, "?"));
+        write(module, "count", 3);
+        expect(list.textContent).toBe(itemText(OPTIONAL_ROWS, 3, "?"));
+        write(module, "count", 1);
+        expect(list.textContent).toBe(itemText(OPTIONAL_ROWS, 1, "?"));
+
+        // `Credited` reads no signal of its own: it subscribes only because the
+        // optional call's reads are credited to it.
+        const credited = mount(module.Credited);
+        const guard = mount(module.Guard);
+        expect(credited.textContent).toBe("S?");
+        expect(guard.textContent).toBe("P?");
+        write(module, "suffix", "#");
+        expect(credited.textContent).toBe("S#");
+        expect(guard.textContent).toBe("P#");
+      });
+    }
+  }
+});
+
+describe("a member reached through both a sibling's this and an optional root path", () => {
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const suffix = signal("!");
+export const count = signal(1);
+export const show = signal(false);
+
+const ns = {
+  Leaf(i) { return <li key={i}>L{i}{suffix.value}</li>; },
+  Tree(n) { return <ul>{Array.from({ length: n }, (_, i) => this.Leaf(i))}</ul>; },
+};
+
+export function Both() {
+  return <div>{ns?.Tree(count.value)}{show.value && ns?.Leaf(9)}</div>;
+}
+`;
+
+  for (const mode of ["auto", "all"] as const) {
+    for (const codegen of ["managed", "inject"] as const) {
+      it(`stays off a boundary and keeps the caller subscribed (${mode}, ${codegen})`, async () => {
+        expect(memberSource(transformedCode(source, mode, codegen), "ns", "Leaf(")).not.toMatch(HOOK);
+        const module = await loadModule(source, { mode, codegen });
+        const both = mount(module.Both);
+        expect(both.textContent).toBe("L0!");
+        write(module, "count", 3);
+        write(module, "show", true);
+        expect(both.textContent).toBe("L0!L1!L2!L9!");
+        write(module, "suffix", "?");
+        expect(both.textContent).toBe("L0?L1?L2?L9?");
+        write(module, "show", false);
+        write(module, "count", 1);
+        expect(both.textContent).toBe("L0?");
+      });
+    }
+  }
+});
+
+describe("an inline render prop the receiving component calls in its own render", () => {
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const label = signal("a");
+
+function List({ render }) {
+  return render();
+}
+
+export function Owner() {
+  return <List render={() => <b>{label.value}</b>} />;
+}
+`;
+
+  // The owner is transformed for the callback's read, but the callback runs in
+  // List's render, after the owner's managed boundary has closed.
+  it("control: the managed owner's boundary does not cover the receiver's call", async () => {
+    const module = await loadModule(source);
+    const container = mount(module.Owner);
+    write(module, "label", "b");
+    expect(container.textContent).toBe("a");
+  });
+
+  for (const codegen of ["managed", "inject"] as const) {
+    it(`updates once the receiver carries its own boundary (${codegen})`, async () => {
+      const module = await loadModule(source.replace("function List", "/** @signalTracking */\nfunction List"), { codegen });
+      const container = mount(module.Owner);
+      expect(container.textContent).toBe("a");
+      write(module, "label", "b");
+      expect(container.textContent).toBe("b");
+    });
+  }
+});
+
+describe("@noSignalTracking on an object member the transform cannot follow", () => {
+  // The member is reached only through a parameter, which no use-site walk
+  // follows, so without the annotation it gets a boundary of its own.
+  const source = `
+import { signal } from "react-fine-grained-signals";
+
+export const suffix = signal("!");
+export const count = signal(1);
+export const show = signal(false);
+
+const icons = {
+  /** @noSignalTracking */
+  Check() { return <i>C{suffix.value}</i>; },
+  /** @noSignalTracking */
+  Cross() { return <i>X{suffix.value}</i>; },
+};
+const columns = [
+  {
+    /** @noSignalTracking */
+    Cell(i) { return <td key={i}>{i}{suffix.value}</td>; },
+  },
+];
+
+function render(set, key) {
+  return set[key]();
+}
+
+export function Toolbar() {
+  const key = "Cr" + "oss";
+  const Alias = icons[key];
+  return <p>{count.value}{show.value && render(icons, "Check")}{show.value && Alias()}</p>;
+}
+
+export function Table() {
+  const rows = Array.from({ length: count.value }, (_, i) => i);
+  return <table><tbody><tr>{rows.map((r) => columns.map((c) => c.Cell(r)))}</tr></tbody></table>;
+}
+`;
+
+  it("control: without the annotation the unfollowed members get conditional or per-item hooks", async () => {
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const unannotated = source.replaceAll("/** @noSignalTracking */", "");
+    const toolbar = await loadModule(unannotated);
+    mount(toolbar.Toolbar);
+    expect(() => write(toolbar, "show", true)).toThrow(/hooks/i);
+
+    const table = await loadModule(unannotated);
+    mount(table.Table);
+    expect(() => write(table, "count", 3)).toThrow(/hooks/i);
+  });
+
+  for (const mode of ["auto", "all"] as const) {
+    for (const codegen of ["managed", "inject"] as const) {
+      it(`keeps the members off a boundary while the caller tracks their reads (${mode}, ${codegen})`, async () => {
+        const module = await loadModule(source, { mode, codegen });
+        const toolbar = mount(module.Toolbar);
+        const table = mount(module.Table);
+        expect(toolbar.textContent).toBe("1");
+        expect(table.textContent).toBe("0!");
+        write(module, "show", true);
+        expect(toolbar.textContent).toBe("1C!X!");
+        write(module, "count", 3);
+        expect(table.textContent).toBe("0!1!2!");
+        write(module, "suffix", "?");
+        expect(toolbar.textContent).toBe("3C?X?");
+        expect(table.textContent).toBe("0?1?2?");
+        write(module, "show", false);
+        write(module, "count", 1);
+        expect(toolbar.textContent).toBe("1");
+        expect(table.textContent).toBe("0?");
+      });
+    }
+  }
+});

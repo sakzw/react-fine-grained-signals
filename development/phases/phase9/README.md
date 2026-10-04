@@ -461,3 +461,8 @@ The chronology after the freeze is:
    - B'2: a `useSignalTracking()` or `useManagedSignals()` component deleted inside an `<Activity>` hidden by a transition or a default-lane update kept its signal subscriptions forever. The hidden pre-render cancelled their scheduled disposal.
 
    The `jsx-runtime` bundle grew by 39 bytes; no size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. The C' re-audit remediation still remains.
+12. The independent C' transform / packaging re-audit of `aca0d30` found two release blockers, both now fixed (see the [closure record](./post-m3-release-review-closure.md#c-transform-re-audit-remediation)). Both come from v0.2's new object-method targeting:
+   - C'1: a member called by a sibling member through `this` (`this.Leaf(i)`) received a hook boundary. The caller ran it a variable number of times, and React crashed.
+   - C'2: a member called through an optional static key path (`ns?.Home()`, `ns.group?.Home()`) received a hook boundary, which crashed on the first conditional call.
+
+   The documentation now states that object methods are newly transformed and that the plugin only recognizes inline calls it can resolve in the same file, with a tested `@noSignalTracking` workaround for the rest. It also corrects the inline render-prop workaround, the uppercase-extension claim, and the React Compiler setup's `oxc-transform-react` prerequisite. No size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. Implementation remediation of all three re-audits is complete; a fresh targeted independent closure verification remains.
