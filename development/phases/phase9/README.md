@@ -466,3 +466,7 @@ The chronology after the freeze is:
    - C'2: a member called through an optional static key path (`ns?.Home()`, `ns.group?.Home()`) received a hook boundary, which crashed on the first conditional call.
 
    The documentation now states that object methods are newly transformed and that the plugin only recognizes inline calls it can resolve in the same file, with a tested `@noSignalTracking` workaround for the rest. It also corrects the inline render-prop workaround, the uppercase-extension claim, and the React Compiler setup's `oxc-transform-react` prerequisite. No size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. Implementation remediation of all three re-audits is complete; a fresh targeted independent closure verification remains.
+13. The final targeted closure verification of `4622aee` confirmed every A', B' and C' blocker closed, and found one more release blocker in the direct-binding lifecycle, now fixed (see the [closure record](./post-m3-release-review-closure.md#final-direct-binding-closure)):
+   - D1: when a signal-bound prop or `style` switched to a plain value, or to another signal, while another signal binding on the same element stayed, the re-attach refreshed the binding that was going away. Its stale value overwrote React's plain value for good. This dates back to at least `7a84712`.
+
+   The `jsx-runtime` bundle grew by 5 bytes; no size budget changed. Versions stay `0.2.0`; nothing was tagged, published, or released. A final independent direct-binding verification remains.

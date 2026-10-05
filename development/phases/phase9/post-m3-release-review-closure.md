@@ -1670,3 +1670,114 @@ Coverage, with thresholds unchanged:
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The fix is one commit on top of `50b5fdf`. No tag, publish, or GitHub Release was performed.
 - Implementation remediation of the A', B' and C' re-audits is complete. A fresh targeted independent closure verification remains before release.
+
+## Final direct-binding closure
+
+### Starting point and scope
+
+- Starting commit: `4622aeedbfda3dcfa13993645da0622591917694` (`fix: close transform re-audit blockers`), the C' remediation. `main` and `origin/main` both pointed to it, and the working tree was clean.
+- Both packages were `0.2.0`, and `alien-signals` was exactly `3.2.1`.
+
+The final targeted closure verification of `4622aee` checked each remediated blocker again:
+
+- A'1, the cross-copy `activeSub` link: closed;
+- B'1, the kept style binding's snapshot keys: closed;
+- B'2, the hidden Activity's subscription leak: closed;
+- C'1 and C'2, the transform blockers: closed by an independent transform / packaging closure verification run against packed tarballs and five bundlers.
+
+The Runtime / React part of that verification found one more release blocker in the direct-binding lifecycle. Only that blocker is fixed here. The transform is not touched.
+
+### D1 — a binding removed or replaced while a sibling binding stays refreshed its stale value
+
+**Reproduction.**
+
+```tsx
+const cls = signal("from-signal");
+const st = signal({ color: "red" });
+
+function App() {
+  const [plain, setPlain] = useState(false);
+  return <div style={st} className={plain ? "plain" : cls} />;
+}
+// after setPlain(true): className is "from-signal", expected "plain"
+```
+
+The same happens to a `style={signal}` replaced by a plain style while a signal-bound `className` stays: the old signal's style overwrites React's. Without the sibling binding the switch works. The verification reproduced it at `4622aee`, `aca0d30`, `f37f0d8` and `7a84712`, so the recent remediations did not cause it.
+
+**Why a sibling binding is needed.** A host element with no signal binding left gets no binding ref, so React only detaches the old one, and the deferred teardown disposes every binding without writing. While one signal binding stays, the element gets a new ref for the new bindings. React replaces a ref within one commit, in this order: detach the old ref, apply the new props, attach the new ref. `NodeBinder` keeps the bindings across that detach and reconciles them on the re-attach.
+
+**Root cause.** On a re-attach after a detach, `NodeBinder.attach` refreshed every mounted binding first, so a kept binding could catch up on a write it held back while detached. It then called `#sync` with the new bindings, which disposes those that are gone. The refresh matched each mounted binding to the new set by prop name only, and a missing name still refreshed. So:
+
+1. the detach restored the old binding's render snapshot (unchanged, see B2);
+2. React's diff wrote the new plain value;
+3. the re-attach refreshed the removed binding, which wrote its signal's current value over React's;
+4. `#sync` disposed that binding.
+
+Nothing corrects the DOM afterwards: the binding is gone, and React thinks its plain value is still applied. A binding replaced by another signal under the same name (A → B) also wrote A's value once before B's binding was mounted and wrote B's.
+
+**Fix.** The refresh loop now refreshes a mounted binding only when the new set holds the same binding: the same name, source and kind (`isSameBinding`, now a type guard). A binding that was removed, turned plain, replaced by another signal, or rebuilt under another kind no longer refreshes. `#sync` disposes it, or replaces it with a new binding that writes its own value. A kept binding is still handed the snapshot React just committed before it refreshes, so a kept style binding still clears that snapshot's keys (B'1). The detach-time restore is unchanged, so a plain value equal to the old render snapshot still wins after an off-render write (B2). The change only affects a re-attach after a detach; an attach without a preceding detach, and every signal write, run exactly the code they did before.
+
+### Old-SHA proof
+
+The new tests were run against the unchanged `4622aee` runtime before the fix:
+
+- `tests/react-jsx-direct-binding-closure.test.tsx`: all 11 failed. The prop and style switches kept `from-signal` and `color: red; width: 10px;`, and the A → B switch recorded the `class` attribute writes `b`, `a`, `b`.
+- The two new browser specs failed on Chromium: the plain style box kept its signal's `80px` width.
+
+With the fix, all of them pass.
+
+### Regression coverage
+
+`tests/react-jsx-direct-binding-closure.test.tsx` (jsdom) adds 11 tests, each with a sibling signal binding that keeps the ref alive:
+
+- prop signal → plain, with and without StrictMode: the same node, `className` is `"plain"`, the old signal is unsubscribed and a later write to it changes nothing, and the kept `style` binding still follows its signal;
+- style signal → plain, with and without StrictMode: the plain style wins and the old `width` key is gone, a later write to the old signal changes nothing, and the kept `className` binding still updates;
+- prop and style signal → a plain value equal to the old render snapshot, after an off-render write moved the signal away from it (the B2 restore path);
+- signal A → signal B, with and without StrictMode: a `MutationObserver` records every `class` write during the switch, and none of them is A's; afterwards B owns the prop and A is unsubscribed;
+- a signal moving from one prop to another: the prop it left keeps React's plain value;
+- a kept style binding across a re-attach in which a descendant's layout effect drops a key while a sibling switches to plain, with and without StrictMode: the B'1 key clearing still works.
+
+`e2e/browser.spec.ts` adds two specs on a new StrictMode fixture section in `examples/browser`, "Sibling binding switch": prop signal → plain and style signal → plain, each with a sibling binding. Each asserts the same node, the plain value, and that a later write to every source changes only the kept sibling.
+
+The existing lifecycle regressions stayed green: signal → plain without a sibling, plain → signal, signal A → B, the B'1 layout-effect and transition races, Activity and Suspense hide and reveal, throwing ref attach and cleanup, StrictMode callback-ref replay, no writes after unmount, and no node remount. Across the direct-binding and JSX regression files that is 134 tests, plus the related browser specs on all three engines.
+
+### Browser
+
+Chromium, Firefox and WebKit ran the full browser gate: 54/54 passed on the first run, the 48 existing tests plus the 2 new specs on each engine. WebKit's intermittent "reveals tracked readers hidden by a transition with the latest value" did not reproduce, so that spec is unchanged.
+
+### Size and performance
+
+`pnpm size` passes with unchanged budgets. The `jsx-runtime` scenario went from 11,229 to 11,234 bytes gzip (+5) against its 11,264-byte budget; the other scenarios do not include the binder. No benchmark was run: the change adds one identity check per mounted binding to the re-attach path, which already looked each binding up by name, and leaves signal writes and first attaches untouched.
+
+### Validation
+
+The complete gate ran on the final code, with no threshold, budget, timeout, or worker-limit change. As before, the browser gate ran with Volta's Node 24.21.0 image directory first on `PATH`.
+
+| Command | Result |
+| --- | --- |
+| `pnpm typecheck` | passed |
+| `pnpm lint` | passed: 0 errors, 96 existing warnings (unchanged) |
+| `pnpm test` | passed: runtime 37 files / 528 tests (previously 517); transform 5 files / 354 passed, 3 skipped |
+| `pnpm test:coverage` | passed (see below) |
+| `pnpm build` | passed |
+| `pnpm test:phase4-duplicate` | passed |
+| `pnpm test:mixed-version` | passed |
+| `pnpm test:consumer` | passed |
+| `pnpm prepare:e2e` | passed |
+| `pnpm --dir examples/react-router run typecheck` | passed |
+| `pnpm test:browser` | passed, 54/54 |
+| `pnpm size` | passed with unchanged budgets |
+| `git diff --check` | passed |
+
+Coverage, with thresholds unchanged:
+
+| Suite | Statements | Branches | Functions | Lines |
+| --- | --- | --- | --- | --- |
+| Runtime (thresholds 92/83/96/94) | 94.47% | 88.36% | 98.12% | 95.59% |
+| Transform (thresholds 92/90/92/95) | 93.52% | 91.32% | 96.53% | 97.15% |
+
+### State after the final direct-binding closure
+
+- Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
+- The fix is one commit on top of `4622aee`. No tag, publish, or GitHub Release was performed.
+- A final independent direct-binding verification remains before release.

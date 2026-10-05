@@ -266,6 +266,47 @@ function StyleReattach({ source }: { source: Signal<Record<string, string>> }) {
   );
 }
 
+/**
+ * A binding switched to a plain value while a sibling binding on the same
+ * element keeps its ref alive: React's plain value must win.
+ */
+function SiblingBindingSwitch({ state }: { state: DemoState }) {
+  const [plainClass, setPlainClass] = useState(false);
+  const [plainStyle, setPlainStyle] = useState(false);
+  return (
+    <section aria-labelledby="sibling-switch-heading">
+      <h2 id="sibling-switch-heading">Sibling binding switch</h2>
+      <div
+        id="switch-class-box"
+        style={state.switchClassSibling}
+        className={plainClass ? "plain" : state.switchClass}
+      />
+      <div
+        id="switch-style-box"
+        className={state.switchStyleSibling}
+        style={plainStyle ? { width: "40px", height: "20px" } : state.switchStyle}
+      />
+      <button id="plain-switch-class" onClick={() => setPlainClass(true)}>
+        Make class plain
+      </button>
+      <button id="plain-switch-style" onClick={() => setPlainStyle(true)}>
+        Make style plain
+      </button>
+      <button
+        id="write-switch-sources"
+        onClick={() => {
+          state.switchClass.value = "late";
+          state.switchStyle.value = { width: "120px", height: "30px", outline: "1px dashed teal" };
+          state.switchClassSibling.value = { width: "120px", height: "30px" };
+          state.switchStyleSibling.value = "keep-next";
+        }}
+      >
+        Write switched sources
+      </button>
+    </section>
+  );
+}
+
 /** @noSignalTracking */
 function BareHiddenReader({ source }: { source: ReadonlySignal<number> }) {
   useSignalTracking();
@@ -416,6 +457,9 @@ export function App({ state }: { state: DemoState }) {
       <ThrowingRefs source={state.refErrorTitle} />
       <StyleOwnership state={state} />
       <StyleReattach source={state.reattachStyle} />
+      <StrictMode>
+        <SiblingBindingSwitch state={state} />
+      </StrictMode>
       <HiddenTrackedReaders state={state} />
     </main>
   );

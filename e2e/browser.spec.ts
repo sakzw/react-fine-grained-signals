@@ -240,6 +240,40 @@ test("clears a style key a layout effect drops while a kept binding re-attaches"
   expect(errors).toEqual([]);
 });
 
+test("keeps a prop switched to plain while a sibling binding stays bound", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const box = page.locator("#switch-class-box");
+  const handle = await box.elementHandle();
+  await expect(box).toHaveAttribute("class", "from-signal");
+
+  await page.locator("#plain-switch-class").click();
+  await expect(box).toHaveAttribute("class", "plain");
+  await page.locator("#write-switch-sources").click();
+  // The sibling style binding still follows its signal; the old class does not.
+  await expect(box).toHaveCSS("width", "120px");
+  await expect(box).toHaveAttribute("class", "plain");
+  expect(await box.evaluate((node, original) => node === original, handle)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
+test("keeps a style switched to plain while a sibling binding stays bound", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const box = page.locator("#switch-style-box");
+  const handle = await box.elementHandle();
+  await expect(box).toHaveCSS("outline-style", "solid");
+
+  await page.locator("#plain-switch-style").click();
+  await expect(box).toHaveCSS("width", "40px");
+  await expect(box).toHaveCSS("outline-style", "none");
+  expect(await box.getAttribute("style")).toBe("width: 40px; height: 20px;");
+  await page.locator("#write-switch-sources").click();
+  // The sibling class binding still follows its signal; the old style does not.
+  await expect(box).toHaveAttribute("class", "keep-next");
+  expect(await box.getAttribute("style")).toBe("width: 40px; height: 20px;");
+  expect(await box.evaluate((node, original) => node === original, handle)).toBe(true);
+  expect(errors).toEqual([]);
+});
+
 async function readEvaluations(page: Page) {
   return page.evaluate(() => ({
     ...(globalThis as { rfgsEvaluations?: Record<string, number> }).rfgsEvaluations,

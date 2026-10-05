@@ -555,7 +555,7 @@ type MountedBinding = {
 /** A binding's identity for the re-render diff: same name, source, and kind. */
 // `b` is optional so callers can pass a positional lookup straight in: a
 // missing counterpart is simply not the same binding.
-function isSameBinding(a: Binding, b: Binding | undefined): boolean {
+function isSameBinding(a: Binding, b: Binding | undefined): b is Binding {
   return b !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
 }
 
@@ -730,8 +730,15 @@ class NodeBinder {
     // Kept bindings may have skipped a write while detached. Each is handed the
     // snapshot React just committed for its prop (matched by name, which is
     // unique per element), so a style binding can clear that snapshot's keys.
+    // Only a binding the new render keeps as the same binding refreshes: one it
+    // removed, turned plain, or replaced lost the prop to React's diff (or to
+    // its replacement), and a refresh would write its stale source over that
+    // just before `#sync` disposes it, with nothing left to correct it.
     if (wasDetached) {
-      for (const entry of this.#mounted) entry.refresh(bindings.find((binding) => binding[0] === entry.binding[0])?.[3]);
+      for (const entry of this.#mounted) {
+        const next = bindings.find((binding) => binding[0] === entry.binding[0]);
+        if (isSameBinding(entry.binding, next)) entry.refresh(next[3]);
+      }
     }
     this.#sync(bindings);
     let userCleanup: RefCleanup;

@@ -15,6 +15,10 @@ export function createDemoState() {
   const hiddenTrackedSource = signal(0);
   return {
     reattachStyle: signal<Record<string, string>>({ width: "80px", height: "40px" }),
+    switchClass: signal("from-signal"),
+    switchClassSibling: signal<Record<string, string>>({ width: "80px", height: "40px" }),
+    switchStyle: signal<Record<string, string>>({ width: "80px", height: "40px", outline: "3px solid crimson" }),
+    switchStyleSibling: signal("keep"),
     hiddenTrackedSource,
     hiddenBare: countedComputed(hiddenTrackedSource, "bare"),
     hiddenManaged: countedComputed(hiddenTrackedSource, "managed"),
