@@ -317,12 +317,33 @@ function ManagedHiddenReader({ source }: { source: ReadonlySignal<number> }) {
   return <output id="hidden-managed-value">{source.value}</output>;
 }
 
+/**
+ * Mirrors whether the passive effects inside its Activity are connected onto
+ * `target` as `data-passive-effects`. The tracked readers subscribe and release
+ * their signals from passive effects too, and React connects or disconnects
+ * every passive effect of a hidden or revealed Activity in one flush. Hiding
+ * commits the DOM change first and, after a transition, runs that flush in a
+ * later task, so a hidden reader is not yet a released one.
+ */
+function PassiveEffectsMarker({ target }: { target: { readonly current: HTMLElement | null } }) {
+  useEffect(() => {
+    const node = target.current;
+    if (node === null) return;
+    node.dataset.passiveEffects = "connected";
+    return () => {
+      node.dataset.passiveEffects = "disconnected";
+    };
+  }, [target]);
+  return null;
+}
+
 /** Tracked readers deleted inside a hidden Activity release their subscriptions. */
 function HiddenTrackedReaders({ state }: { state: DemoState }) {
   const [mode, setMode] = useState<"visible" | "hidden">("visible");
   const [shown, setShown] = useState(true);
+  const section = useRef<HTMLElement>(null);
   return (
-    <section aria-labelledby="hidden-tracked-heading">
+    <section id="hidden-tracked-readers" ref={section} aria-labelledby="hidden-tracked-heading">
       <h2 id="hidden-tracked-heading">Hidden tracked readers</h2>
       <Activity mode={mode}>
         {shown ? (
@@ -331,6 +352,7 @@ function HiddenTrackedReaders({ state }: { state: DemoState }) {
             <ManagedHiddenReader source={state.hiddenManaged} />
           </>
         ) : null}
+        <PassiveEffectsMarker target={section} />
       </Activity>
       <button id="hide-tracked-readers" onClick={() => startTransition(() => setMode("hidden"))}>
         Hide readers

@@ -1781,3 +1781,34 @@ Coverage, with thresholds unchanged:
 - Both manifests are still `0.2.0`, and `alien-signals` is still exactly `3.2.1`.
 - The fix is one commit on top of `4622aee`. No tag, publish, or GitHub Release was performed.
 - A final independent direct-binding verification remains before release.
+
+## Final browser release gate
+
+The final independent direct-binding verification of `2107299` was clean, and no product or runtime release blocker remains. Its `pnpm test:browser` passed 53/54. The failure was WebKit's "reveals tracked readers hidden by a transition with the latest value" (`"managed": 1` expected, `2` received), and repeated WebKit runs failed it 1 time in 15.
+
+**Reproduction.** 40 focused WebKit repeats of the unchanged spec at `2107299` failed 3 times. In one of them the bare reader's count also went from 1 to 2, so the race is not specific to the managed reader. 100 Firefox repeats of the unchanged Activity specs failed 3 times on the same assertion (and 3 more times on Firefox page-setup or teardown timeouts, see below).
+
+**Race.** Both tracked readers subscribe in their layout commit and release their subscriptions from a passive effect cleanup (`RenderStore.scheduleDispose`, then a microtask). Hiding an Activity commits the DOM change, which hides both readers in that commit. React runs the hidden subtree's passive cleanups in a later flush, and after a transition commit that flush runs in a later task. The spec waited only for `#hidden-bare-value` to be hidden and then snapshotted evaluation counts. A snapshot taken between the commit and that flush saw readers that were hidden but still subscribed, and the first write after it re-evaluated them. Waiting for `#hidden-managed-value` to be hidden as well would not help: it is hidden in the same commit.
+
+**Change.** `examples/browser` gained a `PassiveEffectsMarker` inside the same Activity. Its passive effect sets `data-passive-effects="connected"` on the `#hidden-tracked-readers` section, and its cleanup sets `"disconnected"`. React connects or disconnects every passive effect of the Activity in one synchronous flush, and the readers' dispose microtask runs before the next task. So once Playwright sees `"disconnected"`, both readers have released their subscriptions. The reveal spec now:
+
+- checks `"connected"` before hiding;
+- waits for both readers to be hidden and then for `"disconnected"` before the snapshot;
+- waits for `"connected"` after the reveal, before the write that must update both readers.
+
+The assertions are unchanged: no evaluation while hidden, both readers show the latest value after the reveal, and both follow the next write. The deletion spec ("releases tracked readers deleted inside an Activity hidden by a transition") already waited for both readers and snapshots only after the delete commit. React flushes the hide's pending passive effects before it renders that discrete update, so the spec is left unchanged.
+
+**The hardened specs still catch a lingering subscription.** With the pre-B'2 `src/react/react-adapter.mts` from `6f200aa` swapped in temporarily, 11 of 12 Chromium and WebKit runs of the two Activity specs failed.
+
+**Repeated runs after the change:**
+
+| Engine | Specs | Runs | Result |
+| --- | --- | --- | --- |
+| WebKit | reveal + deletion | 80 | 80 passed |
+| WebKit | reveal | 60 | 60 passed |
+| Chromium + Firefox | reveal + deletion | 80 | 80 passed |
+| Chromium + Firefox | reveal + deletion | 200 | 195 passed; 5 Firefox timeouts, no assertion failure |
+
+The Firefox timeouts are page setup, hydration wait, or context teardown exceeding 30 s under heavy `--repeat-each` load, with Firefox reporting "Script terminated by timeout". The unchanged specs hit the same timeouts at `2107299`, as described above.
+
+**Release gate.** `pnpm prepare:e2e` and `pnpm test:browser` passed, 54/54, with Volta's Node 24.21.0 image directory first on `PATH`. `pnpm typecheck`, `pnpm lint` (0 errors, 96 existing warnings), `pnpm test` (runtime 37 files / 528 tests; transform 5 files / 354 passed, 3 skipped) and `git diff --check` passed. Only `e2e/browser.spec.ts` and `examples/browser/src/App.tsx` changed, besides this record, so the size gate was not re-run. Versions stay `0.2.0`; nothing was tagged, published, or released.

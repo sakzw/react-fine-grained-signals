@@ -307,9 +307,17 @@ test("reveals tracked readers hidden by a transition with the latest value", asy
   const errors = await openHydrated(page);
   const bare = page.locator("#hidden-bare-value");
   const managed = page.locator("#hidden-managed-value");
+  const readers = page.locator("#hidden-tracked-readers");
+  await expect(readers).toHaveAttribute("data-passive-effects", "connected");
 
   await page.locator("#hide-tracked-readers").click();
   await expect(bare).toBeHidden();
+  await expect(managed).toBeHidden();
+  // Hiding commits the DOM change first. Both readers release their
+  // subscriptions in the passive-effect flush that follows, which a transition
+  // runs in a later task, so a hidden reader can still be subscribed. The
+  // marker's cleanup runs in that same flush.
+  await expect(readers).toHaveAttribute("data-passive-effects", "disconnected");
   const before = await readEvaluations(page);
   await page.locator("#write-tracked-source").click();
   await page.locator("#write-tracked-source").click();
@@ -319,6 +327,7 @@ test("reveals tracked readers hidden by a transition with the latest value", asy
   await page.locator("#reveal-tracked-readers").click();
   await expect(bare).toHaveText("2");
   await expect(managed).toHaveText("2");
+  await expect(readers).toHaveAttribute("data-passive-effects", "connected");
   await page.locator("#write-tracked-source").click();
   await expect(bare).toHaveText("3");
   await expect(managed).toHaveText("3");
