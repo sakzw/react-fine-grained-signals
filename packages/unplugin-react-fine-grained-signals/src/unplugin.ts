@@ -155,6 +155,29 @@ function resolveTransformLoaderPath(): string | null {
   return transformLoaderPath;
 }
 
+function toBundlerWarning(warning: Error, fallbackFile: string): {
+  code: string;
+  message: string;
+  loc?: { file: string; line: number; column: number };
+} {
+  const location = (warning as Error & {
+    loc?: { filename?: string; line?: number; column?: number };
+  }).loc;
+  return {
+    code: "RFGS",
+    message: warning.message,
+    ...(location?.line !== undefined && location.column !== undefined
+      ? {
+          loc: {
+            file: fallbackFile,
+            line: location.line,
+            column: location.column,
+          },
+        }
+      : {}),
+  };
+}
+
 interface WebpackLikeRule {
   enforce?: unknown;
   use?: unknown;
@@ -249,14 +272,23 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
     // esbuild hands a plugin its resolved build options through the `config`
     // hook, which is the only place a project's own `loader` map can be read.
     let configuredLoaders: Record<string, string> | undefined;
-    const transform = (code: string, id: string): InternalTransformResult | null =>
-      transformReactFineGrainedSignals(code, id, {
+    const transform = function (
+      this: { warn?: (warning: never) => void } | undefined,
+      code: string,
+      id: string,
+    ): InternalTransformResult | null {
+      const warn = this?.warn as ((warning: unknown) => void) | undefined;
+      return transformReactFineGrainedSignals(code, id, {
         importSource: options.importSource ?? "react-fine-grained-signals",
         reactImportSource: options.reactImportSource ?? "react",
         mode: options.mode ?? "auto",
         transform: options.transform ?? "managed",
         reactCompiler: options.reactCompiler ?? "auto",
+        ...(warn === undefined
+          ? {}
+          : { warn: (warning: Error) => warn(toBundlerWarning(warning, cleanModuleId(id))) }),
       });
+    };
     return {
       name: pluginName,
       enforce: "pre",
@@ -292,8 +324,8 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
       vite: {
         transform: {
           order: "pre",
-          handler(code: string, id: string) {
-            return canTransform(id, options) ? transform(code, id) : null;
+          handler(this: { warn?: (warning: never) => void }, code: string, id: string) {
+            return canTransform(id, options) ? transform.call(this, code, id) : null;
           },
         },
       },

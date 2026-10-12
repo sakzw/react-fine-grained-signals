@@ -26,6 +26,8 @@ export interface InternalTransformOptions {
    * regardless of this value.
    */
   reactImportSource: string;
+  /** Receives non-fatal diagnostics; omitted for direct calls, which use console.warn. */
+  warn?: (warning: Error) => void;
 }
 
 export type InternalTransformResult = Exclude<TransformResult, string>;
@@ -2192,7 +2194,30 @@ function isUnverifiableBarrelSignalTracking(
 // plugins use for non-fatal diagnostics, rather than `path.buildCodeFrameError`
 // thrown outright (reserved for the genuinely invalid async/generator case
 // below).
-function warnUnverifiableBarrelSignalTracking(path: NodePath<t.Function>, importSource: string): void {
+function reportWarning(
+  options: InternalTransformOptions,
+  warning: Error,
+  path: NodePath<t.Function>,
+): void {
+  const start = path.node.loc?.start;
+  if (start !== undefined) {
+    (warning as Error & { loc?: { filename?: string; line: number; column: number } }).loc = {
+      line: start.line,
+      column: start.column,
+    };
+  }
+  if (options.warn !== undefined) {
+    options.warn(warning);
+  } else {
+    console.warn(warning.message);
+  }
+}
+
+function warnUnverifiableBarrelSignalTracking(
+  path: NodePath<t.Function>,
+  importSource: string,
+  options: InternalTransformOptions,
+): void {
   const warning = path.buildCodeFrameError(
     `This useSignalTracking() call cannot be verified as "${importSource}"'s own export: it resolves ` +
       "only through a barrel/re-export module, and a single-file transform cannot follow that " +
@@ -2200,7 +2225,7 @@ function warnUnverifiableBarrelSignalTracking(path: NodePath<t.Function>, import
       `boundary. Import useSignalTracking directly from "${importSource}" ` +
       "instead to get the verified boundary.",
   );
-  console.warn(warning.message);
+  reportWarning(options, warning, path);
 }
 
 // An `@signalTracking` annotation is only actionable once the transform can name
@@ -2213,33 +2238,40 @@ function warnUnverifiableBarrelSignalTracking(path: NodePath<t.Function>, import
 // inherit either, or a name that resolves but is neither PascalCase nor `useX`.
 // Left silent, such an annotation reads as an opt-in that simply never
 // happened. Warn instead, matching the barrel case above.
-function warnUnnamedSignalTrackingAnnotation(path: NodePath<t.Function>): void {
+function warnUnnamedSignalTrackingAnnotation(
+  path: NodePath<t.Function>,
+  options: InternalTransformOptions,
+): void {
   const warning = path.buildCodeFrameError(
     "This @signalTracking annotation is ignored: the transform could not resolve a component " +
       "or hook identity for the annotated function, and the boundary is attached to that " +
       "identity. Give it a PascalCase (component) or useX (hook) name -- a binding, a named " +
       "function declaration, or an object property key -- to opt it in.",
   );
-  console.warn(warning.message);
+  reportWarning(options, warning, path);
 }
 
 // The one anonymous `export default` shape `deriveModuleIdentityName` cannot
 // name. Reported rather than skipped for exactly the reason the annotation
 // warning above exists: the author wrote a component in a position the
 // transform recognizes, and silence would read as "handled".
-function warnUnnamedDefaultExport(path: NodePath<t.Function>): void {
+function warnUnnamedDefaultExport(path: NodePath<t.Function>, options: InternalTransformOptions): void {
   const warning = path.buildCodeFrameError(
     "This anonymous default export is left untransformed: its component identity is derived " +
       "from the module's file name, and this module's name does not yield a PascalCase " +
       "identifier. Name the function (`export default function App() { ... }`), or assign it " +
       "to a PascalCase binding and export that binding, to opt it in.",
   );
-  console.warn(warning.message);
+  reportWarning(options, warning, path);
 }
 
 // See the call site in `decideTransform`: the mixed call-and-mount shape that
 // `isPlainCalledComponent` cannot give a boundary to without breaking the call.
-function warnPlainCalledComponentAlsoMounted(path: NodePath<t.Function>, name: string): void {
+function warnPlainCalledComponentAlsoMounted(
+  path: NodePath<t.Function>,
+  name: string,
+  options: InternalTransformOptions,
+): void {
   const warning = path.buildCodeFrameError(
     `${name} is called as a plain function (${name}()) and also rendered as <${name} />. ` +
       "A plain call runs its body inside the caller's render, so it gets no tracking boundary " +
@@ -2247,7 +2279,7 @@ function warnPlainCalledComponentAlsoMounted(path: NodePath<t.Function>, name: s
       `<${name} /> instance therefore only updates when its parent re-renders. Use one form ` +
       `consistently -- render it only as <${name} />, or only call it -- to remove the ambiguity.`,
   );
-  console.warn(warning.message);
+  reportWarning(options, warning, path);
 }
 
 function shouldAutomaticallyTransform(
@@ -2358,7 +2390,7 @@ function decideTransform(
   const statements = body.isBlockStatement() ? body.get("body") : [];
   const explicit = isExplicitSignalTracking(path, statements, options.importSource);
   if (isUnverifiableBarrelSignalTracking(path, statements, options.importSource, explicit)) {
-    warnUnverifiableBarrelSignalTracking(path, options.importSource);
+    warnUnverifiableBarrelSignalTracking(path, options.importSource, options);
   }
   const managedRuntimeSource = `${options.importSource}/runtime`;
   const inspection = inspectFunction(
@@ -2417,7 +2449,7 @@ function decideTransform(
   if (annotation && !annotated && rendersJsx(path)) {
     const enclosing = path.getFunctionParent();
     if (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalTrackingComment)) {
-      warnUnnamedSignalTrackingAnnotation(path);
+      warnUnnamedSignalTrackingAnnotation(path, options);
     }
   }
   // An anonymous default export the file name could not name is the one
@@ -2428,9 +2460,10 @@ function decideTransform(
     identity === undefined &&
     climbedParent !== null &&
     climbedParent.isExportDefaultDeclaration() &&
-    rendersJsx(path)
+    rendersJsx(path) &&
+    (options.mode === "all" || (options.mode === "auto" && inspection.readsValue))
   ) {
-    warnUnnamedDefaultExport(path);
+    warnUnnamedDefaultExport(path, options);
   }
   // A component that is both called (`Title()`) and mounted (`<Title />`) can
   // only be given one answer, and the plain call forces it: a boundary would be
@@ -2449,7 +2482,7 @@ function decideTransform(
     isPlainCalledComponent(path) &&
     isAlsoMountedThroughJsx(path)
   ) {
-    warnPlainCalledComponentAlsoMounted(path, identity?.name ?? "component");
+    warnPlainCalledComponentAlsoMounted(path, identity?.name ?? "component", options);
   }
   const automatic =
     !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);

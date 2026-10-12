@@ -1942,6 +1942,34 @@ describe("anonymous default exports", () => {
     transformReactFineGrainedSignals(source, "123.tsx", { ...options, mode: "manual" });
     expect(warn).not.toHaveBeenCalled();
   });
+
+  it("does not warn for a no-signal anonymous component in auto mode", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const source = "export default () => <p>static</p>;";
+
+    expect(transformReactFineGrainedSignals(source, "123.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })).toBeNull();
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it("still warns for a no-signal anonymous component in all mode", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const source = "export default () => <p>static</p>;";
+
+    expect(transformReactFineGrainedSignals(source, "123.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "all",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })).toBeNull();
+    expect(warn).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("components held in keyed slots", () => {

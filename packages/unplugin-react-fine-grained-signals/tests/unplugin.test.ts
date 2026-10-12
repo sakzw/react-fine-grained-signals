@@ -361,6 +361,33 @@ describe("bundler adapters", () => {
     expect(typeof plugin.transformInclude).toBe("function");
   });
 
+  it("routes transform diagnostics through the bundler warning API with location and code frame", () => {
+    const plugin = rollupAdapter({ mode: "auto" }) as unknown as {
+      transform: (this: { warn(warning: unknown): void }, code: string, id: string) => unknown;
+    };
+    const warnings: Array<{
+      code?: string;
+      message?: string;
+      loc?: { file: string; line: number; column: number };
+    }> = [];
+    const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const source = "const count = { value: 1 };\nexport default () => <p>{count.value}</p>;";
+
+    plugin.transform.call(
+      { warn: (warning) => warnings.push(warning as (typeof warnings)[number]) },
+      source,
+      "/project/src/123.tsx",
+    );
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.code).toBe("RFGS");
+    expect(warnings[0]?.message).toContain("anonymous default export is left untransformed");
+    expect(warnings[0]?.message).toContain("> 2 |");
+    expect(warnings[0]?.loc).toEqual({ file: "/project/src/123.tsx", line: 2, column: 15 });
+    expect(consoleWarn).not.toHaveBeenCalled();
+    consoleWarn.mockRestore();
+  });
+
   it("creates a vite plugin whose transform is ordered ahead of other pre plugins", () => {
     // `enforce: "pre"` alone ties with @vitejs/plugin-react's own pre-enforced
     // React Compiler step and leaves the outcome to array order; the hook-level
