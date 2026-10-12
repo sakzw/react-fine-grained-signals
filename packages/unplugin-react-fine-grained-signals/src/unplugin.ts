@@ -286,7 +286,10 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
         reactCompiler: options.reactCompiler ?? "auto",
         ...(warn === undefined
           ? {}
-          : { warn: (warning: Error) => warn(toBundlerWarning(warning, cleanModuleId(id))) }),
+          : {
+              warn: (warning: Error) =>
+                warn.call(this, toBundlerWarning(warning, cleanModuleId(id))),
+            }),
       });
     };
     return {

@@ -363,7 +363,11 @@ describe("bundler adapters", () => {
 
   it("routes transform diagnostics through the bundler warning API with location and code frame", () => {
     const plugin = rollupAdapter({ mode: "auto" }) as unknown as {
-      transform: (this: { warn(warning: unknown): void }, code: string, id: string) => unknown;
+      transform: (
+        this: { token: string; warn(this: { token: string }, warning: unknown): void },
+        code: string,
+        id: string,
+      ) => unknown;
     };
     const warnings: Array<{
       code?: string;
@@ -372,12 +376,15 @@ describe("bundler adapters", () => {
     }> = [];
     const consoleWarn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const source = "const count = { value: 1 };\nexport default () => <p>{count.value}</p>;";
+    const context = {
+      token: "rollup-plugin-context",
+      warn(this: { token: string }, warning: unknown) {
+        expect(this.token).toBe("rollup-plugin-context");
+        warnings.push(warning as (typeof warnings)[number]);
+      },
+    };
 
-    plugin.transform.call(
-      { warn: (warning) => warnings.push(warning as (typeof warnings)[number]) },
-      source,
-      "/project/src/123.tsx",
-    );
+    plugin.transform.call(context, source, "/project/src/123.tsx");
 
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.code).toBe("RFGS");

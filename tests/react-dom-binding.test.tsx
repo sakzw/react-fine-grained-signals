@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { StrictMode, act } from "react";
+import { Activity, StrictMode, Suspense, act } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx } from "../src/jsx-runtime.js";
@@ -33,12 +33,14 @@ describe("Direct DOM binding", () => {
     const id = signal<string | null | undefined>(undefined);
 
     const { container } = render(
-      <>
-        <div aria-label="HTML host" title={title} id={id} />
-        <svg>
-          <title title={title} id={id}>SVG title element</title>
-        </svg>
-      </>,
+      <StrictMode>
+        <>
+          <div aria-label="HTML host" title={title} id={id} />
+          <svg>
+            <title title={title} id={id}>SVG title element</title>
+          </svg>
+        </>
+      </StrictMode>,
     );
     const html = container.querySelector("div")!;
     const svg = container.querySelector("svg title")!;
@@ -68,6 +70,60 @@ describe("Direct DOM binding", () => {
     expect(html.hasAttribute("id")).toBe(false);
     expect(svg.hasAttribute("title")).toBe(false);
     expect(svg.hasAttribute("id")).toBe(false);
+  });
+
+  it("reconciles nullish title and id bindings across Activity hide and reveal", async () => {
+    const title = signal<string | null | undefined>(null);
+    const id = signal<string | null | undefined>(undefined);
+    function App({ mode }: { mode: "visible" | "hidden" }) {
+      return <Activity mode={mode}><div title={title} id={id} /></Activity>;
+    }
+
+    const view = render(<App mode="visible" />);
+    const node = view.container.querySelector("div")!;
+    act(() => { title.value = "before hide"; id.value = "before-hide"; });
+    expect(node.getAttribute("title")).toBe("before hide");
+    expect(node.getAttribute("id")).toBe("before-hide");
+
+    view.rerender(<App mode="hidden" />);
+    await act(async () => { await Promise.resolve(); });
+    act(() => { title.value = null; id.value = undefined; });
+    view.rerender(<App mode="visible" />);
+    expect(view.container.querySelector("div")).toBe(node);
+    expect(node.hasAttribute("title")).toBe(false);
+    expect(node.hasAttribute("id")).toBe(false);
+
+    act(() => { title.value = "after reveal"; id.value = "after-reveal"; });
+    expect(node.getAttribute("title")).toBe("after reveal");
+    expect(node.getAttribute("id")).toBe("after-reveal");
+  });
+
+  it("attaches nullish title and id bindings after a Suspense reveal", async () => {
+    const title = signal<string | null | undefined>(null);
+    const id = signal<string | null | undefined>(undefined);
+    let ready = false;
+    let resolve!: () => void;
+    const gate = new Promise<void>((done) => { resolve = done; });
+
+    function App() {
+      if (!ready) throw gate;
+      return <div title={title} id={id} />;
+    }
+
+    const view = render(<Suspense fallback={<span>loading</span>}><App /></Suspense>);
+    expect(view.container.querySelector("div")).toBeNull();
+    await act(async () => {
+      ready = true;
+      resolve();
+      await gate;
+    });
+
+    const node = view.container.querySelector("div")!;
+    expect(node.hasAttribute("title")).toBe(false);
+    expect(node.hasAttribute("id")).toBe(false);
+    act(() => { title.value = "revealed"; id.value = "revealed-id"; });
+    expect(node.getAttribute("title")).toBe("revealed");
+    expect(node.getAttribute("id")).toBe("revealed-id");
   });
 
   it("binds a signal directly to host DOM props", () => {
