@@ -28,6 +28,46 @@ function listenerCalls(spy: CallSpy, type: string): number {
 }
 
 describe("Direct DOM binding", () => {
+  it("removes nullish title and id values from HTML and SVG hosts", () => {
+    const title = signal<string | null | undefined>(null);
+    const id = signal<string | null | undefined>(undefined);
+
+    const { container } = render(
+      <>
+        <div aria-label="HTML host" title={title} id={id} />
+        <svg aria-label="SVG host" title={title} id={id} />
+      </>,
+    );
+    const html = container.querySelector("div")!;
+    const svg = container.querySelector("svg")!;
+
+    // Match React DOM's handling of nullish title/id props: there is no empty
+    // attribute. SVG takes the generic attribute path and must keep the same
+    // semantics as the HTML property path.
+    expect(html.hasAttribute("title")).toBe(false);
+    expect(html.hasAttribute("id")).toBe(false);
+    expect(svg.hasAttribute("title")).toBe(false);
+    expect(svg.hasAttribute("id")).toBe(false);
+
+    act(() => {
+      title.value = "bound title";
+      id.value = "bound-id";
+    });
+    expect(html.getAttribute("title")).toBe("bound title");
+    expect(html.getAttribute("id")).toBe("bound-id");
+    expect(svg.getAttribute("title")).toBe("bound title");
+    expect(svg.getAttribute("id")).toBe("bound-id");
+
+    act(() => {
+      title.value = null;
+      id.value = undefined;
+    });
+    expect(html.hasAttribute("title")).toBe(false);
+    expect(html.hasAttribute("id")).toBe(false);
+    expect(svg.hasAttribute("title")).toBe(false);
+    expect(svg.hasAttribute("id")).toBe(false);
+  });
+
   it("binds a signal directly to host DOM props", () => {
     function Field() {
       const disabled = useSignal(true);

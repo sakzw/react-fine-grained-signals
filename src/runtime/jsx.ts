@@ -306,10 +306,12 @@ function setDomProp(node: Element, name: string, value: unknown): void {
 
   switch (name) {
     case "title":
-      (node as HTMLElement).title = value == null ? "" : String(value);
+      if (value == null) node.removeAttribute(name);
+      else (node as HTMLElement).title = String(value);
       return;
     case "id":
-      (node as HTMLElement).id = value == null ? "" : String(value);
+      if (value == null) node.removeAttribute(name);
+      else (node as HTMLElement).id = String(value);
       return;
     case "className":
       (node as HTMLElement).className = value == null ? "" : String(value);
