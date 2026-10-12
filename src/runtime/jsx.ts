@@ -1050,11 +1050,15 @@ export function createSignalAwareElement(
 type Signalable<T> = T | (ReadonlySignal<T> & NotDeepSignal);
 type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style" | "value" | "checked";
 type AriaPropName = `aria-${string}`;
+type SignalableHtmlProp<Name extends PropertyKey, Value> = Signalable<
+  Value | (Name extends "title" | "id" ? null : never)
+>;
 type AddSignalChildren<P> = Omit<P, "children"> & {
   children?: SignalChild;
 };
 type SignalizeKnownHtmlProps<P> = {
-  [Name in keyof P as Name extends DirectSignalPropName | AriaPropName ? Name : never]: Signalable<P[Name]>;
+  [Name in keyof P as Name extends DirectSignalPropName | AriaPropName ? Name : never]:
+    SignalableHtmlProp<Name, P[Name]>;
 };
 type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "children"> & {
   [Name in keyof SignalizeKnownHtmlProps<P>]: SignalizeKnownHtmlProps<P>[Name];

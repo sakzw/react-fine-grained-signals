@@ -5,6 +5,7 @@ import { signal } from "../src/index.js";
 const text = signal("value");
 const enabled = signal(false);
 const boxStyle = signal({ color: "red" });
+const nullishText = signal<string | null | undefined>(null);
 
 function Custom({ value, children }: { value: typeof text; children: typeof text }) {
   return <output>{value === children ? "same" : "different"}</output>;
@@ -23,6 +24,8 @@ const styled = <div style={boxStyle} />;
 // `value` and `checked` are direct-bindable on the controlled-input tags.
 const controlledInput = <input value={text} checked={enabled} onChange={() => {}} />;
 const controlledTextarea = <textarea value={text} onChange={() => {}} />;
+// `title` and `id` remove their attributes when a direct binding becomes nullish.
+const nullishTitleAndId = <div title={nullishText} id={nullishText} />;
 const controlledSelect = (
   <select value={text} onChange={() => {}}>
     <option value="value">value</option>
@@ -48,6 +51,7 @@ void [
   styled,
   controlledInput,
   controlledTextarea,
+  nullishTitleAndId,
   controlledSelect,
   svgChild,
   unsupportedHtmlBinding,

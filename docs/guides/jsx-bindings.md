@@ -86,6 +86,8 @@ export function Field() {
 }
 ```
 
+For a bound `title` or `id`, writing `null` or `undefined` removes the attribute, matching React DOM.
+
 ## style
 
 A number bound to a CSS property is written with a `px` suffix unless the property is one of the small set (`opacity`, `zIndex`, `flexGrow`, and similar) that React also treats as unitless. A key starting with `--` is written as a CSS custom property via `setProperty`. A key present in a previous style object but absent from the next one is cleared, not left stale. That includes keys React wrote from the value the element rendered with, when the signal drops them before the binding attaches, for example while an `<Activity>` or Suspense boundary hides the element.
