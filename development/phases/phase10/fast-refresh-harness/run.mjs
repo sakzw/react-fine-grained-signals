@@ -112,12 +112,13 @@ function assert(condition, message) {
 
 function matchesKnownOxcFailure(caseId, error, errors) {
   if (!knownOxcSignatureLimitations.has(caseId)) return false;
+  const reportsHookOrder = error.message.includes('React reported a Hook-order failure');
   if (caseId.endsWith('/add-hook')) {
-    return error.message.includes('HMR: expected "hook added"')
+    return (error.message.includes('HMR: expected "hook added"') || reportsHookOrder)
       && errors.some((item) => /Rendered more hooks/.test(item));
   }
   if (caseId.endsWith('/remove-hook')) {
-    return error.message.includes('HMR: expected "hook removed"')
+    return (error.message.includes('HMR: expected "hook removed"') || reportsHookOrder)
       && errors.some((item) => /Rendered fewer hooks/.test(item));
   }
   if (caseId.endsWith('/reorder-hooks')) {
@@ -308,8 +309,16 @@ async function runVariant(variant) {
     { id: 'reorder-hooks', initial: { jsx: 'hook order A', hooks: 'reordered' }, edited: { jsx: 'hook order B', hooks: 'reverse-order' } },
   ];
   const results = [];
-  for (const scenario of cases) results.push(await runCase(variant, server, scenario));
-  return results;
+  try {
+    for (const scenario of cases) results.push(await runCase(variant, server, scenario));
+    return results;
+  } finally {
+    console.log(`Closing Vite server for ${variant.id}`);
+    await server.server.close();
+    const index = servers.indexOf(server.server);
+    if (index !== -1) servers.splice(index, 1);
+    console.log(`Closed Vite server for ${variant.id}`);
+  }
 }
 
 async function main() {
@@ -324,10 +333,15 @@ async function main() {
     assert(unexpected.length === 0 && playwrightErrors.every(knownError),
       `Unexpected HMR browser failures: ${unexpected.map((result) => `${result.variant}/${result.scenario}: ${result.error}`).join('\n')}`);
     const knownCount = results.filter((result) => result.status === 'known-failure').length;
+    const passedCount = results.filter((result) => result.status === 'passed').length;
+    assert(results.length === 24, `Expected 24 HMR cases, received ${results.length}`);
+    assert(knownCount === knownOxcSignatureLimitations.size,
+      `Expected all ${knownOxcSignatureLimitations.size} documented Oxc limitations, received ${knownCount}`);
+    assert(passedCount === 15, `Expected 15 passing HMR cases, received ${passedCount}`);
     console.log(`PASS: ${variants.length} Vite HMR browser variants; ${knownCount} documented Oxc Refresh-signature limitations.`);
   } finally {
     if (browser) await browser.close();
-    await Promise.all(servers.map((server) => server.close()));
+    for (const server of servers) await server.close();
   }
 }
 
