@@ -53,7 +53,17 @@ interface LoaderContext {
 }
 
 function toError(thrown: unknown): Error {
-  return thrown instanceof Error ? thrown : new Error(String(thrown));
+  if (thrown instanceof Error) return thrown;
+  if (thrown !== null && typeof thrown === "object" && "message" in thrown) {
+    // The patched webpack/rspack loader must bridge unplugin's structured
+    // `{ code, message, loc }` warning shape to `emitWarning(Error)` itself.
+    const source = thrown as { message: unknown; code?: unknown; loc?: unknown };
+    const error = new Error(String(source.message));
+    if (source.code !== undefined) Object.assign(error, { code: source.code });
+    if (source.loc !== undefined) Object.assign(error, { loc: source.loc });
+    return error;
+  }
+  return new Error(String(thrown));
 }
 
 /** webpack hands the incoming map on as an object or as its JSON text. */

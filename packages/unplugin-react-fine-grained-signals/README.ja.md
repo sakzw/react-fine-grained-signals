@@ -449,14 +449,23 @@ TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析しま
 
 ## Fast Refresh
 
-この制約はv0.1.1から存在します。既定のmanaged変換とViteのOxcベースのFast
-Refreshの組み合わせでは、変換されたcomponentのhookを変更する（hookを追加、
-削除、並べ替える）と、Fast Refreshのstateは保持されません。refreshは
-"Rendered more hooks than during the previous render"（または "fewer"）で
-失敗し、pageの完全なreloadが必要になります。managed変換のboundaryは
-componentのhookを `try` blockの中に置くため、Fast Refreshはそれらのhookを
-componentのhook signatureに含めません。検証したfixtureでは、
-`transform: "inject"` にこの制約はありませんでした。
+この制約はv0.2.1より前から存在します。managed変換はtracking cleanupをreturn、
+throw、Suspense後にも実行するため、component本体（ユーザーが書いたHook呼び出し
+を含む）を生成した `try/finally` の中に置きます。Reactの[Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks)
+は `try`、`catch`、`finally` 内でHookを呼ぶことを禁止しているため、この生成構造は
+公式ルールの対象外です。
+
+監査したVite 8 / Oxc Fast Refreshでは、この構造に対してRefresh transformが
+componentを登録する一方、Hook signatureを省略します。そのためHookの追加、削除、
+並べ替えで以前のstateが残り、Hook順序エラーが発生してfull reloadが必要になる
+場合があります。Hookを `try/finally` 内で呼ぶ通常のReact対照例でもOxcのsignature
+挙動を再現しましたが、この対照例もHookルールに違反します。これはOxcのsignature
+解析と、managed modeが生成する構造との相互作用であり、v0.2.1の回帰ではありません。
+
+`transform: "inject"` はこの生成boundaryを避け、検証したfixtureでは問題が出ません
+でした。bareな `useSignalTracking()` Hookを挿入する方式で、手書きHookと同じbest-effort
+なboundaryを提供します。managed modeの同期的で厳密な `try/finally` tracking contract
+は提供しません。利用可能な代替modeですが、managed modeと契約上同等ではありません。
 
 ## React Server Components
 

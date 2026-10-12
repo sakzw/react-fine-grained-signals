@@ -335,10 +335,12 @@ async function main() {
     const knownCount = results.filter((result) => result.status === 'known-failure').length;
     const passedCount = results.filter((result) => result.status === 'passed').length;
     assert(results.length === 24, `Expected 24 HMR cases, received ${results.length}`);
-    assert(knownCount === knownOxcSignatureLimitations.size,
-      `Expected all ${knownOxcSignatureLimitations.size} documented Oxc limitations, received ${knownCount}`);
-    assert(passedCount === 15, `Expected 15 passing HMR cases, received ${passedCount}`);
-    console.log(`PASS: ${variants.length} Vite HMR browser variants; ${knownCount} documented Oxc Refresh-signature limitations.`);
+    assert(knownCount + passedCount === results.length,
+      `Unexpected HMR case status: ${results.filter((result) => result.status !== 'passed' && result.status !== 'known-failure').map(({ variant, scenario, status }) => `${variant}/${scenario}=${status}`).join(', ')}`);
+    assert(results.every((result) => result.status !== 'known-failure'
+      || knownOxcSignatureLimitations.has(`${result.variant}/${result.scenario}`)),
+    'A non-allowlisted case was classified as a known failure');
+    console.log(`PASS: ${variants.length} Vite HMR browser variants; ${passedCount} passed, ${knownCount} currently reproduced Oxc Refresh-signature limitations.`);
   } finally {
     if (browser) await browser.close();
     for (const server of servers) await server.close();

@@ -461,14 +461,27 @@ plugin. Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`,
 
 ## Fast Refresh
 
-This limitation was present in v0.1.1. With the default managed transform and
-Vite's Oxc-based Fast Refresh, changing a transformed component's hooks
-(adding, removing, or reordering a hook) does not preserve Fast Refresh state.
-The refresh fails with "Rendered more hooks than during the previous render"
-(or "fewer"), and the page needs a full reload. The managed boundary puts the
-component's hooks inside a `try` block, where Fast Refresh does not include
-them in the component's hook signature. In the tested fixture,
-`transform: "inject"` did not have this limitation.
+This limitation predates v0.2.1. The managed transform places the component
+body, including authored Hook calls, inside a generated `try/finally` so
+tracking cleanup runs on return, throw, and Suspense. React's
+[Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks) prohibit
+calling Hooks inside `try`, `catch`, or `finally`, so this generated structure
+is outside that documented rule.
+
+In the audited Vite 8 / Oxc Fast Refresh setup, the Refresh transform registers
+the component but omits its Hook signature for this structure. Adding,
+removing, or reordering Hooks can therefore preserve stale state and fail with
+a Hook-order error until a full reload. A plain React control with Hooks in
+`try/finally` reproduces the Oxc signature behavior, but that control also
+violates the Hook rule. This is an interaction between Oxc's signature analysis
+and a structure that managed mode itself generates; it is not a v0.2.1
+regression.
+
+`transform: "inject"` avoids the generated boundary and passed the audited
+fixture. It inserts a bare `useSignalTracking()` Hook, providing the same
+best-effort boundary as a hand-written Hook; it does not provide managed mode's
+exact synchronous `try/finally` tracking contract. It is an alternative, not a
+contract-equivalent replacement for managed mode.
 
 ## React Server Components
 

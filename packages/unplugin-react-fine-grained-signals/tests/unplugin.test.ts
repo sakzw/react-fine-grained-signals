@@ -717,6 +717,34 @@ describe("bundler adapters", () => {
     expect(warnings.map(({ message }) => message)).toEqual(["heads up"]);
   });
 
+  it("preserves structured warning metadata in the webpack/rspack loader context", async () => {
+    const warnings: Error[] = [];
+    const warning = {
+      code: "RFGS",
+      message: "A non-fatal diagnostic\n> 2 | source();",
+      loc: { file: "/project/src/App.tsx", line: 2, column: 15 },
+    };
+    const query = {
+      plugin: {
+        transform(this: { warn(message: unknown): void }, code: string) {
+          this.warn(warning);
+          return { code: `${code}//transformed` };
+        },
+      },
+    };
+
+    const run = await runLoader(query, "/project/src/App.tsx", "source", undefined, {
+      emitWarning: (message) => warnings.push(message),
+    });
+
+    expect(run.error).toBeNull();
+    expect(run.content).toBe("source//transformed");
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toBe(warning.message);
+    expect((warnings[0] as Error & { code?: string }).code).toBe(warning.code);
+    expect((warnings[0] as Error & { loc?: typeof warning.loc }).loc).toEqual(warning.loc);
+  });
+
   it("reports a transform's own this.error as a loader error", async () => {
     const query = {
       plugin: {
