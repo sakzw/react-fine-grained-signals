@@ -176,9 +176,9 @@ async function runCase(variant, server, scenario) {
     }
   });
   try {
-    // Vite's HMR websocket keeps the network active; wait for document readiness
-    // and then the rendered counter instead of waiting for network idle.
-    await page.goto(server.url, { waitUntil: 'domcontentloaded' });
+    // Navigate once the document response starts, then wait for the app's DOM.
+    // This avoids network-idle hangs from Vite's HMR websocket and slow first transforms.
+    await page.goto(server.url, { waitUntil: 'commit' });
     await page.getByTestId('counter').waitFor();
     const boot = await page.evaluate(() => window.__hmrMetrics.boot);
     const initialTransform = await fetch(`${server.url}src/App.tsx`).then((response) => response.text());
