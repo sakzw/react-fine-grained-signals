@@ -4,6 +4,7 @@
 
 ## 移行ガイド
 
+- [v0.3への移行](migration/v0.3.ja.md)
 - [v0.2への移行](migration/v0.2.ja.md) — v0.1.1からのAPIとdependencyの変更点。
 
 ## ガイド

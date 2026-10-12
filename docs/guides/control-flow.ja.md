@@ -114,9 +114,9 @@ interface IndexProps<T> {
 
 ## Map と Set の入力
 
-`deepSignal` は配列を扱うため、配列操作とitem内部の読み取りをリアクティブにできます。一方で `Map` と `Set` は `deepSignal` にとって意図的に不透明です。
+既定では `deepSignal` は `Map` と `Set` を不透明な値として扱います。`deepSignal(value, { collections: "reactive" })`でcollection追跡を有効にすると、key、member、size、iterationを追跡できます。
 
-reactive plain object / arrayから直接得た `Map` / `Set` は、`.value` 経由で読み取り専用のruntime viewとして公開されます（TypeScript上の型は可変のままです）。immutable replacementを使ってください。つまりコピーを作り、変更してから新しいcollectionをsignalへ代入します。
+既定modeの `Map` / `Set` は、`.value` 経由で読み取り専用のruntime viewとして公開されます（TypeScript上の型は可変のままです）。そのmodeではimmutable replacementを使ってください。コピーを作り、変更してから新しいcollectionをsignalへ代入します。
 
 ```ts
 const next = new Map(labels.value);

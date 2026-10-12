@@ -1,6 +1,7 @@
 import { coreRuntime } from "./core-runtime.js";
 import { executionContext, UNTRACKED_OWNER } from "./execution-owner.js";
 import { createDeepSignalFactory } from "./deep-signal-engine.js";
+import type { DeepSignalOptions } from "./deep-signal-engine.js";
 import {
   batch,
   isSignal,
@@ -79,6 +80,9 @@ export function inspectDeepSignalMetadata(value: object): ReturnType<
  */
 export function deepSignal<T extends object>(
   initialValue: T,
+  options?: DeepSignalOptions,
 ): DeepSignal<T> {
-  return getProductionDeepSignals().deepSignal(initialValue) as DeepSignal<T>;
+  return getProductionDeepSignals().deepSignal(initialValue, options) as DeepSignal<T>;
 }
+
+export type { DeepSignalOptions } from "./deep-signal-engine.js";

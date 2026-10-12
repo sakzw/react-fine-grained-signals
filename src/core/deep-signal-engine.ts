@@ -18,6 +18,10 @@ export interface DeepSignalLike<T extends object> {
   peek(): T;
 }
 
+export interface DeepSignalOptions {
+  collections?: "reactive";
+}
+
 export interface DeepSignalRuntimeAdapter {
   /** Creates the root source behind the public DeepSignal wrapper. */
   createSignal<T>(initial: T): DeepSignalSource<T>;
@@ -48,10 +52,43 @@ interface PropertyMetadata {
   proxy: object;
 }
 
+interface CollectionMetadata {
+  values: Map<unknown, VersionSignal>;
+  existence: Map<unknown, VersionSignal>;
+  members: Map<unknown, VersionSignal>;
+  objectValues: WeakMap<object, VersionSignal>;
+  objectExistence: WeakMap<object, VersionSignal>;
+  objectMembers: WeakMap<object, VersionSignal>;
+  weakValues: WeakMap<object, VersionSignal>;
+  weakExistence: WeakMap<object, VersionSignal>;
+  weakMembers: WeakMap<object, VersionSignal>;
+  size?: VersionSignal;
+  keysIteration?: VersionSignal;
+  entriesIteration?: VersionSignal;
+  prunable: Set<unknown>;
+  methods: Map<PropertyKey, Function>;
+  proxy: object;
+}
+
 type VersionSignal = DeepSignalSource<number>;
 
 function isObjectLike(value: unknown): value is object {
   return (typeof value === "object" && value !== null) || typeof value === "function";
+}
+
+const supportsWeakSymbolKeys = (() => {
+  try {
+    const key = Symbol("weak-key-probe");
+    const collection = new WeakMap<object, boolean>();
+    Reflect.apply(WeakMap.prototype.set, collection, [key, true]);
+    return Reflect.apply(WeakMap.prototype.get, collection, [key]) === true;
+  } catch {
+    return false;
+  }
+})();
+
+function isWeakCollectionKey(value: unknown): value is object | symbol {
+  return isObjectLike(value) || (supportsWeakSymbolKeys && typeof value === "symbol");
 }
 
 function assertExtensible(value: object): void {
@@ -110,6 +147,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   const ARRAY_SEARCHES = new Set<PropertyKey>(["includes", "indexOf", "lastIndexOf"]);
   const proxyToRaw = new WeakMap<object, object>();
   const rawToMetadata = new WeakMap<object, PropertyMetadata>();
+  const reactiveRawToMetadata = new WeakMap<object, PropertyMetadata>();
+  const reactiveCollections = new WeakMap<object, CollectionMetadata>();
+  const scheduledCollectionSweeps = new WeakSet<CollectionMetadata>();
   const readonlyMapViews = new WeakMap<Map<unknown, unknown>, ReadonlyMap<unknown, unknown>>();
   const readonlySetViews = new WeakMap<Set<unknown>, ReadonlySet<unknown>>();
   const readonlyCollectionViewToRaw = new WeakMap<object, Map<unknown, unknown> | Set<unknown>>();
@@ -389,13 +429,40 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     ) as ReadonlySet<Value>;
   }
 
-  function assertRootValue(value: unknown): asserts value is object {
-    if (!isPlainObjectOrArray(value)) {
-      throw new TypeError("deepSignal() only accepts a plain object or array root");
+  function getNativeCollectionKind(value: unknown): "Map" | "Set" | "WeakMap" | "WeakSet" | undefined {
+    if (!isObjectLike(value)) return undefined;
+    const probe = {};
+    try { Map.prototype.has.call(value, probe); return "Map"; } catch { /* try next brand */ }
+    try { Set.prototype.has.call(value, probe); return "Set"; } catch { /* try next brand */ }
+    try { WeakMap.prototype.has.call(value, probe); return "WeakMap"; } catch { /* try next brand */ }
+    try { WeakSet.prototype.has.call(value, probe); return "WeakSet"; } catch { /* not a collection */ }
+    return undefined;
+  }
+
+  function isStandardCollection(value: unknown): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
+    const kind = getNativeCollectionKind(value);
+    if (kind === undefined) return false;
+    const expectedPrototype = kind === "Map" ? Map.prototype : kind === "Set" ? Set.prototype : kind === "WeakMap" ? WeakMap.prototype : WeakSet.prototype;
+    return Object.getPrototypeOf(value) === expectedPrototype;
+  }
+
+  function assertRootValue(value: unknown, reactive = false): asserts value is object {
+    if (!isPlainObjectOrArray(value) && !(reactive && isStandardCollection(value))) {
+      throw new TypeError(reactive
+        ? "deepSignal() with reactive collections only accepts plain objects, arrays, or same-realm standard collections"
+        : "deepSignal() only accepts a plain object or array root");
+    }
+    if (reactive && isStandardCollection(value)) assertReactiveCollection(value);
+  }
+
+  function assertReactiveCollection(value: object): void {
+    if (!Object.isExtensible(value)) throw new TypeError("deepSignal() cannot proxy a non-extensible collection");
+    if (Reflect.ownKeys(value).length !== 0) {
+      throw new TypeError("deepSignal() reactive collections do not support own properties");
     }
   }
 
-  function assertDeepDataGraph(value: unknown): boolean {
+  function assertDeepDataGraph(value: unknown, reactive = false): boolean {
     if (!isObjectLike(value)) return false;
     // A value can be reachable both as reactive plain data and through an opaque
     // value. A proxy beneath an opaque value cannot be unwrapped without changing
@@ -444,22 +511,41 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         throw new TypeError("deepSignal() cannot store a built-in prototype object in deep state");
       }
 
+      if (reactive && !insideOpaque && getNativeCollectionKind(raw) !== undefined && !isStandardCollection(raw)) {
+        throw new TypeError("deepSignal() reactive collections require same-realm standard collections");
+      }
+
       if (raw instanceof Map) {
+        if (reactive && !insideOpaque) {
+          if (!isStandardCollection(raw)) throw new TypeError("deepSignal() reactive collections require a same-realm standard Map");
+          assertReactiveCollection(raw);
+        }
         for (const [key, entry] of raw) {
           if (isObjectLike(key)) {
-            pending.push({ value: key, insideOpaque: true });
+            pending.push({ value: key, insideOpaque: !reactive || insideOpaque });
           }
           if (isObjectLike(entry)) {
-            pending.push({ value: entry, insideOpaque: true });
+            pending.push({ value: entry, insideOpaque: !reactive || insideOpaque });
           }
         }
         continue;
       }
       if (raw instanceof Set) {
+        if (reactive && !insideOpaque) {
+          if (!isStandardCollection(raw)) throw new TypeError("deepSignal() reactive collections require a same-realm standard Set");
+          assertReactiveCollection(raw);
+        }
         for (const entry of raw) {
           if (isObjectLike(entry)) {
-            pending.push({ value: entry, insideOpaque: true });
+            pending.push({ value: entry, insideOpaque: !reactive || insideOpaque });
           }
+        }
+        continue;
+      }
+      if (raw instanceof WeakMap || raw instanceof WeakSet) {
+        if (reactive && !insideOpaque) {
+          if (!isStandardCollection(raw)) throw new TypeError("deepSignal() reactive collections require same-realm standard weak collections");
+          assertReactiveCollection(raw);
         }
         continue;
       }
@@ -509,6 +595,40 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       const wrapperRaw = toRaw(currentSource);
       if (wrapperRaw !== undefined) {
         if (wrapperRaw !== currentTarget) return false;
+        continue;
+      }
+      const sourceIsMap = currentSource instanceof Map;
+      const sourceIsSet = currentSource instanceof Set;
+      if (sourceIsMap || sourceIsSet) {
+        if (typeof currentTarget !== "object" || currentTarget === null) return false;
+        const targetCollection = currentTarget as object;
+        if (sourceIsMap ? !(targetCollection instanceof Map) : !(targetCollection instanceof Set)) return false;
+        const knownTarget = sources.get(currentSource);
+        if (knownTarget !== undefined) {
+          if (knownTarget !== targetCollection) return false;
+          continue;
+        }
+        const knownSource = targets.get(targetCollection);
+        if (knownSource !== undefined && knownSource !== currentSource) return false;
+        sources.set(currentSource, targetCollection);
+        targets.set(targetCollection, currentSource);
+        if (sourceIsMap) {
+          const sourceEntries = [...(currentSource as Map<unknown, unknown>)];
+          const targetEntries = [...(targetCollection as Map<unknown, unknown>)];
+          if (sourceEntries.length !== targetEntries.length) return false;
+          for (let index = 0; index < sourceEntries.length; index++) {
+            const sourceEntry = sourceEntries[index] as [unknown, unknown];
+            const targetEntry = targetEntries[index] as [unknown, unknown];
+            pending.push([sourceEntry[0], targetEntry[0]], [sourceEntry[1], targetEntry[1]]);
+          }
+        } else {
+          const sourceValues = [...(currentSource as Set<unknown>)];
+          const targetValues = [...(targetCollection as Set<unknown>)];
+          if (sourceValues.length !== targetValues.length) return false;
+          for (let index = 0; index < sourceValues.length; index++) {
+            pending.push([sourceValues[index], targetValues[index]]);
+          }
+        }
         continue;
       }
       if (!isPlainObjectOrArray(currentSource)) {
@@ -633,20 +753,77 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     return root;
   }
 
-  function prepareDeepValue<T>(value: T): T {
+  function cloneReactiveGraph<T>(value: T): T {
+    const clones = new WeakMap<object, object>();
+    const created: Array<[object, object]> = [];
+    const pending: object[] = [];
+    const resolve = (current: unknown): unknown => {
+      const raw = toRaw(current);
+      if (raw !== undefined) return isPlainObjectOrArray(raw) ? resolve(raw) : raw;
+      if (!isObjectLike(current)) return current;
+      if (current instanceof WeakMap || current instanceof WeakSet) return current;
+      const plain = isPlainObjectOrArray(current);
+      const map = current instanceof Map;
+      const set = current instanceof Set;
+      if (!plain && !map && !set) return current;
+      const found = clones.get(current);
+      if (found !== undefined) return found;
+      const clone: object = map ? new Map() : set ? new Set() :
+        Array.isArray(current) ? emptyArrayOfLength(current.length) : Object.create(Object.getPrototypeOf(current));
+      clones.set(current, clone);
+      created.push([current, clone]);
+      pending.push(current);
+      return clone;
+    };
+    const root = resolve(value) as T;
+    while (pending.length > 0) {
+      const source = pending.pop() as object;
+      const target = clones.get(source) as object;
+      if (source instanceof Map && target instanceof Map) {
+        for (const [key, entry] of source) {
+          const normalizedKey = resolve(key);
+          if (target.has(normalizedKey)) throw new TypeError("deepSignal() collection keys collide after proxy normalization");
+          target.set(normalizedKey, resolve(entry));
+        }
+      } else if (source instanceof Set && target instanceof Set) {
+        for (const entry of source) {
+          const normalized = resolve(entry);
+          if (target.has(normalized)) throw new TypeError("deepSignal() Set members collide after proxy normalization");
+          target.add(normalized);
+        }
+      } else {
+        for (const key of Reflect.ownKeys(source)) {
+          if (Array.isArray(source) && key === "length") continue;
+          const descriptor = Reflect.getOwnPropertyDescriptor(source, key);
+          if (descriptor === undefined) continue;
+          if (!("value" in descriptor)) throw new TypeError("deepSignal() does not support accessor properties");
+          descriptor.value = resolve(descriptor.value);
+          Reflect.defineProperty(target, key, descriptor);
+        }
+      }
+    }
+    for (const [source, target] of created) normalizedProxyCarriers.set(source, target);
+    return root;
+  }
+
+  function prepareDeepValue<T>(value: T, reactive = false): T {
     // Reassigning a value obtained from this deep signal is already known-good.
     // Avoid validating its entire graph again on this common O(1) path.
     const wrapperRaw = toRaw(value);
     if (wrapperRaw !== undefined) return wrapperRaw as T;
-    const containsProxy = assertDeepDataGraph(value);
-    return containsProxy ? cloneWithoutProxies(value) : value;
+    if (reactive && isObjectLike(value)) {
+      const cached = normalizedProxyCarriers.get(value);
+      if (cached !== undefined && matchesNormalizedGraph(value, cached)) return cached as T;
+    }
+    const containsProxy = assertDeepDataGraph(value, reactive);
+    return containsProxy ? (reactive ? cloneReactiveGraph(value) : cloneWithoutProxies(value)) : value;
   }
 
   // The graph and caches are factory-local, so runtimes keep independent
   // proxies and version sources while sharing this single Proxy implementation.
 
-  const unwrap = <T>(value: T): T => {
-    return prepareDeepValue(value);
+  const unwrap = <T>(value: T, reactive = false): T => {
+    return prepareDeepValue(value, reactive);
   };
 
   // Inherited members of the two prototypes a deep-signal target can have.
@@ -771,6 +948,321 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     trackIterationOf(metadata);
   };
 
+  const collectionVersion = (metadata: CollectionMetadata, kind: "values" | "existence" | "members", key: unknown): VersionSignal => {
+    const objectKey = isObjectLike(key) ? key : undefined;
+    let version = objectKey === undefined
+      ? metadata[kind].get(key)
+      : (kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers).get(objectKey);
+    if (version === undefined) {
+      version = adapter.createVersionSignal(0);
+      if (objectKey === undefined) metadata[kind].set(key, version);
+      else (kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers).set(objectKey, version);
+    }
+    // Primitive misses need a later mutation-driven sweep because they cannot
+    // be weakly keyed. Present keys are removed from this candidate set by the
+    // sweep and re-queued if a later delete removes them.
+    if (objectKey === undefined) metadata.prunable.add(key);
+    return version;
+  };
+
+  const weakCollectionVersion = (metadata: CollectionMetadata, kind: "weakValues" | "weakExistence" | "weakMembers", key: object): VersionSignal => {
+    const versions = metadata[kind];
+    let version = versions.get(key);
+    if (version === undefined) {
+      version = adapter.createVersionSignal(0);
+      versions.set(key, version);
+    }
+    return version;
+  };
+
+  const trackWeakCollectionKey = (
+    metadata: CollectionMetadata,
+    weakKind: "weakValues" | "weakExistence" | "weakMembers",
+    strongKind: "values" | "existence" | "members",
+    key: object | symbol,
+  ): VersionSignal => isObjectLike(key)
+    ? weakCollectionVersion(metadata, weakKind, key)
+    : collectionVersion(metadata, strongKind, key);
+
+  const notifyWeakCollectionKey = (
+    metadata: CollectionMetadata,
+    weakKind: "weakValues" | "weakExistence" | "weakMembers",
+    strongKind: "values" | "existence" | "members",
+    key: object | symbol,
+  ): void => {
+    const version = isObjectLike(key)
+      ? metadata[weakKind].get(key)
+      : metadata[strongKind].get(key);
+    if (version !== undefined) version.value += 1;
+  };
+
+  const trackCollectionVersion = (version: VersionSignal): void => {
+    adapter.markWatched(version);
+    version.value;
+  };
+
+  const collectionAggregate = (metadata: CollectionMetadata, kind: "size" | "keysIteration" | "entriesIteration"): VersionSignal => {
+    let version = metadata[kind];
+    if (version === undefined) metadata[kind] = version = adapter.createVersionSignal(0);
+    return version;
+  };
+
+  const notifyCollectionKey = (metadata: CollectionMetadata, kind: "values" | "existence" | "members", key: unknown): void => {
+    const objectKey = isObjectLike(key) ? key : undefined;
+    const version = objectKey === undefined
+      ? metadata[kind].get(key)
+      : (kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers).get(objectKey);
+    if (version !== undefined) version.value += 1;
+  };
+
+  const sweepCollectionKeys = (metadata: CollectionMetadata): void => {
+    if (adapter.getBatchDepth() !== 0) {
+      if (!scheduledCollectionSweeps.has(metadata)) {
+        scheduledCollectionSweeps.add(metadata);
+        queueMicrotask(() => {
+          scheduledCollectionSweeps.delete(metadata);
+          sweepCollectionKeys(metadata);
+        });
+      }
+      return;
+    }
+    for (const versions of [metadata.values, metadata.existence, metadata.members]) {
+      for (const [key, version] of versions) {
+        if (!adapter.hasSubscribers(version)) versions.delete(key);
+      }
+    }
+    metadata.prunable.clear();
+  };
+
+  function reactiveCollectionProxy(raw: object, kind: "Map" | "Set" | "WeakMap" | "WeakSet"): object {
+    const found = reactiveCollections.get(raw);
+    if (found !== undefined) return found.proxy;
+    const metadata: CollectionMetadata = {
+      values: new Map(), existence: new Map(), members: new Map(),
+      objectValues: new WeakMap(), objectExistence: new WeakMap(), objectMembers: new WeakMap(),
+      weakValues: new WeakMap(), weakExistence: new WeakMap(), weakMembers: new WeakMap(),
+      prunable: new Set(), methods: new Map(), proxy: undefined as unknown as object,
+    };
+    const normalize = (value: unknown): unknown => unwrap(value, true);
+    const wrapRead = <T>(value: T): T => wrap(value, true);
+    const trackAggregate = (name: "size" | "keysIteration" | "entriesIteration"): void => {
+      if (shouldTrackDeepRead()) trackCollectionVersion(collectionAggregate(metadata, name));
+    };
+    const batchWrite = <T>(callback: () => T): T => adapter.batch(() => adapter.untracked(callback));
+    const memoMethod = <T extends Function>(key: PropertyKey, create: () => T): T => {
+      let method = metadata.methods.get(key);
+      if (method === undefined) metadata.methods.set(key, method = create());
+      return method as T;
+    };
+    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } => ({
+      next() {
+        const step = iterator.next();
+        return step.done ? step : { done: false, value: convert(step.value) };
+      },
+      [Symbol.iterator]() { return this; },
+      get [Symbol.toStringTag]() { return tag; },
+    });
+    const proxy = new Proxy(raw, {
+      get(target, key) {
+        if (kind === "Map" && key === "size" || kind === "Set" && key === "size") {
+          trackAggregate("size");
+          return Reflect.get(target, "size", target);
+        }
+        const cachedMethod = metadata.methods.get(key);
+        if (cachedMethod !== undefined) return cachedMethod;
+        const method = (target as unknown as Record<PropertyKey, unknown>)[key];
+        if (typeof method !== "function") return Reflect.get(target, key, target);
+
+        if ((kind === "Map" || kind === "WeakMap") && key === "get") return memoMethod(key, () => (input: unknown) => {
+          const normalized = normalize(input);
+          if (kind === "WeakMap") {
+            if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.get, target, [normalized]);
+            if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakValues", "values", normalized));
+            return wrapRead(Reflect.apply(WeakMap.prototype.get, target, [normalized]));
+          }
+          if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "values", normalized));
+          return wrapRead(Map.prototype.get.call(target, normalized));
+        });
+        if ((kind === "Map" || kind === "WeakMap") && key === "has") return memoMethod(key, () => (input: unknown) => {
+          const normalized = normalize(input);
+          if (kind === "WeakMap") {
+            if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
+            if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakExistence", "existence", normalized));
+            return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
+          }
+          if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "existence", normalized));
+          return Map.prototype.has.call(target, normalized);
+        });
+        if (kind === "Map" && key === "set" || kind === "WeakMap" && key === "set") return memoMethod(key, () => (inputKey: unknown, inputValue: unknown) => {
+          const normalizedKey = normalize(inputKey);
+          const normalizedValue = normalize(inputValue);
+          if (kind === "WeakMap" && !isWeakCollectionKey(normalizedKey)) return WeakMap.prototype.set.call(target, normalizedKey as object, normalizedValue);
+          const had = kind === "Map" ? Map.prototype.has.call(target, normalizedKey) : WeakMap.prototype.has.call(target, normalizedKey as object);
+          const oldValue = kind === "Map" ? Map.prototype.get.call(target, normalizedKey) : WeakMap.prototype.get.call(target, normalizedKey as object);
+          batchWrite(() => {
+            if (kind === "Map") Map.prototype.set.call(target, normalizedKey, normalizedValue);
+            else WeakMap.prototype.set.call(target, normalizedKey as object, normalizedValue);
+            if (!had) {
+              if (kind === "Map") {
+                notifyCollectionKey(metadata, "values", normalizedKey);
+                notifyCollectionKey(metadata, "existence", normalizedKey);
+                const size = metadata.size; if (size !== undefined) size.value += 1;
+                const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
+                const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+              } else {
+                notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
+                notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalizedKey as object | symbol);
+              }
+            } else if (!Object.is(oldValue, normalizedValue)) {
+              if (kind === "Map") {
+                notifyCollectionKey(metadata, "values", normalizedKey);
+                const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+              } else {
+                notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
+              }
+            }
+          });
+          sweepCollectionKeys(metadata);
+          return proxy;
+        });
+        if ((kind === "Map" || kind === "WeakMap") && key === "delete") return memoMethod(key, () => (input: unknown) => {
+          const normalized = normalize(input);
+          const had = kind === "Map" ? Map.prototype.has.call(target, normalized) : WeakMap.prototype.has.call(target, normalized as object);
+          if (!had) return false;
+          batchWrite(() => {
+            if (kind === "Map") Map.prototype.delete.call(target, normalized);
+            else WeakMap.prototype.delete.call(target, normalized as object);
+            if (kind === "Map") {
+              notifyCollectionKey(metadata, "values", normalized);
+              notifyCollectionKey(metadata, "existence", normalized);
+              const size = metadata.size; if (size !== undefined) size.value += 1;
+              const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
+              const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+              if (!isObjectLike(normalized)) metadata.prunable.add(normalized);
+            } else {
+              notifyWeakCollectionKey(metadata, "weakValues", "values", normalized as object | symbol);
+              notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalized as object | symbol);
+            }
+          });
+          sweepCollectionKeys(metadata);
+          return true;
+        });
+        if ((kind === "Map" || kind === "Set") && key === "clear") return memoMethod(key, () => () => {
+          if ((kind === "Map" ? (target as Map<unknown, unknown>).size : (target as Set<unknown>).size) === 0) return undefined;
+          batchWrite(() => {
+            if (kind === "Map") {
+              for (const item of Map.prototype.keys.call(target) as IterableIterator<unknown>) {
+                notifyCollectionKey(metadata, "values", item); notifyCollectionKey(metadata, "existence", item);
+                if (!isObjectLike(item)) metadata.prunable.add(item);
+              }
+              Map.prototype.clear.call(target);
+            } else {
+              for (const item of Set.prototype.values.call(target) as IterableIterator<unknown>) {
+                notifyCollectionKey(metadata, "members", item);
+                if (!isObjectLike(item)) metadata.prunable.add(item);
+              }
+              Set.prototype.clear.call(target);
+            }
+            const size = metadata.size; if (size !== undefined) size.value += 1;
+            const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
+            const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+          });
+          sweepCollectionKeys(metadata);
+          return undefined;
+        });
+        if ((kind === "Set" || kind === "WeakSet") && key === "has") return memoMethod(key, () => (input: unknown) => {
+          const normalized = normalize(input);
+          if (kind === "WeakSet") {
+            if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
+            if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakMembers", "members", normalized));
+            return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
+          }
+          if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "members", normalized));
+          return Set.prototype.has.call(target, normalized);
+        });
+        if ((kind === "Set" || kind === "WeakSet") && key === "add") return memoMethod(key, () => (input: unknown) => {
+          const normalized = normalize(input);
+          if (kind === "WeakSet" && !isWeakCollectionKey(normalized)) return WeakSet.prototype.add.call(target, normalized as object);
+          const had = kind === "Set" ? Set.prototype.has.call(target, normalized) : WeakSet.prototype.has.call(target, normalized as object);
+          batchWrite(() => {
+            if (kind === "Set") Set.prototype.add.call(target, normalized); else WeakSet.prototype.add.call(target, normalized as object);
+            if (!had) {
+              if (kind === "Set") {
+                notifyCollectionKey(metadata, "members", normalized);
+                const size = metadata.size; if (size !== undefined) size.value += 1;
+                const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
+                const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+              } else {
+                notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
+              }
+            }
+          });
+          sweepCollectionKeys(metadata);
+          return proxy;
+        });
+        if ((kind === "Set" || kind === "WeakSet") && key === "delete") return memoMethod(key, () => (input: unknown) => {
+          const normalized = normalize(input);
+          const had = kind === "Set" ? Set.prototype.has.call(target, normalized) : WeakSet.prototype.has.call(target, normalized as object);
+          if (!had) return false;
+          batchWrite(() => {
+            if (kind === "Set") Set.prototype.delete.call(target, normalized); else WeakSet.prototype.delete.call(target, normalized as object);
+            if (kind === "Set") {
+              notifyCollectionKey(metadata, "members", normalized);
+              const size = metadata.size; if (size !== undefined) size.value += 1;
+              const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
+              const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+              if (!isObjectLike(normalized)) metadata.prunable.add(normalized);
+            } else {
+              notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
+            }
+          });
+          sweepCollectionKeys(metadata);
+          return true;
+        });
+
+        if (kind === "Map" && (key === "keys" || key === "values" || key === "entries" || key === Symbol.iterator)) return memoMethod(key, () => () => {
+          trackAggregate(key === "keys" ? "keysIteration" : "entriesIteration");
+          const iterator = key === "keys" ? Map.prototype.keys.call(target) : key === "values" ? Map.prototype.values.call(target) : Map.prototype.entries.call(target);
+          const convert = key === "entries" || key === Symbol.iterator
+            ? (item: unknown) => { const pair = item as [unknown, unknown]; return [wrapRead(pair[0]), wrapRead(pair[1])]; }
+            : (item: unknown) => wrapRead(item);
+          return wrapIterator(iterator as Iterator<unknown>, convert, "Map Iterator");
+        });
+        if (kind === "Set" && (key === "keys" || key === "values" || key === "entries" || key === Symbol.iterator)) return memoMethod(key, () => () => {
+          trackAggregate("entriesIteration");
+          const iterator = key === "entries" ? Set.prototype.entries.call(target) : Set.prototype.values.call(target);
+          const convert = key === "entries"
+            ? (item: unknown) => { const pair = item as [unknown, unknown]; const value = wrapRead(pair[0]); return [value, value]; }
+            : (item: unknown) => wrapRead(item);
+          return wrapIterator(iterator as Iterator<unknown>, convert, "Set Iterator");
+        });
+        if ((kind === "Map" || kind === "Set") && key === "forEach") return memoMethod(key, () => (callback: (value: unknown, key: unknown, collection: object) => void, thisArg?: unknown) => {
+          if (typeof callback !== "function") throw new TypeError("callback must be a function");
+          trackAggregate("entriesIteration");
+          const native = kind === "Map" ? Map.prototype.forEach : Set.prototype.forEach;
+          return Reflect.apply(native, target, [(value: unknown, entryKey: unknown) => Reflect.apply(callback, thisArg, [wrapRead(value), wrapRead(entryKey), proxy])]);
+        });
+        if (kind === "Set" && ["union", "intersection", "difference", "symmetricDifference", "isSubsetOf", "isSupersetOf", "isDisjointFrom"].includes(String(key))) return memoMethod(key, () => (other: unknown) => {
+          trackAggregate("entriesIteration");
+          // Set proposal methods consume their other operand through the set-like
+          // protocol (size/has/keys). Keeping the proxy intact collects those
+          // reads when `other` is another reactive collection.
+          return Reflect.apply(method, target, [other]);
+        });
+        return Reflect.get(target, key, target);
+      },
+      set() { throw new TypeError("deepSignal() reactive collections do not support own properties"); },
+      deleteProperty() { throw new TypeError("deepSignal() reactive collections do not support own properties"); },
+      defineProperty() { throw new TypeError("deepSignal() does not support collection property descriptors"); },
+      preventExtensions() { throw new TypeError("deepSignal() reactive collections must remain extensible"); },
+      setPrototypeOf() { throw new TypeError("deepSignal() does not support prototype mutation"); },
+    });
+    metadata.proxy = proxy;
+    reactiveCollections.set(raw, metadata);
+    proxyToRaw.set(proxy, raw);
+    return proxy;
+  }
+
   const notifyTruncatedIndices = (
     metadata: PropertyMetadata,
     currentLength: number,
@@ -812,17 +1304,23 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
    * `get` trap uses this to reject a non-configurable, non-writable property
    * whose value cannot be substituted, before `wrap()` performs the swap.
    */
-  const isWrappedByValue = (value: unknown): boolean =>
-    isPlainObjectOrArray(value) || value instanceof Map || value instanceof Set;
+  const isWrappedByValue = (value: unknown, reactive = false): boolean =>
+    isPlainObjectOrArray(value) || value instanceof Map || value instanceof Set ||
+    reactive && (value instanceof WeakMap || value instanceof WeakSet);
 
-  const wrap = <T>(value: T): T => {
+  const wrap = <T>(value: T, reactive = false): T => {
     const rawValue = (toRaw(value) as T | undefined) ?? value;
+    if (reactive && isStandardCollection(rawValue)) {
+      const kind = rawValue instanceof Map ? "Map" : rawValue instanceof Set ? "Set" : rawValue instanceof WeakMap ? "WeakMap" : "WeakSet";
+      return reactiveCollectionProxy(rawValue, kind) as T;
+    }
     if (rawValue instanceof Map) return readonlyMapView(rawValue) as T;
     if (rawValue instanceof Set) return readonlySetView(rawValue) as T;
     if (!isPlainObjectOrArray(rawValue)) return rawValue;
     assertExtensible(rawValue);
 
-    const cached = rawToMetadata.get(rawValue);
+    const cache = reactive ? reactiveRawToMetadata : rawToMetadata;
+    const cached = cache.get(rawValue);
     if (cached !== undefined) return cached.proxy as T;
     assertDataProperties(rawValue);
 
@@ -905,7 +1403,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         // is. Gating this on `isPlainObjectOrArray(result)` let a frozen
         // Map/Set-valued property past the friendly error and into a raw engine
         // `TypeError` later on.
-        if (isWrappedByValue(result)) {
+        if (isWrappedByValue(result, reactive)) {
           const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
           if (
             descriptor !== undefined &&
@@ -919,7 +1417,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           }
         }
 
-        return wrap(result);
+        return wrap(result, reactive);
       },
 
       set(target, key, nextValue, receiver) {
@@ -939,7 +1437,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         const existed = Reflect.has(target, key);
         const owned = Object.prototype.hasOwnProperty.call(target, key);
         const oldLength = Array.isArray(target) ? target.length : undefined;
-        const rawNextValue = unwrap(nextValue);
+        const rawNextValue = unwrap(nextValue, reactive);
         const succeeded = Reflect.set(target, key, rawNextValue, target);
         if (!succeeded) return false;
 
@@ -1017,7 +1515,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return descriptor;
         }
 
-        descriptor.value = wrap(descriptor.value);
+        descriptor.value = wrap(descriptor.value, reactive);
         return descriptor;
       },
 
@@ -1045,16 +1543,18 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     });
 
     metadata.proxy = proxy;
-    rawToMetadata.set(rawValue, metadata);
+    cache.set(rawValue, metadata);
     proxyToRaw.set(proxy, rawValue);
     return proxy as T;
   };
 
   class DeepSignalImpl<T extends object> implements DeepSignalLike<T> {
     readonly #source: DeepSignalSource<T>;
+    readonly #reactiveCollections: boolean;
 
-    constructor(source: DeepSignalSource<T>) {
+    constructor(source: DeepSignalSource<T>, reactiveCollections: boolean) {
       this.#source = source;
+      this.#reactiveCollections = reactiveCollections;
       const protocol = getReadableInterop(this.#source);
       if (protocol !== undefined) attachReadableInterop(this, protocol);
     }
@@ -1062,12 +1562,12 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     get value(): T {
       // Runtime collection views intentionally keep the established `.value: T`
       // public type. `DeepSignal<T>` must remain assignable to `Signal<T>`.
-      return wrap(this.#source.value) as T;
+      return wrap(this.#source.value, this.#reactiveCollections) as T;
     }
 
     set value(nextValue: T) {
-      const rawValue = unwrap(nextValue);
-      assertRootValue(rawValue);
+      const rawValue = unwrap(nextValue, this.#reactiveCollections);
+      assertRootValue(rawValue, this.#reactiveCollections);
       this.#source.value = rawValue as T;
     }
 
@@ -1103,13 +1603,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
    * Mutations must go through `.value`; changes made through the original raw
    * object are intentionally not observable.
    */
-  function deepSignal<T extends object>(initialValue: T): DeepSignalLike<T> {
-    const rawInitialValue = prepareDeepValue(initialValue);
-    assertRootValue(rawInitialValue);
+  function deepSignal<T extends object>(initialValue: T, options?: DeepSignalOptions): DeepSignalLike<T> {
+    const reactiveCollections = options?.collections === "reactive";
+    const rawInitialValue = prepareDeepValue(initialValue, reactiveCollections);
+    assertRootValue(rawInitialValue, reactiveCollections);
 
-    wrap(rawInitialValue);
+    wrap(rawInitialValue, reactiveCollections);
     const root = adapter.createSignal(rawInitialValue as T);
-    const result = new DeepSignalImpl(root);
+    const result = new DeepSignalImpl(root, reactiveCollections);
     adapter.registerDeepSignal?.(result);
     return result;
   }

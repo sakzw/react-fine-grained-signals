@@ -24,7 +24,7 @@ const state = deepSignal(initialValue, { collections: "reactive" });
 - reactive modeのMap/Set mutatorは `.value` 経由で成功し、通知を出す。WeakMap/WeakSetの対応methodも同様。mutation methodのnative-compatible return valueを保つ（Map/WeakMap.setとSet/WeakSet.addは同じreactive proxyを返す）。
 - `state.peek()`と元のraw referenceはuntracked raw valueを返す。rawを直接変更してもdependency notificationは起きない。
 - reactive mode内のMap/WeakMap `get` とMap/Setの全iterator・`forEach`は、plain object/arrayのkey/member/valueを同じmodeのdeep proxyとして返す。raw collectionにはraw key/member/valueを保存し、入力proxyは保存前にunproxyする。`get` / `has` / `delete` / `add` は引数proxyをraw identityへ正規化する。
-- WeakMap/WeakSetの既存entriesはenumerateできない。initial traversalによる完全検査を約束せず、method経由のkey normalization、value unwrap、get時のlazy wrapを行う。weak collectionを列挙するAPI、`size`、`clear`は提供しない。
+- WeakMap/WeakSetの既存entriesはenumerateできない。initial traversalによる完全検査を約束せず、method経由のkey normalization、value unwrap、get時のlazy wrapを行う。native runtimeが許可するnon-registered symbol keyも追跡し、weak collectionを列挙するAPI、`size`、`clear`は提供しない。
 
 ## Proxy identityとalias
 
@@ -44,8 +44,8 @@ const state = deepSignal(initialValue, { collections: "reactive" });
 | Set | `has(v)`はmemberごと。`size`はsize。全iterationはmember iteration | new add / existing delete:該当member/size/iteration。重複add、不在delete:なし。非empty clear:該当member/size/iteration |
 
 Iteration dependencyは`keys()` / `values()` / `entries()` / `Symbol.iterator` / `forEach()`を呼んだ時点で取得し、native iteratorの遅延消費・live iterationの挙動は保つ。iteratorが返すobject key/member/valueは消費時に同mode proxyへwrapする。
-| WeakMap | `get(k)`はkeyごとのvalue。`has(k)`はkeyごとのexistence。object key限定 | new set: value/existence。existing value change: valueのみ。同値set:なし。成功delete:該当keyのvalue/existence |
-| WeakSet | `has(v)`はobject memberごと | new add / successful delete:該当member。重複add、不在delete:なし |
+| WeakMap | `get(k)`はkeyごとのvalue。`has(k)`はkeyごとのexistence。object keyとnative runtimeが許すnon-registered symbol key | new set: value/existence。existing value change: valueのみ。同値set:なし。成功delete:該当keyのvalue/existence |
+| WeakSet | `has(v)`はobject memberごと。native runtimeが許すnon-registered symbolも対象 | new add / successful delete:該当member。重複add、不在delete:なし |
 
 `Map.size`は値だけを変えるsetで再実行しない。`Map.keys()`も値更新で再実行しない。entry iteratorはvalueを返すため既存keyのvalue更新で再実行する。Weak collectionはkey単位以外の依存を持たない。
 
@@ -53,7 +53,7 @@ Iteration dependencyは`keys()` / `values()` / `entries()` / `Symbol.iterator` /
 
 - internal collection methodsの実装読みはuntrackedにし、ユーザーが実際に読んだkey/value/iterationだけを収集する。
 - writesは`adapter.batch`を通す。`untracked()`ではread dependencyを足さず、write通知は通常どおりflushする。
-- effect、React render subscriber、foreign readable bridgeの購読がなくなったremoved key metadataを、mutation後のflush時に既存のliveness-aware version sourceで剪定する。Map/Setに現存するkey/memberのmetadataは、購読者がいなくても将来の変更通知に必要なため保持できる。WeakMap/WeakSet key metadataはnative WeakMapを使い、別Mapでkeyを保持しない。存在しないprimitive keyのmetadataは次のcollection mutation時にsweepしてdead dependencyを剪定する。購読解除直後・mutationなしの同期的解放は保証せず、M2ではruntime lifecycle hookを追加しない。
+- effect、React render subscriber、foreign readable bridgeの購読がなくなったremoved key metadataを、mutation後のflush時に既存のliveness-aware version sourceで剪定する。外側の`batch()`内で削除されたkeyは、outer batchのflush後のmicrotaskでsweepする。Map/Setに現存するkey/memberのmetadataは、購読者がいなくても将来の変更通知に必要なため保持できる。object key metadataはWeakMapで保持し、別Mapでkeyを強参照しない。primitive key metadataは次のcollection mutation/sweepまで残ることがある。購読解除直後・mutationなしの同期的解放は保証せず、M2ではruntime lifecycle hookを追加しない。
 - speculative readでcollection dependencyをdurable subscriptionとしてpromotionしない。existing render/graph ownerとcross-copy contractを維持する。
 - descriptor/prototype mutation、non-extensible targets、class instancesは現行同様にsafe boundaryを定義し、partial reactivityを誤って主張しない。
 
@@ -65,4 +65,12 @@ Iteration dependencyは`keys()` / `values()` / `entries()` / `Symbol.iterator` /
 4. collection raw references、weak entry prepopulation、cross-copy deep proxyの限界を実測・検証し、できない保証はAPI docsで明示する。
 5. M2完了時にpublic API docs、migration note、既知のlimits、性能前後の比較計画を更新する。
 
-この文書はM2のdesign gateであり、実装・qualification完了の記録ではない。
+## 実装結果
+
+- `DeepSignalOptions`と `{ collections: "reactive" }` を公開し、default modeのopaque collection動作を維持した。
+- mode別proxy cache、Map/Set/WeakMap/WeakSet instrumentation、raw/proxy identity normalization、lazy wrapping、batch通知、dependency pruningを実装した。
+- raw/proxy重複key/memberは正規化後にTypeErrorで拒否する。同一realm標準collectionのみを受け入れ、subclass/cross-realmは拒否する。Weak collectionのsymbol keyはnative runtimeが許す場合に対応する。
+- `deep-signal-collections.test.ts`、`deep-signal.test.ts`、`deep-signal-review-regressions.test.ts` が66 tests passed。`tsc --noEmit`も成功。
+- 公開利用例と制限はcore primitives guide、およびv0.3 migration guideに記載した。性能比較はM7で同一条件のbaselineと比較する。
+
+設計gateはM2のAPI/dependency契約を記録し、この節はその契約に対する実装・focused qualificationの結果を記録する。

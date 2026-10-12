@@ -11,4 +11,5 @@ export {
 export {
   deepSignal,
   type DeepSignal,
+  type DeepSignalOptions,
 } from "./deep-signal.js";

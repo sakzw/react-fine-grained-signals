@@ -87,7 +87,7 @@ Runs the callback without collecting reactive dependencies, and returns its resu
 ## deepSignal
 
 ```ts
-deepSignal<T extends object>(initialValue: T): DeepSignal<T>
+deepSignal<T extends object>(initialValue: T, options?: DeepSignalOptions): DeepSignal<T>
 ```
 
 Adds property-level tracking for plain objects and arrays. Proxies are created lazily and cached, so aliases and cycles retain stable identity.
@@ -108,7 +108,7 @@ state.value.items.push("second");
 - Only assignment, deletion, and standard array mutations made through `state.value` are observable.
 - `state.peek()` returns the untracked raw root and should be used for reads only.
 - The root must be a mutable plain object or array containing data properties. Accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1, as are non-extensible objects — they are rejected rather than made partially reactive.
-- Nested plain objects and arrays are reactive. Class instances, functions, `Date`, `Map`, `Set`, promises, and existing signals are treated as opaque values.
+- By default, nested plain objects and arrays are reactive. Class instances, functions, `Date`, collections, promises, and existing signals are treated as opaque values.
 - Array mutation methods (`push`, `splice`, `sort`, ...) do not subscribe the caller to the array they change; only the readers of the affected indices, `length`, and keys are notified. A `push` inside an effect therefore does not make that effect re-run on every later push.
 - Key enumeration and own-key checks (`Object.keys`, `for...in`, `Object.hasOwn`, `hasOwnProperty.call`) depend on which keys exist, not on their values. Reading a value through `Object.getOwnPropertyDescriptor(...).value` is not tracked as a value read; read the property itself.
 - Keys inherited from `Object.prototype` (`constructor`, `toString`, ...) stay reactive in dictionary-style objects: reading or checking one re-runs once it becomes an own property.
@@ -119,7 +119,22 @@ Only an opaque `Map` or `Set` reached directly from a reactive plain-object or a
 
 ### Where the view guarantee stops
 
-This view guarantee does not cross an opaque boundary. Class instances, `Date`, functions, collection entries, accessor results, prototype state, private fields, closure state, `WeakMap` entries, and Promise internals are raw, non-reactive regions; values obtained through those regions, and opaque values mutated after they are stored, are not protected from direct mutation. To avoid invoking user code, write validation inspects only own data descriptors and `Map` / `Set` entries; it never calls getters or setters and cannot inspect the other internal regions above. Such writes are rejected when those inspected values contain library proxies.
+In the default mode, this view guarantee does not cross an opaque boundary. Class instances, `Date`, functions, collection entries, accessor results, prototype state, private fields, closure state, `WeakMap` entries, and Promise internals are raw, non-reactive regions; values obtained through those regions, and opaque values mutated after they are stored, are not protected from direct mutation. To avoid invoking user code, write validation inspects only own data descriptors and `Map` / `Set` entries; it never calls getters or setters and cannot inspect the other internal regions above. Such writes are rejected when those inspected values contain library proxies.
+
+### Reactive collections (opt in)
+
+Pass `{ collections: "reactive" }` to opt in to reactive `Map`, `Set`, `WeakMap`, and `WeakSet`, including collection roots:
+
+```ts
+const state = deepSignal(new Map<string, { count: number }>(), {
+  collections: "reactive",
+});
+state.value.set("item", { count: 1 });
+```
+
+The option also applies to collections nested in plain objects and arrays. Map `get` and `has` track independently per key; `size`, key iteration, and entry iteration have separate dependencies. Set `has`, `size`, and iteration are tracked separately. Weak collections track only their key operations and cannot be enumerated or observed through `size` or `clear`.
+
+Collection keys, members, and values that are plain objects or arrays are stored raw and returned as deep proxies. Raw keys and proxies created by this runtime identify the same entry. The proxy cache is separate from the default mode, so the same raw object can have different proxy identities in the two modes. Mutating the original collection or a collection returned by `.peek()` bypasses notifications. Weak collection entries cannot be scanned during initialization; method calls through the reactive proxy normalize keys and wrap returned values lazily. Non-registered symbol keys are supported by weak collections when the native runtime permits them. Only same-realm built-in collections are supported.
 
 ## isSignal
 

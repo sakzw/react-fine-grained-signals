@@ -114,9 +114,9 @@ Renders an array whose row identity is intentionally its position, so it takes n
 
 ## Map and Set inputs
 
-`deepSignal` supports arrays, so array mutations and deep item reads can be reactive. `Map` and `Set` are intentionally opaque to it.
+By default, `deepSignal` treats `Map` and `Set` as opaque. Opt into reactive collection tracking with `deepSignal(value, { collections: "reactive" })`; this covers collection keys, members, size, and iteration in tracked reads.
 
-A `Map` or `Set` reached directly from a reactive plain object or array is exposed by `.value` as a read-only runtime view, although its TypeScript type remains mutable. Use immutable replacement: copy, change, then assign the new collection to the signal.
+A `Map` or `Set` in the default mode is exposed by `.value` as a read-only runtime view, although its TypeScript type remains mutable. Use immutable replacement in that mode: copy, change, then assign the new collection to the signal.
 
 ```ts
 const next = new Map(labels.value);
