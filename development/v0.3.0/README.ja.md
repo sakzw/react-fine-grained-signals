@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M0・M1を完了。M2のcollection API/dependency contractを設計中。
+- 状態: M0・M1を完了。M2 collection API/dependency contractを確定し、実装準備中。
 - 統合ブランチ: `codex/v0.3.0-m0`
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
@@ -17,7 +17,7 @@
 |---|---|---|---|---|
 | M0 | 現行契約、React統合、Vue 3.6差分、性能・保守性、変更候補を棚卸し | v0.2.1基準固定 | 公開契約・非目標・breaking候補・依存関係を記録 | 完了 |
 | M1 | signal/computed/effect/batch/untracked、ownership、subscription、interopの正確性・性能レビュー | M0 | 回帰契約を固定し、証拠のある改善だけ採用。cross-copy、speculative render、ownershipを維持 | 完了・コード変更なし |
-| M2 | Map/Set/WeakMap/WeakSetを含むdeep reactivityと型・依存粒度 | M0、M1のruntime契約 | 公開API、identity、dependency matrix、weak semanticsを先に確定し、境界テスト後に実装 | 次・設計中 |
+| M2 | Map/Set/WeakMap/WeakSetを含むdeep reactivityと型・依存粒度 | M0、M1のruntime契約 | 公開API、identity、dependency matrix、weak semanticsを先に確定し、境界テスト後に実装 | 実装準備中 |
 | M3 | React render tracking境界、Hooks、Fast Refresh、StrictMode、Suspense、Concurrent、SSR | M0。M4より先に契約決定 | ReactのRules of Hooksに適合する候補を実環境で証明。`managed`を`inject`へ置換するだけでは完了にしない | 高リスク調査待ち |
 | M4 | React Compilerのsignal read、memoization、directive、diagnostics | M3のtracking契約 | build-timeと実行時のstale readをcompiler有効/無効で確認 | 未着手 |
 | M5 | transform検出、安全性、RSC、diagnostics、bundler互換性 | M3のtransform契約。独立調査は先行可 | 静的に証明できる範囲と曖昧な範囲を分け、誤注入を安全に拒否 | 未着手 |
@@ -40,9 +40,9 @@
 
 ## 直近の作業
 
-1. M2の公開APIはM0の「collection reactive opt-in」方針をもとに詳細契約を決め、Map/Set/WeakMap/WeakSetごとのdependency matrixと型を設計する。
-2. M2実装は確定したAPIとruntime adapter契約を別worktreeに切り出す。M3のHooks/Fast Refresh設計調査も別担当・別worktreeで並行する。
+1. M2の確定したAPI、dependency matrix、identity、weak semanticsは [M2 collection contract](m2-collection-contract.ja.md) を参照する。runtime adapterのcleanup境界を実装前に確認する。
+2. M2実装は契約とruntime adapterのcleanup要件に沿って進め、collection root、nested collection、型、cleanupの境界テストを追加する。
 3. M3は既存Fast Refresh harnessとcompiler資料を使い、Hooks適合と厳密なrender attempt cleanupを同時に満たす候補を検証する。
 4. 各マイルストーン完了時にdiff review、必要な検証、記録、意味のあるcommitを行う。テスト実行は該当する変更の正しさを確認するために行う。
 
-詳細は [M0 architecture review](m0-architecture-review.ja.md) を参照。
+詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。

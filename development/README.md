@@ -15,6 +15,7 @@ Engineering records for contributors and maintainers. These documents may descri
 - [Roadmap and current status (日本語)](v0.3.0/README.ja.md)
 - [M0 architecture and contract review (日本語)](v0.3.0/m0-architecture-review.ja.md)
 - [M1 reactive core review (日本語)](v0.3.0/m1-core-review.ja.md)
+- [M2 collection reactivity contract (日本語)](v0.3.0/m2-collection-contract.ja.md)
 
 ## Architecture and migration reviews
 
