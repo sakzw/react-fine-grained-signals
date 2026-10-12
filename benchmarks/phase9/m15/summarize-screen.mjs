@@ -6,7 +6,7 @@ if (start < 0) throw new Error("Could not locate screen JSON payload after progr
 const data = JSON.parse(text.slice(start));
 writeFileSync(new URL("./screen-results-raw.json", import.meta.url), `${JSON.stringify(data, null, 2)}\n`);
 const median = (values) => {
-  const sorted = [...values].sort((left, right) => left - right);
+  const sorted = values.toSorted((left, right) => left - right);
   return sorted[Math.floor(sorted.length / 2)];
 };
 for (const caseId of ["source/read@1", "source/write-read@1"]) {

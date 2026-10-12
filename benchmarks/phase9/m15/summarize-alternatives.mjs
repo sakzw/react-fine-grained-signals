@@ -2,11 +2,11 @@ import { readFileSync } from "node:fs";
 const path = process.argv[2] ?? "./screen-alternatives-results.json";
 const data = JSON.parse(readFileSync(new URL(path, import.meta.url), "utf8"));
 const median = (values) => {
-  const sorted = [...values].sort((left, right) => left - right);
+  const sorted = values.toSorted((left, right) => left - right);
   return sorted[Math.floor(sorted.length / 2)];
 };
 const quantile = (values, fraction) => {
-  const sorted = [...values].sort((left, right) => left - right);
+  const sorted = values.toSorted((left, right) => left - right);
   const position = (sorted.length - 1) * fraction;
   const low = Math.floor(position);
   const high = Math.ceil(position);

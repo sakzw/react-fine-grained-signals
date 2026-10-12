@@ -46,7 +46,7 @@ function balancedOrder(ids, roundIndex) {
     ];
     return sixRoundSchedule[roundIndex % sixRoundSchedule.length];
   }
-  if (ids.length === 2) return roundIndex % 2 === 0 ? [...ids] : [...ids].reverse();
+  if (ids.length === 2) return roundIndex % 2 === 0 ? [...ids] : [...ids].toReversed();
   return [...ids];
 }
 

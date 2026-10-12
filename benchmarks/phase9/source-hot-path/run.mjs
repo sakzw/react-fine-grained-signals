@@ -95,7 +95,7 @@ async function assertIdentity() {
   if (hashBytes(await readFile(join(repoRoot, "benchmarks/phase9/m1b-iterations.json"))) !== frozenSha256) throw new Error("ABORT: frozen iteration file changed during diagnostic run.");
 }
 function median(values) {
-  const sorted = [...values].sort((a, b) => a - b); const mid = Math.floor(sorted.length / 2);
+  const sorted = values.toSorted((a, b) => a - b); const mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 function quantile(sorted, p) {

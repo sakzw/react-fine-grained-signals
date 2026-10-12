@@ -67,6 +67,8 @@ try {
   if (artifact.sha256 !== manifest.currentRuntime.artifactSha256) throw new Error("Current dist changed during the A/B run.");
 } catch (error) {
   if (error?.code !== "ENOENT") throw error;
+  // This is an independent usage validation; the caught ENOENT explains why setup began, not why the requested mode is invalid.
+  // oxlint-disable-next-line preserve-caught-error -- the caught ENOENT selects setup; this is an independent usage validation.
   if (mode !== "session" || session !== 1) throw new Error("Start session 1 before auxiliary or allocation runs.");
 
   // Capture dirty state before creating any run outputs. Thus this inventory
@@ -74,6 +76,8 @@ try {
   const preRunStatus = await gitText("status", "--porcelain");
   const currentHead = await gitText("rev-parse", "HEAD");
   const releaseCommit = await gitText("rev-parse", `${RELEASED_TAG}^{commit}`);
+  // The earlier ENOENT only selected first-run setup; this integrity failure has its own cause.
+  // oxlint-disable-next-line preserve-caught-error -- the earlier ENOENT selected first-run setup; this integrity failure is independent.
   if (releaseCommit !== RELEASED_COMMIT) throw new Error(`Pinned v0.1.1 tag mismatch: expected ${RELEASED_COMMIT}, found ${releaseCommit}.`);
   const iterationBytes = await readFile(resolve(here, "m1b-iterations.json"));
   const currentArtifact = await hashCurrentRuntimeArtifact();

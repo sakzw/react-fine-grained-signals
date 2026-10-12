@@ -17,7 +17,7 @@ for (const value of [source, doubled]) {
   assert.deepEqual(Object.getOwnPropertyNames(value), []);
   assert.deepEqual(Object.getOwnPropertySymbols(value), [SIGNAL_BRAND]);
   assert.deepEqual(Object.getOwnPropertySymbols(Object.getPrototypeOf(value)), []);
-  assert.deepEqual(Object.getOwnPropertyNames(Object.getPrototypeOf(value)).sort(), ["constructor", "peek", "value"].sort());
+  assert.deepEqual(Object.getOwnPropertyNames(Object.getPrototypeOf(value)).toSorted(), ["constructor", "peek", "value"].toSorted());
   assert.deepEqual(Object.getOwnPropertyDescriptor(value, SIGNAL_BRAND), {
     value: 1, enumerable: false, writable: false, configurable: false,
   });

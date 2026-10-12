@@ -21,7 +21,7 @@ const baseOrder = [
 const rotate = (items, count) => [...items.slice(count), ...items.slice(0, count)];
 const schedule = [0, 1, 2, 3].flatMap((rotation) => {
   const order = rotate(baseOrder, rotation);
-  return [order, [...order].reverse()];
+  return [order, order.toReversed()];
 });
 const workerPath = fileURLToPath(new URL("./screen-worker.mjs", import.meta.url));
 const cases = [

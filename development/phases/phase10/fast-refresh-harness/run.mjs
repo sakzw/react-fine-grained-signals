@@ -50,7 +50,7 @@ ${signalImport}
 export function Counter() {
 ${tryStart}
   const [local, setLocal] = useState(0);
-${extraHooks}  window.__hmrMetrics.renders += 1;
+${extraHooks}  window.hmrMetrics.renders += 1;
   const signalValue = ${signalRead};
   return (
     <section data-testid="counter">
@@ -75,7 +75,7 @@ export default function App() {
 };
 
 const indexHtml = `<!doctype html><html><head><meta charset="UTF-8"><title>Fast Refresh HMR harness</title></head><body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body></html>`;
-const mainSource = `import React from "react"; import { createRoot } from "react-dom/client"; import App from "./App";\nconst boot = Number(sessionStorage.getItem("__rfgs_hmr_boots") ?? 0) + 1; sessionStorage.setItem("__rfgs_hmr_boots", String(boot));\nwindow.__hmrMetrics = { renders: 0, boot };\ncreateRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);\n`;
+const mainSource = `import React from "react"; import { createRoot } from "react-dom/client"; import App from "./App";\nconst boot = Number(sessionStorage.getItem("__rfgs_hmr_boots") ?? 0) + 1; sessionStorage.setItem("__rfgs_hmr_boots", String(boot));\nwindow.hmrMetrics = { renders: 0, boot };\ncreateRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);\n`;
 const storeSource = (variant) => {
   const sourceName = variant === 'preact-oxc' ? '@preact/signals-react' : 'react-fine-grained-signals';
   return `import { signal } from "${sourceName}";\nexport const count = signal(0);\n`;
@@ -221,7 +221,7 @@ async function runCase(variant, server, scenario) {
     // This avoids network-idle hangs from Vite's HMR websocket and slow first transforms.
     await page.goto(server.url, { waitUntil: 'commit' });
     await page.getByTestId('counter').waitFor();
-    const boot = await page.evaluate(() => window.__hmrMetrics.boot);
+    const boot = await page.evaluate(() => window.hmrMetrics.boot);
     const initialTransform = await fetch(`${server.url}src/App.tsx`).then((response) => response.text());
     const initialSignature = initialTransform.split('\n').filter((line) => /RefreshSig|RefreshReg|createSignature|_s\d?\(|try\s*\{|finish\(\)/.test(line));
 
@@ -233,7 +233,7 @@ async function runCase(variant, server, scenario) {
     await setVariantSource(variant, scenario.edited);
     await waitForUpdate(page, '[data-testid="jsx-label"]', scenario.edited.jsx, `${variant.id}/${scenario.id} HMR`);
     const finalLocal = await page.getByTestId('local').textContent();
-    assert(await page.evaluate(() => window.__hmrMetrics.boot) === boot, `${variant.id}/${scenario.id}: HMR caused a full page reload`);
+    assert(await page.evaluate(() => window.hmrMetrics.boot) === boot, `${variant.id}/${scenario.id}: HMR caused a full page reload`);
     if (scenario.id === 'jsx-only') {
       assert(finalLocal === '1', `${variant.id}/${scenario.id}: JSX-only edit did not preserve local state (saw ${finalLocal})`);
     } else {
@@ -262,10 +262,10 @@ async function runCase(variant, server, scenario) {
       await waitForUpdate(page, '[data-testid="signal"]', String(signalBefore + 1), `${variant.id}/${scenario.id} signal update after HMR`);
       await page.locator('#toggle').click();
       await page.getByTestId('hidden').waitFor();
-      const rendersWhileUnmounted = await page.evaluate(() => window.__hmrMetrics.renders);
+      const rendersWhileUnmounted = await page.evaluate(() => window.hmrMetrics.renders);
       await page.locator('#signal-increment').click();
       await page.waitForTimeout(100);
-      assert(await page.evaluate(() => window.__hmrMetrics.renders) === rendersWhileUnmounted, `${variant.id}/${scenario.id}: hidden component continued rendering on signal updates`);
+      assert(await page.evaluate(() => window.hmrMetrics.renders) === rendersWhileUnmounted, `${variant.id}/${scenario.id}: hidden component continued rendering on signal updates`);
       await page.locator('#toggle').click();
       await page.getByTestId('counter').waitFor();
       await page.locator('#signal-increment').click();

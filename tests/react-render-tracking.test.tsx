@@ -57,13 +57,13 @@ describe("useSignalTracking render tracking", () => {
   });
 
   it("releases an old dynamic branch collected after useSignalTracking", () => {
-    const state = deepSignal({ useFirst: true, first: "A", second: "B" });
+    const state = deepSignal({ selectFirst: true, first: "A", second: "B" });
     const renders = vi.fn();
 
     function Selection() {
       useSignalTracking();
       renders();
-      const selected = state.value.useFirst ? state.value.first : state.value.second;
+      const selected = state.value.selectFirst ? state.value.first : state.value.second;
       return <output aria-label="tracked branch">{selected}</output>;
     }
 
@@ -73,7 +73,7 @@ describe("useSignalTracking render tracking", () => {
     });
     expect(screen.getByLabelText("tracked branch").textContent).toBe("A2");
     act(() => {
-      state.value.useFirst = false;
+      state.value.selectFirst = false;
     });
     expect(screen.getByLabelText("tracked branch").textContent).toBe("B");
     const rendersAfterSwitch = renders.mock.calls.length;
