@@ -1,0 +1,12 @@
+{
+  "name": "rfgs-fast-refresh-legacy-babel-fixture",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@vitejs/plugin-react": "4.7.0",
+    "@babel/core": "7.28.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "vite": "6.4.1"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "name": "rfgs-v021-fast-refresh-harness",
+  "private": true,
+  "type": "module",
+  "description": "Real-browser Vite HMR qualification for managed signal tracking and React Refresh",
+  "scripts": {
+    "test": "node run.mjs"
+  }
+}
