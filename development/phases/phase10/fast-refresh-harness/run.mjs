@@ -14,7 +14,8 @@ const repo = resolve(here, '../../../..');
 const runtimeVersions = {
   node: process.version,
   viteOxc: '8.3.1',
-  viteBabel: '6.4.1',
+  viteBabel: '6.4.4',
+  babelCore: '7.29.7',
   react: '19.3.0',
   reactDom: '19.3.0',
   reactPluginOxc: '6.1.2',
@@ -175,7 +176,9 @@ async function runCase(variant, server, scenario) {
     }
   });
   try {
-    await page.goto(server.url, { waitUntil: 'networkidle' });
+    // Vite's HMR websocket keeps the network active; wait for document readiness
+    // and then the rendered counter instead of waiting for network idle.
+    await page.goto(server.url, { waitUntil: 'domcontentloaded' });
     await page.getByTestId('counter').waitFor();
     const boot = await page.evaluate(() => window.__hmrMetrics.boot);
     const initialTransform = await fetch(`${server.url}src/App.tsx`).then((response) => response.text());
