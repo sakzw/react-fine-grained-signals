@@ -35,11 +35,13 @@ describe("Direct DOM binding", () => {
     const { container } = render(
       <>
         <div aria-label="HTML host" title={title} id={id} />
-        <svg aria-label="SVG host" title={title} id={id} />
+        <svg>
+          <title title={title} id={id}>SVG title element</title>
+        </svg>
       </>,
     );
     const html = container.querySelector("div")!;
-    const svg = container.querySelector("svg")!;
+    const svg = container.querySelector("svg title")!;
 
     // Match React DOM's handling of nullish title/id props: there is no empty
     // attribute. SVG takes the generic attribute path and must keep the same
