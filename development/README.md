@@ -10,6 +10,11 @@ Engineering records for contributors and maintainers. These documents may descri
 - [Transform toolchain alternatives](design/transform-toolchain-alternatives.md) ([日本語](design/transform-toolchain-alternatives.ja.md))
 - [`useSignalTracking()` boundary design](design/use-signals-boundary-design.md) ([日本語](design/use-signals-boundary-design.ja.md))
 
+## v0.3.0
+
+- [Roadmap and current status (日本語)](v0.3.0/README.ja.md)
+- [M0 architecture and contract review (日本語)](v0.3.0/m0-architecture-review.ja.md)
+
 ## Architecture and migration reviews
 
 - [Runtime architecture](reviews/runtime-architecture.md)
