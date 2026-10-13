@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { act, useState } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
@@ -31,6 +31,35 @@ describe("React adapter contracts", () => {
     expect(screen.getByText("before")).toBeTruthy();
     act(() => { source.value = "after"; });
     expect(screen.getByText("after")).toBeTruthy();
+  });
+
+  it("replaces per-readable subscriptions when a managed render switches sources", () => {
+    const runtime = createReactiveRuntime();
+    const first = runtime.signal("first");
+    const second = runtime.signal("second");
+    const { createReactAdapter } = createAlienDerivedReactAdapter(runtime, runtime.renderAdapter);
+    const adapter = createReactAdapter({ mode: "per-readable" });
+    let selectSecond!: () => void;
+
+    function Reader() {
+      const [useSecond, setUseSecond] = useState(false);
+      selectSecond = () => setUseSecond(true);
+      const scope = adapter.useManagedSignals();
+      try {
+        return <output>{useSecond ? adapter.useSignalValue(second) : adapter.useSignalValue(first)}</output>;
+      } finally {
+        scope.finish();
+      }
+    }
+
+    render(<Reader />);
+    act(() => { selectSecond(); });
+    expect(screen.getByText("second")).toBeTruthy();
+
+    act(() => { first.value = "stale source"; });
+    expect(screen.getByText("second")).toBeTruthy();
+    act(() => { second.value = "current source"; });
+    expect(screen.getByText("current source")).toBeTruthy();
   });
 
   it("rejects unknown modes and always finishes managed callbacks", () => {

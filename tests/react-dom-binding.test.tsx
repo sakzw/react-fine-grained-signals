@@ -2,10 +2,11 @@
 // @vitest-environment jsdom
 
 import { Activity, StrictMode, Suspense, act } from "react";
+import type { ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx } from "../src/jsx-runtime.js";
-import { computed, signal, useSignal, useSignalTracking } from "../src/index.js";
+import { computed, createElement as createSignalAwareElement, signal, useSignal, useSignalTracking } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -28,6 +29,33 @@ function listenerCalls(spy: CallSpy, type: string): number {
 }
 
 describe("Direct DOM binding", () => {
+  it("keeps classic createElement bindings reactive while forwarding custom components untouched", () => {
+    const color = signal("darkorange");
+    const parentRenders = vi.fn();
+
+    function Label({ children }: { children?: ReactNode }) {
+      return <output aria-label="classic custom child">{children}</output>;
+    }
+    function Box() {
+      parentRenders();
+      return <>
+        {createSignalAwareElement(Label, undefined, "preserved child")}
+        {createSignalAwareElement("div", { "aria-label": "classic style", style: { color, width: 12 } })}
+      </>;
+    }
+
+    render(<Box />);
+    const box = screen.getByLabelText("classic style") as HTMLDivElement;
+    expect(box.style.color).toBe("darkorange");
+    expect(box.style.width).toBe("12px");
+    expect(screen.getByLabelText("classic custom child").textContent).toBe("preserved child");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+
+    act(() => { color.value = "mediumseagreen"; });
+    expect(box.style.color).toBe("mediumseagreen");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+  });
+
   it("removes nullish title and id values from HTML and SVG hosts", () => {
     const title = signal<string | null | undefined>(null);
     const id = signal<string | null | undefined>(undefined);

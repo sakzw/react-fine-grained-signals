@@ -94,6 +94,10 @@ describe("deepSignal reactive collections", () => {
   it("rejects prototype mutation on reactive collection proxies", () => {
     const map = deepSignal(new Map([["a", 1]]), { collections: "reactive" });
 
+    expect(() => Reflect.set(map.value, "extra", 1)).toThrow(/own properties/);
+    expect(() => Reflect.deleteProperty(map.value, "a")).toThrow(/own properties/);
+    expect(() => Object.defineProperty(map.value, "extra", { value: 1 })).toThrow(/property descriptors/);
+    expect(() => Object.preventExtensions(map.value)).toThrow(/must remain extensible/);
     expect(() => Object.setPrototypeOf(map.value, null)).toThrow(/prototype mutation/);
     expect(map.value).toBeInstanceOf(Map);
     expect(map.value.get("a")).toBe(1);

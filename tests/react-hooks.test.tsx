@@ -1,7 +1,8 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { StrictMode, act } from "react";
+import { Component, StrictMode, act } from "react";
+import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -47,6 +48,51 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(screen.getByText("after")).toBeTruthy();
     expect(parentRenders).toHaveBeenCalledTimes(1);
     expect(leafRenders).toHaveBeenCalledTimes(2);
+  });
+
+  it("forwards a structural readable's background evaluation error to an Error Boundary", () => {
+    const invalidation = signal(0);
+    let shouldThrow = false;
+    const structural = {
+      get value(): string {
+        void invalidation.value;
+        if (shouldThrow) throw new Error("structural read failed");
+        return "ready";
+      },
+    } as ReadonlySignal<string>;
+    const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    class ErrorBoundary extends Component<
+      { children: ReactNode },
+      { error: unknown }
+    > {
+      state: { error: unknown } = { error: undefined };
+
+      static getDerivedStateFromError(error: unknown) {
+        return { error };
+      }
+
+      render() {
+        return this.state.error === undefined
+          ? this.props.children
+          : <output aria-label="structural error">caught</output>;
+      }
+    }
+
+    function Reader() {
+      return <output aria-label="structural value">{useSignalValue(structural)}</output>;
+    }
+
+    render(<ErrorBoundary><Reader /></ErrorBoundary>);
+    expect(screen.getByLabelText("structural value").textContent).toBe("ready");
+    expect(() => {
+      act(() => {
+        shouldThrow = true;
+        invalidation.value += 1;
+      });
+    }).not.toThrow();
+    expect(screen.getByLabelText("structural error").textContent).toBe("caught");
+    expect(reactError).toHaveBeenCalled();
   });
 
   it("does not add an explicit leaf subscription to an ancestor useSignalTracking scope", () => {
