@@ -64,6 +64,13 @@ const explicitGeneratorSource = [
 ].join("\n");
 
 describe("unplugin-react-fine-grained-signals", () => {
+  it("applies the documented defaults when no plugin options are supplied", () => {
+    const output = transformSource(counterSource, {});
+
+    expect(output).toContain('_useSignalCapture()');
+    expect(output).toContain('from "react-fine-grained-signals/runtime"');
+  });
+
   it("only includes application JavaScript and TypeScript modules", () => {
     const options = {
       include: (id: string) => id.includes("/src/"),
@@ -614,6 +621,42 @@ describe("bundler adapters", () => {
     warn.mockRestore();
   });
 
+  it("keeps webpack integration safe when the compiler has no rules array", () => {
+    const raw = (reactFineGrainedSignals as unknown as {
+      raw(
+        options: ReactFineGrainedSignalsOptions,
+        meta: { framework: string },
+      ): { webpack(compiler: unknown): void };
+    }).raw({ mode: "auto" }, { framework: "webpack" });
+
+    expect(() => raw.webpack({ options: { module: { rules: null } } })).not.toThrow();
+    expect(() => raw.webpack({ options: {} })).not.toThrow();
+  });
+
+  it("patches its transform rule while ignoring malformed webpack rule entries", () => {
+    const compiler = createFakeCompiler();
+    compiler.options.module.rules.push(null, {}, { use: [] }, { test: /custom/, use: () => [] });
+    const plugin = reactFineGrainedSignals.webpack({ mode: "auto" }) as unknown as {
+      apply(compiler: unknown): void;
+    };
+
+    expect(() => plugin.apply(compiler)).not.toThrow();
+    const ownRule = compiler.options.module.rules.find((rule) =>
+      rule !== null && typeof rule === "object" &&
+      typeof (rule as { use?: unknown }).use === "function" &&
+      Object.keys(rule).every((key) => key === "use" || key === "enforce")
+    ) as { use: (data: unknown) => LoaderEntry[] } | undefined;
+    expect(ownRule).toBeDefined();
+    const patchedUse = ownRule!.use;
+
+    // Applying the same plugin twice must not wrap its loader a second time.
+    plugin.apply(compiler);
+    expect(ownRule!.use).toBe(patchedUse);
+    const [entry] = ownRule!.use({ resource: "/project/src/App.tsx", resourceQuery: "" });
+    expect(entry?.ident).toBe(pluginName);
+    expect(entry?.loader).toContain("loader.js");
+  });
+
   it("passes an untransformed module through the loader unchanged", async () => {
     const resource = "/project/src/plain.tsx";
     const [entry] = transformLoaderEntries("webpack", resource);
@@ -716,6 +759,23 @@ describe("bundler adapters", () => {
     expect(warnings.map(({ message }) => message)).toEqual(["heads up"]);
   });
 
+  it("returns an empty watch list when the webpack loader has no dependency API", async () => {
+    let watched: string[] | undefined;
+    const query = {
+      plugin: {
+        transform(this: { getWatchFiles(): string[] }, code: string) {
+          watched = this.getWatchFiles();
+          return { code };
+        },
+      },
+    };
+
+    const run = await runLoader(query, "/project/src/App.tsx", "source");
+
+    expect(run.error).toBeNull();
+    expect(watched).toEqual([]);
+  });
+
   it("preserves structured warning metadata in the webpack/rspack loader context", async () => {
     const warnings: Error[] = [];
     const warning = {
@@ -802,6 +862,7 @@ describe("bundler adapters", () => {
     expect(resolveEsbuildLoader("/project/src/App.js", { ".js": "js" })).toBe("js");
     expect(resolveEsbuildLoader("/project/src/state.ts", { ".ts": "tsx" })).toBe("tsx");
     expect(resolveEsbuildLoader("/project/src/App.js", { ".ts": "tsx" })).toBe("jsx");
+    expect(resolveEsbuildLoader("/project/src/no-extension")).toBe("js");
   });
 });
 

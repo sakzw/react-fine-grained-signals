@@ -137,19 +137,26 @@ describe("deepSignal reactive collections", () => {
     expect("clear" in weakMap.value).toBe(false);
     expect("clear" in weakSet.value).toBe(false);
     const seen: Array<number | undefined> = [];
+    const hasValues: boolean[] = [];
     let hasRuns = 0;
     disposers.push(effect(() => { seen.push(weakMap.value.get(key)?.count); }));
+    disposers.push(effect(() => { hasValues.push(weakMap.value.has(key)); }));
     disposers.push(effect(() => { weakSet.value.has(key); hasRuns++; }));
 
     weakMap.value.set(key, { count: 1 });
+    expect(hasValues).toEqual([false, true]);
     expect(seen).toEqual([undefined, 1]);
     expect(weakMap.value.get(key)?.count).toBe(1);
+    weakMap.value.set(key, { count: 2 });
+    expect(seen).toEqual([undefined, 1, 2]);
+    expect(hasValues).toEqual([false, true]);
     expect(weakSet.value.add(key)).toBe(weakSet.value);
     expect(hasRuns).toBe(2);
     weakSet.value.add(key);
     expect(hasRuns).toBe(2);
     expect(weakMap.value.delete(key)).toBe(true);
-    expect(seen).toEqual([undefined, 1, undefined]);
+    expect(seen).toEqual([undefined, 1, 2, undefined]);
+    expect(hasValues).toEqual([false, true, false]);
     expect(weakSet.value.delete(key)).toBe(true);
     expect(hasRuns).toBe(3);
 
@@ -226,5 +233,57 @@ describe("deepSignal reactive collections", () => {
     map.value.set("reused", 3);
     expect(staleSeen).toEqual([undefined]);
     expect(seen).toEqual([2, 3]);
+  });
+
+  it("notifies key and iteration readers when clearing Map and Set and leaves empty clear as a no-op", () => {
+    const map = deepSignal(new Map([["a", 1], ["b", 2]]), { collections: "reactive" });
+    const set = deepSignal(new Set(["a", "b"]), { collections: "reactive" });
+    const mapSnapshots: string[] = [];
+    const setSnapshots: string[] = [];
+    disposers.push(effect(() => {
+      mapSnapshots.push(`${map.value.get("a")}:${map.value.size}:${[...map.value.keys()].join(",")}`);
+    }));
+    disposers.push(effect(() => {
+      setSnapshots.push(`${set.value.has("a")}:${set.value.size}:${[...set.value].join(",")}`);
+    }));
+
+    expect(map.value.clear()).toBeUndefined();
+    expect(set.value.clear()).toBeUndefined();
+    expect(mapSnapshots).toEqual(["1:2:a,b", "undefined:0:"]);
+    expect(setSnapshots).toEqual(["true:2:a,b", "false:0:"]);
+
+    map.value.clear();
+    set.value.clear();
+    expect(mapSnapshots).toHaveLength(2);
+    expect(setSnapshots).toHaveLength(2);
+  });
+
+  it("tracks Map and Set forEach reads with native callback arguments and thisArg", () => {
+    const map = deepSignal(new Map([["a", 1]]), { collections: "reactive" });
+    const set = deepSignal(new Set(["x"]), { collections: "reactive" });
+    const mapSnapshots: string[] = [];
+    const setSnapshots: string[] = [];
+    const context = { prefix: "ctx" };
+    disposers.push(effect(() => {
+      map.value.forEach(function (this: typeof context, value, key, collection) {
+        expect(this).toBe(context);
+        expect(collection).toBe(map.value);
+        mapSnapshots.push(`${this.prefix}:${key}=${value}`);
+      }, context);
+    }));
+    disposers.push(effect(() => {
+      set.value.forEach((value, key, collection) => {
+        expect(key).toBe(value);
+        expect(collection).toBe(set.value);
+        setSnapshots.push(`${key}=${value}`);
+      });
+    }));
+
+    map.value.set("a", 2);
+    set.value.add("y");
+    expect(mapSnapshots).toEqual(["ctx:a=1", "ctx:a=2"]);
+    expect(setSnapshots).toEqual(["x=x", "x=x", "y=y"]);
+    expect(() => map.value.forEach(null as never)).toThrow(/callback must be a function/);
+    expect(() => set.value.forEach(null as never)).toThrow(/callback must be a function/);
   });
 });
