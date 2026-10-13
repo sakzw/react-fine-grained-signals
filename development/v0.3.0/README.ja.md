@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M0・M1・M2を完了。次はM3 React render tracking境界の高リスク調査。
+- 状態: M0・M1・M2を完了。M3のrender-attempt tracking prototypeを調査中。
 - 統合ブランチ: `codex/v0.3.0-m0`
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
@@ -24,6 +24,8 @@
 | M6 | JSX direct binding (style、value/checked、lifecycle、SSR/hydration、例外、型) | M0。collection読み取り統合はM2後 | DOM更新の意味論とattach/detach・フォーム挙動を固定 | 未着手 |
 | M7 | 性能・メモリ・bundle・transform比較 | M0でベースライン確定、M1〜M6の比較対象 | 同条件の反復計測、ウォームアップ・ばらつき報告、正確性を保った判定 | 未着手 |
 | M8 | 全体qualificationとfreeze | M1〜M7 | 指定runtime/transform/browser/bundler/SSR/Compiler/pack/consumerのgateを通過し、重大問題ゼロ | 未着手 |
+
+M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)を参照。
 
 ### 依存と並列化
 
