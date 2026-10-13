@@ -106,11 +106,13 @@ async function loadModule(
     mode = "auto",
     codegen = "managed",
     experimentalCapture = false,
+    modules = {},
   }: {
     transform?: boolean;
     mode?: ReactFineGrainedSignalsMode;
     codegen?: ReactFineGrainedSignalsTransform;
     experimentalCapture?: boolean;
+    modules?: Record<string, unknown>;
   } = {},
 ): Promise<Record<string, unknown>> {
   const transformed = transform
@@ -137,7 +139,7 @@ async function loadModule(
   });
   if (typeof linked?.code !== "string") throw new Error("module linking emitted no code");
   const moduleExports: Record<string, unknown> = {};
-  new Function(MODULES, EXPORTS, linked.code)(moduleRegistry, moduleExports);
+  new Function(MODULES, EXPORTS, linked.code)({ ...moduleRegistry, ...modules }, moduleExports);
   return moduleExports;
 }
 
@@ -181,6 +183,43 @@ export function App() {
     expect(container.textContent).toBe("after/Ada/Ada/0");
     act(() => { (module.deep as { value: { profile: { name: string } } }).value.profile.name = "Grace"; });
     expect(container.textContent).toBe("after/Grace/Grace/0");
+  });
+
+  it("tracks nested signals stored under ref-like property names and constant computed keys", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+const valueKey = "value";
+export const inner = signal("before");
+export const holder = signal({ current: inner });
+export function HolderApp() {
+  return <output>{holder.value.current.value}/{inner[valueKey]}</output>;
+}
+export function KeyApp() { return <output>{inner[valueKey]}</output>; }
+`);
+    const holderContainer = mount(module.HolderApp);
+    const keyContainer = mount(module.KeyApp);
+    expect(holderContainer.textContent).toBe("before/before");
+    expect(keyContainer.textContent).toBe("before");
+
+    write(module, "inner", "after");
+    expect(holderContainer.textContent).toBe("after/after");
+    expect(keyContainer.textContent).toBe("after");
+  });
+
+  it("captures a synchronous signal read performed by an imported helper", async () => {
+    const count = library.signal("before") as Signal<string>;
+    const module = await loadModule(`
+import { readCount } from "./counter-store";
+export function App() { return <output>{readCount()}</output>; }
+`, {
+      mode: "all",
+      modules: { "./counter-store": { readCount: () => count.value } },
+    });
+    const container = mount(module.App);
+    expect(container.textContent).toBe("before");
+
+    act(() => { count.value = "after"; });
+    expect(container.textContent).toBe("after");
   });
 
   it("captures known module-scope helper and render-callback reads at their synchronous call", async () => {

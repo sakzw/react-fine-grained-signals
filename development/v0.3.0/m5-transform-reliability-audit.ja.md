@@ -8,9 +8,9 @@ module-level `"use server"` skip/warningと既知のJSX callback/destructuring w
 
 この調査はM3のtracking実装に依存しない。現状のtransform契約と、v0.3.0で安全性を改善する範囲を記録する。ここに書かれた挙動は既存契約の棚卸しであり、新しい保証ではない。
 
-- `mode: "auto"` は型情報を使わず、静的に識別できる名前付きJSX component/custom Hook内のrender-time `.value`（通常memberまたは静的文字列computed）を検出する。signal以外の `.value` も誤検出し得る。
-- 動的keyの `signal[key]` と `const { value } = signal` はreadとして検出されない。一方 `const { user } = deep.value` はroot readを検出するが、M3 per-read prototypeではdestructure中のnested property readがcapture外に残り得る。
-- 同一module内の一部同期helper/render callbackは追跡できるが、cross-module helper/callback、任意のrender prop、独自callback APIの実行時期は一般には解決できない。`map`等の対応表とasync/event/deferred callback除外を `transform.ts` で管理する。
+- `mode: "auto"` は型情報を使わず、静的に識別できる名前付きJSX component/custom Hook内のrender-time `.value`（通常member、文字列literal、または不変なlocal string constantのcomputed key）を検出する。signal以外の `.value` も誤検出し得るが、実readでなければdependencyは追加しない。
+- 実行時に決まるcomputed keyの `signal[key]` と `const { value } = signal` はreadとして検出されない。一方 `const { user } = deep.value` はroot readを検出するが、nested property readがcapture外に残るためsource-located warningを出す。property名`current`/`target`/`currentTarget`だけで内側のsignal readを除外するheuristicは削除した。
+- 同一module内の一部同期helper/render callbackを追跡する。既にmanaged変換されるcomponentからの直接named/default import helper callもcaptureするが、signal readしかないimport先依存からは`auto`がcomponent変換を推論できない。import先が返すcallback、任意のrender prop、独自callback APIの実行時期は一般には解決できない。`map`等の対応表とasync/event/deferred callback除外を `transform.ts` で管理する。
 - `"use client"` / `"use server"` やbundler environment/layerは現在自動判定しない。Server ComponentでHook挿入が起こり得る。現行回避策は`exclude`、`@noSignalTracking`、`mode: "manual"`。
 - 診断にはimport/annotation/mixed-use曖昧性に加え、JSX function-valued prop callbackとdestructuring `.value` initializerのsource-located warningを追加した。JSX children callback、cross-module callback、dynamic aliasなどは引き続き一般的には検出できない。
 - Vite、Rollup、Webpack、Rspack、esbuild adapterとそれぞれの統合テストがある。Webpack/Rspack loader差し替えはunplugin内部rule形状に依存し、fallback時にwarningを出す。今回、bundler suiteは再実行していない。

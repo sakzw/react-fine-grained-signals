@@ -1790,18 +1790,51 @@ function getReadPropertyName(
   return t.isStringLiteral(property) ? property.value : undefined;
 }
 
-// `e.target.value`, `e.currentTarget.value` and `ref.current.value` are the DOM
-// and React idioms that collide with a signal's `.value` accessor. None of them
-// can be a signal: `target`/`currentTarget` are an event's element fields and
-// `current` is a ref's mutable slot, so a `.value` hanging off one of them is
-// never evidence of a signal read -- unlike `items[0].value` or `props.n.value`,
-// where the receiver genuinely could be a signal and so still counts.
+/**
+ * Resolve a `.value` accessor when its computed key is a constant local string,
+ * such as `const valueKey = "value"; signal[valueKey]`. General computed keys
+ * remain dynamic and are not treated as proven signal reads.
+ */
+function getTrackedReadPropertyName(
+  path: NodePath<t.MemberExpression | t.OptionalMemberExpression>,
+): string | undefined {
+  const direct = getReadPropertyName(path.node);
+  if (direct !== undefined || !path.node.computed) return direct;
+  const property = unwrapTransparent(path.node.property);
+  if (!t.isIdentifier(property)) return undefined;
+  const binding = path.scope.getBinding(property.name);
+  if (binding?.kind !== "const" || !binding.constant || !binding.path.isVariableDeclarator()) {
+    return undefined;
+  }
+  const init = binding.path.get("init");
+  if (!init.node) return undefined;
+  const value = unwrapTransparent(init.node);
+  return t.isStringLiteral(value) ? value.value : undefined;
+}
+
+// Without an explicit signal `.value` earlier in the same receiver chain,
+// these spellings are common DOM/ref fields and do not identify a signal.
+// Once a signal read is already present (`holder.value.current.value`), keep
+// the inner read eligible: a signal may legitimately be stored under any key.
 const nonSignalValueReceivers = new Set(["target", "currentTarget", "current"]);
 
-function isNonSignalValueReceiver(object: t.Node): boolean {
-  const receiver = unwrapTransparent(object);
-  if (!t.isMemberExpression(receiver) && !t.isOptionalMemberExpression(receiver)) return false;
-  const name = getReadPropertyName(receiver);
+function hasTrackedValuePrefix(
+  path: NodePath<t.MemberExpression | t.OptionalMemberExpression>,
+): boolean {
+  let object = path.get("object");
+  while (object.isMemberExpression() || object.isOptionalMemberExpression()) {
+    if (getTrackedReadPropertyName(object) === "value") return true;
+    object = object.get("object");
+  }
+  return false;
+}
+
+function isNonSignalValueReceiver(
+  path: NodePath<t.MemberExpression | t.OptionalMemberExpression>,
+): boolean {
+  const object = path.get("object");
+  if (!object.isMemberExpression() && !object.isOptionalMemberExpression()) return false;
+  const name = getReadPropertyName(object.node);
   return name !== undefined && nonSignalValueReceivers.has(name);
 }
 
@@ -1839,7 +1872,7 @@ function isRenderPropCallback(path: NodePath): boolean {
 function containsSyntacticValueRead(path: NodePath): boolean {
   let found = false;
   const inspect = (member: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
-    if (getReadPropertyName(member.node) === "value") found = true;
+    if (getTrackedReadPropertyName(member) === "value") found = true;
   };
   if (path.isMemberExpression() || path.isOptionalMemberExpression()) inspect(path);
   path.traverse({
@@ -1909,8 +1942,11 @@ function isTrackedValueRead(
   path: NodePath,
   functionPath: NodePath<t.Function>,
 ): boolean {
-  if (getReadPropertyName(node) !== "value") return false;
-  if (isNonSignalValueReceiver(node.object)) return false;
+  const memberPath = path as NodePath<t.MemberExpression | t.OptionalMemberExpression>;
+  if (getTrackedReadPropertyName(memberPath) !== "value") {
+    return false;
+  }
+  if (isNonSignalValueReceiver(memberPath) && !hasTrackedValuePrefix(memberPath)) return false;
   if (isWriteTarget(path)) return false;
   return !isDeferredReadContext(path, functionPath);
 }
@@ -2364,7 +2400,7 @@ function inspectKnownRenderPropReads(
       if (!init.node) return;
       let readsValue = false;
       const inspectRead = (member: NodePath<t.MemberExpression | t.OptionalMemberExpression>) => {
-        if (getReadPropertyName(member.node) === "value") readsValue = true;
+        if (getTrackedReadPropertyName(member) === "value") readsValue = true;
       };
       if (init.isMemberExpression() || init.isOptionalMemberExpression()) inspectRead(init);
       init.traverse({
@@ -3022,7 +3058,7 @@ function functionCallsHook(functionPath: NodePath<t.Function>): boolean {
   return found;
 }
 
-function externalCallReadsTrackedValue(
+function externalCallMayReadTrackedValue(
   call: NodePath<t.CallExpression | t.OptionalCallExpression>,
   functionPath: NodePath<t.Function>,
   importSource: string,
@@ -3058,6 +3094,27 @@ function externalCallReadsTrackedValue(
     const callee = unwrapTransparent(call.node.callee);
     if (!t.isIdentifier(callee)) return false;
     const binding = call.scope.getBinding(callee.name);
+    const importSpecifier = binding?.path;
+    if (
+      importSpecifier !== undefined &&
+      (importSpecifier.isImportSpecifier() || importSpecifier.isImportDefaultSpecifier()) &&
+      importSpecifier.parentPath.isImportDeclaration() &&
+      importSpecifier.parentPath.node.importKind !== "type" &&
+      importSpecifier.parentPath.node.source.value !== importSource &&
+      importSpecifier.parentPath.node.source.value !== reactImportSource
+    ) {
+      const imported = importSpecifier.isImportSpecifier() ? importSpecifier.node.imported : undefined;
+      const importedName = imported === undefined
+        ? "default"
+        : t.isIdentifier(imported) ? imported.name : imported.value;
+      // The transform cannot inspect another module's implementation. Capture
+      // the synchronous call itself so any signal reads it performs belong to
+      // this render attempt. Hook-shaped imports stay as direct calls: wrapping
+      // them in a callback would violate the Rules of Hooks.
+      if (!isHookName(importedName) && !isComponentName(importedName) && !isComponentName(callee.name)) {
+        return true;
+      }
+    }
     const declarator = binding?.path.isVariableDeclarator() ? binding.path : undefined;
     const init = declarator?.get("init");
     // A locally assigned computed member can be a render callback alias even
@@ -3231,7 +3288,7 @@ function captureTrackedReadExpressions(
             hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
             (callee.isIdentifier() &&
               path.scope.getBinding(callee.node.name)?.kind === "param") ||
-            externalCallReadsTrackedValue(
+            externalCallMayReadTrackedValue(
               path,
               functionPath,
               importSource,
@@ -3253,7 +3310,7 @@ function captureTrackedReadExpressions(
             hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
               (callee.isIdentifier() &&
                 path.scope.getBinding(callee.node.name)?.kind === "param") ||
-            externalCallReadsTrackedValue(
+            externalCallMayReadTrackedValue(
               path,
               functionPath,
               importSource,

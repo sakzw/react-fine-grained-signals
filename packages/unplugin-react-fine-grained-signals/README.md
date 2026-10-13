@@ -200,10 +200,14 @@ An anonymous or arrow function passed the same way —
 `observer((props) => …)` — carries no name for a boundary to attach to, and is
 left untransformed.
 
-This detection has five known limitations:
+This detection has the following known limitations:
 
 - A re-assigned alias is not followed, so a PascalCase helper reached through
   `const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
+- A `.value` read is recognized through dot access, a string-literal key, or an
+  immutable local string key such as `const valueKey = "value"`. A runtime key
+  (`signal[key]`) and destructuring a signal itself (`const { value } = signal`)
+  are not recognized; `auto` cannot select a transform from those reads alone.
 - A render callback passed as a JSX prop value is not recognized.
   `<Grid renderItem={Row} />` is syntactically identical whether `Grid` calls
   `renderItem(item)` a variable number of times per render (a render prop,
@@ -230,8 +234,13 @@ This detection has five known limitations:
   component or use an explicit signal-value hook in the component that renders
   the result. JSX children callbacks, cross-module callbacks, and dynamic aliases
   remain unclassified.
-- A callback imported from another module is not followed, because the
-  transform sees one file at a time.
+- A direct call to a named/default imported plain helper is captured while it
+  runs synchronously if its caller already has a managed boundary. The
+  transform cannot inspect that helper to discover a hidden signal read, so
+  `auto` will not select a transform when that is the component's only read;
+  use `mode: "all"`, `@signalTracking`, or an explicit signal-value Hook. A
+  callback returned by an imported helper, or invoked later by another module,
+  is not followed because the transform sees one file at a time.
 - A callback reached through an object key (`items.map(parts.Row)`, or
   `const { Row } = parts` first) is kept off a boundary, but in `auto` mode its
   `.value` reads are not credited to the caller. A caller that reads no signal

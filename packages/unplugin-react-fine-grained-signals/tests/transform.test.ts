@@ -43,6 +43,17 @@ describe("managed render transform", () => {
     expect(output).not.toMatch(/\buseSignalTracking\(\);/);
   });
 
+  it("captures synchronous calls to imported helpers inside an opted-in managed render", () => {
+    const output = compile(`
+      import { readCount } from "./counter-store";
+      /** @signalTracking */
+      export function Counter() { return <output>{readCount()}</output>; }
+    `);
+
+    expect(output).toContain("_signals.capture(() => readCount())");
+    expect(output).not.toMatch(/\btry\s*\{/);
+  });
+
   it("keeps the default manual mode and supports comment opt-in/out", () => {
     const output = compile(`
       const count = { value: 1 };

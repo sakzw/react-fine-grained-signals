@@ -4,7 +4,7 @@
 
 旧試作・再開判断の記述はその時点の履歴であり、現在の実装方針ではない。続く試作記録は残すが、managedの既定codegenはtop-level `useSignalCapture()` とread単位captureへ変更した。user Hookをtry/finallyへ移さず、静的に証明できる同期readだけを短いcapture scopeで囲む。generator/async bodyやReact Hookを含むhelperは同期callsite captureへfoldしない。JSX function propや`.value`を含むdestructuring initializerなど、検出できる追跡外readにはsource位置付きwarningを出す。
 
-現行方式の根拠は、変換後実行57 tests、transform 243 tests、runtime 555 tests、TypeScript runtime/plugin成功。React Compiler専用suiteは71 passed / 3 skipped。実browserのFast Refresh harnessは24ケースで18 passed、6 known failure（通常React `try/finally` control 3件とPreact Oxc 3件）を完走し、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過した。Fast Refresh subgateは完了。複数root/concurrent interleavingとhydrationを含むM3 acceptance gateは未完了。静的に解決できないJSX children callback、cross-module callback/helper、複雑なaliasや任意のdeferred callbackは一般に同一file transformで実行ownerを確定できないため、既定managedの完全なexactnessはまだ主張しない。
+現行方式の根拠は、transform/runtime executionの対象2 suite 303 tests、runtime 555 tests、TypeScript runtime/plugin成功。React Compiler専用suiteは71 passed / 3 skipped。実browserのFast Refresh harnessは24ケースで18 passed、6 known failure（通常React `try/finally` control 3件とPreact Oxc 3件）を完走し、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過した。Fast Refresh subgateは完了。複数root/concurrent interleavingとhydrationを含むM3 acceptance gateは未完了。静的に解決できないJSX children callback、import先が返すcallback、複雑なaliasや任意のdeferred callbackは一般に同一file transformで実行ownerを確定できないため、既定managedの完全なexactnessはまだ主張しない。
 
 最新の契約比較に対するClef-flashの補助意見は、bounded implicit capture + diagnostics 0.8996、explicit targeted subscription 0.1004、confidence 0.6386。これは採用判定ではない。既定managedへの統合は維持したが、未追跡readの診断とowner正確性を確認できるまでM3は未完了とする。
 
@@ -17,6 +17,14 @@ M3は未完了。M2実装後、React Hook配置の違反とFast RefreshのHook�
 - Vite/OxcのFast Refresh harnessはtry内のHook列についてsignatureを欠落させる再現を持つ。Hook追加・削除・順序変更でHook-order runtime errorが起こる。同じtry形状の通常React componentも再現し、RFSG固有ではない。ただしmanagedがこの構文を生成する責任はRFSGにある。[root cause](../phases/phase10/fast-refresh-root-cause.md)、[harness](../phases/phase10/fast-refresh-harness/README.md)
 - `inject`はHooksをbody先頭に残し、現在のVite/Oxc matrixでHook変更を通す。一方、runtimeのscopeは同期的なcomponent-end境界ではなく、managedと同じ正確性・aborted render cleanupを保証しない。
 - Reactの[`useSyncExternalStore`](https://react.dev/reference/react/useSyncExternalStore)はtop-level Hookとsnapshot subscriptionを提供するが、それ自体は任意のsignal readをcomponent単位で検出しない。store更新時の同期renderやSuspenseに関する制約もある。
+
+## 追跡契約の暫定境界と追加回帰修正 (2026-10-13)
+
+managed captureが自動追跡を保証するのは、同期的なcomponent/custom Hook render中に評価されるreadに限る。同一moduleで解決できる同期helper/render callbackに加え、対象componentがすでにmanaged変換される場合は直接呼び出すnamed/default import helperの同期callもcaptureする。`.value`と、`const key = "value"`のように不変な文字列へ解決できるcomputed keyをreadとして扱う。`current`、`target`、`currentTarget`というproperty名だけを根拠にsignal readを除外しない。実際のsignal以外の`.value`に対するcaptureはdependencyを追加しない。
+
+`key`が実行時に決まる`signal[key]`、import越しreadだけを持つcomponentの`auto`判定、import先が返すcallback、所有componentと別時点で実行されるcallback、一般的なclosure escapeは保証外であり、M3のexactness gateは未達。未検出のsignal readしかないcomponentは`auto`が変換を選べない。これらを従来のambient trackingと同等とは扱わない。明示的なreadが必要な境界では`useSignalValue` / `useDeepSignalValue`等のtargeted APIか、変換対象側でreadを同期的に表現する。
+
+この追跡修正では、ref-like property名を持つobject内のsignal (`holder.value.current.value`)、定数computed key (`signal[valueKey]`)、import helperが同期的に読むsignalを実Reactで更新まで検証する回帰testを追加した。transformとReact executionの2 suiteは303/303通過し、plugin `tsc --noEmit`も成功。別root/concurrent interleaving、import先のdeferred callback、任意callback ownershipの実環境gateは継続。
 
 ## 試作順の判断
 

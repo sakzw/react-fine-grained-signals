@@ -227,13 +227,21 @@ try {
   if (!/import\s*\{[^}]*\bcreateElement\b[^}]*\}\s*from\s*["']react-fine-grained-signals["']/.test(output)) {
     throw new Error("Consumer output must import createElement from the package root for a key after a spread");
   }
-  // The fixture hand-writes one managed boundary (ManagedBoundary, opted out of
-  // the transform) and leaves exactly one automatic candidate (Counter), so the
-  // default `transform: "managed"` must produce two boundaries in total.
-  const managedBoundaries = output.match(/finally\s*\{\s*\w+\.finish\(\);/g) ?? [];
-  if (managedBoundaries.length !== 2) {
+  // Managed codegen keeps user Hooks at function top level and captures proven
+  // reads individually. The fixture opts ManagedBoundary out of the transform,
+  // leaving exactly one automatic candidate (Counter) plus its hand-written
+  // boundary. A successful consumer build must therefore retain one capture
+  // call from Counter and one finish call from ManagedBoundary.
+  const captureCalls = output.match(/\.capture\s*\(/g) ?? [];
+  if (captureCalls.length !== 1) {
     throw new Error(
-      `Vite consumer output should hold the fixture's hand-written managed boundary plus the one the transform injects into Counter, found ${managedBoundaries.length}`,
+      `Vite consumer output should contain the one automatically transformed Counter read capture, found ${captureCalls.length}`,
+    );
+  }
+  const finishCalls = output.match(/\.finish\s*\(/g) ?? [];
+  if (finishCalls.length !== 1) {
+    throw new Error(
+      `Vite consumer output should retain ManagedBoundary's hand-written finish call, found ${finishCalls.length}`,
     );
   }
 

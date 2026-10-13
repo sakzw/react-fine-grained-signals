@@ -196,7 +196,7 @@ PascalCaseの名前を持っていればよく、`observer(function Row() { … 
 arrow関数（`observer((props) => …)`）は、boundaryを結び付けるための名前を
 持たないため、変換されないままです。
 
-この検出には既知の制約が5つあります。
+この検出には次の既知の制約があります。
 
 - 再代入したaliasはたどりません。`const RowAlias = Row; items.map(RowAlias)`
   経由で渡したPascalCaseのhelperは、componentとして扱われたままになります。
@@ -224,8 +224,15 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   readをreactiveにするものでもありません。境界を見つける手掛かりとして使い、tracked
   componentへreadを移すか、結果を描画するcomponentで明示的なsignal-value Hookを使って
   ください。JSX children callback、cross-module callback、動的aliasは未分類です。
-- 別moduleからimportしたcallbackはたどりません。変換は1ファイルずつ処理する
-  ためです。
+- `.value`はdot access、文字列literal key、または`const valueKey = "value"`のような
+  不変なlocal string keyで認識します。実行時に決まるkey（`signal[key]`）やsignal自体の
+  destructuring（`const { value } = signal`）は認識しないため、それだけでは`auto`が
+  変換を選べません。
+- named/default importしたplain helperの直接呼び出しは、呼び出し元にmanaged boundaryが
+  あり、同期実行される間だけcaptureします。ただしhelper内のreadをtransformが調べて
+  `auto`変換を選ぶことはできません。そのreadだけが手掛かりなら`mode: "all"`、
+  `@signalTracking`、または明示的なsignal-value Hookを使ってください。import先helperが
+  返すcallbackや、別moduleが後から呼ぶcallbackは追跡しません。
 - objectのkey経由で渡すcallback（`items.map(parts.Row)`、または先に
   `const { Row } = parts` とする場合）はboundaryの対象から外れますが、`auto`
   modeではその `.value` 読み取りが呼び出し元の分として扱われません。呼び出し元
