@@ -223,7 +223,8 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   warningを出します。この診断は受け取り側componentがcallbackを呼ぶタイミングを推測せず、
   readをreactiveにするものでもありません。境界を見つける手掛かりとして使い、tracked
   componentへreadを移すか、結果を描画するcomponentで明示的なsignal-value Hookを使って
-  ください。JSX children callback、cross-module callback、動的aliasは未分類です。
+  ください。静的に解決できるJSX children callbackにも同じwarningを出します。
+  cross-module callbackと動的aliasは未分類です。
 - 静的な`.value` readはdot access、文字列literal key、または
   `const valueKey = "value"`のような不変なlocal string keyで認識します。実行時key
   （`signal[key]`）は、componentが別のreadや設定ですでに変換対象の場合にcaptureし、

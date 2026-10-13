@@ -4,13 +4,15 @@
 
 旧試作・再開判断の記述はその時点の履歴であり、現在の実装方針ではない。続く試作記録は残すが、managedの既定codegenはtop-level `useSignalCapture()` とread単位captureへ変更した。user Hookをtry/finallyへ移さず、静的に証明できる同期readだけを短いcapture scopeで囲む。generator/async bodyやReact Hookを含むhelperは同期callsite captureへfoldしない。JSX function propや`.value`を含むdestructuring initializerなど、検出できる追跡外readにはsource位置付きwarningを出す。
 
-現行方式の根拠は、transform/runtime executionの対象2 suite 303 tests、runtime 555 tests、TypeScript runtime/plugin成功。React Compiler専用suiteは24 passed。実browserのFast Refresh harnessは24ケースで18 passed、6 known failure（通常React `try/finally` control 3件とPreact Oxc 3件）を完走し、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過した。Fast Refresh subgateは完了。Suspense中断中のreadが別rootへ漏れないmulti-root isolation testは60件のReact execution suiteで通過した。time-sliced concurrent interleaving、hydration中のattempt ownership、JSX children callback、import先が返すcallback、複雑なaliasや任意のdeferred callbackは未完了で、既定managedの完全なexactnessはまだ主張しない。
+現行方式の根拠は、React Compiler専用suite 24 passed、Fast Refresh harness 24ケース中18 passed（残り6件は通常React `try/finally` control 3件とPreact/Oxc 3件）で、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過。Suspense中断中のreadが別rootへ漏れないReact実行test、React mock schedulerで変換済みmanaged componentをfiber間yield・signal更新・再開させるtest、yield中に破棄したattemptが購読されないtest、変換済み`useSignalCapture()`のhydration ownership testを追加した。手動Promise境界テストもattempt-local scopeの追加確認として残す。静的に解決できるJSX children callback readにも位置付きwarningを加えた。
 
-最新の契約比較に対するClef-flashの補助意見は、bounded implicit capture + diagnostics 0.8996、explicit targeted subscription 0.1004、confidence 0.6386。これは採用判定ではない。既定managedへの統合は維持したが、未追跡readの診断とowner正確性を確認できるまでM3は未完了とする。
+**M3の有効なexactness契約はbounded synchronous captureである。** `managed`は静的に特定したread expressionを同期captureし、そのrender attemptがcommitされた場合だけsubscriptionをpromoteする。Hookは関数bodyのtop levelに残る。React mock schedulerを使った変換済みcomponentの実time-slicing testでは、parent readとchild fiberの間にsignalを書き換えてもcommit後に両方が最新値へ収束し、次のwriteも追跡する。yield中に置き換えたabandoned attemptのreadは購読されない。JSX prop/children callback、async/deferred callback、cross-module aliasなど、transform単体で呼び出しownerや実行時点を証明できないreadは追跡を約束しない。静的に見つかるprop/children callbackはwarningを出す。残る未分類patternはREADMEに記載し、作者はowner側のtracked componentかtargeted signal-value Hookを使う。この境界を公開契約として明記したうえでのM3 correctness subgateは完了とする。arbitrary callbackまでexactだとは主張しない。
+
+最新の契約比較に対するClef-flashの補助意見は、bounded implicit capture + diagnostics 0.8996、explicit targeted subscription 0.1004、confidence 0.6386。これは採用判定ではない。実装選択は同期captureの境界を保ち、公開文書・診断・実行testで確認した範囲へexactnessを限定する。
 
 ## 現状
 
-M3は未完了。M2実装後、React Hook配置の違反とFast RefreshのHook署名欠落を同時に解消する案を調べ始めた。既存のmanaged transformを単純にinjectへ置き換えない。
+M3はbounded synchronous capture契約のもとで完了。M2後に発生したReact Hook配置とFast RefreshのHook署名の衝突には、top-level capture Hookとread単位の短いscopeで対応した。既存のmanaged transformを単純にinjectへ置き換えてはいない。
 
 - `managed` はruntime hookをcomponent先頭に挿入したあと、元のbody全体を生成 `try/finally` に移す。`finish()`は通常return、throw、Suspense throw時に同期実行されるが、ユーザーがbody内で呼ぶHookもtry内になる。
 - Reactの[Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks)はHooksを`try`、`catch`、`finally`内で呼ぶことを禁じている。
@@ -22,9 +24,9 @@ M3は未完了。M2実装後、React Hook配置の違反とFast RefreshのHook�
 
 managed captureが自動追跡を保証するのは、同期的なcomponent/custom Hook render中に評価されるreadに限る。同一moduleで解決できる同期helper/render callbackに加え、対象componentがすでにmanaged変換される場合は直接呼び出すnamed/default import helperの同期callもcaptureする。静的なread検出は`.value`と、`const key = "value"`のように不変な文字列へ解決できるcomputed keyを扱う。runtime keyのcomputed memberは、別のreadや明示設定ですでにmanaged変換対象となった関数のcapture内で実行される場合に限り候補となり、runtimeは実際のsignal accessorだけをdependencyとして記録する。runtime keyだけでは`auto`はcomponentを選択しない。`current`、`target`、`currentTarget`というproperty名だけを根拠にsignal readを除外しない。実際のsignal以外の`.value`に対するcaptureはdependencyを追加しない。
 
-runtime keyだけを使う`signal[key]` componentの`auto`判定、import越しreadだけを持つcomponentの`auto`判定、import先が返すcallback、所有componentと別時点で実行されるcallback、一般的なclosure escapeは保証外であり、M3のexactness gateは未達。未検出のsignal readしかないcomponentは`auto`が変換を選べない。これらを従来のambient trackingと同等とは扱わない。明示的なreadが必要な境界では`useSignalValue` / `useDeepSignalValue`等のtargeted APIか、変換対象側でreadを同期的に表現する。
+runtime keyだけを使う`signal[key]` componentの`auto`判定、import越しreadだけを持つcomponentの`auto`判定、import先が返すcallback、所有componentと別時点で実行されるcallback、一般的なclosure escapeは追跡保証外である。未検出のsignal readしかないcomponentは`auto`が変換を選べない。これらを従来のambient trackingと同等とは扱わない。明示的なreadが必要な境界では`useSignalValue` / `useDeepSignalValue`等のtargeted APIか、変換対象側でreadを同期的に表現する。
 
-この追跡修正では、ref-like property名を持つobject内のsignal (`holder.value.current.value`)、定数computed key (`signal[valueKey]`)、import helperが同期的に読むsignalを実Reactで更新まで検証する回帰testを追加した。今回、runtime-key accessが他の静的readで選択済みのcomponent内で追跡されるケースと、ordinary `items[index]` だけではauto transformを選ばないケースを追加した。React execution 61件、transform 245件、plugin全体383件（3 skipped）が通過し、plugin `tsc --noEmit`も成功した。Suspense中断中のsignal readと別rootのcommit/updateを交互に行い、fallback/別rootへのsubscription漏れがないことも確認済み。time-sliced interleaving、import先のdeferred callback、任意callback ownershipの実環境gateは継続。
+この追跡修正では、ref-like property名を持つobject内signal、定数/実行時computed key、同期import helperを実Reactで検証した。普通の`items[index]`だけでは`auto` transformを選ばない。render-attempt間のPromise yield isolation、Suspense中断中の別root分離、hydration後のcommit済みattempt ownershipもruntime/React実行testで確認した。React execution 62件、transform suiteはdynamic-keyとchildren-warningの追加後に再集計する。plugin typecheckは成功した。
 
 ## 試作順の判断
 

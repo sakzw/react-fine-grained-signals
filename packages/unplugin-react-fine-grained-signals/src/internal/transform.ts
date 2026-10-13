@@ -8,7 +8,6 @@ import {
   type PluginPass,
 } from "@babel/core";
 import * as t from "@babel/types";
-import type { TransformResult } from "unplugin";
 
 export type ReactFineGrainedSignalsMode = "manual" | "auto" | "all";
 export type ReactFineGrainedSignalsTransform = "inject" | "managed";
@@ -32,7 +31,18 @@ export interface InternalTransformOptions {
   warn?: (warning: Error) => void;
 }
 
-export type InternalTransformResult = Exclude<TransformResult, string>;
+export interface InternalTransformResult {
+  code: string;
+  map?: {
+    file?: string;
+    mappings: string;
+    names: string[];
+    sourceRoot?: string;
+    sources: string[];
+    sourcesContent?: (string | null)[];
+    version: number;
+  };
+}
 
 interface RuntimeImport {
   identifier: t.Identifier;
@@ -1859,13 +1869,15 @@ function isJsxEventHandlerValue(path: NodePath): boolean {
   return t.isJSXIdentifier(name) && /^on[A-Z]/.test(name.name);
 }
 
-/** A function prop is owned and scheduled by the receiving component. */
+/** A JSX callback's execution is owned and scheduled by another component. */
 function isRenderPropCallback(path: NodePath): boolean {
   const container = climbTransparentWrappers(path).parentPath;
   if (container === null || !container.isJSXExpressionContainer()) return false;
-  const attribute = container.parentPath;
-  if (attribute === null || !attribute.isJSXAttribute()) return false;
-  const name = attribute.get("name");
+  const parent = container.parentPath;
+  if (parent === null) return false;
+  if (parent.isJSXElement() || parent.isJSXFragment()) return true;
+  if (!parent.isJSXAttribute()) return false;
+  const name = parent.get("name");
   return name.isJSXIdentifier() && !/^on[A-Z]/.test(name.node.name);
 }
 
@@ -2385,6 +2397,18 @@ function warnUntrackedRenderPropRead(
   reportWarning(options, warning, attribute);
 }
 
+function warnUntrackedChildrenCallbackRead(
+  expression: NodePath<t.JSXExpressionContainer>,
+  options: InternalTransformOptions,
+): void {
+  const warning = expression.buildCodeFrameError(
+    "This JSX children callback reads a signal but its execution owner cannot be proven by a single-file transform. " +
+      "The callback may run outside the current component's render tracking boundary. Move the read into a " +
+      "tracked component or use an explicit signal-value hook in the component that renders the result.",
+  );
+  reportWarning(options, warning, expression);
+}
+
 function inspectKnownRenderPropReads(
   functionPath: NodePath<t.Function>,
   options: InternalTransformOptions,
@@ -2392,6 +2416,26 @@ function inspectKnownRenderPropReads(
 ): void {
   if (options.mode === "manual" && !hasOwnedLeadingComment(functionPath, useSignalTrackingComment)) return;
   functionPath.traverse({
+    JSXExpressionContainer(expression) {
+      if (!expression.parentPath.isJSXElement() && !expression.parentPath.isJSXFragment()) return;
+      const callback = expression.get("expression");
+      let target: NodePath<t.Function> | undefined;
+      if (callback.isArrowFunctionExpression() || callback.isFunctionExpression()) {
+        target = callback;
+      } else if (callback.isIdentifier()) {
+        target = resolveReferencedFunction(expression, callback.node.name);
+      }
+      if (target === undefined) return;
+      const reads = inspectFunction(
+        target,
+        options.importSource,
+        `${options.importSource}/runtime`,
+        reactImportSource,
+        new Set([functionPath.node]),
+        true,
+      ).readsValue;
+      if (reads) warnUntrackedChildrenCallbackRead(expression, options);
+    },
     JSXAttribute(attribute) {
       const name = attribute.get("name");
       if (!name.isJSXIdentifier() || /^on[A-Z]/.test(name.node.name)) return;
@@ -3677,5 +3721,18 @@ export function transformReactFineGrainedSignals(
   ) {
     return null;
   }
-  return { code: result.code, map: result.map };
+  if (result.map === null) return { code: result.code };
+  const { file, names, sources, sourcesContent, ...map } = result.map;
+  return {
+    code: result.code,
+    map: {
+      ...map,
+      names: [...names],
+      // Preserve source indexes from the mapping data if Babel emitted an
+      // unknown source entry; bundler source-map inputs require strings.
+      sources: sources.map((source) => source ?? ""),
+      ...(sourcesContent === undefined ? {} : { sourcesContent: [...sourcesContent] }),
+      ...(file === null ? {} : { file }),
+    },
+  };
 }

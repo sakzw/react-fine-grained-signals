@@ -3341,6 +3341,33 @@ export function App() {
     });
   });
 
+  it("warns at JSX children callbacks whose bodies read signals", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { signal } from "react-fine-grained-signals";
+const count = signal(0);
+export function App() {
+  return <List>{() => count.value}</List>;
+}
+`;
+    const result = transformReactFineGrainedSignals(source, "ChildrenRenderProp.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(result).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("JSX children callback reads a signal");
+    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
+      line: 5,
+      column: 15,
+    });
+  });
+
   it("does not report signal writes in a JSX action callback as render reads", () => {
     const warnings: Error[] = [];
     const source = `

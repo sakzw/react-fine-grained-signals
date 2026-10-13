@@ -51,4 +51,34 @@ describe("render adapter contracts", () => {
       restore();
     }
   });
+
+  it("keeps per-attempt dependencies isolated when render work resumes after a yield", async () => {
+    const runtime = createReactiveRuntime();
+    const left = runtime.signal("left");
+    const right = runtime.signal("right");
+    const leftAttempt = runtime.renderAdapter.createRenderAttempt();
+    const rightAttempt = runtime.renderAdapter.createRenderAttempt();
+
+    runtime.renderAdapter.withRenderScope(leftAttempt, () => {
+      expect(left.value).toBe("left");
+    });
+
+    // React may yield between fibers/capture expressions. No ambient owner is
+    // left active while the first attempt is suspended outside its sync scope.
+    await Promise.resolve();
+    expect(runtime.renderAdapter.hasActiveRenderOwner()).toBe(false);
+
+    runtime.renderAdapter.withRenderScope(rightAttempt, () => {
+      expect(right.value).toBe("right");
+    });
+
+    await Promise.resolve();
+    runtime.renderAdapter.withRenderScope(leftAttempt, () => {
+      expect(left.value).toBe("left");
+    });
+
+    expect([...leftAttempt.dependencies.keys()]).toEqual([left]);
+    expect([...rightAttempt.dependencies.keys()]).toEqual([right]);
+    expect(runtime.renderAdapter.hasActiveRenderOwner()).toBe(false);
+  });
 });

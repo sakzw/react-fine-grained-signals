@@ -14,7 +14,8 @@
 import { transformSync, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
 import { act, createElement, Suspense, useState, type FunctionComponent } from "react";
-import { createRoot, type Root } from "react-dom/client";
+import { createRoot, hydrateRoot, type Root } from "react-dom/client";
+import { renderToString } from "react-dom/server";
 import * as reactJsxRuntime from "react/jsx-runtime";
 import { transformWithOxc } from "vite";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -144,6 +145,51 @@ async function loadModule(
 }
 
 describe("experimental per-read capture codegen", () => {
+  it("commits the transformed per-read capture attempt during hydration", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+export const source = signal("server");
+export const unrelated = signal("unchanged");
+let renders = 0;
+export function getRenders() { return renders; }
+export function App() {
+  renders += 1;
+  return <span data-testid="captured-hydration">{source.value}</span>;
+}
+`, { mode: "all", experimentalCapture: true });
+    const App = module.App as FunctionComponent;
+    const getRenders = module.getRenders as () => number;
+    const source = module.source as Signal<string>;
+    const unrelated = module.unrelated as Signal<string>;
+
+    const html = renderToString(createElement(App));
+    expect(html).toContain("server");
+    expect(getRenders()).toBe(1);
+
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, createElement(App));
+
+    await act(async () => { await Promise.resolve(); });
+    expect(container.querySelector("[data-testid=captured-hydration]")?.textContent).toBe("server");
+    expect(getRenders()).toBe(2);
+
+    await act(async () => { unrelated.value = "ignored"; });
+    expect(getRenders()).toBe(2);
+    expect(container.querySelector("[data-testid=captured-hydration]")?.textContent).toBe("server");
+
+    await act(async () => { source.value = "client"; });
+    expect(getRenders()).toBe(3);
+    expect(container.querySelector("[data-testid=captured-hydration]")?.textContent).toBe("client");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("keeps Hooks at function top level and subscribes shallow and deep read chains", async () => {
     const source = `
 import { deepSignal, signal } from "react-fine-grained-signals";

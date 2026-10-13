@@ -373,6 +373,51 @@ export function Counter() {
 const TRY_WITHOUT_CATCH = "(BuildHIR::lowerStatement) Handle TryStatement without a catch clause";
 
 describe("React Compiler compiled output", () => {
+  it("tracks repeated writes when an author opts a managed component into memoization", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+export const count = signal(0);
+export function Counter() {
+  "use memo";
+  return <output>{count.value}</output>;
+}
+`;
+    const compiled = compilePipeline(source);
+    expect(compiled.code).toContain('"use memo";');
+    expect(compiled.code).not.toContain('"use no memo";');
+    expect(compiled.events.map((event) => event.kind)).toEqual(["CompileSuccess"]);
+
+    const module = await loadModule(source);
+    const container = mount(module.Counter);
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
+  });
+
+  it("keeps an authored use no memo component live while the compiler skips it", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+export const count = signal(0);
+export function Counter() {
+  "use no memo";
+  return <output>{count.value}</output>;
+}
+`;
+    const compiled = compilePipeline(source);
+    expect(compiled.code).toContain('"use no memo";');
+    expect(compiled.events.map((event) => event.kind)).toEqual(["CompileSkip"]);
+
+    const module = await loadModule(source);
+    const container = mount(module.Counter);
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
+  });
+
   it("caches an unguarded inject-transformed component behind the memo sentinel", () => {
     const { code } = compilePipeline(moduleScopeCounter, {
       transform: "inject",
@@ -403,6 +448,18 @@ describe("React Compiler compiled output", () => {
     expect(guarded.events.map((event) => event.kind)).toEqual(["CompileSkip"]);
     expect(unguarded.code).toContain("react/compiler-runtime");
     expect(unguarded.events.map((event) => event.kind)).toEqual(["CompileSuccess"]);
+  });
+
+  it("keeps managed global reads live when the compiler integration is disabled", async () => {
+    const compiled = compilePipeline(moduleScopeCounter, { transform: "managed", reactCompiler: "off" });
+    expect(compiled.events.map((event) => event.kind)).toEqual(["CompileSuccess"]);
+    const module = await loadModule(moduleScopeCounter, { transform: "managed", reactCompiler: "off" });
+    const container = mount(module.Counter);
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
   });
 
   it("honors panicThreshold for managed output when integration is disabled", () => {

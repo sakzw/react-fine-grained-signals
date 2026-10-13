@@ -235,8 +235,8 @@ This detection has the following known limitations:
   receiving component invokes the callback and does not make that read
   reactive; use it to find this boundary, then move the read into a tracked
   component or use an explicit signal-value hook in the component that renders
-  the result. JSX children callbacks, cross-module callbacks, and dynamic aliases
-  remain unclassified.
+  the result. Statically resolvable JSX children callbacks receive the same
+  warning. Cross-module callbacks and dynamic aliases remain unclassified.
 - A direct call to a named/default imported plain helper is captured while it
   runs synchronously if its caller already has a managed boundary. The
   transform cannot inspect that helper to discover a hidden signal read, so
