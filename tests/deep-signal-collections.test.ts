@@ -152,6 +152,24 @@ describe("deepSignal reactive collections", () => {
     expect(seen).toEqual([undefined, 1, undefined]);
     expect(weakSet.value.delete(key)).toBe(true);
     expect(hasRuns).toBe(3);
+
+    let supportsWeakSymbols = false;
+    const symbolKey = Symbol("weak-key");
+    try {
+      WeakMap.prototype.set.call(new WeakMap(), symbolKey as unknown as object, 1);
+      supportsWeakSymbols = true;
+    } catch {
+      // Engines predating weak symbol keys use the normal strong primitive-key
+      // metadata path, which is reclaimed by collection mutation sweeps.
+    }
+    const symbolValues: Array<number | undefined> = [];
+    if (supportsWeakSymbols) {
+      const weakSymbolMap = deepSignal(new WeakMap<object, number>(), { collections: "reactive" });
+      const weakSymbolKey = symbolKey as unknown as object;
+      disposers.push(effect(() => { symbolValues.push(weakSymbolMap.value.get(weakSymbolKey)); }));
+      weakSymbolMap.value.set(weakSymbolKey, 1);
+    }
+    expect(symbolValues).toEqual(supportsWeakSymbols ? [undefined, 1] : []);
   });
 
   it("tracks reactive Set operands used by native Set composition methods", () => {
@@ -179,5 +197,34 @@ describe("deepSignal reactive collections", () => {
       state.value.map.set("a", 2);
     });
     expect(runs).toBe(2);
+  });
+
+  it("keeps subscribed primitive-key metadata through unrelated mutations", () => {
+    const map = deepSignal(new Map<string, number>([["watched", 1]]), { collections: "reactive" });
+    const seen: Array<number | undefined> = [];
+    disposers.push(effect(() => { seen.push(map.value.get("watched")); }));
+
+    // These writes run cleanup without notifying the watched-key subscriber.
+    map.value.set("other-1", 1);
+    map.value.set("other-2", 2);
+    map.value.set("watched", 3);
+    expect(seen).toEqual([1, 3]);
+  });
+
+  it("reclaims disposed primitive-key reads and tracks them again on reuse", () => {
+    const map = deepSignal(new Map<string, number>(), { collections: "reactive" });
+    const staleSeen: Array<number | undefined> = [];
+    const dispose = effect(() => { staleSeen.push(map.value.get("reused")); });
+    dispose();
+
+    // A later mutation sweeps the disposed dependency candidate. Reusing the
+    // same primitive key must create a live dependency with the current value.
+    map.value.set("unrelated", 1);
+    map.value.set("reused", 2);
+    const seen: Array<number | undefined> = [];
+    disposers.push(effect(() => { seen.push(map.value.get("reused")); }));
+    map.value.set("reused", 3);
+    expect(staleSeen).toEqual([undefined]);
+    expect(seen).toEqual([2, 3]);
   });
 });

@@ -67,6 +67,7 @@
   "scripts": {
     "bench": "pnpm build:runtime && node --expose-gc benchmarks/core.mjs",
     "bench:deep": "pnpm build:runtime && node --expose-gc benchmarks/deep-signal.mjs",
+    "bench:collections": "pnpm build:runtime && node --expose-gc benchmarks/collection-sweep.mjs",
     "bench:react": "pnpm build:runtime && node --expose-gc benchmarks/react-render.mjs",
     "bench:transform": "pnpm build:transform && pnpm --filter unplugin-react-fine-grained-signals bench",
     "build": "pnpm build:runtime && pnpm build:transform",

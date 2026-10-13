@@ -65,7 +65,10 @@ interface CollectionMetadata {
   size?: VersionSignal;
   keysIteration?: VersionSignal;
   entriesIteration?: VersionSignal;
-  prunable: Set<unknown>;
+  prunable: Map<unknown, number>;
+  prunableSweepIterator?: Iterator<[unknown, number]> | undefined;
+  prunableRevision: number;
+  prunableSweepRevision?: number | undefined;
   methods: Map<PropertyKey, Function>;
   proxy: object;
 }
@@ -949,19 +952,24 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   };
 
   const collectionVersion = (metadata: CollectionMetadata, kind: "values" | "existence" | "members", key: unknown): VersionSignal => {
-    const objectKey = isObjectLike(key) ? key : undefined;
-    let version = objectKey === undefined
-      ? metadata[kind].get(key)
-      : (kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers).get(objectKey);
+    const weakKey = isWeakCollectionKey(key);
+    const weakVersions = kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers;
+    let version = weakKey ? weakVersions.get(key as object) : metadata[kind].get(key);
     if (version === undefined) {
       version = adapter.createVersionSignal(0);
-      if (objectKey === undefined) metadata[kind].set(key, version);
-      else (kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers).set(objectKey, version);
+      if (weakKey) weakVersions.set(key as object, version);
+      else metadata[kind].set(key, version);
     }
-    // Primitive misses need a later mutation-driven sweep because they cannot
-    // be weakly keyed. Present keys are removed from this candidate set by the
-    // sweep and re-queued if a later delete removes them.
-    if (objectKey === undefined) metadata.prunable.add(key);
+    // Primitive keys cannot be weakly keyed. Record exactly which categories
+    // have a version so mutation cleanup need not probe three maps per key.
+    if (!weakKey) {
+      const bit = kind === "values" ? 1 : kind === "existence" ? 2 : 4;
+      const candidates = metadata.prunable.get(key) ?? 0;
+      if ((candidates & bit) === 0) {
+        metadata.prunable.set(key, candidates | bit);
+        metadata.prunableRevision += 1;
+      }
+    }
     return version;
   };
 
@@ -980,8 +988,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     weakKind: "weakValues" | "weakExistence" | "weakMembers",
     strongKind: "values" | "existence" | "members",
     key: object | symbol,
-  ): VersionSignal => isObjectLike(key)
-    ? weakCollectionVersion(metadata, weakKind, key)
+  ): VersionSignal => isWeakCollectionKey(key)
+    ? weakCollectionVersion(metadata, weakKind, key as object)
     : collectionVersion(metadata, strongKind, key);
 
   const notifyWeakCollectionKey = (
@@ -990,8 +998,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     strongKind: "values" | "existence" | "members",
     key: object | symbol,
   ): void => {
-    const version = isObjectLike(key)
-      ? metadata[weakKind].get(key)
+    const version = isWeakCollectionKey(key)
+      ? metadata[weakKind].get(key as object)
       : metadata[strongKind].get(key);
     if (version !== undefined) version.value += 1;
   };
@@ -1008,30 +1016,72 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   };
 
   const notifyCollectionKey = (metadata: CollectionMetadata, kind: "values" | "existence" | "members", key: unknown): void => {
-    const objectKey = isObjectLike(key) ? key : undefined;
-    const version = objectKey === undefined
-      ? metadata[kind].get(key)
-      : (kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers).get(objectKey);
+    const weakKey = isWeakCollectionKey(key);
+    const weakVersions = kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers;
+    const version = weakKey ? weakVersions.get(key as object) : metadata[kind].get(key);
     if (version !== undefined) version.value += 1;
   };
 
   const sweepCollectionKeys = (metadata: CollectionMetadata): void => {
     if (adapter.getBatchDepth() !== 0) {
-      if (!scheduledCollectionSweeps.has(metadata)) {
-        scheduledCollectionSweeps.add(metadata);
-        queueMicrotask(() => {
-          scheduledCollectionSweeps.delete(metadata);
-          sweepCollectionKeys(metadata);
-        });
-      }
+      scheduleCollectionSweep(metadata, false);
       return;
     }
-    for (const versions of [metadata.values, metadata.existence, metadata.members]) {
-      for (const [key, version] of versions) {
-        if (!adapter.hasSubscribers(version)) versions.delete(key);
-      }
+    // Revisit only primitive candidates and only the categories with versions.
+    // Keep subscribed categories for another mutation-driven cleanup after a
+    // later effect run/disposal; drop each unsubscribed category independently.
+    let iterator = metadata.prunableSweepIterator;
+    if (iterator === undefined) {
+      iterator = metadata.prunable.entries();
+      metadata.prunableSweepIterator = iterator;
+      metadata.prunableSweepRevision = metadata.prunableRevision;
     }
-    metadata.prunable.clear();
+    let processed = 0;
+    while (processed < 128) {
+      const next = iterator.next();
+      if (next.done) {
+        metadata.prunableSweepIterator = undefined;
+        if (metadata.prunableSweepRevision !== metadata.prunableRevision) {
+          metadata.prunableSweepRevision = undefined;
+          scheduleCollectionSweep(metadata, true);
+          return;
+        }
+        metadata.prunableSweepRevision = undefined;
+        return;
+      }
+      const [key, candidates] = next.value;
+      processed += 1;
+      let remaining = candidates;
+      if ((candidates & 1) !== 0) {
+        const version = metadata.values.get(key);
+        if (version === undefined || !adapter.hasSubscribers(version)) { metadata.values.delete(key); remaining &= ~1; }
+      }
+      if ((candidates & 2) !== 0) {
+        const version = metadata.existence.get(key);
+        if (version === undefined || !adapter.hasSubscribers(version)) { metadata.existence.delete(key); remaining &= ~2; }
+      }
+      if ((candidates & 4) !== 0) {
+        const version = metadata.members.get(key);
+        if (version === undefined || !adapter.hasSubscribers(version)) { metadata.members.delete(key); remaining &= ~4; }
+      }
+      if (remaining === 0) metadata.prunable.delete(key);
+      else if (remaining !== candidates) metadata.prunable.set(key, remaining);
+    }
+    // Large candidate sets are drained over timer turns so each collection
+    // mutation pays a fixed synchronous budget and the browser can paint
+    // between cleanup chunks. The live Map iterator also sees appended keys.
+    scheduleCollectionSweep(metadata, true);
+  };
+
+  const scheduleCollectionSweep = (metadata: CollectionMetadata, yieldToTask: boolean): void => {
+    if (scheduledCollectionSweeps.has(metadata)) return;
+    scheduledCollectionSweeps.add(metadata);
+    const resume = () => {
+      scheduledCollectionSweeps.delete(metadata);
+      sweepCollectionKeys(metadata);
+    };
+    if (yieldToTask) setTimeout(resume, 0);
+    else queueMicrotask(resume);
   };
 
   function reactiveCollectionProxy(raw: object, kind: "Map" | "Set" | "WeakMap" | "WeakSet"): object {
@@ -1041,7 +1091,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       values: new Map(), existence: new Map(), members: new Map(),
       objectValues: new WeakMap(), objectExistence: new WeakMap(), objectMembers: new WeakMap(),
       weakValues: new WeakMap(), weakExistence: new WeakMap(), weakMembers: new WeakMap(),
-      prunable: new Set(), methods: new Map(), proxy: undefined as unknown as object,
+      prunable: new Map(), prunableRevision: 0, methods: new Map(), proxy: undefined as unknown as object,
     };
     const normalize = (value: unknown): unknown => unwrap(value, true);
     const normalizeWeakKey = (value: unknown): unknown => {
@@ -1150,7 +1200,6 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
               const size = metadata.size; if (size !== undefined) size.value += 1;
               const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
               const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
-              if (!isObjectLike(normalized)) metadata.prunable.add(normalized);
             } else {
               notifyWeakCollectionKey(metadata, "weakValues", "values", normalized as object | symbol);
               notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalized as object | symbol);
@@ -1165,13 +1214,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
             if (kind === "Map") {
               for (const item of Map.prototype.keys.call(target) as IterableIterator<unknown>) {
                 notifyCollectionKey(metadata, "values", item); notifyCollectionKey(metadata, "existence", item);
-                if (!isObjectLike(item)) metadata.prunable.add(item);
               }
               Map.prototype.clear.call(target);
             } else {
               for (const item of Set.prototype.values.call(target) as IterableIterator<unknown>) {
                 notifyCollectionKey(metadata, "members", item);
-                if (!isObjectLike(item)) metadata.prunable.add(item);
               }
               Set.prototype.clear.call(target);
             }
@@ -1223,7 +1270,6 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
               const size = metadata.size; if (size !== undefined) size.value += 1;
               const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
               const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
-              if (!isObjectLike(normalized)) metadata.prunable.add(normalized);
             } else {
               notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
             }

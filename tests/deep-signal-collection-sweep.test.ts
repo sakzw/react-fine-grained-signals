@@ -1,0 +1,89 @@
+import { describe, expect, it } from "vitest";
+import { createDeepSignalFactory } from "../src/core/deep-signal-engine.js";
+import type { DeepSignalRuntimeAdapter, DeepSignalSource } from "../src/core/deep-signal-engine.js";
+
+const makeSource = <T>(initial: T): DeepSignalSource<T> => {
+  let value = initial;
+  return {
+    get value() { return value; },
+    set value(next) { value = next; },
+    peek() { return value; },
+  };
+};
+
+function makeHarness() {
+  const active = new Set<object>();
+  const checked: object[] = [];
+  const versions: object[] = [];
+  const adapter: DeepSignalRuntimeAdapter = {
+    createSignal: makeSource,
+    createVersionSignal<T>(initial: T) {
+      const source = makeSource(initial);
+      versions.push(source);
+      return source;
+    },
+    markWatched(source) { active.add(source); },
+    hasSubscribers(source) { checked.push(source); return active.has(source); },
+    batch: (callback) => callback(),
+    untracked: (callback) => callback(),
+    isSignal: () => false,
+    hasActiveSubscriber: () => true,
+    getBatchDepth: () => 0,
+  };
+  return { ...createDeepSignalFactory(adapter), active, checked, versions };
+}
+
+describe("reactive collection metadata sweeps", () => {
+  it("bounds synchronous work and rechecks changed candidates before eventual cleanup", async () => {
+    const harness = makeHarness();
+    const collection = harness.deepSignal(new Map<string, number>(), { collections: "reactive" }).value;
+    for (let index = 0; index < 300; index += 1) collection.get(`key-${index}`);
+    const retainedVersion = harness.versions[0]!;
+    harness.active.clear();
+    harness.active.add(retainedVersion);
+
+    collection.set("trigger", 1);
+    expect(harness.checked).toHaveLength(128);
+
+    // Add a category to an already visited key, then append another key. Both
+    // must be revisited before the sweep reports completion.
+    collection.has("key-0");
+    const retainedExistenceVersion = harness.versions.at(-1)!;
+    harness.active.add(retainedExistenceVersion);
+    collection.get("added-during-sweep");
+    const addedVersion = harness.versions.at(-1)!;
+    harness.active.delete(addedVersion);
+    const initialCandidateCount = harness.versions.length;
+    const deadline = Date.now() + 2_000;
+    while (new Set(harness.checked).size < initialCandidateCount && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    expect(new Set(harness.checked).size).toBe(initialCandidateCount);
+    expect(harness.checked).toContain(addedVersion);
+    expect(harness.checked).toContain(retainedExistenceVersion);
+
+    const versionsAfterSweep = harness.versions.length;
+    collection.get("key-0");
+    collection.has("key-0");
+    expect(harness.versions).toHaveLength(versionsAfterSweep);
+
+    // Disposed candidates were removed. Re-reading one allocates a new source.
+    collection.get("key-1");
+    expect(harness.versions).toHaveLength(versionsAfterSweep + 1);
+
+    // A subscribed key stays live through unrelated mutations; after its
+    // subscriber disappears, the next sweep removes both categories.
+    collection.set("another-mutation", 1);
+    const withRetainedVersion = harness.versions.length;
+    collection.get("key-0");
+    collection.has("key-0");
+    expect(harness.versions).toHaveLength(withRetainedVersion);
+    harness.active.delete(retainedVersion);
+    harness.active.delete(retainedExistenceVersion);
+    collection.set("last-mutation", 1);
+    const afterRetainedCleanup = harness.versions.length;
+    collection.get("key-0");
+    collection.has("key-0");
+    expect(harness.versions).toHaveLength(afterRetainedCleanup + 2);
+  });
+});
