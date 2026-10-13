@@ -26,12 +26,14 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { transformSync, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
+import babel from "@rolldown/plugin-babel";
 import reactCompiler from "babel-plugin-react-compiler";
 import { act, createElement, type FunctionComponent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import * as reactCompilerRuntime from "react/compiler-runtime";
+import * as reactJsxDevRuntime from "react/jsx-dev-runtime";
 import * as reactJsxRuntime from "react/jsx-runtime";
-import { build, transformWithOxc, type Plugin } from "vite";
+import { build, transformWithOxc, type Plugin, type PluginOption } from "vite";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
@@ -88,7 +90,7 @@ function emulatedReactCompiler(): Plugin {
   };
 }
 
-async function buildApp(plugins: Plugin[]): Promise<string> {
+async function buildApp(plugins: PluginOption[]): Promise<string> {
   const result = await build({
     configFile: false,
     envFile: false,
@@ -119,6 +121,7 @@ const EXPORTS = "__exports";
 
 const moduleRegistry: Record<string, unknown> = {
   "react/jsx-runtime": reactJsxRuntime,
+  "react/jsx-dev-runtime": reactJsxDevRuntime,
   "react/compiler-runtime": reactCompilerRuntime,
   "react-fine-grained-signals": library,
   "react-fine-grained-signals/runtime": libraryRuntime,
@@ -231,6 +234,18 @@ describe("Vite plugin order against a pre-enforced React Compiler step", () => {
     ["compiler first", (signals: Plugin) => [emulatedReactCompiler(), signals]],
     ["signals first", (signals: Plugin) => [signals, emulatedReactCompiler()]],
   ] as const)("runs ahead of the compiler with %s", async (_label, order) => {
+    const code = await buildApp(order(viteAdapter({ mode: "auto" }) as Plugin));
+
+    expect(code).toContain('"use no memo"');
+    expect(code).toContain("useSignalCapture");
+    expect(code).not.toContain("react/compiler-runtime");
+    expect(drive(linkModule(code))).toEqual(["0", "1", "2"]);
+  }, BUILD_TIMEOUT);
+
+  it.each([
+    ["Babel plugin first", (signals: Plugin) => [babel({ plugins: [[reactCompiler, { panicThreshold: "none" }]] }), signals]],
+    ["signals plugin first", (signals: Plugin) => [signals, babel({ plugins: [[reactCompiler, { panicThreshold: "none" }]] })]],
+  ] as const)("runs an actual React Compiler Vite/Babel build with %s", async (_label, order) => {
     const code = await buildApp(order(viteAdapter({ mode: "auto" }) as Plugin));
 
     expect(code).toContain('"use no memo"');

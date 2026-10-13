@@ -2,9 +2,9 @@
 
 ## 現状（2026-10-13）
 
-後続のM3統合で、`useSignalCapture()` per-read codegenは既定managed modeへ接続済み。したがって下記の「M3確定までは既定modeに接続しない」は当時の計画であり、現在の状態ではない。統合後もM3のexactness gateは未完了なので、M5の検出・diagnostic境界を閉じる必要がある。
+後続のM3統合で、`useSignalCapture()` per-read codegenは既定managed modeへ接続済み。したがって下記の「M3確定までは既定modeに接続しない」は当時の計画であり、現在の状態ではない。M3はbounded synchronous capture contractの下で完了判定した。M5では引き続き検出・diagnostic境界を閉じる。
 
-module-level `"use server"` skip/warningと既知のJSX callback/destructuring warningは実装済み。adapter unit suiteを含むplugin全体は381 passed / 3 skippedで通過した。5 adapter factoryを含むpacked consumer smokeも通過。実Vite buildでは`"use server"` skipとcode-frame warning、`"use client"` transform、両entryのsource mapを確認済み。Rollup/Webpack/Rspack/esbuildのpacked consumer build全体、および各adapter上のRSC directive配送・warning/source-map位置の組み合わせは未検証であり、M5は未完了。
+module-level `"use server"` skip/warningと、JSX function prop/children callbackおよびdestructuring warningは実装済み。adapter unit suiteを含むplugin全体は399 tests passed。実際のVite、Rollup、Webpack、Rspack、esbuild buildで`"use server"` skip/source warning、`"use client"` transform、source-map sourceを確認した。M5 adapter matrixは完了。
 
 この調査はM3のtracking実装に依存しない。現状のtransform契約と、v0.3.0で安全性を改善する範囲を記録する。ここに書かれた挙動は既存契約の棚卸しであり、新しい保証ではない。
 
@@ -12,7 +12,7 @@ module-level `"use server"` skip/warningと既知のJSX callback/destructuring w
 - 実行時に決まるcomputed keyの `signal[key]` は、componentが別のreadや明示設定ですでに変換対象の場合、そのcapture内で動的に評価される。runtimeは実際のsignal accessorだけをdependencyとして記録し、通常のobject/array accessはdependencyを作らない。動的keyだけでは`auto`はtransformを選ばない。`const { value } = signal` は追跡しない。一方 `const { user } = deep.value` はroot readを検出するが、nested property readがcapture外に残るためsource-located warningを出す。property名`current`/`target`/`currentTarget`だけで内側のsignal readを除外するheuristicは削除した。
 - 同一module内の一部同期helper/render callbackを追跡する。既にmanaged変換されるcomponentからの直接named/default import helper callもcaptureするが、signal readしかないimport先依存からは`auto`がcomponent変換を推論できない。import先が返すcallback、任意のrender prop、独自callback APIの実行時期は一般には解決できない。`map`等の対応表とasync/event/deferred callback除外を `transform.ts` で管理する。
 - `"use client"` / `"use server"` やbundler environment/layerは現在自動判定しない。Server ComponentでHook挿入が起こり得る。現行回避策は`exclude`、`@noSignalTracking`、`mode: "manual"`。
-- 診断にはimport/annotation/mixed-use曖昧性に加え、JSX function-valued prop callbackとdestructuring `.value` initializerのsource-located warningを追加した。JSX children callback、cross-module callback、dynamic aliasなどは引き続き一般的には検出できない。
+- 診断にはimport/annotation/mixed-use曖昧性に加え、JSX function-valued prop/children callbackとdestructuring `.value` initializerのsource-located warningを追加した。cross-module callbackやdynamic aliasなどは引き続き一般的には検出できない。
 - Vite、Rollup、Webpack、Rspack、esbuild adapterとそれぞれの統合テストがある。Webpack/Rspack loader差し替えはunplugin内部rule形状に依存し、fallback時にwarningを出す。今回、bundler suiteは再実行していない。
 
 ## M5の作業順と完了条件
@@ -29,9 +29,11 @@ module-level `"use server"` skip/warningと既知のJSX callback/destructuring w
 
 module-levelの`"use server"`は明示的なserver-action boundaryとして扱う。該当module内をtransform対象から外し、JSXを返す候補関数にはsource location付きwarningを出す。`"use client"`は通常変換する。directiveのないServer Componentはclient/serverの判定材料がなく、引き続き`exclude`/annotation/manualで明示的に除外する。この挙動をtransform regression testと英語/日本語READMEに記録した。
 
-`onX`以外のfunction-valued JSX propに渡す静的解決可能なinline/同一module callbackにtracked `.value` readがあれば、`auto` modeでsource-located warningを追加した。destructuring initializer内に`.value` readがある形もwarningにする。いずれも未追跡を自動で解消する診断ではない。JSX children callback、cross-module callback、動的alias、`.value`を持つ通常objectとの誤判定は残るためREADMEに境界を記載する。
+`onX`以外のfunction-valued JSX propまたはJSX childrenに静的解決可能なinline/same-module callbackを渡し、tracked `.value` readがあればsource-located warningを出す。destructuring initializer内に`.value` readがある形もwarningにする。いずれも未追跡を自動で解消する診断ではない。cross-module callback、動的alias、`.value`を持つ通常objectとの誤判定は残るためREADMEに境界を記載する。
 
 これはRSCの一般判定ではない。後続のadapter調査ではwarning locationのunplugin配送、各bundlerで`"use server"` moduleを確実に対象へ届けるかを検証する。
 
 2026-10-13の実Vite gate: `vite-plugin-order.test.ts`で実際の`vite.build()`へ`"use server"`と`"use client"`のentryを渡し、server候補のcapture注入がskipされること、Vite loggerへsource code frame付きwarningが届くこと、client側は変換されること、双方のoutput source mapが元moduleを示すことを確認した。Rolldown自身もmodule-level directiveをbundle中に保持できないwarningを出すため、この確認はtransform段階の振る舞いを示すもので、RSC server runtimeへdirectiveを保持したまま配布する保証ではない。
+
+2026-10-14のadapter matrix: `rollup-rsc.test.ts`と`webpack-rspack-esbuild-rsc.test.ts`は実ビルドを行い、Webpack 5.111.1、Rspack 2.2.8、esbuild 0.28.1でもserver directiveのskip、source-located warning、client transform、出力source mapを確認した。Rollupは4.62.4。新規adapter test 4件と既存Vite order testを含むfocused suiteは12/12 passedし、plugin全suiteは399/399 passed。これらはworkspaceからpluginを使うbuild smokeであり、公開tarballからの最終consumer smokeとは別gate。
 

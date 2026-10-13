@@ -870,7 +870,7 @@ describe.skipIf(esbuildEntry === undefined)("esbuild adapter build", () => {
     const output = await build("counter.js", componentSource, { mode: "auto" });
 
     expect(output).toContain("react-fine-grained-signals/runtime");
-    expect(output).toContain("finally");
+    expect(output).toContain("_signals.capture(() => count.value)");
   });
 
   it("builds a .tsx file through the same adapter", async () => {
