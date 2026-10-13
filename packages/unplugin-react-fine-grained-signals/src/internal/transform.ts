@@ -2481,7 +2481,8 @@ function inspectKnownRenderPropReads(
       if (!readsValue) return;
       const warning = declarator.buildCodeFrameError(
         "Destructuring from a .value expression reads nested properties outside the transform's " +
-          "capture boundary. Read the complete property path in one tracked expression instead.",
+          "per-read capture boundary. Read the complete property path in one tracked expression, " +
+          "or keep/add useSignalTracking() to retain ambient tracking for deep proxy reads.",
       );
       reportWarning(options, warning, declarator);
     },
@@ -2795,16 +2796,6 @@ function decideTransform(
   const automatic =
     !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
-  // An explicit `useSignalTracking()` is a request for the runtime's ambient
-  // render collector. Preserve that contract in managed mode: the per-read
-  // capture transform only instruments statically proven `.value` reads and
-  // cannot see deep-signal proxy properties such as `task.done`. Replacing the
-  // hook with `useSignalCapture()` silently loses those dependencies. Authors
-  // who want the newer exact per-read boundary can use `@signalTracking` (or
-  // remove the explicit hook and let auto mode select the component).
-  if (explicit && options.transform === "managed") {
-    return { kind: "directive-only", body };
-  }
   if (!explicit && (inspection.hasSignalTrackingCall || inspection.hasUseManagedSignalsCall)) {
     return { kind: "skip" };
   }
@@ -2814,6 +2805,16 @@ function decideTransform(
     throw path.buildCodeFrameError(
       "useSignalTracking transform only supports synchronous, non-generator functions",
     );
+  }
+  // An explicit `useSignalTracking()` is a request for the runtime's ambient
+  // render collector. Preserve that contract in managed mode: the per-read
+  // capture transform only instruments statically proven `.value` reads and
+  // cannot see deep-signal proxy properties such as `task.done`. Replacing the
+  // hook with `useSignalCapture()` silently loses those dependencies. Authors
+  // who want the newer exact per-read boundary can use `@signalTracking` (or
+  // remove the explicit hook and let auto mode select the component).
+  if (explicit && options.transform === "managed") {
+    return { kind: "directive-only", body };
   }
 
   const importSource = options.transform === "managed"

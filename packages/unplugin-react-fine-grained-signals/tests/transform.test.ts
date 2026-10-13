@@ -3411,6 +3411,7 @@ export function App() {
 
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toContain("Destructuring from a .value expression");
+    expect(warnings[0]?.message).toContain("useSignalTracking()");
     expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
       line: 5,
       column: 8,
