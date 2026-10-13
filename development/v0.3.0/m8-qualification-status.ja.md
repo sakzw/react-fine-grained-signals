@@ -3,7 +3,7 @@
 ## Qualification that passed
 
 - Runtime: `vitest run --reporter=dot --pool=threads --maxWorkers=1` — 38 files, 555 tests passed. The two concurrent-render audit tests also pass when isolated. A reused-module run produced two order-dependent failures, so the qualification result uses per-file isolation.
-- Transform package: 371 passed, 3 skipped in the full serial suite before the final M4 regression was added. Its dedicated React Compiler suite previously had 71 passed, 3 skipped; an additional focused runtime test passed for managed capture with `reactCompiler: "off"` (72 passed / 3 skipped cumulatively). `tsc --noEmit` passed for runtime and transform package.
+- Transform package: 371 passed, 3 skipped in the full serial suite before the final M4 and M5 integration regressions were added. The dedicated React Compiler suite now passes 24/24 with module/props updates, branch cleanup, Suspense retry, Hook order, and explicit CompileSuccess assertions. The real Vite integration suite now additionally passes module-level RSC skip/warning delivery, client transform, and source-map checks. `tsc --noEmit` passed for runtime and transform package after these additions.
 - Build: runtime `tsdown` succeeded; transform `tsdown` and its `tests/build-smoke.mjs` succeeded. Production Vite browser build succeeded.
 - Lint: root and transform package `oxlint` exited successfully. Root lint emits existing warnings, including `no-shadow` and `consistent-function-scoping` warnings.
 - Package size: all seven gzip app-graph budgets pass with `node scripts/check-size.mjs`.
@@ -18,11 +18,11 @@
 M8 is not complete and v0.3.0 must not be treated as frozen. The following are still required:
 
 1. **M3 exactness:** the `useSignalCapture()`/per-read transform is in default managed codegen, but JSX children/callbacks, cross-module aliases, arbitrary async/deferred execution, and multiple-root/concurrent attempt ownership are not proven or consistently diagnosable. Fast Refresh harness was 18/24: all six remaining failures are React `try/finally` and Preact/Oxc control cases; managed Oxc/Babel Hook-shape cases pass. Resolve the tracking contract and rerun render/HMR/StrictMode/Suspense/SSR/hydration/Concurrent gates before accepting M3.
-2. **M4 Compiler:** current Compiler tests pass, but the opt-out and runtime behavior matrix across the chosen M3 contract remains incomplete.
-3. **M5 bundler/RSC:** unit coverage exercises five adapters and module-level `use server` skip/warning, but real consumer builds and the adapter/RSC combination matrix are incomplete.
+2. **M4 Compiler:** Babel runtime matrix now checks CompileSuccess, repeated writes, branch dependency cleanup, Suspense retry, and Hook order. Author directive runtime cases and production Vite/Babel integration remain incomplete.
+3. **M5 bundler/RSC:** real Vite integration now checks module-level `use server` skip and source warning, `"use client"` transform, and source maps. Packed RSC/warning/source-map builds remain missing for Rollup, Webpack, Rspack, and esbuild.
 4. **M6 development-browser path:** production-bundle browser matrix passes; the Vite SSR/dev-server browser matrix remains unavailable because startup hit dependency optimization/SSR import timeouts. Complete it after resolving that harness failure.
 5. **M7 variability:** most paired performance ratios have wide IQRs that cross 1; treat them as inconclusive. Retained heap IQR is also broad. The weak-collection optimization materially removes the measured ~3,000× regression but native comparisons remain slower by ~15–18×. Npm pack sizes are effectively unchanged from v0.2.1 (runtime -0.6%, plugin +0.02%); reevaluate after any artifact change.
-6. **Release-shaped pack:** rerun the repository's full consumer smoke with the pinned pnpm 12.3.4 installed, using final package versions and lock metadata. They remain `0.2.1` in the source tree until freeze; do not bump or publish before the release contract is accepted.
+6. **Release-shaped pack:** rerun the repository's full consumer smoke with the packageManager-pinned pnpm 12.8.1 and final package versions/lock metadata. The host exposed pnpm 12.6.0, while its Volta shim referenced a missing 12.3.4 executable; the prior smoke used a scratch-only shim to invoke 12.6.0. Source package versions remain `0.2.1` until the release contract is accepted; do not publish before then.
 
 ## Next execution order
 

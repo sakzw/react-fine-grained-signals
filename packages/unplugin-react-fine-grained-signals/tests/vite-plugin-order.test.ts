@@ -23,7 +23,7 @@
 
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { transformSync, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
 import reactCompiler from "babel-plugin-react-compiler";
@@ -32,7 +32,7 @@ import { createRoot, type Root } from "react-dom/client";
 import * as reactCompilerRuntime from "react/compiler-runtime";
 import * as reactJsxRuntime from "react/jsx-runtime";
 import { build, transformWithOxc, type Plugin } from "vite";
-import { afterAll, afterEach, describe, expect, it } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
 import * as libraryRuntime from "../../../src/runtime.js";
@@ -237,5 +237,63 @@ describe("Vite plugin order against a pre-enforced React Compiler step", () => {
     expect(code).toContain("useSignalCapture");
     expect(code).not.toContain("react/compiler-runtime");
     expect(drive(linkModule(code))).toEqual(["0", "1", "2"]);
+  }, BUILD_TIMEOUT);
+
+  it("skips module-level use server, reports its source, and maps transformed client code", async () => {
+    const serverEntry = join(fixtureDir, "server.jsx");
+    const clientEntry = join(fixtureDir, "client.jsx");
+    writeFileSync(serverEntry, [
+      '"use server";',
+      'import { signal } from "react-fine-grained-signals";',
+      "const count = signal(0);",
+      "export function ServerAction() { return <output>{count.value}</output>; }",
+      "",
+    ].join("\n"));
+    writeFileSync(clientEntry, [
+      '"use client";',
+      'import { signal } from "react-fine-grained-signals";',
+      "const count = signal(0);",
+      "export function Client() { return <output>{count.value}</output>; }",
+      "",
+    ].join("\n"));
+
+    const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      const result = await build({
+        configFile: false,
+        envFile: false,
+        root: fixtureDir,
+        logLevel: "warn",
+        plugins: [viteAdapter({ mode: "auto" })],
+        build: {
+          write: false,
+          sourcemap: true,
+          minify: false,
+          lib: {
+            entry: { server: serverEntry, client: clientEntry },
+            formats: ["es"],
+            fileName: (name) => name,
+          },
+          rolldownOptions: {
+            external: [/^react(\/|$)/, /^react-dom(\/|$)/, /^react-fine-grained-signals(\/|$)/],
+          },
+        },
+      });
+      const warningText = warnings.mock.calls.flat().join(" ");
+      expect(warningText).toContain('top-level "use server" directive');
+      expect(warningText).toContain(`> 4 | export function ServerAction()`);
+
+      const outputs = Array.isArray(result) ? result : [result];
+      const chunks = outputs.flatMap((output) => "output" in output ? output.output : [])
+        .filter((item) => item.type === "chunk");
+      const serverChunk = chunks.find((chunk) => chunk.name === "server");
+      const clientChunk = chunks.find((chunk) => chunk.name === "client");
+      expect(serverChunk?.code).not.toContain("useSignalCapture");
+      expect(clientChunk?.code).toContain("useSignalCapture");
+      expect(serverChunk?.map?.sources.some((source) => source.endsWith(basename(serverEntry)))).toBe(true);
+      expect(clientChunk?.map?.sources.some((source) => source.endsWith(basename(clientEntry)))).toBe(true);
+    } finally {
+      warnings.mockRestore();
+    }
   }, BUILD_TIMEOUT);
 });

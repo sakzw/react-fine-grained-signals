@@ -4,7 +4,7 @@
 
 後続のM3統合で、`useSignalCapture()` per-read codegenは既定managed modeへ接続済み。したがって下記の「M3確定までは既定modeに接続しない」は当時の計画であり、現在の状態ではない。統合後もM3のexactness gateは未完了なので、M5の検出・diagnostic境界を閉じる必要がある。
 
-module-level `"use server"` skip/warningと既知のJSX callback/destructuring warningは実装済み。adapter unit suiteを含むplugin全体は371 passed / 3 skippedで通過し、その後M4 opt-out testを追加してfocused testも通過した。5 adapter factoryを含むpacked consumer smokeも通過。実Vite/Rollup/Webpack/Rspack/esbuild consumer build全体、各adapter上のRSC directive配送・warning/source-map位置の組み合わせは未検証であり、M5は未完了。
+module-level `"use server"` skip/warningと既知のJSX callback/destructuring warningは実装済み。adapter unit suiteを含むplugin全体は371 passed / 3 skippedで通過し、その後のCompiler suiteとVite integration追加も通過した。5 adapter factoryを含むpacked consumer smokeも通過。実Vite buildでは`"use server"` skipとcode-frame warning、`"use client"` transform、両entryのsource mapを確認済み。Rollup/Webpack/Rspack/esbuildのpacked consumer build全体、および各adapter上のRSC directive配送・warning/source-map位置の組み合わせは未検証であり、M5は未完了。
 
 この調査はM3のtracking実装に依存しない。現状のtransform契約と、v0.3.0で安全性を改善する範囲を記録する。ここに書かれた挙動は既存契約の棚卸しであり、新しい保証ではない。
 
@@ -32,4 +32,6 @@ module-levelの`"use server"`は明示的なserver-action boundaryとして扱�
 `onX`以外のfunction-valued JSX propに渡す静的解決可能なinline/同一module callbackにtracked `.value` readがあれば、`auto` modeでsource-located warningを追加した。destructuring initializer内に`.value` readがある形もwarningにする。いずれも未追跡を自動で解消する診断ではない。JSX children callback、cross-module callback、動的alias、`.value`を持つ通常objectとの誤判定は残るためREADMEに境界を記載する。
 
 これはRSCの一般判定ではない。後続のadapter調査ではwarning locationのunplugin配送、各bundlerで`"use server"` moduleを確実に対象へ届けるかを検証する。
+
+2026-10-13の実Vite gate: `vite-plugin-order.test.ts`で実際の`vite.build()`へ`"use server"`と`"use client"`のentryを渡し、server候補のcapture注入がskipされること、Vite loggerへsource code frame付きwarningが届くこと、client側は変換されること、双方のoutput source mapが元moduleを示すことを確認した。Rolldown自身もmodule-level directiveをbundle中に保持できないwarningを出すため、この確認はtransform段階の振る舞いを示すもので、RSC server runtimeへdirectiveを保持したまま配布する保証ではない。
 
