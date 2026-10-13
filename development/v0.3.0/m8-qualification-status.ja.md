@@ -2,7 +2,7 @@
 
 ## Review baseline and fixes
 
-Review baseline `2c688ac8e23f711905b9db71dd7255dca0dfdf95` had two confirmed release blockers: the Test workflow passed all 556 runtime tests but failed its runtime coverage thresholds, and the E2E workflow had one stale React Router row after “complete all”. This closure added behavior-focused runtime and transform regressions, restored explicit ambient tracking for deep proxy reads in managed components, bounded collection metadata sweep work, and expanded the bilingual managed migration guidance. Changes are integrated on local `main`; no remote publication action was taken.
+Review baseline `2c688ac8e23f711905b9db71dd7255dca0dfdf95` had two confirmed release blockers: the Test workflow passed all 556 runtime tests but failed its runtime coverage thresholds, and the E2E workflow had one stale React Router row after “complete all”. This closure added behavior-focused runtime and transform regressions, restored explicit ambient tracking for deep proxy reads in managed components, bounded collection metadata sweep work, and expanded the bilingual managed migration guidance. Changes are integrated on `main` and pushed to `origin/main` at `03be0e96cb12f526baa63a93d93c863b8fabf53a`.
 
 The v0.2.1/v0.3.0 comparison used the same keyed-row React consumer fixture. v0.2.1 passed; the unmodified v0.3.0 baseline rendered a stale `task-row`; the fix preserves explicit `useSignalTracking()` calls through managed codegen, and the fixture now passes. The compatibility matrix and migration details are in the [managed tracking migration guide](../../docs/migration/v0.3.ja.md).
 
@@ -18,12 +18,10 @@ The v0.2.1/v0.3.0 comparison used the same keyed-row React consumer fixture. v0.
 
 ## GitHub Actions status
 
-GitHub still reports the baseline runs as failed: [Test run 38468534814](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534814) failed only at the original coverage gate, and [E2E run 38468534839](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534839) had the stale-row failure. The changes are local and the user explicitly prohibited push, so no post-fix Actions run exists. Local `pnpm test:coverage` and the full CI-serial 59-case browser matrix both pass; no new remote Actions status is claimed.
+The post-fix workflows ran against pushed commit `03be0e96cb12f526baa63a93d93c863b8fabf53a`: [Test run 38482796213](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38482796213) passed, and [E2E run 38482796188](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38482796188) passed. The baseline failures remain available for comparison: [Test run 38468534814](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534814) failed at the original coverage gate, and [E2E run 38468534839](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534839) had the stale-row failure.
 
 ## Freeze decision
 
-M8 is **re-frozen locally** at package version 0.3.0. Every requested local qualification gate passed after the review fixes, including the full coverage gate and the CI-serial 59-case browser E2E matrix. The five-worker WebKit transient was retained in the evidence and did not recur in the isolated test or CI-serial run.
+M8 is **re-frozen** at package version 0.3.0. Every requested local qualification gate passed after the review fixes, including the full coverage gate and the CI-serial 59-case browser E2E matrix. The post-fix GitHub Test and E2E workflows also passed. The five-worker WebKit transient was retained in the evidence and did not recur in the isolated test, full CI-serial matrix, or GitHub E2E workflow.
 
-GitHub's Test/E2E results still refer to the failed baseline commit because push was explicitly prohibited; no post-fix remote Actions result is claimed. Re-run those workflows when a remote update is separately authorized. This local freeze records the passing local CI-equivalent evidence and does not claim a remote CI pass.
-
-No push, release tag, npm publish, or GitHub Release was performed.
+No release tag, npm publish, or GitHub Release was created. This freeze is backed by both local qualification and the successful GitHub Actions runs above.
