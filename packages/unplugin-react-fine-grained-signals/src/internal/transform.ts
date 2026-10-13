@@ -2795,6 +2795,16 @@ function decideTransform(
   const automatic =
     !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
+  // An explicit `useSignalTracking()` is a request for the runtime's ambient
+  // render collector. Preserve that contract in managed mode: the per-read
+  // capture transform only instruments statically proven `.value` reads and
+  // cannot see deep-signal proxy properties such as `task.done`. Replacing the
+  // hook with `useSignalCapture()` silently loses those dependencies. Authors
+  // who want the newer exact per-read boundary can use `@signalTracking` (or
+  // remove the explicit hook and let auto mode select the component).
+  if (explicit && options.transform === "managed") {
+    return { kind: "directive-only", body };
+  }
   if (!explicit && (inspection.hasSignalTrackingCall || inspection.hasUseManagedSignalsCall)) {
     return { kind: "skip" };
   }

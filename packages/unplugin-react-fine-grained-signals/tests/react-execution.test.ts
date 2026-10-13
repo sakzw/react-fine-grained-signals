@@ -23,6 +23,7 @@ import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
 import * as libraryJsxRuntime from "../../../src/jsx-runtime.js";
 import * as libraryRuntime from "../../../src/runtime.js";
+import * as libraryUtils from "../../../src/utils.js";
 import {
   transformReactFineGrainedSignals,
   type ReactFineGrainedSignalsMode,
@@ -41,6 +42,7 @@ const moduleRegistry: Record<string, unknown> = {
   "react-fine-grained-signals": library,
   "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
   "react-fine-grained-signals/runtime": libraryRuntime,
+  "react-fine-grained-signals/utils": libraryUtils,
 };
 
 // The same in-memory linker `react-compiler.test.ts` uses: named imports
@@ -250,6 +252,38 @@ export function KeyApp() { return <output>{inner[valueKey]}</output>; }
     write(module, "inner", "after");
     expect(holderContainer.textContent).toBe("after/after");
     expect(keyContainer.textContent).toBe("after");
+  });
+
+  it("preserves explicit ambient tracking for deep proxy reads inside keyed rows", async () => {
+    const module = await loadModule(`
+import { deepSignal, useSignalTracking } from "react-fine-grained-signals";
+import { For } from "react-fine-grained-signals/utils";
+
+export const state = deepSignal({ tasks: [
+  { id: "task-1", title: "Write the test", done: false },
+] });
+
+function TaskRow({ task }) {
+  useSignalTracking();
+  return <li className={task.done ? "task-row done" : "task-row"}>{task.title}</li>;
+}
+
+export function App() {
+  return <ul><For each={state.value.tasks} by={(task) => task.id}>
+    {(task) => <TaskRow task={task} />}
+  </For></ul>;
+}
+`);
+    const container = mount(module.App);
+    const row = container.querySelector("li");
+    expect(row?.className).toBe("task-row");
+    expect(row?.textContent).toBe("Write the test");
+
+    act(() => {
+      (module.state as { value: { tasks: Array<{ done: boolean }> } }).value.tasks[0]!.done = true;
+    });
+
+    expect(container.querySelector("li")?.className).toBe("task-row done");
   });
 
   it("tracks a computed signal accessor with a runtime key", async () => {

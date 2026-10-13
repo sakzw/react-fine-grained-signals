@@ -207,17 +207,16 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(output).not.toContain("try {");
   });
 
-  it("absorbs an explicit useSignalTracking call into the default managed boundary", () => {
+  it("preserves explicit useSignalTracking ambient capture in managed mode", () => {
     const output = transformSource(explicitSource, { mode: "auto" });
 
-    // The author's own call is replaced by the managed store declaration, so
-    // the body is rewritten rather than left untouched — but no second
-    // `useSignalTracking()` call is ever added.
-    expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("const _signals = _useSignalCapture();");
+    // Explicit tracking also captures runtime-only reads (including deep
+    // proxy properties), which cannot be rewritten as `.value` expressions.
+    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
+    expect(output).not.toContain("useSignalCapture");
     expect(output).not.toContain("try {");
-    expect(output).toContain("_signals.capture(() => count.value)");
-    expect(output).not.toMatch(/^\s*useSignalTracking\(\);$/m);
+    expect(output).toMatch(/^\s*useSignalTracking\(\);$/m);
+    expect(output).toContain("count.value");
   });
 
   it("leaves a hand-written useManagedSignals boundary untouched", () => {
