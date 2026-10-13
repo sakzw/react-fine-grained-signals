@@ -472,6 +472,39 @@ export function App({ state }: { state: DemoState }) {
         </button>
       </section>
 
+      <section aria-labelledby="reset-heading">
+        <h2 id="reset-heading">Bound form reset</h2>
+        <form id="bound-reset-form" action={() => {
+          state.resetText.value = "action value";
+          state.resetChecked.value = true;
+        }}>
+          <output
+            id="bound-reset-signals"
+            data-text={state.resetText}
+            data-checked={state.resetChecked}
+          />
+          <input
+            id="bound-reset-text"
+            aria-label="bound reset text"
+            value={state.resetText}
+            onChange={(event) => { state.resetText.value = event.target.value; }}
+          />
+          <input
+            id="bound-reset-checkbox"
+            aria-label="bound reset checkbox"
+            type="checkbox"
+            checked={state.resetChecked}
+            onChange={(event) => { state.resetChecked.value = event.target.checked; }}
+          />
+          <button id="bound-reset-submit" type="button" onClick={() => {
+            state.resetText.value = "signal updated";
+            state.resetChecked.value = true;
+          }}>Write signals</button>
+          <button id="bound-reset-action" type="submit">Submit action</button>
+          <button id="bound-reset-button" type="reset">Reset</button>
+        </form>
+      </section>
+
       <StrictMode>
         <BindingLifecycle source={state.lifecycleTitle} />
       </StrictMode>

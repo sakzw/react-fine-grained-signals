@@ -33,17 +33,11 @@ JSX runtimeは、allowlistに含まれるnative host propに渡されたsignal�
 
 ### fine-grainedなper-property `style` 追跡
 
-出荷済みのbindingは `style={signal}` を1つのobject全体書き込みとしてしか扱いません。個々のentry自体がsignalであるstyle object、つまり `style={{ color: signal }}` はサポートしていません。1つのCSS propertyだけをreactiveにしたい利用者は、現状style object全体を `computed` 経由にする必要があります。
+HTML host向けに実装した。style objectにsignal value entryがある場合、JSX runtimeはReact用render snapshotを作り、host refがcommitされた後にsignal entryごとのdirect subscriptionを設置する。plain entryはplain valueとして保持する。subscriptionはrender中に作らないため、abandonされたconcurrent renderがsource dependencyを残さない。これによりcomponent ownerを再レンダーせずDOMを更新し、既存のstyle key cleanup、detach/reattach、exception、SSR処理を再利用する。
 
-**候補となる方法(未決定):** JSX transformの境界(`transformHostProps` または隣接するhelper)で `style` object内のvalueとしてsignalを検出し、それぞれのentryを個別のeffectとしてbindingします。signalでないentryはそのまま触れません。
+後続renderでstyle objectを差し替えるとcomputed sourceも差し替わる。`NodeBinder`がbindingを更新し、旧key集合を引き継ぐため削除されたCSS propertyもclearされる。同一plain objectをReact renderなしで直接変更してentryを追加・削除しても検知しない。style objectのshapeはhostのrender lifecycleに従う。SVG/MathMLのproperty-level bindingは未対応で、whole-object direct bindingと同じ境界にする。
 
-- Solid的なAPIの書き味に最も近づけます。また `.style` はHTML・SVG・MathMLに一様に存在するため、`setDomProp` の他の部分が抱えるSVG/MathML除外も不要になります。
-- `isReactiveHostProp` は今日、最上位のprop valueしか見ていません。object literalの1階層内側まで見に行くのは異なる形のtransformで、まだ設計されていません。
-- signalとsignalでないentryが混在するstyle object向けの専用testが必要です。
-- render をまたいで `style` prop全体が異なる形のobjectへ差し替わった場合の扱いを決める必要があります。「host propがbindingされているかどうかは要素の生存期間中固定する」という既存の制約に相当するものが、render間でstyle objectへentryが追加・削除されるcaseにはまだ定義されていません。
-- prototypeは存在しません。上記の論点を超えてscopeされていません。
-
-**出荷されるまでの間:** style object全体を `computed` 経由にするか、単一propertyのreactivityが必要ならleaf component patternに頼ってください。
+qualificationは`tests/react-dom-binding.test.tsx`と`tests/jsx-types.tsx`に置いた。signal/plain混在、`applyStyle`によるunit変換、signal entry write時にownerを再レンダーしないことを確認する。
 
 ## 非目標
 

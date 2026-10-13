@@ -60,6 +60,41 @@ test("updates allowlisted host properties without a React rerender", async ({ pa
   expect(errors).toEqual([]);
 });
 
+test("keeps bound form reset defaults and documents accepted-edit divergence", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const form = page.locator("#bound-reset-form");
+  const input = page.locator("#bound-reset-text");
+  const checkbox = page.locator("#bound-reset-checkbox");
+  const signals = page.locator("#bound-reset-signals");
+
+  await page.locator("#bound-reset-submit").click();
+  await expect(input).toHaveValue("signal updated");
+  await expect(checkbox).toBeChecked();
+  await form.locator("button[type=reset]").click();
+  await expect(input).toHaveValue("signal updated");
+  await expect(checkbox).toBeChecked();
+
+  await page.locator("#bound-reset-action").click();
+  await expect(input).toHaveValue("action value");
+  await expect(checkbox).toBeChecked();
+  await expect(signals).toHaveAttribute("data-text", "action value");
+  await expect(signals).toHaveAttribute("data-checked", "true");
+
+  await input.fill("accepted edit");
+  await checkbox.uncheck();
+  await expect(signals).toHaveAttribute("data-text", "accepted edit");
+  await expect(signals).toHaveAttribute("data-checked", "false");
+  await form.locator("button[type=reset]").click();
+
+  // React restores the owner's last rendered defaults after a user edit;
+  // changing the signal from onChange does not itself change that render.
+  await expect(input).toHaveValue("reset initial");
+  await expect(checkbox).not.toBeChecked();
+  await expect(signals).toHaveAttribute("data-text", "accepted edit");
+  await expect(signals).toHaveAttribute("data-checked", "false");
+  expect(errors).toEqual([]);
+});
+
 test("cleans a StrictMode host binding after unmount", async ({ page }) => {
   const errors = await openHydrated(page);
   const binding = page.locator("#detached-binding");

@@ -40,7 +40,7 @@ function isControlledTwoWayProp(tagName: string, name: string): boolean {
  * same facts from the mounted DOM node's `tagName`. It is also half of a
  * binding's identity for `NodeBinder`'s re-attach diff.
  */
-type BindingKind = "style" | "select-value" | "text-value" | "checked" | "prop";
+type BindingKind = "style" | "style-properties" | "select-value" | "text-value" | "checked" | "prop";
 
 function resolveBindingKind(tagName: string, name: string): BindingKind {
   if (name === "style") return "style";
@@ -53,6 +53,19 @@ function resolveBindingKind(tagName: string, name: string): BindingKind {
 
 function isTwoWayBindingKind(kind: BindingKind): boolean {
   return kind === "select-value" || kind === "text-value" || kind === "checked";
+}
+
+function isStylePropertyBinding(source: BindingSource): source is StylePropertyBinding {
+  return !isSignal(source) && "entries" in source;
+}
+
+function sameBindingSource(a: BindingSource, b: BindingSource): boolean {
+  if (a === b) return true;
+  if (!isStylePropertyBinding(a) || !isStylePropertyBinding(b) || a.entries.length !== b.entries.length) return false;
+  return a.entries.every(([key, value], index) => {
+    const other = b.entries[index];
+    return other !== undefined && key === other[0] && Object.is(value, other[1]);
+  });
 }
 
 // The uncontrolled counterpart React reads only at mount, used in place of the
@@ -120,9 +133,11 @@ const NON_HTML_HOST_ELEMENTS: ReadonlySet<string> = /* @__PURE__ */ (() => {
 // observes root replacement only, so nested mutations would never show.
 type SignalChild = React.ReactNode | (ReadonlySignal<SignalChild> & NotDeepSignal) | readonly SignalChild[];
 type HostProps = Record<string, unknown>;
+type StylePropertyBinding = { readonly entries: readonly (readonly [string, unknown])[] };
+type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
 // `snapshot` is the value React itself was handed for the prop at render (see
 // `transformHostProps`); a binding hands the node back to it on detach.
-type Binding = readonly [name: string, source: ReadonlySignal<unknown>, kind: BindingKind, snapshot: unknown];
+type Binding = readonly [name: string, source: BindingSource, kind: BindingKind, snapshot: unknown];
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
@@ -166,6 +181,15 @@ function normalizeArrayItem(value: unknown, index: number): React.ReactNode {
 function isReactiveHostProp(name: string, value: unknown): value is ReadonlySignal<unknown> {
   if (!isSignal(value)) return false;
   return REACTIVE_PROP_NAMES.has(name) || name.startsWith("data-") || name.startsWith("aria-");
+}
+
+function getStylePropertyBinding(value: unknown): { source: StylePropertyBinding; snapshot: Record<string, unknown> } | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value) || isSignal(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>);
+  if (!entries.some(([, entry]) => isSignal(entry))) return undefined;
+  const snapshot: Record<string, unknown> = {};
+  for (const [key, entry] of entries) snapshot[key] = isSignal(entry) ? entry.peek() : entry;
+  return { source: { entries }, snapshot };
 }
 
 function readInitialValue(source: ReadonlySignal<unknown>, kind: BindingKind): unknown {
@@ -506,9 +530,8 @@ function setStyleProperty(style: CSSStyleDeclaration, key: string, value: unknow
 
 /**
  * Applies a whole style object to an element, clearing keys that were present
- * in a previous call but are absent from this one. Only the coarse
- * `style={signal}` form is bound this way — an object whose individual entries
- * are themselves signals is out of scope (see development/design/direct-binding-value-checked-style.md).
+ * in a previous call but are absent from this one. Signal-valued entries are
+ * aggregated by `bindStyleProperties` into this existing whole-style binding.
  */
 function applyStyle(node: HTMLElement, value: unknown, previousKeys: readonly string[]): string[] {
   // A non-object value (an `any`-typed or otherwise unchecked caller passing
@@ -526,6 +549,47 @@ function applyStyle(node: HTMLElement, value: unknown, previousKeys: readonly st
     setStyleProperty(node.style, key, nextStyle[key]);
   }
   return nextKeys;
+}
+
+function subscribeStylePropertyEntries(
+  node: Element,
+  source: StylePropertyBinding,
+  snapshot: unknown,
+  initialStyleKeys: readonly string[] | undefined,
+  binder: NodeBinder,
+): Subscription {
+  let previousKeys: readonly string[] = initialStyleKeys ?? getInitialStyleKeys(undefined, snapshot);
+  let applied = typeof snapshot === "object" && snapshot !== null ? { ...(snapshot as HostProps) } : {};
+  const whileAttached = (write: (value: unknown) => void) => (value: unknown) => {
+    if (binder.attached) write(value);
+  };
+  const subscriptions: BindingSubscription[] = [];
+  for (const [key, value] of source.entries) {
+    if (!isSignal(value)) continue;
+    const write = (next: unknown) => {
+      setStyleProperty((node as HTMLElement).style, key, next);
+      applied[key] = next;
+    };
+    subscriptions.push(createBindingSubscription(value as ReadonlySignal<unknown>, whileAttached(write)));
+  }
+  return {
+    dispose() {
+      for (const subscription of subscriptions) subscription.dispose();
+    },
+    refresh(nextSnapshot) {
+      previousKeys = getInitialStyleKeys(previousKeys, nextSnapshot);
+      for (const subscription of subscriptions) subscription.refresh();
+    },
+    getStyleKeys: () => previousKeys,
+    restore(nextSnapshot) {
+      if (!isSameStyle(applied, nextSnapshot)) {
+        previousKeys = applyStyle(node as HTMLElement, nextSnapshot, previousKeys);
+        applied = typeof nextSnapshot === "object" && nextSnapshot !== null
+          ? { ...(nextSnapshot as HostProps) }
+          : {};
+      }
+    },
+  };
 }
 
 type RefCleanup = void | (() => void);
@@ -558,7 +622,7 @@ type MountedBinding = {
 // `b` is optional so callers can pass a positional lookup straight in: a
 // missing counterpart is simply not the same binding.
 function isSameBinding(a: Binding, b: Binding | undefined): b is Binding {
-  return b !== undefined && a[0] === b[0] && a[1] === b[1] && a[2] === b[2];
+  return b !== undefined && a[0] === b[0] && sameBindingSource(a[1], b[1]) && a[2] === b[2];
 }
 
 /** Whether two style values set the same properties to the same values. */
@@ -576,7 +640,9 @@ function isSameStyle(a: unknown, b: unknown): boolean {
  * every render (see `readInitialValue`), so it is compared by content.
  */
 function hasSameSnapshot(a: Binding, b: Binding): boolean {
-  return isTwoWayBindingKind(a[2]) || (a[2] === "style" ? isSameStyle(a[3], b[3]) : Object.is(a[3], b[3]));
+  return isTwoWayBindingKind(a[2]) || (a[2] === "style" || a[2] === "style-properties"
+    ? isSameStyle(a[3], b[3])
+    : Object.is(a[3], b[3]));
 }
 
 /** What `subscribeBinding` hands back to `mountBinding`. See `MountedBinding`. */
@@ -598,8 +664,9 @@ type Subscription = BindingSubscription & {
 function subscribeBinding(
   node: Element,
   name: string,
-  source: ReadonlySignal<unknown>,
+  source: BindingSource,
   kind: BindingKind,
+  snapshot: unknown,
   initialStyleKeys: readonly string[] | undefined,
   binder: NodeBinder,
 ): Subscription {
@@ -610,6 +677,7 @@ function subscribeBinding(
   };
   switch (kind) {
     case "style": {
+      if (isStylePropertyBinding(source)) throw new Error("Internal style binding kind mismatch");
       let previousKeys: readonly string[] = initialStyleKeys ?? [];
       let applied: unknown;
       const write = (value: unknown) => {
@@ -632,21 +700,25 @@ function subscribeBinding(
         restore: (snapshot) => { if (!isSameStyle(applied, snapshot)) write(snapshot); },
       };
     }
+    case "style-properties": {
+      if (!isStylePropertyBinding(source)) throw new Error("Internal style property source mismatch");
+      return subscribeStylePropertyEntries(node, source, snapshot, initialStyleKeys, binder);
+    }
     case "select-value":
       return {
-        ...bindSelectValue(node as HTMLSelectElement, source, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        ...bindSelectValue(node as HTMLSelectElement, source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
         getStyleKeys: undefined,
         restore: undefined,
       };
     case "text-value":
       return {
-        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
         getStyleKeys: undefined,
         restore: undefined,
       };
     case "checked":
       return {
-        ...createBindingSubscription(source, whileAttached((value: unknown) => setControlledProp(node, name, value))),
+        ...createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, name, value))),
         getStyleKeys: undefined,
         restore: undefined,
       };
@@ -657,7 +729,7 @@ function subscribeBinding(
         setDomProp(node, name, value);
       };
       return {
-        ...createBindingSubscription(source, whileAttached(write)),
+        ...createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached(write)),
         getStyleKeys: undefined,
         restore: (snapshot) => { if (!Object.is(applied, snapshot)) write(snapshot); },
       };
@@ -681,8 +753,18 @@ function getInitialStyleKeys(staleKeys: readonly string[] | undefined, snapshot:
 }
 
 function mountBinding(node: Element, binding: Binding, binder: NodeBinder, staleStyleKeys?: readonly string[]): MountedBinding {
-  const initialStyleKeys = binding[2] === "style" ? getInitialStyleKeys(staleStyleKeys, binding[3]) : undefined;
-  const { dispose, refresh, getStyleKeys, restore } = subscribeBinding(node, binding[0], binding[1], binding[2], initialStyleKeys, binder);
+  const initialStyleKeys = binding[2] === "style" || binding[2] === "style-properties"
+    ? getInitialStyleKeys(staleStyleKeys, binding[3])
+    : undefined;
+  const { dispose, refresh, getStyleKeys, restore } = subscribeBinding(
+    node,
+    binding[0],
+    binding[1],
+    binding[2],
+    binding[3],
+    initialStyleKeys,
+    binder,
+  );
   return { binding, dispose, refresh, getStyleKeys, restore };
 }
 
@@ -878,7 +960,11 @@ function haveSameBindings(a: readonly Binding[], b: readonly Binding[]): boolean
 function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (node: Element | null) => RefCleanup {
   // A user ref is an object or function, never one of the bound signals, so
   // the two kinds of key cannot collide in one map.
-  const cacheKey: object = userRef ?? bindings[0]![1];
+  const firstSource = bindings[0]![1];
+  const styleSignal = isStylePropertyBinding(firstSource)
+    ? firstSource.entries.find(([, value]) => isSignal(value))?.[1]
+    : undefined;
+  const cacheKey: object = userRef ?? styleSignal ?? firstSource;
   const cache = bindingRefs;
   let entries = cache.get(cacheKey);
   if (entries !== undefined) {
@@ -931,20 +1017,27 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
 function transformHostProps(type: string, input: unknown): { props: HostProps; bindings: Binding[] } {
   const inputProps = (input ?? {}) as HostProps;
   const isHtmlHost = !NON_HTML_HOST_ELEMENTS.has(type);
-  const bindings = isHtmlHost ? findHostBindings(inputProps, type) : [];
+  const styleProperties = isHtmlHost ? getStylePropertyBinding(inputProps.style) : undefined;
+  const normalizedProps = styleProperties === undefined
+    ? inputProps
+    : { ...inputProps, style: styleProperties.snapshot };
+  const bindings = isHtmlHost ? findHostBindings(normalizedProps, type) : [];
+  if (styleProperties !== undefined) {
+    bindings.push(["style", styleProperties.source, "style-properties", styleProperties.snapshot]);
+  }
 
-  const rawChildren = inputProps.children;
+  const rawChildren = normalizedProps.children;
   const childrenNeedNormalization =
-    "children" in inputProps && (isSignal(rawChildren) || Array.isArray(rawChildren));
+    "children" in normalizedProps && (isSignal(rawChildren) || Array.isArray(rawChildren));
 
   if (bindings.length === 0 && !childrenNeedNormalization) {
-    return { props: inputProps, bindings };
+    return { props: normalizedProps, bindings };
   }
 
   // Something needs to change, so — and only so — a copy is made; the
   // original `inputProps` (and, transitively, whatever object the caller
   // passed as `input`) is never mutated.
-  const props: HostProps = { ...inputProps };
+  const props: HostProps = { ...normalizedProps };
   if (childrenNeedNormalization) {
     props.children = normalizeChild(rawChildren);
   }
@@ -1048,11 +1141,14 @@ export function createSignalAwareElement(
 }
 
 type Signalable<T> = T | (ReadonlySignal<T> & NotDeepSignal);
+type SignalableStyleObject<T> = {
+  [Name in keyof T]: T[Name] | (ReadonlySignal<T[Name]> & NotDeepSignal);
+};
 type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style" | "value" | "checked";
 type AriaPropName = `aria-${string}`;
 type SignalableHtmlProp<Name extends PropertyKey, Value> = Signalable<
   Value | (Name extends "title" | "id" ? null : never)
->;
+> | (Name extends "style" ? SignalableStyleObject<NonNullable<Value>> : never);
 type AddSignalChildren<P> = Omit<P, "children"> & {
   children?: SignalChild;
 };

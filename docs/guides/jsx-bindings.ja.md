@@ -64,7 +64,7 @@ export function Heading() {
 同じランタイムがDOMへ直接バインドできるネイティブHTML propsは次のものだけです。
 
 - `title`、`id`、`className`、`hidden`、`disabled`
-- `style`。object全体をbindingします(`style={signal}`)。style object内のper-property signal(例: `style={{ color: signal }}`)はサポートしません
+- `style`。object全体(`style={signal}`)とsignal entryを含むobject(例: `style={{ color: colorSignal, width: 12 }}`)をbindingします
 - `input`、`textarea`、`select` の `value`、および `input` の `checked`
 - `data-*` と `aria-*` 属性
 
@@ -92,6 +92,8 @@ export function Field() {
 
 CSS propertyへbindingした数値は、Reactもunitless扱いする一部のproperty(`opacity`、`zIndex`、`flexGrow` など)を除き、`px` suffixを付けて書き込まれます。`--` で始まるkeyは `setProperty` を通じてCSS custom propertyとして書き込まれます。前回のstyle objectにはあり今回にはないkeyは、値を残さずclearされます。要素がレンダーされたときの値からReactが書き込んだkeyを、bindingが付く前にsignalが落とした場合(例えば `<Activity>` やSuspense境界が要素を隠している間)も同様です。
 
+個々のstyle valueにもsignalを指定できます。host refのcommit時にentryごとのsubscriptionを設置するため、signalの変更はowner componentを再レンダーせずCSS propertyへ反映されます。同じobjectにあるplain entryは、componentが再レンダーするまで固定です。後のrenderでstyle objectを置き換えるとbindingを再差分し、新しいshapeで削除されたpropertyをclearします。対象はwhole-object style bindingと同じHTML hostです。
+
 ## value と checked
 
 `value` と `checked` は双方向bindingのため、他のallowlistとは異なる戦略を取ります。JSX runtimeはcontrolled propの代わりに `.peek()` から得た値で `defaultValue`/`defaultChecked` を代入します。Reactはmount時に一度だけそれを適用し、以降の再レンダーでは再適用しません。それ以降はdirect bindingのeffectがDOM propertyを保持し、`onChange` はそのまま残ります。DOMが既にその値を保持している場合は書き込みを省略するため、無関係な再レンダーや `onChange` からの同じ値のechoが編集中の状態を乱すことはありません。
@@ -110,6 +112,6 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 - `deepSignal` はsignal childやbindingするpropには使えません。これらの位置はrootの置き換えしか追わないため、ネストした変更は表示に反映されません。TypeScriptはこれをエラーにします。deepな状態は追跡されたコンポーネント内で読むか、[`useDeepSignalValue`](./hooks.ja.md#usedeepsignalvalue) でprimitiveを選択してください。
 - SSRとhydrationでは、signalの初期値がサーバーとクライアントで一致するようにしてください。リクエスト固有のsignalを共有のmodule scopeへ置かず、リクエストごとに生成してください。
 - bindingしたcomputed signalのgetterが例外を投げた場合、そのサイクルのDOM書き込みはスキップされ、`console.error` にエラーが記録されます。記録は書き込みごとではなく、連続した失敗のエピソードごとに1回です。メッセージは `"react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` で、`{ cause: error }` が付きます。direct bindingはReactのrenderサイクルを経由しないため、投げられたエラーを捕まえるError Boundaryはありません。失敗するcomputedにError Boundaryのセマンティクスが必要な場合は [`useSignalValue`](./hooks.ja.md#usesignalvalue) を使ってください。
-- `value`/`checked`/`style` については2点が未解決です。現状は[直接バインディングの設計検討docs](../../development/design/direct-binding-value-checked-style.ja.md)を参照してください: *派生* `value` におけるcaretの維持と、per-propertyの細かい `style` 追跡(`style={{ color: signal }}`)です。
+- *派生* `value` におけるcaretの維持は既知の制約です。現在の状態は[直接バインディングの設計検討docs](../../development/design/direct-binding-value-checked-style.ja.md)を参照してください。
 
 関連: [描画最適化](./rendering-optimization.ja.md)、[JSX制御フローユーティリティ](./control-flow.ja.md)。

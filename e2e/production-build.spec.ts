@@ -54,3 +54,60 @@ test("updates allowlisted host properties directly in the minified bundle", asyn
   await expect(boundButton).toBeDisabled();
   expect(errors).toEqual([]);
 });
+
+test("preserves bound form reset behavior in the production bundle", async ({
+  page,
+}) => {
+  const errors = await openApp(page);
+  const form = page.locator("#bound-reset-form");
+  const input = page.locator("#bound-reset-text");
+  const checkbox = page.locator("#bound-reset-checkbox");
+  const signals = page.locator("#bound-reset-signals");
+
+  await page.locator("#bound-reset-submit").click();
+  await expect(input).toHaveValue("signal updated");
+  await expect(checkbox).toBeChecked();
+  await form.locator("button[type=reset]").click();
+  await expect(input).toHaveValue("signal updated");
+  await expect(checkbox).toBeChecked();
+
+  await page.locator("#bound-reset-action").click();
+  await expect(input).toHaveValue("action value");
+  await expect(checkbox).toBeChecked();
+  await expect(signals).toHaveAttribute("data-text", "action value");
+  await expect(signals).toHaveAttribute("data-checked", "true");
+
+  await input.fill("accepted edit");
+  await checkbox.uncheck();
+  await expect(signals).toHaveAttribute("data-text", "accepted edit");
+  await expect(signals).toHaveAttribute("data-checked", "false");
+  await form.locator("button[type=reset]").click();
+  await expect(input).toHaveValue("reset initial");
+  await expect(checkbox).not.toBeChecked();
+  await expect(signals).toHaveAttribute("data-text", "accepted edit");
+  await expect(signals).toHaveAttribute("data-checked", "false");
+  expect(errors).toEqual([]);
+});
+
+test("paints a signal-bound style prop in the production bundle", async ({
+  page,
+}) => {
+  const errors = await openApp(page);
+  const styledBox = page.locator("#styled-box");
+
+  await expect(styledBox).toHaveCSS("width", "80px");
+  await expect(styledBox).toHaveCSS("height", "40px");
+  await expect(styledBox).toHaveCSS("background-color", "rgb(70, 130, 180)");
+
+  const initialBox = await styledBox.boundingBox();
+  expect(initialBox?.width).toBeCloseTo(80, 0);
+  expect(initialBox?.height).toBeCloseTo(40, 0);
+
+  await page.locator("#toggle-style").click();
+  await expect(styledBox).toHaveCSS("width", "160px");
+  await expect(styledBox).toHaveCSS("background-color", "rgb(46, 139, 87)");
+
+  const updatedBox = await styledBox.boundingBox();
+  expect(updatedBox?.width).toBeCloseTo(160, 0);
+  expect(errors).toEqual([]);
+});

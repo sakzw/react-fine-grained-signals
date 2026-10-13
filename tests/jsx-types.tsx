@@ -5,6 +5,7 @@ import { signal } from "../src/index.js";
 const text = signal("value");
 const enabled = signal(false);
 const boxStyle = signal({ color: "red" });
+const color = signal("blue");
 const nullishText = signal<string | null | undefined>(null);
 
 function Custom({ value, children }: { value: typeof text; children: typeof text }) {
@@ -18,8 +19,9 @@ const html = (
   </button>
 );
 
-// `style` accepts the coarse whole-object form.
+// `style` accepts whole-object and property-level signal bindings.
 const styled = <div style={boxStyle} />;
+const partiallyStyled = <div style={{ color, width: 12 }} />;
 
 // `value` and `checked` are direct-bindable on the controlled-input tags.
 const controlledInput = <input value={text} checked={enabled} onChange={() => {}} />;
@@ -49,6 +51,7 @@ const component = <Custom value={text}>{text}</Custom>;
 void [
   html,
   styled,
+  partiallyStyled,
   controlledInput,
   controlledTextarea,
   nullishTitleAndId,

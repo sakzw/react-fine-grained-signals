@@ -35,6 +35,8 @@ export function createDemoState() {
       background: "steelblue",
     }),
     imeText: signal("initial"),
+    resetText: signal("reset initial"),
+    resetChecked: signal(false),
     refErrorTitle: signal("ref initial"),
     activityStyle: signal<Record<string, string>>({
       width: "80px",

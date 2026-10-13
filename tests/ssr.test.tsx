@@ -171,6 +171,118 @@ describe("SSR and hydration", () => {
     consoleError.mockRestore();
   });
 
+  it("hydrates a direct-bound multiple select and follows selected-option updates", async () => {
+    const selected = signal(["b", "c"]);
+
+    function App() {
+      return (
+        <select data-testid="multi-select" multiple value={selected} onChange={(event) => {
+          selected.value = Array.from(event.target.selectedOptions, (option) => option.value);
+        }}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+      );
+    }
+
+    const html = renderToString(<App />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => { await Promise.resolve(); });
+    const select = container.querySelector("[data-testid=multi-select]") as HTMLSelectElement;
+    const selectedValues = () => Array.from(select.selectedOptions, (option) => option.value);
+    expect(selectedValues()).toEqual(["b", "c"]);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => { selected.value = ["a"]; });
+    expect(selectedValues()).toEqual(["a"]);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
+  it("hydrates a direct-bound single select and follows value updates", async () => {
+    const selected = signal("b");
+
+    function App() {
+      return (
+        <select data-testid="single-select" value={selected} onChange={(event) => {
+          selected.value = event.target.value;
+        }}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+      );
+    }
+
+    const html = renderToString(<App />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => { await Promise.resolve(); });
+    const select = container.querySelector("[data-testid=single-select]") as HTMLSelectElement;
+    expect(select.value).toBe("b");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => { selected.value = "c"; });
+    expect(select.value).toBe("c");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
+  it("resyncs a hydrated single select when its matching option is added later", async () => {
+    const selected = signal("c");
+    const showOptionC = signal(false);
+
+    function App() {
+      useSignalTracking();
+      return (
+        <select data-testid="late-single-select" value={selected} onChange={(event) => {
+          selected.value = event.target.value;
+        }}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          {showOptionC.value ? <option value="c">C</option> : null}
+        </select>
+      );
+    }
+
+    const html = renderToString(<App />);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => { await Promise.resolve(); });
+    const select = container.querySelector("[data-testid=late-single-select]") as HTMLSelectElement;
+    expect(select.value).toBe("");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    await act(async () => { showOptionC.value = true; });
+    expect(select.value).toBe("c");
+    expect(selected.value).toBe("c");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("hydrates a direct-bound input value without warnings and survives an unrelated update", async () => {
     const text = signal("server value");
     const bump = signal(0);
@@ -284,6 +396,41 @@ describe("SSR and hydration", () => {
     });
     expect(styledNode.style.color).toBe("");
     expect(styledNode.style.background).toBe("blue");
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
+  it("hydrates style objects with per-property signal entries", async () => {
+    const color = signal("purple");
+    const opacity = signal(0.5);
+
+    function App() {
+      return <span data-testid="property-styled" style={{ color, opacity, width: 12 }}>content</span>;
+    }
+
+    const html = renderToString(<App />);
+    expect(html).toContain("color:purple");
+    expect(html).toContain("opacity:0.5");
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+
+    await act(async () => { await Promise.resolve(); });
+    const styledNode = container.querySelector("[data-testid=property-styled]") as HTMLSpanElement;
+    expect(styledNode.style.color).toBe("purple");
+    expect(styledNode.style.opacity).toBe("0.5");
+
+    await act(async () => {
+      color.value = "teal";
+      opacity.value = 0.75;
+    });
+    expect(styledNode.style.color).toBe("teal");
+    expect(styledNode.style.opacity).toBe("0.75");
     expect(consoleError).not.toHaveBeenCalled();
 
     root.unmount();

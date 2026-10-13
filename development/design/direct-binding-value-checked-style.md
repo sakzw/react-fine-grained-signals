@@ -2,7 +2,7 @@
 
 [English](./direct-binding-value-checked-style.md) | [日本語](./direct-binding-value-checked-style.ja.md)
 
-**Status:** `value`/`checked` and coarse `style` binding are implemented and shipped. Two design questions remain genuinely open below, with no API or implementation decision made.
+**Status:** `value`/`checked` and whole-object plus per-property signal `style` binding are implemented. Derived-value caret preservation remains open.
 
 ## Implemented (shipped)
 
@@ -33,17 +33,11 @@ Every reactive UI library that direct-binds `value` runs into this. Right now it
 
 ### Fine-grained per-property `style` tracking
 
-The shipped binding only handles `style={signal}` as a single whole-object write. It does not support `style={{ color: signal }}` — a style object whose individual entries are themselves signals. A consumer who wants only one CSS property to be reactive currently has to route the entire style object through a `computed`.
+Implemented for HTML hosts. When a style object contains signal-valued entries, the JSX runtime takes a render snapshot for React and installs one direct subscription per signal entry when the host ref commits. Plain entries are retained as plain values. Subscriptions are not created during render, so an abandoned concurrent render cannot leave source dependencies behind. This keeps DOM updates outside the owning component's render path and reuses the existing style key cleanup, detach/reattach, exception, and SSR behavior.
 
-**Candidate approach, undecided:** detect signals as values inside the `style` object at the JSX-transform boundary (`transformHostProps` or a sibling helper), and bind each such entry as its own effect, leaving non-signal entries untouched.
+Replacing the style object on a later render creates a new computed source. `NodeBinder` replaces the style binding and carries the old key set forward, so removed CSS properties are cleared. Adding/removing entries by mutating the same plain object without causing a React render is not observed; style object shape follows the host's render lifecycle. SVG/MathML property-level bindings remain unsupported, matching the whole-object direct binding boundary.
 
-- Would get closest to Solid-style ergonomics, and would not need the SVG/MathML exclusion the rest of `setDomProp` carries — `.style` exists uniformly across HTML, SVG, and MathML.
-- `isReactiveHostProp` today only inspects top-level prop values; walking one level into an object literal is a different shape of transform, not yet designed.
-- Needs its own tests for a style object mixing signal and non-signal entries.
-- Needs a decision for what happens when the whole `style` prop is swapped for a differently-shaped object across renders — the existing "keep whether a host prop is bound fixed for the element lifetime" constraint has no defined equivalent yet for entries added to or removed from a style object between renders.
-- No prototype exists. This is unscoped beyond the bullet points above.
-
-**Until this ships:** route the whole style object through a `computed`, or fall back to the leaf-component pattern for single-property reactivity.
+Qualification lives in `tests/react-dom-binding.test.tsx` and `tests/jsx-types.tsx`: mixed signal/plain entries, unit conversion through `applyStyle`, and no owner rerender on a signal entry write.
 
 ## Non-goals
 

@@ -231,6 +231,60 @@ describe("Direct DOM binding", () => {
     expect(parentRenders).toHaveBeenCalledTimes(1);
   });
 
+  it("binds signal-valued style properties without rerendering the component", () => {
+    const color = signal("crimson");
+    const opacity = signal(0.5);
+    const parentRenders = vi.fn();
+
+    function Box() {
+      parentRenders();
+      return <div aria-label="property-bound style" style={{ color, opacity, width: 12 }} />;
+    }
+
+    render(<Box />);
+    const box = screen.getByLabelText("property-bound style") as HTMLDivElement;
+    expect(box.style.color).toBe("crimson");
+    expect(box.style.opacity).toBe("0.5");
+    expect(box.style.width).toBe("12px");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      color.value = "royalblue";
+      opacity.value = 0.75;
+    });
+
+    expect(box.style.color).toBe("royalblue");
+    expect(box.style.opacity).toBe("0.75");
+    expect(box.style.width).toBe("12px");
+    expect(parentRenders).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears property-bound style keys when the style shape changes across renders", () => {
+    const color = signal("crimson");
+    let propertyBinding = true;
+
+    function Box() {
+      return <div aria-label="changing property style" style={propertyBinding
+        ? { color, width: 12 }
+        : { backgroundColor: "steelblue" }} />;
+    }
+
+    const view = render(<Box />);
+    const box = screen.getByLabelText("changing property style") as HTMLDivElement;
+    expect(box.style.color).toBe("crimson");
+    expect(box.style.width).toBe("12px");
+
+    propertyBinding = false;
+    view.rerender(<Box />);
+    expect(box.style.color).toBe("");
+    expect(box.style.width).toBe("");
+    expect(box.style.backgroundColor).toBe("steelblue");
+
+    act(() => { color.value = "royalblue"; });
+    expect(box.style.color).toBe("");
+    expect(box.style.backgroundColor).toBe("steelblue");
+  });
+
   it("treats known-unitless CSS properties and CSS custom properties correctly", () => {
     const style = signal<Record<string, string | number>>({ opacity: 0.5, scale: 2, "--gap": 4 });
 
@@ -486,6 +540,97 @@ describe("Direct DOM binding", () => {
     expect(input.checked).toBe(true);
   });
 
+  it("resets bound inputs and checkboxes to the latest value written to their signals", () => {
+    const text = signal("initial text");
+    const checked = signal(false);
+
+    function Form() {
+      return (
+        <form aria-label="bound reset form">
+          <input aria-label="reset text" value={text} onChange={(event) => { text.value = event.target.value; }} />
+          <input type="checkbox" aria-label="reset checkbox" checked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
+          <button type="reset">Reset</button>
+        </form>
+      );
+    }
+
+    render(<Form />);
+    const form = screen.getByLabelText("bound reset form") as HTMLFormElement;
+    const input = screen.getByLabelText("reset text") as HTMLInputElement;
+    const checkbox = screen.getByLabelText("reset checkbox") as HTMLInputElement;
+
+    act(() => {
+      text.value = "latest text";
+      checked.value = true;
+    });
+    expect(input.value).toBe("latest text");
+    expect(checkbox.checked).toBe(true);
+
+    act(() => { form.reset(); });
+    expect(input.value).toBe("latest text");
+    expect(checkbox.checked).toBe(true);
+    expect(text.value).toBe("latest text");
+    expect(checked.value).toBe(true);
+
+  });
+
+  it("documents React's default reset behavior after an accepted user edit", () => {
+    const text = signal("rendered text");
+    const checked = signal(true);
+
+    function Form() {
+      return (
+        <form aria-label="accepted edit reset form">
+          <input aria-label="accepted edit reset text" value={text} onChange={(event) => { text.value = event.target.value; }} />
+          <input type="checkbox" aria-label="accepted edit reset checkbox" checked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
+        </form>
+      );
+    }
+
+    render(<Form />);
+    const form = screen.getByLabelText("accepted edit reset form") as HTMLFormElement;
+    const input = screen.getByLabelText("accepted edit reset text") as HTMLInputElement;
+    const checkbox = screen.getByLabelText("accepted edit reset checkbox") as HTMLInputElement;
+
+    fireEvent.change(input, { target: { value: "accepted edit" } });
+    fireEvent.click(checkbox);
+    expect(text.value).toBe("accepted edit");
+    expect(checked.value).toBe(false);
+    act(() => { form.reset(); });
+
+    // React resets the defaults after its change handler, even if that handler
+    // writes the signal. Consumers that want reset to change the signal should
+    // write it from the form action or onReset handler.
+    expect(input.value).toBe("rendered text");
+    expect(checkbox.checked).toBe(true);
+    expect(text.value).toBe("accepted edit");
+    expect(checked.value).toBe(false);
+  });
+
+  it("resets a user edit declined by onChange to the last signal value", () => {
+    const text = signal("signal text");
+
+    function Form() {
+      return (
+        <form aria-label="declined edit form">
+          <input aria-label="declined edit" value={text} onChange={() => {}} />
+        </form>
+      );
+    }
+
+    render(<Form />);
+    const form = screen.getByLabelText("declined edit form") as HTMLFormElement;
+    const input = screen.getByLabelText("declined edit") as HTMLInputElement;
+    input.value = "user edit";
+    fireEvent.change(input, { target: { value: "user edit" } });
+    expect(input.value).toBe("user edit");
+    expect(text.value).toBe("signal text");
+
+    act(() => { form.reset(); });
+    expect(input.value).toBe("signal text");
+    expect(text.value).toBe("signal text");
+  });
+
   it("binds a signal directly to a select element's value", () => {
     const choice = signal("b");
 
@@ -566,6 +711,49 @@ describe("Direct DOM binding", () => {
     // The MutationObserver delivers its callback as a microtask, so the
     // resync lands a tick after the option is actually in the DOM.
     await waitFor(() => expect(select.value).toBe("c"));
+  });
+
+  it("resets single and multiple select bindings to their latest signal values", () => {
+    const choice = signal("a");
+    const choices = signal<string[]>(["a"]);
+
+    function Form() {
+      return (
+        <form aria-label="select reset form">
+          <select aria-label="reset choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
+            <option value="a">A</option>
+            <option value="b">B</option>
+            <option value="c">C</option>
+          </select>
+          <select aria-label="reset choices" multiple value={choices} onChange={(event) => {
+            choices.value = Array.from(event.target.selectedOptions, (option) => option.value);
+          }}>
+            <option value="a">A</option>
+            <option value="b">B</option>
+            <option value="c">C</option>
+          </select>
+          <button type="reset">Reset</button>
+        </form>
+      );
+    }
+
+    render(<Form />);
+    const form = screen.getByLabelText("select reset form") as HTMLFormElement;
+    const single = screen.getByLabelText("reset choice") as HTMLSelectElement;
+    const multiple = screen.getByLabelText("reset choices") as HTMLSelectElement;
+
+    act(() => {
+      choice.value = "c";
+      choices.value = ["b", "c"];
+    });
+    expect(single.value).toBe("c");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b", "c"]);
+
+    act(() => { form.reset(); });
+    expect(single.value).toBe("c");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b", "c"]);
+    expect(choice.value).toBe("c");
+    expect(choices.value).toEqual(["b", "c"]);
   });
 
   it("unchecks radio siblings backed by independent computed signals when another is selected", () => {
