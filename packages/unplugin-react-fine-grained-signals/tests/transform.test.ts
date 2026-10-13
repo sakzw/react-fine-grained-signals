@@ -27,7 +27,7 @@ function compile(
 }
 
 describe("managed render transform", () => {
-  it("turns an explicit useSignalTracking call into a top-level capture scope", () => {
+  it("preserves an explicit useSignalTracking ambient scope in managed mode", () => {
     const output = compile(`
       import { useSignalTracking } from "react-fine-grained-signals";
       export function Counter({ count }) {
@@ -36,11 +36,11 @@ describe("managed render transform", () => {
       }
     `);
 
-    expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("_signals.capture(() => count.value)");
-    expect(output).toContain("_useSignalCapture()");
-    expect(output).toContain("_useSignalCapture()");
-    expect(output).not.toMatch(/\buseSignalTracking\(\);/);
+    expect(output).toContain('import { useSignalTracking } from "react-fine-grained-signals"');
+    expect(output).toContain("useSignalTracking();");
+    expect(output).toContain("count.value");
+    expect(output).not.toContain("useSignalCapture");
+    expect(output).not.toContain(".capture(() =>");
   });
 
   it("captures synchronous calls to imported helpers inside an opted-in managed render", () => {
@@ -1406,22 +1406,19 @@ describe("managed render transform", () => {
     });
   });
 
-  it("drops the import left dead by absorbing an explicit useSignalTracking call", () => {
-    // The managed boundary replaces the author's call with its own store
-    // declaration, so the non-runtime entry point it came from is no longer
-    // referenced and must not stay in the bundle graph.
+  it("keeps the import used by an explicit ambient tracking call", () => {
     const output = compile(`
       import { useSignalTracking } from "react-fine-grained-signals";
       const count = { value: 1 };
       export function App() { useSignalTracking(); return <p>{count.value}</p>; }
     `);
 
-    expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).not.toContain('from "react-fine-grained-signals"');
-    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(output).toContain('import { useSignalTracking } from "react-fine-grained-signals"');
+    expect(output).toContain("useSignalTracking();");
+    expect(output).not.toContain("useSignalCapture");
   });
 
-  it("keeps an absorbed import that something else still uses", () => {
+  it("keeps an explicit ambient tracking import that something else still uses", () => {
     const output = compile(`
       import { useSignalTracking } from "react-fine-grained-signals";
       const count = { value: 1 };
@@ -1433,15 +1430,15 @@ describe("managed render transform", () => {
     expect(output).toContain("export const escaped = useSignalTracking;");
   });
 
-  it("keeps other specifiers of a partially absorbed import declaration", () => {
+  it("keeps other specifiers alongside an explicit ambient tracking import", () => {
     const output = compile(`
       import { signal, useSignalTracking } from "react-fine-grained-signals";
       const count = signal(1);
       export function App() { useSignalTracking(); return <p>{count.value}</p>; }
     `);
 
-    expect(output).toContain('import { signal } from "react-fine-grained-signals"');
-    expect(output).not.toContain("signal, useSignalTracking");
+    expect(output).toContain('import { signal, useSignalTracking } from "react-fine-grained-signals"');
+    expect(output).toContain("useSignalTracking();");
   });
 
   it("parses class auto-accessors rather than failing the build", () => {
@@ -1553,14 +1550,14 @@ describe("managed render transform", () => {
 
   it("does not reuse a type-only managed import or a shadowed runtime alias", () => {
     const typeOnly = compile(`
-      import { useSignalTracking } from "react-fine-grained-signals";
       import type { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
-      export function App() { useSignalTracking(); return <main />; }
+      /** @signalTracking */
+      export function App() { return <main />; }
     `);
     const shadowed = compile(`
-      import { useSignalTracking } from "react-fine-grained-signals";
       import { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
-      export function App(managed) { useSignalTracking(); return <main />; }
+      /** @signalTracking */
+      export function App(managed) { return <main />; }
     `);
 
     expect(typeOnly).toContain("const _signals = _useSignalCapture();");
@@ -1749,8 +1746,8 @@ describe("PascalCase higher-order component factories", () => {
       }
     `);
 
-    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-    expect(output).toMatch(/function WithCount\(Base\) \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toContain("useSignalTracking();");
+    expect(output).not.toContain("useSignalCapture");
   });
 
   it("still treats a function whose parameters look ordinary as a component", () => {
