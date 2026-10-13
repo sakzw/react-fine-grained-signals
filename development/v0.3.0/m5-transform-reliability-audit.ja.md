@@ -2,6 +2,10 @@
 
 ## 現状（2026-10-13）
 
+後続のM3統合で、`useSignalCapture()` per-read codegenは既定managed modeへ接続済み。したがって下記の「M3確定までは既定modeに接続しない」は当時の計画であり、現在の状態ではない。統合後もM3のexactness gateは未完了なので、M5の検出・diagnostic境界を閉じる必要がある。
+
+module-level `"use server"` skip/warningと既知のJSX callback/destructuring warningは実装済み。adapter unit suiteを含むplugin全体は371 passed / 3 skippedで通過し、その後M4 opt-out testを追加してfocused testも通過した。5 adapter factoryを含むpacked consumer smokeも通過。実Vite/Rollup/Webpack/Rspack/esbuild consumer build全体、各adapter上のRSC directive配送・warning/source-map位置の組み合わせは未検証であり、M5は未完了。
+
 この調査はM3のtracking実装に依存しない。現状のtransform契約と、v0.3.0で安全性を改善する範囲を記録する。ここに書かれた挙動は既存契約の棚卸しであり、新しい保証ではない。
 
 - `mode: "auto"` は型情報を使わず、静的に識別できる名前付きJSX component/custom Hook内のrender-time `.value`（通常memberまたは静的文字列computed）を検出する。signal以外の `.value` も誤検出し得る。
@@ -14,7 +18,7 @@
 ## M5の作業順と完了条件
 
 1. **RSC安全性:** 明示directiveと信頼できるbundler metadataで識別できる範囲を決める。`"use client"`がないことだけをServer Componentの証拠にしない。曖昧な場合のdiagnostic/configurationを仕様化する。
-2. **read分類:** static/computed key、dynamic key、destructuring、alias、helper境界を検出可能・非対応・誤検出の各分類に分け、`auto`で変換/警告/拒否する境界を定める。M3が未確定の間は試作codegenを既定modeに接続しない。
+2. **read分類:** static/computed key、dynamic key、destructuring、alias、helper境界を検出可能・非対応・誤検出の各分類に分け、`auto`で変換/警告/拒否する境界を定める。M3 per-read codegenは後続変更で既定modeへ統合済み。未解決のreadを静かに見逃さないdiagnostic境界は継続課題。
 3. **callback/Hooks安全性:** 認識済みrender callback API、同一moduleの解決範囲、React Hookを含む関数の扱いを列挙し、未知のrender prop/deferred APIを推測でcaptureしない。
 4. **診断:** 誤注入より安全側に倒すため、静的に疑わしいread漏れやRSC不整合に対する位置付きwarning/errorの候補を比較する。annotationとmanual modeで明示的に回避できることを確認する。
 5. **adapter matrix:** Vite/Rollup/Webpack/Rspack/esbuildの対象拡張子、source map、warning位置、plugin順序、fallbackをsmoke testで確認する。
