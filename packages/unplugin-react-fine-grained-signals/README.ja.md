@@ -224,10 +224,12 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   readをreactiveにするものでもありません。境界を見つける手掛かりとして使い、tracked
   componentへreadを移すか、結果を描画するcomponentで明示的なsignal-value Hookを使って
   ください。JSX children callback、cross-module callback、動的aliasは未分類です。
-- `.value`はdot access、文字列literal key、または`const valueKey = "value"`のような
-  不変なlocal string keyで認識します。実行時に決まるkey（`signal[key]`）やsignal自体の
-  destructuring（`const { value } = signal`）は認識しないため、それだけでは`auto`が
-  変換を選べません。
+- 静的な`.value` readはdot access、文字列literal key、または
+  `const valueKey = "value"`のような不変なlocal string keyで認識します。実行時key
+  （`signal[key]`）は、componentが別のreadや設定ですでに変換対象の場合にcaptureし、
+  実際のsignal accessorへ解決したときだけruntimeがdependencyを記録します。実行時key
+  のreadだけでは`auto`は変換を選びません。signal自体のdestructuring
+  （`const { value } = signal`）は追跡しません。
 - named/default importしたplain helperの直接呼び出しは、呼び出し元にmanaged boundaryが
   あり、同期実行される間だけcaptureします。ただしhelper内のreadをtransformが調べて
   `auto`変換を選ぶことはできません。そのreadだけが手掛かりなら`mode: "all"`、

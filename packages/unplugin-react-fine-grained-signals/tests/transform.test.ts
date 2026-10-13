@@ -2108,6 +2108,14 @@ describe("components held in keyed slots", () => {
     expect(compile(runtime, "all")).toBe(runtime);
   });
 
+  it("does not select ordinary runtime-key access as a signal read", () => {
+    const source = `
+      export function App({ items, index }) { return <p>{items[index]}</p>; }
+    `;
+
+    expect(compile(source, "auto")).toBe(source);
+  });
+
   it("names a nested compound target and an inline object property", () => {
     // Naming reads the key alone, so neither a deeper member target nor an
     // object literal that no binding holds needs a holder to resolve through.

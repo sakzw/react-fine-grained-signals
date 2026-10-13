@@ -3,7 +3,7 @@
 ## Qualification that passed
 
 - Runtime: `vitest run --reporter=dot --pool=forks --maxWorkers=1 --configLoader native` — 38 files, 555 tests passed. The equivalent threads run passed 37 files/507 tests before one worker-start timeout; its remaining file passed 48/48 in isolation.
-- Transform package: full serial suite now passes 381 tests / 3 skipped. React execution includes suspended capture isolation across roots. The dedicated React Compiler suite passes 24/24 with module/props updates, branch cleanup, Suspense retry, Hook order, and explicit CompileSuccess assertions. The real Vite integration suite passes module-level RSC skip/warning delivery, client transform, and source-map checks. Runtime and transform `tsc --noEmit` both pass.
+- Transform package: full serial suite now passes 383 tests / 3 skipped. React execution includes suspended capture isolation across roots and runtime-key signal access; ordinary computed access alone does not select auto transform. The dedicated React Compiler suite passes 24/24 with module/props updates, branch cleanup, Suspense retry, Hook order, and explicit CompileSuccess assertions. The real Vite integration suite passes module-level RSC skip/warning delivery, client transform, and source-map checks. Runtime and transform `tsc --noEmit` both pass.
 - Build: runtime `tsdown` and declaration comment cleanup succeeded; transform `tsdown` and `tests/build-smoke.mjs` succeeded. Production Vite browser build succeeded.
 - Lint: root `oxlint` exited successfully with existing warnings, including `no-shadow` and `consistent-function-scoping`.
 - Package size: all seven gzip app-graph budgets pass with `node scripts/check-size.mjs`.

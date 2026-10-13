@@ -206,6 +206,27 @@ export function KeyApp() { return <output>{inner[valueKey]}</output>; }
     expect(keyContainer.textContent).toBe("after");
   });
 
+  it("tracks a computed signal accessor with a runtime key", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+export const source = signal("before");
+export const key = signal("value");
+export function App() { return <output>{source[key.value]}</output>; }
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("before");
+
+    write(module, "source", "after");
+    expect(container.textContent).toBe("after");
+    write(module, "key", "other");
+    write(module, "source", "unused");
+    expect(container.textContent).toBe("");
+    write(module, "key", "value");
+    expect(container.textContent).toBe("unused");
+    write(module, "source", "final");
+    expect(container.textContent).toBe("final");
+  });
+
   it("captures a synchronous signal read performed by an imported helper", async () => {
     const count = library.signal("before") as Signal<string>;
     const module = await loadModule(`

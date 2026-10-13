@@ -204,10 +204,13 @@ This detection has the following known limitations:
 
 - A re-assigned alias is not followed, so a PascalCase helper reached through
   `const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
-- A `.value` read is recognized through dot access, a string-literal key, or an
-  immutable local string key such as `const valueKey = "value"`. A runtime key
-  (`signal[key]`) and destructuring a signal itself (`const { value } = signal`)
-  are not recognized; `auto` cannot select a transform from those reads alone.
+- A statically recognized `.value` read uses dot access, a string-literal key,
+  or an immutable local string key such as `const valueKey = "value"`. A
+  runtime-key access (`signal[key]`) is captured when the component is already
+  selected for transformation, and the runtime records a dependency only if
+  that key resolves to a signal accessor. A runtime-key read alone does not
+  select a component in `auto` mode. Destructuring a signal itself
+  (`const { value } = signal`) is not tracked.
 - A render callback passed as a JSX prop value is not recognized.
   `<Grid renderItem={Row} />` is syntactically identical whether `Grid` calls
   `renderItem(item)` a variable number of times per render (a render prop,

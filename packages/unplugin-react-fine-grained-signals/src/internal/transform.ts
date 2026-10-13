@@ -1951,6 +1951,29 @@ function isTrackedValueRead(
   return !isDeferredReadContext(path, functionPath);
 }
 
+/**
+ * A computed member with a runtime key can still resolve to a signal's `value`
+ * accessor. Since the key is not statically known, capture the complete member
+ * expression and let the runtime record an actual signal read if one occurs.
+ */
+function isPotentialDynamicMemberRead(
+  node: t.MemberExpression | t.OptionalMemberExpression,
+  path: NodePath,
+  functionPath: NodePath<t.Function>,
+): boolean {
+  const memberPath = path as NodePath<t.MemberExpression | t.OptionalMemberExpression>;
+  if (!node.computed || getTrackedReadPropertyName(memberPath) !== undefined) return false;
+  const property = unwrapTransparent(node.property);
+  if (
+    t.isNumericLiteral(property) ||
+    t.isBigIntLiteral(property) ||
+    t.isBooleanLiteral(property) ||
+    t.isNullLiteral(property)
+  ) return false;
+  if (isWriteTarget(path)) return false;
+  return !isDeferredReadContext(path, functionPath);
+}
+
 function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
@@ -2124,6 +2147,10 @@ function inspectFunction(
     node: t.MemberExpression | t.OptionalMemberExpression,
     path: NodePath,
   ): void => {
+    // Unknown computed members are capture candidates only after another
+    // statically recognized read (or explicit transform mode) selects this
+    // function. Treating every `items[index]` as an auto-detection signal
+    // would inject Hooks into ordinary components.
     if (isTrackedValueRead(node, path, functionPath)) inspection.readsValue = true;
   };
 
@@ -2997,7 +3024,10 @@ function hasTrackedReadInMemberChain(
 ): boolean {
   let current: NodePath = path;
   while (current.isMemberExpression() || current.isOptionalMemberExpression()) {
-    if (isTrackedValueRead(current.node, current, functionPath)) return true;
+    if (
+      isTrackedValueRead(current.node, current, functionPath) ||
+      isPotentialDynamicMemberRead(current.node, current, functionPath)
+    ) return true;
     const object = current.get("object") as NodePath;
     if (object.isCallExpression() || object.isOptionalCallExpression()) {
       return hasTrackedReadInExpression(object, functionPath, trackedAliases);
@@ -3015,6 +3045,7 @@ function hasTrackedReadInExpression(
   const isTracked = (candidate: NodePath): boolean =>
     (candidate.isMemberExpression() || candidate.isOptionalMemberExpression()) &&
     (isTrackedValueRead(candidate.node, candidate, functionPath) ||
+      isPotentialDynamicMemberRead(candidate.node, candidate, functionPath) ||
       hasTrackedReadInMemberChain(candidate, functionPath, trackedAliases));
   if (isTracked(path)) return true;
   let found = false;
@@ -3251,8 +3282,10 @@ function isWriteTarget(path: NodePath): boolean {
 }
 
 /**
- * Managed codegen: capture each statically proven synchronous `.value` read
- * in a short-lived scope. Alias data-flow is handled by the tracked-alias set;
+ * Managed codegen: capture statically proven synchronous `.value` reads and
+ * runtime-key computed member reads in a short-lived scope. The latter are
+ * candidates only: the runtime records a dependency only when the key resolves
+ * to a tracked accessor. Alias data-flow is handled by the tracked-alias set;
  * unknown callback execution remains outside the proof boundary.
  */
 function captureTrackedReadExpressions(

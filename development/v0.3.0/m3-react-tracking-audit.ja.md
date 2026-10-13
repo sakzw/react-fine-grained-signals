@@ -20,11 +20,11 @@ M3は未完了。M2実装後、React Hook配置の違反とFast RefreshのHook�
 
 ## 追跡契約の暫定境界と追加回帰修正 (2026-10-13)
 
-managed captureが自動追跡を保証するのは、同期的なcomponent/custom Hook render中に評価されるreadに限る。同一moduleで解決できる同期helper/render callbackに加え、対象componentがすでにmanaged変換される場合は直接呼び出すnamed/default import helperの同期callもcaptureする。`.value`と、`const key = "value"`のように不変な文字列へ解決できるcomputed keyをreadとして扱う。`current`、`target`、`currentTarget`というproperty名だけを根拠にsignal readを除外しない。実際のsignal以外の`.value`に対するcaptureはdependencyを追加しない。
+managed captureが自動追跡を保証するのは、同期的なcomponent/custom Hook render中に評価されるreadに限る。同一moduleで解決できる同期helper/render callbackに加え、対象componentがすでにmanaged変換される場合は直接呼び出すnamed/default import helperの同期callもcaptureする。静的なread検出は`.value`と、`const key = "value"`のように不変な文字列へ解決できるcomputed keyを扱う。runtime keyのcomputed memberは、別のreadや明示設定ですでにmanaged変換対象となった関数のcapture内で実行される場合に限り候補となり、runtimeは実際のsignal accessorだけをdependencyとして記録する。runtime keyだけでは`auto`はcomponentを選択しない。`current`、`target`、`currentTarget`というproperty名だけを根拠にsignal readを除外しない。実際のsignal以外の`.value`に対するcaptureはdependencyを追加しない。
 
-`key`が実行時に決まる`signal[key]`、import越しreadだけを持つcomponentの`auto`判定、import先が返すcallback、所有componentと別時点で実行されるcallback、一般的なclosure escapeは保証外であり、M3のexactness gateは未達。未検出のsignal readしかないcomponentは`auto`が変換を選べない。これらを従来のambient trackingと同等とは扱わない。明示的なreadが必要な境界では`useSignalValue` / `useDeepSignalValue`等のtargeted APIか、変換対象側でreadを同期的に表現する。
+runtime keyだけを使う`signal[key]` componentの`auto`判定、import越しreadだけを持つcomponentの`auto`判定、import先が返すcallback、所有componentと別時点で実行されるcallback、一般的なclosure escapeは保証外であり、M3のexactness gateは未達。未検出のsignal readしかないcomponentは`auto`が変換を選べない。これらを従来のambient trackingと同等とは扱わない。明示的なreadが必要な境界では`useSignalValue` / `useDeepSignalValue`等のtargeted APIか、変換対象側でreadを同期的に表現する。
 
-この追跡修正では、ref-like property名を持つobject内のsignal (`holder.value.current.value`)、定数computed key (`signal[valueKey]`)、import helperが同期的に読むsignalを実Reactで更新まで検証する回帰testを追加した。transformとReact executionの2 suiteは303/303通過し、plugin `tsc --noEmit`も成功。追加でSuspense中断中のsignal readと別rootのcommit/updateを交互に行い、fallback/別rootへのsubscription漏れがないことを60/60 suiteで確認した。time-sliced interleaving、import先のdeferred callback、任意callback ownershipの実環境gateは継続。
+この追跡修正では、ref-like property名を持つobject内のsignal (`holder.value.current.value`)、定数computed key (`signal[valueKey]`)、import helperが同期的に読むsignalを実Reactで更新まで検証する回帰testを追加した。今回、runtime-key accessが他の静的readで選択済みのcomponent内で追跡されるケースと、ordinary `items[index]` だけではauto transformを選ばないケースを追加した。React execution 61件、transform 245件、plugin全体383件（3 skipped）が通過し、plugin `tsc --noEmit`も成功した。Suspense中断中のsignal readと別rootのcommit/updateを交互に行い、fallback/別rootへのsubscription漏れがないことも確認済み。time-sliced interleaving、import先のdeferred callback、任意callback ownershipの実環境gateは継続。
 
 ## 試作順の判断
 
