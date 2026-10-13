@@ -148,6 +148,28 @@ describe("deepSignal", () => {
     expect(secondItems).toEqual(["second", undefined]);
   });
 
+  it("notifies only tracked truncated array indices when sparse subscriptions outnumber removed slots", () => {
+    const state = deepSignal({ items: Array.from({ length: 100 }, (_, index) => `item-${index}`) });
+    const values: Array<string | undefined> = [];
+    const existence: boolean[] = [];
+
+    // The range removed by this length change is much larger than the number
+    // of observed indices. This exercises the sparse-index path and verifies
+    // both value reads and `in` checks remain subscribed after truncation.
+    disposers.push(effect(() => { values.push(state.value.items[90]); }));
+    disposers.push(effect(() => { existence.push(92 in state.value.items); }));
+
+    state.value.items.length = 50;
+
+    expect(values).toEqual(["item-90", undefined]);
+    expect(existence).toEqual([true, false]);
+
+    state.value.items[90] = "restored";
+    state.value.items[92] = "restored existence";
+    expect(values).toEqual(["item-90", undefined, "restored"]);
+    expect(existence).toEqual([true, false, true]);
+  });
+
   it("preserves aliases and cycles while changes remain reactive", () => {
     const shared = { count: 1 };
     type Cyclic = { self?: Cyclic; shared: typeof shared };

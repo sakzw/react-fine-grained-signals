@@ -91,6 +91,14 @@ describe("deepSignal reactive collections", () => {
     expect(() => deepSignal({ map: crossRealmMap }, { collections: "reactive" })).toThrow(/same-realm/);
   });
 
+  it("rejects prototype mutation on reactive collection proxies", () => {
+    const map = deepSignal(new Map([["a", 1]]), { collections: "reactive" });
+
+    expect(() => Object.setPrototypeOf(map.value, null)).toThrow(/prototype mutation/);
+    expect(map.value).toBeInstanceOf(Map);
+    expect(map.value.get("a")).toBe(1);
+  });
+
   it("rejects Map key collisions caused by normalizing this runtime's proxy", () => {
     const source = deepSignal({ key: { id: 1 } });
     const rawKey = source.peek().key;
