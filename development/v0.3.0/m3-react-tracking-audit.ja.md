@@ -31,8 +31,21 @@ Clefは「top-level Hook + per-render-attempt capture」を最初に試作する
 5. SSR/hydrationとReact Compiler enabled/disabledの両方でHook order、stale render、scope leakがないことを確認する。
 6. いずれかのケースがexact trackingを裏付けない場合はM3を完了扱いにせず、契約変更案とmigrationを文書化する。
 
+## 試作1の結果（2026-10-13）
+
+独立worktreeで`applyManaged()`の生成`try/finally`を外し、`useManagedSignals()`と元のcomponent bodyを同じ関数bodyの先頭レベルに置く試作を実行した。worktree内でruntime/pluginをbuildし、既存のPlaywright + Vite Fast Refresh harnessを完走した。
+
+- Vite/Oxcのmanaged試作: JSX-onlyとHook追加・削除・並べ替えをすべて通過。Hook署名が更新され、Hook変更時にcomponent stateが安全にresetされた。
+- legacy Babel managed: 同じ4シナリオを通過。
+- Oxcの通常React `try` controlとPreact control: Hook追加・削除・並べ替えは既知の失敗を再現。
+- `inject` control: 4シナリオ通過。
+- 合計: 6 variant、18 passed、6 known failures。6件は通常React `try` controlとPreact controlの各Hook変更3ケース。
+
+この結果はmanaged transformがHookをtryの外に置けばFast Refresh署名問題を避けられることを示す。一方で、この試作は`finish()`を同期的に呼ばず、runtimeの`useInsertionEffect`または`queueMicrotask()`による終了に依存する。従って、失敗したrenderから別rootのrenderへ同期的に移った場合や、commit前に走るuntransformed callbackのread帰属を検証しておらず、exact trackingの根拠にはならない。試作コードは本線へ統合しない。
+
 ### 次の作業
 
-1. prototype worktreeでrender scopeのambient pointer/restore semanticsと同じtask内のsibling isolationを確認する。
-2. `managed`からtry/finallyだけを外した実験transformと、render-attempt token方式を比較する。
-3. Fast Refresh harness、Rules-of-Hooks lint、commit/abort/sibling/runtime testsを合わせて実行し、境界の主張を採否する。
+1. 試作worktreeで、throw/Suspenseで中断したrender直後の同じtask内の別root renderとuntransformed callbackのread帰属を再現テストする。
+2. sibling、nested tree、StrictModeのattemptがinsertion effectで閉じる順序と、abandoned attemptのcollector cleanupを確認する。
+3. Fast Refreshが通ったtransformに対してRules-of-Hooks lint、commit/abort/runtime tests、SSR/hydration、React Compiler検証を行い、exactnessの境界を確定する。
+4. exact trackingを証明できない場合はmanaged契約をbest-effortとして扱うか、静的読み取り変換/targeted subscription案とbreaking change・migrationを比較する。
