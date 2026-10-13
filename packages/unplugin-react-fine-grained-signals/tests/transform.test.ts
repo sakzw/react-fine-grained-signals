@@ -27,7 +27,7 @@ function compile(
 }
 
 describe("managed render transform", () => {
-  it("turns an explicit useSignalTracking call into a managed try/finally scope", () => {
+  it("turns an explicit useSignalTracking call into a top-level capture scope", () => {
     const output = compile(`
       import { useSignalTracking } from "react-fine-grained-signals";
       export function Counter({ count }) {
@@ -37,9 +37,9 @@ describe("managed render transform", () => {
     `);
 
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("try {");
-    expect(output).toContain("finally {");
-    expect(output).toContain("_signals.finish();");
+    expect(output).toContain("_signals.capture(() => count.value)");
+    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("_useSignalCapture()");
     expect(output).not.toMatch(/\buseSignalTracking\(\);/);
   });
 
@@ -55,7 +55,7 @@ describe("managed render transform", () => {
       export function OptOut() { return <p>{count.value}</p>; }
     `);
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("function Untouched");
     expect(output).toContain("function callback");
     expect(output).toContain("function OptOut");
@@ -67,7 +67,7 @@ describe("managed render transform", () => {
       export function Static() { return <p>static</p>; }
     `);
 
-    expect(output).toContain("_signals.finish();");
+    expect(output).toContain("_useSignalCapture()");
   });
 
   it("does not recognize the old annotation names", () => {
@@ -82,7 +82,7 @@ describe("managed render transform", () => {
     `, "auto");
 
     expect(compile(oldOptIn)).toBe(oldOptIn);
-    expect(oldOptOut).toContain("_signals.finish();");
+    expect(oldOptOut).toContain("_signals.capture(() =>");
   });
 
   it("auto-detects named JSX components that read .value", () => {
@@ -92,7 +92,7 @@ describe("managed render transform", () => {
     `, "auto");
 
     expect(output).toContain("const Counter = () => {");
-    expect(output).toContain("finally {");
+    expect(output).toContain("_useSignalCapture()");
   });
 
   it("injects a bare useSignalTracking call without a managed render rewrite", () => {
@@ -106,7 +106,7 @@ describe("managed render transform", () => {
     expect(output).toContain("const Counter = () => {");
     expect(output).toContain("_useSignalTracking();");
     expect(output).not.toContain("try {");
-    expect(output).not.toContain("finally {");
+    expect(output).not.toContain("_useSignalCapture()");
     expect(output).not.toContain(".finish();");
   });
 
@@ -145,7 +145,7 @@ describe("managed render transform", () => {
       export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = memo(() => {");
     expect(output).toContain("const RefCounter = forwardRef((props, ref) => {");
   });
@@ -165,11 +165,11 @@ describe("managed render transform", () => {
     `, "auto");
 
     expect(memoOutput).toContain("memo(function inner() {");
-    expect(memoOutput.match(/finally/g)).toHaveLength(1);
-    expect(memoOutput).toContain("_signals.finish();");
+    expect(memoOutput.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(memoOutput).toContain("_signals.capture(() =>");
     expect(forwardRefOutput).toContain("forwardRef(function render(props, ref) {");
-    expect(forwardRefOutput.match(/finally/g)).toHaveLength(1);
-    expect(forwardRefOutput).toContain("_signals.finish();");
+    expect(forwardRefOutput.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(forwardRefOutput).toContain("_signals.capture(() =>");
   });
 
   it("prefers the assigned binding over an unwrapped function expression's own name", () => {
@@ -185,8 +185,8 @@ describe("managed render transform", () => {
     `, "auto");
 
     expect(component).toContain("export const Counter = function render() {");
-    expect(component.match(/finally/g)).toHaveLength(1);
-    expect(component).toContain("_signals.finish();");
+    expect(component.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(component).toContain("_signals.capture(() =>");
     expect(helper).not.toContain("finally");
     expect(helper).not.toContain("react-fine-grained-signals/runtime");
   });
@@ -208,9 +208,9 @@ describe("managed render transform", () => {
     );
 
     expect(named).toContain("const Counter = memo(() => {");
-    expect(named).toContain("finally {");
+    expect(named).toContain("_useSignalCapture()");
     expect(namespaced).toContain("const Counter = React.memo(() => {");
-    expect(namespaced).toContain("finally {");
+    expect(namespaced).toContain("_useSignalCapture()");
     // Documented limitation: the default only matches a direct "react" import,
     // because a single-file transform cannot follow the re-export chain.
     expect(compile(namedSource, "auto")).not.toContain("finally");
@@ -226,7 +226,7 @@ describe("managed render transform", () => {
       export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
     `, "auto", "managed", "react-fine-grained-signals", "auto", "./react-compat");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = memo(() => {");
     expect(output).toContain("const RefCounter = forwardRef((props, ref) => {");
   });
@@ -244,10 +244,10 @@ describe("managed render transform", () => {
       export const MemoCounter = React.memo(() => <p>{count.value}</p>);
     `, "auto");
 
-    expect(namespaceOutput.match(/finally/g)).toHaveLength(2);
+    expect(namespaceOutput.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(namespaceOutput).toContain("const MemoCounter = React.memo(() => {");
     expect(namespaceOutput).toContain("const RefCounter = React.forwardRef((props, ref) => {");
-    expect(defaultOutput.match(/finally/g)).toHaveLength(1);
+    expect(defaultOutput.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(defaultOutput).toContain("const MemoCounter = React.memo(() => {");
   });
 
@@ -289,7 +289,7 @@ describe("managed render transform", () => {
       export const RefCounter = fr((props, ref) => <p ref={ref}>{count.value}</p>);
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = m(() => {");
     expect(output).toContain("const RefCounter = fr((props, ref) => {");
   });
@@ -322,9 +322,9 @@ describe("managed render transform", () => {
         `, mode);
 
       expect(memoOutput).toContain("memo(function Inner() {");
-      expect(memoOutput).toContain("finally {");
+      expect(memoOutput).toContain("_useSignalCapture()");
       expect(forwardRefOutput).toContain("forwardRef(function Inner(props, ref) {");
-      expect(forwardRefOutput).toContain("finally {");
+      expect(forwardRefOutput).toContain("_useSignalCapture()");
     },
   );
 
@@ -348,9 +348,9 @@ describe("managed render transform", () => {
         `, mode);
 
       expect(memoOutput).toContain("memo(() => {");
-      expect(memoOutput).toContain("finally {");
+      expect(memoOutput).toContain("_useSignalCapture()");
       expect(forwardRefOutput).toContain("forwardRef((props, ref) => {");
-      expect(forwardRefOutput).toContain("finally {");
+      expect(forwardRefOutput).toContain("_useSignalCapture()");
     },
   );
 
@@ -362,7 +362,7 @@ describe("managed render transform", () => {
     `);
 
     expect(output).toContain("const Counter = memo(() => {");
-    expect(output).toContain("finally {");
+    expect(output).toContain("_useSignalCapture()");
   });
 
   it("does not auto-transform lowercase functions, JSX without .value, or non-JSX reads", () => {
@@ -384,7 +384,7 @@ describe("managed render transform", () => {
       export function Counter() { return <p>{useCount()}</p>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("function useCount");
   });
 
@@ -395,7 +395,7 @@ describe("managed render transform", () => {
       export function Optional() { return <p>{count?.value}</p>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
   });
 
   describe("value reads that are not signal reads", () => {
@@ -476,7 +476,7 @@ describe("managed render transform", () => {
         }
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/function Form\(\{[^}]*\}\) \{\s+(?:"use no memo";\s+)?const _signals/);
     });
 
@@ -490,7 +490,7 @@ describe("managed render transform", () => {
         export function Nested({ props }) { return <p>{props.count.value}</p>; }
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(2);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     });
   });
 
@@ -500,7 +500,7 @@ describe("managed render transform", () => {
       export function useValue() { return 1; }
     `, "all");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("function App");
   });
 
@@ -514,7 +514,7 @@ describe("managed render transform", () => {
         }
       `, mode);
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toMatch(/function Row\(item\) \{\s+return/);
     },
@@ -533,7 +533,7 @@ describe("managed render transform", () => {
         }
       `, mode);
 
-      expect(output.match(/finally/g)).toHaveLength(2);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
       expect(output).toMatch(/function ArrowList\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toMatch(/function NamedList\(\) \{\s+(?:"use no memo";\s+)?const _signals\d*/);
       expect(output).toMatch(/function Row\(item\) \{\s+return/);
@@ -553,7 +553,7 @@ describe("managed render transform", () => {
 
       // Row runs once per item inside List's single render, so a hook injected
       // into it would break hook order: List owns the read instead.
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toContain("const Row = item => <li>{item.value}</li>;");
     },
@@ -571,7 +571,7 @@ describe("managed render transform", () => {
       // Row runs once per item inside List's single render, so injecting a hook
       // into it breaks hook order even though it is a function declaration
       // rather than a `const` binding.
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
       expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     },
@@ -587,7 +587,7 @@ describe("managed render transform", () => {
       export function List() { return items.map(Row); }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Row = item => <li>{item.value}</li>;");
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -600,7 +600,7 @@ describe("managed render transform", () => {
       export function List() { return <ul>{items.map(First)}</ul>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function First\(item\) \{\s+return <li>/);
     expect(output).toMatch(/function Second\(item\) \{\s+return <li>/);
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -617,7 +617,7 @@ describe("managed render transform", () => {
       }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
     expect(output).toContain("const Cell = item => <li>{item.value}</li>;");
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -632,7 +632,7 @@ describe("managed render transform", () => {
       export function Each() { const out = []; items.forEach(Row); return <ul>{out}</ul>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
     expect(output).toMatch(/function Flat\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/function Each\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -651,7 +651,7 @@ describe("managed render transform", () => {
         export const out = items.${method}(Row, Host);
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/const Host = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toContain("const Row = item => <li>{item.value}</li>;");
     },
@@ -673,7 +673,7 @@ describe("managed render transform", () => {
       export function List() { return items.map(${reference}); }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Row = item => <li>{item.value}</li>;");
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -693,7 +693,7 @@ describe("managed render transform", () => {
       reactImportSource: "react",
     })?.code ?? "";
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const useRow = item => item.value;");
     expect(output).toMatch(/function useTotal\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -705,7 +705,7 @@ describe("managed render transform", () => {
       export function List() { return items.map!(Row); }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Row = item => <li>{item.value}</li>;");
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -718,7 +718,7 @@ describe("managed render transform", () => {
       }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
@@ -739,7 +739,7 @@ describe("managed render transform", () => {
       export function List() { return items.map(Row); }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain(`const Row = (item => <li>{item.value}</li>)${wrapper};`);
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -755,7 +755,7 @@ describe("managed render transform", () => {
       export const Both = (memo(((props) => <p>{count.value}</p>) as any))!;
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(3);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
     expect(output).toMatch(/memo\(\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/memo\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -771,7 +771,7 @@ describe("managed render transform", () => {
         export function List() { return items["${method}" as const](Row); }
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toContain("const Row = item => <li>{item.value}</li>;");
       expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     },
@@ -791,7 +791,7 @@ describe("managed render transform", () => {
       export default observer(Cell as typeof Cell);
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/const Cell = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -807,7 +807,7 @@ describe("managed render transform", () => {
       export const kept = items.filter(Row);
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
@@ -824,7 +824,7 @@ describe("managed render transform", () => {
       export const ConnectedCell = connect()(Cell);
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/const Cell = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toContain("export default observer(Row);");
@@ -842,7 +842,7 @@ describe("managed render transform", () => {
       export const RefRow = forwardRef(Ref);
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/const Ref = \(props, ref\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -860,7 +860,7 @@ describe("managed render transform", () => {
         export const MemoRow = memo(Row, (a, b) => a.id === b.id);
       `, mode);
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/const Row = props => \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toContain("memo(Row, (a, b) => a.id === b.id)");
     },
@@ -875,7 +875,7 @@ describe("managed render transform", () => {
       export const MemoRow = memo((props) => <li />, (a, b) => a.id === b.id);
     `);
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("(a, b) => a.id === b.id");
   });
 
@@ -892,7 +892,7 @@ describe("managed render transform", () => {
         export function List() { return <ul>{items.map((i) => Row(i))}</ul>; }
       `, mode);
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
       expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     },
@@ -917,7 +917,7 @@ describe("managed render transform", () => {
         }
       `, mode);
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toContain("const useLabel = item => count.value + item;");
       expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     },
@@ -946,27 +946,31 @@ describe("managed render transform", () => {
     expect(output).toContain("const Row = (item) => <li>{count.value}</li>;");
   });
 
-  it("documents the JSX render-prop limitation and the inline workaround", () => {
-    // A bare identifier in a JSX attribute is syntactically identical whether
-    // the receiver instantiates it as a component or calls it per item, so a
-    // referenced callback keeps its own hook (known limitation), while the
-    // recommended inline form is collected by the component that owns it.
+  it("documents the JSX render-prop limitation and warns for inline callbacks", () => {
+    const warnings: Error[] = [];
     const referenced = compile(`
       const count = { value: 1 };
       const Row = (item) => <li>{item.value}</li>;
       export function List() { return <Grid renderItem={Row} />; }
     `, "auto");
-    const inline = compile(`
+    const inline = transformReactFineGrainedSignals(`
       export function List() {
         return <Grid renderItem={(item) => <li>{item.value}</li>} />;
       }
-    `, "auto");
+    `, "RenderProp.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
 
-    expect(referenced.match(/finally/g)).toHaveLength(1);
+    expect(referenced.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(referenced).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
-    expect(inline.match(/finally/g)).toHaveLength(1);
-    expect(inline).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
-    expect(inline).toContain("renderItem={item => <li>{item.value}</li>}");
+    expect(inline).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("JSX callback prop reads a signal");
   });
 
   it("still transforms a component referenced by name into memo", () => {
@@ -977,7 +981,7 @@ describe("managed render transform", () => {
       export const MemoRow = memo(Row);
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toContain("export const MemoRow = memo(Row);");
   });
@@ -991,7 +995,7 @@ describe("managed render transform", () => {
       }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/export function List\(\) \{\s+const Row/);
   });
@@ -1006,7 +1010,7 @@ describe("managed render transform", () => {
       }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function withCount\(Base\) \{\s+return function Wrapped/);
     expect(output).toMatch(/function Wrapped\(props\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -1027,7 +1031,7 @@ describe("managed render transform", () => {
         export const withCount = (Base) => (props) => <Base {...props} count={count.value} />;
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(
         /const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
       );
@@ -1054,7 +1058,7 @@ describe("managed render transform", () => {
         }
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(3);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
       // Only the returned components are wrapped; the factories keep their
       // bodies, which React never renders.
       expect(output).toMatch(/const withBlock = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -1074,7 +1078,7 @@ describe("managed render transform", () => {
           memo((props) => <Base {...props} count={count.value} />, (a, b) => a.id === b.id);
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/memo\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toContain("(a, b) => a.id === b.id");
     });
@@ -1091,7 +1095,7 @@ describe("managed render transform", () => {
       `;
 
       expect(compile(source, "auto")).toBe(source);
-      expect(compile(source, "all").match(/finally/g)).toHaveLength(1);
+      expect(compile(source, "all").match(/useSignalCapture\(\)/g)).toHaveLength(1);
     });
 
     it("attributes an annotation on the returned component to it", () => {
@@ -1104,7 +1108,7 @@ describe("managed render transform", () => {
         }
       `);
 
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/return props => \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(warn).not.toHaveBeenCalled();
     });
@@ -1125,7 +1129,7 @@ describe("managed render transform", () => {
         }
       `);
 
-      expect(output.match(/finally/g)).toHaveLength(2);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
       expect(output).toMatch(
         /const withConcise = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
       );
@@ -1173,7 +1177,7 @@ describe("managed render transform", () => {
         export function useRow() { return () => <li>{count.value}</li>; }
       `, "auto");
 
-      expect(output.match(/finally/g)).toHaveLength(2);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
       expect(output.match(/return \(\) => <li>\{count\.value\}<\/li>;/g)).toHaveLength(2);
     });
 
@@ -1201,10 +1205,10 @@ describe("managed render transform", () => {
     const auto = compile(source, "auto");
     const all = compile(source, "all");
 
-    expect(auto.match(/finally/g)).toHaveLength(1);
+    expect(auto.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(auto).toMatch(/function Parent\(\) \{\s+const Child/);
     expect(auto).toMatch(/const Child = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
-    expect(all.match(/finally/g)).toHaveLength(2);
+    expect(all.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(all).toMatch(/function Parent\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(all).toMatch(/const Child = \(\) => \{\s+(?:"use no memo";\s+)?const _signals\d*/);
   });
@@ -1294,7 +1298,7 @@ describe("managed render transform", () => {
       const managedOutput = compile(barrelFirstStatementSource, "manual", "managed");
       expect(managedOutput).toBe(barrelFirstStatementSource);
       expect(managedOutput).not.toContain("try {");
-      expect(managedOutput).not.toContain("finally {");
+      expect(managedOutput).not.toContain("_useSignalCapture()");
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]?.[0]).toContain("cannot be verified");
       expect(warn.mock.calls[0]?.[0]).toContain("barrel");
@@ -1403,7 +1407,7 @@ describe("managed render transform", () => {
 
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
     expect(output).not.toContain('from "react-fine-grained-signals"');
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
   });
 
   it("keeps an absorbed import that something else still uses", () => {
@@ -1489,7 +1493,7 @@ describe("managed render transform", () => {
         "fixture.tsx",
         { ...options, mode: "auto" },
       )?.code,
-    ).toContain("finally");
+    ).toContain("_signals.capture(() => count.value)");
   });
 
   it.each(["inject", "managed"] as const)("keeps the %s transform idempotent", (transform) => {
@@ -1511,7 +1515,7 @@ describe("managed render transform", () => {
       }
     `);
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
   });
 
   it("parses non-JSX TypeScript syntax according to the module extension", () => {
@@ -1548,9 +1552,9 @@ describe("managed render transform", () => {
       export function App(managed) { useSignalTracking(); return <main />; }
     `);
 
-    expect(typeOnly).toContain("const _signals = _useManagedSignals();");
+    expect(typeOnly).toContain("const _signals = _useSignalCapture();");
     expect(typeOnly).not.toContain("const _signals = managed();");
-    expect(shadowed).toContain("const _signals = _useManagedSignals();");
+    expect(shadowed).toContain("const _signals = _useSignalCapture();");
     expect(shadowed).not.toContain("const _signals = managed();");
   });
 });
@@ -1647,11 +1651,11 @@ describe("PascalCase higher-order component factories", () => {
       export function WithCount(Base) { return (props) => <Base n={count.value} />; }
     `, "auto");
 
-    expect(concise.match(/finally/g)).toHaveLength(1);
+    expect(concise.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(concise).toMatch(
       /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
     );
-    expect(block.match(/finally/g)).toHaveLength(1);
+    expect(block.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(block).toMatch(/function WithCount\(Base\) \{\s+return props => \{/);
   });
 
@@ -1664,7 +1668,7 @@ describe("PascalCase higher-order component factories", () => {
       export const WithCount = (Base) => (props) => <Base />;
     `, "all");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(
       /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
     );
@@ -1681,7 +1685,7 @@ describe("PascalCase higher-order component factories", () => {
       export const WithCount = (Base) => (props) => <div>{count.value}</div>;
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(
       /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
     );
@@ -1702,11 +1706,11 @@ describe("PascalCase higher-order component factories", () => {
 
     // Exactly one boundary each: the factory must not take the annotation for
     // itself now that the component it returns can honor it.
-    expect(concise.match(/finally/g)).toHaveLength(1);
+    expect(concise.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(concise).toMatch(
       /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
     );
-    expect(block.match(/finally/g)).toHaveLength(1);
+    expect(block.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(block).toMatch(/function WithBlock\(Base\) \{\s+return props => \{/);
     expect(warn).not.toHaveBeenCalled();
   });
@@ -1734,7 +1738,7 @@ describe("PascalCase higher-order component factories", () => {
       }
     `);
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function WithCount\(Base\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
@@ -1748,7 +1752,7 @@ describe("PascalCase higher-order component factories", () => {
       export function Panel(Base) { return <p>{count.value}</p>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
   });
 
   it("gives a useX name no identity-inheritance escape hatch, and still transforms the hook", () => {
@@ -1768,7 +1772,7 @@ describe("PascalCase higher-order component factories", () => {
       export const useRow = (Base) => (props) => <Base n={count.value} />;
     `, "all");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const useRow = Base => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toContain("return props => <Base n={count.value} />;");
   });
@@ -1796,9 +1800,9 @@ describe("PascalCase higher-order component factories", () => {
       }
     `);
 
-    expect(auto.match(/finally/g)).toHaveLength(1);
+    expect(auto.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(auto).toMatch(/function useModal\(Overlay\) \{\s+(?:"use no memo";\s+)?const _signals/);
-    expect(annotated.match(/finally/g)).toHaveLength(1);
+    expect(annotated.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -1818,7 +1822,7 @@ describe("PascalCase higher-order component factories", () => {
     );
     // `Fallback` renders JSX but reads no signal, so `auto` leaves it alone and
     // the returned component owns the file's only boundary.
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
   });
 
   it("leaves a factory whose returned component is separately named alone", () => {
@@ -1856,11 +1860,11 @@ describe("PascalCase higher-order component factories", () => {
       }
     `, "auto");
 
-    expect(camelCaseFactory.match(/finally/g)).toHaveLength(1);
+    expect(camelCaseFactory.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(camelCaseFactory).toMatch(
       /const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
     );
-    expect(hookInRenderCallback.match(/finally/g)).toHaveLength(1);
+    expect(hookInRenderCallback.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(hookInRenderCallback).toContain("const useLabel = item => count.value + item;");
     expect(hookInRenderCallback).toMatch(
       /function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/,
@@ -1886,9 +1890,9 @@ describe("anonymous default exports", () => {
       export default function () { return <p>{count.value}</p>; }
     `, mode);
 
-    expect(arrow.match(/finally/g)).toHaveLength(1);
+    expect(arrow.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(arrow).toMatch(/export default props => \{\s+(?:"use no memo";\s+)?const _signals/);
-    expect(expression.match(/finally/g)).toHaveLength(1);
+    expect(expression.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(expression).toMatch(
       /export default function \(\) \{\s+(?:"use no memo";\s+)?const _signals/,
     );
@@ -1910,7 +1914,7 @@ describe("anonymous default exports", () => {
       },
     )?.code;
 
-    expect(output).toContain("finally {");
+    expect(output).toContain("_useSignalCapture()");
   });
 
   it("leaves a non-component default export alone", () => {
@@ -1985,7 +1989,7 @@ describe("components held in keyed slots", () => {
       Card.Footer = function Footer() { return <p>{count.value}</p>; };
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/Card\.Header = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(
       /Card\.Footer = function Footer\(\) \{\s+(?:"use no memo";\s+)?const _signals/,
@@ -1999,7 +2003,7 @@ describe("components held in keyed slots", () => {
       export function App() { return <ns.Home />; }
     `, "auto");
 
-    expect(namespace.match(/finally/g)).toHaveLength(1);
+    expect(namespace.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(namespace).toMatch(/Home: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
@@ -2050,7 +2054,7 @@ describe("components held in keyed slots", () => {
       export class Holder { Row = () => <p>{count.value}</p>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(3);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
     expect(output).toMatch(/Row = \(\) => <p>\{count\.value\}<\/p>;/);
   });
 
@@ -2087,8 +2091,8 @@ describe("components held in keyed slots", () => {
       export const ns = { [key]: () => <p>{count.value}</p> };
     `;
 
-    expect(literal.match(/finally/g)).toHaveLength(1);
-    expect(computed.match(/finally/g)).toHaveLength(1);
+    expect(literal.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(computed.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(compile(runtime, "auto")).toBe(runtime);
     expect(compile(runtime, "all")).toBe(runtime);
   });
@@ -2107,8 +2111,8 @@ describe("components held in keyed slots", () => {
       export const registered = register({ Home: () => <p>{count.value}</p> });
     `, "auto");
 
-    expect(nested.match(/finally/g)).toHaveLength(1);
-    expect(inline.match(/finally/g)).toHaveLength(1);
+    expect(nested.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(inline.match(/useSignalCapture\(\)/g)).toHaveLength(1);
   });
 
   it("keeps a keyed component handed to an iteration method off its own boundary", () => {
@@ -2153,7 +2157,7 @@ describe("components held in keyed slots", () => {
     // `all` mode still wraps `List` itself, which is an ordinary component; what
     // must not happen is `Row` getting a second boundary of its own.
     const all = compile(nested, "all");
-    expect(all.match(/finally/g)).toHaveLength(1);
+    expect(all.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(all).toContain("Row: item => <li>{count.value}{item}</li>");
   });
 
@@ -2166,7 +2170,7 @@ describe("components held in keyed slots", () => {
       export function List() { return <ul><a.b.Row /></ul>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/Row: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
@@ -2238,7 +2242,7 @@ describe("components defined inline as a call argument", () => {
       export default observer(function App() { return <p>{count.value}</p>; });
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/observer\(function App\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
@@ -2275,7 +2279,7 @@ describe("components defined inline as a call argument", () => {
 
     // Only `List` is transformed, and only because the render callback's read is
     // folded into it -- none of `App`, `Rows` or `Row` gets a boundary.
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/function App\(\) \{\s+return <p>/);
     expect(output).toMatch(/function Rows\(\) \{\s+return <p>/);
@@ -2347,7 +2351,7 @@ describe("@signalTracking annotations that attach to nothing", () => {
       export const ns = { /** @signalTracking */ Home: () => <p>{count.value}</p> };
     `);
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(warn).not.toHaveBeenCalled();
   });
 });
@@ -2414,7 +2418,7 @@ describe("component-named functions called as plain functions", () => {
       export function Outer({ show }) { return <div>{show && Title()}</div>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function Title\(\) \{\s+return <h1>\{count\.value\}<\/h1>;/);
     expect(hasBoundary(output, "Outer")).toBe(true);
   });
@@ -2439,7 +2443,7 @@ describe("component-named functions called as plain functions", () => {
       export function Outer() { return <div>{Title()}</div>; }
     `, "all");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Title = () => <h1>static</h1>;");
     expect(hasBoundary(output, "Outer")).toBe(true);
   });
@@ -2505,7 +2509,7 @@ describe("component-named functions called as plain functions", () => {
       }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(hasBoundary(output, "Outer")).toBe(true);
     expect(hasBoundary(output, "Title")).toBe(false);
   });
@@ -2534,7 +2538,7 @@ describe("component-named functions called as plain functions", () => {
 
     // The called slots lose their own boundaries, and their reads are folded
     // into Page through the keyed definition (`resolveKeyedFunction`).
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("Home: () => <p>{count.value}</p>");
     expect(output).toContain("Card.Header = () => <h1>{count.value}</h1>;");
     expect(hasBoundary(output, "Page")).toBe(true);
@@ -2589,7 +2593,7 @@ describe("signal reads in parameter defaults", () => {
     `, "auto");
 
     expect(output).toMatch(
-      /function C\(_param\) \{\s+"use no memo";\s+const _signals = _useManagedSignals\(\);\s+try \{\s+let \{\s+v = count\.value\s+\} = _param;\s+return <p>\{v\}<\/p>;/,
+      /function C\(_param\) \{\s+"use no memo";\s+const _signals = _useSignalCapture\(\);\s+let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;\s+return <p>\{v\}<\/p>;/,
     );
   });
 
@@ -2599,7 +2603,7 @@ describe("signal reads in parameter defaults", () => {
       export const C = (n = count.value) => <p>{n}</p>;
     `, "auto");
 
-    expect(output).toContain("let n = _param === undefined ? count.value : _param;");
+    expect(output).toContain("let n = _param === undefined ? _signals.capture(() => count.value) : _param;");
     // A `.tsx` module: the generated parameter stays optional, like `n`.
     expect(output).toMatch(/const C = \(_param\?\) => \{/);
   });
@@ -2623,7 +2627,7 @@ describe("signal reads in parameter defaults", () => {
     `, "auto");
 
     expect(output).toMatch(/forwardRef\(\(_param, _param2\) => \{/);
-    expect(output).toMatch(/let \{\s+v = count\.value\s+\} = _param;\s+let ref = _param2;/);
+    expect(output).toMatch(/let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;\s+let ref = _param2;/);
   });
 
   it("moves every later parameter too, so defaults keep their evaluation order", () => {
@@ -2634,7 +2638,7 @@ describe("signal reads in parameter defaults", () => {
 
     expect(output).toContain("function C(label, _param?, _param2?, ..._param3)");
     expect(output).toMatch(
-      /let n = _param === undefined \? count\.value : _param;\s+let m = _param2 === undefined \? n : _param2;\s+let rest = _param3;/,
+      /let n = _param === undefined \? _signals\.capture\(\(\) => count\.value\) : _param;\s+let m = _param2 === undefined \? n : _param2;\s+let rest = _param3;/,
     );
   });
 
@@ -2646,7 +2650,7 @@ describe("signal reads in parameter defaults", () => {
     `, "auto");
 
     expect(output).toContain("function C(_param: Props)");
-    expect(output).toMatch(/let \{\s+v = count\.value\s+\} = _param;/);
+    expect(output).toMatch(/let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;/);
   });
 
   it("leaves parameters alone when no default reads a signal", () => {
@@ -2659,7 +2663,7 @@ describe("signal reads in parameter defaults", () => {
     expect(output).toMatch(/function C\(\{\s+v = 1\s+\}, other\)/);
     // A closure created by a default runs inside the body, behind the boundary.
     expect(output).toMatch(/function D\(\{\s+format = \(\) => count\.value\s+\}\)/);
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
   });
 
   it("declines the move when the body would capture a name the default uses", () => {
@@ -2674,7 +2678,7 @@ describe("signal reads in parameter defaults", () => {
 
     expect(output).toMatch(/function C\(\{\s+v = count\.value\s+\}\)/);
     expect(output).toMatch(/function D\(v = count\.value\)/);
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
   });
 });
 
@@ -2705,7 +2709,9 @@ describe("parameter optionality after a relocated default", () => {
         export function C(optional?: string, value = count.value) { return <p>{optional}{value}</p>; }
       `, "fixture.tsx", transform);
       expect(component).toContain("function C(optional?: string, _param?)");
-      expect(component).toContain("let value = _param === undefined ? count.value : _param;");
+      expect(component).toContain(transform === "managed"
+        ? "let value = _param === undefined ? _signals.capture(() => count.value) : _param;"
+        : "let value = _param === undefined ? count.value : _param;");
 
       const hook = await compileAndParse(`
         const count = { value: 1 };
@@ -2763,7 +2769,7 @@ describe("object-method shorthand components", () => {
       };
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(3);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
     expect(output).toMatch(/Home\(\) \{\s+"use no memo";\s+const _signals/);
     expect(output).toMatch(/\["Away"\]\(\) \{\s+"use no memo";\s+const _signals/);
     expect(output).toMatch(/useTotal\(\) \{\s+"use no memo";\s+const _signals/);
@@ -2804,7 +2810,7 @@ describe("object-method shorthand components", () => {
       export function Page() { return <main>{ns.Home()}{deep.a.Home?.()}</main>; }
     `, "auto");
 
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/Home\(\) \{\s+return <p>/);
     expect(hasBoundary(output, "Page")).toBe(true);
   });
@@ -2819,7 +2825,7 @@ describe("render callbacks reached through Array.from or a destructured keyed sl
     `, "all");
 
     expect(output).toMatch(/function Star\(\) \{\s+return <span>/);
-    expect(output.match(/finally/g)).toHaveLength(1);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
   });
 
   it("only treats Array.from's second argument as the callback", () => {
@@ -2857,7 +2863,7 @@ describe("render callbacks reached through Array.from or a destructured keyed sl
 
     for (const output of [shorthand, renamed, called]) {
       expect(output).toMatch(/Row: \(?\w*\)? => <li>/);
-      expect(output.match(/finally/g)).toHaveLength(1);
+      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     }
   });
 
@@ -2871,7 +2877,7 @@ describe("render callbacks reached through Array.from or a destructured keyed sl
     // unannotated caller that reads nothing itself is left alone (documented).
     expect(compile(source, "auto")).toBe(source);
     const annotated = compile(source.replace("export function List", "/* @signalTracking */ export function List"), "auto");
-    expect(annotated.match(/finally/g)).toHaveLength(1);
+    expect(annotated.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(annotated).toMatch(/Row: \(?item\)? => <li>/);
   });
 
@@ -3028,7 +3034,7 @@ export const ns = {
   Away() { return <p>away</p>; },
 };
 `);
-    expect(output.match(/finally/g)).toHaveLength(2);
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output.indexOf("@jsxImportSource")).toBeLessThan(output.indexOf("import "));
   });
 });
@@ -3262,5 +3268,106 @@ describe("keyed slots reached through a sibling's this or an optional static pat
 
     expect(output).toMatch(/function Optional\(\) \{\s+"use no memo";\s+const _signals/);
     expect(output).toMatch(/function ViaThis\(\) \{\s+"use no memo";\s+const _signals/);
+  });
+
+  it("leaves a module-level use server component untouched and reports its source location", () => {
+    const warnings: Error[] = [];
+    const source = `"use server";
+import { signal } from "react-fine-grained-signals";
+const count = signal(0);
+export function ServerBadge() { return <output>{count.value}</output>; }
+`;
+    const result = transformReactFineGrainedSignals(source, "ServerBadge.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(result).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain('top-level "use server" directive');
+    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
+      line: 4,
+      column: 7,
+    });
+  });
+
+  it("warns at function-valued JSX props whose callbacks read signals", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { signal } from "react-fine-grained-signals";
+const count = signal(0);
+export function App() {
+  return <List itemContent={() => count.value} />;
+}
+`;
+    const result = transformReactFineGrainedSignals(source, "RenderProp.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(result).toBeNull();
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("JSX callback prop reads a signal");
+    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
+      line: 5,
+      column: 15,
+    });
+  });
+
+  it("does not report signal writes in a JSX action callback as render reads", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { signal } from "react-fine-grained-signals";
+const count = signal(0);
+export function App() {
+  return <form action={() => { count.value = 1; }} />;
+}
+`;
+
+    transformReactFineGrainedSignals(source, "Action.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(warnings).toEqual([]);
+  });
+
+  it("warns when a destructuring declaration reads a .value expression", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ profile: { name: "Ada" } });
+export function App() {
+  const { profile } = state.value;
+  return <span>{profile.name}</span>;
+}
+`;
+    transformReactFineGrainedSignals(source, "DestructuredDeepRead.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("Destructuring from a .value expression");
+    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
+      line: 5,
+      column: 8,
+    });
   });
 });

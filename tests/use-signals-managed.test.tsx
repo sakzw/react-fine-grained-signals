@@ -3,9 +3,10 @@
 
 import { StrictMode, Suspense, act, memo, useLayoutEffect } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
+import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, deepSignal, signal, useComputed, useSignalTracking } from "../src/index.js";
-import { useManagedSignals } from "../src/runtime.js";
+import { useManagedSignals, useSignalCapture } from "../src/runtime.js";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
 import { executionContext } from "../src/core/execution-owner.js";
 import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
@@ -533,5 +534,115 @@ describe("managed useManagedSignals render scope", () => {
     idle.value.a;
     idle.value.b;
     expect(inspectDeepSignalMetadata(idle.peek())?.properties).toEqual([]);
+  });
+});
+
+describe("per-read useSignalCapture prototype", () => {
+  it("tracks shallow and deep reads while restoring the render context after each capture", () => {
+    const shallow = signal("before");
+    const deep = deepSignal({ profile: { name: "Ada" } });
+    const renders = vi.fn();
+
+    function Reader() {
+      const scope = useSignalCapture();
+      renders();
+      const shallowValue = scope.capture(() => shallow.value);
+      const deepValue = scope.capture(() => deep.value.profile.name);
+      expect(hasActiveRenderCollector()).toBe(false);
+      return <output aria-label="per read values">{`${shallowValue}/${deepValue}`}</output>;
+    }
+
+    render(<Reader />);
+    act(() => {
+      shallow.value = "after";
+      deep.value.profile.name = "Grace";
+    });
+    expect(screen.getByLabelText("per read values").textContent).toBe("after/Grace");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("restores the render context synchronously when a captured read throws", () => {
+    const abandoned = signal("abandoned");
+    const healthy = signal("healthy");
+    const healthyRenders = vi.fn();
+
+    function Throwing() {
+      const scope = useSignalCapture();
+      scope.capture(() => {
+        abandoned.value;
+        throw new Error("capture failed");
+      });
+      return null;
+    }
+    function Healthy() {
+      const scope = useSignalCapture();
+      healthyRenders();
+      return <output aria-label="capture healthy">{scope.capture(() => healthy.value)}</output>;
+    }
+
+    expect(() => render(<Throwing />)).toThrow("capture failed");
+    expect(hasActiveRenderCollector()).toBe(false);
+    render(<Healthy />);
+    act(() => { abandoned.value = "changed"; });
+    expect(healthyRenders).toHaveBeenCalledTimes(1);
+    act(() => { healthy.value = "updated"; });
+    expect(screen.getByLabelText("capture healthy").textContent).toBe("updated");
+  });
+
+  it("does not collect reads made through a capture handle after commit", () => {
+    const source = signal("render");
+    const late = signal("late");
+    const renders = vi.fn();
+    let capture!: <T>(callback: () => T) => T;
+
+    function Reader() {
+      capture = useSignalCapture().capture;
+      renders();
+      return <output aria-label="capture after commit">{capture(() => source.value)}</output>;
+    }
+
+    render(<Reader />);
+    const readAfterCommit = capture(() => late.value);
+    expect(readAfterCommit).toBe("late");
+    act(() => { late.value = "changed"; });
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => { source.value = "updated"; });
+    expect(screen.getByLabelText("capture after commit").textContent).toBe("updated");
+    expect(renders).toHaveBeenCalledTimes(2);
+  });
+
+  it("keeps StrictMode capture subscriptions live through replay and disposes them on unmount", () => {
+    const source = signal("strict mount");
+    const renders = vi.fn();
+
+    function Reader() {
+      const capture = useSignalCapture();
+      renders();
+      return <output aria-label="strict capture">{capture.capture(() => source.value)}</output>;
+    }
+
+    const view = render(<StrictMode><Reader /></StrictMode>);
+    expect(screen.getByLabelText("strict capture").textContent).toBe("strict mount");
+    const mountedRenderCount = renders.mock.calls.length;
+    act(() => { source.value = "strict update"; });
+    expect(screen.getByLabelText("strict capture").textContent).toBe("strict update");
+    expect(renders.mock.calls.length).toBeGreaterThan(mountedRenderCount);
+
+    view.unmount();
+    const unmountedRenderCount = renders.mock.calls.length;
+    act(() => { source.value = "after unmount"; });
+    expect(renders).toHaveBeenCalledTimes(unmountedRenderCount);
+  });
+
+  it("renders captured reads on the server without leaving an active collector", () => {
+    const source = signal("server capture");
+
+    function Reader() {
+      const capture = useSignalCapture();
+      return <output>{capture.capture(() => source.value)}</output>;
+    }
+
+    expect(renderToString(<Reader />)).toContain("server capture");
+    expect(hasActiveRenderCollector()).toBe(false);
   });
 });

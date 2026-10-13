@@ -85,22 +85,20 @@ not been verified against this plugin.
 
 Two known limitations apply with React Compiler. Both were present in v0.1.1.
 
-- **Inline render helpers can be memoized by the compiler.** A function this
-  plugin treats as part of its caller's render gets no boundary and no
-  `"use no memo"` of its own. Examples are a PascalCase helper called as a
-  plain function (`Title()`) and a render callback such as `items.map(Row)`.
-  React Compiler can still compile that helper by itself. If the helper's JSX
-  has no dependency the compiler can see (a module-level signal read is not
-  one), the compiler caches the JSX, and the helper's output stays stale even
-  though the calling component re-renders. Put `"use no memo"` in the helper's
-  body, or render it as a component (`<Title />`) instead.
+- **Inline render helpers can be memoized by the compiler.** A plain-called
+  helper or callback is not a Hook owner. Examples are a PascalCase helper
+  called as `Title()` and a render callback such as `items.map(Row)`. The
+  transform captures statically proven synchronous reads at the callsite, but
+  React Compiler can still compile the helper itself. If it caches the helper's
+  JSX, its output can stay stale while the caller re-renders. Put
+  `"use no memo"` in the helper body, or render it as a component (`<Title />`).
 - **An author-written `"use memo"` is kept.** The plugin does not add
   `"use no memo"` to a function that already states a memoization directive.
   Tested with `babel-plugin-react-compiler` 1.0:
-  - With the managed transform, the compiler does not compile the generated
-    `try` / `finally`. With the default `panicThreshold` it skips the function.
-    With `panicThreshold: "all_errors"` the build fails ("Handle TryStatement
-    without a catch clause").
+  - With the managed transform, the compiler does not add the protective
+    `"use no memo"` directive. The generated capture wrapper can be memoized,
+    so the component may stop updating. Keep the directive or use the default
+    `reactCompiler: "auto"`.
   - With `transform: "inject"`, the compiler compiles the function and can
     memoize away its signal reads, so the component can stop updating.
 
@@ -136,9 +134,9 @@ export default {
     callbacks are collected by their owning component but are never transform
     targets themselves.
 - `transform`:
-  - `"managed"` (default and recommended): adds an exact `try` / `finally` boundary, importing
-    from the package's `/runtime` entry and closing the render-tracking
-    window synchronously at the point the component function returns.
+  - `"managed"` (default and recommended): adds a top-level `useSignalCapture()`
+    hook and wraps statically proven synchronous signal reads in short capture
+    scopes. Generated code does not move user Hooks into `try` / `finally`.
   - `"inject"` (supported advanced/compatibility mode): adds bare
     `useSignalTracking()` for best-effort opt-in. It inserts a normal
     `useSignalTracking()` call without rewriting control flow, so it has the same
@@ -155,7 +153,7 @@ export default {
     [the compatibility note](../../development/design/react-compiler-compatibility.md).
 - `importSource`: overrides `react-fine-grained-signals` for a compatible wrapper.
   The wrapper must re-export the runtime's root `useSignalTracking` and its
-  `/runtime` entry's `useManagedSignals`, which the generated code imports.
+  `/runtime` entry's `useSignalCapture`, which the generated code imports.
 - `reactImportSource`: an additional module specifier whose `memo` and
   `forwardRef` exports count as React's own when the plugin decides whether a
   wrapped function is a component. Recognition is additive, not a replacement:
@@ -216,13 +214,22 @@ This detection has five known limitations:
   `@signalTracking` / `@noSignalTracking` comment.
 
   Writing the callback inline (`<Grid renderItem={(item) => <li>{item.value}</li>} />`)
-  is not a general fix. Its reads are attributed to the owning component, so
-  the owner is transformed, but `Grid` calls `renderItem` during its *own*
+  does not make its execution timing provable, so the callback is not
+  automatically tracked. If `Grid` calls `renderItem` during its *own*
   render, after the owner's function has returned. With the default managed
   transform the owner's boundary is already closed by then, so the reads are
   tracked only if `Grid` has a boundary of its own; otherwise the rendered items
   stay stale. If `Grid` is your own component, opt it in with
   `@signalTracking` (or have it read the signal itself).
+
+  For a statically resolvable inline or same-module callback on a function prop
+  other than `onX`, `auto` now emits a source-located warning when the callback
+  body reads `.value`. This diagnostic does not infer when the
+  receiving component invokes the callback and does not make that read
+  reactive; use it to find this boundary, then move the read into a tracked
+  component or use an explicit signal-value hook in the component that renders
+  the result. JSX children callbacks, cross-module callbacks, and dynamic aliases
+  remain unclassified.
 - A callback imported from another module is not followed, because the
   transform sees one file at a time.
 - A callback reached through an object key (`items.map(parts.Row)`, or
@@ -411,9 +418,9 @@ function's existing opt-in. A call that is not the function's first statement,
 and any barrel-imported call, is left alone in both transform modes. A
 first-statement call imported directly or as a namespace from `importSource` is
 left in place under `"inject"`, but under `"managed"` (the default) it is
-absorbed into the generated boundary: the statement is removed and replaced by
-the managed store declaration plus the `try` / `finally` scope, so the function
-body is rewritten rather than left byte-for-byte untouched.
+absorbed into the generated capture: the statement is removed and replaced by
+the top-level capture Hook, and statically proven reads are wrapped at their
+execution sites.
 
 A first-statement `useSignalTracking()` call inside an `async` or generator function
 fails the build under the default `"managed"` transform, with
@@ -461,38 +468,24 @@ plugin. Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`,
 
 ## Fast Refresh
 
-This limitation predates v0.2.1. The managed transform places the component
-body, including authored Hook calls, inside a generated `try/finally` so
-tracking cleanup runs on return, throw, and Suspense. React's
-[Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks) prohibit
-calling Hooks inside `try`, `catch`, or `finally`, so this generated structure
-is outside that documented rule.
+Managed output now calls `useSignalCapture()` at the top level of each transformed function and wraps statically proven synchronous reads in short capture scopes. Authored Hooks remain in the function body at the same top-level positions; generated output contains no `try/finally` around user code. The per-read runtime restores its scope if a captured expression throws, and uncommitted render attempts never install subscriptions.
 
-In the audited Vite 8 / Oxc Fast Refresh setup, the Refresh transform registers
-the component but omits its Hook signature for this structure. Adding,
-removing, or reordering Hooks can therefore preserve stale state and fail with
-a Hook-order error until a full reload. A plain React control with Hooks in
-`try/finally` reproduces the Oxc signature behavior, but that control also
-violates the Hook rule. This is an interaction between Oxc's signature analysis
-and a structure that managed mode itself generates; it is not a v0.2.1
-regression.
+The previous managed `try/finally` structure was the source of the Vite 8 / Oxc Fast Refresh Hook-signature issue described in the historical qualification record. The current output passed the real-browser Vite 8/Oxc HMR cases for JSX-only edits and Hook addition, removal, and reordering; all six hook-shape cases passed under managed Oxc and Babel. The full six-variant matrix completed 18 passes; the six known failures remain limited to the ordinary React `try/finally` control and Preact's corresponding Oxc structure. This closes the HMR subgate, while broader exactness qualification remains in progress.
 
-`transform: "inject"` avoids the generated boundary and passed the audited
-fixture. It inserts a bare `useSignalTracking()` Hook, providing the same
-best-effort boundary as a hand-written Hook; it does not provide managed mode's
-exact synchronous `try/finally` tracking contract. It is an alternative, not a
-contract-equivalent replacement for managed mode.
+`transform: "inject"` continues to insert a bare `useSignalTracking()` Hook and provides a best-effort ambient boundary. Managed mode retains implicit signal read detection for its documented static synchronous scope while tracking each selected expression in isolation; unsupported callback ownership and dynamic patterns are documented and warned where statically provable.
 
 ## React Server Components
 
-The transform does not tell server modules from client modules: it reads
-neither `"use client"` / `"use server"` directives nor the bundler's
-environment or layer. A synchronous server component that reads `.value` would
-therefore receive the client-only render-tracking hook and fail when it renders
-on the server (async server components are never transformed, because async
-functions never are). In an RSC setup, keep server components out of the
-transform with `exclude` (for example by directory), opt individual ones out
-with a `@noSignalTracking` comment, or use `mode: "manual"`.
+The transform does not infer server/client identity from bundler environment
+or layer. A module with a module-level `"use server"` directive is left
+untransformed, with a source-located warning when a JSX-returning candidate is
+found. A module-level `"use client"` continues through the normal transform.
+Server Components without either directive cannot be identified by a
+single-file transform, so a synchronous component that reads `.value` may
+still receive the client-only render-tracking hook (async functions are not
+transformed). In an RSC setup, keep server components out of the transform with
+`exclude`, opt individual ones out with a `@noSignalTracking` comment, or use
+`mode: "manual"`.
 
 ## License
 

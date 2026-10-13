@@ -2,7 +2,7 @@
 
 [English](./use-signals-boundary-design.md) | [日本語](./use-signals-boundary-design.ja.md)
 
-Status: Phase 8 is complete and frozen (M0–M3). Bare `useSignalTracking()` remains best-effort; `transform: "managed"` is the recommended/default exact path; manual `useManagedSignals()` with `try` / `finally` is the exact plugin-free path; `transform: "inject"` remains a supported best-effort advanced/compatibility mode; `useSignalValue()` and JSX direct signal bindings are exact targeted subscriptions. Scope-policy separation is adopted: `SharedInteropContextV1.renderScope` is the single active-scope arbitration stack, with `activeRenderCollector` retained as the direct local collector channel. Cross-copy readable dependencies follow lexical render ownership. See [phase8.md](../phases/phase8.md) for the milestone record.
+Status (2026-10-13): this is the historical v0.2.1 boundary decision and Phase 8 record, not the v0.3.0 managed transform contract. In v0.3.0, bare `useSignalTracking()` remains best-effort and `transform: "managed"` uses top-level `useSignalCapture()` with per-read capture for statically proven synchronous reads; exactness qualification is still in progress. Manual `useManagedSignals()` with `try` / `finally` remains available for a lexical runtime boundary, and `useSignalValue()` plus JSX direct bindings remain targeted subscriptions. For current transform details, see the [M3 audit](../v0.3.0/m3-react-tracking-audit.ja.md) and [plugin guide](../../packages/unplugin-react-fine-grained-signals/README.md#fast-refresh). The Phase 8 record remains at [phase8.md](../phases/phase8.md).
 
 ## Context
 

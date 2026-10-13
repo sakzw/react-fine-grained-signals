@@ -1,5 +1,11 @@
 # M3 — React tracking / Fast Refresh audit
 
+## 現行方式と状態 (2026-10-13)
+
+旧試作・再開判断の記述はその時点の履歴であり、現在の実装方針ではない。続く試作記録は残すが、managedの既定codegenはtop-level `useSignalCapture()` とread単位captureへ変更した。user Hookをtry/finallyへ移さず、静的に証明できる同期readだけを短いcapture scopeで囲む。generator/async bodyやReact Hookを含むhelperは同期callsite captureへfoldしない。JSX function propや`.value`を含むdestructuring initializerなど、検出できる追跡外readにはsource位置付きwarningを出す。
+
+現行方式の根拠は、変換後実行57 tests、transform 243 tests、runtime 555 tests、TypeScript runtime/plugin成功。React Compiler専用suiteは71 passed / 3 skipped。実browserのFast Refresh harnessは24ケースで18 passed、6 known failure（通常React `try/finally` control 3件とPreact Oxc 3件）を完走し、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過した。Fast Refresh subgateは完了。複数root/concurrent interleavingとhydrationを含むM3 acceptance gateは未完了。静的に解決できないJSX children callback、cross-module callback/helper、複雑なaliasや任意のdeferred callbackは一般に同一file transformで実行ownerを確定できないため、既定managedの完全なexactnessはまだ主張しない。
+
 ## 現状
 
 M3は未完了。M2実装後、React Hook配置の違反とFast RefreshのHook署名欠落を同時に解消する案を調べ始めた。既存のmanaged transformを単純にinjectへ置き換えない。
@@ -43,9 +49,54 @@ Clefは「top-level Hook + per-render-attempt capture」を最初に試作する
 
 この結果はmanaged transformがHookをtryの外に置けばFast Refresh署名問題を避けられることを示す。一方で、この試作は`finish()`を同期的に呼ばず、runtimeの`useInsertionEffect`または`queueMicrotask()`による終了に依存する。従って、失敗したrenderから別rootのrenderへ同期的に移った場合や、commit前に走るuntransformed callbackのread帰属を検証しておらず、exact trackingの根拠にはならない。試作コードは本線へ統合しない。
 
-### 次の作業
+## 試作2の結果（2026-10-13）
 
-1. 試作worktreeで、throw/Suspenseで中断したrender直後の同じtask内の別root renderとuntransformed callbackのread帰属を再現テストする。
-2. sibling、nested tree、StrictModeのattemptがinsertion effectで閉じる順序と、abandoned attemptのcollector cleanupを確認する。
-3. Fast Refreshが通ったtransformに対してRules-of-Hooks lint、commit/abort/runtime tests、SSR/hydration、React Compiler検証を行い、exactnessの境界を確定する。
-4. exact trackingを証明できない場合はmanaged契約をbest-effortとして扱うか、静的読み取り変換/targeted subscription案とbreaking change・migrationを比較する。
+試作1を継続し、Hookをcomponent bodyのtop levelに維持したまま、明示的なreturn直前とユーザー記述の`finally`実行後に`finish()`を挿入した。return expressionは一時変数へ先に評価する。AST traversal中にreturnを置換すると試験が停止したため、対象return pathを先に収集してから置換するよう修正した。
+
+- 専用のreturn/finally実行テスト: 1 passed。signal readの通常追跡、ユーザー`finally`のread追跡、Hook順序を検証。
+- `react-execution.test.ts`: 49 passed。
+- plugin build: success、124.32 kB。
+- 既存Fast Refresh harness: 6 variant、18 passed、6 known failures。失敗は通常React `try` controlとPreact controlのHook変更ケース。
+- plugin全体test: 175 passed、113 failed、3 skipped、およびworker起動timeout 3件。主な失敗は既存transform/unplugin testが生成`try/finally`を前提にしているためで、この試作に合わせた期待値更新は未実施。従ってsuite全体の合格とは扱わない。
+
+この試作は通常returnとreturnを囲む通常のユーザー`finally`では同期境界を改善したが、同期throw、Suspense、ユーザー`finally`自身のthrowでは`finish()`を保証しない。runtimeのmicrotask cleanupは同期境界ではなく、insertion effectはcommitされるrender attemptに限られる。Reactの[Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks)はHookを`try`/`catch`/`finally`内で呼ぶことを禁止し、[Suspense](https://react.dev/reference/react/Suspense)は初回mount前にsuspendしたtreeを破棄して再試行する。このため、試作2もstrict trackingのacceptance gateを満たさず、本線へ統合しない。
+
+現在の設計仮説として、ambient scopeをcomponent全体で開く代わりに、各signal/deepSignal readをrender-attempt tokenへ短く記録する方式を次に試す。read評価だけを`try/finally`で閉じればHook呼び出しを囲わず、例外時の同期cleanupを保てる可能性がある。一方、render callback・custom Hook・nested proxy・評価順序・stale closureまで自動trackingを維持できるかは未証明である。明示的なtargeted subscriptionへ公開契約を変える案も比較対象に残す。
+
+Clef-flashは次の優先調査としてtargeted subscription契約（B）を0.5473、per-read token方式（A）を0.2441、throw時のdeferred cleanup（C）を0.2086と評価した。confidenceは0.1039で低く、採用判断ではなく比較材料として記録する。Aの小さなprototypeで公開APIを維持できる見込みを測り、Bのmigration負担とReact lifecycle適合性を同時に確認する。
+
+## 試作3 — per-read capture runtime / transform（2026-10-13）
+
+既存managed scopeを変えず、runtime subpathに内部試作用`useSignalCapture()`を追加した。Hookはrender attemptを作るがcomponent全体のambient scopeやmicrotask cleanupを開始しない。`capture(fn)`だけが`withRenderScope()`で同期scopeを開閉し、commit時のdependency promote/subscriptionは既存`RenderStore`を再利用する。insertion effect後のstale captureはcallbackを実行してもclosed attemptへ依存を追加しない。
+
+transformにはテスト専用`experimentalCapture`分岐を置き、既定`managed` codegenは変えていない。候補readの最大member chainを包み、`.value` readから識別子aliasへの単純なdata-flowも同じfunction内で追う。method call・call後のproperty read・`new`・tagged templateは式全体を包んでreceiver/constructor意味論を維持する。単純代入・update・delete・destructuring代入・TypeScript assertion付き代入の左辺は書き換えない。inline同期callback内のreadはcallback bodyを、別定義の同期helper/render callbackは静的に解決できる呼び出し式をcaptureし、React Hookを含むhelperはwrapを避ける。既知のdeferred read除外も適用する。
+
+検証結果:
+
+- `tests/use-signals-managed.test.tsx`: 20 passed。shallow/deep read、capture中throw後のscope復元、commit後のstale handleを確認。
+- `tests/use-signals-managed.test.tsx`: 22 passed。shallow/deep read、capture中throw後のscope復元、commit後のstale handle、StrictMode replay/update/unmount、SSRを確認。
+- plugin `tests/react-execution.test.ts`: 56 passed。top-level Hookとtry不在のcodegen、shallow/deep chain、identifier alias、inline・module-scope同期helper/render callback、auto modeでのmodule/local同期helper検出とcallsite capture、Suspense fallbackとabandoned attemptの分離・retry、optional read、write target、call後property、nested constructor、tagged receiverを確認。
+- plugin `tests/transform.test.ts`: 239 passed。既存transform契約の回帰を確認。
+- plugin package `tsc --noEmit`: success。
+- root runtime `tsc --noEmit` とplugin package `tsc --noEmit`: success。`git diff --check`: success。
+
+独立レビューでは、destructuring代入、`new`、tagged template、call後propertyの意味破壊・漏れが指摘された。pattern親を辿るwrite除外、constructor/tagged式全体、call後member chain、call expressionをcalleeとする`new`を包む修正を入れ、focused assertionsを追加した。最新差分の再レビューで、JSX prop経由の外部callback、destructuring deep read、generator helperの実行時readが未捕捉になる具体例が残った。呼び出し時に実行されないgenerator本体とawait以降を同期callsiteのcaptureへfoldしないガードを追加した。JSX function propの静的callbackとdestructuring `.value` initializerには位置付きwarningを追加したが、JSX children、dynamic alias、cross-module callback、async/deferred helperは保証対象外であり、M3のexactnessは未達。
+
+追加したStrictMode/SSRテストはcapture runtimeが通常のcommit lifecycleで動くことを確認するが、Vite/Oxc Fast Refresh実環境、複数rootの同時render、Concurrent time-slicing、hydration、React Compilerの検証には代わらない。StrictMode更新ではrender関数が複数回呼ばれるため、回数ではなく値の追従とunmount後の停止をassertする。
+
+この試作は**採用・M3完了の根拠にはならない**。`const proxy = deep.value; proxy.user.name`の単純identifier aliasと同一module内で静的解決できる同期helper/render callbackは試験した。追加変更で、同期plain helper readを`mode: "auto"`のinspectionへfoldし、helper本体ではなく静的に分かるcallsite全体をcaptureする。async/generatorとHookを呼ぶhelperはこのfoldから除外する。helperが返すcallbackのbodyは同期実行されるとは限らないためinspectionから除外し、実行地点を特定できないclosureをrender attemptへ結び付けない。JSX function propとdestructuring `.value` initializerには診断を追加した。JSX children、aliasの複雑な再代入、cross-module helper、任意の独自deferred callbackには一般解がなく、引き続きM3 exactness未達として扱う。
+
+## 旧判断の履歴（managed統合前）
+
+Clef-flashの比較では「静的に証明できる自動tracking範囲を定義し、曖昧patternへ位置付き診断を出し、曖昧な読み取りには明示subscriptionを使う」案を選好した（A 0.9354、B 0.0425、C 0.0221）。これは補助意見であり、実装の正確性を保証しない。現時点の方針として、per-read prototypeは自動追跡範囲の正確性と診断可能性を測るために続ける。根拠が揃うまで既定managedへ接続せず、暗黙のbest-effort降格も行わない。曖昧ケースを安全に拒否できない場合はtargeted subscriptionを主要契約にする案へ戻る。
+
+この方針には、静的に分かるdestructuring deep read、generator、JSX render prop、未知callbackの代表例に位置付きdiagnosticまたは明示APIで対応できることが必要。cross-module sourceを一file transformだけで判断できない境界は、検出不能として説明し、無音のexactness保証をしない。
+
+2026-10-13の再判断でもClef-flashは有限な静的範囲を定義して既存managed契約を保つ案を支持した（A 0.9452、B 0.0548）。補助意見として記録し、正確性は診断と実環境gateで判定する。
+
+### 当時の未完了項目（履歴）
+
+1. cross-module helper、destructuring read、complex aliasを含むtracked read漏れを診断できる範囲を定義する。
+2. 同一task内の別root、StrictMode、SSR/hydration、React Compiler、Fast Refreshでattempt ownershipとHook orderを検証する。
+3. 自動trackingを保証できる静的範囲とtargeted subscription契約への変更を比較し、breaking change・migrationを文書化する。
+4. exactness gateを満たすまでM3を未完了のまま保つ。

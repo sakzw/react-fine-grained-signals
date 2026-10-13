@@ -85,11 +85,11 @@ build pluginをbuildに入れている場合、これを手で書く必要はあ
 
 読むコンポーネントがすべて自分で呼ぶ必要があるのはこのためです。呼んでいない兄弟・子孫コンポーネントの読み取りは、別のコンポーネントの開いたままのウィンドウに帰属してしまうことがあり、その場合、実際に読んだコンポーネントはそのsignalに対して無言で更新されなくなります。
 
-厳密な境界が必要な場合は、build pluginの `transform: "managed"`（既定）を使用してください。手書きの `try` / `finally` が不要なため、利用できる場合はこれが最もエラーの少ない選択肢です。
+build pluginの `transform: "managed"`（既定）は、静的に証明できる同期readを追跡します。top-level capture Hookを置き、readごとにcaptureするため、ユーザーが書いたHookは通常どおりtop-levelに残ります。対応patternとdiagnosticsは[plugin guide](../../packages/unplugin-react-fine-grained-signals/README.ja.md#fast-refresh)を参照してください。
 
 ### pluginを使わずに厳密な境界を作る
 
-`react-fine-grained-signals/runtime` は `useManagedSignals` をexportしています。scope handleを返すため、自分で閉じます。build時のtransformなしに、pluginのmanaged出力と同じ厳密な境界が得られます。
+`react-fine-grained-signals/runtime` は `useManagedSignals` をexportしています。scope handleを返すため、`try` / `finally` で自分で閉じます。build時のtransformなしにlexical boundaryを作れます。
 
 ```tsx
 import { useManagedSignals } from "react-fine-grained-signals/runtime";

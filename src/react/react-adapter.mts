@@ -8,6 +8,9 @@ type SubscriptionMode = "combined" | "per-readable";
 interface SnapshotEntry { readonly dependencies: Map<object, number>; readonly value: unknown }
 interface SnapshotCache { readonly readable: object; current: SnapshotEntry | undefined }
 interface ManagedScope { finish(): void; getSnapshot(): number }
+interface SignalCaptureScope extends ManagedScope {
+  capture<T>(callback: () => T): T;
+}
 
 export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDerivedRenderAdapter) {
 function isInteropProtocol(dependency: object): dependency is ReadableProtocolV1 {
@@ -46,6 +49,7 @@ class RenderStore {
   #combinedDependencies = new Set<object>();
   #listeners = new Set<() => void>();
   #version = 0;
+  #closedAttempts = new WeakSet<RenderAttempt>();
   // Advanced only by lifecycle events that prove the component is mounted and
   // visible again: a layout commit and a passive (re)activation. A render on
   // its own, such as a hidden Activity prerender, must not cancel a scheduled
@@ -59,15 +63,22 @@ class RenderStore {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   };
-  begin(scopePolicy: ScopePolicy): RenderAttempt {
+  begin(scopePolicy: ScopePolicy, ambient = true): RenderAttempt {
     const attempt = render.createRenderAttempt();
-    attempt.restoreScope = render.pushRenderScope(attempt, scopePolicy);
-    queueMicrotask(() => this.finish(attempt));
+    if (ambient) {
+      attempt.restoreScope = render.pushRenderScope(attempt, scopePolicy);
+      queueMicrotask(() => this.finish(attempt));
+    }
     return attempt;
   }
   finish(attempt: RenderAttempt): void {
     attempt?.restoreScope?.();
     attempt.restoreScope = undefined;
+    this.#closedAttempts.add(attempt);
+  }
+  capture<T>(attempt: RenderAttempt, callback: () => T): T {
+    if (this.#closedAttempts.has(attempt)) return callback();
+    return render.withRenderScope(attempt, callback, "managed");
   }
   commit(attempt: RenderAttempt): void {
     this.#lifecycle += 1;
@@ -139,10 +150,10 @@ function createReactAdapter(
     const getSnapshot = useMemo(() => () => snapshot(readable, cache), [readable, cache]);
     return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
   }
-  function useTrackingStore(scopePolicy: ScopePolicy): { store: RenderStore; attempt: RenderAttempt } {
+  function useTrackingStore(scopePolicy: ScopePolicy, ambient = true): { store: RenderStore; attempt: RenderAttempt } {
     const store = useMemo(() => new RenderStore(mode), []);
     useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-    const attempt = store.begin(scopePolicy);
+    const attempt = store.begin(scopePolicy, ambient);
     // A bare scope deliberately stays open after this component returns, so
     // descendants rendered without their own scope are still attributed to it.
     // Rendering is over once React starts committing, though, and every
@@ -162,7 +173,15 @@ function createReactAdapter(
     const { store, attempt } = useTrackingStore("managed");
     return { finish: () => store.finish(attempt), getSnapshot: store.getSnapshot };
   }
-  return { useSignalValue, useSignalTracking, useManagedSignals };
+  function useSignalCapture(): SignalCaptureScope {
+    const { store, attempt } = useTrackingStore("managed", false);
+    return {
+      finish: () => store.finish(attempt),
+      getSnapshot: store.getSnapshot,
+      capture: (callback) => store.capture(attempt, callback),
+    };
+  }
+  return { useSignalValue, useSignalTracking, useManagedSignals, useSignalCapture };
 }
 
 function managed<T>(scope: ManagedScope, callback: () => T): T {

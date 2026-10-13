@@ -135,9 +135,9 @@ export default {
   - `"all"`: さらにすべての名前付きJSX componentを変換します。ネストした
     callbackの読み取りは親componentが収集しますが、callback自体は変換しません。
 - `transform`
-  - `"managed"`（既定・推奨）: 厳密な `try` / `finally` 境界を追加します。
-    `/runtime` からimportし、componentの関数がreturnする時点でrender
-    tracking windowを同期的に閉じます。
+  - `"managed"`（既定・推奨）: top-levelに `useSignalCapture()` を追加し、静的に
+    証明できる同期的signal readを短いcapture scopeで囲みます。生成コードはuser Hookを
+    `try` / `finally` 内へ移しません。
   - `"inject"`（サポートされた高度・互換性向けmode）: best-effortなopt-in向けに
     変換なしの `useSignalTracking()` を追加します。制御フローを書き換えず、通常の
     `useSignalTracking()` を先頭hookとして挿入するため、手書きと同じbest-effort
@@ -155,7 +155,7 @@ export default {
     に照らして確認済みの場合だけ選んでください。
 - `importSource`: `react-fine-grained-signals` 互換wrapperへの置き換えです。
   wrapperは、生成されたコードがimportするruntimeのrootの `useSignalTracking` と、
-  `/runtime` entryの `useManagedSignals` をre-exportしている必要があります。
+  `/runtime` entryの `useSignalCapture` をre-exportしている必要があります。
 - `reactImportSource`: wrapされた関数をcomponentと判定する際に、`memo` /
   `forwardRef` をReact由来とみなすmodule specifierを追加します。置き換えでは
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり
@@ -200,7 +200,7 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
 
 - 再代入したaliasはたどりません。`const RowAlias = Row; items.map(RowAlias)`
   経由で渡したPascalCaseのhelperは、componentとして扱われたままになります。
-- JSXのprop値として渡すrender callbackは認識しません。`<Grid renderItem={Row} />`
+- JSXのprop値として渡すrender callbackの実行時期は解決できません。`<Grid renderItem={Row} />`
   は、`Grid` が1回のrenderで `renderItem(item)` を可変回数呼ぶ場合（render prop。
   hook挿入は安全ではありません）でも、`Row` を独立したcomponentとしてinstance化
   する場合（hook挿入こそが更新を成立させます）でも構文が同一で、そのファイルだけ
@@ -208,15 +208,22 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   持ったままになります。参照先の関数に `@signalTracking` /
   `@noSignalTracking` コメントで意図を明示してください。
 
-  callbackをinlineで書くこと
-  （`<Grid renderItem={(item) => <li>{item.value}</li>} />`）は、一般的な解決策
-  ではありません。その読み取りは呼び出し元componentに帰属するので呼び出し元は
-  変換されますが、`Grid` は `renderItem` を *自分の* render中、つまり呼び出し元の
-  関数がreturnした後に呼びます。既定のmanaged変換では、その時点で呼び出し元の
+  callbackをinlineで書いても
+  （`<Grid renderItem={(item) => <li>{item.value}</li>} />`）、実行時期を証明できないため
+  自動trackingはしません。`onX` 以外のfunction-valued JSX propに静的に読める
+  signal readがある場合は位置付きwarningを出します。`Grid` がcallbackを
+  *自分の* render中に呼ぶときは、呼び出し元の関数がreturnした後なので、その呼び出し元の
   boundaryはすでに閉じているため、`Grid` 自身がboundaryを持つ場合にしか読み取りは
   追跡されず、そうでなければrenderされた項目は古いままになります。`Grid` が
   自分のcomponentなら、`@signalTracking` でopt-inしてください（または `Grid`
   自身でsignalを読んでください）。
+
+  `auto` modeでは、`onX` 以外のfunction-valued JSX propに静的解決できるinlineまたは
+  同一module callbackを渡し、そのbodyに `.value` readがある場合、source location付き
+  warningを出します。この診断は受け取り側componentがcallbackを呼ぶタイミングを推測せず、
+  readをreactiveにするものでもありません。境界を見つける手掛かりとして使い、tracked
+  componentへreadを移すか、結果を描画するcomponentで明示的なsignal-value Hookを使って
+  ください。JSX children callback、cross-module callback、動的aliasは未分類です。
 - 別moduleからimportしたcallbackはたどりません。変換は1ファイルずつ処理する
   ためです。
 - objectのkey経由で渡すcallback（`items.map(parts.Row)`、または先に
@@ -400,9 +407,8 @@ import、namespace import、barrel import経由の呼び出しは、その関数
 みなします。先頭文でない呼び出しと、barrel import経由の呼び出しは、いずれの
 変換モードでもそのまま残ります。`importSource` からdirect importまたは
 namespace importした先頭文の呼び出しは、`"inject"` ではそのまま残りますが、
-`"managed"`（既定）では生成する境界に吸収されます。つまりその文は削除され、
-managed storeの宣言と `try` / `finally` scopeに置き換わるため、関数本体は
-そのまま残るのではなく書き換えられます。
+`"managed"`（既定）ではその文は削除され、top-level capture Hookへ置き換わります。
+静的に証明できるreadは実行箇所で個別にcaptureされます。
 
 先頭文での `useSignalTracking()` 呼び出しが `async` 関数やgenerator関数の中にあると、
 既定の `"managed"` 変換ではbuildが失敗し、
@@ -449,34 +455,22 @@ TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析しま
 
 ## Fast Refresh
 
-この制約はv0.2.1より前から存在します。managed変換はtracking cleanupをreturn、
-throw、Suspense後にも実行するため、component本体（ユーザーが書いたHook呼び出し
-を含む）を生成した `try/finally` の中に置きます。Reactの[Rules of Hooks](https://react.dev/reference/rules/rules-of-hooks)
-は `try`、`catch`、`finally` 内でHookを呼ぶことを禁止しているため、この生成構造は
-公式ルールの対象外です。
+`managed` output now inserts `useSignalCapture()` at each transformed function's top level and wraps statically proven synchronous reads in short capture scopes. User Hooks remain at the function's top level, and generated code does not wrap user code in `try/finally`. A captured expression that throws still restores its temporary scope; render attempts that never commit do not install subscriptions.
 
-監査したVite 8 / Oxc Fast Refreshでは、この構造に対してRefresh transformが
-componentを登録する一方、Hook signatureを省略します。そのためHookの追加、削除、
-並べ替えで以前のstateが残り、Hook順序エラーが発生してfull reloadが必要になる
-場合があります。Hookを `try/finally` 内で呼ぶ通常のReact対照例でもOxcのsignature
-挙動を再現しましたが、この対照例もHookルールに違反します。これはOxcのsignature
-解析と、managed modeが生成する構造との相互作用であり、v0.2.1の回帰ではありません。
+過去に記録したVite 8 / Oxc Fast RefreshのHook signature問題は、以前の生成`try/finally`構造が原因でした。現行出力は実browserのVite 8/Oxc HMRでJSXのみの編集とHook追加・削除・並べ替えを通過し、managed OxcとBabelのHook形状変更6ケースはすべて成功しました。6 variantのmatrixは18 passedで完了し、残る6件の既知失敗は通常Reactの`try/finally` controlとPreactの同じOxc構造だけでした。HMR subgateは完了しましたが、M3全体のexactness qualificationは継続中です。
 
-`transform: "inject"` はこの生成boundaryを避け、検証したfixtureでは問題が出ません
-でした。bareな `useSignalTracking()` Hookを挿入する方式で、手書きHookと同じbest-effort
-なboundaryを提供します。managed modeの同期的で厳密な `try/finally` tracking contract
-は提供しません。利用可能な代替modeですが、managed modeと契約上同等ではありません。
+`transform: "inject"` は従来どおりbareな `useSignalTracking()` を挿入し、best-effortなambient boundaryを提供します。`managed` は暗黙のsignal-read検出を保ちながら、文書化した静的・同期範囲の各readを個別に捕捉します。静的に証明できないcallback所有権やdynamic patternは、範囲を明記し、検出可能なケースをwarningにします。
 
 ## React Server Components
 
-この変換はserver moduleとclient moduleを区別しません。`"use client"` /
-`"use server"` directiveも、bundlerのenvironmentやlayerも参照しないためです。
-したがって `.value` を読む同期のserver componentには、client専用のrender
-tracking hookが挿入され、serverでrenderした時点で失敗します（async関数は
-変換しないため、asyncのserver componentは変換されません）。RSC構成では、
-`exclude`（たとえばdirectory単位）でserver componentを変換対象から外すか、
-個別に `@noSignalTracking` コメントでopt-outするか、`mode: "manual"` を
-使ってください。
+この変換はbundlerのenvironmentやlayerからserver/clientを判定しません。
+module-levelの`"use server"` directiveがあるファイルでは変換を行わず、JSXを
+返す候補関数があれば位置付きwarningを出します。module-levelの`"use client"`は
+client moduleとして通常どおり処理します。どちらのdirectiveもないServer Componentは
+一file transformだけでは判別できないため、`.value`を読む同期componentにclient専用の
+render tracking hookが挿入される可能性があります（async関数は変換しません）。
+RSC構成では、`exclude`（たとえばserver directory単位）、個別の
+`@noSignalTracking`、または`mode: "manual"`も利用してください。
 
 ## License
 

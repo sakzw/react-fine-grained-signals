@@ -26,6 +26,8 @@ export interface InternalTransformOptions {
    * regardless of this value.
    */
   reactImportSource: string;
+  /** Internal experiment: collect each synchronous tracked read in its own attempt scope. */
+  experimentalCapture?: boolean;
   /** Receives non-fatal diagnostics; omitted for direct calls, which use console.warn. */
   warn?: (warning: Error) => void;
 }
@@ -701,7 +703,9 @@ function isNamedUseManagedSignalsImport(
     resolved !== undefined &&
     resolved.specifier.isImportSpecifier() &&
     resolved.source === runtimeSource &&
-    t.isIdentifier(resolved.specifier.node.imported, { name: "useManagedSignals" })
+    t.isIdentifier(resolved.specifier.node.imported) &&
+    (resolved.specifier.node.imported.name === "useManagedSignals" ||
+      resolved.specifier.node.imported.name === "useSignalCapture")
   );
 }
 
@@ -1822,6 +1826,40 @@ function isJsxEventHandlerValue(path: NodePath): boolean {
   return t.isJSXIdentifier(name) && /^on[A-Z]/.test(name.name);
 }
 
+/** A function prop is owned and scheduled by the receiving component. */
+function isRenderPropCallback(path: NodePath): boolean {
+  const container = climbTransparentWrappers(path).parentPath;
+  if (container === null || !container.isJSXExpressionContainer()) return false;
+  const attribute = container.parentPath;
+  if (attribute === null || !attribute.isJSXAttribute()) return false;
+  const name = attribute.get("name");
+  return name.isJSXIdentifier() && !/^on[A-Z]/.test(name.node.name);
+}
+
+function containsSyntacticValueRead(path: NodePath): boolean {
+  let found = false;
+  const inspect = (member: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
+    if (getReadPropertyName(member.node) === "value") found = true;
+  };
+  if (path.isMemberExpression() || path.isOptionalMemberExpression()) inspect(path);
+  path.traverse({
+    MemberExpression: inspect,
+    OptionalMemberExpression: inspect,
+  });
+  return found;
+}
+
+function warnUncapturedParameterRead(
+  functionPath: NodePath<t.Function>,
+  options: InternalTransformOptions,
+): void {
+  const warning = functionPath.buildCodeFrameError(
+    "A .value read remains in a function parameter initializer, which runs before the top-level " +
+      "capture Hook. Move the read into the function body so managed tracking can capture it safely.",
+  );
+  reportWarning(options, warning, functionPath);
+}
+
 /** Is `path` the callback argument of `useEffect`/`useMemo`/one of their kin? */
 function isDeferredCallbackArgument(path: NodePath): boolean {
   const slot = climbTransparentWrappers(path);
@@ -1873,6 +1911,7 @@ function isTrackedValueRead(
 ): boolean {
   if (getReadPropertyName(node) !== "value") return false;
   if (isNonSignalValueReceiver(node.object)) return false;
+  if (isWriteTarget(path)) return false;
   return !isDeferredReadContext(path, functionPath);
 }
 
@@ -1884,6 +1923,7 @@ function inspectFunction(
   // Guards the render-callback recursion below against reference cycles
   // (mutually referencing helpers) and re-inspecting the same body twice.
   visited: Set<t.Node> = new Set([functionPath.node]),
+  synchronousBodyOnly = false,
 ): FunctionInspection {
   const inspection: FunctionInspection = {
     containsJSX: false,
@@ -1908,12 +1948,21 @@ function inspectFunction(
     // The wrapper node is what occupies the argument slot, so the position
     // check compares against `argument` itself; only the name has to be read
     // from underneath a `Row!` / `Row as Fn` / `Row satisfies Fn` wrapper.
-    const reference = unwrapTransparent(argument);
-    if (!t.isIdentifier(reference)) return;
     if (!isRenderCallbackInvocation(call.node, argument)) return;
-    const target = resolveReferencedFunction(call, reference.name);
-    // A callback defined inside this function is already part of the walk.
-    if (target === undefined || target.isDescendant(functionPath)) return;
+    const reference = unwrapTransparent(argument);
+    let target: NodePath<t.Function> | undefined;
+    if (t.isIdentifier(reference)) {
+      target = resolveReferencedFunction(call, reference.name);
+    } else {
+      const argumentPath = call.get("arguments").find((candidate) => candidate.node === argument);
+      if (argumentPath?.isArrowFunctionExpression() || argumentPath?.isFunctionExpression()) {
+        target = argumentPath;
+      }
+    }
+    // An async callback only executes its synchronous prefix at this callsite;
+    // a generator executes none of its body until iteration. Folding either
+    // body into the caller would claim reads outside the active capture.
+    if (target === undefined || target.node.async || target.node.generator) return;
     if (visited.has(target.node)) return;
     visited.add(target.node);
     const nested = inspectFunction(
@@ -1922,6 +1971,7 @@ function inspectFunction(
       managedRuntimeSource,
       reactImportSource,
       visited,
+      true,
     );
     if (nested.containsJSX) inspection.containsJSX = true;
     if (nested.readsValue) inspection.readsValue = true;
@@ -1984,7 +2034,7 @@ function inspectFunction(
       : member !== undefined
         ? resolveKeyedFunction(call, member)
         : undefined;
-    if (target === undefined || target.isDescendant(functionPath)) return;
+    if (target === undefined || target.node.async || target.node.generator) return;
     if (visited.has(target.node)) return;
     visited.add(target.node);
     const nested = inspectFunction(
@@ -1993,8 +2043,44 @@ function inspectFunction(
       managedRuntimeSource,
       reactImportSource,
       visited,
+      true,
     );
     if (nested.containsJSX) inspection.containsJSX = true;
+    if (nested.readsValue) inspection.readsValue = true;
+  };
+
+  // Ordinary module-local helpers are part of the caller's synchronous render
+  // when invoked directly. Unlike components and custom Hooks, a plain helper
+  // cannot own a React tracking Hook of its own, so leaving its reads outside
+  // the caller's inspection silently misses `mode: "auto"` transforms.
+  const foldDirectlyCalledHelpers = (
+    call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
+  ): void => {
+    if (isDeferredReadContext(call, functionPath)) return;
+    const callee = unwrapTransparent(call.node.callee);
+    const member = t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+      ? callee
+      : undefined;
+    const chain = member === undefined ? undefined : getStaticMemberChain(member);
+    const name = t.isIdentifier(callee) ? callee.name : chain?.keys.at(-1);
+    if (name === undefined || isComponentName(name) || isHookName(name)) return;
+    const target = t.isIdentifier(callee)
+      ? resolveReferencedFunction(call, name)
+      : member === undefined ? undefined : resolveKeyedFunction(call, member);
+    if (
+      target === undefined ||
+      target.node.async || target.node.generator || functionCallsHook(target) ||
+      visited.has(target.node)
+    ) return;
+    visited.add(target.node);
+    const nested = inspectFunction(
+      target,
+      importSource,
+      managedRuntimeSource,
+      reactImportSource,
+      visited,
+      true,
+    );
     if (nested.readsValue) inspection.readsValue = true;
   };
 
@@ -2006,8 +2092,16 @@ function inspectFunction(
   };
 
   functionPath.traverse({
+    // A nested function is not a render read until a known synchronous call
+    // site runs it. The call-site visitors below fold recognized helpers and
+    // render callbacks into this inspection; unknown callbacks stay outside
+    // the automatic guarantee instead of creating a stale captured closure.
     Function(path) {
-      if (isNestedTrackingBoundary(path, reactImportSource)) path.skip();
+      if (
+        synchronousBodyOnly ||
+        isNestedTrackingBoundary(path, reactImportSource) ||
+        isRenderPropCallback(path)
+      ) path.skip();
     },
     JSXElement(_path) {
       inspection.containsJSX = true;
@@ -2024,6 +2118,7 @@ function inspectFunction(
     CallExpression(path) {
       foldReferencedRenderCallbacks(path);
       foldDirectlyCalledRenderCallbacks(path);
+      foldDirectlyCalledHelpers(path);
       // Compared by node, as the equivalent checks in `isDeferredReadContext`
       // and `foldDirectlyCalledRenderCallbacks` are: a re-crawled scope can hand
       // back a fresh NodePath for the very same function.
@@ -2039,7 +2134,8 @@ function inspectFunction(
           managedRuntimeSource,
         )) ||
         (callee.isMemberExpression() &&
-          getReadPropertyName(callee.node) === "useManagedSignals" &&
+          (getReadPropertyName(callee.node) === "useManagedSignals" ||
+            getReadPropertyName(callee.node) === "useSignalCapture") &&
           callee.get("object").isIdentifier() &&
           isNamespaceUseManagedSignalsImport(
             functionPath,
@@ -2053,6 +2149,7 @@ function inspectFunction(
     OptionalCallExpression(path) {
       foldReferencedRenderCallbacks(path);
       foldDirectlyCalledRenderCallbacks(path);
+      foldDirectlyCalledHelpers(path);
     },
   });
   return inspection;
@@ -2061,7 +2158,7 @@ function inspectFunction(
 function findRuntimeImports(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
-  importedName: "useSignalTracking" | "useManagedSignals",
+  importedName: "useSignalTracking" | "useManagedSignals" | "useSignalCapture",
 ): RuntimeImport[] {
   const imports: RuntimeImport[] = [];
   for (const statement of programPath.get("body")) {
@@ -2091,7 +2188,7 @@ function findRuntimeImports(
 function addRuntimeImport(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
-  importedName: "useSignalTracking" | "useManagedSignals",
+  importedName: "useSignalTracking" | "useManagedSignals" | "useSignalCapture",
   functionPath: NodePath<t.Function>,
 ): RuntimeImport {
   const local = functionPath.scope.generateUidIdentifier(importedName);
@@ -2197,7 +2294,7 @@ function isUnverifiableBarrelSignalTracking(
 function reportWarning(
   options: InternalTransformOptions,
   warning: Error,
-  path: NodePath<t.Function>,
+  path: NodePath,
 ): void {
   const start = path.node.loc?.start;
   if (start !== undefined) {
@@ -2211,6 +2308,77 @@ function reportWarning(
   } else {
     console.warn(warning.message);
   }
+}
+
+function warnUntrackedRenderPropRead(
+  attribute: NodePath<t.JSXAttribute>,
+  options: InternalTransformOptions,
+): void {
+  const warning = attribute.buildCodeFrameError(
+    "This JSX callback prop reads a signal but its execution owner cannot be proven by a single-file transform. " +
+      "The callback may run outside the current component's render tracking boundary. Move the read into a " +
+      "tracked component or use an explicit signal-value hook in the component that renders the result.",
+  );
+  reportWarning(options, warning, attribute);
+}
+
+function inspectKnownRenderPropReads(
+  functionPath: NodePath<t.Function>,
+  options: InternalTransformOptions,
+  reactImportSource: string,
+): void {
+  if (options.mode === "manual" && !hasOwnedLeadingComment(functionPath, useSignalTrackingComment)) return;
+  functionPath.traverse({
+    JSXAttribute(attribute) {
+      const name = attribute.get("name");
+      if (!name.isJSXIdentifier() || /^on[A-Z]/.test(name.node.name)) return;
+      const value = attribute.get("value");
+      if (!value.isJSXExpressionContainer()) return;
+      const expression = value.get("expression");
+      let target: NodePath<t.Function> | undefined;
+      if (expression.isArrowFunctionExpression() || expression.isFunctionExpression()) {
+        target = expression;
+      } else if (expression.isIdentifier()) {
+        target = resolveReferencedFunction(attribute, expression.node.name);
+      }
+      if (target === undefined || target.node.async || target.node.generator) {
+        // Deferred callbacks are outside this transform's proven ownership
+        // model, whether or not their signal reads are syntactically visible.
+        if (target !== undefined) warnUntrackedRenderPropRead(attribute, options);
+        return;
+      }
+      const reads = inspectFunction(
+        target,
+        options.importSource,
+        `${options.importSource}/runtime`,
+        reactImportSource,
+        new Set([functionPath.node]),
+        true,
+      ).readsValue;
+      if (reads) warnUntrackedRenderPropRead(attribute, options);
+    },
+    VariableDeclarator(declarator) {
+      const id = declarator.get("id");
+      if (!id.isObjectPattern() && !id.isArrayPattern()) return;
+      const init = declarator.get("init");
+      if (!init.node) return;
+      let readsValue = false;
+      const inspectRead = (member: NodePath<t.MemberExpression | t.OptionalMemberExpression>) => {
+        if (getReadPropertyName(member.node) === "value") readsValue = true;
+      };
+      if (init.isMemberExpression() || init.isOptionalMemberExpression()) inspectRead(init);
+      init.traverse({
+        MemberExpression: inspectRead,
+        OptionalMemberExpression: inspectRead,
+      });
+      if (!readsValue) return;
+      const warning = declarator.buildCodeFrameError(
+        "Destructuring from a .value expression reads nested properties outside the transform's " +
+          "capture boundary. Read the complete property path in one tracked expression instead.",
+      );
+      reportWarning(options, warning, declarator);
+    },
+  });
 }
 
 function warnUnverifiableBarrelSignalTracking(
@@ -2278,6 +2446,25 @@ function warnPlainCalledComponentAlsoMounted(
       "of its own (its signal reads are tracked by the calling component instead), and the " +
       `<${name} /> instance therefore only updates when its parent re-renders. Use one form ` +
       `consistently -- render it only as <${name} />, or only call it -- to remove the ambiguity.`,
+  );
+  reportWarning(options, warning, path);
+}
+
+function hasModuleLevelUseServer(path: NodePath<t.Function>): boolean {
+  const program = path.findParent((parent) => parent.isProgram());
+  return program?.isProgram() === true && program.node.directives.some(
+    (directive) => directive.value.value === "use server",
+  );
+}
+
+function warnServerDirectiveComponent(
+  path: NodePath<t.Function>,
+  options: InternalTransformOptions,
+): void {
+  const warning = path.buildCodeFrameError(
+    'This component is left untransformed because its module has a top-level "use server" directive. ' +
+      'A server-only module cannot receive the client tracking Hook. Move the component to a ' +
+      '"use client" module if it needs automatic signal tracking.',
   );
   reportWarning(options, warning, path);
 }
@@ -2364,6 +2551,17 @@ function decideTransform(
   options: InternalTransformOptions,
   reactImportSource: string,
 ): TransformDecision {
+  // A module-level server-action directive is positive evidence that its
+  // exports are server-only. Do not infer this from the absence of "use
+  // client": ordinary RSC Server Components and client modules are otherwise
+  // indistinguishable to this single-file transform.
+  if (hasModuleLevelUseServer(path)) {
+    if (rendersJsx(path) && (options.mode !== "manual" || hasOwnedLeadingComment(path, useSignalTrackingComment))) {
+      warnServerDirectiveComponent(path, options);
+    }
+    return { kind: "skip" };
+  }
+
   // Computed once and given to every check below that would otherwise climb
   // through this same function's memo()/forwardRef() wrappers on its own --
   // see `getBindingIdentityName`'s matching parameter.
@@ -2398,7 +2596,10 @@ function decideTransform(
     options.importSource,
     managedRuntimeSource,
     reactImportSource,
+    undefined,
+    options.experimentalCapture === true,
   );
+  inspectKnownRenderPropReads(path, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
   // attach a boundary to it -- the component it returns carries one instead
@@ -2511,7 +2712,7 @@ function decideTransform(
     runtimeImport = addRuntimeImport(
       state.programPath,
       importSource,
-      options.transform === "managed" ? "useManagedSignals" : "useSignalTracking",
+      options.transform === "managed" ? "useSignalCapture" : "useSignalTracking",
       path,
     );
     imports.push(runtimeImport);
@@ -2607,23 +2808,19 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
 }
 
 /**
- * Moves the parameters whose defaults read a signal behind the boundary,
- * returning the statements that bind them again, for the caller to place as
- * the first statements *after* the hook call.
+ * Moves parameters with signal-reading defaults into the function body, after
+ * the top-level capture Hook has opened the render-attempt capture.
  *
  * Parameter defaults are evaluated before the first statement of the body runs,
  * so in `function C({ v = count.value })` the read happens before the injected
- * `useManagedSignals()` / `useSignalTracking()` call has opened the render
- * collection -- the read is real, `inspectFunction` rightly counts it and
- * transforms the component, and yet the boundary never sees it, so the
- * component does not re-render when `count` changes. Moving the pattern into
- * the body is the only placement that runs it after the hook:
+ * `useSignalCapture()` call has run -- the read is real, `inspectFunction`
+ * counts it, and the component should subscribe to it. Moving the pattern
+ * into the body makes it run after the Hook:
  *
  * ```js
  * function C(_param) {
- *   const _signals = _useManagedSignals();
- *   try {
- *     let { v = count.value } = _param;
+ *   const _signals = _useSignalCapture();
+ *   let { v = _signals.capture(() => count.value) } = _param;
  *     ...
  * ```
  *
@@ -2757,7 +2954,372 @@ function applyInject(
   markTransformed(state);
 }
 
-/** Codegen: wrap the function body in the managed try/finally render-tracking scope. */
+function hasTrackedReadInMemberChain(
+  path: NodePath,
+  functionPath: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+): boolean {
+  let current: NodePath = path;
+  while (current.isMemberExpression() || current.isOptionalMemberExpression()) {
+    if (isTrackedValueRead(current.node, current, functionPath)) return true;
+    const object = current.get("object") as NodePath;
+    if (object.isCallExpression() || object.isOptionalCallExpression()) {
+      return hasTrackedReadInExpression(object, functionPath, trackedAliases);
+    }
+    current = object;
+  }
+  return current.isIdentifier() && trackedAliases.has(current.scope.getBinding(current.node.name) as object);
+}
+
+function hasTrackedReadInExpression(
+  path: NodePath,
+  functionPath: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+): boolean {
+  const isTracked = (candidate: NodePath): boolean =>
+    (candidate.isMemberExpression() || candidate.isOptionalMemberExpression()) &&
+    (isTrackedValueRead(candidate.node, candidate, functionPath) ||
+      hasTrackedReadInMemberChain(candidate, functionPath, trackedAliases));
+  if (isTracked(path)) return true;
+  let found = false;
+  path.traverse({
+    Function(nested) { nested.skip(); },
+    MemberExpression(candidate) {
+      if (isTracked(candidate)) {
+        found = true;
+        candidate.stop();
+      }
+    },
+    OptionalMemberExpression(candidate) {
+      if (isTracked(candidate)) {
+        found = true;
+        candidate.stop();
+      }
+    },
+  });
+  return found;
+}
+
+function functionCallsHook(functionPath: NodePath<t.Function>): boolean {
+  let found = false;
+  const inspectCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
+    const callee = unwrapTransparent(path.node.callee);
+    const name = t.isIdentifier(callee)
+      ? callee.name
+      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+        ? getStaticMemberChain(callee)?.keys.at(-1)
+        : undefined;
+    if (name !== undefined && isHookName(name)) {
+      found = true;
+      path.stop();
+    }
+  };
+  functionPath.get("body").traverse({
+    Function(nested) { nested.skip(); },
+    CallExpression: inspectCall,
+    OptionalCallExpression: inspectCall,
+  });
+  return found;
+}
+
+function externalCallReadsTrackedValue(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  functionPath: NodePath<t.Function>,
+  importSource: string,
+  managedRuntimeSource: string,
+  reactImportSource: string,
+): boolean {
+  const argument = getRenderCallbackArgument(call.node);
+  let target: NodePath<t.Function> | undefined;
+  if (argument !== undefined && isRenderCallbackInvocation(call.node, argument)) {
+    const reference = unwrapTransparent(argument);
+    if (t.isIdentifier(reference)) {
+      target = resolveReferencedFunction(call, reference.name);
+    } else {
+      const argumentPath = call.get("arguments").find((candidate) => candidate.node === argument);
+      if (argumentPath?.isArrowFunctionExpression() || argumentPath?.isFunctionExpression()) {
+        target = argumentPath;
+      }
+    }
+  }
+  if (target === undefined) {
+    const callee = unwrapTransparent(call.node.callee);
+    if (t.isIdentifier(callee)) {
+      if (isHookName(callee.name)) return false;
+      target = resolveReferencedFunction(call, callee.name);
+    } else if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
+      const chain = getStaticMemberChain(callee);
+      const name = chain?.keys.at(-1);
+      if (name === undefined || isHookName(name)) return false;
+      target = resolveKeyedFunction(call, callee);
+    }
+  }
+  if (target === undefined) {
+    const callee = unwrapTransparent(call.node.callee);
+    if (!t.isIdentifier(callee)) return false;
+    const binding = call.scope.getBinding(callee.name);
+    const declarator = binding?.path.isVariableDeclarator() ? binding.path : undefined;
+    const init = declarator?.get("init");
+    // A locally assigned computed member can be a render callback alias even
+    // when its concrete target depends on a runtime key. Capturing its direct
+    // synchronous invocation preserves the owner without inserting a Hook in
+    // the aliased function.
+    return init?.isMemberExpression() === true && init.node.computed &&
+      getReadPropertyName(init.node) === undefined;
+  }
+  const identity = resolveComponentIdentity(target, reactImportSource);
+  if (
+    (isComponentIdentity(identity) || isHookIdentity(identity)) &&
+    !isPlainCalledComponent(target) &&
+    !isRenderCallback(target)
+  ) {
+    return false;
+  }
+  if (functionCallsHook(target)) return false;
+  const inspection = inspectFunction(
+    target,
+    importSource,
+    managedRuntimeSource,
+    reactImportSource,
+    undefined,
+    true,
+  );
+  return inspection.readsValue || hasDynamicCallTarget(target);
+}
+
+/** Does a synchronous helper invoke a function selected through a dynamic key? */
+function hasDynamicCallTarget(functionPath: NodePath<t.Function>): boolean {
+  let found = false;
+  functionPath.traverse({
+    Function(nested) { nested.skip(); },
+    CallExpression(path) {
+      const callee = unwrapTransparent(path.node.callee);
+      if (
+        (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
+        callee.computed && getReadPropertyName(callee) === undefined
+      ) {
+        found = true;
+        path.stop();
+      }
+    },
+    OptionalCallExpression(path) {
+      const callee = unwrapTransparent(path.node.callee);
+      if (
+        (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
+        callee.computed && getReadPropertyName(callee) === undefined
+      ) {
+        found = true;
+        path.stop();
+      }
+    },
+  });
+  return found;
+}
+
+function collectTrackedReadAliases(
+  functionPath: NodePath<t.Function>,
+): Set<object> {
+  const trackedAliases = new Set<object>();
+  let changed = true;
+  while (changed) {
+    changed = false;
+    functionPath.traverse({
+      Function(nested) {
+        nested.skip();
+      },
+      VariableDeclarator(path) {
+        const id = path.get("id");
+        const init = path.get("init");
+        if (!id.isIdentifier() || !init.node) return;
+        if (!hasTrackedReadInExpression(init, functionPath, trackedAliases)) return;
+        const binding = path.scope.getBinding(id.node.name);
+        if (binding !== undefined && !trackedAliases.has(binding)) {
+          trackedAliases.add(binding);
+          changed = true;
+        }
+      },
+    });
+  }
+  return trackedAliases;
+}
+
+function isWriteTarget(path: NodePath): boolean {
+  let target = path;
+  while (target.parentPath !== null) {
+    const parent = target.parentPath;
+    if (
+      (parent.isMemberExpression() || parent.isOptionalMemberExpression()) &&
+      parent.get("object").node === target.node
+    ) {
+      target = parent;
+      continue;
+    }
+    if (
+      (parent.isTSAsExpression() || parent.isTSTypeAssertion() || parent.isTSNonNullExpression()) &&
+      parent.get("expression").node === target.node
+    ) {
+      target = parent;
+      continue;
+    }
+    if (parent.isObjectProperty() && parent.get("value").node === target.node) {
+      target = parent;
+      continue;
+    }
+    if (parent.isRestElement() && parent.get("argument").node === target.node) {
+      target = parent;
+      continue;
+    }
+    if (parent.isAssignmentPattern() && parent.get("left").node === target.node) {
+      target = parent;
+      continue;
+    }
+    if (parent.isObjectPattern() && parent.node.properties.some((property) => property === target.node)) {
+      target = parent;
+      continue;
+    }
+    if (parent.isArrayPattern() && parent.node.elements.some((element) => element === target.node)) {
+      target = parent;
+      continue;
+    }
+    break;
+  }
+  const parent = target.parentPath;
+  if (parent === null) return false;
+  if (parent.isAssignmentExpression()) return parent.get("left") === target;
+  if (parent.isUpdateExpression()) return parent.get("argument") === target;
+  if (parent.isForInStatement() || parent.isForOfStatement()) {
+    return parent.get("left").node === target.node;
+  }
+  return parent.isUnaryExpression({ operator: "delete" }) && parent.get("argument") === target;
+}
+
+/**
+ * Managed codegen: capture each statically proven synchronous `.value` read
+ * in a short-lived scope. Alias data-flow is handled by the tracked-alias set;
+ * unknown callback execution remains outside the proof boundary.
+ */
+function captureTrackedReadExpressions(
+  functionPath: NodePath<t.Function>,
+  store: t.Identifier,
+  importSource: string,
+  managedRuntimeSource: string,
+  reactImportSource: string,
+  trackedAliases: Set<object>,
+): void {
+  const wrap = (path: NodePath<t.Expression>): void => {
+    path.replaceWith(
+      t.callExpression(
+        t.memberExpression(t.cloneNode(store), t.identifier("capture")),
+        [t.arrowFunctionExpression([], t.cloneNode(path.node, true))],
+      ),
+    );
+    path.skip();
+  };
+  functionPath.get("body").traverse({
+    Function(path) {
+      // Reads inside another function need a call-site boundary. Capturing the
+      // body itself would leave a stale handle in callbacks that escape render;
+      // known synchronous helper/render-callback calls are wrapped as a whole
+      // by the CallExpression visitor below.
+      path.skip();
+    },
+    CallExpression: {
+      enter(path) {
+        const callee = path.get("callee");
+        if (
+          ((callee.isMemberExpression() || callee.isOptionalMemberExpression()) &&
+            hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
+            (callee.isIdentifier() &&
+              path.scope.getBinding(callee.node.name)?.kind === "param") ||
+            externalCallReadsTrackedValue(
+              path,
+              functionPath,
+              importSource,
+              managedRuntimeSource,
+              reactImportSource,
+            )) &&
+          !isDeferredReadContext(path, functionPath)
+        ) {
+          wrap(path as NodePath<t.Expression>);
+          return;
+        }
+      },
+    },
+    OptionalCallExpression: {
+      enter(path) {
+        const callee = path.get("callee");
+        if (
+          ((callee.isMemberExpression() || callee.isOptionalMemberExpression()) &&
+            hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
+              (callee.isIdentifier() &&
+                path.scope.getBinding(callee.node.name)?.kind === "param") ||
+            externalCallReadsTrackedValue(
+              path,
+              functionPath,
+              importSource,
+              managedRuntimeSource,
+              reactImportSource,
+            )) &&
+          !isDeferredReadContext(path, functionPath)
+        ) {
+          wrap(path as NodePath<t.Expression>);
+        }
+      },
+    },
+    NewExpression: {
+      enter(path) {
+        const callee = path.get("callee");
+        if (
+          hasTrackedReadInExpression(callee, functionPath, trackedAliases) &&
+          !isDeferredReadContext(path, functionPath)
+        ) {
+          wrap(path as NodePath<t.Expression>);
+        }
+      },
+    },
+    TaggedTemplateExpression: {
+      enter(path) {
+        const tag = path.get("tag");
+        if (
+          hasTrackedReadInExpression(tag, functionPath, trackedAliases) &&
+          !isDeferredReadContext(path, functionPath)
+        ) {
+          wrap(path as NodePath<t.Expression>);
+        }
+      },
+    },
+    MemberExpression: {
+      enter(path) {
+        const parent = path.parentPath;
+        if (
+          ((parent?.isMemberExpression() || parent?.isOptionalMemberExpression()) &&
+            parent.get("object") === path) ||
+          ((parent?.isCallExpression() || parent?.isOptionalCallExpression()) &&
+            parent.get("callee") === path) ||
+          isWriteTarget(path) ||
+          !hasTrackedReadInMemberChain(path, functionPath, trackedAliases)
+        ) return;
+        wrap(path as NodePath<t.Expression>);
+      },
+    },
+    OptionalMemberExpression: {
+      enter(path) {
+        const parent = path.parentPath;
+        if (
+          ((parent?.isMemberExpression() || parent?.isOptionalMemberExpression()) &&
+            parent.get("object") === path) ||
+          ((parent?.isCallExpression() || parent?.isOptionalCallExpression()) &&
+            parent.get("callee") === path) ||
+          isWriteTarget(path) ||
+          !hasTrackedReadInMemberChain(path, functionPath, trackedAliases)
+        ) return;
+        wrap(path as NodePath<t.Expression>);
+      },
+    },
+  });
+}
+
+/** Codegen: add a top-level capture hook and wrap proven synchronous reads. */
 function applyManaged(
   path: NodePath<t.Function>,
   { body, statements, explicit, runtimeImport, absorbedImport }: TransformCodegenInput,
@@ -2773,28 +3335,26 @@ function applyManaged(
   ]);
   const first = statements[0];
   if (explicit && first !== undefined) t.inheritsComments(declaration, first.node);
+  const relocated = relocateTrackedParameters(path, state.typeScript);
+  if (path.get("params").some(containsSyntacticValueRead)) {
+    warnUncapturedParameterRead(path, options);
+  }
   const originalStatements = body.isBlockStatement()
     ? statements.slice(explicit ? 1 : 0).map((statement) => statement.node)
     : [t.returnStatement(body.node as t.Expression)];
-  // Inside the `try`, not between the hook and it: a default that throws must
-  // still reach `finish()`, exactly as a throw from the original body does.
-  const relocated = relocateTrackedParameters(path, state.typeScript);
-  const transformedBody = t.blockStatement([
-    declaration,
-    t.tryStatement(
-      t.blockStatement([...relocated, ...originalStatements]),
-      null,
-      t.blockStatement([
-        t.expressionStatement(
-          t.callExpression(
-            t.memberExpression(t.cloneNode(store), t.identifier("finish")),
-            [],
-          ),
-        ),
-      ]),
-    ),
-  ]);
-  if (body.isBlockStatement()) transformedBody.directives = body.node.directives;
+  const directives = body.isBlockStatement() ? body.node.directives : [];
+  body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
+  const trackedAliases = collectTrackedReadAliases(path);
+  captureTrackedReadExpressions(
+    path,
+    store,
+    options.importSource,
+    `${options.importSource}/runtime`,
+    options.reactImportSource,
+    trackedAliases,
+  );
+  const transformedBody = t.blockStatement([declaration, ...(body.node as t.BlockStatement).body]);
+  transformedBody.directives = directives;
   if (options.reactCompiler === "auto") addNoMemoDirective(transformedBody);
   body.replaceWith(transformedBody);
   path.scope.crawl();
@@ -2896,7 +3456,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
           state.managedRuntimeImports = findRuntimeImports(
             path,
             managedRuntimeSource,
-            "useManagedSignals",
+            "useSignalCapture",
           );
           state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
           state.absorbedImports = [];

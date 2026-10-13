@@ -333,7 +333,7 @@ describe("React Compiler compiled output", () => {
     expect(events.map((event) => event.kind)).toEqual(["CompileSkip"]);
   });
 
-  it("leaves a managed-transformed component uncompiled either way", () => {
+  it("skips managed output by default and compiles it only when integration is disabled", () => {
     const guarded = compilePipeline(moduleScopeCounter, { transform: "managed" });
     const unguarded = compilePipeline(moduleScopeCounter, {
       transform: "managed",
@@ -341,27 +341,24 @@ describe("React Compiler compiled output", () => {
     });
 
     expect(guarded.code).not.toContain("react/compiler-runtime");
-    expect(unguarded.code).not.toContain("react/compiler-runtime");
-    // The try/finally scope cannot be lowered to the compiler's IR, so managed
-    // output is skipped even without the directive -- but only as a logged
-    // compile error, which a `panicThreshold: "all_errors"` build turns fatal.
-    expect(unguarded.events.map((event) => event.kind)).toEqual(["CompileError"]);
+    expect(guarded.events.map((event) => event.kind)).toEqual(["CompileSkip"]);
+    expect(unguarded.code).toContain("react/compiler-runtime");
+    expect(unguarded.events.map((event) => event.kind)).toEqual(["CompileSuccess"]);
   });
 
-  it("panics on managed output under panicThreshold only without the directive", () => {
-    // The directive leaves the error event logged, so it does not look like it
-    // should help -- but measured, it is what keeps the panic from firing.
+  it("honors panicThreshold for managed output when integration is disabled", () => {
     const guarded = applySignalsTransform(moduleScopeCounter, { transform: "managed" });
     const unguarded = applySignalsTransform(moduleScopeCounter, {
       transform: "managed",
       reactCompiler: "off",
     });
 
-    expect(() => applyReactCompiler(unguarded, { panicThreshold: "all_errors" })).toThrow(
-      TRY_WITHOUT_CATCH,
-    );
-    const compiled = applyReactCompiler(guarded, { panicThreshold: "all_errors" });
-    expect(compiled.events.map((event) => event.kind)).toEqual(["CompileError"]);
+    const compiled = applyReactCompiler(unguarded, { panicThreshold: "all_errors" });
+    expect(compiled.code).toContain("react/compiler-runtime");
+    expect(compiled.events.map((event) => event.kind)).toEqual(["CompileSuccess"]);
+    const guardedCompiled = applyReactCompiler(guarded, { panicThreshold: "all_errors" });
+    expect(guardedCompiled.code).not.toContain("react/compiler-runtime");
+    expect(guardedCompiled.events.map((event) => event.kind)).toEqual(["CompileSkip"]);
   });
 
   it("leaves a hand-written runtime-import component uncompiled, directive or not", () => {

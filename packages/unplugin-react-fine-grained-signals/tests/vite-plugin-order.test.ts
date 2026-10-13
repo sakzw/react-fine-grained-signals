@@ -223,7 +223,7 @@ describe("Vite plugin order against a pre-enforced React Compiler step", () => {
     expect(code).toContain("react/compiler-runtime");
     expect(code).toContain("react.memo_cache_sentinel");
     expect(code).not.toContain("use no memo");
-    expect(code).not.toContain("useManagedSignals");
+    expect(code).not.toContain("useSignalCapture");
     expect(drive(linkModule(code))).toEqual(["0", "0", "0"]);
   }, BUILD_TIMEOUT);
 
@@ -234,7 +234,7 @@ describe("Vite plugin order against a pre-enforced React Compiler step", () => {
     const code = await buildApp(order(viteAdapter({ mode: "auto" }) as Plugin));
 
     expect(code).toContain('"use no memo"');
-    expect(code).toContain("useManagedSignals");
+    expect(code).toContain("useSignalCapture");
     expect(code).not.toContain("react/compiler-runtime");
     expect(drive(linkModule(code))).toEqual(["0", "1", "2"]);
   }, BUILD_TIMEOUT);

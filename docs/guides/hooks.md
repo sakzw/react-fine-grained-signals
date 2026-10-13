@@ -85,11 +85,11 @@ The collection window closes at the next `useSignalTracking()` call, when React 
 
 That is why every reading component needs its own call: a read from a sibling or descendant that does not call `useSignalTracking()` can be attributed to another component's still-open window, and that signal then silently stops updating the component that actually read it.
 
-Use the build plugin's `transform: "managed"` (its default) when an exact boundary is required. It needs no hand-written `try` / `finally`, so it is the least error-prone option when available.
+Use the build plugin's `transform: "managed"` (its default) for statically proven synchronous reads. It installs a top-level capture Hook and wraps individual reads, so authored Hooks remain at their normal top level. The supported patterns and diagnostics are listed in the [plugin guide](../../packages/unplugin-react-fine-grained-signals/README.md#fast-refresh).
 
 ### Exact boundary without the plugin
 
-`react-fine-grained-signals/runtime` exports `useManagedSignals`, which returns a scope handle that you close yourself, giving the identical exact boundary with no build-time transform.
+`react-fine-grained-signals/runtime` exports `useManagedSignals`, which returns a scope handle that you close yourself with a `try` / `finally`. This manual form provides a lexical boundary without a build transform.
 
 ```tsx
 import { useManagedSignals } from "react-fine-grained-signals/runtime";

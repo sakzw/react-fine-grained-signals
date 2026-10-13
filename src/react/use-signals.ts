@@ -8,6 +8,11 @@ export interface ManagedSignalsStore {
   finish(): void;
 }
 
+/** Per-read render-attempt capture handle used by the experimental transform prototype. */
+export interface SignalCaptureStore extends ManagedSignalsStore {
+  capture<T>(callback: () => T): T;
+}
+
 /** Best-effort render tracking for untransformed components. */
 export function useSignalTracking(): void {
   reactAdapter.useSignalTracking();
@@ -16,4 +21,9 @@ export function useSignalTracking(): void {
 /** Exact render scope used by the transform-managed boundary. */
 export function useManagedSignals(): ManagedSignalsStore {
   return reactAdapter.useManagedSignals();
+}
+
+/** Capture synchronous signal reads without keeping an ambient render scope open. */
+export function useSignalCapture(): SignalCaptureStore {
+  return reactAdapter.useSignalCapture();
 }

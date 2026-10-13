@@ -99,7 +99,7 @@ describe("unplugin-react-fine-grained-signals", () => {
       "/project/src/App.TSX",
       internalOptions,
     )?.code;
-    expect(output).toContain("_useManagedSignals()");
+    expect(output).toContain("_useSignalCapture()");
     expect(resolveEsbuildLoader("/project/src/App.TSX")).toBe("tsx");
   });
 
@@ -138,7 +138,7 @@ describe("unplugin-react-fine-grained-signals", () => {
 
     expect(canTransform(fragmentId, {})).toBe(true);
     const result = transformReactFineGrainedSignals(counterSource, fragmentId, internalOptions);
-    expect(result?.code).toContain("_useManagedSignals()");
+    expect(result?.code).toContain("_useSignalCapture()");
     expect((result?.map as { sources: string[] } | undefined)?.sources)
       .toEqual(["/project/src/App.tsx"]);
   });
@@ -180,7 +180,7 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(plugin.transform.handler(counterSource, "/project/node_modules/pkg/App.tsx")).toBeNull();
     expect(plugin.transform.handler(counterSource, "/project/excluded/App.tsx")).toBeNull();
     expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain(
-      "_useManagedSignals()",
+      "_useSignalCapture()",
     );
   });
 
@@ -188,14 +188,14 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(reactFineGrainedSignals).toBeDefined();
   });
 
-  it("uses the managed try/finally transform by default", () => {
+  it("uses top-level per-read capture in managed mode by default", () => {
     const output = transformCounter({ mode: "auto" });
 
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain('import { useManagedSignals as _useManagedSignals } from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("const _signals = _useManagedSignals();");
-    expect(output).toContain("try {");
-    expect(output).toContain("_signals.finish();");
+    expect(output).toContain('import { useSignalCapture as _useSignalCapture } from "react-fine-grained-signals/runtime"');
+    expect(output).toContain("const _signals = _useSignalCapture();");
+    expect(output).not.toContain("try {");
+    expect(output).toContain("_signals.capture(() => count.value)");
   });
 
   it("uses the lightweight injection transform when it is opted into", () => {
@@ -214,9 +214,9 @@ describe("unplugin-react-fine-grained-signals", () => {
     // the body is rewritten rather than left untouched — but no second
     // `useSignalTracking()` call is ever added.
     expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain("const _signals = _useManagedSignals();");
-    expect(output).toContain("try {");
-    expect(output).toContain("_signals.finish();");
+    expect(output).toContain("const _signals = _useSignalCapture();");
+    expect(output).not.toContain("try {");
+    expect(output).toContain("_signals.capture(() => count.value)");
     expect(output).not.toMatch(/^\s*useSignalTracking\(\);$/m);
   });
 
@@ -557,7 +557,7 @@ describe("bundler adapters", () => {
     const run = await runTransformLoader(entry!, resource, componentSource, incomingMap);
 
     expect(run.error).toBeNull();
-    expect(run.content).toContain("_useManagedSignals()");
+    expect(run.content).toContain("_useSignalCapture()");
     expect((run.map as { sources: string[] }).sources).toEqual([resource]);
   });
 
@@ -574,7 +574,7 @@ describe("bundler adapters", () => {
     const run = await runTransformLoader(entry!, resource, source, upstreamMap());
 
     expect(run.error).toBeNull();
-    expect(run.content).toContain("_useManagedSignals()");
+    expect(run.content).toContain("_useSignalCapture()");
     expect(run.content).not.toContain("sourceMappingURL");
     expect((run.map as { sources: string[] }).sources).toEqual([resource]);
   });

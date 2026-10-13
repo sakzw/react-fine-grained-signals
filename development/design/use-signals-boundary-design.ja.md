@@ -2,7 +2,7 @@
 
 [English](./use-signals-boundary-design.md) | [日本語](./use-signals-boundary-design.ja.md)
 
-状態: Phase 8 は完了し、freeze済みです（M0〜M3）。bare `useSignalTracking()` はbest-effort、`transform: "managed"` は推奨かつdefaultの厳密な経路、`useManagedSignals()` と `try` / `finally` はplugin不要の厳密な経路です。`transform: "inject"` はサポートされた高度・互換性向けのbest-effort modeです。`useSignalValue()` とJSX direct bindingは対象を絞った厳密な購読です。scope policyの分離を採用し、`SharedInteropContextV1.renderScope` を唯一のactive scope調停stackとし、`activeRenderCollector` は同一コピー内の直接collector経路として維持しています。重複package間のread依存は字句的に最上位のrender scopeが所有します。各milestoneの記録は[phase8.md](../phases/phase8.md)を参照してください。
+状態（2026-10-13）: この文書はv0.2.1時点の境界判断とPhase 8記録であり、v0.3.0のmanaged transform契約ではありません。v0.3.0のbare `useSignalTracking()` は引き続きbest-effortです。`transform: "managed"` はtop-levelの `useSignalCapture()` と静的に証明できる同期read単位のcaptureを使い、exactness qualificationを継続中です。`useManagedSignals()` と `try` / `finally` はlexical runtime boundaryとして引き続き利用でき、`useSignalValue()` とJSX direct bindingは対象を絞ったsubscriptionです。現行transformは[M3 audit](../v0.3.0/m3-react-tracking-audit.ja.md)と[plugin guide](../../packages/unplugin-react-fine-grained-signals/README.ja.md#fast-refresh)を参照してください。Phase 8記録は[phase8.md](../phases/phase8.md)に残しています。
 
 ## 背景
 

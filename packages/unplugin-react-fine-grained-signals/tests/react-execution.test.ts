@@ -13,7 +13,7 @@
 
 import { transformSync, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
-import { act, createElement, type FunctionComponent } from "react";
+import { act, createElement, Suspense, useState, type FunctionComponent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import * as reactJsxRuntime from "react/jsx-runtime";
 import { transformWithOxc } from "vite";
@@ -35,6 +35,7 @@ const MODULES = "__modules";
 const EXPORTS = "__exports";
 
 const moduleRegistry: Record<string, unknown> = {
+  react: { Suspense, useState },
   "react/jsx-runtime": reactJsxRuntime,
   "react-fine-grained-signals": library,
   "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
@@ -104,10 +105,12 @@ async function loadModule(
     transform = true,
     mode = "auto",
     codegen = "managed",
+    experimentalCapture = false,
   }: {
     transform?: boolean;
     mode?: ReactFineGrainedSignalsMode;
     codegen?: ReactFineGrainedSignalsTransform;
+    experimentalCapture?: boolean;
   } = {},
 ): Promise<Record<string, unknown>> {
   const transformed = transform
@@ -117,6 +120,7 @@ async function loadModule(
       transform: codegen,
       reactCompiler: "auto",
       reactImportSource: "react",
+      experimentalCapture,
     })?.code ?? source
     : source;
   // `importSource: "react"` is the project-wide default a per-file
@@ -136,6 +140,252 @@ async function loadModule(
   new Function(MODULES, EXPORTS, linked.code)(moduleRegistry, moduleExports);
   return moduleExports;
 }
+
+describe("experimental per-read capture codegen", () => {
+  it("keeps Hooks at function top level and subscribes shallow and deep read chains", async () => {
+    const source = `
+import { deepSignal, signal } from "react-fine-grained-signals";
+import { useState } from "react";
+
+export const shallow = signal("before");
+export const deep = deepSignal({ profile: { name: "Ada" } });
+
+export function App() {
+  const [count, setCount] = useState(0);
+  const label = shallow.value;
+  const profile = deep.value.profile;
+  const alias = profile.name;
+  const name = [0].map(() => deep.value.profile.name)[0];
+  return <button onClick={() => setCount(count + 1)}>{label + "/" + alias + "/" + name + "/" + count}</button>;
+}
+`;
+    const transformed = transformReactFineGrainedSignals(source, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "all",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      experimentalCapture: true,
+    })?.code;
+    expect(transformed).toContain("useSignalCapture");
+    expect(transformed).toMatch(/useSignalCapture\(\);[\s\S]*useState\(0\)/);
+    expect(transformed).toContain(".capture(() => shallow.value)");
+    expect(transformed).toContain(".capture(() => deep.value.profile)");
+    expect(transformed).toContain(".capture(() => profile.name)");
+    expect(transformed).not.toMatch(/\btry\s*\{/);
+
+    const module = await loadModule(source, { experimentalCapture: true });
+    const container = mount(module.App);
+    expect(container.textContent).toBe("before/Ada/Ada/0");
+    write(module, "shallow", "after");
+    expect(container.textContent).toBe("after/Ada/Ada/0");
+    act(() => { (module.deep as { value: { profile: { name: string } } }).value.profile.name = "Grace"; });
+    expect(container.textContent).toBe("after/Grace/Grace/0");
+  });
+
+  it("captures known module-scope helper and render-callback reads at their synchronous call", async () => {
+    const module = await loadModule(`
+import { deepSignal } from "react-fine-grained-signals";
+export const state = deepSignal({ profile: { name: "Ada" } });
+function readName() { return state.value.profile.name; }
+export function App() {
+  const direct = readName();
+  const mapped = [0].map(readName)[0];
+  return <output>{direct + "/" + mapped}</output>;
+}
+`, { mode: "all", experimentalCapture: true });
+    const container = mount(module.App);
+    expect(container.textContent).toBe("Ada/Ada");
+    act(() => {
+      (module.state as { value: { profile: { name: string } } }).value.profile.name = "Grace";
+    });
+    expect(container.textContent).toBe("Grace/Grace");
+  });
+
+  it("auto-detects reads in a statically resolved synchronous module helper", async () => {
+    const module = await loadModule(`
+import { deepSignal } from "react-fine-grained-signals";
+export const state = deepSignal({ profile: { name: "Ada" } });
+function readName() { return state.value.profile.name; }
+export function App() {
+  const name = readName();
+  return <output>{name}</output>;
+}
+`, { mode: "auto", experimentalCapture: true });
+    const container = mount(module.App);
+    expect(container.textContent).toBe("Ada");
+    act(() => {
+      (module.state as { value: { profile: { name: string } } }).value.profile.name = "Grace";
+    });
+    expect(container.textContent).toBe("Grace");
+  });
+
+  it("does not fold async or generator callbacks into a synchronous render capture", () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+const state = signal("value");
+export function App() {
+  const pending = [0].map(async () => { await Promise.resolve(); return state.value; });
+  const deferred = [0].map(function* () { yield state.value; });
+  return <output>{String(pending.length + deferred.length)}</output>;
+}
+`;
+    const transformed = transformReactFineGrainedSignals(source, "DeferredCallbacks.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "all",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      experimentalCapture: true,
+    })?.code;
+    expect(transformed).not.toContain(".capture(() => state.value)");
+    expect(transformed).toContain("map(async () => {");
+    expect(transformed).toContain("map(function* ()");
+  });
+
+  it("captures a nested synchronous helper at its callsite instead of retaining a render handle", async () => {
+    const module = await loadModule(`
+import { deepSignal } from "react-fine-grained-signals";
+export const state = deepSignal({ profile: { name: "Ada" } });
+export function App() {
+  function readLocal() { return state.value.profile.name; }
+  return <output>{readLocal()}</output>;
+}
+`, { mode: "auto", experimentalCapture: true });
+    const container = mount(module.App);
+    expect(container.textContent).toBe("Ada");
+    act(() => {
+      (module.state as { value: { profile: { name: string } } }).value.profile.name = "Grace";
+    });
+    expect(container.textContent).toBe("Grace");
+  });
+
+  it("keeps a suspended attempt separate from the fallback and its later retry", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+
+export const source = signal("before");
+export const fallbackSource = signal("loading");
+export const renderCounts = { reader: 0 };
+let ready = false;
+let release;
+const gate = new Promise((resolve) => { release = resolve; });
+export const retry = () => { ready = true; release(); };
+
+export function Reader() {
+  renderCounts.reader += 1;
+  const value = source.value;
+  if (!ready) throw gate;
+  return <output>{value}</output>;
+}
+
+export function Fallback() {
+  return <output>{fallbackSource.value}</output>;
+}
+`, { experimentalCapture: true });
+    const Reader = module.Reader as FunctionComponent;
+    const Fallback = module.Fallback as FunctionComponent;
+    const container = mount(() => createElement(
+      Suspense,
+      { fallback: createElement(Fallback) },
+      createElement(Reader),
+    ));
+    expect(container.textContent).toBe("loading");
+    const counts = module.renderCounts as { reader: number };
+    expect(counts.reader).toBeGreaterThan(0);
+    const abandonedRenderCount = counts.reader;
+
+    write(module, "fallbackSource", "still waiting");
+    expect(container.textContent).toBe("still waiting");
+    expect(counts.reader).toBe(abandonedRenderCount);
+    write(module, "source", "while suspended");
+    expect(container.textContent).toBe("still waiting");
+    expect(counts.reader).toBe(abandonedRenderCount);
+
+    await act(async () => {
+      (module.retry as () => void)();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toBe("while suspended");
+    write(module, "source", "committed update");
+    expect(container.textContent).toBe("committed update");
+  });
+
+  it("preserves assignment targets, optional reads, constructor calls, and tagged receivers", () => {
+    const transformed = transformReactFineGrainedSignals(`
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ nested: { value: 1 }, Ctor: class {}, tag() { return this.nested.value; } });
+function View(next) {
+  const read = state.value.nested?.value;
+  state.value.nested.value = next;
+  state.value.nested.value++;
+  delete state.value.nested.value;
+  ({ nested: state.value.nested.value } = next);
+  const instance = new state.value.Ctor();
+  const tagged = state.value.tag\`read\`;
+  return <output>{read + instance + tagged}</output>;
+}
+`, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      experimentalCapture: true,
+    })?.code;
+    expect(transformed).toContain(".capture(() => state.value.nested?.value)");
+    expect(transformed).toContain(".capture(() => new state.value.Ctor())");
+    expect(transformed).toContain(".capture(() => state.value.tag`read`)");
+    expect(transformed).toContain("state.value.nested.value = next");
+    expect(transformed).toContain("state.value.nested.value++");
+    expect(transformed).toContain("delete state.value.nested.value");
+    expect(transformed).toContain("nested: state.value.nested.value");
+  });
+
+  it("captures member reads after calls and preserves nested constructor callee evaluation", () => {
+    const transformed = transformReactFineGrainedSignals(`
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ getChild() { return { name: "Ada" }; }, makeCtor() { return class {} } });
+function View() {
+  const name = state.value.getChild().name;
+  const instance = new (state.value.makeCtor())();
+  return <output>{name + instance}</output>;
+}
+`, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      experimentalCapture: true,
+    })?.code;
+    expect(transformed).toContain(".capture(() => state.value.getChild().name)");
+    expect(transformed).toContain(".capture(() => new (state.value.makeCtor())())");
+  });
+
+  it("does not wrap TypeScript assertions on assignment targets", () => {
+    const transformed = transformReactFineGrainedSignals(`
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ nested: { value: 1 } });
+function View(next: number) {
+  state.value.nested.value! = next;
+  (state.value.nested.value as number) = next;
+  return <output>{state.value.nested.value}</output>;
+}
+`, "Fixture.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      experimentalCapture: true,
+    })?.code;
+    expect(transformed).toContain("state.value.nested.value! = next");
+    expect(transformed).toContain("state.value.nested.value as number");
+    expect(transformed).not.toContain(".capture(() => state.value.nested.value!");
+    expect(transformed).not.toContain(".capture(() => state.value.nested.value as number");
+  });
+});
 
 const mounted: { root: Root; container: HTMLElement }[] = [];
 
@@ -346,7 +596,7 @@ export function Rating() {
       reactCompiler: "auto",
       reactImportSource: "react",
     })?.code ?? source;
-    expect(transformed.match(/useManagedSignals\(\)/g)).toHaveLength(1);
+    expect(transformed.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(transformed).toMatch(/function Star\(\) \{\s+return <span>/);
   });
 
@@ -389,7 +639,7 @@ export function List() {
       reactCompiler: "auto",
       reactImportSource: "react",
     })?.code ?? source;
-    expect(transformed.match(/useManagedSignals\(\)/g)).toHaveLength(1);
+    expect(transformed.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(transformed).toMatch(/Row: \(?item\)? => <li>/);
   });
 
@@ -602,7 +852,7 @@ function memberSource(code: string, object: string, head: string): string {
   return code.slice(start, end === -1 ? undefined : end);
 }
 
-const HOOK = /_useManagedSignals\(\)|_useSignalTracking\(\)/;
+const HOOK = /_useSignalCapture\(\)|_useSignalTracking\(\)/;
 
 const THIS_LISTS = ["L", "O", "D", "Q", "M", "F"];
 const OPTIONAL_ROWS = ["R", "r"];
