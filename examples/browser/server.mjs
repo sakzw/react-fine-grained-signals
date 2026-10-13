@@ -12,16 +12,49 @@ const host = "127.0.0.1";
 const port = 4173;
 
 const source = (path) => resolve(repositoryRoot, path);
+const reactSsrBridgeId = "\0react-ssr-cjs-bridge";
+// Keep React's CommonJS entry in Node's native loader. Vite's SSR runner can
+// otherwise evaluate that file as ESM when optional peer dependencies vary.
+const reactSsrBridge = {
+  name: "react-ssr-cjs-bridge",
+  enforce: "pre",
+  resolveId(id, _importer, options) {
+    return id === "react" && options?.ssr ? reactSsrBridgeId : null;
+  },
+  load(id) {
+    if (id !== reactSsrBridgeId) return null;
+    const exports = [
+      "Activity",
+      "Component",
+      "StrictMode",
+      "Suspense",
+      "memo",
+      "startTransition",
+      "useEffect",
+      "useLayoutEffect",
+      "useRef",
+      "useState",
+    ];
+    return [
+      'import { createRequire } from "node:module";',
+      `const React = createRequire(${JSON.stringify(resolve(browserRoot, "server.mjs"))})("react");`,
+      "export default React;",
+      ...exports.map((name) => `export const ${name} = React.${name};`),
+      "",
+    ].join("\n");
+  },
+};
 const vite = await createViteServer({
   root: repositoryRoot,
   appType: "custom",
-  server: { middlewareMode: true },
+  // Reserve a module-runner channel separate from other Vite apps on this host.
+  server: { middlewareMode: true, hmr: { port: 24679 } },
   oxc: false,
   esbuild: {
     jsx: "automatic",
     jsxImportSource: "react-fine-grained-signals",
   },
-  plugins: [signals({ mode: "auto" })],
+  plugins: [reactSsrBridge, signals({ mode: "auto" })],
   resolve: {
     dedupe: ["react", "react-dom"],
     alias: [

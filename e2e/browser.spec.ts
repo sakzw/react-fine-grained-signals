@@ -7,7 +7,9 @@ async function openHydrated(page: Page) {
   });
   page.on("pageerror", (error) => errors.push(error.message));
 
-  await page.goto("/");
+  // The first Firefox navigation may include Vite's cold dependency optimizer
+  // startup, which has exceeded Playwright's 30s default on fresh workers.
+  await page.goto("/", { timeout: 60_000 });
   await expect(page.locator("html")).toHaveAttribute("data-hydrated", "true");
   expect(errors).toEqual([]);
   return errors;
