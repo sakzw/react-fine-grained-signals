@@ -2,6 +2,8 @@
 
 ## 既存実装と実測済み契約
 
+2026-10-13の追加runtime gate: `reactCompiler: "off"`でも、Compiler自体が後段で有効な構成を模してmanaged captureをcompileし、signalを2回書き換えた後も表示値が更新されることをfocused testで確認した。`react-compiler.test.ts` の対象ケースは1 passed / 19 skipped。これにより専用suiteは従来の71 passed / 3 skippedから、合計72 passed / 3 skipped相当になる。統合全体は次のM8 full runで再確認する。
+
 Compiler対応は未着手ではなく、v0.2.1で設計・実装・専用テストがある。`reactCompiler: "auto"` が変換対象へ `"use no memo"` を加え、作者指定directiveは維持する。`"off"` はdirectiveを省略する。
 
 - `inject` のmodule-scope signal readをCompilerがmemoizeすると、更新後にdependencyが失われてstaleになる回帰を専用テストで固定している。

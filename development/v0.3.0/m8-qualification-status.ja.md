@@ -3,7 +3,7 @@
 ## Qualification that passed
 
 - Runtime: `vitest run --reporter=dot --pool=threads --maxWorkers=1` — 38 files, 555 tests passed. The two concurrent-render audit tests also pass when isolated. A reused-module run produced two order-dependent failures, so the qualification result uses per-file isolation.
-- Transform package: 371 passed, 3 skipped in the full serial suite. Its dedicated React Compiler suite has 71 passed, 3 skipped. `tsc --noEmit` passed for runtime and transform package.
+- Transform package: 371 passed, 3 skipped in the full serial suite before the final M4 regression was added. Its dedicated React Compiler suite previously had 71 passed, 3 skipped; an additional focused runtime test passed for managed capture with `reactCompiler: "off"` (72 passed / 3 skipped cumulatively). `tsc --noEmit` passed for runtime and transform package.
 - Build: runtime `tsdown` succeeded; transform `tsdown` and its `tests/build-smoke.mjs` succeeded. Production Vite browser build succeeded.
 - Lint: root and transform package `oxlint` exited successfully. Root lint emits existing warnings, including `no-shadow` and `consistent-function-scoping` warnings.
 - Package size: all seven gzip app-graph budgets pass with `node scripts/check-size.mjs`.

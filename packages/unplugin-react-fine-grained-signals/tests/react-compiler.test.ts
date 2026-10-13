@@ -497,6 +497,20 @@ describe("React Compiler runtime behavior", () => {
     expect(container.textContent).toBe("1");
   });
 
+  it("keeps managed capture fresh when Compiler integration is disabled", async () => {
+    const module = await loadModule(moduleScopeCounter, {
+      transform: "managed",
+      reactCompiler: "off",
+    });
+    const container = mount(module.Counter);
+
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
+  });
+
   it("updates a hand-written runtime-import component compiled by the compiler", async () => {
     // No directive anywhere: the bail-out on `try` without `catch` is enough on
     // its own to keep every render re-reading the signal.
