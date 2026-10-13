@@ -2,7 +2,7 @@
 
 ## 既存実装と実測済み契約
 
-2026-10-13の追加runtime gate: `reactCompiler: "off"`でも、Compiler自体が後段で有効な構成を模してmanaged captureをcompileし、signalを2回書き換えた後も表示値が更新されることをfocused testで確認した。`react-compiler.test.ts` の対象ケースは1 passed / 19 skipped。これにより専用suiteは従来の71 passed / 3 skippedから、合計72 passed / 3 skipped相当になる。統合全体は次のM8 full runで再確認する。
+2026-10-13の追加qualification: `react-compiler.test.ts` は24 passed。managed compile successを明示確認し、module-scope/props-held signalの複数回更新、条件分岐の切替後に旧dependencyを解除して新dependencyを追う挙動、suspended renderのretry後の追跡、user Hook順をruntimeで確認した。Compiler integrationを無効にする設定でもCompiler plugin自体を後段に実行し、managed codegenがcompileできる状態を直接測定した。これはBabel pipelineのqualificationであり、Vite/Babelのproduction統合全体や他bundlerの認定ではない。
 
 Compiler対応は未着手ではなく、v0.2.1で設計・実装・専用テストがある。`reactCompiler: "auto"` が変換対象へ `"use no memo"` を加え、作者指定directiveは維持する。`"off"` はdirectiveを省略する。
 
@@ -16,10 +16,10 @@ Compiler対応は未着手ではなく、v0.2.1で設計・実装・専用テス
 
 M3のtracking契約はper-read managed方式として実装中。本書はそのCompiler適合のqualification記録であり、v0.2.1のtry/finally bailout説明は歴史的事実で、現行managed codegenを説明しない。
 
-1. Compiler compile/skipとintegration on/offそれぞれで、追跡値更新、stale render、retry/abandoned render、Hook順をM3の現行方式で確認する。特に`reactCompiler: "off"`を選んだ場合にCompiler自体が有効な利用者への挙動と制約を明示する。
-2. `"use memo"`等の作者指定、bare `useSignalTracking()`、手書き`useManagedSignals`、custom Hook、module/import signal、props経由signalの境界を再確認する。
+1. Compiler compile/skipの両経路と、integration設定の影響をVite production buildでも確認する。Babel pipelineでは更新、stale control、branch switch、Suspense retry、Hook順まで実測済み。
+2. `"use memo"`等の作者指定、bare `useSignalTracking()`、手書き`useManagedSignals`、custom Hook、module/import signal、props経由signalの境界を確認する。現suiteは手書きruntime import・custom Hook・module scope・props・JSX direct bindingを含むが、作者指定directiveのmanaged runtime matrixは未完了。
 3. Vite順序回帰とBabel Compilerの実統合を区別して報告する。Rollup、Webpack/Rspack、Next.jsは明示的な対応対象にする場合だけ追加認定する。
 4. CompilerのCompileErrorとtransform diagnosticを区別し、未追跡callback等が静かにstaleになる条件をM3/M5の診断契約へ接続する。
-5. lockfileで固定されたCompilerの実バージョンを記録し、依存更新時に専用suiteを必ず再実行する。
+5. lockfileで固定されたCompilerは`babel-plugin-react-compiler@1.0.0`。依存更新時に専用suiteを必ず再実行する。
 
-M4の完了条件は、M3の最終方式で上記の正確性境界が有効・無効両方で固定され、対応を謳うbundler経路と未対応経路が文書化されること。現時点では既存方式の証拠はあるが、v0.3.0 qualificationは未完了。
+M4のCompiler/Babel correctness subgateは完了。作者指定directive matrix、実Vite/Babel production統合、diagnostics、対応bundler範囲の明示が残るため、マイルストーン全体は未完了。

@@ -17,7 +17,7 @@
 import { transformSync, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
 import reactCompiler, { type LoggerEvent } from "babel-plugin-react-compiler";
-import { act, createElement, type FunctionComponent } from "react";
+import { act, createElement, Suspense, useState, type FunctionComponent } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import * as reactCompilerRuntime from "react/compiler-runtime";
 import * as reactJsxRuntime from "react/jsx-runtime";
@@ -41,6 +41,7 @@ const MODULES = "__modules";
 const EXPORTS = "__exports";
 
 const moduleRegistry: Record<string, unknown> = {
+  react: { useState },
   "react/jsx-runtime": reactJsxRuntime,
   "react/compiler-runtime": reactCompilerRuntime,
   "react-fine-grained-signals": library,
@@ -259,6 +260,64 @@ export const count = signal(0);
 export function Counter() {
   const value = useSignalValue(count);
   return <output>{value}</output>;
+}
+`;
+
+const managedPropCounter = `
+import { signal } from "react-fine-grained-signals";
+
+export const count = signal(0);
+
+function Leaf({ source }) {
+  return <output>{source.value}</output>;
+}
+
+export function Counter() {
+  return <Leaf source={count} />;
+}
+`;
+
+const managedConditionalCounter = `
+import { signal } from "react-fine-grained-signals";
+
+export const chooseLeft = signal(true);
+export const left = signal("left");
+export const right = signal("right");
+
+export function Counter() {
+  return <output>{chooseLeft.value ? left.value : right.value}</output>;
+}
+`;
+
+const managedSuspendingCounter = `
+import { signal } from "react-fine-grained-signals";
+
+export const count = signal(0);
+let ready = false;
+let release;
+const gate = new Promise((resolve) => { release = resolve; });
+
+export function retry() {
+  ready = true;
+  release();
+}
+
+export function Counter() {
+  const value = count.value;
+  if (!ready) throw gate;
+  return <output>{value}</output>;
+}
+`;
+
+const managedHookOrderCounter = `
+import { signal } from "react-fine-grained-signals";
+import { useState } from "react";
+
+export const count = signal(0);
+
+export function Counter() {
+  const [local, setLocal] = useState(0);
+  return <button onClick={() => setLocal(local + 1)}>{count.value}:{local}</button>;
 }
 `;
 
@@ -488,13 +547,18 @@ describe("React Compiler runtime behavior", () => {
     expect(container.textContent).toBe("2");
   });
 
-  it("updates a managed-transformed component compiled by the compiler", async () => {
-    const module = await loadModule(moduleScopeCounter, { transform: "managed" });
+  it("updates a managed component compiled with integration disabled", async () => {
+    const options = { transform: "managed" as const, reactCompiler: "off" as const };
+    const { events } = compilePipeline(moduleScopeCounter, options);
+    expect(events.map((event) => event.kind)).toContain("CompileSuccess");
+    const module = await loadModule(moduleScopeCounter, options);
     const container = mount(module.Counter);
 
     expect(container.textContent).toBe("0");
     write(module, 1);
     expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
   });
 
   it("keeps managed capture fresh when Compiler integration is disabled", async () => {
@@ -509,6 +573,93 @@ describe("React Compiler runtime behavior", () => {
     expect(container.textContent).toBe("1");
     write(module, 2);
     expect(container.textContent).toBe("2");
+  });
+
+  it("keeps a prop-held signal read fresh when Compiler integration is disabled", async () => {
+    const { events } = compilePipeline(managedPropCounter, {
+      transform: "managed",
+      reactCompiler: "off",
+    });
+    expect(events.map((event) => event.kind)).toContain("CompileSuccess");
+
+    const module = await loadModule(managedPropCounter, {
+      transform: "managed",
+      reactCompiler: "off",
+    });
+    const container = mount(module.Counter);
+
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+    write(module, 2);
+    expect(container.textContent).toBe("2");
+  });
+
+  it("switches managed Compiler dependencies and drops the previous branch", async () => {
+    const options = { transform: "managed" as const, reactCompiler: "off" as const };
+    const { events } = compilePipeline(managedConditionalCounter, options);
+    expect(events.map((event) => event.kind)).toEqual(["CompileSuccess"]);
+
+    const module = await loadModule(managedConditionalCounter, options);
+    const container = mount(module.Counter);
+
+    expect(container.textContent).toBe("left");
+    act(() => {
+      (module.chooseLeft as Signal<boolean>).value = false;
+    });
+    expect(container.textContent).toBe("right");
+    act(() => {
+      (module.left as Signal<string>).value = "stale";
+    });
+    expect(container.textContent).toBe("right");
+    act(() => {
+      (module.right as Signal<string>).value = "fresh";
+    });
+    expect(container.textContent).toBe("fresh");
+  });
+
+  it("retries a suspended managed render after Compiler compilation", async () => {
+    const options = { transform: "managed" as const, reactCompiler: "off" as const };
+    const { events } = compilePipeline(managedSuspendingCounter, options);
+    expect(events.map((event) => event.kind)).toContain("CompileSuccess");
+
+    const module = await loadModule(managedSuspendingCounter, options);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+    act(() => {
+      root.render(createElement(
+        Suspense,
+        { fallback: createElement("i", null, "waiting") },
+        createElement(module.Counter as FunctionComponent),
+      ));
+    });
+    expect(container.textContent).toBe("waiting");
+
+    await act(async () => {
+      (module.retry as () => void)();
+      await Promise.resolve();
+    });
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+  });
+
+  it("preserves user Hook order in a compiled managed component", async () => {
+    const options = { transform: "managed" as const, reactCompiler: "off" as const };
+    const { events } = compilePipeline(managedHookOrderCounter, options);
+    expect(events.map((event) => event.kind)).toContain("CompileSuccess");
+
+    const module = await loadModule(managedHookOrderCounter, options);
+    const container = mount(module.Counter);
+    const button = container.querySelector("button");
+    expect(button?.textContent).toBe("0:0");
+
+    act(() => button?.click());
+    expect(button?.textContent).toBe("0:1");
+    write(module, 1);
+    expect(button?.textContent).toBe("1:1");
   });
 
   it("updates a hand-written runtime-import component compiled by the compiler", async () => {
