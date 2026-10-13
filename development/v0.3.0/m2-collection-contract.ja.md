@@ -53,7 +53,7 @@ Iteration dependencyは`keys()` / `values()` / `entries()` / `Symbol.iterator` /
 
 - internal collection methodsの実装読みはuntrackedにし、ユーザーが実際に読んだkey/value/iterationだけを収集する。
 - writesは`adapter.batch`を通す。`untracked()`ではread dependencyを足さず、write通知は通常どおりflushする。
-- effect、React render subscriber、foreign readable bridgeの購読がなくなったremoved key metadataを、mutation後のflush時に既存のliveness-aware version sourceで剪定する。外側の`batch()`内で削除されたkeyは、outer batchのflush後のmicrotaskでsweepする。Map/Setに現存するkey/memberのmetadataは、購読者がいなくても将来の変更通知に必要なため保持できる。object key metadataはWeakMapで保持し、別Mapでkeyを強参照しない。primitive key metadataは次のcollection mutation/sweepまで残ることがある。購読解除直後・mutationなしの同期的解放は保証せず、M2ではruntime lifecycle hookを追加しない。
+- effect、React render subscriber、foreign readable bridgeの購読がなくなったremoved key metadataを、mutation後に既存のliveness-aware version sourceで剪定する。同期mutationでは候補を最大128件だけ確認し、残りはtimer taskへ分割して最終的にsweepする。外側の`batch()`内で削除されたkeyも、outer batchのflush後にcleanupを開始する。Map/Setに現存するkey/memberのmetadataは、購読者がいなくても将来の変更通知に必要なため保持できる。object key metadataはWeakMapで保持し、別Mapでkeyを強参照しない。primitive key metadataはsweep完了まで残ることがある。購読解除直後・mutationなしの同期的解放は保証せず、M2ではruntime lifecycle hookを追加しない。
 - speculative readでcollection dependencyをdurable subscriptionとしてpromotionしない。existing render/graph ownerとcross-copy contractを維持する。
 - descriptor/prototype mutation、non-extensible targets、class instancesは現行同様にsafe boundaryを定義し、partial reactivityを誤って主張しない。
 

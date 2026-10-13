@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M0〜M8のrelease qualification完了。v0.3.0ローカルrelease candidateをfreezeし、push、タグ、npm publish、GitHub Releaseは未実施。M3はtop-level `useSignalCapture()` / read単位captureを既定managed codegenへ統合し、React schedulerのyield/resume、abandoned attempt cleanup、StrictMode、Suspense retry、SSR/hydration、別root隔離を確認。Fast Refreshではmanaged Oxc/BabelのHook形状変更を検証し、保証範囲は静的に特定できる同期readとする。M4 Compiler/Babel suiteと両plugin登録順の実Vite production buildを通過。M5はmodule-level `use server` skip + source warningを実装し、実Vite/Rollup/Webpack/Rspack/esbuild buildでdirective skip、client transform、warning位置、source mapを確認。M6のdev SSR browser suiteはcold Firefoxを含みChromium/Firefox/WebKit各16件、48/48 passed。production browserも3 engineの12ケースが成功。M7はpaired baseline計測・memory・bundle・transform・collection比較を実施し、WeakMap/WeakSetの約3,000倍の遅延を15〜18倍まで縮小。高負荷computed/batch recheckで再現可能な悪化はなく、retained heap差は精度限界を記録。
+- 状態: post-freeze review closureのコード修正とローカルqualificationは進行済みだが、M8の再freezeは保留。Runtime/transform coverage gate、typecheck/build、consumer pack、cross-copy/mixed-version、production browser、React Router regression、Fast Refresh、size、collection sweep benchmarkは再確認済み。coverageは566/566 runtimeと404/404 transformが成功し、閾値は据え置き。CI baselineで見つかったTaskRow stale renderは、v0.2.1比較fixtureとReact Router browser E2E 7/7で修正を確認。フル `pnpm test:browser` は壊れたVolta pnpm shimで起動できず、Node直起動でもVite dev dependency optimizerがlisten前にtimeoutしたため、開発browser 48-case matrixの再実行とGitHub post-fix Actions確認が未完了。変更はlocal `main`のみ。push、tag、npm publish、GitHub Releaseは未実施。
 - 統合ブランチ: `codex/v0.3.0-m0`
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
@@ -23,7 +23,7 @@
 | M5 | transform検出、安全性、RSC、diagnostics、bundler互換性 | M3のtransform契約。独立調査は先行可 | 静的に証明できる範囲と曖昧な範囲を分け、誤注入を安全に拒否 | module-level `use server`をskip + warning。Vite/Rollup/Webpack/Rspack/esbuild実buildのRSC/warning/source-map matrix完了 |
 | M6 | JSX direct binding (style、value/checked、lifecycle、SSR/hydration、例外、型) | M0。collection読み取り統合はM2後 | DOM更新の意味論とattach/detach・フォーム挙動を固定 | per-property style、single/multiple select SSR/hydration/resetをJSDOMで確認。Dev SSR 48/48、production browser 12/12を3 engineで確認 |
 | M7 | 性能・メモリ・bundle・transform比較 | M0でベースライン確定、M1〜M6の比較対象 | 同条件の反復計測、ウォームアップ・ばらつき報告、正確性を保った判定 | paired baseline計測完了。computed/batchの高負荷再計測で悪化なし。retained-heap recheckも完了し、分布重複を含む制約を記録。サイズ予算通過 |
-| M8 | 全体qualificationとfreeze | M1〜M7 | 指定runtime/transform/browser/bundler/SSR/Compiler/pack/consumerのgateを通過し、重大問題ゼロ | runtime/transform、dev/production browser、5 bundler matrix、build/typecheck/lint/size、cross-copy/mixed-version、最終v0.3.0 clean pack/consumer smoke完了。ローカルrelease candidateをfreeze |
+| M8 | 全体qualificationとfreeze | M1〜M7 | 指定runtime/transform/browser/bundler/SSR/Compiler/pack/consumerのgateを通過し、重大問題ゼロ | review closure fixesは統合済み。coverage/build/typecheck/consumer/interop/production browser/Router回帰は通過。full dev browser matrixとpost-fix GitHub Actions結果が未確認のため、再freeze保留。詳細は[M8 qualification status](m8-qualification-status.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
