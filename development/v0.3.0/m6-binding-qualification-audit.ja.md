@@ -20,14 +20,15 @@ M6の中核機能は未実装ではない。`src/runtime/jsx.ts` にhost binding
 ## 残りのqualification順
 
 1. JSX型テストでmultiple value、deepSignal、option、非HTML host、plain/signal切替の境界がどこまで既に固定済みか確認し、不足だけを追加する。
-2. 既存のdirect-binding closure、StrictMode、exception、IME、hydration browser testsをmilestone checklistへ紐付け、残る複数browser-engine検証を追加する。
+2. 既存のdirect-binding closure、StrictMode、exception、IME、hydration browser testsをmilestone checklistへ紐付ける。開発SSR browser matrixは48/48で完了した。
 
 ## 追加qualification記録（2026-10-13）
 
 - `tests/react-dom-binding.test.tsx` と `tests/ssr.test.tsx`: 47 passed（別々に実行）。single/multiple selectのnative reset、single/multiple selectとper-property styleのSSR/hydration/updateを含む。
 - `e2e/browser.spec.ts` の追加reset scenario: Chromium production buildで1 passed。signal write後のnative reset、React form action自動reset、accepted edit後のDOM/signal差異を実ブラウザで確認した。全browser engineは未実行。
+- 開発用SSR harnessで`e2e/browser.spec.ts`をChromium/Firefox/WebKit各16件、合計48/48通過。初回cold optimizerでFirefox hydrationの30秒navigation timeoutが1件発生したため、Vite cacheをwarmにし60秒timeoutで全matrixを再実行した。Firefox単体retryもhydration・更新まで通過した。production-browser gateとは別のdev SSR/hydration gateを閉じた。
 - Per-property style bindingはrender後にpropertyごとのsubscriptionをattachする方式で実装した。render中にcomputed dependencyを残さない。signal/plain mixed entryとrender間のshape replacement cleanup、SSR/hydration後の更新を確認。root `tsc --noEmit` は成功。
 - 当初、accepted edit後にresetすると信号最新値へ戻る想定でテストしたが、既存docsに記載されたReact default restorationと一致しなかった。契約を変更せず、テストを「DOMはownerの最終render defaultへ戻り、signalはonChangeのwrite値を保持する」と修正した。
-- Chromium qualificationはform action/reset scenarioに限定され、全browser engineのselect/hydration/reset matrixは未実行。dev SSR browser harnessはVoltaのpnpm shimおよびReact externalization errorで起動しなかったため、reset scenarioは既存production preview serverで検証した。
+- Production-browser qualificationで全engineがcoverするのはsignal counter、allowlisted props、form reset、styleの12ケース。select-specific SSR/hydration/resetはJSDOMで確認済みで、全engineのDOM select matrixは未実行。dev SSR browser harnessは権限付き直接起動後、48/48通過した。
 
 M6完了条件は、form action/resetとselect hydrationの契約がテストか明示的な非対応範囲で確定し、型/runtimeのhost差とstyle entry lifecycleが説明され、browser binding lifecycleに重大な回帰がないこと。

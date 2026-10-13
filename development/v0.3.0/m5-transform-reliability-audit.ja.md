@@ -4,7 +4,7 @@
 
 後続のM3統合で、`useSignalCapture()` per-read codegenは既定managed modeへ接続済み。したがって下記の「M3確定までは既定modeに接続しない」は当時の計画であり、現在の状態ではない。統合後もM3のexactness gateは未完了なので、M5の検出・diagnostic境界を閉じる必要がある。
 
-module-level `"use server"` skip/warningと既知のJSX callback/destructuring warningは実装済み。adapter unit suiteを含むplugin全体は371 passed / 3 skippedで通過し、その後のCompiler suiteとVite integration追加も通過した。5 adapter factoryを含むpacked consumer smokeも通過。実Vite buildでは`"use server"` skipとcode-frame warning、`"use client"` transform、両entryのsource mapを確認済み。Rollup/Webpack/Rspack/esbuildのpacked consumer build全体、および各adapter上のRSC directive配送・warning/source-map位置の組み合わせは未検証であり、M5は未完了。
+module-level `"use server"` skip/warningと既知のJSX callback/destructuring warningは実装済み。adapter unit suiteを含むplugin全体は381 passed / 3 skippedで通過した。5 adapter factoryを含むpacked consumer smokeも通過。実Vite buildでは`"use server"` skipとcode-frame warning、`"use client"` transform、両entryのsource mapを確認済み。Rollup/Webpack/Rspack/esbuildのpacked consumer build全体、および各adapter上のRSC directive配送・warning/source-map位置の組み合わせは未検証であり、M5は未完了。
 
 この調査はM3のtracking実装に依存しない。現状のtransform契約と、v0.3.0で安全性を改善する範囲を記録する。ここに書かれた挙動は既存契約の棚卸しであり、新しい保証ではない。
 
