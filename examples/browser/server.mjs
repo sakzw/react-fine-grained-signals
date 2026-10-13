@@ -45,7 +45,10 @@ const reactSsrBridge = {
   },
 };
 const vite = await createViteServer({
-  root: repositoryRoot,
+  // Keep dependency discovery within this browser fixture. Using the monorepo
+  // root crawls generated HTML from other projects and can stall the SSR
+  // module runner before this server begins listening.
+  root: browserRoot,
   appType: "custom",
   // Reserve a module-runner channel separate from other Vite apps on this host.
   server: { middlewareMode: true, hmr: { port: 24679 } },
@@ -78,7 +81,7 @@ const vite = await createViteServer({
   },
 });
 
-const { createApp } = await vite.ssrLoadModule("/examples/browser/src/entry-server.tsx");
+const { createApp } = await vite.ssrLoadModule("/src/entry-server.tsx");
 
 const templatePath = resolve(browserRoot, "index.html");
 
