@@ -6,6 +6,8 @@
 
 現行方式の根拠は、変換後実行57 tests、transform 243 tests、runtime 555 tests、TypeScript runtime/plugin成功。React Compiler専用suiteは71 passed / 3 skipped。実browserのFast Refresh harnessは24ケースで18 passed、6 known failure（通常React `try/finally` control 3件とPreact Oxc 3件）を完走し、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過した。Fast Refresh subgateは完了。複数root/concurrent interleavingとhydrationを含むM3 acceptance gateは未完了。静的に解決できないJSX children callback、cross-module callback/helper、複雑なaliasや任意のdeferred callbackは一般に同一file transformで実行ownerを確定できないため、既定managedの完全なexactnessはまだ主張しない。
 
+最新の契約比較に対するClef-flashの補助意見は、bounded implicit capture + diagnostics 0.8996、explicit targeted subscription 0.1004、confidence 0.6386。これは採用判定ではない。既定managedへの統合は維持したが、未追跡readの診断とowner正確性を確認できるまでM3は未完了とする。
+
 ## 現状
 
 M3は未完了。M2実装後、React Hook配置の違反とFast RefreshのHook署名欠落を同時に解消する案を調べ始めた。既存のmanaged transformを単純にinjectへ置き換えない。
