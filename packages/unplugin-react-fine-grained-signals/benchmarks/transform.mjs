@@ -1,12 +1,18 @@
 import os from "node:os";
+import { appendFileSync } from "node:fs";
 import signals from "../dist/vite.js";
 
 const argumentIterations = process.argv.slice(2).find((argument) => argument !== "--");
 const iterations = Number.parseInt(argumentIterations ?? process.env.BENCH_ITERATIONS ?? "400", 10);
-const warmups = 3;
-const samples = 9;
+const largeIterations = Number.parseInt(process.env.BENCH_LARGE_ITERATIONS ?? String(Math.max(1, Math.floor(iterations / 20))), 10);
+const warmups = Number.parseInt(process.env.BENCH_WARMUPS ?? "3", 10);
+const samples = Number.parseInt(process.env.BENCH_SAMPLES ?? "9", 10);
+const managedHook = process.env.BENCH_MANAGED_HOOK ?? "useSignalCapture";
 if (!Number.isSafeInteger(iterations) || iterations < 1) {
   throw new Error("BENCH_ITERATIONS must be a positive integer");
+}
+if (!Number.isSafeInteger(largeIterations) || largeIterations < 1) {
+  throw new Error("BENCH_LARGE_ITERATIONS must be a positive integer");
 }
 
 const percentile = (values, ratio) => {
@@ -45,10 +51,13 @@ const largeNoCandidate = largeReactive.replaceAll(".value", ".current");
 
 function createTransform(transformMode) {
   const plugin = signals({ mode: "auto", transform: transformMode });
-  if (typeof plugin.transform !== "function") {
+  const transformHook = typeof plugin.transform === "function"
+    ? plugin.transform
+    : plugin.transform?.handler;
+  if (typeof transformHook !== "function") {
     throw new Error("The built Vite adapter did not expose a transform hook");
   }
-  return (source) => plugin.transform(source, "benchmark.tsx");
+  return (source) => transformHook.call(plugin, source, "benchmark.tsx");
 }
 
 function transformedCase(name, source, transformMode, expected) {
@@ -56,9 +65,7 @@ function transformedCase(name, source, transformMode, expected) {
   return {
     name,
     source,
-    iterations: source === largeReactive || source === largeNoCandidate
-      ? Math.max(1, Math.floor(iterations / 20))
-      : iterations,
+    iterations: source === largeReactive || source === largeNoCandidate ? largeIterations : iterations,
     run() {
       return runTransform(source);
     },
@@ -68,11 +75,11 @@ function transformedCase(name, source, transformMode, expected) {
         return;
       }
       if (result === null) throw new Error(`${name} did not transform source`);
-      if (!result.code.includes("useSignalTracking") && !result.code.includes("useManagedSignals")) {
+      if (!result.code.includes("useSignalTracking") && !result.code.includes("useManagedSignals") && !result.code.includes("useSignalCapture")) {
         throw new Error(`${name} omitted the runtime hook`);
       }
-      if (transformMode === "managed" && (!result.code.includes("try") || !result.code.includes(".finish()"))) {
-        throw new Error(`${name} omitted its managed boundary`);
+      if (transformMode === "managed" && !result.code.includes(managedHook)) {
+        throw new Error(`${name} omitted its managed capture hook`);
       }
     },
   };
@@ -92,7 +99,7 @@ const cases = [
   {
     name: "large/pass-through",
     source: largeReactive,
-    iterations: Math.max(1, Math.floor(iterations / 20)),
+    iterations: largeIterations,
     run() { return largeReactive; },
     check(result) { if (result !== largeReactive) throw new Error("pass-through changed source"); },
   },
@@ -125,11 +132,36 @@ function benchmark(definition) {
     "modules/s": (1_000 / median).toLocaleString("en-US", { maximumFractionDigits: 0 }),
     "p25 ms": percentile(timings, 0.25).toFixed(3),
     "p75 ms": percentile(timings, 0.75).toFixed(3),
+    outputBytes: typeof checked === "string"
+      ? Buffer.byteLength(checked)
+      : typeof checked?.code === "string" ? Buffer.byteLength(checked.code) : 0,
+    rawMsPerModule: timings,
   };
 }
 
-console.log(`Node ${process.version}; ${iterations} small and ${Math.max(1, Math.floor(iterations / 20))} large modules per sample`);
+console.log(`Node ${process.version}; ${iterations} small and ${largeIterations} large modules per sample`);
 console.log(`${os.platform()} ${os.arch()}; ${os.cpus()[0]?.model ?? "unknown CPU"}`);
 console.log("Manual diagnostics only: compare results only on identical Node versions and hardware.");
 console.log("Pass-through is a lower bound; no-candidate includes Babel parse/traverse/generate without a rewrite.");
-console.table(cases.map(benchmark));
+const results = cases.map(benchmark);
+console.table(results);
+if (process.env.BENCH_OUTPUT) {
+  const metadata = {
+    kind: "transform-sample",
+    date: process.env.BENCH_DATE ?? new Date().toISOString().slice(0, 10),
+    commit: process.env.BENCH_COMMIT ?? "working-tree",
+    workingTree: process.env.BENCH_WORKING_TREE ?? undefined,
+    round: Number.parseInt(process.env.BENCH_ROUND ?? "0", 10),
+    order: process.env.BENCH_ORDER ?? "",
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    cpu: os.cpus()[0]?.model,
+    iterations,
+    largeIterations,
+    warmups,
+    samples,
+    managedHook,
+  };
+  for (const result of results) appendFileSync(process.env.BENCH_OUTPUT, `${JSON.stringify({ ...metadata, ...result })}\n`);
+}

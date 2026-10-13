@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M0・M1・M2を完了。M3ではtop-level Hook試作がFast Refresh matrixを通過。render失敗・Suspense・root間のread帰属とexact cleanupは未検証。
+- 状態: M0・M1・M2を完了。M3のtop-level `useSignalCapture()` / read単位captureを既定managed codegenへ統合。shallow/deep read、同期throw、Suspense attempt分離、StrictMode、SSR、async/generator callback境界をfocused testsで確認。実browser HMRは24ケース中18 passed、残る6 known failuresは通常React `try/finally` controlとPreact Oxcだけで、managed Oxc/BabelはHook形状変更を通過。M3全体の複数root/concurrent exactnessは未完了。M4 Compiler suiteは71 passed / 3 skipped、opt-out/runtime matrixは未完了。M5はmodule-level `use server` skip + source warningを実装し、adapter/RSC matrixが未完了。M6はJSDOM SSR/hydration/reset確認済みで、production Chromium/Firefox/WebKitでもsignal counter、allowlisted props、form reset、style更新の12件がすべて通過。M7のpaired baseline計測・メモリ・bundle・transform・collection比較を実施し、WeakMap/WeakSetの約3,000倍の遅延を15〜18倍まで縮小。通常の性能比較はばらつきが大きく結論保留。M8の一部qualificationは通過したが、全gateが未完了のためfreezeしていない。
 - 統合ブランチ: `codex/v0.3.0-m0`
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
@@ -18,14 +18,14 @@
 | M0 | 現行契約、React統合、Vue 3.6差分、性能・保守性、変更候補を棚卸し | v0.2.1基準固定 | 公開契約・非目標・breaking候補・依存関係を記録 | 完了 |
 | M1 | signal/computed/effect/batch/untracked、ownership、subscription、interopの正確性・性能レビュー | M0 | 回帰契約を固定し、証拠のある改善だけ採用。cross-copy、speculative render、ownershipを維持 | 完了・コード変更なし |
 | M2 | Map/Set/WeakMap/WeakSetを含むdeep reactivityと型・依存粒度 | M0、M1のruntime契約 | 公開API、identity、dependency matrix、weak semanticsを先に確定し、境界テスト後に実装 | 完了 |
-| M3 | React render tracking境界、Hooks、Fast Refresh、StrictMode、Suspense、Concurrent、SSR | M0。M4より先に契約決定 | ReactのRules of Hooksに適合する候補を実環境で証明。`managed`を`inject`へ置換するだけでは完了にしない | prototype継続・exactness未証明 |
-| M4 | React Compilerのsignal read、memoization、directive、diagnostics | M3のtracking契約 | build-timeと実行時のstale readをcompiler有効/無効で確認 | 未着手 |
-| M5 | transform検出、安全性、RSC、diagnostics、bundler互換性 | M3のtransform契約。独立調査は先行可 | 静的に証明できる範囲と曖昧な範囲を分け、誤注入を安全に拒否 | 未着手 |
-| M6 | JSX direct binding (style、value/checked、lifecycle、SSR/hydration、例外、型) | M0。collection読み取り統合はM2後 | DOM更新の意味論とattach/detach・フォーム挙動を固定 | 未着手 |
-| M7 | 性能・メモリ・bundle・transform比較 | M0でベースライン確定、M1〜M6の比較対象 | 同条件の反復計測、ウォームアップ・ばらつき報告、正確性を保った判定 | 未着手 |
-| M8 | 全体qualificationとfreeze | M1〜M7 | 指定runtime/transform/browser/bundler/SSR/Compiler/pack/consumerのgateを通過し、重大問題ゼロ | 未着手 |
+| M3 | React render tracking境界、Hooks、Fast Refresh、StrictMode、Suspense、Concurrent、SSR | M0。M4より先に契約決定 | ReactのRules of Hooksに適合する候補を実環境で証明。`managed`を`inject`へ置換するだけでは完了にしない | top-level capture/read単位codegenを既定managedへ統合。Fast Refresh subgate完了。複数root/concurrent exactness継続 |
+| M4 | React Compilerのsignal read、memoization、directive、diagnostics | M3のtracking契約 | build-timeと実行時のstale readをcompiler有効/無効で確認 | 現行方式の専用suite 71 passed / 3 skipped。opt-out/runtime matrix継続 |
+| M5 | transform検出、安全性、RSC、diagnostics、bundler互換性 | M3のtransform契約。独立調査は先行可 | 静的に証明できる範囲と曖昧な範囲を分け、誤注入を安全に拒否 | module-level `use server`をskip + warning。diagnostics/adapter matrix継続 |
+| M6 | JSX direct binding (style、value/checked、lifecycle、SSR/hydration、例外、型) | M0。collection読み取り統合はM2後 | DOM更新の意味論とattach/detach・フォーム挙動を固定 | per-property style、single/multiple select SSR/hydration/resetをJSDOMで確認。Chromium form action/reset通過、複数browser engine検証が残る |
+| M7 | 性能・メモリ・bundle・transform比較 | M0でベースライン確定、M1〜M6の比較対象 | 同条件の反復計測、ウォームアップ・ばらつき報告、正確性を保った判定 | paired baseline計測完了。一般性能差はノイズ域、weak collectionsの高速経路を追加し再計測。サイズ予算通過 |
+| M8 | 全体qualificationとfreeze | M1〜M7 | 指定runtime/transform/browser/bundler/SSR/Compiler/pack/consumerのgateを通過し、重大問題ゼロ | Chromium/Firefox/WebKit production E2E通過。他の全体gateは継続中。未完了 |
 
-M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)を参照。
+M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
 ### 依存と並列化
 
@@ -42,9 +42,9 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 ## 直近の作業
 
-1. M3の試作結果と次の境界検証は [React tracking audit](m3-react-tracking-audit.ja.md) を参照する。
-2. 失敗render後の別root・untransformed callbackの依存帰属と abandoned attempt cleanupを試作worktreeで再現し、採用可否を決める。
-3. M3の契約が決まるまでM4を開始しない。独立できるM5/M6/M7の調査は並行可能。
+1. M3現行実装とstrict tracking gateは [React tracking audit](m3-react-tracking-audit.ja.md) を参照する。
+2. managedの静的追跡契約、警告可能範囲、unsupported callback/deep destructuring、root/concurrent ownershipを実装・実環境で閉じる。
+3. M3方式に対するM4 Compiler matrixを完了する。M5のdiagnostics/RSC/adapter監査は [M5 audit](m5-transform-reliability-audit.ja.md)、M6のdirect-binding qualification gapsは [M6 audit](m6-binding-qualification-audit.ja.md) を参照する。
 4. 各マイルストーン完了時にdiff review、必要な検証、記録、意味のあるcommitを行う。テスト実行は該当する変更の正しさを確認するために行う。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。

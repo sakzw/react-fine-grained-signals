@@ -1,9 +1,10 @@
 import os from "node:os";
+import { appendFileSync } from "node:fs";
 import { deepSignal, effect } from "../dist/index.js";
 
 const iterations = Number.parseInt(process.argv[2] ?? process.env.BENCH_ITERATIONS ?? "50000", 10);
-const warmups = 3;
-const samples = 9;
+const warmups = Number.parseInt(process.env.BENCH_WARMUPS ?? "3", 10);
+const samples = Number.parseInt(process.env.BENCH_SAMPLES ?? "9", 10);
 if (typeof deepSignal !== "function") throw new Error("deepSignal is absent from dist; build after adding the public API");
 if (!Number.isSafeInteger(iterations) || iterations < 1) throw new Error("BENCH_ITERATIONS must be a positive integer");
 
@@ -73,10 +74,35 @@ function benchmark(definition) {
     timings.push(Number(process.hrtime.bigint() - start) / 1e9); definition.check(state, iterations); state.dispose?.();
   }
   timings.sort((left, right) => left - right); const median = percentile(timings, 0.5);
-  return { case: definition.name, "median ops/s": (iterations / median).toLocaleString("en-US", { maximumFractionDigits: 0 }), "p25 ms": (percentile(timings, 0.25) * 1e3).toFixed(3), "p75 ms": (percentile(timings, 0.75) * 1e3).toFixed(3) };
+  return {
+    case: definition.name,
+    "median ops/s": (iterations / median).toLocaleString("en-US", { maximumFractionDigits: 0 }),
+    "p25 ms": (percentile(timings, 0.25) * 1e3).toFixed(3),
+    "p75 ms": (percentile(timings, 0.75) * 1e3).toFixed(3),
+    rawSeconds: timings,
+  };
 }
 
 console.log(`Node ${process.version}; ${iterations.toLocaleString()} operations; ${samples} samples after ${warmups} warmups`);
 console.log(`${os.platform()} ${os.arch()}; ${os.cpus()[0]?.model ?? "unknown CPU"}`);
 console.log("Manual diagnostics only: compare results only on identical Node versions and hardware.");
-console.table(cases.map(benchmark));
+const results = cases.map(benchmark);
+console.table(results);
+if (process.env.BENCH_OUTPUT) {
+  const metadata = {
+    kind: "deep-sample",
+    date: process.env.BENCH_DATE ?? new Date().toISOString().slice(0, 10),
+    commit: process.env.BENCH_COMMIT ?? "working-tree",
+    workingTree: process.env.BENCH_WORKING_TREE ?? undefined,
+    round: Number.parseInt(process.env.BENCH_ROUND ?? "0", 10),
+    order: process.env.BENCH_ORDER ?? "",
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    cpu: os.cpus()[0]?.model,
+    iterations,
+    warmups,
+    samples,
+  };
+  for (const result of results) appendFileSync(process.env.BENCH_OUTPUT, `${JSON.stringify({ ...metadata, ...result })}\n`);
+}

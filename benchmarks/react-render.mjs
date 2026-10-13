@@ -28,7 +28,11 @@ const { signal, computed, useSignalTracking } = await import("../dist/index.js")
 // 57f824e) never calls the bare `useSignalTracking()` above -- it rewrites call
 // sites to this runtime entry point's managed boundary instead. Imported
 // the production runtime entry point's managed boundary.
-const { useManagedSignals } = await import("../dist/runtime.js");
+const { useManagedSignals, useSignalCapture } = await import("../dist/runtime.js");
+const managedImpl = process.env.BENCH_MANAGED_IMPL ?? "capture";
+if (managedImpl !== "capture" && managedImpl !== "try-finally") {
+  throw new Error(`Unknown BENCH_MANAGED_IMPL: ${managedImpl}`);
+}
 // The JSX pragma a compiled `.tsx` file actually calls -- `jsx`/`jsxs` wrap
 // `react/jsx-runtime`'s own factories with `createJsxWrapper` (src/runtime/jsx.ts),
 // which runs `transformProps`-style work on *every* element, custom
@@ -147,27 +151,29 @@ function createSignalsVariant(counts) {
 }
 
 /**
- * Builds the managed-boundary signals variant: same shape as
- * `createSignalsVariant` above, but `ManagedSignalsCounter` opens and closes
- * its render scope the way the plugin's shipped `transform: "managed"`
- * output does -- `const store = useManagedSignals(); try { ... } finally {
- * store.finish(); }` against `react-fine-grained-signals/runtime` -- instead of calling
- * the bare `useSignalTracking()` hook. This is the boundary real apps built with
- * the default toolchain actually run, so it's benchmarked alongside the bare
- * variant rather than in its place.
+ * Builds the default managed variant: same shape as `createSignalsVariant`,
+ * but its counter uses the managed codegen's per-read capture. Set
+ * BENCH_MANAGED_IMPL=try-finally to measure the v0.2.1 boundary on the baseline
+ * checkout. The bare `useSignalTracking()` variant remains a separate control.
  */
 function createManagedSignalsVariant(counts) {
   const count = signal(0);
 
-  function ManagedSignalsCounter() {
-    const store = useManagedSignals();
-    try {
-      counts.counter += 1;
-      return React.createElement("li", null, "count:", count.value);
-    } finally {
-      store.finish();
-    }
-  }
+  const ManagedSignalsCounter = managedImpl === "try-finally"
+    ? function ManagedSignalsCounterTryFinally() {
+        const store = useManagedSignals();
+        try {
+          counts.counter += 1;
+          return React.createElement("li", null, "count:", count.value);
+        } finally {
+          store.finish();
+        }
+      }
+    : function ManagedSignalsCounterCapture() {
+        const capture = useSignalCapture();
+        counts.counter += 1;
+        return React.createElement("li", null, "count:", capture.capture(() => count.value));
+      };
 
   function ManagedSignalsSibling(props) {
     counts.siblings += 1;
@@ -195,15 +201,18 @@ function createControlledSignalsVariant(counts, managed, mode) {
     counts.counter += 1;
     return React.createElement("li", null, "count:", value.value);
   }
-  function Counter() {
-    const store = useManagedSignals();
-    try {
-      return renderCounter();
-    } finally {
-      store.finish();
-    }
-  }
-  function UnmanagedCounter() { useSignalTracking(); return renderCounter(); }
+  const Counter = managed && managedImpl === "try-finally"
+    ? function ManagedCounterTryFinally() {
+        const store = useManagedSignals();
+        try { return renderCounter(); } finally { store.finish(); }
+      }
+    : managed
+      ? function ManagedCounterCapture() {
+          const capture = useSignalCapture();
+          counts.counter += 1;
+          return React.createElement("li", null, "count:", capture.capture(() => value.value));
+        }
+      : function UnmanagedCounter() { useSignalTracking(); return renderCounter(); };
   function Sibling(props) {
     counts.siblings += 1;
     return React.createElement("li", null, "row ", props.index);
@@ -521,9 +530,11 @@ function benchmark(variant) {
     "sibling renders (total)": variant.counts.siblings,
     "mount median ms": (percentile(mountTimings, 0.5) * 1e3).toFixed(3),
     "mount p25–p75 ms": `${(percentile(mountTimings, 0.25) * 1e3).toFixed(3)}–${(percentile(mountTimings, 0.75) * 1e3).toFixed(3)}`,
+    rawMountSeconds: mountTimings,
     "median ms": (median * 1e3).toFixed(3),
     "p25 ms": (percentile(timings, 0.25) * 1e3).toFixed(3),
     "p75 ms": (percentile(timings, 0.75) * 1e3).toFixed(3),
+    rawUpdateSeconds: timings,
     "updates/s": (updates / median).toLocaleString("en-US", { maximumFractionDigits: 0 }),
   };
 }
@@ -543,8 +554,11 @@ if (process.env.BENCH_OUTPUT) {
     kind: "react-sample", date: process.env.BENCH_DATE ?? new Date().toISOString().slice(0, 10),
     commit: process.env.BENCH_COMMIT ?? "working-tree",
     workingTree: process.env.BENCH_WORKING_TREE ?? undefined,
+    round: Number.parseInt(process.env.BENCH_ROUND ?? "0", 10),
+    order: process.env.BENCH_ORDER ?? "",
     node: process.version, platform: process.platform, arch: process.arch,
-    cpu: os.cpus()[0]?.model, react: "19.2.8", rows, updates, warmups, samples,
+    cpu: os.cpus()[0]?.model, react: "19.3.0", rows, updates, warmups, samples,
+    managedImpl,
   };
   for (const result of results) appendFileSync(process.env.BENCH_OUTPUT, `${JSON.stringify({ ...metadata, ...result })}\n`);
 }

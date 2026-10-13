@@ -1,10 +1,11 @@
 import os from "node:os";
+import { appendFileSync } from "node:fs";
 import { computed as rawComputed, effect as rawEffect, endBatch, signal as rawSignal, startBatch } from "alien-signals";
 import * as current from "../dist/index.js";
 
 const iterations = Number.parseInt(process.argv[2] ?? process.env.BENCH_ITERATIONS ?? "100000", 10);
-const warmups = 3;
-const samples = 9;
+const warmups = Number.parseInt(process.env.BENCH_WARMUPS ?? "3", 10);
+const samples = Number.parseInt(process.env.BENCH_SAMPLES ?? "9", 10);
 if (!Number.isSafeInteger(iterations) || iterations < 1) throw new Error("BENCH_ITERATIONS must be a positive integer");
 
 const assert = (condition, message) => { if (!condition) throw new Error(message); };
@@ -118,7 +119,13 @@ function benchmark(adapter, definition) {
   }
   timings.sort((left, right) => left - right);
   const median = percentile(timings, 0.5);
-  return { case: definition.name, "median ops/s": (iterations / median).toLocaleString("en-US", { maximumFractionDigits: 0 }), "p25 ms": (percentile(timings, 0.25) * 1e3).toFixed(3), "p75 ms": (percentile(timings, 0.75) * 1e3).toFixed(3) };
+  return {
+    case: definition.name,
+    "median ops/s": (iterations / median).toLocaleString("en-US", { maximumFractionDigits: 0 }),
+    "p25 ms": (percentile(timings, 0.25) * 1e3).toFixed(3),
+    "p75 ms": (percentile(timings, 0.75) * 1e3).toFixed(3),
+    rawSeconds: timings,
+  };
 }
 
 const adapters = [rawAdapter(), currentAdapter()];
@@ -127,4 +134,26 @@ if (preact) adapters.push(preact);
 console.log(`Node ${process.version}; ${iterations.toLocaleString()} operations; ${samples} samples after ${warmups} warmups`);
 console.log(`${os.platform()} ${os.arch()}; ${os.cpus()[0]?.model ?? "unknown CPU"}`);
 console.log("Manual diagnostics only: compare results only on identical Node versions and hardware.");
-for (const adapter of adapters) { console.log(`\n${adapter.name}`); console.table(cases.map((definition) => benchmark(adapter, definition))); }
+const results = adapters.flatMap((adapter) => cases.map((definition) => ({ adapter: adapter.name, ...benchmark(adapter, definition) })));
+for (const adapter of adapters) {
+  console.log(`\n${adapter.name}`);
+  console.table(results.filter((result) => result.adapter === adapter.name));
+}
+if (process.env.BENCH_OUTPUT) {
+  const metadata = {
+    kind: "core-sample",
+    date: process.env.BENCH_DATE ?? new Date().toISOString().slice(0, 10),
+    commit: process.env.BENCH_COMMIT ?? "working-tree",
+    workingTree: process.env.BENCH_WORKING_TREE ?? undefined,
+    round: Number.parseInt(process.env.BENCH_ROUND ?? "0", 10),
+    order: process.env.BENCH_ORDER ?? "",
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    cpu: os.cpus()[0]?.model,
+    iterations,
+    warmups,
+    samples,
+  };
+  for (const result of results) appendFileSync(process.env.BENCH_OUTPUT, `${JSON.stringify({ ...metadata, ...result })}\n`);
+}
