@@ -71,7 +71,7 @@ useSignalTracking(): void
 
 レンダー追跡のウィンドウを開きます。レンダー中にsignalの `.value` を読むコンポーネントでは、最初のフックとして1回、無条件に呼び出してください。
 
-build pluginをbuildに入れている場合、これを手で書く必要はありません。既定の `mode: "auto"` では、`.value` を読むコンポーネントとカスタムフックにplugin自身が境界を挿入します。手で書くのは、pluginを使わずにbuildする場合か、`mode: "manual"` で明示的にopt inさせたい場合です。2つのレイヤーの比較は[描画最適化](./rendering-optimization.ja.md)を参照してください。
+build pluginを使う場合、`mode: "auto"` は静的に認識できる `.value` readから対象関数を選択し、managed per-read captureを使います。pluginなしでbuildする場合、`mode: "manual"`を使う場合、または`task.done`のようなdeep-proxy property向けにambient collectionが必要な場合は、このcallを手で書きます。先頭文に直接importしたcallは`transform: "managed"`でも保持されます。2つのレイヤーの比較は[描画最適化](./rendering-optimization.ja.md)を参照してください。
 
 - 引数も戻り値もありません。
 - フック以降の同期的なsignal読み取りが自動収集され、そのいずれかが変わるとコンポーネントが再レンダーされます。
@@ -85,7 +85,7 @@ build pluginをbuildに入れている場合、これを手で書く必要はあ
 
 読むコンポーネントがすべて自分で呼ぶ必要があるのはこのためです。呼んでいない兄弟・子孫コンポーネントの読み取りは、別のコンポーネントの開いたままのウィンドウに帰属してしまうことがあり、その場合、実際に読んだコンポーネントはそのsignalに対して無言で更新されなくなります。
 
-build pluginの `transform: "managed"`（既定）は、静的に証明できる同期readを追跡します。top-level capture Hookを置き、readごとにcaptureするため、ユーザーが書いたHookは通常どおりtop-levelに残ります。対応patternとdiagnosticsは[plugin guide](../../packages/unplugin-react-fine-grained-signals/README.ja.md#fast-refresh)を参照してください。
+build pluginの `transform: "managed"`（既定）は、静的に証明できる同期readを追跡します。top-level capture Hookを置き、readごとにcaptureするため、ユーザーが書いたHookは通常どおりtop-levelに残ります。対応patternとdiagnosticsは[managed tracking契約](../../packages/unplugin-react-fine-grained-signals/README.ja.md#managed-tracking-contract)を参照してください。
 
 ### pluginを使わずに厳密な境界を作る
 
@@ -104,7 +104,8 @@ function Row() {
 }
 ```
 
-- ウィンドウは `finally` が実行される箇所でちょうど閉じます。
+- runtime scopeは `finally` の位置で閉じます。そこで同期的に実行される読み取りなら、同期的に呼び出したhelper内の読み取りも含めて収集できます。
+- このlexical scopeは、現在のpluginの `transform: "managed"` 出力と同等ではありません。pluginはtop-levelの `useSignalCapture()` Hookを挿入し、実行箇所が同期的だと静的に証明できるreadだけを個別にcaptureします。helper内だけのreadや動的に選ばれるreadが漏れる場合があるため、既存境界を移行する前にplugin guideを確認してください。
 
 ### React Compiler
 

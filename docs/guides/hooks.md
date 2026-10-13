@@ -71,7 +71,7 @@ useSignalTracking(): void
 
 Opens the render-tracking window. Call it once and unconditionally as the first hook in every component that reads signal `.value` during render.
 
-With the build plugin in your build you do not write this by hand: in its default `mode: "auto"` the plugin inserts the boundary into every component and custom hook that reads `.value`. Write the call yourself when you build without the plugin, or when you run the plugin in `mode: "manual"` and want to opt a component in explicitly. See [Rendering optimization](./rendering-optimization.md) for the two layers side by side.
+With the build plugin, `mode: "auto"` selects eligible functions from statically recognized `.value` reads and uses managed per-read capture. Write this call yourself when you build without the plugin, when you use `mode: "manual"`, or when a managed component needs ambient collection for deep-proxy properties such as `task.done`. The plugin preserves a directly imported, first-statement call even in `transform: "managed"`. See [Rendering optimization](./rendering-optimization.md) for the two layers side by side.
 
 - It takes no arguments and returns no value.
 - Synchronous signal reads after the call are collected automatically, and the component rerenders when one of those values changes.
@@ -85,7 +85,7 @@ The collection window closes at the next `useSignalTracking()` call, when React 
 
 That is why every reading component needs its own call: a read from a sibling or descendant that does not call `useSignalTracking()` can be attributed to another component's still-open window, and that signal then silently stops updating the component that actually read it.
 
-Use the build plugin's `transform: "managed"` (its default) for statically proven synchronous reads. It installs a top-level capture Hook and wraps individual reads, so authored Hooks remain at their normal top level. The supported patterns and diagnostics are listed in the [plugin guide](../../packages/unplugin-react-fine-grained-signals/README.md#fast-refresh).
+Use the build plugin's `transform: "managed"` (its default) for statically proven synchronous reads. It installs a top-level capture Hook and wraps individual reads, so authored Hooks remain at their normal top level. The supported patterns and diagnostics are listed in the [managed tracking contract](../../packages/unplugin-react-fine-grained-signals/README.md#managed-tracking-contract).
 
 ### Exact boundary without the plugin
 
@@ -104,7 +104,8 @@ function Row() {
 }
 ```
 
-- The window closes exactly where `finally` runs, matching the plugin's managed output.
+- The runtime scope closes exactly where `finally` runs and can collect any synchronous signal read executed inside it, including reads inside a helper called synchronously.
+- This lexical scope is not equivalent to the plugin's current `transform: "managed"` output. The plugin uses a top-level `useSignalCapture()` Hook and wraps only reads it can prove are synchronous at their execution sites. A helper-only or dynamically selected read may therefore be missed; consult the plugin guide before migrating an existing boundary.
 
 ### React Compiler
 

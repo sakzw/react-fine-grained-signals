@@ -2,8 +2,8 @@
 
 [English](README.md) | [日本語](README.ja.md)
 
-Universal bundler integration for automatic `useSignalTracking()` insertion and the
-optional managed render-scope transform in
+Universal bundler integration for automatic render tracking and managed per-read
+capture in
 [`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals).
 
 This package is deliberately the only build-time integration. It keeps the
@@ -160,6 +160,23 @@ export default {
   a direct import from `"react"` is always recognized, so setting this only
   widens detection and never turns off an existing direct import.
 - `include` / `exclude`: functions that filter source module IDs.
+
+## Managed tracking contract
+
+In `transform: "managed"`, generated functions call `useSignalCapture()` as a top-level Hook, and the transform wraps statically identified synchronous reads in per-read capture scopes. This is deliberately narrower than the v0.2.1 whole-function `try` / `finally` boundary. The transform does not infer arbitrary callback invocation or follow helper bodies across module boundaries.
+
+| Pattern | Managed behavior |
+| --- | --- |
+| `state.value.user.name` in a selected function | Captured as one synchronous read expression. |
+| `const { user } = state.value; user.name` | Emits a diagnostic: the proxy property access is outside the `.value` capture and may stay stale. Read the full path in one expression or keep an explicit `useSignalTracking()` call. |
+| `const { value } = signal` | Destructured signal accessors are not tracked. Read `signal.value` directly. |
+| Synchronous helper call | Can be captured at its call site when the selected transform can prove the synchronous call. An imported helper body is not inspected to select a function in `auto` mode. |
+| Runtime key or alias | A runtime-key read can be captured after the function is selected, but the dynamic read alone does not select a function in `auto`. Destructured aliases are not generally followed. |
+| JSX render prop or `children` callback | Capture is not guaranteed because the transform cannot know when or how often the receiver invokes it. Statically visible cases emit a source-located warning. |
+
+An explicit, directly imported first-statement `useSignalTracking()` remains an ambient runtime boundary even when `transform: "managed"` is configured. The plugin preserves the call instead of replacing it with `useSignalCapture()`. This is needed for deep-proxy reads such as `task.done`, which have no `.value` expression for the per-read transform to wrap. Async and generator functions remain ineligible.
+
+`mode: "auto"`, `"manual"`, and `"all"` select functions; they do not change capture semantics. `auto` selects from statically recognized reads and explicit opt-ins, `manual` requires an explicit call or `@signalTracking`, and `all` selects eligible JSX components. `transform: "inject"` inserts the best-effort ambient `useSignalTracking()` boundary for selected functions.
 
 ## Render callback detection
 
@@ -482,7 +499,7 @@ plugin. Plain `.ts` files are parsed as TypeScript without JSX, while `.tsx`,
 
 Managed output now calls `useSignalCapture()` at the top level of each transformed function and wraps statically proven synchronous reads in short capture scopes. Authored Hooks remain in the function body at the same top-level positions; generated output contains no `try/finally` around user code. The per-read runtime restores its scope if a captured expression throws, and uncommitted render attempts never install subscriptions.
 
-The previous managed `try/finally` structure was the source of the Vite 8 / Oxc Fast Refresh Hook-signature issue described in the historical qualification record. The current output passed the real-browser Vite 8/Oxc HMR cases for JSX-only edits and Hook addition, removal, and reordering; all six hook-shape cases passed under managed Oxc and Babel. The full six-variant matrix completed 18 passes; the six known failures remain limited to the ordinary React `try/finally` control and Preact's corresponding Oxc structure. This closes the HMR subgate, while broader exactness qualification remains in progress.
+The previous managed `try/finally` structure was the source of the Vite 8 / Oxc Fast Refresh Hook-signature issue described in the historical qualification record. The current output passed the real-browser Vite 8/Oxc HMR cases for JSX-only edits and Hook addition, removal, and reordering; all six hook-shape cases passed under managed Oxc and Babel. The full six-variant matrix completed 18 passes; the six known failures remain limited to the ordinary React `try/finally` control and Preact's corresponding Oxc structure. This closes the HMR subgate. The supported exactness contract remains limited to statically identified synchronous reads; the callback, destructuring, and dynamic-selection cases above are migration constraints, and a stale render in a supported pattern is a bug.
 
 `transform: "inject"` continues to insert a bare `useSignalTracking()` Hook and provides a best-effort ambient boundary. Managed mode retains implicit signal read detection for its documented static synchronous scope while tracking each selected expression in isolation; unsupported callback ownership and dynamic patterns are documented and warned where statically provable.
 

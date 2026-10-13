@@ -3,8 +3,8 @@
 [English](README.md) | [日本語](README.ja.md)
 
 [`react-fine-grained-signals`](https://www.npmjs.com/package/react-fine-grained-signals)
-向けの、`useSignalTracking()` 自動挿入と任意のmanaged render scope変換を提供する汎用
-bundler integrationです。
+向けの、自動render trackingとmanaged per-read captureを提供する汎用bundler
+integrationです。
 
 このpackageは意図的に唯一のbuild-time integrationです。Babel実装は内部に
 閉じ込め、利用側はbundlerごとのentry pointだけを設定します。
@@ -161,6 +161,23 @@ export default {
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり
   設定しても既存のdirect importの認識が外れることはありません。
 - `include` / `exclude`: source module IDを絞る関数です。
+
+## managed tracking契約
+
+`transform: "managed"`では、生成関数のtop-levelで`useSignalCapture()`を呼び、静的に特定された同期readをper-read capture scopeで囲みます。これはv0.2.1の関数全体を囲む`try` / `finally`より狭い契約です。任意のcallback呼び出しやmodule境界を越えるhelperの実行を推測しません。
+
+| pattern | managedの動作 |
+| --- | --- |
+| 選択済み関数内の`state.value.user.name` | 1つの同期read式としてcaptureします。 |
+| `const { user } = state.value; user.name` | diagnosticを出します。proxy property readは`.value` captureの外なのでstaleになる可能性があります。完全なproperty pathで読むか、明示的な`useSignalTracking()`を残してください。 |
+| `const { value } = signal` | destructured signal accessorは追跡されません。`signal.value`と直接読んでください。 |
+| 同期helper call | 選択済みのtransformが同期呼び出しと証明できれば、呼び出し位置でcaptureできます。`auto`で関数を選ぶ際、import helperの中身は解析しません。 |
+| runtime key / alias | 関数が別の条件で選択されていればruntime-key readをcaptureできますが、dynamic readだけでは`auto`選択されません。destructured aliasは一般に追跡しません。 |
+| JSX render prop / `children` callback | receiverがいつ、何回呼ぶかを証明できず、captureは保証されません。静的に見える場合は位置付きwarningを出します。 |
+
+先頭文に直接importした明示的な`useSignalTracking()`は、`transform: "managed"`でもambient runtime boundaryとして残ります。pluginはこれを`useSignalCapture()`へ置き換えません。per-read transformでwrapできる`.value`式がない`task.done`のようなdeep-proxy readに必要です。async関数とgenerator関数は引き続き対象外です。
+
+`mode: "auto"`、`"manual"`、`"all"`は関数を選択するもので、capture semanticsは変えません。`auto`は静的に認識したreadまたは明示opt-in、`manual`は明示callまたは`@signalTracking`、`all`は対象JSX componentを選びます。`transform: "inject"`は選択関数へbest-effortなambient `useSignalTracking()` boundaryを挿入します。
 
 ## Render callbackの検出
 
@@ -467,7 +484,7 @@ TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析しま
 
 `managed` output now inserts `useSignalCapture()` at each transformed function's top level and wraps statically proven synchronous reads in short capture scopes. User Hooks remain at the function's top level, and generated code does not wrap user code in `try/finally`. A captured expression that throws still restores its temporary scope; render attempts that never commit do not install subscriptions.
 
-過去に記録したVite 8 / Oxc Fast RefreshのHook signature問題は、以前の生成`try/finally`構造が原因でした。現行出力は実browserのVite 8/Oxc HMRでJSXのみの編集とHook追加・削除・並べ替えを通過し、managed OxcとBabelのHook形状変更6ケースはすべて成功しました。6 variantのmatrixは18 passedで完了し、残る6件の既知失敗は通常Reactの`try/finally` controlとPreactの同じOxc構造だけでした。HMR subgateは完了しましたが、M3全体のexactness qualificationは継続中です。
+過去に記録したVite 8 / Oxc Fast RefreshのHook signature問題は、以前の生成`try/finally`構造が原因でした。現行出力は実browserのVite 8/Oxc HMRでJSXのみの編集とHook追加・削除・並べ替えを通過し、managed OxcとBabelのHook形状変更6ケースはすべて成功しました。6 variantのmatrixは18 passedで完了し、残る6件の既知失敗は通常Reactの`try/finally` controlとPreactの同じOxc構造だけでした。HMR subgateは完了です。exactness契約は静的に特定できる同期readが対象です。上記callback、destructuring、dynamic selectionは移行時に扱う制約であり、対応patternでstale renderingが起きた場合は不具合です。
 
 `transform: "inject"` は従来どおりbareな `useSignalTracking()` を挿入し、best-effortなambient boundaryを提供します。`managed` は暗黙のsignal-read検出を保ちながら、文書化した静的・同期範囲の各readを個別に捕捉します。静的に証明できないcallback所有権やdynamic patternは、範囲を明記し、検出可能なケースをwarningにします。
 
