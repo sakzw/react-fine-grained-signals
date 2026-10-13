@@ -350,6 +350,50 @@ export function Fallback() {
     expect(container.textContent).toBe("committed update");
   });
 
+  it("keeps suspended capture ownership isolated across React roots", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+
+export const suspendedSource = signal("pending");
+export const otherRootSource = signal("other root");
+let ready = false;
+let release;
+const gate = new Promise((resolve) => { release = resolve; });
+export const retry = () => { ready = true; release(); };
+
+export function SuspendedReader() {
+  const value = suspendedSource.value;
+  if (!ready) throw gate;
+  return <output>{value}</output>;
+}
+
+export function OtherRootReader() {
+  return <output>{otherRootSource.value}</output>;
+}
+`, { experimentalCapture: true });
+    const suspendedRoot = mount(() => createElement(
+      Suspense,
+      { fallback: createElement("output", null, "fallback") },
+      createElement(module.SuspendedReader as FunctionComponent),
+    ));
+    const otherRoot = mount(module.OtherRootReader);
+
+    expect(suspendedRoot.textContent).toBe("fallback");
+    expect(otherRoot.textContent).toBe("other root");
+    write(module, "suspendedSource", "new pending value");
+    expect(suspendedRoot.textContent).toBe("fallback");
+    expect(otherRoot.textContent).toBe("other root");
+
+    await act(async () => {
+      (module.retry as () => void)();
+      await Promise.resolve();
+    });
+    expect(suspendedRoot.textContent).toBe("new pending value");
+    write(module, "otherRootSource", "updated other root");
+    expect(otherRoot.textContent).toBe("updated other root");
+    expect(suspendedRoot.textContent).toBe("new pending value");
+  });
+
   it("preserves assignment targets, optional reads, constructor calls, and tagged receivers", () => {
     const transformed = transformReactFineGrainedSignals(`
 import { deepSignal } from "react-fine-grained-signals";

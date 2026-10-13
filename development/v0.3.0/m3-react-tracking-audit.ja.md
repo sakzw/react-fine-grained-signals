@@ -4,7 +4,7 @@
 
 旧試作・再開判断の記述はその時点の履歴であり、現在の実装方針ではない。続く試作記録は残すが、managedの既定codegenはtop-level `useSignalCapture()` とread単位captureへ変更した。user Hookをtry/finallyへ移さず、静的に証明できる同期readだけを短いcapture scopeで囲む。generator/async bodyやReact Hookを含むhelperは同期callsite captureへfoldしない。JSX function propや`.value`を含むdestructuring initializerなど、検出できる追跡外readにはsource位置付きwarningを出す。
 
-現行方式の根拠は、transform/runtime executionの対象2 suite 303 tests、runtime 555 tests、TypeScript runtime/plugin成功。React Compiler専用suiteは71 passed / 3 skipped。実browserのFast Refresh harnessは24ケースで18 passed、6 known failure（通常React `try/finally` control 3件とPreact Oxc 3件）を完走し、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過した。Fast Refresh subgateは完了。複数root/concurrent interleavingとhydrationを含むM3 acceptance gateは未完了。静的に解決できないJSX children callback、import先が返すcallback、複雑なaliasや任意のdeferred callbackは一般に同一file transformで実行ownerを確定できないため、既定managedの完全なexactnessはまだ主張しない。
+現行方式の根拠は、transform/runtime executionの対象2 suite 303 tests、runtime 555 tests、TypeScript runtime/plugin成功。React Compiler専用suiteは24 passed。実browserのFast Refresh harnessは24ケースで18 passed、6 known failure（通常React `try/finally` control 3件とPreact Oxc 3件）を完走し、managed Oxc/BabelはHook追加・削除・並べ替えの全6ケースを通過した。Fast Refresh subgateは完了。Suspense中断中のreadが別rootへ漏れないmulti-root isolation testは60件のReact execution suiteで通過した。time-sliced concurrent interleaving、hydration中のattempt ownership、JSX children callback、import先が返すcallback、複雑なaliasや任意のdeferred callbackは未完了で、既定managedの完全なexactnessはまだ主張しない。
 
 最新の契約比較に対するClef-flashの補助意見は、bounded implicit capture + diagnostics 0.8996、explicit targeted subscription 0.1004、confidence 0.6386。これは採用判定ではない。既定managedへの統合は維持したが、未追跡readの診断とowner正確性を確認できるまでM3は未完了とする。
 
@@ -24,7 +24,7 @@ managed captureが自動追跡を保証するのは、同期的なcomponent/cust
 
 `key`が実行時に決まる`signal[key]`、import越しreadだけを持つcomponentの`auto`判定、import先が返すcallback、所有componentと別時点で実行されるcallback、一般的なclosure escapeは保証外であり、M3のexactness gateは未達。未検出のsignal readしかないcomponentは`auto`が変換を選べない。これらを従来のambient trackingと同等とは扱わない。明示的なreadが必要な境界では`useSignalValue` / `useDeepSignalValue`等のtargeted APIか、変換対象側でreadを同期的に表現する。
 
-この追跡修正では、ref-like property名を持つobject内のsignal (`holder.value.current.value`)、定数computed key (`signal[valueKey]`)、import helperが同期的に読むsignalを実Reactで更新まで検証する回帰testを追加した。transformとReact executionの2 suiteは303/303通過し、plugin `tsc --noEmit`も成功。別root/concurrent interleaving、import先のdeferred callback、任意callback ownershipの実環境gateは継続。
+この追跡修正では、ref-like property名を持つobject内のsignal (`holder.value.current.value`)、定数computed key (`signal[valueKey]`)、import helperが同期的に読むsignalを実Reactで更新まで検証する回帰testを追加した。transformとReact executionの2 suiteは303/303通過し、plugin `tsc --noEmit`も成功。追加でSuspense中断中のsignal readと別rootのcommit/updateを交互に行い、fallback/別rootへのsubscription漏れがないことを60/60 suiteで確認した。time-sliced interleaving、import先のdeferred callback、任意callback ownershipの実環境gateは継続。
 
 ## 試作順の判断
 
