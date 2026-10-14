@@ -116,7 +116,7 @@ Renders an array whose row identity is intentionally its position, so it takes n
 
 `deepSignal` tracks same-realm `Map`, `Set`, `WeakMap`, and `WeakSet` values by default, including nested collections. Read and mutate them through `.value`; raw collection references and `.peek()` bypass notifications. Map key reads, collection membership, size, and iteration use separate dependencies where the native collection exposes them. Weak collections support key operations only.
 
-A `Map` or `Set` in the default mode is exposed by `.value` as a read-only runtime view, although its TypeScript type remains mutable. Use immutable replacement in that mode: copy, change, then assign the new collection to the signal.
+Mutations through a collection obtained from `.value` are reactive and notify the consumers that read the affected key or iteration dependency. You can update the collection in place; immutable replacement remains an option when it makes the surrounding state update clearer.
 
 ```ts
 const next = new Map(labels.value);

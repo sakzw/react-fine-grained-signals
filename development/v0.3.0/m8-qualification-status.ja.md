@@ -37,3 +37,11 @@ The post-fix workflows ran against pushed commit `03be0e96cb12f526baa63a93d93c86
 M8 is **re-frozen** at package version 0.3.0. Local qualification and both GitHub workflows passed for the final symbol-key closure. The earlier five-worker WebKit transient remains documented above and did not recur in the isolated test, CI-serial matrix, or GitHub E2E workflow.
 
 No release tag, npm publish, or GitHub Release was created. The current re-freeze is backed by local qualification and the post-fix GitHub Actions runs above.
+
+## M9 — API redesign and performance re-freeze (2026-10-14)
+
+The M8 re-freeze was reopened for the v0.3.0 API/performance development recorded in [M9](m9-api-performance-development.ja.md). The `deepSignal` collection option was removed and collections became reactive by default; explicit `bindValue`/`bindChecked` APIs replaced implicit signal-valued form props; weak collection keys now retain native opaque-object semantics; managed tracking diagnostics and cleanup measurements were updated. M8 is re-frozen again on the final M9-qualified candidate integrated to `main`.
+
+Qualification passed locally: runtime/transform full coverage (573 and 408 tests), typecheck, lint, build, consumer package smoke, cross-copy/mixed-version compatibility, React Compiler (27/27), browser E2E (59/59 across Chromium/Firefox/WebKit plus production and React Router), all seven bundle budgets, and the final collection scaling benchmark. The real-browser Fast Refresh harness passed all RFSG managed Oxc/inject/Babel scenarios; six existing ordinary-React try/finally and Preact Oxc control cases reproduced the already documented Refresh-signature issue. No M9-specific release blocker remains. The final independent review found no blocker and recorded one low-priority interoperability limit for custom branded signals whose writable `value` setter is inherited above their immediate prototype; standard RFSG and cross-copy signals work. The detailed measurements and constraints are recorded in M9.
+
+Substantive code commits: `a523afb`, `82f7e8a`, and `9b7a7e4`, following the Phase A–D commits listed in M9. GitHub Actions results for the pushed revision will be added after remote verification. No release tag, npm publish, or GitHub Release was created.

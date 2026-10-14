@@ -1,0 +1,1121 @@
+{
+  "runtime": "v24.21.0",
+  "platform": "win32 x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "trackedSamples": 3,
+  "trackedCandidateBudgetPerSample": 20000,
+  "weakSamples": 3,
+  "weakIterationsPerSample": 300,
+  "weakWarmups": 1,
+  "cleanupSamples": 2,
+  "tracked": [
+    {
+      "kind": "Map",
+      "name": "update",
+      "subscribedKeys": 10,
+      "iterationsPerSample": 1000,
+      "unit": "ns/op",
+      "median": 5628,
+      "mean": 8896,
+      "variance": 23852368,
+      "standardDeviation": 4884,
+      "minimum": 5260,
+      "maximum": 15800,
+      "rawSamples": [
+        15800,
+        5628,
+        5260
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "add",
+      "subscribedKeys": 10,
+      "iterationsPerSample": 1000,
+      "unit": "ns/op",
+      "median": 5164,
+      "mean": 7409,
+      "variance": 10114962,
+      "standardDeviation": 3180,
+      "minimum": 5156,
+      "maximum": 11907,
+      "rawSamples": [
+        11907,
+        5156,
+        5164
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "delete",
+      "subscribedKeys": 10,
+      "iterationsPerSample": 1000,
+      "unit": "ns/op",
+      "median": 5523,
+      "mean": 6415,
+      "variance": 4729811,
+      "standardDeviation": 2175,
+      "minimum": 4312,
+      "maximum": 9410,
+      "rawSamples": [
+        9410,
+        5523,
+        4312
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "duplicate-add",
+      "subscribedKeys": 10,
+      "iterationsPerSample": 1000,
+      "unit": "ns/op",
+      "median": 5925,
+      "mean": 6069,
+      "variance": 3370925,
+      "standardDeviation": 1836,
+      "minimum": 3896,
+      "maximum": 8387,
+      "rawSamples": [
+        8387,
+        5925,
+        3896
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "add",
+      "subscribedKeys": 10,
+      "iterationsPerSample": 1000,
+      "unit": "ns/op",
+      "median": 6043,
+      "mean": 6688,
+      "variance": 915361,
+      "standardDeviation": 957,
+      "minimum": 5981,
+      "maximum": 8041,
+      "rawSamples": [
+        5981,
+        6043,
+        8041
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "delete",
+      "subscribedKeys": 10,
+      "iterationsPerSample": 1000,
+      "unit": "ns/op",
+      "median": 5580,
+      "mean": 5721,
+      "variance": 2384412,
+      "standardDeviation": 1544,
+      "minimum": 3905,
+      "maximum": 7680,
+      "rawSamples": [
+        7680,
+        3905,
+        5580
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "update",
+      "subscribedKeys": 1000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 90664,
+      "mean": 100847,
+      "variance": 546739694,
+      "standardDeviation": 23382,
+      "minimum": 78692,
+      "maximum": 133184,
+      "rawSamples": [
+        133184,
+        78692,
+        90664
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "add",
+      "subscribedKeys": 1000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 95636,
+      "mean": 102823,
+      "variance": 1867246180,
+      "standardDeviation": 43212,
+      "minimum": 53860,
+      "maximum": 158972,
+      "rawSamples": [
+        53860,
+        95636,
+        158972
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "delete",
+      "subscribedKeys": 1000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 28984,
+      "mean": 173039,
+      "variance": 41844391257,
+      "standardDeviation": 204559,
+      "minimum": 27804,
+      "maximum": 462328,
+      "rawSamples": [
+        462328,
+        28984,
+        27804
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "duplicate-add",
+      "subscribedKeys": 1000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 47592,
+      "mean": 43791,
+      "variance": 83010564,
+      "standardDeviation": 9111,
+      "minimum": 31228,
+      "maximum": 52552,
+      "rawSamples": [
+        52552,
+        47592,
+        31228
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "add",
+      "subscribedKeys": 1000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 51768,
+      "mean": 51907,
+      "variance": 5251225,
+      "standardDeviation": 2292,
+      "minimum": 49172,
+      "maximum": 54780,
+      "rawSamples": [
+        51768,
+        49172,
+        54780
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "delete",
+      "subscribedKeys": 1000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 46400,
+      "mean": 48084,
+      "variance": 18635744,
+      "standardDeviation": 4317,
+      "minimum": 43844,
+      "maximum": 54008,
+      "rawSamples": [
+        54008,
+        46400,
+        43844
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "update",
+      "subscribedKeys": 10000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 188940,
+      "mean": 183708,
+      "variance": 268853643,
+      "standardDeviation": 16397,
+      "minimum": 161528,
+      "maximum": 200656,
+      "rawSamples": [
+        188940,
+        161528,
+        200656
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "add",
+      "subscribedKeys": 10000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 71212,
+      "mean": 81903,
+      "variance": 231500900,
+      "standardDeviation": 15215,
+      "minimum": 71076,
+      "maximum": 103420,
+      "rawSamples": [
+        71212,
+        71076,
+        103420
+      ]
+    },
+    {
+      "kind": "Map",
+      "name": "delete",
+      "subscribedKeys": 10000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 157844,
+      "mean": 172477,
+      "variance": 1313841966,
+      "standardDeviation": 36247,
+      "minimum": 137248,
+      "maximum": 222340,
+      "rawSamples": [
+        157844,
+        137248,
+        222340
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "duplicate-add",
+      "subscribedKeys": 10000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 200540,
+      "mean": 200615,
+      "variance": 976296004,
+      "standardDeviation": 31246,
+      "minimum": 162384,
+      "maximum": 238920,
+      "rawSamples": [
+        238920,
+        162384,
+        200540
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "add",
+      "subscribedKeys": 10000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 264968,
+      "mean": 345979,
+      "variance": 16045904313,
+      "standardDeviation": 126672,
+      "minimum": 248112,
+      "maximum": 524856,
+      "rawSamples": [
+        524856,
+        248112,
+        264968
+      ]
+    },
+    {
+      "kind": "Set",
+      "name": "delete",
+      "subscribedKeys": 10000,
+      "iterationsPerSample": 25,
+      "unit": "ns/op",
+      "median": 253124,
+      "mean": 255637,
+      "variance": 629767065,
+      "standardDeviation": 25095,
+      "minimum": 226236,
+      "maximum": 287552,
+      "rawSamples": [
+        287552,
+        226236,
+        253124
+      ]
+    }
+  ],
+  "weak": [
+    {
+      "kind": "WeakMap",
+      "mode": "native",
+      "keyShape": "empty",
+      "name": "set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 525,
+      "mean": 695,
+      "variance": 65065,
+      "standardDeviation": 255,
+      "minimum": 505,
+      "maximum": 1056,
+      "rawSamples": [
+        1056,
+        525,
+        505
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "reactive",
+      "keyShape": "empty",
+      "name": "set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 6173,
+      "mean": 6215,
+      "variance": 912461,
+      "standardDeviation": 955,
+      "minimum": 5067,
+      "maximum": 7406,
+      "rawSamples": [
+        7406,
+        6173,
+        5067
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "native",
+      "keyShape": "empty",
+      "name": "update-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 366,
+      "mean": 483,
+      "variance": 32069,
+      "standardDeviation": 179,
+      "minimum": 346,
+      "maximum": 736,
+      "rawSamples": [
+        736,
+        366,
+        346
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "reactive",
+      "keyShape": "empty",
+      "name": "update-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 2352,
+      "mean": 55530,
+      "variance": 5681244662,
+      "standardDeviation": 75374,
+      "minimum": 2113,
+      "maximum": 162125,
+      "rawSamples": [
+        162125,
+        2113,
+        2352
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "native",
+      "keyShape": "empty",
+      "name": "delete-set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 581,
+      "mean": 582,
+      "variance": 17210,
+      "standardDeviation": 131,
+      "minimum": 422,
+      "maximum": 744,
+      "rawSamples": [
+        422,
+        581,
+        744
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "reactive",
+      "keyShape": "empty",
+      "name": "delete-set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 4202,
+      "mean": 4446,
+      "variance": 124632,
+      "standardDeviation": 353,
+      "minimum": 4191,
+      "maximum": 4945,
+      "rawSamples": [
+        4202,
+        4191,
+        4945
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "native",
+      "keyShape": "empty",
+      "name": "add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 542,
+      "mean": 612,
+      "variance": 12388,
+      "standardDeviation": 111,
+      "minimum": 525,
+      "maximum": 769,
+      "rawSamples": [
+        769,
+        542,
+        525
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "reactive",
+      "keyShape": "empty",
+      "name": "add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 2216,
+      "mean": 2550,
+      "variance": 531570,
+      "standardDeviation": 729,
+      "minimum": 1872,
+      "maximum": 3562,
+      "rawSamples": [
+        3562,
+        2216,
+        1872
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "native",
+      "keyShape": "empty",
+      "name": "duplicate-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 326,
+      "mean": 360,
+      "variance": 3321,
+      "standardDeviation": 58,
+      "minimum": 314,
+      "maximum": 442,
+      "rawSamples": [
+        442,
+        314,
+        326
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "reactive",
+      "keyShape": "empty",
+      "name": "duplicate-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 1797,
+      "mean": 1766,
+      "variance": 14645,
+      "standardDeviation": 121,
+      "minimum": 1605,
+      "maximum": 1897,
+      "rawSamples": [
+        1605,
+        1797,
+        1897
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "native",
+      "keyShape": "empty",
+      "name": "delete-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 426,
+      "mean": 394,
+      "variance": 8481,
+      "standardDeviation": 92,
+      "minimum": 269,
+      "maximum": 488,
+      "rawSamples": [
+        426,
+        488,
+        269
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "reactive",
+      "keyShape": "empty",
+      "name": "delete-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 2156,
+      "mean": 2496,
+      "variance": 377194,
+      "standardDeviation": 614,
+      "minimum": 1975,
+      "maximum": 3359,
+      "rawSamples": [
+        2156,
+        1975,
+        3359
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "native",
+      "keyShape": "with-own-data",
+      "name": "set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 485,
+      "mean": 480,
+      "variance": 8152,
+      "standardDeviation": 90,
+      "minimum": 367,
+      "maximum": 588,
+      "rawSamples": [
+        367,
+        588,
+        485
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "reactive",
+      "keyShape": "with-own-data",
+      "name": "set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 1612,
+      "mean": 1589,
+      "variance": 34673,
+      "standardDeviation": 186,
+      "minimum": 1350,
+      "maximum": 1805,
+      "rawSamples": [
+        1805,
+        1612,
+        1350
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "native",
+      "keyShape": "with-own-data",
+      "name": "update-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 210,
+      "mean": 208,
+      "variance": 20,
+      "standardDeviation": 4,
+      "minimum": 202,
+      "maximum": 213,
+      "rawSamples": [
+        213,
+        210,
+        202
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "reactive",
+      "keyShape": "with-own-data",
+      "name": "update-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 1639,
+      "mean": 1578,
+      "variance": 26990,
+      "standardDeviation": 164,
+      "minimum": 1354,
+      "maximum": 1743,
+      "rawSamples": [
+        1354,
+        1639,
+        1743
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "native",
+      "keyShape": "with-own-data",
+      "name": "delete-set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 246,
+      "mean": 265,
+      "variance": 765,
+      "standardDeviation": 28,
+      "minimum": 246,
+      "maximum": 304,
+      "rawSamples": [
+        304,
+        246,
+        246
+      ]
+    },
+    {
+      "kind": "WeakMap",
+      "mode": "reactive",
+      "keyShape": "with-own-data",
+      "name": "delete-set-get",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 2337,
+      "mean": 2314,
+      "variance": 88995,
+      "standardDeviation": 298,
+      "minimum": 1938,
+      "maximum": 2667,
+      "rawSamples": [
+        2667,
+        1938,
+        2337
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "native",
+      "keyShape": "with-own-data",
+      "name": "add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 517,
+      "mean": 558,
+      "variance": 20825,
+      "standardDeviation": 144,
+      "minimum": 406,
+      "maximum": 752,
+      "rawSamples": [
+        406,
+        517,
+        752
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "reactive",
+      "keyShape": "with-own-data",
+      "name": "add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 1966,
+      "mean": 1965,
+      "variance": 9178,
+      "standardDeviation": 96,
+      "minimum": 1848,
+      "maximum": 2082,
+      "rawSamples": [
+        2082,
+        1848,
+        1966
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "native",
+      "keyShape": "with-own-data",
+      "name": "duplicate-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 402,
+      "mean": 402,
+      "variance": 18,
+      "standardDeviation": 4,
+      "minimum": 397,
+      "maximum": 407,
+      "rawSamples": [
+        407,
+        402,
+        397
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "reactive",
+      "keyShape": "with-own-data",
+      "name": "duplicate-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 1181,
+      "mean": 1151,
+      "variance": 39399,
+      "standardDeviation": 198,
+      "minimum": 894,
+      "maximum": 1377,
+      "rawSamples": [
+        1181,
+        894,
+        1377
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "native",
+      "keyShape": "with-own-data",
+      "name": "delete-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 319,
+      "mean": 301,
+      "variance": 930,
+      "standardDeviation": 30,
+      "minimum": 258,
+      "maximum": 325,
+      "rawSamples": [
+        325,
+        319,
+        258
+      ]
+    },
+    {
+      "kind": "WeakSet",
+      "mode": "reactive",
+      "keyShape": "with-own-data",
+      "name": "delete-add-has",
+      "iterationsPerSample": 300,
+      "unit": "ns/op-sequence",
+      "median": 1248,
+      "mean": 1236,
+      "variance": 6752,
+      "standardDeviation": 82,
+      "minimum": 1131,
+      "maximum": 1331,
+      "rawSamples": [
+        1248,
+        1331,
+        1131
+      ]
+    }
+  ],
+  "cleanup": [
+    {
+      "kind": "Map",
+      "keyCount": 10,
+      "samples": {
+        "trackedHeapDeltaBytes": {
+          "median": 7216,
+          "mean": -8156,
+          "variance": 236298384,
+          "standardDeviation": 15372,
+          "minimum": -23528,
+          "maximum": 7216,
+          "rawSamples": [
+            -23528,
+            7216
+          ]
+        },
+        "afterSweepHeapDeltaBytes": {
+          "median": -5544,
+          "mean": -992180,
+          "variance": 973450596496,
+          "standardDeviation": 986636,
+          "minimum": -1978816,
+          "maximum": -5544,
+          "rawSamples": [
+            -5544,
+            -1978816
+          ]
+        },
+        "unsubscribeMs": {
+          "median": 0,
+          "mean": 0,
+          "variance": 0,
+          "standardDeviation": 0,
+          "minimum": 0,
+          "maximum": 0,
+          "rawSamples": [
+            0,
+            0
+          ]
+        },
+        "sweepWallMs": {
+          "median": 18,
+          "mean": 16,
+          "variance": 4,
+          "standardDeviation": 2,
+          "minimum": 14,
+          "maximum": 18,
+          "rawSamples": [
+            14,
+            18
+          ]
+        }
+      }
+    },
+    {
+      "kind": "Map",
+      "keyCount": 1000,
+      "samples": {
+        "trackedHeapDeltaBytes": {
+          "median": 407784,
+          "mean": 404316,
+          "variance": 12027024,
+          "standardDeviation": 3468,
+          "minimum": 400848,
+          "maximum": 407784,
+          "rawSamples": [
+            400848,
+            407784
+          ]
+        },
+        "afterSweepHeapDeltaBytes": {
+          "median": 324928,
+          "mean": 168636,
+          "variance": 24427189264,
+          "standardDeviation": 156292,
+          "minimum": 12344,
+          "maximum": 324928,
+          "rawSamples": [
+            324928,
+            12344
+          ]
+        },
+        "unsubscribeMs": {
+          "median": 0,
+          "mean": 0,
+          "variance": 0,
+          "standardDeviation": 0,
+          "minimum": 0,
+          "maximum": 0,
+          "rawSamples": [
+            0,
+            0
+          ]
+        },
+        "sweepWallMs": {
+          "median": 142,
+          "mean": 141,
+          "variance": 0,
+          "standardDeviation": 1,
+          "minimum": 141,
+          "maximum": 142,
+          "rawSamples": [
+            142,
+            141
+          ]
+        }
+      }
+    },
+    {
+      "kind": "Map",
+      "keyCount": 10000,
+      "samples": {
+        "trackedHeapDeltaBytes": {
+          "median": 4375912,
+          "mean": 4368196,
+          "variance": 59536656,
+          "standardDeviation": 7716,
+          "minimum": 4360480,
+          "maximum": 4375912,
+          "rawSamples": [
+            4375912,
+            4360480
+          ]
+        },
+        "afterSweepHeapDeltaBytes": {
+          "median": 4000,
+          "mean": -9143404,
+          "variance": 83674999939216,
+          "standardDeviation": 9147404,
+          "minimum": -18290808,
+          "maximum": 4000,
+          "rawSamples": [
+            -18290808,
+            4000
+          ]
+        },
+        "unsubscribeMs": {
+          "median": 2,
+          "mean": 1,
+          "variance": 1,
+          "standardDeviation": 1,
+          "minimum": 1,
+          "maximum": 2,
+          "rawSamples": [
+            2,
+            1
+          ]
+        },
+        "sweepWallMs": {
+          "median": 1221,
+          "mean": 1205,
+          "variance": 270,
+          "standardDeviation": 16,
+          "minimum": 1189,
+          "maximum": 1221,
+          "rawSamples": [
+            1221,
+            1189
+          ]
+        }
+      }
+    },
+    {
+      "kind": "Set",
+      "keyCount": 10,
+      "samples": {
+        "trackedHeapDeltaBytes": {
+          "median": 7184,
+          "mean": -11704,
+          "variance": 356756544,
+          "standardDeviation": 18888,
+          "minimum": -30592,
+          "maximum": 7184,
+          "rawSamples": [
+            -30592,
+            7184
+          ]
+        },
+        "afterSweepHeapDeltaBytes": {
+          "median": 1488,
+          "mean": -12752,
+          "variance": 202777600,
+          "standardDeviation": 14240,
+          "minimum": -26992,
+          "maximum": 1488,
+          "rawSamples": [
+            -26992,
+            1488
+          ]
+        },
+        "unsubscribeMs": {
+          "median": 0,
+          "mean": 0,
+          "variance": 0,
+          "standardDeviation": 0,
+          "minimum": 0,
+          "maximum": 0,
+          "rawSamples": [
+            0,
+            0
+          ]
+        },
+        "sweepWallMs": {
+          "median": 31,
+          "mean": 27,
+          "variance": 24,
+          "standardDeviation": 5,
+          "minimum": 22,
+          "maximum": 31,
+          "rawSamples": [
+            31,
+            22
+          ]
+        }
+      }
+    },
+    {
+      "kind": "Set",
+      "keyCount": 1000,
+      "samples": {
+        "trackedHeapDeltaBytes": {
+          "median": 419560,
+          "mean": 414724,
+          "variance": 23386896,
+          "standardDeviation": 4836,
+          "minimum": 409888,
+          "maximum": 419560,
+          "rawSamples": [
+            419560,
+            409888
+          ]
+        },
+        "afterSweepHeapDeltaBytes": {
+          "median": 344192,
+          "mean": 176300,
+          "variance": 28187723664,
+          "standardDeviation": 167892,
+          "minimum": 8408,
+          "maximum": 344192,
+          "rawSamples": [
+            344192,
+            8408
+          ]
+        },
+        "unsubscribeMs": {
+          "median": 1,
+          "mean": 0,
+          "variance": 0,
+          "standardDeviation": 0,
+          "minimum": 0,
+          "maximum": 1,
+          "rawSamples": [
+            1,
+            0
+          ]
+        },
+        "sweepWallMs": {
+          "median": 131,
+          "mean": 130,
+          "variance": 1,
+          "standardDeviation": 1,
+          "minimum": 129,
+          "maximum": 131,
+          "rawSamples": [
+            131,
+            129
+          ]
+        }
+      }
+    },
+    {
+      "kind": "Set",
+      "keyCount": 10000,
+      "samples": {
+        "trackedHeapDeltaBytes": {
+          "median": 4371712,
+          "mean": 4368956,
+          "variance": 7595536,
+          "standardDeviation": 2756,
+          "minimum": 4366200,
+          "maximum": 4371712,
+          "rawSamples": [
+            4366200,
+            4371712
+          ]
+        },
+        "afterSweepHeapDeltaBytes": {
+          "median": 3580704,
+          "mean": 1800476,
+          "variance": 3169211731984,
+          "standardDeviation": 1780228,
+          "minimum": 20248,
+          "maximum": 3580704,
+          "rawSamples": [
+            3580704,
+            20248
+          ]
+        },
+        "unsubscribeMs": {
+          "median": 4,
+          "mean": 3,
+          "variance": 1,
+          "standardDeviation": 1,
+          "minimum": 3,
+          "maximum": 4,
+          "rawSamples": [
+            4,
+            3
+          ]
+        },
+        "sweepWallMs": {
+          "median": 1233,
+          "mean": 1203,
+          "variance": 872,
+          "standardDeviation": 30,
+          "minimum": 1174,
+          "maximum": 1233,
+          "rawSamples": [
+            1174,
+            1233
+          ]
+        }
+      }
+    }
+  ]
+}

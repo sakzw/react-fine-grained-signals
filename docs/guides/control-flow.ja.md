@@ -116,7 +116,7 @@ interface IndexProps<T> {
 
 `deepSignal`は同一realmの`Map`、`Set`、`WeakMap`、`WeakSet`を既定で追跡し、ネストしたcollectionも対象です。`.value`経由で読み書きしてください。元のcollection参照や`.peek()`経由の変更は通知されません。Mapのkey読み取り、membership、size、iterationは、それぞれ独立したdependencyを使います。Weak collectionはネイティブで可能なkey操作だけを追跡します。
 
-既定modeの `Map` / `Set` は、`.value` 経由で読み取り専用のruntime viewとして公開されます（TypeScript上の型は可変のままです）。そのmodeではimmutable replacementを使ってください。コピーを作り、変更してから新しいcollectionをsignalへ代入します。
+`.value`から取得したcollectionの変更はリアクティブで、変更されたkeyやiteration dependencyを読んだconsumerへ通知されます。collectionをその場で更新できます。周囲のstate更新が分かりやすくなる場合はimmutable replacementも使えます。
 
 ```ts
 const next = new Map(labels.value);
