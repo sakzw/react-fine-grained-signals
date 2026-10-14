@@ -10,7 +10,7 @@ Qualification on the final local source: focused symbol/sweep tests passed (2 fi
 
 The collection benchmark was repeated at 10k subscribed primitive keys. Two runs measured update/add/delete at 319,642/270,362/338,166 ns and 168,348/89,372/126,434 ns respectively; the earlier single baseline was 144,812/172,428/191,268 ns. This spread is too noisy to claim a stable regression or improvement, and the benchmark uses string keys, so it does not exercise the new registered-symbol branch. The symbol-key sweep test verifies bounded synchronous work and eventual cleanup instead. No memory-retention claim is inferred from the noisy heap deltas.
 
-This change is committed locally on `main` and was not pushed, per the current no-push instruction. The GitHub Test/E2E runs listed below cover the earlier managed-tracking closure commit, not this symbol-key fix. Therefore the local candidate is re-frozen, while a post-fix GitHub Actions run remains a release qualification blocker until CI runs on this change.
+This change was pushed to `origin/main` at `dc8b588cf448e770c807e52c3a3574270f6bdbd0`. The post-fix [GitHub Test run 38489399215](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38489399215) and [E2E run 38489399223](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38489399223) both passed. No release tag, npm publish, or GitHub Release was created.
 
 ## Review baseline and fixes
 
@@ -32,8 +32,8 @@ The v0.2.1/v0.3.0 comparison used the same keyed-row React consumer fixture. v0.
 
 The post-fix workflows ran against pushed commit `03be0e96cb12f526baa63a93d93c863b8fabf53a`: [Test run 38482796213](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38482796213) passed, and [E2E run 38482796188](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38482796188) passed. The baseline failures remain available for comparison: [Test run 38468534814](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534814) failed at the original coverage gate, and [E2E run 38468534839](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534839) had the stale-row failure.
 
-## Prior freeze decision
+## Freeze decision
 
-The earlier review closure re-froze M8 at package version 0.3.0 after local qualification and successful GitHub Actions runs. The final symbol-key closure above supersedes that code qualification for the current local `main` state.
+M8 is **re-frozen** at package version 0.3.0. Local qualification and both GitHub workflows passed for the final symbol-key closure. The earlier five-worker WebKit transient remains documented above and did not recur in the isolated test, CI-serial matrix, or GitHub E2E workflow.
 
-No release tag, npm publish, or GitHub Release was created. The current local re-freeze is backed by the local qualification above; the post-symbol-fix GitHub Actions check remains outstanding.
+No release tag, npm publish, or GitHub Release was created. The current re-freeze is backed by local qualification and the post-fix GitHub Actions runs above.
