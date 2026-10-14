@@ -20,10 +20,6 @@ const REACTIVE_PROP_NAMES = new Set([
   "checked",
 ]);
 
-function domBindingProp(name: string): string {
-  return name === "bindValue" ? "value" : name === "bindChecked" ? "checked" : name;
-}
-
 /**
  * The concrete strategy a direct binding is mounted with. Resolved once, in
  * `findHostBindings`, from the JSX tag string that is already on hand at
@@ -180,13 +176,9 @@ function isReactiveHostProp(name: string, value: unknown): value is ReadonlySign
 
 function isWritableSignal(value: unknown): value is Signal<unknown> {
   if (!isSignal(value)) return false;
-  let target: object | null = value;
-  while (target !== null) {
-    const descriptor = Object.getOwnPropertyDescriptor(target, "value");
-    if (descriptor !== undefined) return typeof descriptor.set === "function" || descriptor.writable === true;
-    target = Object.getPrototypeOf(target) as object | null;
-  }
-  return false;
+  const descriptor = Object.getOwnPropertyDescriptor(value, "value") ??
+    Object.getOwnPropertyDescriptor(Object.getPrototypeOf(value), "value");
+  return descriptor !== undefined && (typeof descriptor.set === "function" || descriptor.writable === true);
 }
 
 function getStylePropertyBinding(value: unknown): { source: StylePropertyBinding; snapshot: Record<string, unknown> } | undefined {
@@ -764,7 +756,7 @@ function subscribeBinding(
       };
     case "text-value":
       return {
-        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source as Signal<unknown>, whileAttached((value: unknown) => setControlledProp(node, domBindingProp(name), value))),
+        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source as Signal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
         getStyleKeys: undefined,
         restore: undefined,
       };
@@ -774,7 +766,7 @@ function subscribeBinding(
         const writableSource = source as Signal<unknown>;
         const onChange = () => { writableSource.value = input.checked; };
         input.addEventListener("change", onChange);
-        const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, domBindingProp(name), value)));
+        const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "checked", value)));
         const disposeReset = bindFormReset(input, subscription.refresh);
         return {
           ...subscription,
@@ -1064,23 +1056,23 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
   for (const [name, value] of Object.entries(props)) {
     if (name === "bindValue" || name === "bindChecked") {
       if (!isWritableSignal(value)) {
-        throw new TypeError(`react-fine-grained-signals: ${name} requires a writable signal.`);
+        throw new TypeError(`${name} requires writable signal.`);
       }
       if (name === "bindValue") {
         const inputType = String(props.type ?? "text").toLowerCase();
         const textInputTypes = new Set(["text", "search", "tel", "url", "password", "email"]);
         if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(inputType))) {
-          throw new TypeError("react-fine-grained-signals: bindValue is supported on text-like <input> elements and <textarea> only.");
+          throw new TypeError("bindValue: text input/textarea only.");
         }
       } else if (tagName !== "input" || String(props.type ?? "text").toLowerCase() !== "checkbox") {
-        throw new TypeError("react-fine-grained-signals: bindChecked is supported on <input type=\"checkbox\"> only; radio groups need a shared selection value.");
+        throw new TypeError("bindChecked: checkbox only.");
       }
       const kind = resolveBindingKind(tagName, name);
       bindings.push([name, value, kind, readInitialValue(value, kind)]);
       continue;
     }
     if ((name === "value" || name === "checked") && isSignal(value)) {
-      throw new TypeError(`react-fine-grained-signals: signal-valued ${name} props are no longer implicit bindings. Use ${name === "value" ? "bindValue" : "bindChecked"}={signal} for direct binding, or pass signal.value for React-controlled semantics.`);
+      throw new TypeError(`Use ${name === "value" ? "bindValue" : "bindChecked"} or ${name}.value for signal props.`);
     }
     if (isReactiveHostProp(name, value)) {
       const kind = resolveBindingKind(tagName, name);

@@ -5,7 +5,7 @@ import { Activity, act, useLayoutEffect } from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
-import { computed, effect, signal, useSignalTracking } from "../src/index.js";
+import { computed, effect, isSignal, signal, useSignalTracking } from "../src/index.js";
 import { useManagedSignals } from "../src/runtime.js";
 
 // Regression coverage for the final targeted v0.2.0 release-blocker validation.
@@ -277,12 +277,16 @@ describe("a host prop switched from a signal binding back to a plain value", () 
   });
 
   it("hands a text input's value to a plain value equal to the render-time snapshot", () => {
-    const { node } = switchToPlain("a", "b", "a", (value) => <input value={value as string} onChange={() => {}} />);
+    const { node } = switchToPlain("a", "b", "a", (value) => isSignal(value)
+      ? <input bindValue={value as ReturnType<typeof signal<string>>} />
+      : <input value={value as string} />);
     expect((node as HTMLInputElement).value).toBe("a");
   });
 
   it("hands a checkbox's checked state to a plain value equal to the render-time snapshot", () => {
-    const { node } = switchToPlain(false, true, false, (checked) => <input type="checkbox" checked={checked as boolean} onChange={() => {}} />);
+    const { node } = switchToPlain(false, true, false, (checked) => isSignal(checked)
+      ? <input type="checkbox" bindChecked={checked as ReturnType<typeof signal<boolean>>} />
+      : <input type="checkbox" checked={checked as boolean} />);
     expect((node as HTMLInputElement).checked).toBe(false);
   });
 

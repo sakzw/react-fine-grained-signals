@@ -507,10 +507,10 @@ describe("Direct DOM binding", () => {
   it("rejects implicit signal-valued form props and readonly binding sources", () => {
     const writable = signal("value");
     const readonly = computed(() => writable.value);
-    expect(() => createSignalAwareElement("input", { value: writable })).toThrow(/signal-valued value props are no longer implicit bindings/);
-    expect(() => createSignalAwareElement("input", { checked: signal(true) })).toThrow(/signal-valued checked props are no longer implicit bindings/);
-    expect(() => createSignalAwareElement("input", { bindValue: readonly })).toThrow(/bindValue requires a writable signal/);
-    expect(() => createSignalAwareElement("input", { type: "radio", bindChecked: signal(false) })).toThrow(/checkbox.*only/);
+    expect(() => createSignalAwareElement("input", { value: writable })).toThrow(/Use bindValue.*value\.value for signal props/);
+    expect(() => createSignalAwareElement("input", { checked: signal(true) })).toThrow(/Use bindChecked.*checked\.value for signal props/);
+    expect(() => createSignalAwareElement("input", { bindValue: readonly })).toThrow(/bindValue requires writable signal/);
+    expect(() => createSignalAwareElement("input", { type: "radio", bindChecked: signal(false) })).toThrow(/checkbox/);
   });
 
   it("does not let an unrelated re-render move the caret on a direct-bound value", () => {

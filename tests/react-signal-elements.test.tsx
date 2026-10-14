@@ -360,10 +360,10 @@ describe("JSX pragma: uncopied-props fast path", () => {
 
   it("never mutates the original props object for a two-way bound value", () => {
     const text = signal("initial");
-    const original: Record<string, unknown> = { "aria-label": "two-way field", value: text, onChange: () => {} };
+    const original: Record<string, unknown> = { "aria-label": "two-way field", bindValue: text, onChange: () => {} };
 
     render(jsx("input", original, undefined));
-    expect(original.value).toBe(text);
+    expect(original.bindValue).toBe(text);
     expect("defaultValue" in original).toBe(false);
   });
 
