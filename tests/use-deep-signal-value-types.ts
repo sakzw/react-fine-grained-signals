@@ -33,7 +33,7 @@ function TypeContract({ prefix }: { prefix: string }) {
   const badName: number = useDeepSignalValue(state, (value) => value.user.name, []);
   // @ts-expect-error selectors only receive the declared root state shape.
   useDeepSignalValue(state, (value) => value.missing, []);
-  // @ts-expect-error selector snapshots must be primitive values, not proxies.
+  // @ts-expect-error Object selectors are rejected because mutable snapshots lack stable identity.
   useDeepSignalValue(state, (value) => value.user, []);
 
   void [name, firstTaskDone, optionalLabel, label, badName];

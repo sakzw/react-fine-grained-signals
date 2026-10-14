@@ -45,12 +45,15 @@ property単位で追跡するdeep signalを、コンポーネントの生存期�
 
 ```ts
 useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
+useComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
 ```
 
-安定したidentityを持つcomputed signalを作ります。2つのモードがあり、コンポーネントの生存期間中はどちらか一方を使い続けてください。
+安定したidentityを持つcomputed signalを作ります。getterを渡すと読み取り専用、`{ get, set }`を渡すと書き込み可能です。書き込み可能なoverloadは`FormBindableSignal<T>`を返し、型が合う`bindValue`または`bindChecked`に渡せます。getterのみの呼び出しは引き続き`ReadonlySignal<T>`です。コンポーネントの生存期間中は依存関係のmodeと読み取り専用／書き込み可能のcapabilityを固定してください。
 
 - **依存配列を省略する場合**、getterはsignalだけを読む必要があります。最初のクロージャがコンポーネントの生存期間中保持されるため、props、React state、その他のsignalではない値を捕捉しないでください。
 - **依存配列を渡す場合**、getterが捕捉するsignal以外の値をすべて列挙します: `useComputed(() => count.value * step, [step])`。
+
+`{ get, set }`も同じ依存関係ルールに従います。依存値が変わると、commitされたrenderの後に両callbackが一緒に更新されます。中断されたrenderはcommit済みcallbackを置き換えません。form bindingではgetterが表示値の正本です。setterが入力を拒否または正規化した場合、Reactがユーザーイベントを処理した後にgetterの値へDOMを戻します。
 
 ## useSignalEffect
 
@@ -143,6 +146,6 @@ const name = useDeepSignalValue(state, (value) => value.user.name, []);
 ```
 
 - `dependencies` は必須で、長さと順序を一定に保ち、selectorが捕捉するsignal以外の値をすべて列挙してください。レンダー間で長さが変わると例外を投げます。
-- selectorはプリミティブなsnapshotを返す必要があります。object、Proxy、functionを返すと、runtimeで `TypeError` を投げます。
+- selectorはプリミティブなsnapshotを返す必要があります。object、Proxy、functionを返すと、runtimeで `TypeError` になります。mutableな値は安定したsnapshot identityを保証できないためです。
 
 関連: [コアプリミティブ](./core-primitives.ja.md)、[描画最適化](./rendering-optimization.ja.md)。

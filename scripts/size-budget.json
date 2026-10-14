@@ -1,23 +1,23 @@
 {
   "signal-only": {
-    "gzip": 7680
+    "gzip": 7744
   },
   "core": {
-    "gzip": 7680
+    "gzip": 7744
   },
   "core+hooks": {
-    "gzip": 9536
+    "gzip": 9728
   },
   "deep": {
-    "gzip": 15616
+    "gzip": 15040
   },
   "index-full": {
-    "gzip": 21440
+    "gzip": 22848
   },
   "jsx-runtime": {
-    "gzip": 13184
+    "gzip": 14336
   },
   "utils": {
-    "gzip": 9344
+    "gzip": 9408
   }
 }

@@ -114,13 +114,19 @@ const enabled = signal(false);
   <option value="a">A</option>
   <option value="b">B</option>
 </select>
+<input type="radio" name="plan" value="basic" bindValue={plan} />
+<input type="radio" name="plan" value="pro" bindValue={plan} />
+<input type="checkbox" name="features" value="search" bindValue={features} />
+<input type="checkbox" name="features" value="export" bindValue={features} />
 <select multiple bindValue={selectedMany}>
   <option value="a">A</option>
   <option value="b">B</option>
 </select>
 ```
 
-`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`), `textarea`, single selects with `FormBindableSignal<string>`, and `multiple` selects with `FormBindableSignal<string[]>`. `bindChecked` requires `FormBindableSignal<boolean>`. The `multiple` attribute must be a literal `true` for the array form; dynamic booleans are checked at runtime against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later are observed and the current signal selection is reapplied. Radio groups are not supported by `bindChecked`; use React-controlled props.
+`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`), `textarea`, single selects with `FormBindableSignal<string>`, and `multiple` selects with `FormBindableSignal<string[]>`. Radio inputs with the same form owner and `name` can share a `FormBindableSignal<string>`; each option needs a string `value`. Checkbox inputs with the same form owner and `name` can share a `FormBindableSignal<string[]>`; each checkbox needs a string `value`. `bindChecked` remains available for one independent checkbox and requires `FormBindableSignal<boolean>`. The `multiple` attribute must be a literal `true` for the select array form; dynamic booleans are checked at runtime against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later are observed and the current signal selection is reapplied.
+
+Checkbox-group arrays retain their existing order and duplicates when another option is selected; a newly selected value is appended once. Unchecking a value removes all of its occurrences.
 
 The binding types require the package capability `FormBindableSignal<T>`. `signal()`, `useSignal()`, and writable `computed({ get, set })` return this type. Keep it in reusable form props instead of widening the value to `Signal<T>`:
 
@@ -142,7 +148,7 @@ The capability is a TypeScript-only opaque marker; it is not a JavaScript proper
 
 An explicit binding owns that DOM state: do not combine `bindValue` with `value` or `defaultValue`, or `bindChecked` with `checked` or `defaultChecked`. The runtime rejects those combinations, and the RFSG JSX types reject statically visible conflicts. Standard React-controlled selects remain available with `value={selected.value}` and an `onChange` handler. With `bindValue`, the native change listener updates the signal before React's `onChange` runs, so no signal assignment is needed in that handler unless it normalizes the value.
 
-The binding subscribes after the host ref attaches, initializes from the signal, and writes signal changes to the DOM without rerendering the owner. Native `input` events write text into the signal, and native `change` events write checkbox state or select values (an array for `multiple`). `onChange` and `onInput` props are forwarded unchanged and still run through React. For text inputs, the target-level native listener runs before React's delegated handler; it calls the binding setter synchronously and defers any corrective DOM write until the event has bubbled, so React handlers observe the entered text. An `onChange` handler can perform additional work or write a normalized value. Ignoring an edit in `onChange` does not reject it because the native binding already called the setter.
+The binding subscribes after the host ref attaches, initializes from the signal, and writes signal changes to the DOM without rerendering the owner. Native `input` events write text into the signal; `change` events write checkbox or select values (an array for a multiple select). Radio and checkbox groups update from the target's native `click` before React's delegated click handler, so that handler observes the current shared signal. Group correction is deferred until the event has bubbled, preserving React's synthetic `onChange`. `onChange` and `onInput` props are forwarded unchanged. For text inputs, the target-level native input listener calls the binding setter synchronously and defers any corrective DOM write until the event has bubbled, so React handlers observe the entered text. An `onChange` handler can perform additional work or write a normalized value. Ignoring an edit in `onChange` does not reject it because the native binding already called the setter.
 
 For writable computed bindings, the getter is the source of truth. After the input event has fully propagated, the binding reads the getter in the next task and corrects the DOM only if it still contains that event's attempted value and differs from the getter. Deferring to a task also accounts for browsers that run microtasks between native listeners, before React's delegated handler. This handles rejected input and normalization, while avoiding stale writes if a newer edit or React handler has already changed the DOM. During IME composition, correction waits until composition ends.
 
@@ -162,6 +168,6 @@ These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "reac
 - A `deepSignal` is not accepted as a signal child or a bound prop. Those positions follow root replacement only, so nested mutations would never show; TypeScript rejects them. Read deep state inside a tracked component, or select a primitive with [`useDeepSignalValue`](./hooks.md#usedeepsignalvalue).
 - For SSR and hydration, ensure the initial signal values are identical on server and client. Do not place request-specific signals in shared module scope; create them per request.
 - Writable signals are required; read-only computed signals cannot be used with `bindValue` or `bindChecked`.
-- A `computed({ get, set })` is writable and can be bound when its value type matches the field. The native input/select change calls its setter; updates to dependencies are still reflected through its getter. The getter-only `computed(() => ...)` and `useComputed()` remain read-only.
+- A `computed({ get, set })` or writable `useComputed({ get, set })` can be bound when its value type matches the field. User input calls its setter; updates to dependencies are reflected through its getter. If the setter rejects or normalizes a value, the getter remains authoritative and the DOM is corrected after React's event handlers run. Getter-only computed values remain read-only.
 
 See also: [rendering optimization](./rendering-optimization.md), [JSX control-flow utilities](./control-flow.md).

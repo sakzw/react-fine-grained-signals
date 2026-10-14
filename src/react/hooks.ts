@@ -11,6 +11,7 @@ import type {
   DeepSignal,
   FormBindableSignal,
   ReadonlySignal,
+  WritableComputedOptions,
 } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
 import { untrackedRender } from "../core/render-tracking.js";
@@ -22,6 +23,7 @@ const EMPTY_DEPENDENCIES: DependencyList = [];
 
 /** Which of `useComputed`'s two mutually exclusive modes a call site uses. */
 type ComputedMode = "without a dependency array" | "with a dependency array";
+type ComputedCapability = "read-only" | "writable";
 
 /** An immutable value that React can safely compare as an external-store snapshot. */
 export type SignalSnapshot =
@@ -222,17 +224,30 @@ export function useDeepSignalValue<
 export function useComputed<T>(
   getValue: () => T,
   dependencies?: DependencyList,
-): ReadonlySignal<T> {
+): ReadonlySignal<T>;
+export function useComputed<T>(
+  options: WritableComputedOptions<T>,
+  dependencies?: DependencyList,
+): FormBindableSignal<T>;
+export function useComputed<T>(
+  source: (() => T) | WritableComputedOptions<T>,
+  dependencies?: DependencyList,
+): ReadonlySignal<T> | FormBindableSignal<T> {
+  const capability: ComputedCapability =
+    typeof source === "function" ? "read-only" : "writable";
   const dependencyComputed = useMemo(
     () =>
       dependencies === undefined
         ? undefined
-        : computed(getValue),
+        : typeof source === "function"
+          ? computed(source)
+          : computed(source),
     dependencies ?? EMPTY_DEPENDENCIES,
   );
 
   const initialModeRef = useRef<ComputedMode | undefined>(undefined);
-  const signalOnlyComputedRef = useRef<ReadonlySignal<T> | undefined>(undefined);
+  const initialCapabilityRef = useRef<ComputedCapability | undefined>(undefined);
+  const signalOnlyComputedRef = useRef<ReadonlySignal<T> | FormBindableSignal<T> | undefined>(undefined);
 
   // Both directions of a mode switch are silently destructive, so neither is
   // allowed to reach the caller as a mystery. Going deps -> no-deps used to
@@ -252,12 +267,23 @@ export function useComputed<T>(
     throw error;
   }
 
+  initialCapabilityRef.current ??= capability;
+  if (initialCapabilityRef.current !== capability) {
+    const error = new Error(
+      `useComputed: the computed capability changed between renders (from ${initialCapabilityRef.current} to ${capability}) for this call site. Keep using either a getter or a writable { get, set } object for the component's lifetime.`,
+    );
+    error.name = "UseComputedCapabilityChangeError";
+    throw error;
+  }
+
   // Defined exactly when `dependencies` is, per the memo above; checking the
   // result rather than the argument is what removes the old `!` assertion.
   if (dependencyComputed !== undefined) return dependencyComputed;
 
   if (signalOnlyComputedRef.current === undefined) {
-    signalOnlyComputedRef.current = computed(getValue);
+    signalOnlyComputedRef.current = typeof source === "function"
+      ? computed(source)
+      : computed(source);
   }
 
   return signalOnlyComputedRef.current;

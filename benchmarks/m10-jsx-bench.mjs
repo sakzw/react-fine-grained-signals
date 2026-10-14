@@ -12,6 +12,8 @@ const classSignal = signal("active");
 const styleColor = signal("red");
 const valueSignal = signal("text");
 const checkedSignal = signal(false);
+const radioSignal = signal("basic");
+const checkboxGroupSignal = signal(["search"]);
 function Component() { return null; }
 let sink;
 
@@ -32,6 +34,8 @@ const signalOnly = [
   ["signal-children-array", () => signalJsxs("div", { children: [titleSignal, "suffix"] })],
   ["bind-value", () => signalJsx("input", { type: "text", bindValue: valueSignal })],
   ["bind-checked", () => signalJsx("input", { type: "checkbox", bindChecked: checkedSignal })],
+  ["bind-radio-value", () => signalJsx("input", { type: "radio", name: "plan", value: "basic", bindValue: radioSignal })],
+  ["bind-checkbox-group", () => signalJsx("input", { type: "checkbox", name: "features", value: "search", bindValue: checkboxGroupSignal })],
 ];
 
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];

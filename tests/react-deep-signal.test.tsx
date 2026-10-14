@@ -324,8 +324,10 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     ["mutable object", () => ({ name: "Ada" })],
     ["deep proxy", (value: { user: { name: string } }) => value.user],
     ["function", () => () => "Ada"],
+    ["Map", (value: { map: Map<string, number> }) => value.map],
+    ["class instance", (value: { opaque: Date }) => value.opaque],
   ])("rejects a %s returned by a deep selector at runtime", (_label, selector) => {
-    const state = deepSignal({ user: { name: "Ada" } });
+    const state = deepSignal({ user: { name: "Ada" }, map: new Map([['x', 1]]), opaque: new Date() });
 
     function InvalidSelection() {
       useDeepSignalValue(state, selector as never, []);
@@ -342,7 +344,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
   it.each([
     [
       "an invalid selector result",
-      (value: { fail: boolean }) => value.fail ? value : "ready",
+      (value: { fail: boolean }) => value.fail ? new Map() : "ready",
       (state: ReturnType<typeof deepSignal<{ fail: boolean }>>) => {
         state.value.fail = true;
       },

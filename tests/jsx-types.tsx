@@ -1,6 +1,6 @@
 /** @jsxImportSource react-fine-grained-signals */
 
-import { computed, signal, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
+import { computed, signal, useComputed, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
 
 const text = signal("value");
 const enabled = signal(false);
@@ -36,6 +36,21 @@ function HookCreatedBinding() {
   return <input bindValue={hookSignal} />;
 }
 
+function HookWritableComputedBinding() {
+  const hookComputed = useComputed({
+    get: () => text.value,
+    set: (value: string) => { text.value = value; },
+  });
+  const capability: FormBindableSignal<string> = hookComputed;
+  return <input bindValue={capability} />;
+}
+
+function HookReadonlyComputedBinding() {
+  const hookComputed = useComputed(() => text.value);
+  // @ts-expect-error Getter-only useComputed results remain readonly.
+  return <input bindValue={hookComputed} />;
+}
+
 // HTML direct bindings and signal children are supported.
 const html = (
   <button disabled={enabled} aria-label={text} data-state={text}>
@@ -62,6 +77,8 @@ const unsupportedCustomBinding = <input bindValue={customWritableSignal} />;
 const writableComputedCheckbox = <input type="checkbox" bindChecked={writableChecked} />;
 const boundCheckboxWithFormValue = <input type="checkbox" name="permission" value="admin" bindChecked={enabled} />;
 const boundCheckboxWithDefaultFormValue = <input type="checkbox" name="permission" defaultValue="admin" bindChecked={enabled} />;
+const boundRadioOption = <input type="radio" name="choice" value="a" bindValue={text} />;
+const boundCheckboxGroupOption = <input type="checkbox" name="features" value="a" bindValue={selectedMany} />;
 // @ts-expect-error Checkbox form values remain ordinary React props, not signal bindings.
 const checkboxImplicitValueBinding = <input type="checkbox" value={text} bindChecked={enabled} />;
 const boundTextarea = <textarea bindValue={text} />;
@@ -92,6 +109,16 @@ const implicitValueBinding = <input value={text} />;
 const readOnlyBinding = <input bindValue={enabledReadOnly} />;
 // @ts-expect-error Binding types are explicit about their payload.
 const wrongCheckedBinding = <input type="checkbox" bindChecked={text} />;
+// @ts-expect-error Radio binding requires a scalar string source.
+const wrongRadioGroupValue = <input type="radio" name="choice" value="a" bindValue={selectedMany} />;
+// @ts-expect-error Checkbox group binding requires an array of strings.
+const wrongCheckboxGroupValue = <input type="checkbox" value="a" bindValue={text} />;
+// @ts-expect-error Radio bindings require a group name.
+const missingRadioGroupName = <input type="radio" value="a" bindValue={text} />;
+// @ts-expect-error Group binding owns checked/defaultChecked state.
+const conflictingRadioDefaultChecked = <input type="radio" name="choice" value="a" defaultChecked bindValue={text} />;
+// @ts-expect-error Group binding cannot be combined with defaultValue.
+const conflictingGroupDefaultValue = <input type="checkbox" value="a" defaultValue="a" bindValue={selectedMany} />;
 // @ts-expect-error Getter-only computed values remain readonly and cannot be form bindings.
 const readonlyComputedInput = <input bindValue={computed(() => text.value)} />;
 // `title` and `id` remove their attributes when a direct binding becomes nullish.
@@ -157,4 +184,13 @@ void [
   unsupportedSvgStyle,
   component,
   HookCreatedBinding,
+  HookWritableComputedBinding,
+  HookReadonlyComputedBinding,
+  boundRadioOption,
+  boundCheckboxGroupOption,
+  wrongRadioGroupValue,
+  wrongCheckboxGroupValue,
+  missingRadioGroupName,
+  conflictingRadioDefaultChecked,
+  conflictingGroupDefaultValue,
 ];

@@ -130,6 +130,24 @@ function RebindingComputedFormBinding() {
   );
 }
 
+function InputValueGroups() {
+  const choice = useSignal("a");
+  const selected = useSignal<string[]>(["a"]);
+  return (
+    <section aria-labelledby="input-group-heading">
+      <h2 id="input-group-heading">Input value groups</h2>
+      <form id="input-value-groups">
+        <input id="group-radio-a" type="radio" name="group-choice" value="a" bindValue={choice} />
+        <input id="group-radio-b" type="radio" name="group-choice" value="b" bindValue={choice} />
+        <input id="group-checkbox-a" type="checkbox" name="group-features" value="a" bindValue={selected} />
+        <input id="group-checkbox-b" type="checkbox" name="group-features" value="b" bindValue={selected} />
+        <output id="group-choice-value" data-value={choice}>{choice}</output>
+        <output id="group-selected-values" data-value={selected.value.join(",")}>{selected.value.join(",")}</output>
+      </form>
+    </section>
+  );
+}
+
 class RefErrorBoundary extends Component<
   { id: string; children: ReactNode },
   { message: string | null }
@@ -480,6 +498,7 @@ export function App({ state }: { state: DemoState }) {
 
       <WritableComputedFormBinding />
       <RebindingComputedFormBinding />
+      <InputValueGroups />
 
       <section aria-labelledby="component-heading">
         <h2 id="component-heading">React component boundary</h2>

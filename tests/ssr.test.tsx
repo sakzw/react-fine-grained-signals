@@ -10,6 +10,7 @@ import {
   signal,
   computed,
   deepSignal,
+  useComputed,
   useDeepSignal,
   useDeepSignalValue,
   useSignalTracking,
@@ -20,6 +21,66 @@ import { For, Index, Show } from "react-fine-grained-signals/utils";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("SSR and hydration", () => {
+  it("hydrates writable useComputed form values and radio/checkbox groups", async () => {
+    const textSource = signal("server text");
+    const choiceSource = signal("b");
+    const selectedSource = signal<string[]>(["a", "c"]);
+    function App() {
+      const text = useComputed({
+        get: () => textSource.value,
+        set: (next: string) => { textSource.value = next; },
+      }, []);
+      const choice = useComputed({
+        get: () => choiceSource.value,
+        set: (next: string) => { choiceSource.value = next; },
+      });
+      const selected = useComputed({
+        get: () => selectedSource.value,
+        set: (next: string[]) => { selectedSource.value = next; },
+      });
+      return <form aria-label="hydrated group bindings">
+        <input aria-label="hydrated computed hook" bindValue={text} />
+        <input type="radio" name="hydrated choice" value="a" aria-label="hydrated radio a" bindValue={choice} />
+        <input type="radio" name="hydrated choice" value="b" aria-label="hydrated radio b" bindValue={choice} />
+        <input type="checkbox" name="hydrated feature" value="a" aria-label="hydrated feature a" bindValue={selected} />
+        <input type="checkbox" name="hydrated feature" value="b" aria-label="hydrated feature b" bindValue={selected} />
+        <input type="checkbox" name="hydrated feature" value="c" aria-label="hydrated feature c" bindValue={selected} />
+      </form>;
+    }
+
+    const html = renderToString(<App />);
+    expect(html).toContain('value="server text"');
+    expect((html.match(/checked=""/g) ?? [])).toHaveLength(3);
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+    await act(async () => { await Promise.resolve(); });
+    const input = container.querySelector('[aria-label="hydrated computed hook"]') as HTMLInputElement;
+    const radioA = container.querySelector('[aria-label="hydrated radio a"]') as HTMLInputElement;
+    const radioB = container.querySelector('[aria-label="hydrated radio b"]') as HTMLInputElement;
+    const checkboxA = container.querySelector('[aria-label="hydrated feature a"]') as HTMLInputElement;
+    const checkboxB = container.querySelector('[aria-label="hydrated feature b"]') as HTMLInputElement;
+    const checkboxC = container.querySelector('[aria-label="hydrated feature c"]') as HTMLInputElement;
+    expect(input.value).toBe("server text");
+    expect([radioA.checked, radioB.checked]).toEqual([false, true]);
+    expect([checkboxA.checked, checkboxB.checked, checkboxC.checked]).toEqual([true, false, true]);
+    await act(async () => {
+      input.value = "client text";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      radioA.click();
+      checkboxB.click();
+    });
+    expect(textSource.value).toBe("client text");
+    expect(choiceSource.value).toBe("a");
+    expect(selectedSource.value).toEqual(["a", "c", "b"]);
+    expect(consoleError).not.toHaveBeenCalled();
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("hydrates single and multiple explicit select bindings with their initial values", async () => {
     const singleSource = signal("b");
     const singleValue = computed({ get: () => singleSource.value, set: (next: string) => { singleSource.value = next; } });

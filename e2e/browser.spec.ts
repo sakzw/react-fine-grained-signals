@@ -94,6 +94,37 @@ test("cancels a rejected input correction when onChange rebinds the same node", 
   expect(errors).toEqual([]);
 });
 
+test("synchronizes radio and checkbox groups through explicit value bindings", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const radioA = page.locator("#group-radio-a");
+  const radioB = page.locator("#group-radio-b");
+  const checkboxA = page.locator("#group-checkbox-a");
+  const checkboxB = page.locator("#group-checkbox-b");
+
+  await expect(radioA).toBeChecked();
+  await expect(radioB).not.toBeChecked();
+  await radioA.focus();
+  await page.keyboard.press("ArrowRight");
+  await expect(radioB).toBeChecked();
+  await expect(page.locator("#group-choice-value")).toHaveText("b");
+
+  await expect(checkboxA).toBeChecked();
+  await expect(checkboxB).not.toBeChecked();
+  await checkboxB.check();
+  await expect(checkboxB).toBeChecked();
+  await expect(page.locator("#group-selected-values")).toHaveText("a,b");
+  await checkboxA.uncheck();
+  await expect(page.locator("#group-selected-values")).toHaveText("b");
+
+  const data = await page.locator("#input-value-groups").evaluate((form) => Object.fromEntries(new FormData(form as HTMLFormElement).entries()));
+  expect(data).toEqual({ "group-choice": "b", "group-features": "b" });
+  await page.locator("#input-value-groups").evaluate((form) => (form as HTMLFormElement).reset());
+  await expect(radioB).toBeChecked();
+  await expect(checkboxA).not.toBeChecked();
+  await expect(checkboxB).toBeChecked();
+  expect(errors).toEqual([]);
+});
+
 test("keeps bound form reset defaults synchronized with accepted edits", async ({ page }) => {
   const errors = await openHydrated(page);
   const form = page.locator("#bound-reset-form");

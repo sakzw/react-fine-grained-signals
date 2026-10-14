@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { Component, StrictMode, act } from "react";
+import { Component, StrictMode, Suspense, act, startTransition, useLayoutEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -13,7 +13,7 @@ import {
   useSignalValue,
   useSignalTracking,
 } from "../src/index.js";
-import type { ReadonlySignal } from "../src/index.js";
+import type { FormBindableSignal, ReadonlySignal } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -336,6 +336,135 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(screen.getByLabelText("product").textContent).toBe("6");
   });
 
+  it("keeps a writable useComputed stable and forwards writes to its setter", () => {
+    const source = signal(2);
+    let writable: FormBindableSignal<number> | undefined;
+    const renders = vi.fn();
+
+    function Writable({ label }: { label: string }) {
+      renders();
+      writable = useComputed({
+        get: () => source.value * 2,
+        set: (next) => { source.value = next / 2; },
+      });
+      return <output aria-label="writable computed" data-label={label}>{useSignalValue(writable)}</output>;
+    }
+
+    const view = render(<Writable label="first" />);
+    const initial = writable;
+    expect(screen.getByLabelText("writable computed").textContent).toBe("4");
+    view.rerender(<Writable label="second" />);
+    expect(writable).toBe(initial);
+
+    act(() => { writable!.value = 10; });
+    expect(source.value).toBe(5);
+    expect(screen.getByLabelText("writable computed").textContent).toBe("10");
+  });
+
+  it("updates writable useComputed getter and setter together when dependencies change", () => {
+    const source = signal(2);
+    let writable: FormBindableSignal<number> | undefined;
+
+    function Product({ factor }: { factor: number }) {
+      writable = useComputed({
+        get: () => source.value * factor,
+        set: (next) => { source.value = next / factor; },
+      }, [factor]);
+      return <output aria-label="writable product">{useSignalValue(writable)}</output>;
+    }
+
+    const view = render(<Product factor={2} />);
+    const first = writable;
+    expect(screen.getByLabelText("writable product").textContent).toBe("4");
+
+    view.rerender(<Product factor={4} />);
+    expect(writable).not.toBe(first);
+    expect(screen.getByLabelText("writable product").textContent).toBe("8");
+
+    act(() => { writable!.value = 20; });
+    expect(source.value).toBe(5);
+    expect(screen.getByLabelText("writable product").textContent).toBe("20");
+  });
+
+  it("does not let a suspended useComputed render replace the committed getter or setter", async () => {
+    const source = signal(2);
+    const suspendRenders = vi.fn();
+    let releaseSuspense!: () => void;
+    const pending = new Promise<void>((resolve) => { releaseSuspense = resolve; });
+    let canShowFive = false;
+    let committed: FormBindableSignal<number> | undefined;
+
+    function Product({ factor }: { factor: number }) {
+      const product = useComputed({
+        get: () => source.value * factor,
+        set: (next) => { source.value = next / factor; },
+      }, [factor]);
+      useLayoutEffect(() => { committed = product; }, [product]);
+      if (factor === 5 && !canShowFive) {
+        suspendRenders();
+        throw pending;
+      }
+      return <output aria-label="suspended product">{useSignalValue(product)}</output>;
+    }
+
+    function App() {
+      const [factor, setFactor] = useState(2);
+      return <>
+        <button onClick={() => startTransition(() => setFactor(5))}>change factor</button>
+        <Suspense fallback={<span>loading</span>}><Product factor={factor} /></Suspense>
+      </>;
+    }
+
+    render(<App />);
+    const oldCommitted = committed;
+    expect(screen.getByLabelText("suspended product").textContent).toBe("4");
+
+    await act(async () => {
+      screen.getByText("change factor").click();
+      await Promise.resolve();
+    });
+    expect(suspendRenders).toHaveBeenCalled();
+    expect(committed).toBe(oldCommitted);
+
+    act(() => { committed!.value = 20; });
+    expect(source.value).toBe(10);
+    expect(screen.getByLabelText("suspended product").textContent).toBe("20");
+
+    canShowFive = true;
+    await act(async () => { releaseSuspense(); await Promise.resolve(); });
+    expect(screen.getByLabelText("suspended product").textContent).toBe("50");
+    act(() => { committed!.value = 100; });
+    expect(source.value).toBe(20);
+    expect(screen.getByLabelText("suspended product").textContent).toBe("100");
+  });
+
+  it("batches source notifications made by a writable useComputed setter", () => {
+    const left = signal(1);
+    const right = signal(2);
+    const renders = vi.fn();
+
+    let total: FormBindableSignal<number> | undefined;
+    function Capture() {
+      total = useComputed({
+        get: () => left.value + right.value,
+        set: (next) => batch(() => {
+          left.value = next / 2;
+          right.value = next / 2;
+        }),
+      });
+      renders();
+      return <output aria-label="writable total">{useSignalValue(total)}</output>;
+    }
+
+    render(<Capture />);
+    expect(renders).toHaveBeenCalledTimes(1);
+    act(() => { total!.value = 10; });
+    expect(left.value).toBe(5);
+    expect(right.value).toBe(5);
+    expect(renders).toHaveBeenCalledTimes(2);
+    expect(screen.getByLabelText("writable total").textContent).toBe("10");
+  });
+
   it("reports a useComputed dependency-mode switch instead of crashing obscurely", () => {
     const source = signal(2);
 
@@ -366,5 +495,19 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
       /dependency-array mode changed between renders/,
     );
     reverseErrorSpy.mockRestore();
+  });
+
+  it("reports a read-only/writable useComputed capability switch", () => {
+    const source = signal(2);
+    function Switcher({ writable }: { writable: boolean }) {
+      const value = writable
+        ? useComputed({ get: () => source.value, set: (next: number) => { source.value = next; } })
+        : useComputed(() => source.value);
+      return <output>{useSignalValue(value)}</output>;
+    }
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<Switcher writable={false} />);
+    expect(() => view.rerender(<Switcher writable />)).toThrow(/computed capability changed between renders/);
+    errorSpy.mockRestore();
   });
 });

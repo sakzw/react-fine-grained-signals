@@ -538,6 +538,11 @@ describe("Direct DOM binding", () => {
     expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, defaultChecked: true })).toThrow(/bindChecked cannot be combined/);
     expect(() => createSignalAwareElement("select", { multiple: true, bindValue: text })).toThrow(/Invalid select bindValue/);
     expect(() => createSignalAwareElement("select", { bindValue: list })).toThrow(/Invalid select bindValue/);
+    expect(() => createSignalAwareElement("input", { type: "radio", value: "a", bindValue: text })).toThrow(/requires a non-empty name/);
+    expect(() => createSignalAwareElement("input", { type: "radio", name: "choice", value: "a", bindValue: list })).toThrow(/Radio bindValue requires a string/);
+    expect(() => createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: text })).toThrow(/array of strings/);
+    expect(() => createSignalAwareElement("input", { type: "radio", name: "choice", value: "a", defaultChecked: true, bindValue: text })).toThrow(/cannot be combined/);
+    expect(() => createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: list, bindChecked: checked })).toThrow(/cannot be combined/);
   });
 
   it("does not let an unrelated re-render move the caret on a direct-bound value", () => {
@@ -649,6 +654,170 @@ describe("Direct DOM binding", () => {
       bump.value++;
     });
     expect(input.checked).toBe(true);
+  });
+
+  it("bindValue synchronizes a radio group through one shared string signal", () => {
+    const choice = signal("b");
+    const renders = vi.fn();
+    const changes = vi.fn((event: ChangeEvent<HTMLInputElement>) => {
+      expect(choice.value).toBe(event.currentTarget.value);
+      expect(event.currentTarget.checked).toBe(true);
+    });
+
+    function Field() {
+      renders();
+      return <form aria-label="radio group">
+        <input type="radio" name="choice" value="a" aria-label="choice a" bindValue={choice} onChange={changes} />
+        <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onChange={changes} />
+      </form>;
+    }
+
+    render(<Field />);
+    const a = screen.getByLabelText("choice a") as HTMLInputElement;
+    const b = screen.getByLabelText("choice b") as HTMLInputElement;
+    expect(a.checked).toBe(false);
+    expect(b.checked).toBe(true);
+
+    act(() => { choice.value = "a"; });
+    expect(a.checked).toBe(true);
+    expect(b.checked).toBe(false);
+    const ownerRenders = renders.mock.calls.length;
+
+    fireEvent.click(b);
+    expect(choice.value).toBe("b");
+    expect(a.checked).toBe(false);
+    expect(b.checked).toBe(true);
+    expect(changes).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(ownerRenders);
+    const data = new FormData(screen.getByLabelText("radio group") as HTMLFormElement);
+    expect(data.get("choice")).toBe("b");
+  });
+
+  it("bindValue synchronizes checkbox groups with stable array order and duplicate removal", () => {
+    const selected = signal<string[]>(["b", "b"]);
+    const changes = vi.fn((event: ChangeEvent<HTMLInputElement>) => {
+      expect(selected.value.includes(event.currentTarget.value)).toBe(event.currentTarget.checked);
+    });
+
+    render(<form aria-label="checkbox group">
+      <input type="checkbox" name="features" value="a" aria-label="feature a" bindValue={selected} onChange={changes} />
+      <input type="checkbox" name="features" value="b" aria-label="feature b" bindValue={selected} onChange={changes} />
+      <input type="checkbox" name="features" value="c" aria-label="feature c" bindValue={selected} disabled />
+    </form>);
+    const a = screen.getByLabelText("feature a") as HTMLInputElement;
+    const b = screen.getByLabelText("feature b") as HTMLInputElement;
+    const c = screen.getByLabelText("feature c") as HTMLInputElement;
+    expect([a.checked, b.checked, c.checked]).toEqual([false, true, false]);
+
+    fireEvent.click(a);
+    expect(selected.value).toEqual(["b", "b", "a"]);
+    expect(a.checked).toBe(true);
+    fireEvent.click(b);
+    expect(selected.value).toEqual(["a"]);
+    expect(b.checked).toBe(false);
+    fireEvent.click(c);
+    expect(selected.value).toEqual(["a"]);
+    expect(changes).toHaveBeenCalledTimes(2);
+
+    act(() => { selected.value = ["c", "b"]; });
+    expect([a.checked, b.checked, c.checked]).toEqual([false, true, true]);
+    const data = new FormData(screen.getByLabelText("checkbox group") as HTMLFormElement);
+    expect(data.getAll("features")).toEqual(["b"]);
+  });
+
+  it("uses the latest accepted group signal values as form reset defaults", async () => {
+    const choice = signal("a");
+    const selected = signal<string[]>(["x"]);
+    render(<form aria-label="group reset form">
+      <input type="radio" name="choice" value="a" aria-label="reset radio a" bindValue={choice} />
+      <input type="radio" name="choice" value="b" aria-label="reset radio b" bindValue={choice} />
+      <input type="checkbox" name="features" value="x" aria-label="reset feature x" bindValue={selected} />
+      <input type="checkbox" name="features" value="y" aria-label="reset feature y" bindValue={selected} />
+    </form>);
+    const form = screen.getByLabelText("group reset form") as HTMLFormElement;
+    const radioB = screen.getByLabelText("reset radio b") as HTMLInputElement;
+    const checkboxY = screen.getByLabelText("reset feature y") as HTMLInputElement;
+
+    fireEvent.click(radioB);
+    fireEvent.click(checkboxY);
+    expect(choice.value).toBe("b");
+    expect(selected.value).toEqual(["x", "y"]);
+    await act(async () => { form.reset(); await Promise.resolve(); });
+    expect(radioB.checked).toBe(true);
+    expect(checkboxY.checked).toBe(true);
+    expect(choice.value).toBe("b");
+    expect(selected.value).toEqual(["x", "y"]);
+  });
+
+  it("keeps React onChange observable when a radio computed rejects, then restores the group", async () => {
+    const accepted = signal("a");
+    const choice = computed({
+      get: () => accepted.value,
+      set: (next: string) => { if (next === "a") accepted.value = next; },
+    });
+    const changes = vi.fn((event: ChangeEvent<HTMLInputElement>) => {
+      expect(event.currentTarget.value).toBe("b");
+      expect(event.currentTarget.checked).toBe(true);
+    });
+    render(<>
+      <input type="radio" name="rejecting choice" value="a" aria-label="accepted radio" bindValue={choice} />
+      <input type="radio" name="rejecting choice" value="b" aria-label="rejected radio" bindValue={choice} onChange={changes} />
+    </>);
+    const a = screen.getByLabelText("accepted radio") as HTMLInputElement;
+    const b = screen.getByLabelText("rejected radio") as HTMLInputElement;
+    fireEvent.click(b);
+    expect(changes).toHaveBeenCalledTimes(1);
+    expect(b.checked).toBe(true);
+    await act(async () => { await waitForNextTask(); });
+    expect(choice.value).toBe("a");
+    expect(a.checked).toBe(true);
+    expect(b.checked).toBe(false);
+  });
+
+  it("cancels a pending radio correction when the same node switches binding sources", async () => {
+    const accepted = signal("a");
+    const rejecting = computed({
+      get: () => accepted.value,
+      set: (next: string) => { if (next === "a") accepted.value = next; },
+    });
+    const replacement = signal("b");
+    const useReplacement = signal(false);
+    function Field() {
+      useSignalTracking();
+      const source = useReplacement.value ? replacement : rejecting;
+      return <input
+        type="radio"
+        name="replaceable choice"
+        value="b"
+        aria-label="replaceable radio"
+        bindValue={source}
+        onChange={() => { useReplacement.value = true; }}
+      />;
+    }
+    render(<Field />);
+    const input = screen.getByLabelText("replaceable radio") as HTMLInputElement;
+    expect(input.checked).toBe(false);
+    fireEvent.click(input);
+    expect(useReplacement.value).toBe(true);
+    await act(async () => { await waitForNextTask(); });
+    expect(input.checked).toBe(true);
+    expect(replacement.value).toBe("b");
+  });
+
+  it("keeps checkbox group reset aligned with the latest signal selection", async () => {
+    const selected = signal<string[]>(["a"]);
+    render(<form aria-label="checkbox group reset">
+      <input type="checkbox" name="items" value="a" aria-label="reset item a" bindValue={selected} />
+      <input type="checkbox" name="items" value="b" aria-label="reset item b" bindValue={selected} />
+    </form>);
+    const form = screen.getByLabelText("checkbox group reset") as HTMLFormElement;
+    const a = screen.getByLabelText("reset item a") as HTMLInputElement;
+    const b = screen.getByLabelText("reset item b") as HTMLInputElement;
+    act(() => { selected.value = ["b"]; });
+    expect([a.checked, b.checked]).toEqual([false, true]);
+    await act(async () => { form.reset(); await Promise.resolve(); });
+    expect(selected.value).toEqual(["b"]);
+    expect([a.checked, b.checked]).toEqual([false, true]);
   });
 
   it("uses writable computed signals for input, checkbox, and select bindings", () => {

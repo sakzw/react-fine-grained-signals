@@ -30,17 +30,25 @@ const REACTIVE_PROP_NAMES = new Set([
  * same facts from the mounted DOM node's `tagName`. It is also half of a
  * binding's identity for `NodeBinder`'s re-attach diff.
  */
-type BindingKind = "style" | "style-properties" | "select-value" | "text-value" | "checked" | "prop";
+type BindingKind = "style" | "style-properties" | "select-value" | "text-value" | "radio-value" | "checkbox-group" | "checked" | "prop";
 
-function resolveBindingKind(tagName: string, name: string): BindingKind {
-  if (name === "bindValue") return tagName === "select" ? "select-value" : "text-value";
+function resolveBindingKind(tagName: string, name: string, props?: HostProps): BindingKind {
+  if (name === "bindValue") {
+    if (tagName === "select") return "select-value";
+    if (tagName === "input") {
+      const inputType = String(props?.type ?? "text").toLowerCase();
+      if (inputType === "radio") return "radio-value";
+      if (inputType === "checkbox") return "checkbox-group";
+    }
+    return "text-value";
+  }
   if (name === "bindChecked") return "checked";
   if (name === "style") return "style";
   return "prop";
 }
 
 function isTwoWayBindingKind(kind: BindingKind): boolean {
-  return kind === "select-value" || kind === "text-value" || kind === "checked";
+  return kind === "select-value" || kind === "text-value" || kind === "radio-value" || kind === "checkbox-group" || kind === "checked";
 }
 
 function isStylePropertyBinding(source: BindingSource): source is StylePropertyBinding {
@@ -125,7 +133,7 @@ type StylePropertyBinding = { readonly entries: readonly (readonly [string, unkn
 type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
 // `snapshot` is the value React itself was handed for the prop at render (see
 // `transformHostProps`); a binding hands the node back to it on detach.
-type Binding = readonly [name: string, source: BindingSource, kind: BindingKind, snapshot: unknown];
+type Binding = readonly [name: string, source: BindingSource, kind: BindingKind, snapshot: unknown, config?: readonly unknown[]];
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 /**
@@ -524,6 +532,138 @@ function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, app
   };
 }
 
+type InputValueGroupKind = "radio-value" | "checkbox-group";
+type InputValueGroupMember = () => void;
+const inputValueGroupMembers = new WeakMap<object, Set<InputValueGroupMember>>();
+
+function isCheckboxGroupValue(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isInputValueGroupChecked(value: unknown, kind: InputValueGroupKind, optionValue: string): boolean {
+  if (kind === "radio-value") {
+    if (typeof value !== "string") throw new TypeError("Radio bindValue requires a string.");
+    return value === optionValue;
+  }
+  if (!isCheckboxGroupValue(value)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
+  return value.includes(optionValue);
+}
+
+function registerInputValueGroupMember(
+  source: Signal<unknown>,
+  member: InputValueGroupMember,
+): () => void {
+  let members = inputValueGroupMembers.get(source);
+  if (members === undefined) {
+    members = new Set();
+    inputValueGroupMembers.set(source, members);
+  }
+  members.add(member);
+  return () => {
+    members!.delete(member);
+    if (members!.size === 0) inputValueGroupMembers.delete(source);
+  };
+}
+
+function refreshInputValueGroup(source: Signal<unknown>): void {
+  const members = inputValueGroupMembers.get(source);
+  if (members === undefined) return;
+  for (const refresh of members) refresh();
+}
+
+function setInputValueGroupChecked(input: HTMLInputElement, checked: boolean): void {
+  // Always assign the public DOM property, even when the browser already
+  // changed it as part of radio exclusivity or click activation. React 19
+  // observes these public writes to keep its synthetic change detection in
+  // sync; no private tracker API is needed and same-value writes dispatch no
+  // DOM events.
+  input.checked = checked;
+  if (input.defaultChecked !== checked) input.defaultChecked = checked;
+}
+
+/** Binds each radio/checkbox option to a shared string or string-array signal. */
+function bindInputValueGroup(
+  input: HTMLInputElement,
+  source: Signal<unknown>,
+  kind: InputValueGroupKind,
+  optionValue: string,
+  write: (checked: boolean) => void,
+): BindingSubscription {
+  const episode: FailureEpisode = { hasReported: false };
+  let deferUserElementWrite = false;
+  const apply = (value: unknown) => {
+    if (!deferUserElementWrite) write(isInputValueGroupChecked(value, kind, optionValue));
+  };
+  const subscription = createBindingSubscription(source, apply, episode);
+  let active = true;
+  let correctionVersion = 0;
+  let correctionTimer: ReturnType<typeof setTimeout> | undefined;
+  const cancelCorrection = () => {
+    correctionVersion += 1;
+    if (correctionTimer !== undefined) {
+      clearTimeout(correctionTimer);
+      correctionTimer = undefined;
+    }
+  };
+  const refreshGroup = () => applyBoundSignal(() => source.peek(), apply, episode);
+  const unregisterMember = registerInputValueGroupMember(source, refreshGroup);
+  const onClick = () => {
+    if (!active || input.disabled) return;
+    let attempted: unknown;
+    if (kind === "radio-value") {
+      if (!input.checked) return;
+      attempted = input.value;
+    } else {
+      const current = source.peek();
+      if (!isCheckboxGroupValue(current)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
+      attempted = input.checked
+        ? current.includes(optionValue) ? current : [...current, optionValue]
+        : current.filter((value) => value !== optionValue);
+    }
+
+    cancelCorrection();
+    deferUserElementWrite = true;
+    try {
+      source.value = attempted;
+    } finally {
+      deferUserElementWrite = false;
+    }
+    // Let React's delegated click/change handlers observe the native user
+    // selection before synchronizing every member to a rejected, normalized,
+    // or cross-root group value in the next task.
+    const getterMatchesUserState = isInputValueGroupChecked(source.peek(), kind, optionValue) === input.checked;
+    if (active && getterMatchesUserState) {
+      // The target's subscription deliberately skipped its checked write
+      // above to preserve React's click tracker. Keep the browser reset
+      // default current without touching that tracker.
+      if (input.defaultChecked !== input.checked) input.defaultChecked = input.checked;
+    } else if (active) {
+      const version = correctionVersion;
+      correctionTimer = setTimeout(() => {
+        correctionTimer = undefined;
+        if (active && version === correctionVersion) refreshInputValueGroup(source);
+      }, 0);
+    }
+  };
+  // React 19 synthesizes checkbox/radio onChange from the bubbling click
+  // path. Updating at the target keeps the shared signal current before that
+  // delegated handler runs; the subsequent native input/change events are
+  // still forwarded through React normally.
+  input.addEventListener("click", onClick);
+  const disposeReset = bindFormReset(input, subscription.refresh);
+  return {
+    refresh: subscription.refresh,
+    dispose() {
+      active = false;
+      cancelCorrection();
+      subscription.dispose();
+      unregisterMember();
+      disposeReset();
+      input.removeEventListener("click", onClick);
+    },
+  };
+}
+
 /**
  * Forcing a `value` write while an IME composition is in progress can abort
  * the composition outright, independent of whether the string being written
@@ -750,7 +890,19 @@ type MountedBinding = {
 // `b` is optional so callers can pass a positional lookup straight in: a
 // missing counterpart is simply not the same binding.
 function isSameBinding(a: Binding, b: Binding | undefined): b is Binding {
-  return b !== undefined && a[0] === b[0] && sameBindingSource(a[1], b[1]) && a[2] === b[2];
+  return b !== undefined
+    && a[0] === b[0]
+    && sameBindingSource(a[1], b[1])
+    && a[2] === b[2]
+    && sameBindingConfig(a[4], b[4]);
+}
+
+function sameBindingConfig(left: readonly unknown[] | undefined, right: readonly unknown[] | undefined): boolean {
+  if (left === right) return true;
+  return left !== undefined
+    && right !== undefined
+    && left.length === right.length
+    && left.every((value, index) => Object.is(value, right[index]));
 }
 
 /** Whether two style values set the same properties to the same values. */
@@ -795,6 +947,7 @@ function subscribeBinding(
   source: BindingSource,
   kind: BindingKind,
   snapshot: unknown,
+  config: readonly unknown[] | undefined,
   initialStyleKeys: readonly string[] | undefined,
   binder: NodeBinder,
 ): Subscription {
@@ -844,6 +997,22 @@ function subscribeBinding(
         getStyleKeys: undefined,
         restore: undefined,
       };
+    case "radio-value":
+    case "checkbox-group": {
+      const optionValue = config?.[0];
+      if (typeof optionValue !== "string") throw new Error("Input value-group binding requires a string option value.");
+      return {
+        ...bindInputValueGroup(
+          node as HTMLInputElement,
+          source as Signal<unknown>,
+          kind,
+          optionValue,
+          whileAttached((checked: boolean) => setInputValueGroupChecked(node as HTMLInputElement, checked)),
+        ),
+        getStyleKeys: undefined,
+        restore: undefined,
+      };
+    }
     case "checked":
       if (name === "bindChecked") {
         const input = node as HTMLInputElement;
@@ -914,6 +1083,7 @@ function mountBinding(node: Element, binding: Binding, binder: NodeBinder, stale
     binding[1],
     binding[2],
     binding[3],
+    binding[4],
     initialStyleKeys,
     binder,
   );
@@ -1144,8 +1314,17 @@ type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) 
 function findHostBindings(props: HostProps, tagName: string): Binding[] {
   const bindings: Binding[] = [];
   const has = (name: string) => Object.prototype.hasOwnProperty.call(props, name);
+  const inputType = tagName === "input" ? String(props.type ?? "text").toLowerCase() : undefined;
+  const isInputValueGroup = inputType === "radio" || inputType === "checkbox";
+  if (has("bindValue") && has("bindChecked")) {
+    throw new TypeError("bindValue and bindChecked cannot be combined on one input.");
+  }
   if (has("bindValue") && (tagName === "input" || tagName === "textarea" || tagName === "select")) {
-    if (has("value") || has("defaultValue")) {
+    if (isInputValueGroup) {
+      if (has("defaultValue") || has("checked") || has("defaultChecked")) {
+        throw new TypeError("Input group bindValue cannot be combined with defaultValue, checked, or defaultChecked.");
+      }
+    } else if (has("value") || has("defaultValue")) {
       throw new TypeError("bindValue cannot be combined with value or defaultValue.");
     }
   }
@@ -1158,27 +1337,44 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
         throw new TypeError(`${name} requires writable signal.`);
       }
       if (name === "bindValue") {
-        const inputType = String(props.type ?? "text").toLowerCase();
+        const resolvedInputType = String(props.type ?? "text").toLowerCase();
         const textInputTypes = new Set(["text", "search", "tel", "url", "password", "email"]);
+        const kind = resolveBindingKind(tagName, name, props);
         if (tagName === "select") {
           const multiple = props.multiple === true;
           const initial = readInitialValue(value, "select-value");
           if (!isSelectValue(initial, multiple)) throw new TypeError("Invalid select bindValue.");
-        } else if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(inputType))) {
+        } else if (kind === "radio-value") {
+          const initial = readInitialValue(value, kind);
+          if (typeof initial !== "string") throw new TypeError("Radio bindValue requires a string.");
+          if (typeof props.value !== "string") throw new TypeError("Radio bindValue requires a string value option.");
+          if (typeof props.name !== "string" || props.name.length === 0) throw new TypeError("Radio bindValue requires a non-empty name.");
+        } else if (kind === "checkbox-group") {
+          const initial = readInitialValue(value, kind);
+          if (!isCheckboxGroupValue(initial)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
+          if (typeof props.value !== "string") throw new TypeError("Checkbox group bindValue requires a string value option.");
+        } else if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(resolvedInputType))) {
           throw new TypeError("bindValue: text input/textarea/select only.");
         }
       } else if (tagName !== "input" || String(props.type ?? "text").toLowerCase() !== "checkbox") {
         throw new TypeError("bindChecked: checkbox only.");
       }
-      const kind = resolveBindingKind(tagName, name);
-      bindings.push([name, value, kind, readInitialValue(value, kind)]);
+      const kind = resolveBindingKind(tagName, name, props);
+      if (kind === "radio-value" || kind === "checkbox-group") {
+        const optionValue = props.value as string;
+        const groupConfig = [optionValue, props.name, props.form];
+        const selected = isInputValueGroupChecked(readInitialValue(value, kind), kind, optionValue);
+        bindings.push([name, value, kind, selected, groupConfig]);
+      } else {
+        bindings.push([name, value, kind, readInitialValue(value, kind)]);
+      }
       continue;
     }
     if ((name === "value" || name === "checked") && isSignal(value)) {
       throw new TypeError(`Use ${name === "value" ? "bindValue" : "bindChecked"} or ${name}.value for signal props.`);
     }
     if (isReactiveHostProp(name, value)) {
-      const kind = resolveBindingKind(tagName, name);
+      const kind = resolveBindingKind(tagName, name, props);
       bindings.push([name, value, kind, readInitialValue(value, kind)]);
     }
   }
@@ -1230,6 +1426,11 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
     // Only explicit `bindValue`/`bindChecked` bindings use two-way kinds, so
     // this lookup maps them to their React initialization props. Should a new
     // kind ever miss the table, keep the previous direct-prop behavior.
+    if (kind === "radio-value" || kind === "checkbox-group") {
+      delete props[name];
+      props.defaultChecked = snapshot;
+      continue;
+    }
     const uncontrolledName = isTwoWayBindingKind(kind) ? UNCONTROLLED_PROP_NAMES[name] : undefined;
     if (uncontrolledName !== undefined) {
       // Leaving the controlled prop in place would keep the element
@@ -1347,10 +1548,11 @@ type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "chil
   [name: `data-${string}`]: Signalable<string | number | boolean | undefined>;
 } & AddSignalChildren<{}>;
 
-type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "checked" | "defaultChecked" | "bindValue" | "bindChecked"> & (
-  Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked"> & { bindValue?: never; bindChecked?: never }
+type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "checked" | "defaultChecked" | "bindValue" | "bindChecked" | "name"> & (
+  Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked" | "name"> & { bindValue?: never; bindChecked?: never }
   | {
     type?: "text" | "search" | "tel" | "url" | "password" | "email";
+    name?: P["name"];
     value?: never;
     defaultValue?: never;
     checked?: never;
@@ -1360,12 +1562,33 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
   }
   | {
     type: "checkbox";
+    name?: P["name"];
     value?: P["value"];
     defaultValue?: P["defaultValue"];
     checked?: never;
     defaultChecked?: never;
     bindValue?: never;
     bindChecked?: FormBindableSignal<boolean> & NotDeepSignal;
+  }
+  | {
+    type: "radio";
+    name: string;
+    value: string;
+    defaultValue?: never;
+    checked?: never;
+    defaultChecked?: never;
+    bindValue: FormBindableSignal<string> & NotDeepSignal;
+    bindChecked?: never;
+  }
+  | {
+    type: "checkbox";
+    name?: P["name"];
+    value: string;
+    defaultValue?: never;
+    checked?: never;
+    defaultChecked?: never;
+    bindValue: FormBindableSignal<string[]> & NotDeepSignal;
+    bindChecked?: never;
   }
 );
 

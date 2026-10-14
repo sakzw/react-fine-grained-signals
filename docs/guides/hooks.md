@@ -45,12 +45,15 @@ Keeps one deep signal, with property-level tracking, for the component lifetime.
 
 ```ts
 useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
+useComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
 ```
 
-Creates a computed signal with a stable identity. It has two modes, and a component must keep to one of them for its lifetime.
+Creates a computed signal with a stable identity. Pass a getter for a read-only computed, or `{ get, set }` for a writable computed. The writable overload returns `FormBindableSignal<T>` and can be passed to a matching `bindValue` or `bindChecked`; getter-only calls remain `ReadonlySignal<T>`. A component must keep to one of the two dependency modes and keep the call site's read-only or writable capability fixed for its lifetime.
 
 - **Without a dependency array**, the getter must read only signals. Its initial closure is retained for the component lifetime, so it must not capture props, React state, or other non-signal values.
 - **With a dependency array**, list every non-signal value the getter captures: `useComputed(() => count.value * step, [step])`.
+
+The `{ get, set }` overload follows the same dependency rules. When dependencies change, both callbacks update together after a committed render; an interrupted render does not replace the committed callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
 
 ## useSignalEffect
 
@@ -143,6 +146,6 @@ const name = useDeepSignalValue(state, (value) => value.user.name, []);
 ```
 
 - `dependencies` is required, must keep a constant length and order, and must list every non-signal value the selector captures. A length change between renders throws.
-- The selector must return a primitive snapshot. Object, Proxy, and function results are rejected at runtime with a `TypeError`.
+- The selector must return a primitive snapshot. Object, Proxy, and function results are rejected at runtime with a `TypeError` because mutable results do not provide stable snapshot identity.
 
 See also: [core primitives](./core-primitives.md), [rendering optimization](./rendering-optimization.md).
