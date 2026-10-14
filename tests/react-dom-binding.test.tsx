@@ -702,6 +702,31 @@ describe("Direct DOM binding", () => {
     </form>)).toThrow("Radio bindValue controls in the same native group must share one signal.");
   });
 
+  it("switches every radio in one group to a new source in one StrictMode commit", () => {
+    const sourceA = signal("a");
+    const sourceB = signal("b");
+    function Field() {
+      const [useSourceB, setUseSourceB] = useState(false);
+      const source = useSourceB ? sourceB : sourceA;
+      return <StrictMode>
+        <form aria-label="radio source switch">
+          <input type="radio" name="source-switch" value="a" aria-label="source switch a" bindValue={source} />
+          <input type="radio" name="source-switch" value="b" aria-label="source switch b" bindValue={source} />
+          <button type="button" aria-label="switch radio source" onClick={() => setUseSourceB(true)}>Switch</button>
+        </form>
+      </StrictMode>;
+    }
+
+    render(<Field />);
+    const a = screen.getByLabelText("source switch a") as HTMLInputElement;
+    const b = screen.getByLabelText("source switch b") as HTMLInputElement;
+    fireEvent.click(screen.getByLabelText("switch radio source"));
+
+    expect(screen.getByLabelText("source switch a")).toBe(a);
+    expect(screen.getByLabelText("source switch b")).toBe(b);
+    expect([a.checked, b.checked]).toEqual([false, true]);
+  });
+
   it("allows replacing a detached radio group member with a different source in one commit", async () => {
     const selectedA = signal("a");
     const selectedB = signal("b");

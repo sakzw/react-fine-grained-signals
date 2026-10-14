@@ -558,6 +558,11 @@ function assertRadioGroupSource(input: HTMLInputElement, source: Signal<unknown>
   for (const peer of getNativeRadioPeers(input)) {
     const peerSource = boundRadioSources.get(peer);
     if (peerSource !== undefined && peerSource !== source) {
+      // React detaches changed refs before attaching their replacements in the
+      // same commit. A detached peer still has its old binding until the
+      // deferred NodeBinder disposal runs, so ignore it during this transition;
+      // any peer that remains attached still represents a real source conflict.
+      if (nodeBinders.get(peer)?.attached === false) continue;
       throw new TypeError("Radio bindValue controls in the same native group must share one signal.");
     }
   }
