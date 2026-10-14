@@ -34,6 +34,37 @@ function makeHarness() {
 }
 
 describe("reactive collection metadata sweeps", () => {
+  it("cleans up large registered-symbol subscriptions after unsubscribe", async () => {
+    const harness = makeHarness();
+    const collection = harness.deepSignal(new Map<symbol, number>(), { collections: "reactive" }).value;
+    const keys = Array.from({ length: 300 }, (_, index) => Symbol.for(`cleanup-symbol-${index}`));
+    for (const key of keys) collection.get(key);
+    expect(harness.versions).toHaveLength(keys.length);
+
+    collection.set(Symbol.for("first-symbol-mutation"), 1);
+    expect(harness.checked).toHaveLength(128);
+    const deadline = Date.now() + 2_000;
+    while (harness.checked.length < keys.length && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    expect(harness.checked).toHaveLength(keys.length);
+
+    // All 300 simulated effect subscriptions now dispose. The next mutation
+    // must sweep the remaining candidates asynchronously without retaining
+    // their strong symbol keys indefinitely.
+    harness.active.clear();
+    collection.set(Symbol.for("second-symbol-mutation"), 1);
+    const cleanupDeadline = Date.now() + 2_000;
+    while (harness.checked.length < keys.length * 2 && Date.now() < cleanupDeadline) {
+      await new Promise((resolve) => setTimeout(resolve, 1));
+    }
+    expect(harness.checked.length).toBeGreaterThanOrEqual(keys.length * 2);
+
+    const beforeReuse = harness.versions.length;
+    collection.get(keys[0]!);
+    expect(harness.versions).toHaveLength(beforeReuse + 1);
+  });
+
   it("bounds synchronous work and rechecks changed candidates before eventual cleanup", async () => {
     const harness = makeHarness();
     const collection = harness.deepSignal(new Map<string, number>(), { collections: "reactive" }).value;

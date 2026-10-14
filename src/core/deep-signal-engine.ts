@@ -91,7 +91,15 @@ const supportsWeakSymbolKeys = (() => {
 })();
 
 function isWeakCollectionKey(value: unknown): value is object | symbol {
-  return isObjectLike(value) || (supportsWeakSymbolKeys && typeof value === "symbol");
+  return isObjectLike(value) || (
+    supportsWeakSymbolKeys
+    && typeof value === "symbol"
+    // Native WeakMap/WeakSet accept non-registered symbols where supported,
+    // but Symbol.for() symbols are shared registry entries and never valid
+    // weak keys. Symbol.keyFor() returns undefined for local and well-known
+    // symbols, both of which follow the native weak-key contract.
+    && Symbol.keyFor(value) === undefined
+  );
 }
 
 function assertExtensible(value: object): void {
