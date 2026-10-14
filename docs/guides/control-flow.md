@@ -114,7 +114,7 @@ Renders an array whose row identity is intentionally its position, so it takes n
 
 ## Map and Set inputs
 
-By default, `deepSignal` treats `Map` and `Set` as opaque. Opt into reactive collection tracking with `deepSignal(value, { collections: "reactive" })`; this covers collection keys, members, size, and iteration in tracked reads.
+`deepSignal` tracks same-realm `Map`, `Set`, `WeakMap`, and `WeakSet` values by default, including nested collections. Read and mutate them through `.value`; raw collection references and `.peek()` bypass notifications. Map key reads, collection membership, size, and iteration use separate dependencies where the native collection exposes them. Weak collections support key operations only.
 
 A `Map` or `Set` in the default mode is exposed by `.value` as a read-only runtime view, although its TypeScript type remains mutable. Use immutable replacement in that mode: copy, change, then assign the new collection to the signal.
 

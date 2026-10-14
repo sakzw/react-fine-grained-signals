@@ -9,21 +9,21 @@ describe("deepSignal reactive collections", () => {
     while (disposers.length > 0) disposers.pop()?.();
   });
 
-  it("keeps the legacy opaque collection contract unless opted in", () => {
+  it("reacts to collection roots and nested collections by default", () => {
     const rawMap = new Map([["a", 1]]);
-    const legacy = deepSignal({ map: rawMap });
-    expect(legacy.value.map.get("a")).toBe(1);
-    expect(() => legacy.value.map.set("b", 2)).toThrow("Map#set()");
-
-    const reactive = deepSignal(rawMap, { collections: "reactive" });
+    const nested = deepSignal({ map: rawMap });
+    const reactive = deepSignal(rawMap);
     expect(reactive.value).toBeInstanceOf(Map);
-    expect(reactive.value).not.toBe(legacy.value.map);
-    expect(reactive.value.set("b", 2)).toBe(reactive.value);
-    expect(legacy.value.map.get("b")).toBe(2);
+    expect(reactive.value).toBe(nested.value.map);
+    const values: Array<number | undefined> = [];
+    disposers.push(effect(() => { values.push(nested.value.map.get("a")); }));
+    expect(nested.value.map.set("a", 2)).toBe(nested.value.map);
+    expect(values).toEqual([1, 2]);
+    expect(reactive.value.get("a")).toBe(2);
   });
 
   it("tracks Map keys, values, size and both iteration domains independently", () => {
-    const map = deepSignal(new Map([["a", 1], ["b", 2]]), { collections: "reactive" });
+    const map = deepSignal(new Map([["a", 1], ["b", 2]]));
     const values: Array<number | undefined> = [];
     const existence: boolean[] = [];
     const sizes: number[] = [];
@@ -63,9 +63,7 @@ describe("deepSignal reactive collections", () => {
   it("normalizes raw and proxy Map keys and Set members while wrapping iteration values", () => {
     const key = { id: 1 };
     const value = { count: 1 };
-    const state = deepSignal({ map: new Map([[key, value]]), set: new Set([key]) }, {
-      collections: "reactive",
-    });
+    const state = deepSignal({ map: new Map([[key, value]]), set: new Set([key]) });
     const proxyKey = [...state.value.map.keys()][0]!;
     const proxySetMember = [...state.value.set][0]!;
 
@@ -87,12 +85,12 @@ describe("deepSignal reactive collections", () => {
   it("rejects collection subclasses and cross-realm collections in reactive mode", () => {
     class CustomMap extends Map<string, number> {}
     const crossRealmMap = runInNewContext("new Map([['a', 1]])") as Map<string, number>;
-    expect(() => deepSignal(new CustomMap(), { collections: "reactive" })).toThrow(/same-realm/);
-    expect(() => deepSignal({ map: crossRealmMap }, { collections: "reactive" })).toThrow(/same-realm/);
+    expect(() => deepSignal(new CustomMap())).toThrow(/same-realm/);
+    expect(() => deepSignal({ map: crossRealmMap })).toThrow(/same-realm/);
   });
 
   it("rejects prototype mutation on reactive collection proxies", () => {
-    const map = deepSignal(new Map([["a", 1]]), { collections: "reactive" });
+    const map = deepSignal(new Map([["a", 1]]));
 
     expect(() => Reflect.set(map.value, "extra", 1)).toThrow(/own properties/);
     expect(() => Reflect.deleteProperty(map.value, "a")).toThrow(/own properties/);
@@ -108,7 +106,7 @@ describe("deepSignal reactive collections", () => {
     const rawKey = source.peek().key;
     const proxyKey = source.value.key;
     const colliding = new Map< object, number>([[rawKey, 1], [proxyKey, 2]]);
-    expect(() => deepSignal(colliding, { collections: "reactive" })).toThrow(/collide after proxy normalization/);
+    expect(() => deepSignal(colliding)).toThrow(/collide after proxy normalization/);
   });
 
   it("wraps nested collection values and preserves aliases and cycles", () => {
@@ -120,7 +118,7 @@ describe("deepSignal reactive collections", () => {
       second: shared,
     };
     raw.self = raw;
-    const state = deepSignal(raw, { collections: "reactive" });
+    const state = deepSignal(raw);
     const root = state.value;
 
     expect(root.first).toBe(root.second);
@@ -130,10 +128,8 @@ describe("deepSignal reactive collections", () => {
 
   it("tracks WeakMap and WeakSet operations only by object key", () => {
     const key = {};
-    const weakMap = deepSignal(new WeakMap<object, { count: number }>(), {
-      collections: "reactive",
-    });
-    const weakSet = deepSignal(new WeakSet<object>(), { collections: "reactive" });
+    const weakMap = deepSignal(new WeakMap<object, { count: number }>());
+    const weakSet = deepSignal(new WeakSet<object>());
     expect("clear" in weakMap.value).toBe(false);
     expect("clear" in weakSet.value).toBe(false);
     const seen: Array<number | undefined> = [];
@@ -171,7 +167,7 @@ describe("deepSignal reactive collections", () => {
     }
     const symbolValues: Array<number | undefined> = [];
     if (supportsWeakSymbols) {
-      const weakSymbolMap = deepSignal(new WeakMap<object, number>(), { collections: "reactive" });
+      const weakSymbolMap = deepSignal(new WeakMap<object, number>());
       const weakSymbolKey = symbolKey as unknown as object;
       disposers.push(effect(() => { symbolValues.push(weakSymbolMap.value.get(weakSymbolKey)); }));
       weakSymbolMap.value.set(weakSymbolKey, 1);
@@ -184,8 +180,8 @@ describe("deepSignal reactive collections", () => {
       isSubsetOf?: (other: ReadonlySet<unknown>) => boolean;
     };
     if (typeof (Set.prototype as SetWithIsSubsetOf).isSubsetOf !== "function") return;
-    const left = deepSignal(new Set([1]), { collections: "reactive" });
-    const right = deepSignal(new Set([1]), { collections: "reactive" });
+    const left = deepSignal(new Set([1]));
+    const right = deepSignal(new Set([1]));
     const results: boolean[] = [];
     disposers.push(effect(() => { results.push((left.value as SetWithIsSubsetOf).isSubsetOf!(right.value)); }));
 
@@ -194,7 +190,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("batches collection changes and leaves untracked reads unsubscribed", () => {
-    const state = deepSignal({ map: new Map<string, number>() }, { collections: "reactive" });
+    const state = deepSignal({ map: new Map<string, number>() });
     let runs = 0;
     disposers.push(effect(() => { state.value.map.get("a"); runs++; }));
 
@@ -207,7 +203,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("keeps subscribed primitive-key metadata through unrelated mutations", () => {
-    const map = deepSignal(new Map<string, number>([["watched", 1]]), { collections: "reactive" });
+    const map = deepSignal(new Map<string, number>([["watched", 1]]));
     const seen: Array<number | undefined> = [];
     disposers.push(effect(() => { seen.push(map.value.get("watched")); }));
 
@@ -219,7 +215,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("reclaims disposed primitive-key reads and tracks them again on reuse", () => {
-    const map = deepSignal(new Map<string, number>(), { collections: "reactive" });
+    const map = deepSignal(new Map<string, number>());
     const staleSeen: Array<number | undefined> = [];
     const dispose = effect(() => { staleSeen.push(map.value.get("reused")); });
     dispose();
@@ -236,8 +232,8 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("notifies key and iteration readers when clearing Map and Set and leaves empty clear as a no-op", () => {
-    const map = deepSignal(new Map([["a", 1], ["b", 2]]), { collections: "reactive" });
-    const set = deepSignal(new Set(["a", "b"]), { collections: "reactive" });
+    const map = deepSignal(new Map([["a", 1], ["b", 2]]));
+    const set = deepSignal(new Set(["a", "b"]));
     const mapSnapshots: string[] = [];
     const setSnapshots: string[] = [];
     disposers.push(effect(() => {
@@ -259,8 +255,8 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("tracks Map and Set forEach reads with native callback arguments and thisArg", () => {
-    const map = deepSignal(new Map([["a", 1]]), { collections: "reactive" });
-    const set = deepSignal(new Set(["x"]), { collections: "reactive" });
+    const map = deepSignal(new Map([["a", 1]]));
+    const set = deepSignal(new Set(["x"]));
     const mapSnapshots: string[] = [];
     const setSnapshots: string[] = [];
     const context = { prefix: "ctx" };

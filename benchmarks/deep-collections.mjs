@@ -9,7 +9,7 @@ if (![iterations, warmups, samples].every(Number.isSafeInteger) || iterations < 
   throw new Error("Invalid collection benchmark iteration counts");
 }
 const collectionValue = (value) => process.env.BENCH_COLLECTIONS_REACTIVE === "true"
-  ? deepSignal(value, { collections: "reactive" }).value
+  ? deepSignal(value).value
   : value;
 
 const cases = [

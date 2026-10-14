@@ -36,7 +36,7 @@ function makeHarness() {
 describe("reactive collection metadata sweeps", () => {
   it("cleans up large registered-symbol subscriptions after unsubscribe", async () => {
     const harness = makeHarness();
-    const collection = harness.deepSignal(new Map<symbol, number>(), { collections: "reactive" }).value;
+    const collection = harness.deepSignal(new Map<symbol, number>()).value;
     const keys = Array.from({ length: 300 }, (_, index) => Symbol.for(`cleanup-symbol-${index}`));
     for (const key of keys) collection.get(key);
     expect(harness.versions).toHaveLength(keys.length);
@@ -67,7 +67,7 @@ describe("reactive collection metadata sweeps", () => {
 
   it("bounds synchronous work and rechecks changed candidates before eventual cleanup", async () => {
     const harness = makeHarness();
-    const collection = harness.deepSignal(new Map<string, number>(), { collections: "reactive" }).value;
+    const collection = harness.deepSignal(new Map<string, number>()).value;
     for (let index = 0; index < 300; index += 1) collection.get(`key-${index}`);
     const retainedVersion = harness.versions[0]!;
     harness.active.clear();

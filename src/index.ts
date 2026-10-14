@@ -7,7 +7,6 @@ export {
   signal,
   untracked,
   type DeepSignal,
-  type DeepSignalOptions,
   type ReadonlySignal,
   type Signal,
 } from "./core/index.js";

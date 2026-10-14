@@ -1,7 +1,6 @@
 import { coreRuntime } from "./core-runtime.js";
 import { executionContext, UNTRACKED_OWNER } from "./execution-owner.js";
 import { createDeepSignalFactory } from "./deep-signal-engine.js";
-import type { DeepSignalOptions } from "./deep-signal-engine.js";
 import {
   batch,
   isSignal,
@@ -12,7 +11,7 @@ import type { Signal } from "./base.js";
 
 declare const deepSignalBrand: unique symbol;
 
-/** A signal whose plain-object and array values are reactive by property. */
+/** A signal whose plain-object, array, and standard collection values are reactive. */
 export interface DeepSignal<T extends object> extends Signal<T> {
   /**
    * Type-only marker; never present at runtime. It lets positions that only
@@ -74,15 +73,10 @@ export function inspectDeepSignalMetadata(value: object): ReturnType<
 }
 
 /**
- * Creates a signal that lazily tracks nested plain-object and array properties.
- * Mutations must go through `.value`; changes made through the original raw
- * object are intentionally not observable.
+ * Creates a signal that lazily tracks nested plain-object, array, and standard
+ * collection reads. Mutations must go through `.value`; changes made through
+ * the original raw value or `.peek()` are intentionally not observable.
  */
-export function deepSignal<T extends object>(
-  initialValue: T,
-  options?: DeepSignalOptions,
-): DeepSignal<T> {
-  return getProductionDeepSignals().deepSignal(initialValue, options) as DeepSignal<T>;
+export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
+  return getProductionDeepSignals().deepSignal(initialValue) as DeepSignal<T>;
 }
-
-export type { DeepSignalOptions } from "./deep-signal-engine.js";

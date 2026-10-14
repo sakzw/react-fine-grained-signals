@@ -18,10 +18,6 @@ export interface DeepSignalLike<T extends object> {
   peek(): T;
 }
 
-export interface DeepSignalOptions {
-  collections?: "reactive";
-}
-
 export interface DeepSignalRuntimeAdapter {
   /** Creates the root source behind the public DeepSignal wrapper. */
   createSignal<T>(initial: T): DeepSignalSource<T>;
@@ -158,12 +154,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   const ARRAY_SEARCHES = new Set<PropertyKey>(["includes", "indexOf", "lastIndexOf"]);
   const proxyToRaw = new WeakMap<object, object>();
   const rawToMetadata = new WeakMap<object, PropertyMetadata>();
-  const reactiveRawToMetadata = new WeakMap<object, PropertyMetadata>();
   const reactiveCollections = new WeakMap<object, CollectionMetadata>();
   const scheduledCollectionSweeps = new WeakSet<CollectionMetadata>();
-  const readonlyMapViews = new WeakMap<Map<unknown, unknown>, ReadonlyMap<unknown, unknown>>();
-  const readonlySetViews = new WeakMap<Set<unknown>, ReadonlySet<unknown>>();
-  const readonlyCollectionViewToRaw = new WeakMap<object, Map<unknown, unknown> | Set<unknown>>();
   // A carrier that contains one of our proxies has to be copied before it can be
   // stored. Remember that copy so assigning the same carrier again preserves the
   // same identity and aliases, just like assigning an ordinary raw object does.
@@ -259,189 +251,26 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   }
 
   /**
-   * Resolves a value that may be one of our proxies or one of our readonly
-   * collection views back to the raw object it wraps. Returns `undefined` when
+   * Resolves a value that may be one of our proxies back to the raw object it
+   * wraps. Returns `undefined` when
    * `value` is not object-like or is not a value this module has wrapped, so
    * callers can fall back to using it as-is.
    */
   function toRaw(value: unknown): object | undefined {
     if (!isObjectLike(value)) return undefined;
-    const directRaw = proxyToRaw.get(value);
-    if (directRaw !== undefined) return directRaw;
-    return readonlyCollectionViewToRaw.get(value);
-  }
-
-  type RejectMutation = (operation: string) => () => never;
-
-  /**
-   * Shared scaffolding for `readonlyMapView`/`readonlySetView`: cache lookup,
-   * the "reject this mutation" factory, defining the descriptors, the
-   * feature-detected extras loop, and the dual-WeakMap registration. Only the
-   * per-type descriptor bodies (which truly differ between Map and Set) and
-   * the extras list are supplied by the caller.
-   */
-  function createReadonlyCollectionView<Raw extends object, View extends object>(
-    raw: Raw,
-    cache: WeakMap<Raw, View>,
-    prototype: object,
-    kind: string,
-    buildCore: (raw: Raw, view: View, rejectMutation: RejectMutation) => Record<PropertyKey, PropertyDescriptor>,
-    buildExtras: (raw: Raw, rejectMutation: RejectMutation) => Array<[string, (...args: unknown[]) => unknown]>,
-  ): View {
-    const cached = cache.get(raw);
-    if (cached !== undefined) return cached;
-
-    const view = Object.create(prototype) as View;
-    const rejectMutation: RejectMutation = (operation: string) => () => {
-      throw new TypeError(
-        `deepSignal() ${kind}#${operation}() is not allowed through .value; replace the ${kind} immutably`,
-      );
-    };
-    Object.defineProperties(view, buildCore(raw, view, rejectMutation));
-    for (const [name, impl] of buildExtras(raw, rejectMutation)) {
-      Object.defineProperty(view, name, { enumerable: false, configurable: false, value: impl });
-    }
-
-    cache.set(raw, view);
-    readonlyCollectionViewToRaw.set(view, raw as Map<unknown, unknown> | Set<unknown>);
-    return view;
-  }
-
-  function readonlyMapView<Key, Value>(raw: Map<Key, Value>): ReadonlyMap<Key, Value> {
-    return createReadonlyCollectionView(
-      raw as Map<unknown, unknown>,
-      readonlyMapViews,
-      Map.prototype,
-      "Map",
-      (target, view, rejectMutation) => ({
-        size: { enumerable: false, configurable: false, get: () => target.size },
-        get: { enumerable: false, configurable: false, value: (key: unknown) => target.get(key) },
-        has: { enumerable: false, configurable: false, value: (key: unknown) => target.has(key) },
-        entries: {
-          enumerable: false,
-          configurable: false,
-          value: () => Map.prototype.entries.call(target),
-        },
-        keys: {
-          enumerable: false,
-          configurable: false,
-          value: () => Map.prototype.keys.call(target),
-        },
-        values: {
-          enumerable: false,
-          configurable: false,
-          value: () => Map.prototype.values.call(target),
-        },
-        forEach: {
-          enumerable: false,
-          configurable: false,
-          value: (
-            callback: (value: unknown, key: unknown, map: ReadonlyMap<unknown, unknown>) => void,
-            thisArg?: unknown,
-          ) => {
-            Map.prototype.forEach.call(target, (value, key) => callback.call(thisArg, value, key, view));
-          },
-        },
-        [Symbol.iterator]: {
-          enumerable: false,
-          configurable: false,
-          value: () => Map.prototype.entries.call(target),
-        },
-        set: { enumerable: false, configurable: false, value: rejectMutation("set") },
-        delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
-        clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
-      }),
-      (_target, rejectMutation) => {
-        const extras: Array<[string, (...args: unknown[]) => unknown]> = [];
-        // Keep future mutating Map proposals from becoming an integrity bypass when
-        // they are present in the running JavaScript engine.
-        for (const operation of ["getOrInsert", "getOrInsertComputed", "emplace"]) {
-          if (typeof (Map.prototype as unknown as Record<string, unknown>)[operation] === "function") {
-            extras.push([operation, rejectMutation(operation)]);
-          }
-        }
-        return extras;
-      },
-    ) as ReadonlyMap<Key, Value>;
-  }
-
-  function readonlySetView<Value>(raw: Set<Value>): ReadonlySet<Value> {
-    return createReadonlyCollectionView(
-      raw as Set<unknown>,
-      readonlySetViews,
-      Set.prototype,
-      "Set",
-      (target, view, rejectMutation) => ({
-        size: { enumerable: false, configurable: false, get: () => target.size },
-        has: { enumerable: false, configurable: false, value: (value: unknown) => target.has(value) },
-        entries: {
-          enumerable: false,
-          configurable: false,
-          value: () => Set.prototype.entries.call(target),
-        },
-        keys: {
-          enumerable: false,
-          configurable: false,
-          value: () => Set.prototype.keys.call(target),
-        },
-        values: {
-          enumerable: false,
-          configurable: false,
-          value: () => Set.prototype.values.call(target),
-        },
-        forEach: {
-          enumerable: false,
-          configurable: false,
-          value: (
-            callback: (value: unknown, key: unknown, set: ReadonlySet<unknown>) => void,
-            thisArg?: unknown,
-          ) => {
-            Set.prototype.forEach.call(target, (value) => callback.call(thisArg, value, value, view));
-          },
-        },
-        [Symbol.iterator]: {
-          enumerable: false,
-          configurable: false,
-          value: () => Set.prototype.values.call(target),
-        },
-        add: { enumerable: false, configurable: false, value: rejectMutation("add") },
-        delete: { enumerable: false, configurable: false, value: rejectMutation("delete") },
-        clear: { enumerable: false, configurable: false, value: rejectMutation("clear") },
-      }),
-      (target) => {
-        const extras: Array<[string, (...args: unknown[]) => unknown]> = [];
-        const forwardSetOperation = (operation: string) => (other: unknown) => {
-          const method = (Set.prototype as unknown as Record<string, unknown>)[operation];
-          if (typeof method !== "function") {
-            throw new TypeError(`Set#${operation}() is unavailable in this JavaScript engine`);
-          }
-          const collection =
-            isObjectLike(other) ? readonlyCollectionViewToRaw.get(other) ?? other : other;
-          return Reflect.apply(method, target, [collection]);
-        };
-        // ES2025's Set operations are non-mutating. Forward them to the raw Set so
-        // native methods receive their required internal-slot receiver. A second
-        // deepSignal read-only view is unwrapped first because it is also set-like.
-        for (const operation of [
-          "union",
-          "intersection",
-          "difference",
-          "symmetricDifference",
-          "isSubsetOf",
-          "isSupersetOf",
-          "isDisjointFrom",
-        ]) {
-          if (typeof (Set.prototype as unknown as Record<string, unknown>)[operation] === "function") {
-            extras.push([operation, forwardSetOperation(operation)]);
-          }
-        }
-        return extras;
-      },
-    ) as ReadonlySet<Value>;
+    return proxyToRaw.get(value);
   }
 
   function getNativeCollectionKind(value: unknown): "Map" | "Set" | "WeakMap" | "WeakSet" | undefined {
     if (!isObjectLike(value)) return undefined;
+    // Ordinary deep-state nodes are overwhelmingly plain objects and arrays.
+    // Avoid four native internal-slot probes (each of the wrong collection
+    // brand throws) for every node in those graphs.
+    if (isPlainObjectOrArray(value)) return undefined;
+    if ((value as object) instanceof Map) return "Map";
+    if ((value as object) instanceof Set) return "Set";
+    if ((value as object) instanceof WeakMap) return "WeakMap";
+    if ((value as object) instanceof WeakSet) return "WeakSet";
     const probe = {};
     try { Map.prototype.has.call(value, probe); return "Map"; } catch { /* try next brand */ }
     try { Set.prototype.has.call(value, probe); return "Set"; } catch { /* try next brand */ }
@@ -457,13 +286,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     return Object.getPrototypeOf(value) === expectedPrototype;
   }
 
-  function assertRootValue(value: unknown, reactive = false): asserts value is object {
-    if (!isPlainObjectOrArray(value) && !(reactive && isStandardCollection(value))) {
-      throw new TypeError(reactive
-        ? "deepSignal() with reactive collections only accepts plain objects, arrays, or same-realm standard collections"
-        : "deepSignal() only accepts a plain object or array root");
+  function assertRootValue(value: unknown): asserts value is object {
+    if (!isPlainObjectOrArray(value) && !isStandardCollection(value)) {
+      throw new TypeError("deepSignal() only accepts plain objects, arrays, or same-realm standard collections");
     }
-    if (reactive && isStandardCollection(value)) assertReactiveCollection(value);
+    if (isStandardCollection(value)) assertReactiveCollection(value);
   }
 
   function assertReactiveCollection(value: object): void {
@@ -473,7 +300,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     }
   }
 
-  function assertDeepDataGraph(value: unknown, reactive = false): boolean {
+  function assertDeepDataGraph(value: unknown): boolean {
     if (!isObjectLike(value)) return false;
     // A value can be reachable both as reactive plain data and through an opaque
     // value. A proxy beneath an opaque value cannot be unwrapped without changing
@@ -522,42 +349,33 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         throw new TypeError("deepSignal() cannot store a built-in prototype object in deep state");
       }
 
-      if (reactive && !insideOpaque && getNativeCollectionKind(raw) !== undefined && !isStandardCollection(raw)) {
-        throw new TypeError("deepSignal() reactive collections require same-realm standard collections");
+      if (!insideOpaque && getNativeCollectionKind(raw) !== undefined && !isStandardCollection(raw)) {
+        throw new TypeError("deepSignal() collections require same-realm standard collections");
       }
 
       if (raw instanceof Map) {
-        if (reactive && !insideOpaque) {
-          if (!isStandardCollection(raw)) throw new TypeError("deepSignal() reactive collections require a same-realm standard Map");
-          assertReactiveCollection(raw);
-        }
+        if (!insideOpaque) assertReactiveCollection(raw);
         for (const [key, entry] of raw) {
           if (isObjectLike(key)) {
-            pending.push({ value: key, insideOpaque: !reactive || insideOpaque });
+            pending.push({ value: key, insideOpaque });
           }
           if (isObjectLike(entry)) {
-            pending.push({ value: entry, insideOpaque: !reactive || insideOpaque });
+            pending.push({ value: entry, insideOpaque });
           }
         }
         continue;
       }
       if (raw instanceof Set) {
-        if (reactive && !insideOpaque) {
-          if (!isStandardCollection(raw)) throw new TypeError("deepSignal() reactive collections require a same-realm standard Set");
-          assertReactiveCollection(raw);
-        }
+        if (!insideOpaque) assertReactiveCollection(raw);
         for (const entry of raw) {
           if (isObjectLike(entry)) {
-            pending.push({ value: entry, insideOpaque: !reactive || insideOpaque });
+            pending.push({ value: entry, insideOpaque });
           }
         }
         continue;
       }
       if (raw instanceof WeakMap || raw instanceof WeakSet) {
-        if (reactive && !insideOpaque) {
-          if (!isStandardCollection(raw)) throw new TypeError("deepSignal() reactive collections require same-realm standard weak collections");
-          assertReactiveCollection(raw);
-        }
+        if (!insideOpaque) assertReactiveCollection(raw);
         continue;
       }
       if (!isPlainObjectOrArray(raw)) {
@@ -707,70 +525,16 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
    * every re-assignment, breaking the documented guarantee that assigning the
    * same carrier twice preserves identity and aliasing.
    */
-  function cloneWithoutProxies<T>(value: T): T {
-    const wrapperRaw = toRaw(value);
-    if (wrapperRaw !== undefined) return wrapperRaw as T;
-    if (!isObjectLike(value)) return value;
-
-    const cachedRoot = normalizedProxyCarriers.get(value);
-    if (
-      cachedRoot !== undefined &&
-      matchesNormalizedGraph(value, cachedRoot)
-    ) {
-      return cachedRoot as T;
-    }
-
-    const clones = new WeakMap<object, object>();
-    const created: Array<[object, object]> = [];
-    const pending: object[] = [];
-
-    const resolve = (current: unknown): unknown => {
-      const resolvedRaw = toRaw(current);
-      if (resolvedRaw !== undefined) return resolvedRaw;
-      if (!isPlainObjectOrArray(current)) return current;
-
-      const local = clones.get(current);
-      if (local !== undefined) return local;
-
-      const result: object = Array.isArray(current)
-        ? emptyArrayOfLength(current.length)
-        : Object.create(Object.getPrototypeOf(current));
-      clones.set(current, result);
-      created.push([current, result]);
-      pending.push(current);
-      return result;
-    };
-
-    const root = resolve(value) as T;
-    while (pending.length > 0) {
-      const source = pending.pop() as object;
-      const target = clones.get(source) as object;
-      for (const key of Reflect.ownKeys(source)) {
-        if (Array.isArray(source) && key === "length") continue;
-        const descriptor = Reflect.getOwnPropertyDescriptor(source, key);
-        if (descriptor === undefined) continue;
-        // Validation has already rejected accessors, before any clone is exposed.
-        if (!("value" in descriptor)) {
-          throw new TypeError("deepSignal() does not support accessor properties");
-        }
-        descriptor.value = resolve(descriptor.value);
-        Reflect.defineProperty(target, key, descriptor);
-      }
-    }
-
-    for (const [source, target] of created) {
-      normalizedProxyCarriers.set(source, target);
-    }
-    return root;
-  }
-
   function cloneReactiveGraph<T>(value: T): T {
     const clones = new WeakMap<object, object>();
     const created: Array<[object, object]> = [];
     const pending: object[] = [];
     const resolve = (current: unknown): unknown => {
+      // A proxy is already an identity-bearing reference to a known raw node.
+      // Keep that raw identity instead of cloning it; this preserves aliases
+      // from the existing deep graph when a proxy is placed in a new carrier.
       const raw = toRaw(current);
-      if (raw !== undefined) return isPlainObjectOrArray(raw) ? resolve(raw) : raw;
+      if (raw !== undefined) return raw;
       if (!isObjectLike(current)) return current;
       if (current instanceof WeakMap || current instanceof WeakSet) return current;
       const plain = isPlainObjectOrArray(current);
@@ -786,19 +550,28 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       pending.push(current);
       return clone;
     };
+    const resolveCollectionEntry = (current: unknown): unknown => {
+      const raw = toRaw(current);
+      if (raw !== undefined) return raw;
+      if (!isObjectLike(current)) return current;
+      // Collection keys and values that are already raw keep their identity.
+      // If an entry is itself a carrier containing a proxy, clone that carrier
+      // so no proxy can be stored in the raw collection graph.
+      return assertDeepDataGraph(current) ? resolve(current) : current;
+    };
     const root = resolve(value) as T;
     while (pending.length > 0) {
       const source = pending.pop() as object;
       const target = clones.get(source) as object;
       if (source instanceof Map && target instanceof Map) {
         for (const [key, entry] of source) {
-          const normalizedKey = resolve(key);
+          const normalizedKey = resolveCollectionEntry(key);
           if (target.has(normalizedKey)) throw new TypeError("deepSignal() collection keys collide after proxy normalization");
-          target.set(normalizedKey, resolve(entry));
+          target.set(normalizedKey, resolveCollectionEntry(entry));
         }
       } else if (source instanceof Set && target instanceof Set) {
         for (const entry of source) {
-          const normalized = resolve(entry);
+          const normalized = resolveCollectionEntry(entry);
           if (target.has(normalized)) throw new TypeError("deepSignal() Set members collide after proxy normalization");
           target.add(normalized);
         }
@@ -817,24 +590,24 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     return root;
   }
 
-  function prepareDeepValue<T>(value: T, reactive = false): T {
+  function prepareDeepValue<T>(value: T): T {
     // Reassigning a value obtained from this deep signal is already known-good.
     // Avoid validating its entire graph again on this common O(1) path.
     const wrapperRaw = toRaw(value);
     if (wrapperRaw !== undefined) return wrapperRaw as T;
-    if (reactive && isObjectLike(value)) {
+    if (isObjectLike(value)) {
       const cached = normalizedProxyCarriers.get(value);
       if (cached !== undefined && matchesNormalizedGraph(value, cached)) return cached as T;
     }
-    const containsProxy = assertDeepDataGraph(value, reactive);
-    return containsProxy ? (reactive ? cloneReactiveGraph(value) : cloneWithoutProxies(value)) : value;
+    const containsProxy = assertDeepDataGraph(value);
+    return containsProxy ? cloneReactiveGraph(value) : value;
   }
 
   // The graph and caches are factory-local, so runtimes keep independent
   // proxies and version sources while sharing this single Proxy implementation.
 
-  const unwrap = <T>(value: T, reactive = false): T => {
-    return prepareDeepValue(value, reactive);
+  const unwrap = <T>(value: T): T => {
+    return prepareDeepValue(value);
   };
 
   // Inherited members of the two prototypes a deep-signal target can have.
@@ -1101,7 +874,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       weakValues: new WeakMap(), weakExistence: new WeakMap(), weakMembers: new WeakMap(),
       prunable: new Map(), prunableRevision: 0, methods: new Map(), proxy: undefined as unknown as object,
     };
-    const normalize = (value: unknown): unknown => unwrap(value, true);
+    const normalize = (value: unknown): unknown => unwrap(value);
     const normalizeWeakKey = (value: unknown): unknown => {
       if (isObjectLike(value)) {
         const raw = toRaw(value);
@@ -1114,7 +887,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       }
       return normalize(value);
     };
-    const wrapRead = <T>(value: T): T => wrap(value, true);
+    const wrapRead = <T>(value: T): T => wrap(value);
     const trackAggregate = (name: "size" | "keysIteration" | "entriesIteration"): void => {
       if (shouldTrackDeepRead()) trackCollectionVersion(collectionAggregate(metadata, name));
     };
@@ -1366,27 +1139,24 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
 
   /**
    * Whether `wrap()` would hand back something other than `value` itself — a
-   * deep proxy for a plain object/array, or a readonly view for a Map/Set. The
+   * deep proxy for a plain object/array or a collection.
    * `get` trap uses this to reject a non-configurable, non-writable property
    * whose value cannot be substituted, before `wrap()` performs the swap.
    */
-  const isWrappedByValue = (value: unknown, reactive = false): boolean =>
+  const isWrappedByValue = (value: unknown): boolean =>
     isPlainObjectOrArray(value) || value instanceof Map || value instanceof Set ||
-    reactive && (value instanceof WeakMap || value instanceof WeakSet);
+    value instanceof WeakMap || value instanceof WeakSet;
 
-  const wrap = <T>(value: T, reactive = false): T => {
+  const wrap = <T>(value: T): T => {
     const rawValue = (toRaw(value) as T | undefined) ?? value;
-    if (reactive && isStandardCollection(rawValue)) {
+    if (isStandardCollection(rawValue)) {
       const kind = rawValue instanceof Map ? "Map" : rawValue instanceof Set ? "Set" : rawValue instanceof WeakMap ? "WeakMap" : "WeakSet";
       return reactiveCollectionProxy(rawValue, kind) as T;
     }
-    if (rawValue instanceof Map) return readonlyMapView(rawValue) as T;
-    if (rawValue instanceof Set) return readonlySetView(rawValue) as T;
     if (!isPlainObjectOrArray(rawValue)) return rawValue;
     assertExtensible(rawValue);
 
-    const cache = reactive ? reactiveRawToMetadata : rawToMetadata;
-    const cached = cache.get(rawValue);
+    const cached = rawToMetadata.get(rawValue);
     if (cached !== undefined) return cached.proxy as T;
     assertDataProperties(rawValue);
 
@@ -1463,13 +1233,13 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return wrapper;
         }
 
-        // Checked before `wrap()` substitutes anything: `wrap()` also swaps a
-        // Map/Set for a readonly view, and those views are just as unassignable
+        // Checked before `wrap()` substitutes anything: collection values are
+        // proxied too, and those proxies are just as unassignable
         // back through a non-configurable, non-writable slot as a nested proxy
         // is. Gating this on `isPlainObjectOrArray(result)` let a frozen
         // Map/Set-valued property past the friendly error and into a raw engine
         // `TypeError` later on.
-        if (isWrappedByValue(result, reactive)) {
+        if (isWrappedByValue(result)) {
           const descriptor = Reflect.getOwnPropertyDescriptor(target, key);
           if (
             descriptor !== undefined &&
@@ -1483,7 +1253,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           }
         }
 
-        return wrap(result, reactive);
+        return wrap(result);
       },
 
       set(target, key, nextValue, receiver) {
@@ -1503,7 +1273,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         const existed = Reflect.has(target, key);
         const owned = Object.prototype.hasOwnProperty.call(target, key);
         const oldLength = Array.isArray(target) ? target.length : undefined;
-        const rawNextValue = unwrap(nextValue, reactive);
+        const rawNextValue = unwrap(nextValue);
         const succeeded = Reflect.set(target, key, rawNextValue, target);
         if (!succeeded) return false;
 
@@ -1581,7 +1351,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return descriptor;
         }
 
-        descriptor.value = wrap(descriptor.value, reactive);
+        descriptor.value = wrap(descriptor.value);
         return descriptor;
       },
 
@@ -1609,31 +1379,27 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     });
 
     metadata.proxy = proxy;
-    cache.set(rawValue, metadata);
+    rawToMetadata.set(rawValue, metadata);
     proxyToRaw.set(proxy, rawValue);
     return proxy as T;
   };
 
   class DeepSignalImpl<T extends object> implements DeepSignalLike<T> {
     readonly #source: DeepSignalSource<T>;
-    readonly #reactiveCollections: boolean;
 
-    constructor(source: DeepSignalSource<T>, reactiveCollections: boolean) {
+    constructor(source: DeepSignalSource<T>) {
       this.#source = source;
-      this.#reactiveCollections = reactiveCollections;
       const protocol = getReadableInterop(this.#source);
       if (protocol !== undefined) attachReadableInterop(this, protocol);
     }
 
     get value(): T {
-      // Runtime collection views intentionally keep the established `.value: T`
-      // public type. `DeepSignal<T>` must remain assignable to `Signal<T>`.
-      return wrap(this.#source.value, this.#reactiveCollections) as T;
+      return wrap(this.#source.value) as T;
     }
 
     set value(nextValue: T) {
-      const rawValue = unwrap(nextValue, this.#reactiveCollections);
-      assertRootValue(rawValue, this.#reactiveCollections);
+      const rawValue = unwrap(nextValue);
+      assertRootValue(rawValue);
       this.#source.value = rawValue as T;
     }
 
@@ -1665,18 +1431,17 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   }
 
   /**
-   * Creates a signal that lazily tracks nested plain-object and array properties.
-   * Mutations must go through `.value`; changes made through the original raw
-   * object are intentionally not observable.
+   * Creates a signal that lazily tracks nested plain-object, array, and standard
+   * collection reads. Mutations must go through `.value`; changes made through
+   * the original raw value or `.peek()` are intentionally not observable.
    */
-  function deepSignal<T extends object>(initialValue: T, options?: DeepSignalOptions): DeepSignalLike<T> {
-    const reactiveCollections = options?.collections === "reactive";
-    const rawInitialValue = prepareDeepValue(initialValue, reactiveCollections);
-    assertRootValue(rawInitialValue, reactiveCollections);
+  function deepSignal<T extends object>(initialValue: T): DeepSignalLike<T> {
+    const rawInitialValue = prepareDeepValue(initialValue);
+    assertRootValue(rawInitialValue);
 
-    wrap(rawInitialValue, reactiveCollections);
+    wrap(rawInitialValue);
     const root = adapter.createSignal(rawInitialValue as T);
-    const result = new DeepSignalImpl(root, reactiveCollections);
+    const result = new DeepSignalImpl(root);
     adapter.registerDeepSignal?.(result);
     return result;
   }

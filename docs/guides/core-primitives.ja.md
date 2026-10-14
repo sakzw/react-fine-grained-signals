@@ -87,10 +87,10 @@ untracked<T>(fn: () => T): T
 ## deepSignal
 
 ```ts
-deepSignal<T extends object>(initialValue: T, options?: DeepSignalOptions): DeepSignal<T>
+deepSignal<T extends object>(initialValue: T): DeepSignal<T>
 ```
 
-プレーンオブジェクトと配列にプロパティ単位の追跡を追加します。Proxyはアクセス時に遅延生成されてキャッシュされるため、別名参照や循環参照でも同一性が安定して維持されます。
+プレーンオブジェクト、配列、同一realmの標準collectionにプロパティまたはkey単位の追跡を追加します。Proxyはアクセス時に遅延生成されてキャッシュされるため、別名参照や循環参照でも同一性が安定して維持されます。
 
 ```ts
 import { computed, deepSignal } from "react-fine-grained-signals";
@@ -107,34 +107,24 @@ state.value.items.push("second");
 
 - 監視できるのは、`state.value` を経由した代入、削除、標準的な配列操作だけです。
 - `state.peek()` は依存関係を収集せず生のルート値を返すため、読み取り専用として扱ってください。
-- ルートにはデータプロパティを持つ変更可能なプレーンオブジェクトまたは配列が必要です。v1では、アクセサプロパティ、プロパティ記述子やプロトタイプの変更、`freeze` / `seal` を拒否します。拡張不可のオブジェクトも、部分的にリアクティブにせず拒否します。
-- 既定ではネストしたプレーンオブジェクトと配列がリアクティブになります。クラスインスタンス、関数、`Date`、collection、Promise、既存のsignalは不透明な値として扱います。
+- ルートにはデータプロパティを持つ変更可能なプレーンオブジェクト、配列、または同一realmの標準collectionが必要です。v1では、アクセサプロパティ、プロパティ記述子やプロトタイプの変更、`freeze` / `seal` を拒否します。拡張不可のオブジェクトも、部分的にリアクティブにせず拒否します。
+- ネストしたプレーンオブジェクト、配列、`Map`、`Set`、`WeakMap`、`WeakSet`はリアクティブです。クラスインスタンス、関数、`Date`、Promise、既存のsignalは不透明な値として扱います。
 - 配列の変更メソッド(`push`、`splice`、`sort` など)は、呼び出し側を変更対象の配列に購読させません。通知されるのは、影響を受けたindex、`length`、keyを読んでいる側だけです。そのため、effect内での `push` によって、そのeffectが以後の `push` のたびに再実行されることはありません。
 - keyの列挙や自身のkeyの確認(`Object.keys`、`for...in`、`Object.hasOwn`、`hasOwnProperty.call`)は、値ではなくkeyの有無に依存します。`Object.getOwnPropertyDescriptor(...).value` を通じた値の読み取りは値の読み取りとして追跡されないため、プロパティそのものを読んでください。
 - `Object.prototype` から継承したkey(`constructor`、`toString` など)も、辞書的なオブジェクトではリアクティブなままです。読み取りや存在確認は、そのkeyが自身のプロパティになった時点で再実行されます。
 
-### 不透明な Map と Set
+### Reactive collections
 
-`state.value` の reactive plain object / array のProxyから**直接**取得した不透明な `Map` / `Set` だけは、読み取り専用viewとして公開されます。`Signal<T>` との型互換性を保つためTypeScript上の型は通常の可変 `Map` / `Set` のままですが、`set`、`add`、`delete`、`clear` はruntimeで `TypeError` になります。コピーとして新しい `Map` / `Set` を作成して変更し、代わりにその新しいcollectionを代入してください。
-
-### viewの保証が及ばない範囲
-
-既定modeでは、このviewの保証は不透明な境界をまたぎません。クラスインスタンス、`Date`、関数、collection entry、アクセサの戻り値、prototypeの状態、private field、closureの状態、`WeakMap` のentry、Promiseの内部状態は、rawかつ非リアクティブな領域です。これらの領域から得た値や、保存後に直接変更された不透明な値は、直接変更に対して保護されません。ユーザーコードを呼ばないため、書き込み時の検証はown data descriptorと `Map` / `Set` のentryだけを調べ、getter / setterは呼び出しません。検査できる値にlibrary Proxyが含まれる書き込みは拒否されますが、それ以外の内部領域は検査できません。
-
-### リアクティブcollection（opt-in）
-
-`{ collections: "reactive" }`を渡すと、`Map`、`Set`、`WeakMap`、`WeakSet`をリアクティブにできます。collectionをroot値として渡すこともできます。
+collectionは既定でリアクティブです。collectionをroot値として渡すこともできます。
 
 ```ts
-const state = deepSignal(new Map<string, { count: number }>(), {
-  collections: "reactive",
-});
+const state = deepSignal(new Map<string, { count: number }>());
 state.value.set("item", { count: 1 });
 ```
 
-このoptionはplain objectや配列の中にあるcollectionにも適用されます。Mapの`get`と`has`はkeyごとに別々に追跡されます。`size`、key iteration、entry iterationも別の依存です。Setの`has`、`size`、iterationも別に追跡されます。Weak collectionはkey操作だけを追跡し、列挙、`size`、`clear`はできません。
+Mapの`get`と`has`はkeyごとに別々に追跡されます。`size`、key iteration、entry iterationも別の依存です。Setの`has`、`size`、iterationも別に追跡されます。Weak collectionはkey操作だけを追跡し、列挙、`size`、`clear`はできません。
 
-plain objectや配列であるcollectionのkey、member、valueはrawで保存され、読み出し時にdeep proxyとして返ります。このruntimeが作ったraw keyとproxy keyは同じentryとして扱います。既定modeとは別のproxy cacheを使うため、同じraw objectでもmodeが違えばproxy identityも異なります。元のcollectionや`.peek()`からcollectionを変更しても通知されません。Weak collectionの初期entryは走査できないため、reactive proxy経由のmethod呼び出し時にkeyを正規化し、戻り値を遅延wrapします。native runtimeが許可するnon-registered symbol keyもweak collectionで使えます。同一realmの組み込みcollectionのみ対応します。
+plain objectや配列であるcollectionのkey、member、valueはrawで保存され、読み出し時にdeep proxyとして返ります。このruntimeが作ったraw keyとproxy keyは同じentryとして扱います。元のcollectionや`.peek()`からcollectionを変更しても通知されません。Weak collectionの初期entryは走査できないため、reactive proxy経由のmethod呼び出し時にkeyを正規化し、戻り値を遅延wrapします。symbol keyの可否はnative runtimeのWeakMap/WeakSet key規則に従います。同一realmの組み込みcollectionのみ対応します。
 
 ## isSignal
 

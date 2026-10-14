@@ -9,7 +9,7 @@ function measure(keyCount, operation, prepare = () => {}) {
   const iterations = Math.min(1_000, Math.max(25, Math.floor(targetCandidateChecksPerSample / Math.max(1, keyCount))));
   const warmupIterations = Math.min(100, iterations);
   const measuredMutations = iterations * samples;
-  const state = deepSignal(new Map([["churn", 0]]), { collections: "reactive" });
+  const state = deepSignal(new Map([["churn", 0]]));
   prepare(state.value, measuredMutations + warmupIterations + 100);
   const dispose = effect(() => {
     for (let i = 0; i < keyCount; i += 1) state.value.get(`subscribed-${i}`);
@@ -31,7 +31,7 @@ function measure(keyCount, operation, prepare = () => {}) {
 async function measureHeap(keyCount) {
   global.gc();
   const before = process.memoryUsage().heapUsed;
-  const state = deepSignal(new Map(), { collections: "reactive" });
+  const state = deepSignal(new Map());
   let dispose = effect(() => {
     for (let i = 0; i < keyCount; i += 1) state.value.get(`heap-${i}`);
   });
