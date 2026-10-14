@@ -57,7 +57,25 @@ APIは明示`bindValue`を継続する。単独checkboxはbooleanの`bindChecked
 | Mixed-version | `pnpm test:mixed-version` pass。v0.1.1とのSignal interop拒否など、既存のunsupported boundaryを確認 |
 | Bundle size | final buildで`jsx-runtime` 13.34 kB gzip、`index-full` 21.25 kB。旧budget 12.88/20.94 kBを機能追加分が超えたため、`pnpm size:update`で各実測値+5%のheadroomへ更新。tree-shaking presence/absence checkを維持し、最終`node scripts/check-size.mjs` pass |
 
-### JSX factory characterization
+### Performance characterization
+
+計測はNode v24.21.0 / React 19.3.0 / AMD Ryzen 7 PRO 6850U上の手動診断。別環境の予測値や性能保証には使わない。既存`benchmarks/core.mjs`は100,000 operations、3 warmup、9 samplesでsignal/computedのcreate/read/update/batchを測る。再実行は`pnpm build:runtime; node --expose-gc benchmarks/core.mjs`。M11では直接のcomputed生成時間も比較するJSX factory characterizationと、JSDOM上で実際にmount/update/unmountするフォームbinding比較を追加した。
+
+#### Core signal/computed
+
+| Case | alien-signals raw ops/s (p25–p75 ms/100k) | RFSG ops/s (p25–p75 ms/100k) | @preact/signals-core ops/s (p25–p75 ms/100k) |
+|---|---:|---:|---:|
+| signal/read | 15.69M (6.342–7.169) | 5.76M (11.530–31.394) | 26.25M (3.502–6.600) |
+| signal/write | 15.41M (6.451–7.018) | 9.87M (5.581–12.154) | 8.52M (9.711–12.808) |
+| signal/observed-write | 2.43M (34.480–63.050) | 0.54M (94.164–245.871) | 1.80M (36.723–62.275) |
+| computed/create | 5.07M (18.948–29.427) | 0.14M (567.126–842.477) | 3.16M (27.239–37.925) |
+| computed/read | 1.66M (34.396–94.246) | 4.62M (13.184–63.708) | 6.30M (6.386–20.153) |
+| computed/update-and-read | 0.60M (151.580–278.437) | 2.34M (41.818–45.654) | 2.75M (28.243–62.541) |
+| batch/two-observed-writes | 0.46M (165.824–270.825) | 0.58M (141.087–278.435) | 0.65M (141.553–166.990) |
+
+`benchmarks/core.mjs`はcomputedの生成、cached read、update-and-readを別々に測るよう拡張した。生成caseは最後のcomputedを保持して結果を確認する。今回の9-sample runではRFSGのcomputed生成中央値がraw比較対象より遅く、他のcaseもp25–p75の幅が大きい。これは現状値を記録する診断であり、M11でcore algorithmを変更していないためM11起因の回帰とは結論しない。M11機能のない同じpackage baselineとの同時A/B結果ではなく、性能差の帰属はできない。
+
+#### JSX factory characterization
 
 既存`benchmarks/m10-jsx-bench.mjs`へradio/checkbox-group binding casesを足し、Node v24.21.0 / React 19.3.0で10,000 iteration、2 warmup、5 sampleを比較した。これはJSX factoryのみ（DOM mount/subscribeを除く）なので単体mount時間として解釈しない。
 
@@ -72,7 +90,24 @@ APIは明示`bindValue`を継続する。単独checkboxはbooleanの`bindChecked
 
 radio factory costは従来のtext/checkbox direct bindingに近く、checkbox-group factoryは約2.7 µs/call増だった。測定分布には通常props caseを含むばらつきがあるため、傾向確認としてのみ扱う。owner rerenderが起きないことはruntime tests/E2Eで別途確認した。
 
-## Commits / push
+#### Form mount/update and retained heap
+
+再現コマンドは`pnpm build:runtime`の後に`node --expose-gc benchmarks/m11-form-runtime-bench.mjs`。環境変数`M11_FORM_WARMUPS`、`M11_FORM_SAMPLES`、`M11_FORM_UPDATES`、`M11_FORM_HEAP_CYCLES`、`M11_FORM_HEAP_WIDTH`で測定量を変更できる。PowerShellで記録条件を再現するには、`$env:M11_FORM_WARMUPS='2'; $env:M11_FORM_SAMPLES='5'; $env:M11_FORM_UPDATES='40'; $env:M11_FORM_HEAP_CYCLES='10'; $env:M11_FORM_HEAP_WIDTH='5'; node --expose-gc benchmarks/m11-form-runtime-bench.mjs`を実行する。update・mount時間は中央値とp25–p75、heapは5 sampleのprocess heap差を記録した。
+
+| Binding | mount ms React / RFSG (p25–p75) | update ms/op React / RFSG (p25–p75) | owner rerender React / RFSG |
+|---|---:|---:|---:|
+| text | 4.30 (3.48–4.58) / 3.45 (3.10–4.08) | 0.67 (0.65–0.86) / 0.06 (0.05–0.06) | 40 / 0 |
+| checked | 4.25 (3.37–11.80) / 5.05 (4.14–12.59) | 0.91 (0.79–1.02) / 0.05 (0.04–0.17) | 40 / 0 |
+| single select | 5.64 (5.44–10.11) / 7.47 (5.41–8.25) | 1.10 (0.96–1.39) / 0.11 (0.11–0.17) | 40 / 0 |
+| multiple select | 4.64 (4.62–5.00) / 4.79 (4.54–5.09) | 0.82 (0.77–1.07) / 0.14 (0.13–0.14) | 40 / 0 |
+| radio group | 4.84 (4.57–5.69) / 5.17 (4.79–5.41) | 1.11 (1.10–1.16) / 0.09 (0.08–0.10) | 40 / 0 |
+| checkbox group | 4.31 (4.30–5.55) / 5.70 (5.02–5.81) | 1.03 (0.98–1.07) / 0.06 (0.06–0.06) | 40 / 0 |
+
+Mount times include JSDOM/React root setup and have wide sample ranges. Update medians were lower for direct binding in this harness, while owner render counts matched the intended no-rerender contract. These are process-local results, not browser latency claims.
+
+Forced-GC retained-heap median deltas and p25–p75 ranges (React / RFSG) were text `11,656 (10,992–24,864) / 36,824 (11,536–37,248) B`, checked `3,696 (3,456–8,720) / 25,336 (6,352–42,736) B`, single select `15,864 (12,808–46,296) / 22,024 (17,352–22,808) B`, multiple select `4,640 (3,872–11,768) / 36,592 (13,040–45,264) B`, radio `8,048 (2,256–9,320) / 14,608 (10,648–17,800) B`, checkbox group `9,424 (7,064–18,360) / 11,784 (10,728–13,408) B`. The ranges overlap or vary broadly, so these measurements do not establish a stable retained-memory advantage or regression. Across the full binding run all 544 created MutationObservers were disconnected and none survived the post-GC WeakRef check. One weakly referenced multiple-select node from an RFSG mount remained reachable in JSDOM after five event-loop/GC passes. Its retaining path was not identified, so the process-level heap diagnostic cannot establish whether this is a runtime retention or a JSDOM/React artifact. Browser heap profiling remains outside this diagnostic.
+
+The benchmark checks final DOM values after updates and counts owner renders. Heap measurements are intentionally diagnostic: React, JSDOM, Node GC scheduling, and process caches make small deltas noisy. They are not a memory guarantee.
 
 ## Commits / push
 

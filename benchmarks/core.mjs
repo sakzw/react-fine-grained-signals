@@ -75,6 +75,21 @@ const cases = [
     check(state, count) { assert(state.runs === count + 1, "observed write did not notify once per change"); },
   },
   {
+    name: "computed/create",
+    create(adapter) {
+      const source = adapter.signal(7);
+      return { createComputed: () => adapter.computed(() => source.get() * 2), latest: undefined };
+    },
+    run(state, count) { for (let index = 0; index < count; index += 1) state.latest = state.createComputed(); },
+    check(state) { assert(state.latest?.get() === 14, "computed creation produced an incorrect value"); },
+  },
+  {
+    name: "computed/read",
+    create(adapter) { const doubled = adapter.computed(() => 7 * 2); return { doubled, sum: 0 }; },
+    run(state, count) { let sum = 0; for (let index = 0; index < count; index += 1) sum += state.doubled.get(); state.sum = sum; },
+    check(state, count) { assert(state.sum === count * 14, "computed read result is incorrect"); },
+  },
+  {
     name: "computed/update-and-read",
     create(adapter) {
       const source = adapter.signal(0); const doubled = adapter.computed(() => source.get() * 2);
