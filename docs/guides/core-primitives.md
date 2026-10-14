@@ -37,9 +37,30 @@ Creates a writable reactive value.
 
 ```ts
 computed<T>(getter: () => T): ReadonlySignal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
 ```
 
 Creates a lazily evaluated, read-only derived value. It exposes the same `.value` and `.peek()` as `signal`, and re-evaluates on the next read after a dependency its getter read has changed.
+
+Pass a getter and setter object to create a writable computed value. The getter remains the source of truth; assigning `.value` calls the user setter and does not copy a value into a second signal. The setter runs untracked and inside a batch, so reading other signals in the setter does not add dependencies and multiple writes notify observers after the setter finishes.
+
+```ts
+const first = signal("John");
+const last = signal("Smith");
+const fullName = computed({
+  get: () => `${first.value} ${last.value}`,
+  set: (value) => {
+    const [nextFirst = "", ...rest] = value.split(" ");
+    first.value = nextFirst;
+    last.value = rest.join(" ");
+  },
+});
+
+fullName.value = "Ada Lovelace";
+console.log(fullName.value); // "Ada Lovelace"
+```
+
+The getter-only form remains `ReadonlySignal<T>` and cannot be used with writable JSX form bindings. The getter/setter form is a writable `Signal<T>`, so it works with `bindValue`, `bindChecked`, and single or multiple select bindings when its value type matches. A setter need not be a mathematical inverse: after assignment, reads show whatever the getter derives from the state the setter wrote.
 
 ### When the getter throws
 

@@ -22,6 +22,7 @@ export interface ReactiveRuntime {
   readonly renderAdapter: AlienDerivedRenderAdapter;
   signal<T>(value: T): RuntimeSignal<T>;
   computed<T>(getter: () => T): RuntimeReadonlySignal<T>;
+  computed<T>(getter: () => T, setter: (value: T) => void): RuntimeSignal<T>;
   effect(fn: () => void | (() => void)): () => void;
   detachedEffect(fn: () => void | (() => void)): () => void;
   batch<T>(fn: () => T): T;
@@ -48,7 +49,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
     getNodeForReadable: graph.getNodeForReadable,
     renderAdapter: render,
     signal: graph.signal,
-    computed: graph.computed,
+    computed: graph.computed as ReactiveRuntime["computed"],
     effect: graph.effect,
     detachedEffect: graph.detachedEffect,
     batch: graph.batch,

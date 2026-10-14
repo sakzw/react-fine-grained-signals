@@ -37,9 +37,30 @@ signal<T>(initialValue: T): Signal<T>
 
 ```ts
 computed<T>(getter: () => T): ReadonlySignal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
 ```
 
 遅延評価される読み取り専用の派生値を作成します。`signal` と同じ `.value` と `.peek()` を公開し、getterが読んだ依存が変化したあと、次の読み取り時に再評価されます。
+
+getterとsetterを持つオブジェクトを渡すと、書き込み可能なcomputedを作成します。getterが値の真偽を決め、`.value`への代入はユーザー定義のsetterを呼びます。別のsignalへ値をコピーするものではありません。setterは依存追跡なし、かつbatch内で実行されるため、setter内で別のsignalを読むことはcomputedの依存にならず、複数の書き込みはsetter完了後に購読者へ通知されます。
+
+```ts
+const first = signal("John");
+const last = signal("Smith");
+const fullName = computed({
+  get: () => `${first.value} ${last.value}`,
+  set: (value) => {
+    const [nextFirst = "", ...rest] = value.split(" ");
+    first.value = nextFirst;
+    last.value = rest.join(" ");
+  },
+});
+
+fullName.value = "Ada Lovelace";
+console.log(fullName.value); // "Ada Lovelace"
+```
+
+getterだけの形式は引き続き`ReadonlySignal<T>`で、書き込みが必要なJSX form bindingには使えません。getter/setter形式は書き込み可能な`Signal<T>`となり、値の型が合えば`bindValue`、`bindChecked`、単一・複数select bindingで使えます。setterとgetterが完全な逆変換でなくてもかまいません。代入後の読み取り値は、setterが変更した状態からgetterが導出した値です。
 
 ### getterが例外を投げた場合
 

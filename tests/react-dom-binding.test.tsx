@@ -637,6 +637,69 @@ describe("Direct DOM binding", () => {
     expect(input.checked).toBe(true);
   });
 
+  it("uses writable computed signals for input, checkbox, and select bindings", () => {
+    const first = signal("John");
+    const last = signal("Smith");
+    const fullName = computed({
+      get: () => `${first.value} ${last.value}`,
+      set: (value) => {
+        const [nextFirst = "", ...rest] = value.split(" ");
+        first.value = nextFirst;
+        last.value = rest.join(" ");
+      },
+    });
+    const checkedSource = signal(false);
+    const checked = computed({ get: () => checkedSource.value, set: (value) => { checkedSource.value = value; } });
+    const selectedSource = signal("a");
+    const selected = computed({ get: () => selectedSource.value, set: (value) => { selectedSource.value = value; } });
+    const manySource = signal<string[]>(["a"]);
+    const many = computed({ get: () => manySource.value, set: (value) => { manySource.value = value; } });
+
+    render(
+      <form aria-label="writable computed form">
+        <input aria-label="full name" bindValue={fullName} />
+        <input type="checkbox" aria-label="writable checked" bindChecked={checked} />
+        <select aria-label="writable single select" bindValue={selected}>
+          <option value="a">A</option><option value="b">B</option>
+        </select>
+        <select aria-label="writable multiple select" multiple bindValue={many}>
+          <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+        </select>
+      </form>,
+    );
+
+    const nameInput = screen.getByLabelText("full name") as HTMLInputElement;
+    const checkbox = screen.getByLabelText("writable checked") as HTMLInputElement;
+    const single = screen.getByLabelText("writable single select") as HTMLSelectElement;
+    const multiple = screen.getByLabelText("writable multiple select") as HTMLSelectElement;
+    expect(nameInput.value).toBe("John Smith");
+    expect(checkbox.checked).toBe(false);
+    expect(single.value).toBe("a");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a"]);
+
+    act(() => {
+      first.value = "Ada";
+      checkedSource.value = true;
+      selectedSource.value = "b";
+      manySource.value = ["b", "c"];
+    });
+    expect(nameInput.value).toBe("Ada Smith");
+    expect(checkbox.checked).toBe(true);
+    expect(single.value).toBe("b");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b", "c"]);
+
+    fireEvent.input(nameInput, { target: { value: "Grace Hopper" } });
+    fireEvent.click(checkbox);
+    fireEvent.change(single, { target: { value: "a" } });
+    multiple.options[0]!.selected = true;
+    multiple.options[1]!.selected = false;
+    multiple.options[2]!.selected = true;
+    fireEvent.change(multiple);
+    expect([first.value, last.value, checkedSource.value, selectedSource.value, manySource.value]).toEqual([
+      "Grace", "Hopper", false, "a", ["a", "c"],
+    ]);
+  });
+
   it("keeps a bound checkbox's form value available to FormData", () => {
     const enabled = signal(false);
     render(

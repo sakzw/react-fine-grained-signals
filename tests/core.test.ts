@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { batch, computed, effect, isSignal, signal, untracked } from "../src/index.js";
+import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
   setActiveRenderCollector,
   type RenderDependency,
@@ -111,6 +112,78 @@ describe("core signal primitives", () => {
     expect(values).toEqual(["first", "first-updated", "second"]);
     second.value = "second-updated";
     expect(values).toEqual(["first", "first-updated", "second", "second-updated"]);
+  });
+
+  it("supports lazy writable computed values with peek and batched setter writes", () => {
+    const first = signal(1);
+    const second = signal(2);
+    let evaluations = 0;
+    const total = computed({
+      get: () => {
+        evaluations += 1;
+        return first.value + second.value;
+      },
+      set: (value) => {
+        first.value = value - 2;
+        second.value = 2;
+      },
+    });
+    expect(isSignal(total)).toBe(true);
+    expect(evaluations).toBe(0);
+    expect(total.peek()).toBe(3);
+    expect(evaluations).toBe(1);
+
+    const seen: number[] = [];
+    disposers.push(effect(() => { seen.push(total.value); }));
+    expect(seen).toEqual([3]);
+    total.value = 10;
+    expect(first.value).toBe(8);
+    expect(second.value).toBe(2);
+    expect(seen).toEqual([3, 10]);
+    expect(evaluations).toBe(2);
+  });
+
+  it("keeps writable computed setters untracked and propagates setter errors", () => {
+    const source = signal(1);
+    const unrelated = signal(0);
+    const writable = computed({
+      get: () => source.value,
+      set: (value) => {
+        void unrelated.value;
+        source.value = value;
+      },
+    });
+    let runs = 0;
+    disposers.push(effect(() => {
+      writable.value;
+      runs += 1;
+    }));
+
+    writable.value = 2;
+    expect(runs).toBe(2);
+    unrelated.value += 1;
+    expect(runs).toBe(2);
+
+    const broken = computed({ get: () => source.value, set: () => { throw new Error("setter failed"); } });
+    expect(() => { broken.value = 3; }).toThrow("setter failed");
+  });
+
+  it("keeps writable computed values observable across independent runtime copies", () => {
+    const sourceRuntime = createReactiveRuntime();
+    const observerRuntime = createReactiveRuntime();
+    const source = sourceRuntime.signal(2);
+    const doubled = sourceRuntime.computed(
+      () => source.value * 2,
+      (value) => { source.value = value / 2; },
+    );
+    const values: number[] = [];
+    const dispose = observerRuntime.effect(() => { values.push(doubled.value); });
+
+    expect(values).toEqual([4]);
+    doubled.value = 10;
+    expect(source.value).toBe(5);
+    expect(values).toEqual([4, 10]);
+    dispose();
   });
 
   it("coalesces notifications made inside batch", () => {

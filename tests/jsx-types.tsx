@@ -1,13 +1,23 @@
 /** @jsxImportSource react-fine-grained-signals */
 
-import { computed, signal } from "../src/index.js";
+import { computed, signal, type Signal } from "../src/index.js";
 
 const text = signal("value");
 const enabled = signal(false);
+const selectedMany = signal<string[]>(["a"]);
 const enabledReadOnly = computed(() => enabled.value);
 const boxStyle = signal({ color: "red" });
 const color = signal("blue");
 const nullishText = signal<string | null | undefined>(null);
+const writableText = computed({ get: () => text.value, set: (value) => { text.value = value; } });
+const writableChecked = computed({ get: () => enabled.value, set: (value) => { enabled.value = value; } });
+const writableSelection = computed({ get: () => text.value, set: (value) => { text.value = value; } });
+const writableManySelection = computed({ get: () => selectedMany.value, set: (value) => { selectedMany.value = value; } });
+const customWritableSignal: Signal<string> = {
+  get value() { return text.value; },
+  set value(value: string) { text.value = value; },
+  peek: () => text.peek(),
+};
 
 function Custom({ value, children }: { value: typeof text; children: typeof text }) {
   return <output>{value === children ? "same" : "different"}</output>;
@@ -29,14 +39,19 @@ const partiallyStyled = <div style={{ color, width: 12 }} />;
 const controlledInput = <input value={text.value} checked={enabled.value} onChange={() => {}} />;
 const boundInput = <input bindValue={text} />;
 const boundCheckbox = <input type="checkbox" bindChecked={enabled} />;
+const writableComputedInput = <input bindValue={writableText} />;
+// @ts-expect-error Structural writable signals remain assignable to Signal<T>, but JSX binding requires an RFSG-created source.
+const unsupportedCustomBinding = <input bindValue={customWritableSignal} />;
+const writableComputedCheckbox = <input type="checkbox" bindChecked={writableChecked} />;
 const boundCheckboxWithFormValue = <input type="checkbox" name="permission" value="admin" bindChecked={enabled} />;
 const boundCheckboxWithDefaultFormValue = <input type="checkbox" name="permission" defaultValue="admin" bindChecked={enabled} />;
 // @ts-expect-error Checkbox form values remain ordinary React props, not signal bindings.
 const checkboxImplicitValueBinding = <input type="checkbox" value={text} bindChecked={enabled} />;
 const boundTextarea = <textarea bindValue={text} />;
 const boundSingleSelect = <select bindValue={text}><option value="value">value</option></select>;
-const selectedMany = signal<string[]>(["a"]);
+const boundComputedSingleSelect = <select bindValue={writableSelection}><option value="value">value</option></select>;
 const boundMultipleSelect = <select multiple bindValue={selectedMany}><option value="a">A</option></select>;
+const boundComputedMultipleSelect = <select multiple bindValue={writableManySelection}><option value="a">A</option></select>;
 const controlledMultipleSelect = <select multiple value={selectedMany.value}><option value="a">A</option></select>;
 // @ts-expect-error Single-select binding values must be strings.
 const wrongSingleSelect = <select bindValue={selectedMany} />;
@@ -60,6 +75,8 @@ const implicitValueBinding = <input value={text} />;
 const readOnlyBinding = <input bindValue={enabledReadOnly} />;
 // @ts-expect-error Binding types are explicit about their payload.
 const wrongCheckedBinding = <input type="checkbox" bindChecked={text} />;
+// @ts-expect-error Getter-only computed values remain readonly and cannot be form bindings.
+const readonlyComputedInput = <input bindValue={computed(() => text.value)} />;
 // `title` and `id` remove their attributes when a direct binding becomes nullish.
 const nullishTitleAndId = <div title={nullishText} id={nullishText} />;
 const controlledSelect = (
@@ -89,12 +106,17 @@ void [
   controlledInput,
   boundInput,
   boundCheckbox,
+  writableComputedInput,
+  unsupportedCustomBinding,
+  writableComputedCheckbox,
   boundCheckboxWithFormValue,
   boundCheckboxWithDefaultFormValue,
   checkboxImplicitValueBinding,
   boundTextarea,
   boundSingleSelect,
+  boundComputedSingleSelect,
   boundMultipleSelect,
+  boundComputedMultipleSelect,
   controlledMultipleSelect,
   wrongSingleSelect,
   wrongMultipleSelect,
@@ -107,6 +129,7 @@ void [
   implicitValueBinding,
   readOnlyBinding,
   wrongCheckedBinding,
+  readonlyComputedInput,
   nullishTitleAndId,
   controlledSelect,
   svgChild,

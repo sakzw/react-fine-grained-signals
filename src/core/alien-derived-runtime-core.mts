@@ -782,7 +782,11 @@ const signalClassBrandHelper = <T,>(initialValue: T): RuntimeWritable<T> => crea
 
 class HelperBrandComputed<T = unknown> {
   #node: RuntimeComputed;
-  constructor(node: RuntimeComputed, branded = true) { this.#node = node; if (branded) registerHelperBrand(this); attachProtocol(this, node); }
+  constructor(node: RuntimeComputed, branded = true) {
+    this.#node = node;
+    if (branded) registerHelperBrand(this);
+    attachProtocol(this, node);
+  }
   get value(): T {
     const node = this.#node;
     const currentOwner = executionContext.owner;
@@ -809,11 +813,25 @@ class HelperBrandComputed<T = unknown> {
   }
   peek(): T { return untracked(() => readComputed(this.#node) as T); }
 }
-function createBrandedComputed<T>(makeReadable: new (node: RuntimeComputed) => RuntimeReadable<T>, getter: () => T): RuntimeReadable<T> {
-  const node = makeNode("computed", None, { getter, value: undefined, error: undefined, hasError: false, initialized: false });
-  return new makeReadable(node as RuntimeComputed);
+
+class WritableHelperBrandComputed<T = unknown> extends HelperBrandComputed<T> {
+  #setter: (value: T) => void;
+  constructor(node: RuntimeComputed, setter: (value: T) => void) {
+    super(node);
+    this.#setter = setter;
+  }
+  get value(): T { return super.value; }
+  set value(value: T) {
+    batch(() => untracked(() => this.#setter!(value)));
+  }
 }
-const computedClassBrandHelper = <T,>(getter: () => T): RuntimeReadable<T> => createBrandedComputed(HelperBrandComputed<T>, getter);
+function createBrandedComputed<T>(getter: () => T, setter?: (value: T) => void): RuntimeReadable<T> {
+  const node = makeNode("computed", None, { getter, value: undefined, error: undefined, hasError: false, initialized: false });
+  return setter === undefined
+    ? new HelperBrandComputed<T>(node as RuntimeComputed)
+    : new WritableHelperBrandComputed<T>(node as RuntimeComputed, setter);
+}
+const computedClassBrandHelper = <T,>(getter: () => T, setter?: (value: T) => void): RuntimeReadable<T> => createBrandedComputed(getter, setter);
 
 function hasBrandAndPeek(value: unknown): value is { peek(): unknown } & object {
   if (typeof value !== "object" || value === null) return false;

@@ -7,8 +7,10 @@ export {
   signal,
   untracked,
   type DeepSignal,
+  type FormBindableSignal,
   type ReadonlySignal,
   type Signal,
+  type WritableComputedOptions,
 } from "./core/index.js";
 export {
   useComputed,

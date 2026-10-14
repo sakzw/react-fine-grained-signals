@@ -12,6 +12,12 @@ export interface Signal<T> extends ReadonlySignal<T> {
   value: T;
 }
 
+/** A package signal accepted by the direct JSX binding runtime. */
+export interface FormBindableSignal<T> extends Signal<T> {
+  /** Type-only capability matching the runtime's RFSG signal brand check. */
+  readonly "__rfgs_form_bindable__": true;
+}
+
 const signalInstances = new WeakSet<object>();
 
 // The brand carries a protocol version instead of `true` so a future instance
@@ -53,13 +59,23 @@ export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
 }
 
 /** Creates a writable reactive value. */
-export function signal<T>(initialValue: T): Signal<T> {
-  return coreRuntime.signal(initialValue);
+export function signal<T>(initialValue: T): FormBindableSignal<T> {
+  return coreRuntime.signal(initialValue) as FormBindableSignal<T>;
 }
 
-/** Creates a lazily evaluated reactive value. */
-export function computed<T>(getter: () => T): ReadonlySignal<T> {
-  return coreRuntime.computed(getter);
+/** Getter/setter behavior for a lazily evaluated writable computed signal. */
+export interface WritableComputedOptions<T> {
+  get: () => T;
+  set: (value: T) => void;
+}
+
+/** Creates a lazily evaluated readonly computed signal. */
+export function computed<T>(getter: () => T): ReadonlySignal<T>;
+/** Creates a lazily evaluated writable computed signal. */
+export function computed<T>(options: WritableComputedOptions<T>): FormBindableSignal<T>;
+export function computed<T>(source: (() => T) | WritableComputedOptions<T>): ReadonlySignal<T> | Signal<T> {
+  if (typeof source === "function") return coreRuntime.computed(source);
+  return coreRuntime.computed(source.get, source.set) as FormBindableSignal<T>;
 }
 
 /** Runs a reactive side effect and returns a disposer. */

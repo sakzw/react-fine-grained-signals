@@ -142,5 +142,6 @@ These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "reac
 - A `deepSignal` is not accepted as a signal child or a bound prop. Those positions follow root replacement only, so nested mutations would never show; TypeScript rejects them. Read deep state inside a tracked component, or select a primitive with [`useDeepSignalValue`](./hooks.md#usedeepsignalvalue).
 - For SSR and hydration, ensure the initial signal values are identical on server and client. Do not place request-specific signals in shared module scope; create them per request.
 - Writable signals are required; read-only computed signals cannot be used with `bindValue` or `bindChecked`.
+- A `computed({ get, set })` is writable and can be bound when its value type matches the field. The native input/select change calls its setter; updates to dependencies are still reflected through its getter. The getter-only `computed(() => ...)` and `useComputed()` remain read-only.
 
 See also: [rendering optimization](./rendering-optimization.md), [JSX control-flow utilities](./control-flow.md).

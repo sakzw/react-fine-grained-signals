@@ -2,7 +2,7 @@ import { isSignal, untracked } from "../core/index.js";
 import { detachedEffect } from "../core/base.js";
 import { subscribeReadableV1 } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
-import type { ReadonlySignal, Signal } from "../core/index.js";
+import type { FormBindableSignal, ReadonlySignal, Signal } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
 import { useSignalValue } from "../react/hooks.js";
 import { createElement, Fragment } from "react";
@@ -1276,7 +1276,7 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     defaultValue?: never;
     checked?: never;
     defaultChecked?: never;
-    bindValue?: Signal<string> & NotDeepSignal;
+    bindValue?: FormBindableSignal<string> & NotDeepSignal;
     bindChecked?: never;
   }
   | {
@@ -1286,13 +1286,13 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     checked?: never;
     defaultChecked?: never;
     bindValue?: never;
-    bindChecked?: Signal<boolean> & NotDeepSignal;
+    bindChecked?: FormBindableSignal<boolean> & NotDeepSignal;
   }
 );
 
 type BoundTextareaProps<P extends React.JSX.IntrinsicElements["textarea"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "bindValue"> & (
   Pick<P, "value" | "defaultValue"> & { bindValue?: never }
-  | { value?: never; defaultValue?: never; bindValue?: Signal<string> & NotDeepSignal }
+  | { value?: never; defaultValue?: never; bindValue?: FormBindableSignal<string> & NotDeepSignal }
 );
 
 type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "multiple" | "bindValue"> & (
@@ -1306,13 +1306,13 @@ type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<Ad
     multiple?: false;
     value?: never;
     defaultValue?: never;
-    bindValue?: Signal<string> & NotDeepSignal;
+    bindValue?: FormBindableSignal<string> & NotDeepSignal;
   }
   | {
     multiple: true;
     value?: never;
     defaultValue?: never;
-    bindValue?: Signal<string[]> & NotDeepSignal;
+    bindValue?: FormBindableSignal<string[]> & NotDeepSignal;
   }
 );
 
