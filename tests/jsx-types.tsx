@@ -1,6 +1,6 @@
 /** @jsxImportSource react-fine-grained-signals */
 
-import { computed, signal, type Signal } from "../src/index.js";
+import { computed, signal, useSignal, type Signal } from "../src/index.js";
 
 const text = signal("value");
 const enabled = signal(false);
@@ -21,6 +21,11 @@ const customWritableSignal: Signal<string> = {
 
 function Custom({ value, children }: { value: typeof text; children: typeof text }) {
   return <output>{value === children ? "same" : "different"}</output>;
+}
+
+function HookCreatedBinding() {
+  const hookSignal = useSignal("");
+  return <input bindValue={hookSignal} />;
 }
 
 // HTML direct bindings and signal children are supported.
@@ -137,4 +142,5 @@ void [
   unsupportedSvgBinding,
   unsupportedSvgStyle,
   component,
+  HookCreatedBinding,
 ];

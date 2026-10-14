@@ -9,6 +9,7 @@ import { computed, deepSignal, signal, untracked } from "../core/index.js";
 import { detachedEffect } from "../core/base.js";
 import type {
   DeepSignal,
+  FormBindableSignal,
   ReadonlySignal,
   Signal,
 } from "../core/index.js";
@@ -131,8 +132,8 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
 }
 
 /** Creates a signal whose identity is stable for the lifetime of this component. */
-export function useSignal<T>(initialValue: T): Signal<T> {
-  const signalRef = useRef<Signal<T> | undefined>(undefined);
+export function useSignal<T>(initialValue: T): FormBindableSignal<T> {
+  const signalRef = useRef<FormBindableSignal<T> | undefined>(undefined);
 
   if (signalRef.current === undefined) {
     signalRef.current = signal(initialValue);
