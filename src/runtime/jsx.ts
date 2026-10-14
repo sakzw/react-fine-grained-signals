@@ -542,6 +542,8 @@ function bindTextValue(
   let composing = false;
   let hasPending = false;
   let pending: unknown;
+  let handlingInput = false;
+  let inputVersion = 0;
   const episode: FailureEpisode = { hasReported: false };
 
   const onCompositionStart = () => {
@@ -556,7 +558,12 @@ function bindTextValue(
   };
   const onInput = () => {
     const attempted = node.value;
-    source.value = attempted;
+    handlingInput = true;
+    try {
+      source.value = attempted;
+    } finally {
+      handlingInput = false;
+    }
     if (composing) {
       const result = readBoundSignal(() => source.peek(), episode);
       if (result.ok && !areFormValuesEqual(result.value, attempted)) {
@@ -565,7 +572,22 @@ function bindTextValue(
       }
       return;
     }
-    resyncRejectedFormWrite(source, attempted, write, episode);
+    const version = ++inputVersion;
+    // Some browsers run a microtask checkpoint between the target listener
+    // and React's delegated listener. Use a task so React always observes the
+    // attempted value before any corrective DOM write.
+    setTimeout(() => {
+      if (version !== inputVersion || !Object.is(node.value, attempted)) return;
+      if (composing) {
+        const result = readBoundSignal(() => source.peek(), episode);
+        if (result.ok && !areFormValuesEqual(result.value, attempted)) {
+          hasPending = true;
+          pending = result.value;
+        }
+        return;
+      }
+      resyncRejectedFormWrite(source, attempted, write, episode);
+    }, 0);
   };
 
   node.addEventListener("compositionstart", onCompositionStart);
@@ -581,6 +603,7 @@ function bindTextValue(
       pending = next;
       return;
     }
+    if (handlingInput) return;
     write(next);
   }, episode);
   const disposeReset = bindFormReset(node, subscription.refresh);

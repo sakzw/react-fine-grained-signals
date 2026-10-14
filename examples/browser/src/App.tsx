@@ -9,12 +9,15 @@ import {
   startTransition,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ReactNode,
 } from "react";
 import {
+  computed,
   isSignal,
+  useSignal,
   useSignalTracking,
   type ReadonlySignal,
   type Signal,
@@ -70,6 +73,34 @@ function BindingLifecycle({ source }: { source: Signal<string> }) {
       >
         Update detached signal
       </button>
+    </section>
+  );
+}
+
+function WritableComputedFormBinding() {
+  const source = useSignal("123");
+  const inputEvents = useSignal(0);
+  const changeEvents = useSignal(0);
+  const digits = useMemo(() => computed({
+    get: () => source.value,
+    set: (next: string) => {
+      if (/^\d+$/.test(next)) source.value = next;
+    },
+  }), [source]);
+
+  return (
+    <section aria-labelledby="computed-form-heading">
+      <h2 id="computed-form-heading">Writable computed form binding</h2>
+      <input
+        id="computed-form-input"
+        aria-label="writable computed form input"
+        bindValue={digits}
+        onInput={() => { inputEvents.value += 1; }}
+        onChange={() => { changeEvents.value += 1; }}
+      />
+      <output id="computed-form-source">{source}</output>
+      <output id="computed-form-input-count">{inputEvents}</output>
+      <output id="computed-form-change-count">{changeEvents}</output>
     </section>
   );
 }
@@ -421,6 +452,8 @@ export function App({ state }: { state: DemoState }) {
           Toggle bindings
         </button>
       </section>
+
+      <WritableComputedFormBinding />
 
       <section aria-labelledby="component-heading">
         <h2 id="component-heading">React component boundary</h2>

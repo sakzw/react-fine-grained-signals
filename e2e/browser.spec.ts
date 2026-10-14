@@ -62,6 +62,26 @@ test("updates allowlisted host properties without a React rerender", async ({ pa
   expect(errors).toEqual([]);
 });
 
+test("keeps React input and change events when a writable computed rejects text", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const input = page.locator("#computed-form-input");
+
+  await expect(input).toHaveValue("123");
+  await input.press("End");
+  await input.press("x");
+  await expect(input).toHaveValue("123");
+  await expect(page.locator("#computed-form-source")).toHaveText("123");
+  await expect(page.locator("#computed-form-input-count")).toHaveText("1");
+  await expect(page.locator("#computed-form-change-count")).toHaveText("1");
+
+  await input.press("4");
+  await expect(input).toHaveValue("1234");
+  await expect(page.locator("#computed-form-source")).toHaveText("1234");
+  await expect(page.locator("#computed-form-input-count")).toHaveText("2");
+  await expect(page.locator("#computed-form-change-count")).toHaveText("2");
+  expect(errors).toEqual([]);
+});
+
 test("keeps bound form reset defaults synchronized with accepted edits", async ({ page }) => {
   const errors = await openHydrated(page);
   const form = page.locator("#bound-reset-form");

@@ -2,7 +2,7 @@
 // @vitest-environment jsdom
 
 import { Activity, StrictMode, Suspense, act } from "react";
-import type { ChangeEvent, ReactNode } from "react";
+import type { ChangeEvent, InputEvent as ReactInputEvent, ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx } from "../src/jsx-runtime.js";
@@ -26,6 +26,20 @@ function attributeWrites(spy: CallSpy, name: string): number {
 /** How many listeners of `type` were added or removed, across every EventTarget. */
 function listenerCalls(spy: CallSpy, type: string): number {
   return spy.mock.calls.filter(([listened]) => listened === type).length;
+}
+
+function waitForNextTask(): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** Dispatch one native text input after bypassing React's programmatic value tracker. */
+function dispatchUserTextInput(node: HTMLInputElement | HTMLTextAreaElement, value: string, beforeDispatch?: () => void): void {
+  const prototype = node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+  const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
+  if (!setter) throw new Error("The DOM text control has no native value setter.");
+  setter.call(node, value);
+  beforeDispatch?.();
+  node.dispatchEvent(new InputEvent("input", { bubbles: true, inputType: "insertText", data: value }));
 }
 
 describe("Direct DOM binding", () => {
@@ -700,7 +714,7 @@ describe("Direct DOM binding", () => {
     ]);
   });
 
-  it("re-synchronizes a text binding when a writable computed rejects an input", () => {
+  it("re-synchronizes a text binding when a writable computed rejects an input", async () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
@@ -709,53 +723,117 @@ describe("Direct DOM binding", () => {
       },
     });
 
-    render(<input aria-label="digits" bindValue={digits} />);
+    const observedEvents: string[] = [];
+    const onChange = vi.fn((event: ChangeEvent<HTMLInputElement>) => observedEvents.push(`change:${event.currentTarget.value}`));
+    const onInput = vi.fn((event: ReactInputEvent<HTMLInputElement>) => observedEvents.push(`input:${event.currentTarget.value}`));
+    render(<input aria-label="digits" bindValue={digits} onChange={onChange} onInput={onInput} />);
     const input = screen.getByLabelText("digits") as HTMLInputElement;
-    fireEvent.input(input, { target: { value: "123x" } });
+    let changesDuringEvent = 0;
+    let inputsDuringEvent = 0;
+    await act(async () => {
+      dispatchUserTextInput(input, "123x");
+      changesDuringEvent = onChange.mock.calls.length;
+      inputsDuringEvent = onInput.mock.calls.length;
+      await waitForNextTask();
+    });
 
     expect(source.value).toBe("123");
     expect(digits.value).toBe("123");
     expect(input.value).toBe("123");
+    expect(changesDuringEvent).toBe(1);
+    expect(inputsDuringEvent).toBe(1);
+    expect(observedEvents).toEqual(["input:123x", "change:123x"]);
   });
 
-  it("re-synchronizes same-value normalization without disturbing the caret or onChange", () => {
+  it("preserves React onChange for one accepted direct text input", async () => {
+    const text = signal("before");
+    const events: string[] = [];
+    render(<input
+      aria-label="accepted event"
+      bindValue={text}
+      onInput={(event) => events.push(`input:${event.currentTarget.value}`)}
+      onChange={(event) => events.push(`change:${event.currentTarget.value}`)}
+    />);
+    let eventsDuringInput: string[] = [];
+    await act(async () => {
+      dispatchUserTextInput(screen.getByLabelText("accepted event") as HTMLInputElement, "typed");
+      eventsDuringInput = [...events];
+      await waitForNextTask();
+    });
+
+    expect(text.value).toBe("typed");
+    expect(eventsDuringInput).toEqual(["input:typed", "change:typed"]);
+  });
+
+  it("re-synchronizes same-value normalization without disturbing the caret or onChange", async () => {
     const source = signal("ABC");
     const normalized = computed({
       get: () => source.value,
       set: (next: string) => { source.value = next.trim().toUpperCase(); },
     });
     const onChange = vi.fn();
-    render(<input aria-label="normalized text" bindValue={normalized} onChange={onChange} />);
+    const onInput = vi.fn();
+    render(<input aria-label="normalized text" bindValue={normalized} onChange={onChange} onInput={onInput} />);
     const input = screen.getByLabelText("normalized text") as HTMLInputElement;
 
     input.focus();
-    // React's synthetic onChange is tested through its native change event;
-    // the following input event exercises the direct binding listener.
-    fireEvent.change(input, { target: { value: "ABC " } });
-    const setNativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
-    setNativeValue.call(input, "ABC ");
-    input.setSelectionRange(4, 4);
-    fireEvent.input(input);
+    let changesDuringEvent = 0;
+    let inputsDuringEvent = 0;
+    await act(async () => {
+      dispatchUserTextInput(input, "ABC ", () => input.setSelectionRange(4, 4));
+      changesDuringEvent = onChange.mock.calls.length;
+      inputsDuringEvent = onInput.mock.calls.length;
+      await waitForNextTask();
+    });
 
     expect(source.value).toBe("ABC");
     expect(input.value).toBe("ABC");
     expect(input.selectionStart).toBe(3);
-    expect(onChange).toHaveBeenCalledOnce();
+    expect(changesDuringEvent).toBe(1);
+    expect(inputsDuringEvent).toBe(1);
   });
 
-  it("re-synchronizes a normalized computed value after its getter changes", () => {
+  it("re-synchronizes a normalized computed value after its getter changes", async () => {
     const source = signal("before");
     const normalized = computed({
       get: () => source.value,
       set: (next: string) => { source.value = next.trim().toUpperCase(); },
     });
-    render(<input aria-label="normalized changed text" bindValue={normalized} />);
+    const onChange = vi.fn();
+    render(<input aria-label="normalized changed text" bindValue={normalized} onChange={onChange} />);
     const input = screen.getByLabelText("normalized changed text") as HTMLInputElement;
 
-    fireEvent.input(input, { target: { value: "  grace  " } });
+    let changesDuringEvent = 0;
+    await act(async () => {
+      dispatchUserTextInput(input, "  grace  ");
+      changesDuringEvent = onChange.mock.calls.length;
+      await waitForNextTask();
+    });
 
     expect(source.value).toBe("GRACE");
     expect(input.value).toBe("GRACE");
+    expect(changesDuringEvent).toBe(1);
+  });
+
+  it("preserves React onChange for writable computed textarea input", async () => {
+    const source = signal("123");
+    const digits = computed({
+      get: () => source.value,
+      set: (next: string) => { if (/^\\d+$/.test(next)) source.value = next; },
+    });
+    const onChange = vi.fn();
+    render(<textarea aria-label="computed textarea" bindValue={digits} onChange={onChange} />);
+    const textarea = screen.getByLabelText("computed textarea") as HTMLTextAreaElement;
+    let changesDuringEvent = 0;
+    await act(async () => {
+      dispatchUserTextInput(textarea, "12x");
+      changesDuringEvent = onChange.mock.calls.length;
+      await waitForNextTask();
+    });
+
+    expect(source.value).toBe("123");
+    expect(textarea.value).toBe("123");
+    expect(changesDuringEvent).toBe(1);
   });
 
   it("defers a rejected computed text edit until IME composition ends", () => {
@@ -770,6 +848,27 @@ describe("Direct DOM binding", () => {
     fireEvent.compositionStart(input);
     input.value = "123あ";
     fireEvent.input(input);
+    expect(input.value).toBe("123あ");
+    expect(source.value).toBe("123");
+
+    fireEvent.compositionEnd(input);
+    expect(input.value).toBe("123");
+  });
+
+  it("keeps a queued rejected-input correction pending if IME composition starts first", async () => {
+    const source = signal("123");
+    const digits = computed({
+      get: () => source.value,
+      set: (next: string) => { if (/^\\d+$/.test(next)) source.value = next; },
+    });
+    render(<input aria-label="queued composing digits" bindValue={digits} />);
+    const input = screen.getByLabelText("queued composing digits") as HTMLInputElement;
+
+    await act(async () => {
+      dispatchUserTextInput(input, "123あ");
+      fireEvent.compositionStart(input);
+      await waitForNextTask();
+    });
     expect(input.value).toBe("123あ");
     expect(source.value).toBe("123");
 
@@ -867,7 +966,10 @@ describe("Direct DOM binding", () => {
     expect(source.value).toBe("456");
     expect(input.value).toBe("456");
 
-    fireEvent.input(input, { target: { value: "456x" } });
+    await act(async () => {
+      fireEvent.input(input, { target: { value: "456x" } });
+      await waitForNextTask();
+    });
     expect(input.value).toBe("456");
     await act(async () => { form.reset(); await Promise.resolve(); });
     expect(source.value).toBe("456");
