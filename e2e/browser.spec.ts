@@ -125,6 +125,24 @@ test("synchronizes radio and checkbox groups through explicit value bindings", a
   expect(errors).toEqual([]);
 });
 
+test("keeps same-name radios independent when their native form owners differ", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const first = page.locator("#independent-radio-a");
+  const second = page.locator("#independent-radio-b");
+  const signals = page.locator("#independent-radio-signals");
+
+  await expect(first).toBeChecked();
+  await expect(second).toBeChecked();
+  await expect(signals).toHaveText("a|b");
+
+  await first.click();
+
+  await expect(first).toBeChecked();
+  await expect(second).toBeChecked();
+  await expect(signals).toHaveText("a|b");
+  expect(errors).toEqual([]);
+});
+
 test("keeps bound form reset defaults synchronized with accepted edits", async ({ page }) => {
   const errors = await openHydrated(page);
   const form = page.locator("#bound-reset-form");

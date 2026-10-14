@@ -535,6 +535,33 @@ function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, app
 type InputValueGroupKind = "radio-value" | "checkbox-group";
 type InputValueGroupMember = () => void;
 const inputValueGroupMembers = new WeakMap<object, Set<InputValueGroupMember>>();
+const boundRadioSources = new WeakMap<HTMLInputElement, Signal<unknown>>();
+
+function getNativeRadioPeers(input: HTMLInputElement): HTMLInputElement[] {
+  const form = input.form;
+  const root = input.getRootNode();
+  const candidates: Element[] = form !== null
+    ? Array.from(form.elements)
+    : Array.from((root as ParentNode).querySelectorAll("input[type='radio']"));
+  return candidates.filter((candidate): candidate is HTMLInputElement =>
+    candidate.localName === "input"
+    && candidate !== input
+    && (candidate as HTMLInputElement).type === "radio"
+    && (candidate as HTMLInputElement).name === input.name
+    && (candidate as HTMLInputElement).form === form
+    && candidate.getRootNode() === root,
+  );
+}
+
+function assertRadioGroupSource(input: HTMLInputElement, source: Signal<unknown>): void {
+  if (input.name.length === 0) return;
+  for (const peer of getNativeRadioPeers(input)) {
+    const peerSource = boundRadioSources.get(peer);
+    if (peerSource !== undefined && peerSource !== source) {
+      throw new TypeError("Radio bindValue controls in the same native group must share one signal.");
+    }
+  }
+}
 
 function isCheckboxGroupValue(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
@@ -590,6 +617,15 @@ function bindInputValueGroup(
   write: (checked: boolean) => void,
 ): BindingSubscription {
   const episode: FailureEpisode = { hasReported: false };
+  if (kind === "radio-value") {
+    boundRadioSources.set(input, source);
+    try {
+      assertRadioGroupSource(input, source);
+    } catch (error) {
+      boundRadioSources.delete(input);
+      throw error;
+    }
+  }
   let deferUserElementWrite = false;
   const apply = (value: unknown) => {
     if (!deferUserElementWrite) write(isInputValueGroupChecked(value, kind, optionValue));
@@ -609,6 +645,7 @@ function bindInputValueGroup(
   const unregisterMember = registerInputValueGroupMember(source, refreshGroup);
   const onClick = () => {
     if (!active || input.disabled) return;
+    if (kind === "radio-value") assertRadioGroupSource(input, source);
     let attempted: unknown;
     if (kind === "radio-value") {
       if (!input.checked) return;
@@ -658,6 +695,7 @@ function bindInputValueGroup(
       cancelCorrection();
       subscription.dispose();
       unregisterMember();
+      if (kind === "radio-value" && boundRadioSources.get(input) === source) boundRadioSources.delete(input);
       disposeReset();
       input.removeEventListener("click", onClick);
     },

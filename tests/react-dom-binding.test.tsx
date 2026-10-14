@@ -693,6 +693,116 @@ describe("Direct DOM binding", () => {
     expect(data.get("choice")).toBe("b");
   });
 
+  it("rejects distinct binding sources inside one native radio group", () => {
+    const selectedA = signal("a");
+    const selectedB = signal("b");
+    expect(() => render(<form aria-label="radio source mismatch">
+      <input type="radio" name="mismatch" value="a" aria-label="mismatch a" bindValue={selectedA} />
+      <input type="radio" name="mismatch" value="b" aria-label="mismatch b" bindValue={selectedB} />
+    </form>)).toThrow("Radio bindValue controls in the same native group must share one signal.");
+  });
+
+  it("allows replacing a detached radio group member with a different source in one commit", async () => {
+    const selectedA = signal("a");
+    const selectedB = signal("b");
+    const view = render(<form aria-label="radio replacement">
+      <input key="old" type="radio" name="replace" value="a" aria-label="old radio" bindValue={selectedA} />
+    </form>);
+
+    view.rerender(<form aria-label="radio replacement">
+      <input key="new" type="radio" name="replace" value="b" aria-label="new radio" bindValue={selectedB} />
+    </form>);
+    await act(async () => { await Promise.resolve(); });
+
+    const replacement = screen.getByLabelText("new radio") as HTMLInputElement;
+    expect(replacement.checked).toBe(true);
+    fireEvent.click(replacement);
+    expect(selectedB.value).toBe("b");
+    act(() => { selectedA.value = "a"; });
+    expect(replacement.checked).toBe(true);
+  });
+
+  it("keeps same-name radios with different form owners independent", () => {
+    const first = signal("a");
+    const second = signal("b");
+    render(<>
+      <form aria-label="first radio owner"><input type="radio" name="choice" value="a" aria-label="first radio" bindValue={first} /></form>
+      <form aria-label="second radio owner"><input type="radio" name="choice" value="b" aria-label="second radio" bindValue={second} /></form>
+    </>);
+    const a = screen.getByLabelText("first radio") as HTMLInputElement;
+    const b = screen.getByLabelText("second radio") as HTMLInputElement;
+    expect([a.checked, b.checked]).toEqual([true, true]);
+    fireEvent.click(a);
+    expect(first.value).toBe("a");
+    expect(second.value).toBe("b");
+    expect([a.checked, b.checked]).toEqual([true, true]);
+  });
+
+  it("refreshes one shared radio signal across different native form owners", () => {
+    const selected = signal("a");
+    render(<>
+      <form aria-label="shared first owner"><input type="radio" name="choice" value="a" aria-label="shared first radio" bindValue={selected} /></form>
+      <form aria-label="shared second owner"><input type="radio" name="choice" value="b" aria-label="shared second radio" bindValue={selected} /></form>
+    </>);
+    const a = screen.getByLabelText("shared first radio") as HTMLInputElement;
+    const b = screen.getByLabelText("shared second radio") as HTMLInputElement;
+    expect([a.checked, b.checked]).toEqual([true, false]);
+    fireEvent.click(b);
+    expect(selected.value).toBe("b");
+    expect([a.checked, b.checked]).toEqual([false, true]);
+  });
+
+  it("shares radio updates across React roots in one native group", () => {
+    const selected = signal("a");
+    const changes = vi.fn((event: ChangeEvent<HTMLInputElement>) => {
+      expect(selected.value).toBe(event.currentTarget.value);
+    });
+    const form = document.createElement("form");
+    const hostA = document.createElement("div");
+    const hostB = document.createElement("div");
+    form.append(hostA, hostB);
+    document.body.appendChild(form);
+    const rootA = render(<input type="radio" name="cross-root" value="a" aria-label="cross root a" bindValue={selected} />, { container: hostA });
+    const rootB = render(<input type="radio" name="cross-root" value="b" aria-label="cross root b" bindValue={selected} onChange={changes} />, { container: hostB });
+    const a = screen.getByLabelText("cross root a") as HTMLInputElement;
+    const b = screen.getByLabelText("cross root b") as HTMLInputElement;
+    expect([a.checked, b.checked]).toEqual([true, false]);
+    fireEvent.click(b);
+    expect(selected.value).toBe("b");
+    expect([a.checked, b.checked]).toEqual([false, true]);
+    expect(changes).toHaveBeenCalledTimes(1);
+    rootA.unmount();
+    rootB.unmount();
+    form.remove();
+  });
+
+  it("rebinds radio reset handling when the form owner prop changes", () => {
+    const selected = signal("a");
+    const firstForm = document.createElement("form");
+    firstForm.id = "first-radio-owner";
+    const secondForm = document.createElement("form");
+    secondForm.id = "second-radio-owner";
+    document.body.append(firstForm, secondForm);
+    const firstAdd = vi.spyOn(firstForm, "addEventListener");
+    const firstRemove = vi.spyOn(firstForm, "removeEventListener");
+    const secondAdd = vi.spyOn(secondForm, "addEventListener");
+    function Field() {
+      const [owner, setOwner] = useState(firstForm.id);
+      return <>
+        <button aria-label="move reset owner" onClick={() => setOwner(secondForm.id)}>Move</button>
+        <input type="radio" form={owner} name="owner-switch" value="a" aria-label="owner switched radio" bindValue={selected} />
+      </>;
+    }
+    const result = render(<Field />);
+    expect(firstAdd).toHaveBeenCalledWith("reset", expect.any(Function));
+    fireEvent.click(screen.getByLabelText("move reset owner"));
+    expect(firstRemove).toHaveBeenCalledWith("reset", expect.any(Function));
+    expect(secondAdd).toHaveBeenCalledWith("reset", expect.any(Function));
+    result.unmount();
+    firstForm.remove();
+    secondForm.remove();
+  });
+
   it("bindValue synchronizes checkbox groups with stable array order and duplicate removal", () => {
     const selected = signal<string[]>(["b", "b"]);
     const changes = vi.fn((event: ChangeEvent<HTMLInputElement>) => {

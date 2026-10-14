@@ -122,6 +122,8 @@ const enabled = signal(false);
 
 `bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）、`textarea`、`FormBindableSignal<string>`を使う単一選択select、`FormBindableSignal<string[]>`を使うmultiple selectに対応します。同じform ownerと`name`のradio inputは`FormBindableSignal<string>`を共有できます。各optionにはstringの`value`が必要です。同じform ownerと`name`のcheckbox inputは`FormBindableSignal<string[]>`を共有できます。各checkboxにはstringの`value`が必要です。`bindChecked`は独立したcheckbox 1つを同期する用途で、`FormBindableSignal<boolean>`が必要です。selectの配列bindingでは`multiple`を静的に`true`にしてください。動的booleanは現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。
 
+native radio groupは`Signal`のidentityではなくform ownerと`name`で排他制御されます。そのため、同じform ownerと`name`を持つbinding対象radioは必ず同じ書き込み可能Signalを共有してください。異なるSignalを結ぶと、ブラウザーは兄弟radioをsignal更新イベントなしに解除するため、DOMとsignalが食い違います。同じRFSG runtime copyが両方のbindingを登録している場合、RFSGは異なるsourceを拒否します。React標準の`checked`/`defaultChecked` radioや、別のRFSG runtime copyによるbindingは検出境界をまたぐため、同じnative groupに混在させないでください。form ownerまたは`name`が異なるradioは独立して使えます。同じnative groupを複数React rootに分ける場合も、同じSignalを共有してください。
+
 checkbox groupの配列は、別optionを選択しても既存の順序と重複を維持します。新たに選んだ値は重複がなければ末尾へ追加し、解除時はその値をすべて削除します。
 
 JSX bindingの型はpackage capabilityである`FormBindableSignal<T>`を要求します。`signal()`、`useSignal()`、書き込み可能な`computed({ get, set })`はこの型を返します。再利用可能なform propsでも`Signal<T>`へ広げず、この型を保ってください。

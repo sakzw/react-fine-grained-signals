@@ -148,6 +148,23 @@ function InputValueGroups() {
   );
 }
 
+function IndependentRadioFormOwners() {
+  const firstChoice = useSignal("a");
+  const secondChoice = useSignal("b");
+  return (
+    <section aria-labelledby="independent-radio-owner-heading">
+      <h2 id="independent-radio-owner-heading">Independent radio form owners</h2>
+      <form id="independent-radio-owner-a">
+        <input id="independent-radio-a" type="radio" name="independent-choice" value="a" bindValue={firstChoice} />
+      </form>
+      <form id="independent-radio-owner-b">
+        <input id="independent-radio-b" type="radio" name="independent-choice" value="b" bindValue={secondChoice} />
+      </form>
+      <output id="independent-radio-signals">{firstChoice}|{secondChoice}</output>
+    </section>
+  );
+}
+
 class RefErrorBoundary extends Component<
   { id: string; children: ReactNode },
   { message: string | null }
@@ -499,6 +516,7 @@ export function App({ state }: { state: DemoState }) {
       <WritableComputedFormBinding />
       <RebindingComputedFormBinding />
       <InputValueGroups />
+      <IndependentRadioFormOwners />
 
       <section aria-labelledby="component-heading">
         <h2 id="component-heading">React component boundary</h2>

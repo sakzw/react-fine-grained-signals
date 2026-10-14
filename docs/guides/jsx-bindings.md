@@ -69,6 +69,8 @@ The same runtime supports direct bindings only for these native HTML props:
 - `value` and `checked` retain React's standard semantics when used without an explicit binding
 - `data-*` and `aria-*` attributes
 
+`bindValue` radios with the same native form owner and `name` must share one writable signal. The browser unchecks a radio sibling without dispatching an input event to that sibling; binding those peers to separate signals would leave one signal stale. RFSG rejects that configuration when both bindings belong to the same runtime copy. Radios with different form owners or different names remain independent, and a shared signal can span React roots when the radios still belong to the same native group.
+
 ```tsx
 const title = signal("Initial title");
 const disabled = signal(false);
@@ -124,7 +126,7 @@ const enabled = signal(false);
 </select>
 ```
 
-`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`), `textarea`, single selects with `FormBindableSignal<string>`, and `multiple` selects with `FormBindableSignal<string[]>`. Radio inputs with the same form owner and `name` can share a `FormBindableSignal<string>`; each option needs a string `value`. Checkbox inputs with the same form owner and `name` can share a `FormBindableSignal<string[]>`; each checkbox needs a string `value`. `bindChecked` remains available for one independent checkbox and requires `FormBindableSignal<boolean>`. The `multiple` attribute must be a literal `true` for the select array form; dynamic booleans are checked at runtime against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later are observed and the current signal selection is reapplied.
+`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`), `textarea`, single selects with `FormBindableSignal<string>`, and `multiple` selects with `FormBindableSignal<string[]>`. Radio inputs with the same form owner and `name` can share a `FormBindableSignal<string>`; each option needs a string `value`. Every bound radio in that native group must use the same signal. The runtime rejects different sources when it can see both bindings in the same RFSG runtime copy. Do not mix `bindValue` radios with React `checked`/`defaultChecked` radios or with bindings from another RFSG runtime copy in the same native group; those peers cannot be diagnosed across ownership boundaries. Checkbox inputs with the same form owner and `name` can share a `FormBindableSignal<string[]>`; each checkbox needs a string `value`. `bindChecked` remains available for one independent checkbox and requires `FormBindableSignal<boolean>`. The `multiple` attribute must be a literal `true` for the select array form; dynamic booleans are checked at runtime against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later are observed and the current signal selection is reapplied.
 
 Checkbox-group arrays retain their existing order and duplicates when another option is selected; a newly selected value is appended once. Unchecking a value removes all of its occurrences.
 
