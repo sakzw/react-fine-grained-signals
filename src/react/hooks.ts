@@ -11,7 +11,6 @@ import type {
   DeepSignal,
   FormBindableSignal,
   ReadonlySignal,
-  Signal,
 } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
 import { untrackedRender } from "../core/render-tracking.js";
