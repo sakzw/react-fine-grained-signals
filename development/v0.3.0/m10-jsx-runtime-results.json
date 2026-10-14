@@ -1,0 +1,265 @@
+{
+  "node": "v24.21.0",
+  "react": "19.3.0",
+  "iterations": 10000,
+  "warmups": 1,
+  "samples": 3,
+  "gcExposed": true,
+  "methodology": "JSX factory-only; props literals allocated per call; ordinary cases compare React and RFSG; signal/binding cases are RFSG-only feature costs; median and p25/p75 in ns/call.",
+  "results": [
+    {
+      "name": "host-no-props",
+      "react": {
+        "medianNsPerCall": 16788.04,
+        "p25NsPerCall": 12191.825,
+        "p75NsPerCall": 17189.205,
+        "samplesNsPerCall": [
+          7595.61,
+          16788.04,
+          17590.37
+        ]
+      },
+      "rfsg": {
+        "medianNsPerCall": 25804.23,
+        "p25NsPerCall": 18370.55,
+        "p75NsPerCall": 39774.72,
+        "samplesNsPerCall": [
+          25804.23,
+          10936.87,
+          53745.21
+        ]
+      },
+      "ratio": 1.5370603119840076,
+      "outputEquivalent": true
+    },
+    {
+      "name": "host-ordinary-props",
+      "react": {
+        "medianNsPerCall": 11159.33,
+        "p25NsPerCall": 9031.76,
+        "p75NsPerCall": 34452.525,
+        "samplesNsPerCall": [
+          11159.33,
+          57745.72,
+          6904.19
+        ]
+      },
+      "rfsg": {
+        "medianNsPerCall": 26873.27,
+        "p25NsPerCall": 23076.565000000002,
+        "p75NsPerCall": 27541.085,
+        "samplesNsPerCall": [
+          28208.9,
+          19279.86,
+          26873.27
+        ]
+      },
+      "ratio": 2.4081436788767787,
+      "outputEquivalent": true
+    },
+    {
+      "name": "host-one-child",
+      "react": {
+        "medianNsPerCall": 83010.7,
+        "p25NsPerCall": 48071.28,
+        "p75NsPerCall": 105269.2,
+        "samplesNsPerCall": [
+          83010.7,
+          127527.7,
+          13131.86
+        ]
+      },
+      "rfsg": {
+        "medianNsPerCall": 49046.53,
+        "p25NsPerCall": 39572.51,
+        "p75NsPerCall": 61421.635,
+        "samplesNsPerCall": [
+          30098.49,
+          73796.74,
+          49046.53
+        ]
+      },
+      "ratio": 0.5908458789047677,
+      "outputEquivalent": true
+    },
+    {
+      "name": "host-multiple-children",
+      "react": {
+        "medianNsPerCall": 9337.58,
+        "p25NsPerCall": 8074.0650000000005,
+        "p75NsPerCall": 12638.735,
+        "samplesNsPerCall": [
+          6810.55,
+          15939.89,
+          9337.58
+        ]
+      },
+      "rfsg": {
+        "medianNsPerCall": 33677.91,
+        "p25NsPerCall": 24301.920000000002,
+        "p75NsPerCall": 64429.065,
+        "samplesNsPerCall": [
+          95180.22,
+          33677.91,
+          14925.93
+        ]
+      },
+      "ratio": 3.606706448565903,
+      "outputEquivalent": true
+    },
+    {
+      "name": "custom-no-props",
+      "react": {
+        "medianNsPerCall": 18371.69,
+        "p25NsPerCall": 13503.47,
+        "p75NsPerCall": 33181.104999999996,
+        "samplesNsPerCall": [
+          18371.69,
+          47990.52,
+          8635.25
+        ]
+      },
+      "rfsg": {
+        "medianNsPerCall": 17264.12,
+        "p25NsPerCall": 13213.06,
+        "p75NsPerCall": 45012.345,
+        "samplesNsPerCall": [
+          72760.57,
+          9162,
+          17264.12
+        ]
+      },
+      "ratio": 0.9397132218102962,
+      "outputEquivalent": true
+    },
+    {
+      "name": "custom-ordinary-props",
+      "react": {
+        "medianNsPerCall": 9957.82,
+        "p25NsPerCall": 8915.015,
+        "p75NsPerCall": 13880.52,
+        "samplesNsPerCall": [
+          9957.82,
+          7872.21,
+          17803.22
+        ]
+      },
+      "rfsg": {
+        "medianNsPerCall": 34764.45,
+        "p25NsPerCall": 22213.339999999997,
+        "p75NsPerCall": 36416.065,
+        "samplesNsPerCall": [
+          34764.45,
+          9662.23,
+          38067.68
+        ]
+      },
+      "ratio": 3.4911707582583333,
+      "outputEquivalent": true
+    },
+    {
+      "name": "fragment-children",
+      "react": {
+        "medianNsPerCall": 53427.58,
+        "p25NsPerCall": 31581.82,
+        "p75NsPerCall": 83249.015,
+        "samplesNsPerCall": [
+          113070.45,
+          53427.58,
+          9736.06
+        ]
+      },
+      "rfsg": {
+        "medianNsPerCall": 23074.07,
+        "p25NsPerCall": 20934.6,
+        "p75NsPerCall": 47268.175,
+        "samplesNsPerCall": [
+          71462.28,
+          18795.13,
+          23074.07
+        ]
+      },
+      "ratio": 0.431875634269791,
+      "outputEquivalent": true
+    },
+    {
+      "name": "signal-host-prop",
+      "rfsgFeatureCost": {
+        "medianNsPerCall": 31194.16,
+        "p25NsPerCall": 29857.075,
+        "p75NsPerCall": 132524.35499999998,
+        "samplesNsPerCall": [
+          233854.55,
+          31194.16,
+          28519.99
+        ]
+      }
+    },
+    {
+      "name": "signal-style-property",
+      "rfsgFeatureCost": {
+        "medianNsPerCall": 162689.96,
+        "p25NsPerCall": 136106.68,
+        "p75NsPerCall": 190641.215,
+        "samplesNsPerCall": [
+          218592.47,
+          162689.96,
+          109523.4
+        ]
+      }
+    },
+    {
+      "name": "signal-child",
+      "rfsgFeatureCost": {
+        "medianNsPerCall": 292559.51,
+        "p25NsPerCall": 168870.37,
+        "p75NsPerCall": 301026.17000000004,
+        "samplesNsPerCall": [
+          292559.51,
+          45181.23,
+          309492.83
+        ]
+      }
+    },
+    {
+      "name": "signal-children-array",
+      "rfsgFeatureCost": {
+        "medianNsPerCall": 298785.4,
+        "p25NsPerCall": 224734.19,
+        "p75NsPerCall": 350407.99,
+        "samplesNsPerCall": [
+          402030.58,
+          150682.98,
+          298785.4
+        ]
+      }
+    },
+    {
+      "name": "bind-value",
+      "rfsgFeatureCost": {
+        "medianNsPerCall": 143619.36,
+        "p25NsPerCall": 112170.91,
+        "p75NsPerCall": 173254.59499999997,
+        "samplesNsPerCall": [
+          202889.83,
+          143619.36,
+          80722.46
+        ]
+      }
+    },
+    {
+      "name": "bind-checked",
+      "rfsgFeatureCost": {
+        "medianNsPerCall": 94755.55,
+        "p25NsPerCall": 71229.495,
+        "p75NsPerCall": 97732.35,
+        "samplesNsPerCall": [
+          100709.15,
+          47703.44,
+          94755.55
+        ]
+      }
+    }
+  ],
+  "sinkType": "object"
+}

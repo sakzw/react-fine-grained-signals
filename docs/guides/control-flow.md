@@ -89,6 +89,7 @@ Renders a list whose items have stable identities. It is a local React list boun
 
 - Accepts arrays, `Set`, and `Map`. For a `Map`, both `by` and the child receive a `[key, value]` entry.
 - `by` is always required, and must be pure and derived from the item rather than generated during render.
+- When the collection changes, `For` invokes `by` and `children` for every item. React keys preserve row identity and state, but do not skip the callback or React reconciliation work for unchanged items.
 - For a row that reads signals or deep item properties inside a child component, call `useSignalTracking()` in that row (or use the plugin) so the row owns the subscription.
 
 ## Index

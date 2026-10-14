@@ -1,0 +1,657 @@
+{
+  "node": "v24.21.0",
+  "react": "19.3.0",
+  "sizes": [
+    100,
+    1000
+  ],
+  "warmups": 1,
+  "samples": 3,
+  "gcExposed": true,
+  "results": [
+    {
+      "size": 100,
+      "kind": "baseline-for",
+      "mount": {
+        "medianMs": 52.29650000000038,
+        "p25Ms": 49.63770000000022,
+        "p75Ms": 52.82475000000022,
+        "callbackCalls": 100,
+        "heapDeltaBytes": 762904,
+        "samplesMs": [
+          46.97890000000007,
+          53.353000000000065,
+          52.29650000000038
+        ],
+        "callbackSamples": [
+          100,
+          100,
+          100
+        ],
+        "heapDeltaSamplesBytes": [
+          762904,
+          789344,
+          727520
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 34.490999999999985,
+          "p25Ms": 33.28679999999986,
+          "p75Ms": 34.67819999999983,
+          "medianCallbackCalls": 100,
+          "medianRowRenders": 100,
+          "samplesMs": [
+            34.86539999999968,
+            32.08259999999973,
+            34.490999999999985
+          ],
+          "callbackSamples": [
+            100,
+            100,
+            100
+          ],
+          "rowRenderSamples": [
+            100,
+            100,
+            100
+          ]
+        },
+        "append": {
+          "medianMs": 38.89099999999962,
+          "p25Ms": 37.935849999999846,
+          "p75Ms": 39.6583499999997,
+          "medianCallbackCalls": 101,
+          "medianRowRenders": 101,
+          "samplesMs": [
+            36.98070000000007,
+            38.89099999999962,
+            40.42569999999978
+          ],
+          "callbackSamples": [
+            101,
+            101,
+            101
+          ],
+          "rowRenderSamples": [
+            101,
+            101,
+            101
+          ]
+        },
+        "prepend": {
+          "medianMs": 43.354699999999866,
+          "p25Ms": 38.938750000000255,
+          "p75Ms": 45.389100000000326,
+          "medianCallbackCalls": 101,
+          "medianRowRenders": 101,
+          "samplesMs": [
+            34.52280000000064,
+            43.354699999999866,
+            47.423500000000786
+          ],
+          "callbackSamples": [
+            101,
+            101,
+            101
+          ],
+          "rowRenderSamples": [
+            101,
+            101,
+            101
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 43.54620000000068,
+          "p25Ms": 39.22595000000001,
+          "p75Ms": 49.0016999999998,
+          "medianCallbackCalls": 99,
+          "medianRowRenders": 99,
+          "samplesMs": [
+            43.54620000000068,
+            54.45719999999892,
+            34.90569999999934
+          ],
+          "callbackSamples": [
+            99,
+            99,
+            99
+          ],
+          "rowRenderSamples": [
+            99,
+            99,
+            99
+          ]
+        },
+        "move": {
+          "medianMs": 49.10989999999947,
+          "p25Ms": 47.10214999999971,
+          "p75Ms": 53.0936499999998,
+          "medianCallbackCalls": 100,
+          "medianRowRenders": 100,
+          "samplesMs": [
+            57.077400000000125,
+            45.09439999999995,
+            49.10989999999947
+          ],
+          "callbackSamples": [
+            100,
+            100,
+            100
+          ],
+          "rowRenderSamples": [
+            100,
+            100,
+            100
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 37.79489999999896,
+          "p25Ms": 35.57614999999987,
+          "p75Ms": 39.292749999998705,
+          "medianCallbackCalls": 100,
+          "medianRowRenders": 100,
+          "samplesMs": [
+            40.79059999999845,
+            37.79489999999896,
+            33.35740000000078
+          ],
+          "callbackSamples": [
+            100,
+            100,
+            100
+          ],
+          "rowRenderSamples": [
+            100,
+            100,
+            100
+          ]
+        }
+      },
+      "unmountMs": 5.1828999999997905
+    },
+    {
+      "size": 100,
+      "kind": "for",
+      "mount": {
+        "medianMs": 63.99859999999899,
+        "p25Ms": 58.7571999999991,
+        "p75Ms": 65.82489999999962,
+        "callbackCalls": 100,
+        "heapDeltaBytes": 1169288,
+        "samplesMs": [
+          53.51579999999922,
+          63.99859999999899,
+          67.65120000000024
+        ],
+        "callbackSamples": [
+          100,
+          100,
+          100
+        ],
+        "heapDeltaSamplesBytes": [
+          1090216,
+          1169288,
+          1203432
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 16.8083000000006,
+          "p25Ms": 15.969500000000153,
+          "p75Ms": 16.864150000000336,
+          "medianCallbackCalls": 1,
+          "medianRowRenders": 1,
+          "samplesMs": [
+            15.130699999999706,
+            16.920000000000073,
+            16.8083000000006
+          ],
+          "callbackSamples": [
+            1,
+            1,
+            1
+          ],
+          "rowRenderSamples": [
+            1,
+            1,
+            1
+          ]
+        },
+        "append": {
+          "medianMs": 12.844499999999243,
+          "p25Ms": 12.702499999999418,
+          "p75Ms": 13.297900000000482,
+          "medianCallbackCalls": 1,
+          "medianRowRenders": 1,
+          "samplesMs": [
+            13.75130000000172,
+            12.560499999999593,
+            12.844499999999243
+          ],
+          "callbackSamples": [
+            1,
+            1,
+            1
+          ],
+          "rowRenderSamples": [
+            1,
+            1,
+            1
+          ]
+        },
+        "prepend": {
+          "medianMs": 52.108799999999974,
+          "p25Ms": 51.63730000000032,
+          "p75Ms": 52.85660000000007,
+          "medianCallbackCalls": 101,
+          "medianRowRenders": 101,
+          "samplesMs": [
+            51.16580000000067,
+            53.60440000000017,
+            52.108799999999974
+          ],
+          "callbackSamples": [
+            101,
+            101,
+            101
+          ],
+          "rowRenderSamples": [
+            101,
+            101,
+            101
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 31.595500000001266,
+          "p25Ms": 29.929200000000492,
+          "p75Ms": 32.621250000001055,
+          "medianCallbackCalls": 49,
+          "medianRowRenders": 49,
+          "samplesMs": [
+            28.262899999999718,
+            33.647000000000844,
+            31.595500000001266
+          ],
+          "callbackSamples": [
+            49,
+            49,
+            49
+          ],
+          "rowRenderSamples": [
+            49,
+            49,
+            49
+          ]
+        },
+        "move": {
+          "medianMs": 48.09939999999915,
+          "p25Ms": 47.81224999999995,
+          "p75Ms": 49.422199999999066,
+          "medianCallbackCalls": 100,
+          "medianRowRenders": 100,
+          "samplesMs": [
+            47.52510000000075,
+            50.74499999999898,
+            48.09939999999915
+          ],
+          "callbackSamples": [
+            100,
+            100,
+            100
+          ],
+          "rowRenderSamples": [
+            100,
+            100,
+            100
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 63.26589999999851,
+          "p25Ms": 60.07774999999947,
+          "p75Ms": 64.77749999999924,
+          "medianCallbackCalls": 100,
+          "medianRowRenders": 100,
+          "samplesMs": [
+            56.88960000000043,
+            66.28909999999996,
+            63.26589999999851
+          ],
+          "callbackSamples": [
+            100,
+            100,
+            100
+          ],
+          "rowRenderSamples": [
+            100,
+            100,
+            100
+          ]
+        }
+      },
+      "unmountMs": 7.839600000001155
+    },
+    {
+      "size": 1000,
+      "kind": "baseline-for",
+      "mount": {
+        "medianMs": 434.77579999999944,
+        "p25Ms": 416.88044999999966,
+        "p75Ms": 437.6380999999992,
+        "callbackCalls": 1000,
+        "heapDeltaBytes": 6030776,
+        "samplesMs": [
+          398.9850999999999,
+          440.500399999999,
+          434.77579999999944
+        ],
+        "callbackSamples": [
+          1000,
+          1000,
+          1000
+        ],
+        "heapDeltaSamplesBytes": [
+          5960672,
+          6062040,
+          6030776
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 362.8944999999985,
+          "p25Ms": 357.5006999999987,
+          "p75Ms": 436.30574999999953,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            509.71700000000055,
+            352.10689999999886,
+            362.8944999999985
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        },
+        "append": {
+          "medianMs": 499.196899999999,
+          "p25Ms": 425.200499999999,
+          "p75Ms": 527.5538499999984,
+          "medianCallbackCalls": 1001,
+          "medianRowRenders": 1001,
+          "samplesMs": [
+            351.204099999999,
+            499.196899999999,
+            555.9107999999978
+          ],
+          "callbackSamples": [
+            1001,
+            1001,
+            1001
+          ],
+          "rowRenderSamples": [
+            1001,
+            1001,
+            1001
+          ]
+        },
+        "prepend": {
+          "medianMs": 685.6134999999995,
+          "p25Ms": 664.6023000000005,
+          "p75Ms": 697.3419999999987,
+          "medianCallbackCalls": 1001,
+          "medianRowRenders": 1001,
+          "samplesMs": [
+            643.5911000000015,
+            685.6134999999995,
+            709.070499999998
+          ],
+          "callbackSamples": [
+            1001,
+            1001,
+            1001
+          ],
+          "rowRenderSamples": [
+            1001,
+            1001,
+            1001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 537.3596999999972,
+          "p25Ms": 528.5530999999992,
+          "p75Ms": 549.8466499999977,
+          "medianCallbackCalls": 999,
+          "medianRowRenders": 999,
+          "samplesMs": [
+            519.7465000000011,
+            562.3335999999981,
+            537.3596999999972
+          ],
+          "callbackSamples": [
+            999,
+            999,
+            999
+          ],
+          "rowRenderSamples": [
+            999,
+            999,
+            999
+          ]
+        },
+        "move": {
+          "medianMs": 364.3006999999998,
+          "p25Ms": 342.7388499999979,
+          "p75Ms": 536.5574500000002,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            708.8142000000007,
+            364.3006999999998,
+            321.17699999999604
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 572.2946000000011,
+          "p25Ms": 460.43269999999757,
+          "p75Ms": 626.818299999999,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            572.2946000000011,
+            681.3419999999969,
+            348.57079999999405
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        }
+      },
+      "unmountMs": 24.415200000003097
+    },
+    {
+      "size": 1000,
+      "kind": "for",
+      "mount": {
+        "medianMs": 508.7227999999959,
+        "p25Ms": 490.7340499999991,
+        "p75Ms": 641.6022499999999,
+        "callbackCalls": 1000,
+        "heapDeltaBytes": 10516192,
+        "samplesMs": [
+          774.4817000000039,
+          472.7453000000023,
+          508.7227999999959
+        ],
+        "callbackSamples": [
+          1000,
+          1000,
+          1000
+        ],
+        "heapDeltaSamplesBytes": [
+          10503720,
+          10636088,
+          10516192
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 100.24629999999888,
+          "p25Ms": 97.45889999999781,
+          "p75Ms": 101.09454999999798,
+          "medianCallbackCalls": 1,
+          "medianRowRenders": 1,
+          "samplesMs": [
+            101.94279999999708,
+            100.24629999999888,
+            94.67149999999674
+          ],
+          "callbackSamples": [
+            1,
+            1,
+            1
+          ],
+          "rowRenderSamples": [
+            1,
+            1,
+            1
+          ]
+        },
+        "append": {
+          "medianMs": 115.4710999999952,
+          "p25Ms": 104.75805000000037,
+          "p75Ms": 135.43994999999995,
+          "medianCallbackCalls": 1,
+          "medianRowRenders": 1,
+          "samplesMs": [
+            94.04500000000553,
+            155.4088000000047,
+            115.4710999999952
+          ],
+          "callbackSamples": [
+            1,
+            1,
+            1
+          ],
+          "rowRenderSamples": [
+            1,
+            1,
+            1
+          ]
+        },
+        "prepend": {
+          "medianMs": 677.0107999999964,
+          "p25Ms": 599.315499999997,
+          "p75Ms": 747.3115499999985,
+          "medianCallbackCalls": 1001,
+          "medianRowRenders": 1001,
+          "samplesMs": [
+            521.6201999999976,
+            677.0107999999964,
+            817.6123000000007
+          ],
+          "callbackSamples": [
+            1001,
+            1001,
+            1001
+          ],
+          "rowRenderSamples": [
+            1001,
+            1001,
+            1001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 342.66159999999945,
+          "p25Ms": 336.6745499999997,
+          "p75Ms": 365.04975000000195,
+          "medianCallbackCalls": 499,
+          "medianRowRenders": 499,
+          "samplesMs": [
+            330.6875,
+            387.43790000000445,
+            342.66159999999945
+          ],
+          "callbackSamples": [
+            499,
+            499,
+            499
+          ],
+          "rowRenderSamples": [
+            499,
+            499,
+            499
+          ]
+        },
+        "move": {
+          "medianMs": 544.2007000000012,
+          "p25Ms": 497.060300000001,
+          "p75Ms": 591.38465,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            544.2007000000012,
+            449.9199000000008,
+            638.5685999999987
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 411.4285000000018,
+          "p25Ms": 391.82320000000254,
+          "p75Ms": 426.79305000000386,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            411.4285000000018,
+            372.2179000000033,
+            442.1576000000059
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        }
+      },
+      "unmountMs": 41.12319999999454
+    }
+  ]
+}

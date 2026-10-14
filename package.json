@@ -70,6 +70,8 @@
     "bench:collections": "pnpm build:runtime && node --expose-gc benchmarks/collection-sweep.mjs",
     "bench:collection-scaling": "pnpm build:runtime && node --expose-gc benchmarks/collection-scaling.mjs",
     "bench:react": "pnpm build:runtime && node --expose-gc benchmarks/react-render.mjs",
+    "bench:lists:m10": "pnpm build:runtime && node --expose-gc benchmarks/m10-list-bench.mjs",
+    "bench:jsx:m10": "pnpm build:runtime && node --expose-gc benchmarks/m10-jsx-bench.mjs",
     "bench:transform": "pnpm build:transform && pnpm --filter unplugin-react-fine-grained-signals bench",
     "build": "pnpm build:runtime && pnpm build:transform",
     "build:runtime": "tsdown && node scripts/strip-dts-sourcemap-comments.mjs",

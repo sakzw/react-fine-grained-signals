@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { act, Fragment, StrictMode, useState } from "react";
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { act, createContext, Fragment, StrictMode, useContext, useState } from "react";
+import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { deepSignal, signal, useSignalTracking } from "../src/index.js";
+import { coreRuntime } from "../src/core/core-runtime.js";
 import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -11,6 +12,42 @@ import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/util
 afterEach(cleanup);
 
 describe("JSX control flow utilities", () => {
+  it("keeps parent closures and context current and cleans up the collection subscription", async () => {
+    const rows = signal(["row"]);
+    const LabelContext = createContext("initial");
+    let setLabel!: (label: string) => void;
+    function Label() {
+      const label = useContext(LabelContext);
+      return <output>{label}</output>;
+    }
+    function App() {
+      const [label, updateLabel] = useState("initial");
+      setLabel = updateLabel;
+      return (
+        <LabelContext.Provider value={label}>
+          <For each={rows} by={(row) => row}>{(row) => <><li>{`${label}:${row}`}</li><Label /></>}</For>
+        </LabelContext.Provider>
+      );
+    }
+
+    const view = render(<App />);
+    expect(coreRuntime.hasSubscribers(rows)).toBe(true);
+    act(() => setLabel("updated"));
+    expect(view.getByText("updated")).toBeTruthy();
+    expect(view.getByText("updated:row")).toBeTruthy();
+    view.unmount();
+    await waitFor(() => expect(coreRuntime.hasSubscribers(rows)).toBe(false));
+  });
+
+  it("cleans up Index's collection subscription after unmount", async () => {
+    const rows = signal(["row"]);
+    const view = render(<Index each={rows}>{(item) => <span>{item()}</span>}</Index>);
+    expect(coreRuntime.hasSubscribers(rows)).toBe(true);
+
+    view.unmount();
+    await waitFor(() => expect(coreRuntime.hasSubscribers(rows)).toBe(false));
+  });
+
   it("updates Show locally and renders its fallback", () => {
     const visible = signal(false);
     const parentRenders = vi.fn();

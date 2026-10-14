@@ -1,0 +1,250 @@
+{
+  "node": "v24.21.0",
+  "react": "19.3.0",
+  "sizes": [
+    10000
+  ],
+  "warmups": 0,
+  "samples": 1,
+  "gcExposed": true,
+  "results": [
+    {
+      "size": 10000,
+      "kind": "baseline-for",
+      "mount": {
+        "medianMs": 1611.7101000000002,
+        "p25Ms": 1611.7101000000002,
+        "p75Ms": 1611.7101000000002,
+        "callbackCalls": 10000,
+        "heapDeltaBytes": 45364800,
+        "samplesMs": [
+          1611.7101000000002
+        ],
+        "callbackSamples": [
+          10000
+        ],
+        "heapDeltaSamplesBytes": [
+          45364800
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 1177.4244999999992,
+          "p25Ms": 1177.4244999999992,
+          "p75Ms": 1177.4244999999992,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            1177.4244999999992
+          ],
+          "callbackSamples": [
+            10000
+          ],
+          "rowRenderSamples": [
+            10000
+          ]
+        },
+        "append": {
+          "medianMs": 1141.6755999999987,
+          "p25Ms": 1141.6755999999987,
+          "p75Ms": 1141.6755999999987,
+          "medianCallbackCalls": 10001,
+          "medianRowRenders": 10001,
+          "samplesMs": [
+            1141.6755999999987
+          ],
+          "callbackSamples": [
+            10001
+          ],
+          "rowRenderSamples": [
+            10001
+          ]
+        },
+        "prepend": {
+          "medianMs": 1419.047199999999,
+          "p25Ms": 1419.047199999999,
+          "p75Ms": 1419.047199999999,
+          "medianCallbackCalls": 10001,
+          "medianRowRenders": 10001,
+          "samplesMs": [
+            1419.047199999999
+          ],
+          "callbackSamples": [
+            10001
+          ],
+          "rowRenderSamples": [
+            10001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 1192.819599999999,
+          "p25Ms": 1192.819599999999,
+          "p75Ms": 1192.819599999999,
+          "medianCallbackCalls": 9999,
+          "medianRowRenders": 9999,
+          "samplesMs": [
+            1192.819599999999
+          ],
+          "callbackSamples": [
+            9999
+          ],
+          "rowRenderSamples": [
+            9999
+          ]
+        },
+        "move": {
+          "medianMs": 1572.0118000000002,
+          "p25Ms": 1572.0118000000002,
+          "p75Ms": 1572.0118000000002,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            1572.0118000000002
+          ],
+          "callbackSamples": [
+            10000
+          ],
+          "rowRenderSamples": [
+            10000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 1774.795900000001,
+          "p25Ms": 1774.795900000001,
+          "p75Ms": 1774.795900000001,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            1774.795900000001
+          ],
+          "callbackSamples": [
+            10000
+          ],
+          "rowRenderSamples": [
+            10000
+          ]
+        }
+      },
+      "unmountMs": 215.05329999999958
+    },
+    {
+      "size": 10000,
+      "kind": "for",
+      "mount": {
+        "medianMs": 2627.9894999999997,
+        "p25Ms": 2627.9894999999997,
+        "p75Ms": 2627.9894999999997,
+        "callbackCalls": 10000,
+        "heapDeltaBytes": 87877424,
+        "samplesMs": [
+          2627.9894999999997
+        ],
+        "callbackSamples": [
+          10000
+        ],
+        "heapDeltaSamplesBytes": [
+          87877424
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 898.4799000000057,
+          "p25Ms": 898.4799000000057,
+          "p75Ms": 898.4799000000057,
+          "medianCallbackCalls": 1,
+          "medianRowRenders": 1,
+          "samplesMs": [
+            898.4799000000057
+          ],
+          "callbackSamples": [
+            1
+          ],
+          "rowRenderSamples": [
+            1
+          ]
+        },
+        "append": {
+          "medianMs": 891.6723999999958,
+          "p25Ms": 891.6723999999958,
+          "p75Ms": 891.6723999999958,
+          "medianCallbackCalls": 1,
+          "medianRowRenders": 1,
+          "samplesMs": [
+            891.6723999999958
+          ],
+          "callbackSamples": [
+            1
+          ],
+          "rowRenderSamples": [
+            1
+          ]
+        },
+        "prepend": {
+          "medianMs": 2104.356399999997,
+          "p25Ms": 2104.356399999997,
+          "p75Ms": 2104.356399999997,
+          "medianCallbackCalls": 10001,
+          "medianRowRenders": 10001,
+          "samplesMs": [
+            2104.356399999997
+          ],
+          "callbackSamples": [
+            10001
+          ],
+          "rowRenderSamples": [
+            10001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 1674.9129999999932,
+          "p25Ms": 1674.9129999999932,
+          "p75Ms": 1674.9129999999932,
+          "medianCallbackCalls": 4999,
+          "medianRowRenders": 4999,
+          "samplesMs": [
+            1674.9129999999932
+          ],
+          "callbackSamples": [
+            4999
+          ],
+          "rowRenderSamples": [
+            4999
+          ]
+        },
+        "move": {
+          "medianMs": 2336.892899999999,
+          "p25Ms": 2336.892899999999,
+          "p75Ms": 2336.892899999999,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            2336.892899999999
+          ],
+          "callbackSamples": [
+            10000
+          ],
+          "rowRenderSamples": [
+            10000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 2444.6676000000007,
+          "p25Ms": 2444.6676000000007,
+          "p75Ms": 2444.6676000000007,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            2444.6676000000007
+          ],
+          "callbackSamples": [
+            10000
+          ],
+          "rowRenderSamples": [
+            10000
+          ]
+        }
+      },
+      "unmountMs": 308.26720000000205
+    }
+  ]
+}
