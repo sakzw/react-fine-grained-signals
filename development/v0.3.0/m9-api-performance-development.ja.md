@@ -78,7 +78,7 @@ packしたv0.3.0 runtimeをclean Vite consumerにinstallし、package rootから
 
 The post-fix full benchmark is saved as `m9-collection-scaling-final.json` (Node v24.21.0, Windows x64, Ryzen 7 PRO 6850U; 7 timing samples and 5 cleanup samples). For 10,000 subscribed keys, observed Map update/add/delete medians were about 62/88/72 µs and Set duplicate-add/add/delete about 89/94/51 µs. Unsubscribe medians were 1 ms or less. The 10,000-key sweep medians were about 1.22 s for both Map and Set. These timing samples vary substantially across runs; they do not support a universal performance claim. Post-sweep heap deltas also vary with GC and allocator behavior, so no bytes-per-key or leak-free claim is made. Cleanup work remains bounded to 128 candidate checks per turn and continues in timer turns.
 
-No M9-specific release blocker remains. The documented Oxc Refresh-signature failures occur only in non-RFSG control variants. M8 is re-frozen on the final M9-qualified v0.3.0 candidate, integrated on `main`. The push revision and GitHub Actions outcomes are recorded below after remote verification. No release tag, npm publish, or GitHub Release is part of this work.
+No M9-specific release blocker remains. The documented Oxc Refresh-signature failures occur only in non-RFSG control variants. M8 is re-frozen on the final M9-qualified v0.3.0 candidate, integrated on `main` and pushed to `origin/main` at `f6ed4875e99e221b6fe6b93ba776f56e822ef3fd`. GitHub [Test run 38507715468](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38507715468) and [E2E run 38507715464](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38507715464) both passed. No release tag, npm publish, or GitHub Release is part of this work.
 
 ### Commits
 
