@@ -106,6 +106,17 @@ describe("managed render transform", () => {
     expect(output).toContain("_useSignalCapture()");
   });
 
+  it("captures a direct .value read through a local signal alias", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      const alias = count;
+      export const Counter = () => <p>{alias.value}</p>;
+    `, "auto");
+
+    expect(output).toContain("_signals.capture(() => alias.value)");
+    expect(output).toContain("const alias = count;");
+  });
+
   it("injects a bare useSignalTracking call without a managed render rewrite", () => {
     const output = compile(`
       const count = { value: 1 };
@@ -3407,11 +3418,95 @@ export function App() {
     });
 
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.message).toContain("Destructuring from a .value expression");
+    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
     expect(warnings[0]?.message).toContain("useSignalTracking()");
     expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
       line: 5,
       column: 8,
     });
+  });
+
+  it("warns when destructuring reads a property from an alias of a deep proxy", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ profile: { settings: { name: "Ada" } } });
+export function App() {
+  const profile = state.value.profile;
+  const { name } = profile.settings;
+  return <span>{name}</span>;
+}
+`;
+    const output = transformReactFineGrainedSignals(source, "DestructuredProxyAlias.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    })?.code;
+
+    expect(output).toMatch(/const \{\s*name\s*\} = _signals\.capture\(\(\) => profile\.settings\);/);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
+    expect(warnings[0]?.message).toContain("complete property path");
+    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
+      line: 6,
+      column: 8,
+    });
+  });
+
+  it("warns when a destructuring assignment reads a deep proxy", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ profile: { name: "Ada" } });
+export function App() {
+  let name;
+  ({ name } = state.value.profile);
+  return <span>{name}</span>;
+}
+`;
+    const output = transformReactFineGrainedSignals(source, "DestructuringAssignment.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    })?.code;
+
+    expect(output).toMatch(/\(\{\s*name\s*\}\s*=\s*_signals\.capture\(\(\) => state\.value\.profile\)\);/);
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
+    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
+      line: 6,
+      column: 3,
+    });
+  });
+
+  it("warns when a destructuring assignment reads from a deep proxy alias", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ profile: { settings: { name: "Ada" } } });
+export function App() {
+  const profile = state.value.profile;
+  let name;
+  ({ name } = profile.settings);
+  return <span>{name}</span>;
+}
+`;
+    transformReactFineGrainedSignals(source, "DestructuringAliasAssignment.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
   });
 });

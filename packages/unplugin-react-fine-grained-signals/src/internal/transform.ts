@@ -2409,12 +2409,36 @@ function warnUntrackedChildrenCallbackRead(
   reportWarning(options, warning, expression);
 }
 
+function warnUntrackedDestructuringRead(
+  path: NodePath,
+  options: InternalTransformOptions,
+): void {
+  const warning = path.buildCodeFrameError(
+    "Destructuring from a tracked value reads properties outside the transform's per-read capture " +
+      "boundary; deep-proxy reads may stay stale. Read the complete property path in one tracked " +
+      "expression, or keep/add useSignalTracking() for ambient deep-proxy tracking.",
+  );
+  reportWarning(options, warning, path);
+}
+
 function inspectKnownRenderPropReads(
   functionPath: NodePath<t.Function>,
   options: InternalTransformOptions,
   reactImportSource: string,
 ): void {
   if (options.mode === "manual" && !hasOwnedLeadingComment(functionPath, useSignalTrackingComment)) return;
+  const hasTrackedSource = (path: NodePath, seen = new Set<object>()): boolean => {
+    if (containsSyntacticValueRead(path)) return true;
+    if (path.isMemberExpression() || path.isOptionalMemberExpression()) {
+      return hasTrackedSource(path.get("object"), seen);
+    }
+    if (!path.isIdentifier()) return false;
+    const binding = path.scope.getBinding(path.node.name);
+    if (binding === undefined || seen.has(binding) || !binding.path.isVariableDeclarator()) return false;
+    seen.add(binding);
+    const init = binding.path.get("init");
+    return init.node !== null && init.node !== undefined && hasTrackedSource(init, seen);
+  };
   functionPath.traverse({
     JSXExpressionContainer(expression) {
       if (!expression.parentPath.isJSXElement() && !expression.parentPath.isJSXFragment()) return;
@@ -2469,22 +2493,15 @@ function inspectKnownRenderPropReads(
       if (!id.isObjectPattern() && !id.isArrayPattern()) return;
       const init = declarator.get("init");
       if (!init.node) return;
-      let readsValue = false;
-      const inspectRead = (member: NodePath<t.MemberExpression | t.OptionalMemberExpression>) => {
-        if (getTrackedReadPropertyName(member) === "value") readsValue = true;
-      };
-      if (init.isMemberExpression() || init.isOptionalMemberExpression()) inspectRead(init);
-      init.traverse({
-        MemberExpression: inspectRead,
-        OptionalMemberExpression: inspectRead,
-      });
-      if (!readsValue) return;
-      const warning = declarator.buildCodeFrameError(
-        "Destructuring from a .value expression reads nested properties outside the transform's " +
-          "per-read capture boundary. Read the complete property path in one tracked expression, " +
-          "or keep/add useSignalTracking() to retain ambient tracking for deep proxy reads.",
-      );
-      reportWarning(options, warning, declarator);
+      if (!hasTrackedSource(init)) return;
+      warnUntrackedDestructuringRead(declarator, options);
+    },
+    AssignmentExpression(assignment) {
+      const left = assignment.get("left");
+      if (!left.isObjectPattern() && !left.isArrayPattern()) return;
+      const right = assignment.get("right");
+      if (!hasTrackedSource(right)) return;
+      warnUntrackedDestructuringRead(assignment, options);
     },
   });
 }
