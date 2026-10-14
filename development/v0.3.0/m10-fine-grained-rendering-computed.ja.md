@@ -113,6 +113,8 @@ React 19.3.0 / Node v24.21.0で、各factoryを1万回/round、warmup 1回、tim
 | Independent code review | pass — For/Index契約とwritable-computed APIをレビュー。Index memo候補は実装・測定済みとは扱わず、製品変更なし |
 | Performance / memory | pass — 100/1,000/10,000行For候補測定。候補のmount/heap/再配置コスト悪化により採用せず。Index 100/1,000行の現行測定も保存 |
 
+GitHub Actionsは最終revision `96edb7e926309df3934f519646da3fccbebe6a09` で [Test](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38546331446) と [E2E](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38546331467) の両方がsuccess。先行実行ではReact Router fixtureが`useSignal()`由来のform bindingを型不適合とし、修正後の再実行でReact Router typecheckとbrowser suiteを通過した。追加の未解決release blockerはない。
+
 ## 既知の制約とM11候補
 
 - `For`はReact keyによりidentityとstateを保つが、collection更新時に全rowのrender callbackを実行する。行単位callback memoizationはmount時間とheap増加が大きく採用しなかった。

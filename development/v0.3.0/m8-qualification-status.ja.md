@@ -52,4 +52,6 @@ M8をM10のFor/Index性能調査とWritable computed追加のため再度openし
 
 M10の[qualification record](m10-fine-grained-rendering-computed.ja.md)にあるruntime/transform full coverage、typecheck/lint/build、package smoke、cross-copy/mixed-version、React Compiler、59/59 browser E2E、bundle budget、独立reviewが完了した。開始baselineに対するconsumer bundle増加はgzip 0.03–0.08 kBの範囲で全budget内。5-workerの一度のWebKit hydration timeoutは、再実行を1 workerに直すとFirefox/WebKit/Chromium/production/React Router全て通り、failureは再現しなかった。coverage thresholdやテスト仕様は緩和していない。
 
-以上により、M10変更を含むv0.3.0 candidateを**ローカルqualification上で再freeze**と判断する。変更は意味のある単位でcommitし、`origin/main`へpushした後にGitHub Test/E2E workflow結果をここへ追記する。release tag、npm publish、GitHub Releaseは作成しない。
+以上により、M10変更を含むv0.3.0 candidateを**再freeze**と判断する。GitHub E2Eが最初のpushでReact Router consumer fixtureの型検査に失敗し、`useSignal()`の実際のsignal生成能力を戻り値型へ反映して修正した。次のpushではTestとE2Eの両workflowが通過した。release tag、npm publish、GitHub Releaseは作成しない。
+
+最終revision `96edb7e926309df3934f519646da3fccbebe6a09` を`origin/main`へpush済み。GitHub [Test run 38546331446](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38546331446) と [E2E run 38546331467](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38546331467) はどちらもsuccess。Testではlint、typecheck、runtime/transform coverage、build、size budget、consumer smoke、mixed-version smokeが完了し、E2EではReact Router typecheckとbrowser suiteが完了した。
