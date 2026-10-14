@@ -637,6 +637,24 @@ describe("Direct DOM binding", () => {
     expect(input.checked).toBe(true);
   });
 
+  it("keeps a bound checkbox's form value available to FormData", () => {
+    const enabled = signal(false);
+    render(
+      <form aria-label="permission form">
+        <input type="checkbox" name="permission" value="admin" bindChecked={enabled} />
+      </form>,
+    );
+
+    const form = screen.getByLabelText("permission form") as HTMLFormElement;
+    const checkbox = form.querySelector('input[name="permission"]') as HTMLInputElement;
+    expect(checkbox.value).toBe("admin");
+    expect(new FormData(form).has("permission")).toBe(false);
+
+    fireEvent.click(checkbox);
+    expect(enabled.value).toBe(true);
+    expect(new FormData(form).get("permission")).toBe("admin");
+  });
+
   it("resets bound inputs and checkboxes to the latest value written to their signals", () => {
     const text = signal("initial text");
     const checked = signal(false);

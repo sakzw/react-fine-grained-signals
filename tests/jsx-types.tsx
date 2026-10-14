@@ -29,6 +29,10 @@ const partiallyStyled = <div style={{ color, width: 12 }} />;
 const controlledInput = <input value={text.value} checked={enabled.value} onChange={() => {}} />;
 const boundInput = <input bindValue={text} />;
 const boundCheckbox = <input type="checkbox" bindChecked={enabled} />;
+const boundCheckboxWithFormValue = <input type="checkbox" name="permission" value="admin" bindChecked={enabled} />;
+const boundCheckboxWithDefaultFormValue = <input type="checkbox" name="permission" defaultValue="admin" bindChecked={enabled} />;
+// @ts-expect-error Checkbox form values remain ordinary React props, not signal bindings.
+const checkboxImplicitValueBinding = <input type="checkbox" value={text} bindChecked={enabled} />;
 const boundTextarea = <textarea bindValue={text} />;
 const boundSingleSelect = <select bindValue={text}><option value="value">value</option></select>;
 const selectedMany = signal<string[]>(["a"]);
@@ -85,6 +89,9 @@ void [
   controlledInput,
   boundInput,
   boundCheckbox,
+  boundCheckboxWithFormValue,
+  boundCheckboxWithDefaultFormValue,
+  checkboxImplicitValueBinding,
   boundTextarea,
   boundSingleSelect,
   boundMultipleSelect,

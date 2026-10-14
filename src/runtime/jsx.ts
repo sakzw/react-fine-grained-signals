@@ -1281,8 +1281,8 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
   }
   | {
     type: "checkbox";
-    value?: never;
-    defaultValue?: never;
+    value?: P["value"];
+    defaultValue?: P["defaultValue"];
     checked?: never;
     defaultChecked?: never;
     bindValue?: never;
