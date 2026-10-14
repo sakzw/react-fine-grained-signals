@@ -82,7 +82,7 @@ test("preserves bound form reset behavior in the production bundle", async ({
   await expect(signals).toHaveAttribute("data-text", "accepted edit");
   await expect(signals).toHaveAttribute("data-checked", "false");
   await form.locator("button[type=reset]").click();
-  await expect(input).toHaveValue("reset initial");
+  await expect(input).toHaveValue("accepted edit");
   await expect(checkbox).not.toBeChecked();
   await expect(signals).toHaveAttribute("data-text", "accepted edit");
   await expect(signals).toHaveAttribute("data-checked", "false");

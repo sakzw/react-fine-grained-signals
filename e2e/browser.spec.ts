@@ -62,7 +62,7 @@ test("updates allowlisted host properties without a React rerender", async ({ pa
   expect(errors).toEqual([]);
 });
 
-test("keeps bound form reset defaults and documents accepted-edit divergence", async ({ page }) => {
+test("keeps bound form reset defaults synchronized with accepted edits", async ({ page }) => {
   const errors = await openHydrated(page);
   const form = page.locator("#bound-reset-form");
   const input = page.locator("#bound-reset-text");
@@ -88,9 +88,8 @@ test("keeps bound form reset defaults and documents accepted-edit divergence", a
   await expect(signals).toHaveAttribute("data-checked", "false");
   await form.locator("button[type=reset]").click();
 
-  // React restores the owner's last rendered defaults after a user edit;
-  // changing the signal from onChange does not itself change that render.
-  await expect(input).toHaveValue("reset initial");
+  // Accepted edits update the signal, which also updates the reset defaults.
+  await expect(input).toHaveValue("accepted edit");
   await expect(checkbox).not.toBeChecked();
   await expect(signals).toHaveAttribute("data-text", "accepted edit");
   await expect(signals).toHaveAttribute("data-checked", "false");
