@@ -114,3 +114,4 @@ The benchmark checks final DOM values after updates and counts owner renders. He
 - `ec657f0194fcbbbe6bbcb56d37553d036eb1cb92` — `feat: complete M11 hooks and form groups`。`origin/main`へpush済み。
 - push後のGitHub Actionsは両方成功: [Test #146](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38586490331)、[E2E #146](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38586490068)。
 - 追跡用のdocumentation commitでも`origin/main` SHAと上記のCI結果を記録した。
+- `ef512b6c721539a089edfffc6d378b8dbdf1b132` — `perf: record M11 runtime binding benchmarks`。benchmark script、computed create/read測定、今回の性能記録を追加しpush済み。GitHub Actions [Test #149](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38591382266) と [E2E #149](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38591382325) は両方成功。
