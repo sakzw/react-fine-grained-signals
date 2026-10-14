@@ -105,6 +105,31 @@ function WritableComputedFormBinding() {
   );
 }
 
+function RebindingComputedFormBinding() {
+  const source = useSignal("123");
+  const replacement = useSignal("123x");
+  const digits = useMemo(() => computed({
+    get: () => source.value,
+    set: (next: string) => {
+      if (/^\d+$/.test(next)) source.value = next;
+    },
+  }), [source]);
+  const [useReplacement, setUseReplacement] = useState(false);
+
+  return (
+    <section aria-labelledby="rebound-form-heading">
+      <h2 id="rebound-form-heading">Rebound writable computed form binding</h2>
+      <input
+        id="rebound-form-input"
+        aria-label="rebound writable computed form input"
+        bindValue={useReplacement ? replacement : digits}
+        onChange={() => setUseReplacement(true)}
+      />
+      <output id="rebound-form-current-value">{useReplacement ? replacement : digits}</output>
+    </section>
+  );
+}
+
 class RefErrorBoundary extends Component<
   { id: string; children: ReactNode },
   { message: string | null }
@@ -454,6 +479,7 @@ export function App({ state }: { state: DemoState }) {
       </section>
 
       <WritableComputedFormBinding />
+      <RebindingComputedFormBinding />
 
       <section aria-labelledby="component-heading">
         <h2 id="component-heading">React component boundary</h2>

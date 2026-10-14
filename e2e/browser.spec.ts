@@ -82,6 +82,18 @@ test("keeps React input and change events when a writable computed rejects text"
   expect(errors).toEqual([]);
 });
 
+test("cancels a rejected input correction when onChange rebinds the same node", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const input = page.locator("#rebound-form-input");
+
+  await expect(input).toHaveValue("123");
+  await input.press("End");
+  await input.press("x");
+  await expect(page.locator("#rebound-form-current-value")).toHaveText("123x");
+  await expect(input).toHaveValue("123x");
+  expect(errors).toEqual([]);
+});
+
 test("keeps bound form reset defaults synchronized with accepted edits", async ({ page }) => {
   const errors = await openHydrated(page);
   const form = page.locator("#bound-reset-form");

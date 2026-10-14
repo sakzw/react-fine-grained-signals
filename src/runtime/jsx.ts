@@ -544,6 +544,8 @@ function bindTextValue(
   let pending: unknown;
   let handlingInput = false;
   let inputVersion = 0;
+  let correctionTimer: ReturnType<typeof setTimeout> | undefined;
+  let active = true;
   const episode: FailureEpisode = { hasReported: false };
 
   const onCompositionStart = () => {
@@ -558,6 +560,11 @@ function bindTextValue(
   };
   const onInput = () => {
     const attempted = node.value;
+    const version = ++inputVersion;
+    if (correctionTimer !== undefined) {
+      clearTimeout(correctionTimer);
+      correctionTimer = undefined;
+    }
     handlingInput = true;
     try {
       source.value = attempted;
@@ -572,12 +579,14 @@ function bindTextValue(
       }
       return;
     }
-    const version = ++inputVersion;
+    const current = readBoundSignal(() => source.peek(), episode);
+    if (current.ok && areFormValuesEqual(current.value, attempted)) return;
     // Some browsers run a microtask checkpoint between the target listener
     // and React's delegated listener. Use a task so React always observes the
     // attempted value before any corrective DOM write.
-    setTimeout(() => {
-      if (version !== inputVersion || !Object.is(node.value, attempted)) return;
+    const timer = setTimeout(() => {
+      if (correctionTimer === timer) correctionTimer = undefined;
+      if (!active || version !== inputVersion || !Object.is(node.value, attempted)) return;
       if (composing) {
         const result = readBoundSignal(() => source.peek(), episode);
         if (result.ok && !areFormValuesEqual(result.value, attempted)) {
@@ -588,6 +597,7 @@ function bindTextValue(
       }
       resyncRejectedFormWrite(source, attempted, write, episode);
     }, 0);
+    correctionTimer = timer;
   };
 
   node.addEventListener("compositionstart", onCompositionStart);
@@ -610,6 +620,12 @@ function bindTextValue(
 
   return {
     dispose() {
+      active = false;
+      inputVersion += 1;
+      if (correctionTimer !== undefined) {
+        clearTimeout(correctionTimer);
+        correctionTimer = undefined;
+      }
       subscription.dispose();
       disposeReset();
       node.removeEventListener("compositionstart", onCompositionStart);

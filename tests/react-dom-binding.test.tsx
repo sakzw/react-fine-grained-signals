@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { Activity, StrictMode, Suspense, act } from "react";
+import { Activity, StrictMode, Suspense, act, useState } from "react";
 import type { ChangeEvent, InputEvent as ReactInputEvent, ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -745,6 +745,33 @@ describe("Direct DOM binding", () => {
     expect(observedEvents).toEqual(["input:123x", "change:123x"]);
   });
 
+  it("does not let a disposed computed binding overwrite a replacement signal after onChange", async () => {
+    const source = signal("123");
+    const digits = computed({
+      get: () => source.value,
+      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+    });
+    const replacement = signal("123x");
+
+    function RebindingInput() {
+      const [useReplacement, setUseReplacement] = useState(false);
+      return <input
+        aria-label="rebound computed input"
+        bindValue={useReplacement ? replacement : digits}
+        onChange={() => setUseReplacement(true)}
+      />;
+    }
+
+    render(<RebindingInput />);
+    const input = screen.getByLabelText("rebound computed input") as HTMLInputElement;
+    await act(async () => { dispatchUserTextInput(input, "123x"); });
+    expect(input.value).toBe("123x");
+
+    await act(async () => { await waitForNextTask(); });
+    expect(replacement.value).toBe("123x");
+    expect(input.value).toBe("123x");
+  });
+
   it("preserves React onChange for one accepted direct text input", async () => {
     const text = signal("before");
     const events: string[] = [];
@@ -819,21 +846,26 @@ describe("Direct DOM binding", () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
-      set: (next: string) => { if (/^\\d+$/.test(next)) source.value = next; },
+      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
     });
     const onChange = vi.fn();
     render(<textarea aria-label="computed textarea" bindValue={digits} onChange={onChange} />);
     const textarea = screen.getByLabelText("computed textarea") as HTMLTextAreaElement;
-    let changesDuringEvent = 0;
     await act(async () => {
-      dispatchUserTextInput(textarea, "12x");
-      changesDuringEvent = onChange.mock.calls.length;
+      dispatchUserTextInput(textarea, "456");
+      await waitForNextTask();
+    });
+    expect(source.value).toBe("456");
+    expect(textarea.value).toBe("456");
+
+    await act(async () => {
+      dispatchUserTextInput(textarea, "456x");
       await waitForNextTask();
     });
 
-    expect(source.value).toBe("123");
-    expect(textarea.value).toBe("123");
-    expect(changesDuringEvent).toBe(1);
+    expect(source.value).toBe("456");
+    expect(textarea.value).toBe("456");
+    expect(onChange).toHaveBeenCalledTimes(2);
   });
 
   it("defers a rejected computed text edit until IME composition ends", () => {
@@ -859,7 +891,7 @@ describe("Direct DOM binding", () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
-      set: (next: string) => { if (/^\\d+$/.test(next)) source.value = next; },
+      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
     });
     render(<input aria-label="queued composing digits" bindValue={digits} />);
     const input = screen.getByLabelText("queued composing digits") as HTMLInputElement;
