@@ -20,6 +20,42 @@ import { For, Index, Show } from "react-fine-grained-signals/utils";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 describe("SSR and hydration", () => {
+  it("hydrates single and multiple explicit select bindings with their initial values", async () => {
+    const singleValue = signal("b");
+    const multipleValues = signal<string[]>(["a", "c"]);
+    function App() {
+      return <>
+        <select aria-label="hydrated single" bindValue={singleValue}>
+          <option value="a">A</option><option value="b">B</option>
+        </select>
+        <select aria-label="hydrated multiple" multiple bindValue={multipleValues}>
+          <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+        </select>
+      </>;
+    }
+
+    const html = renderToString(<App />);
+    expect(html).toContain('selected=""');
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+    await act(async () => { await Promise.resolve(); });
+
+    const single = container.querySelector('[aria-label="hydrated single"]') as HTMLSelectElement;
+    const multiple = container.querySelector('[aria-label="hydrated multiple"]') as HTMLSelectElement;
+    expect(single.value).toBe("b");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a", "c"]);
+    await act(async () => { multiple.options[1]!.selected = true; multiple.dispatchEvent(new Event("change", { bubbles: true })); });
+    expect(multipleValues.value).toEqual(["a", "b", "c"]);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
   it("hydrates control-flow utilities and follows signal updates without warnings", async () => {
     const visible = signal(true);
     const items = deepSignal([{ id: "ada", name: "Ada" }]);

@@ -33,10 +33,9 @@ const REACTIVE_PROP_NAMES = new Set([
 type BindingKind = "style" | "style-properties" | "select-value" | "text-value" | "checked" | "prop";
 
 function resolveBindingKind(tagName: string, name: string): BindingKind {
-  if (name === "bindValue") return "text-value";
+  if (name === "bindValue") return tagName === "select" ? "select-value" : "text-value";
   if (name === "bindChecked") return "checked";
   if (name === "style") return "style";
-  if (name === "value" && tagName === "select") return "select-value";
   return "prop";
 }
 
@@ -61,8 +60,6 @@ function sameBindingSource(a: BindingSource, b: BindingSource): boolean {
 // controlled prop so React's own input reconciliation never re-asserts a stale
 // signal snapshot over what the direct-binding subscription just wrote.
 const UNCONTROLLED_PROP_NAMES: Record<string, string> = {
-  value: "defaultValue",
-  checked: "defaultChecked",
   bindValue: "defaultValue",
   bindChecked: "defaultChecked",
 };
@@ -417,7 +414,7 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
   if (input.defaultChecked !== next) input.defaultChecked = next;
 }
 
-function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement, refresh: () => void): () => void {
+function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, refresh: () => void): () => void {
   const form = node.form;
   if (form === null) return () => {};
   const onReset = (event: Event) => {
@@ -440,11 +437,16 @@ function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement, refresh: ()
  * is per-`<option>` `.selected`, so an array-valued signal (React's own
  * typing for a multi-select) is applied that way instead.
  */
+function isSelectValue(value: unknown, multiple: boolean): boolean {
+  return multiple
+    ? Array.isArray(value) && value.every((item) => typeof item === "string")
+    : typeof value === "string";
+}
+
 function setSelectValue(select: HTMLSelectElement, value: unknown): void {
   const multiple = select.multiple;
-  const values = new Set(
-    Array.isArray(value) && multiple ? value.map(String) : value == null ? (multiple ? [] : [""]) : [String(value)],
-  );
+  if (!isSelectValue(value, multiple)) throw new TypeError("Invalid select bindValue.");
+  const values = new Set(multiple ? value as string[] : [value as string]);
   // A single select keeps going through `.value`, which also handles a value
   // no option matches (nothing selected).
   if (!multiple) {
@@ -470,12 +472,19 @@ function setSelectValue(select: HTMLSelectElement, value: unknown): void {
  * the signal's current value whenever its `<option>` list changes, closing
  * that gap without requiring the signal to change too.
  */
-function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unknown>, apply: (value: unknown) => void): BindingSubscription {
+function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, apply: (value: unknown) => void): BindingSubscription {
   // Shared by both read sites below: a subscription-triggered failure and a
   // MutationObserver-triggered failure are the same underlying computed
   // erroring, so they report as one episode, not two.
   const episode: FailureEpisode = { hasReported: false };
   const subscription = createBindingSubscription(source, apply, episode);
+  const onChange = () => {
+    source.value = select.multiple
+      ? Array.from(select.selectedOptions, (option) => option.value)
+      : select.value;
+  };
+  select.addEventListener("change", onChange);
+  const disposeReset = bindFormReset(select, subscription.refresh);
   const observer = new MutationObserver(() => {
     applyBoundSignal(() => source.peek(), apply, episode);
   });
@@ -484,6 +493,8 @@ function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unkno
     dispose() {
       subscription.dispose();
       observer.disconnect();
+      disposeReset();
+      select.removeEventListener("change", onChange);
     },
     refresh: subscription.refresh,
   };
@@ -750,7 +761,7 @@ function subscribeBinding(
     }
     case "select-value":
       return {
-        ...bindSelectValue(node as HTMLSelectElement, source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        ...bindSelectValue(node as HTMLSelectElement, source as Signal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
         getStyleKeys: undefined,
         restore: undefined,
       };
@@ -1053,6 +1064,15 @@ type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) 
  */
 function findHostBindings(props: HostProps, tagName: string): Binding[] {
   const bindings: Binding[] = [];
+  const has = (name: string) => Object.prototype.hasOwnProperty.call(props, name);
+  if (has("bindValue") && (tagName === "input" || tagName === "textarea" || tagName === "select")) {
+    if (has("value") || has("defaultValue")) {
+      throw new TypeError("bindValue cannot be combined with value or defaultValue.");
+    }
+  }
+  if (has("bindChecked") && tagName === "input" && (has("checked") || has("defaultChecked"))) {
+    throw new TypeError("bindChecked cannot be combined with checked or defaultChecked.");
+  }
   for (const [name, value] of Object.entries(props)) {
     if (name === "bindValue" || name === "bindChecked") {
       if (!isWritableSignal(value)) {
@@ -1061,8 +1081,12 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
       if (name === "bindValue") {
         const inputType = String(props.type ?? "text").toLowerCase();
         const textInputTypes = new Set(["text", "search", "tel", "url", "password", "email"]);
-        if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(inputType))) {
-          throw new TypeError("bindValue: text input/textarea only.");
+        if (tagName === "select") {
+          const multiple = props.multiple === true;
+          const initial = readInitialValue(value, "select-value");
+          if (!isSelectValue(initial, multiple)) throw new TypeError("Invalid select bindValue.");
+        } else if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(inputType))) {
+          throw new TypeError("bindValue: text input/textarea/select only.");
         }
       } else if (tagName !== "input" || String(props.type ?? "text").toLowerCase() !== "checkbox") {
         throw new TypeError("bindChecked: checkbox only.");
@@ -1238,16 +1262,69 @@ type SignalizeKnownHtmlProps<P> = {
   [Name in keyof P as Name extends DirectSignalPropName | AriaPropName ? Name : never]:
     SignalableHtmlProp<Name, P[Name]>;
 };
-type AddHtmlSignalProps<Tag extends keyof React.JSX.IntrinsicElements, P> = Omit<P, DirectSignalPropName | AriaPropName | "children"> & {
+type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "children"> & {
   [Name in keyof SignalizeKnownHtmlProps<P>]: SignalizeKnownHtmlProps<P>[Name];
 } & {
   [name: `data-${string}`]: Signalable<string | number | boolean | undefined>;
-} & (Tag extends "input" ? {
-  bindValue?: Signal<string> & NotDeepSignal;
-  bindChecked?: Signal<boolean> & NotDeepSignal;
-} : Tag extends "textarea" ? {
-  bindValue?: Signal<string> & NotDeepSignal;
-} : {}) & AddSignalChildren<{}>;
+} & AddSignalChildren<{}>;
+
+type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "checked" | "defaultChecked" | "bindValue" | "bindChecked"> & (
+  Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked"> & { bindValue?: never; bindChecked?: never }
+  | {
+    type?: "text" | "search" | "tel" | "url" | "password" | "email";
+    value?: never;
+    defaultValue?: never;
+    checked?: never;
+    defaultChecked?: never;
+    bindValue?: Signal<string> & NotDeepSignal;
+    bindChecked?: never;
+  }
+  | {
+    type: "checkbox";
+    value?: never;
+    defaultValue?: never;
+    checked?: never;
+    defaultChecked?: never;
+    bindValue?: never;
+    bindChecked?: Signal<boolean> & NotDeepSignal;
+  }
+);
+
+type BoundTextareaProps<P extends React.JSX.IntrinsicElements["textarea"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "bindValue"> & (
+  Pick<P, "value" | "defaultValue"> & { bindValue?: never }
+  | { value?: never; defaultValue?: never; bindValue?: Signal<string> & NotDeepSignal }
+);
+
+type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "multiple" | "bindValue"> & (
+  {
+    multiple?: boolean;
+    value?: React.JSX.IntrinsicElements["select"]["value"];
+    defaultValue?: React.JSX.IntrinsicElements["select"]["defaultValue"];
+    bindValue?: never;
+  }
+  | {
+    multiple?: false;
+    value?: never;
+    defaultValue?: never;
+    bindValue?: Signal<string> & NotDeepSignal;
+  }
+  | {
+    multiple: true;
+    value?: never;
+    defaultValue?: never;
+    bindValue?: Signal<string[]> & NotDeepSignal;
+  }
+);
+
+type SignalIntrinsicElement<Tag extends keyof React.JSX.IntrinsicElements> = Tag extends "input"
+  ? BoundInputProps<React.JSX.IntrinsicElements[Tag]>
+  : Tag extends "textarea"
+    ? BoundTextareaProps<React.JSX.IntrinsicElements[Tag]>
+    : Tag extends "select"
+      ? BoundSelectProps<React.JSX.IntrinsicElements[Tag]>
+      : Tag extends NonHtmlHostElement
+        ? AddSignalChildren<React.JSX.IntrinsicElements[Tag]>
+        : AddHtmlSignalProps<React.JSX.IntrinsicElements[Tag]>;
 
 /** Types exposed by `jsxImportSource: "react-fine-grained-signals"`. */
 export namespace JSX {
@@ -1266,7 +1343,5 @@ export namespace JSX {
 }
 
 type SignalIntrinsicElements = {
-  [Tag in keyof React.JSX.IntrinsicElements]: Tag extends NonHtmlHostElement
-    ? AddSignalChildren<React.JSX.IntrinsicElements[Tag]>
-    : AddHtmlSignalProps<Tag, React.JSX.IntrinsicElements[Tag]>;
+  [Tag in keyof React.JSX.IntrinsicElements]: SignalIntrinsicElement<Tag>;
 };

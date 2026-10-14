@@ -513,6 +513,19 @@ describe("Direct DOM binding", () => {
     expect(() => createSignalAwareElement("input", { type: "radio", bindChecked: signal(false) })).toThrow(/checkbox/);
   });
 
+  it("rejects binding and React prop ownership conflicts and select payload mismatches", () => {
+    const text = signal("a");
+    const checked = signal(true);
+    const list = signal<string[]>(["a"]);
+    expect(() => createSignalAwareElement("input", { bindValue: text, value: "a" })).toThrow(/bindValue cannot be combined/);
+    expect(() => createSignalAwareElement("textarea", { bindValue: text, defaultValue: "a" })).toThrow(/bindValue cannot be combined/);
+    expect(() => createSignalAwareElement("select", { bindValue: text, defaultValue: "a" })).toThrow(/bindValue cannot be combined/);
+    expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, checked: true })).toThrow(/bindChecked cannot be combined/);
+    expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, defaultChecked: true })).toThrow(/bindChecked cannot be combined/);
+    expect(() => createSignalAwareElement("select", { multiple: true, bindValue: text })).toThrow(/Invalid select bindValue/);
+    expect(() => createSignalAwareElement("select", { bindValue: list })).toThrow(/Invalid select bindValue/);
+  });
+
   it("does not let an unrelated re-render move the caret on a direct-bound value", () => {
     const text = signal("abc");
     const bump = signal(0);
@@ -720,7 +733,7 @@ describe("Direct DOM binding", () => {
     expect(text.value).toBe("user edit");
   });
 
-  it("binds a signal directly to a select element's value", () => {
+  it("keeps React-controlled select props available", () => {
     const choice = signal("b");
 
     function Field() {
@@ -743,7 +756,7 @@ describe("Direct DOM binding", () => {
     expect(select.value).toBe("c");
   });
 
-  it("binds a signal directly to a multi-select's value via per-option selection", () => {
+  it("keeps React-controlled multi-select props available", () => {
     const choices = signal<string[]>(["a", "c"]);
 
     function Field() {
@@ -773,6 +786,182 @@ describe("Direct DOM binding", () => {
       choices.value = ["b"];
     });
     expect(optionStates()).toEqual([false, true, false]);
+  });
+
+  it("bindValue synchronizes a single select both ways without rerendering its owner", () => {
+    const choice = signal("b");
+    const renders = vi.fn();
+    const changes = vi.fn((event: ChangeEvent<HTMLSelectElement>) => {
+      expect(choice.value).toBe(event.currentTarget.value);
+    });
+
+    function Field() {
+      renders();
+      return <select aria-label="bound choice" bindValue={choice} onChange={changes}>
+        <option value="a">A</option>
+        <option value="b">B</option>
+        <option value="c">C</option>
+      </select>;
+    }
+
+    render(<Field />);
+    const select = screen.getByLabelText("bound choice") as HTMLSelectElement;
+    expect(select.value).toBe("b");
+    const firstRenderCount = renders.mock.calls.length;
+
+    act(() => { choice.value = "a"; });
+    expect(select.value).toBe("a");
+    expect(renders).toHaveBeenCalledTimes(firstRenderCount);
+
+    fireEvent.change(select, { target: { value: "c" } });
+    expect(choice.value).toBe("c");
+    expect(select.value).toBe("c");
+    expect(changes).toHaveBeenCalledTimes(1);
+    expect(renders).toHaveBeenCalledTimes(firstRenderCount);
+  });
+
+  it("bindValue synchronizes multiple selects from selectedOptions in DOM order", () => {
+    const choices = signal<string[]>(["c", "a"]);
+    const changes = vi.fn();
+    render(<select aria-label="bound choices" multiple bindValue={choices} onChange={changes}>
+      <option value="a">A</option>
+      <option value="b">B</option>
+      <option value="c">C</option>
+    </select>);
+    const select = screen.getByLabelText("bound choices") as HTMLSelectElement;
+    const selected = () => Array.from(select.selectedOptions, (option) => option.value);
+    expect(selected()).toEqual(["a", "c"]);
+
+    act(() => { choices.value = ["b"]; });
+    expect(selected()).toEqual(["b"]);
+
+    select.options[0]!.selected = true;
+    select.options[1]!.selected = false;
+    select.options[2]!.selected = true;
+    fireEvent.change(select);
+    expect(choices.value).toEqual(["a", "c"]);
+    expect(changes).toHaveBeenCalledTimes(1);
+  });
+
+  it("replaces select sources and cleans subscriptions and option observers on detach", async () => {
+    const first = signal("a");
+    const second = signal("b");
+    const useSecond = signal(false);
+    const observe = vi.spyOn(MutationObserver.prototype, "observe");
+    const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
+    function Field() {
+      useSignalTracking();
+      return <select aria-label="replaceable select" bindValue={useSecond.value ? second : first}>
+        <option value="a">A</option><option value="b">B</option>
+      </select>;
+    }
+    const view = render(<Field />);
+    const select = screen.getByLabelText("replaceable select") as HTMLSelectElement;
+    expect(select.value).toBe("a");
+    expect(observe).toHaveBeenCalledTimes(1);
+
+    act(() => { useSecond.value = true; });
+    expect(select.value).toBe("b");
+    expect(observe).toHaveBeenCalledTimes(2);
+    act(() => { first.value = "a"; });
+    expect(select.value).toBe("b");
+    act(() => { second.value = "a"; });
+    expect(select.value).toBe("a");
+
+    view.unmount();
+    await act(async () => { await Promise.resolve(); });
+    expect(disconnect).toHaveBeenCalledTimes(2);
+    act(() => { second.value = "b"; });
+    expect(select.value).toBe("a");
+  });
+
+  it("resynchronizes single and multiple bound selects when options are inserted or removed", async () => {
+    const choice = signal("late");
+    const choices = signal<string[]>(["a", "late"]);
+    const showLate = signal(false);
+    function Field() {
+      useSignalTracking();
+      return <>
+        <select aria-label="dynamic single" bindValue={choice}>
+          <option value="a">A</option>
+          {showLate.value ? <option value="late">Late</option> : null}
+        </select>
+        <select aria-label="dynamic multiple" multiple bindValue={choices}>
+          <option value="a">A</option>
+          {showLate.value ? <option value="late">Late</option> : null}
+        </select>
+      </>;
+    }
+    render(<Field />);
+    const single = screen.getByLabelText("dynamic single") as HTMLSelectElement;
+    const multiple = screen.getByLabelText("dynamic multiple") as HTMLSelectElement;
+    expect(single.value).toBe("");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a"]);
+
+    act(() => { showLate.value = true; });
+    await waitFor(() => {
+      expect(single.value).toBe("late");
+      expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a", "late"]);
+    });
+    act(() => { showLate.value = false; });
+    await waitFor(() => {
+      expect(single.value).toBe("");
+      expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a"]);
+    });
+    expect(choice.value).toBe("late");
+    expect(choices.value).toEqual(["a", "late"]);
+  });
+
+  it("resets bound selects to the latest accepted signal values and honors canceled reset", async () => {
+    const choice = signal("a");
+    const choices = signal<string[]>(["a"]);
+    const includeLateOption = signal(false);
+    function Form() {
+      useSignalTracking();
+      return <form aria-label="bound select reset" onReset={(event) => {
+        if (event.currentTarget.dataset.cancel === "true") event.preventDefault();
+      }}>
+        <select aria-label="reset bound single" bindValue={choice}>
+          <option value="a">A</option><option value="b">B</option>
+          {includeLateOption.value ? <option value="late">Late</option> : null}
+        </select>
+        <select aria-label="reset bound multiple" multiple bindValue={choices}>
+          <option value="a">A</option><option value="b">B</option>
+          {includeLateOption.value ? <option value="late">Late</option> : null}
+        </select>
+      </form>;
+    }
+    render(<Form />);
+    const form = screen.getByLabelText("bound select reset") as HTMLFormElement;
+    const single = screen.getByLabelText("reset bound single") as HTMLSelectElement;
+    const multiple = screen.getByLabelText("reset bound multiple") as HTMLSelectElement;
+    act(() => { choice.value = "b"; choices.value = ["b"]; });
+    await act(async () => { form.reset(); await Promise.resolve(); });
+    expect(choice.value).toBe("b");
+    expect(single.value).toBe("b");
+    expect(choices.value).toEqual(["b"]);
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b"]);
+
+    form.dataset.cancel = "true";
+    act(() => { single.value = "a"; multiple.options[0]!.selected = true; });
+    await act(async () => { fireEvent.reset(form); await Promise.resolve(); });
+    expect(single.value).toBe("a");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a", "b"]);
+    expect(choice.value).toBe("b");
+    expect(choices.value).toEqual(["b"]);
+
+    act(() => {
+      choice.value = "late";
+      choices.value = ["late"];
+      includeLateOption.value = true;
+    });
+    await waitFor(() => {
+      expect(single.value).toBe("late");
+      expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["late"]);
+    });
+    await act(async () => { form.reset(); await Promise.resolve(); });
+    expect(single.value).toBe("late");
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["late"]);
   });
 
   it("keeps a React-controlled select in sync when a matching <option> is added later", async () => {

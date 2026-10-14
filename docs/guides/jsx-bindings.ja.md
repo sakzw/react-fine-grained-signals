@@ -65,8 +65,8 @@ export function Heading() {
 
 - `title`、`id`、`className`、`hidden`、`disabled`
 - `style`。object全体(`style={signal}`)とsignal entryを含むobject(例: `style={{ color: colorSignal, width: 12 }}`)をbindingします
-- text系 `input` と `textarea` の `bindValue`、checkbox `input` の `bindChecked`
-- `value` と `checked` はReact標準の意味論を維持し、`select`もReact標準のcontrolled inputとして扱います
+- text系 `input`、`textarea`、単一／複数選択 `select` の `bindValue`、checkbox `input` の `bindChecked`
+- 明示bindingと併用しない `value` と `checked` はReact標準の意味論を維持します
 - `data-*` と `aria-*` 属性
 
 ```tsx
@@ -75,6 +75,8 @@ const disabled = signal(false);
 const boxStyle = signal({ color: "crimson" });
 const newTitle = signal("");
 const enabled = signal(false);
+const selected = signal("a");
+const selectedMany = signal<string[]>(["a"]);
 
 export function Field() {
   return (
@@ -84,6 +86,14 @@ export function Field() {
       </button>
       <input bindValue={newTitle} />
       <input type="checkbox" bindChecked={enabled} />
+      <select bindValue={selected}>
+        <option value="a">A</option>
+        <option value="b">B</option>
+      </select>
+      <select multiple bindValue={selectedMany}>
+        <option value="a">A</option>
+        <option value="b">B</option>
+      </select>
     </>
   );
 }
@@ -110,11 +120,13 @@ const enabled = signal(false);
 <input type="checkbox" bindChecked={enabled} />
 ```
 
-`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）と`textarea`に対応します。`bindChecked`はcheckbox inputのみ対応し、radio groupは非対応です。共有の選択値bindingが用意されるまでは、radio groupにはReact controlled propsを使ってください。`select`もReact標準の`value`/`onChange` contractのままです。
+`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）、`textarea`、`Signal<string>`を使う単一選択select、`Signal<string[]>`を使うmultiple selectに対応します。配列bindingでは`multiple`を静的に`true`にしてください。動的booleanは現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。`bindChecked`はcheckbox inputのみ対応し、radio groupは対象外です。radio groupにはReact controlled propsを使ってください。
 
-host refのattach後にbindingをsubscribeしてsignalの初期値を反映し、その後のsignal更新をownerの再レンダーなしでDOMへ書き込みます。native `input` eventはテキストをsignalへ、native `change` eventはcheckboxの状態をsignalへ反映します。`onChange`と`onInput` propsは変更せずReactへ渡します。direct listenerはReactのbubble handlerより先に動くため、`onChange` handlerでsignalへ書き戻せば入力値を補正できます。`onChange`が編集を無視しても、native bindingがすでにDOM値をsignalへコピーしています。
+明示bindingがDOM stateを所有します。`bindValue`と`value`/`defaultValue`、`bindChecked`と`checked`/`defaultChecked`は併用できません。runtimeで拒否し、静的に分かる競合はRFSG JSX型でも拒否します。React標準のcontrolled selectは引き続き`value={selected.value}`と`onChange`で利用できます。`bindValue`ではnative change listenerがReactの`onChange`より前にsignalを更新するため、正規化処理がなければhandler内のsignal代入は不要です。
 
-text controlでは同じ値の書き込みを省略します。focused fieldへの外部更新ではselection rangeを新しい文字列の長さに収まるように維持します。selection APIがないinput typeではcaret位置をブラウザに任せます。IME変換中の外部更新は`compositionend`まで遅延するため変換を中断せず、最後にpending signal値を適用します。signalへ反映した値は`defaultValue`/`defaultChecked`にも同期されるため、form resetは最後にbindingされたsignal値へ戻ります。
+host refのattach後にbindingをsubscribeしてsignalの初期値を反映し、その後のsignal更新をownerの再レンダーなしでDOMへ書き込みます。native `input` eventはテキストを、native `change` eventはcheckboxの状態またはselectの選択値（multipleでは配列）をsignalへ反映します。`onChange`と`onInput` propsは変更せずReactへ渡します。direct listenerはReactのbubble handlerより先に動くため、`onChange` handlerでsignalへ書き戻せば入力値を補正できます。`onChange`が編集を無視しても、native bindingがすでにDOM値をsignalへコピーしています。
+
+text controlとselectでは同じ値の書き込みを省略します。focused fieldへの外部更新ではselection rangeを新しい文字列の長さに収まるように維持します。selection APIがないinput typeではcaret位置をブラウザに任せます。IME変換中の外部更新は`compositionend`まで遅延するため変換を中断せず、最後にpending signal値を適用します。form resetは単一／複数selectを含め最新のsignal値へ戻します。reset eventがcancelされた場合はDOMとsignalを変更しません。optionが後から追加された場合は、その時点でsignalに一致する選択とreset用defaultを反映します。
 
 SSRではsignalの初期値を対応するdefault valueとして出力します。serverとclientの初期値を一致させてください。hydration時に既存host nodeへbindingをattachしますが、hydration前に行われた編集はsignalの初期値で上書きされる場合があります。
 

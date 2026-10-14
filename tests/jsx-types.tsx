@@ -30,6 +30,26 @@ const controlledInput = <input value={text.value} checked={enabled.value} onChan
 const boundInput = <input bindValue={text} />;
 const boundCheckbox = <input type="checkbox" bindChecked={enabled} />;
 const boundTextarea = <textarea bindValue={text} />;
+const boundSingleSelect = <select bindValue={text}><option value="value">value</option></select>;
+const selectedMany = signal<string[]>(["a"]);
+const boundMultipleSelect = <select multiple bindValue={selectedMany}><option value="a">A</option></select>;
+const controlledMultipleSelect = <select multiple value={selectedMany.value}><option value="a">A</option></select>;
+// @ts-expect-error Single-select binding values must be strings.
+const wrongSingleSelect = <select bindValue={selectedMany} />;
+// @ts-expect-error Multiple-select binding values must be arrays of strings.
+const wrongMultipleSelect = <select multiple bindValue={text} />;
+// @ts-expect-error A dynamic multiple flag cannot prove the binding payload shape.
+const dynamicMultipleSelect = <select multiple={enabled.value} bindValue={text} />;
+// @ts-expect-error Explicit bindValue owns value/defaultValue.
+const conflictingInputBinding = <input bindValue={text} value="value" />;
+// @ts-expect-error Explicit bindValue owns value/defaultValue on textarea too.
+const conflictingTextareaBinding = <textarea bindValue={text} defaultValue="value" />;
+// @ts-expect-error Explicit bindValue owns value/defaultValue on select too.
+const conflictingSelectBinding = <select bindValue={text} value="value" />;
+// @ts-expect-error Explicit bindChecked owns checked/defaultChecked.
+const conflictingCheckedBinding = <input type="checkbox" bindChecked={enabled} checked />;
+// @ts-expect-error Explicit bindChecked owns checked/defaultChecked.
+const conflictingDefaultCheckedBinding = <input type="checkbox" bindChecked={enabled} defaultChecked />;
 // @ts-expect-error Implicit signal-valued `value` bindings are removed.
 const implicitValueBinding = <input value={text} />;
 // @ts-expect-error Computed/read-only signals cannot be written from an input.
@@ -66,6 +86,17 @@ void [
   boundInput,
   boundCheckbox,
   boundTextarea,
+  boundSingleSelect,
+  boundMultipleSelect,
+  controlledMultipleSelect,
+  wrongSingleSelect,
+  wrongMultipleSelect,
+  dynamicMultipleSelect,
+  conflictingInputBinding,
+  conflictingTextareaBinding,
+  conflictingSelectBinding,
+  conflictingCheckedBinding,
+  conflictingDefaultCheckedBinding,
   implicitValueBinding,
   readOnlyBinding,
   wrongCheckedBinding,

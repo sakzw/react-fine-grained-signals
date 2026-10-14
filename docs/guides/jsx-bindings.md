@@ -65,8 +65,8 @@ The same runtime supports direct bindings only for these native HTML props:
 
 - `title`, `id`, `className`, `hidden`, and `disabled`
 - `style`, bound as a whole object (`style={signal}`) or with signal-valued entries such as `style={{ color: colorSignal, width: 12 }}`
-- `bindValue` on text-like `input` elements and `textarea`, and `bindChecked` on checkbox inputs
-- `value` and `checked` retain React's standard semantics; `select` remains React-controlled
+- `bindValue` on text-like `input` elements, `textarea`, and single or multiple `select` elements; `bindChecked` on checkbox inputs
+- `value` and `checked` retain React's standard semantics when used without an explicit binding
 - `data-*` and `aria-*` attributes
 
 ```tsx
@@ -75,6 +75,8 @@ const disabled = signal(false);
 const boxStyle = signal({ color: "crimson" });
 const newTitle = signal("");
 const enabled = signal(false);
+const selected = signal("a");
+const selectedMany = signal<string[]>(["a"]);
 
 export function Field() {
   return (
@@ -108,13 +110,23 @@ const enabled = signal(false);
 <input bindValue={name} />
 <textarea bindValue={name} />
 <input type="checkbox" bindChecked={enabled} />
+<select bindValue={selected}>
+  <option value="a">A</option>
+  <option value="b">B</option>
+</select>
+<select multiple bindValue={selectedMany}>
+  <option value="a">A</option>
+  <option value="b">B</option>
+</select>
 ```
 
-`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`) and `textarea`. `bindChecked` supports checkbox inputs only. Radio groups are not supported by `bindChecked`; use React-controlled props until a shared-selection binding is available. `select` also remains under React's usual `value`/`onChange` contract.
+`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`), `textarea`, single selects with `Signal<string>`, and `multiple` selects with `Signal<string[]>`. The `multiple` attribute must be a literal `true` for the array form; dynamic booleans are checked at runtime against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later are observed and the current signal selection is reapplied. `bindChecked` supports checkbox inputs only. Radio groups are not supported by `bindChecked`; use React-controlled props.
 
-The binding subscribes after the host ref attaches, initializes from the signal, and writes signal changes to the DOM without rerendering the owner. Native `input` events write text into the signal, and native `change` events write checkbox state. `onChange` and `onInput` props are forwarded unchanged and still run through React. The direct listener runs before React's bubbled handler, so an `onChange` handler may normalize the entered value by writing the signal again. An `onChange` handler that ignores an edit does not reject it: the native binding has already copied the DOM value to the signal.
+An explicit binding owns that DOM state: do not combine `bindValue` with `value` or `defaultValue`, or `bindChecked` with `checked` or `defaultChecked`. The runtime rejects those combinations, and the RFSG JSX types reject statically visible conflicts. Standard React-controlled selects remain available with `value={selected.value}` and an `onChange` handler. With `bindValue`, the native change listener updates the signal before React's `onChange` runs, so no signal assignment is needed in that handler unless it normalizes the value.
 
-For text controls, equal-value writes are skipped. When an external write changes a focused field, the binding restores its selection range, clamped to the new string length; input types without a selection API use the browser's normal caret behavior. During IME composition, external writes are deferred until `compositionend`, so composition is not interrupted; the latest pending signal value is applied then. Form reset uses the last bound signal value because each applied update also synchronizes `defaultValue` or `defaultChecked`.
+The binding subscribes after the host ref attaches, initializes from the signal, and writes signal changes to the DOM without rerendering the owner. Native `input` events write text into the signal, and native `change` events write checkbox state or select values (an array for `multiple`). `onChange` and `onInput` props are forwarded unchanged and still run through React. The direct listener runs before React's bubbled handler, so an `onChange` handler may normalize the entered value by writing the signal again. An `onChange` handler that ignores an edit does not reject it: the native binding has already copied the DOM value to the signal.
+
+For text controls and selects, equal-value writes are skipped. When an external text write changes a focused field, the binding restores its selection range, clamped to the new string length; input types without a selection API use the browser's normal caret behavior. During IME composition, external text writes are deferred until `compositionend`, so composition is not interrupted; the latest pending signal value is applied then. Form reset restores the latest signal value for both single and multiple selects. A canceled reset leaves the DOM and signal untouched. Select option changes update both current selection and reset defaults, so a later-added matching option is selected and retained through reset.
 
 On the server, the initial signal value is rendered as the corresponding default value. Server and client initial values must match. Hydration attaches the binding to the existing host node; an edit made before hydration may be replaced by the initial signal value.
 
