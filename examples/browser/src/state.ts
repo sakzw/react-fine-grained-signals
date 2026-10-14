@@ -37,6 +37,8 @@ export function createDemoState() {
     imeText: signal("initial"),
     resetText: signal("reset initial"),
     resetChecked: signal(false),
+    resetChoice: signal("a"),
+    resetChoices: signal<string[]>(["a"]),
     refErrorTitle: signal("ref initial"),
     activityStyle: signal<Record<string, string>>({
       width: "80px",

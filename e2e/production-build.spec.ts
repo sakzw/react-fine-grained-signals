@@ -62,30 +62,48 @@ test("preserves bound form reset behavior in the production bundle", async ({
   const form = page.locator("#bound-reset-form");
   const input = page.locator("#bound-reset-text");
   const checkbox = page.locator("#bound-reset-checkbox");
+  const single = page.locator("#bound-reset-choice");
+  const multiple = page.locator("#bound-reset-choices");
   const signals = page.locator("#bound-reset-signals");
 
   await page.locator("#bound-reset-submit").click();
   await expect(input).toHaveValue("signal updated");
   await expect(checkbox).toBeChecked();
+  await expect(single).toHaveValue("c");
+  await expect(multiple.locator("option:checked")).toHaveCount(2);
   await form.locator("button[type=reset]").click();
   await expect(input).toHaveValue("signal updated");
   await expect(checkbox).toBeChecked();
+  await expect(single).toHaveValue("c");
+  await expect(multiple.locator("option:checked")).toHaveCount(2);
 
   await page.locator("#bound-reset-action").click();
   await expect(input).toHaveValue("action value");
   await expect(checkbox).toBeChecked();
   await expect(signals).toHaveAttribute("data-text", "action value");
   await expect(signals).toHaveAttribute("data-checked", "true");
+  await expect(single).toHaveValue("b");
+  await expect(multiple.locator("option:checked")).toHaveText(["B", "C"]);
+  await expect(signals).toHaveAttribute("data-choice", "b");
+  await expect(signals).toHaveAttribute("data-choices", "b,c");
 
   await input.fill("accepted edit");
   await checkbox.uncheck();
+  await single.selectOption("a");
+  await multiple.selectOption(["a", "c"]);
   await expect(signals).toHaveAttribute("data-text", "accepted edit");
   await expect(signals).toHaveAttribute("data-checked", "false");
+  await expect(signals).toHaveAttribute("data-choice", "a");
+  await expect(signals).toHaveAttribute("data-choices", "a,c");
   await form.locator("button[type=reset]").click();
   await expect(input).toHaveValue("accepted edit");
   await expect(checkbox).not.toBeChecked();
   await expect(signals).toHaveAttribute("data-text", "accepted edit");
   await expect(signals).toHaveAttribute("data-checked", "false");
+  await expect(single).toHaveValue("a");
+  await expect(multiple.locator("option:checked")).toHaveText(["A", "C"]);
+  await expect(signals).toHaveAttribute("data-choice", "a");
+  await expect(signals).toHaveAttribute("data-choices", "a,c");
   expect(errors).toEqual([]);
 });
 

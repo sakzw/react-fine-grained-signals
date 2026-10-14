@@ -9,7 +9,7 @@ import signals from "../../packages/unplugin-react-fine-grained-signals/dist/vit
 const browserRoot = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = resolve(browserRoot, "../..");
 const host = "127.0.0.1";
-const port = 4173;
+const port = Number(process.env.PORT ?? 4173);
 
 const source = (path) => resolve(repositoryRoot, path);
 const reactSsrBridgeId = "\0react-ssr-cjs-bridge";
@@ -51,7 +51,7 @@ const vite = await createViteServer({
   root: browserRoot,
   appType: "custom",
   // Reserve a module-runner channel separate from other Vite apps on this host.
-  server: { middlewareMode: true, hmr: { port: 24679 } },
+  server: { middlewareMode: true, hmr: { port: Number(process.env.HMR_PORT ?? 24679) } },
   oxc: false,
   esbuild: {
     jsx: "automatic",

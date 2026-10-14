@@ -474,11 +474,15 @@ export function App({ state }: { state: DemoState }) {
         <form id="bound-reset-form" action={() => {
           state.resetText.value = "action value";
           state.resetChecked.value = true;
+          state.resetChoice.value = "b";
+          state.resetChoices.value = ["b", "c"];
         }}>
           <output
             id="bound-reset-signals"
             data-text={state.resetText}
             data-checked={state.resetChecked}
+            data-choice={state.resetChoice}
+            data-choices={state.resetChoices.value.join(",")}
           />
           <input
             id="bound-reset-text"
@@ -491,9 +495,17 @@ export function App({ state }: { state: DemoState }) {
             type="checkbox"
             bindChecked={state.resetChecked}
           />
+          <select id="bound-reset-choice" aria-label="bound reset choice" bindValue={state.resetChoice}>
+            <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+          </select>
+          <select id="bound-reset-choices" aria-label="bound reset choices" multiple bindValue={state.resetChoices}>
+            <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+          </select>
           <button id="bound-reset-submit" type="button" onClick={() => {
             state.resetText.value = "signal updated";
             state.resetChecked.value = true;
+            state.resetChoice.value = "c";
+            state.resetChoices.value = ["a", "c"];
           }}>Write signals</button>
           <button id="bound-reset-action" type="submit">Submit action</button>
           <button id="bound-reset-button" type="reset">Reset</button>
