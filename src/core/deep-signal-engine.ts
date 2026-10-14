@@ -804,6 +804,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   };
 
   const sweepCollectionKeys = (metadata: CollectionMetadata): void => {
+    // Primitive-key versions are the only strong metadata retained here. Avoid
+    // creating an empty iterator after collection writes with no subscribers.
+    if (metadata.prunable.size === 0) return;
     if (adapter.getBatchDepth() !== 0) {
       scheduleCollectionSweep(metadata, false);
       return;

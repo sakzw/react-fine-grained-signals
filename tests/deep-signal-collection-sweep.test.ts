@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createDeepSignalFactory } from "../src/core/deep-signal-engine.js";
 import type { DeepSignalRuntimeAdapter, DeepSignalSource } from "../src/core/deep-signal-engine.js";
 
@@ -34,6 +34,30 @@ function makeHarness() {
 }
 
 describe("reactive collection metadata sweeps", () => {
+  it("skips empty primitive metadata sweeps for unrelated collection mutations", () => {
+    const harness = makeHarness();
+    const map = harness.deepSignal(new Map<string, number>()).value;
+    const set = harness.deepSignal(new Set<string>()).value;
+    const weakMap = harness.deepSignal(new WeakMap<object, number>()).value;
+    const weakSet = harness.deepSignal(new WeakSet<object>()).value;
+    const key = {};
+    const nativeEntries = Map.prototype.entries;
+    let emptyEntriesCalls = 0;
+    const entriesSpy = vi.spyOn(Map.prototype, "entries").mockImplementation(function (this: Map<unknown, unknown>) {
+      if (this.size === 0) emptyEntriesCalls += 1;
+      return Reflect.apply(nativeEntries, this, []);
+    });
+    try {
+      map.set("entry", 1);
+      set.add("member");
+      weakMap.set(key, 1);
+      weakSet.add(key);
+    } finally {
+      entriesSpy.mockRestore();
+    }
+    expect(emptyEntriesCalls).toBe(0);
+  });
+
   it("cleans up large registered-symbol subscriptions after unsubscribe", async () => {
     const harness = makeHarness();
     const collection = harness.deepSignal(new Map<symbol, number>()).value;
