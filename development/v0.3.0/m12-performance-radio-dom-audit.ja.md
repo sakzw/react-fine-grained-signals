@@ -84,7 +84,7 @@ runtime code reviewではselect binding disposeがsubscriptionを解除し、Mut
 | Typecheck | root runtime + transform package passed |
 | Lint | passed; repository existing warnings remain |
 | Runtime/transform builds | passed |
-| Browser E2E | Chromium/Firefox/WebKit + production build + React Router: 71/71 passed with `--workers=1`. Initial 5-worker run had two unrelated hydration smoke timeouts; focused serial rerun passed both, then full serial run passed. Test timeout was not changed. |
+| Browser E2E | Chromium/Firefox/WebKit + production build + React Router: 71/71 passed with `--workers=1`. Initial 5-worker run had two unrelated hydration smoke timeouts; focused serial rerun passed both, then full serial run passed. Test timeout was not changed. GitHub E2E run [38627323881](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38627323881) passed. |
 | Cross-copy | `test:phase4-duplicate` and consumer smoke cross-copy runtime passed |
 | Mixed-version | `test:mixed-version` passed; v0.1.1 interop remains explicitly unsupported as reported by existing smoke |
 | Consumer package / pack | runtime and unplugin tarballs installed into isolated consumer smoke and passed |
@@ -93,8 +93,13 @@ runtime code reviewではselect binding disposeがsubscriptionを解除し、Mut
 | DOM heap | JSDOM final-host survivor unresolved; no RFSG-specific retaining path found. |
 | Radio group checks | Attach/click validate native peers; Signal update path does not rescan the group. Same-commit keyed replacement with a new source is covered. |
 
-Full runtime coverage was rerun after the same-commit radio replacement regression test was added. GitHub Actions status, commit SHA and push are recorded below after integration.
+Full runtime coverage was rerun after the same-commit radio replacement regression test was added. GitHub Test run [38627324180](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38627324180) passed on `3dea01813c989a81ce75eb0f11ade6d1356269cb`.
 
 ## Commit / push / Actions
 
-_Local implementation and qualification complete; commit, push, and GitHub Actions verification pending._
+| Commit | 内容 |
+|---|---|
+| `093b4a0` | Native radio-group source validation, lifecycle replacement regression, browser fixture/E2E and EN/JA contract docs |
+| `3dea018` | Computed profiling benchmark, M12 audit record and roadmap update |
+
+Both commits were pushed to `origin/main`. At verification, `main` pointed to `3dea01813c989a81ce75eb0f11ade6d1356269cb`. GitHub [Test](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38627324180) and [E2E](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38627323881) workflows both succeeded. No release tag, GitHub Release, or npm publish was created.
