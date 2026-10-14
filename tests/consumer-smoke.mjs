@@ -245,6 +245,53 @@ try {
     );
   }
 
+  // Build a second entry as a real installed consumer. Do not externalize
+  // React: this checks whether importing only core primitives from the package
+  // root causes a bundler to pull React into an application bundle.
+  await writeFile(join(consumerRoot, "core-only.html"), `
+    <!doctype html>
+    <html><head><meta charset="UTF-8"></head><body>
+      <script type="module" src="/core-only.js"></script>
+    </body></html>
+  `);
+  await writeFile(join(consumerRoot, "core-only.js"), `
+    import { computed, signal } from "react-fine-grained-signals";
+    const count = signal(1);
+    const doubled = computed(() => count.value * 2);
+    globalThis.coreOnlyResult = doubled.value;
+  `);
+  const coreOnlyConfig = join(consumerRoot, "vite.core-only.config.mjs");
+  await writeFile(coreOnlyConfig, `
+    import { dirname, resolve } from "node:path";
+    import { fileURLToPath } from "node:url";
+    const root = dirname(fileURLToPath(import.meta.url));
+    export default {
+      root,
+      build: {
+        outDir: "dist-core-only",
+        emptyOutDir: true,
+        minify: false,
+        rollupOptions: { input: resolve(root, "core-only.html") },
+      },
+    };
+  `);
+  await run(
+    pnpmInvocation.command,
+    [...pnpmInvocation.prefixArguments, "exec", "vite", "build", "--config", coreOnlyConfig],
+    consumerRoot,
+  );
+  const coreBundleDirectory = join(consumerRoot, "dist-core-only", "assets");
+  const coreBundleFiles = (await readdir(coreBundleDirectory)).filter((entry) => entry.endsWith(".js"));
+  if (coreBundleFiles.length !== 1) {
+    throw new Error(`Expected one core-only consumer bundle, received ${coreBundleFiles.length}`);
+  }
+  const coreBundle = await readFile(join(coreBundleDirectory, coreBundleFiles[0]), "utf8");
+  for (const reactMarker of ["useSyncExternalStore", "react.production.js", "react.development.js"]) {
+    if (coreBundle.includes(reactMarker)) {
+      throw new Error(`Core-only installed consumer unexpectedly bundled React marker ${JSON.stringify(reactMarker)}`);
+    }
+  }
+
   // Exercise two freshly copied runtime builds in this same consumer smoke
   // path. This keeps duplicate-copy coverage independent of stale dist during
   // ordinary source unit tests.
