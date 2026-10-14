@@ -85,7 +85,7 @@ build pluginを使う場合、`mode: "auto"` は静的に認識できる `.value
 
 読むコンポーネントがすべて自分で呼ぶ必要があるのはこのためです。呼んでいない兄弟・子孫コンポーネントの読み取りは、別のコンポーネントの開いたままのウィンドウに帰属してしまうことがあり、その場合、実際に読んだコンポーネントはそのsignalに対して無言で更新されなくなります。
 
-build pluginの `transform: "managed"`（既定）は、静的に証明できる同期readを追跡します。top-level capture Hookを置き、readごとにcaptureするため、ユーザーが書いたHookは通常どおりtop-levelに残ります。対応patternとdiagnosticsは[managed tracking契約](../../packages/unplugin-react-fine-grained-signals/README.ja.md#managed-tracking-contract)を参照してください。
+build pluginの `transform: "managed"`（既定）は、静的に証明できる同期readを追跡します。top-level capture Hookを置き、readごとにcaptureするため、ユーザーが書いたHookは通常どおりtop-levelに残ります。対応patternとdiagnosticsは[managed tracking契約](../../packages/unplugin-react-fine-grained-signals/README.ja.md#managed-tracking契約)を参照してください。
 
 ### pluginを使わずに厳密な境界を作る
 

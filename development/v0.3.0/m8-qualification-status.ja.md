@@ -1,5 +1,17 @@
 # M8 — Post-freeze review closure status (2026-10-14)
 
+## Final registered-symbol regression closure (2026-10-14)
+
+Review baseline: `3b47d4e2f4b558f806f7751d73edffd3a6654181`. The regression was caused by treating every symbol as a valid weak key when the runtime supports non-registered symbol keys. Native behavior was checked on Node v24.21.0: `Symbol.for()` keys throw in WeakMap/WeakSet, while local `Symbol()` and well-known symbols such as `Symbol.iterator` are accepted. `isWeakCollectionKey()` now excludes registered symbols with `Symbol.keyFor()`; they use the existing strongly-held, sweepable primitive-key metadata path. Invalid weak writes continue to be delegated to native collections.
+
+Added runtime coverage for reactive Map `get`/`has`, Set `has`, registered-symbol add/update/delete notifications, native WeakMap/WeakSet key acceptance and TypeError parity, local and well-known symbols, object-key cleanup, and 300 registered-symbol subscriptions followed by unsubscribe cleanup and key reuse. Japanese links now use the actual Japanese heading anchors.
+
+Qualification on the final local source: focused symbol/sweep tests passed (2 files, 6 tests); runtime coverage passed (40 files, 571 tests; statements 93.16%, branches 88.53%, functions 97.41%, lines 94.98%); transform coverage passed (8 files, 404 tests; statements 92.71%, branches 90.03%, functions 97.35%, lines 95.42%). Coverage thresholds were unchanged. Typecheck, lint, build, browser E2E (59/59), consumer pack/smoke, cross-copy and mixed-version tests, and all seven bundle budgets passed in the closure qualification. Independent static review found no blocker; the reviewer could not rerun tests in its sandbox.
+
+The collection benchmark was repeated at 10k subscribed primitive keys. Two runs measured update/add/delete at 319,642/270,362/338,166 ns and 168,348/89,372/126,434 ns respectively; the earlier single baseline was 144,812/172,428/191,268 ns. This spread is too noisy to claim a stable regression or improvement, and the benchmark uses string keys, so it does not exercise the new registered-symbol branch. The symbol-key sweep test verifies bounded synchronous work and eventual cleanup instead. No memory-retention claim is inferred from the noisy heap deltas.
+
+This change is committed locally on `main` and was not pushed, per the current no-push instruction. The GitHub Test/E2E runs listed below cover the earlier managed-tracking closure commit, not this symbol-key fix. Therefore the local candidate is re-frozen, while a post-fix GitHub Actions run remains a release qualification blocker until CI runs on this change.
+
 ## Review baseline and fixes
 
 Review baseline `2c688ac8e23f711905b9db71dd7255dca0dfdf95` had two confirmed release blockers: the Test workflow passed all 556 runtime tests but failed its runtime coverage thresholds, and the E2E workflow had one stale React Router row after “complete all”. This closure added behavior-focused runtime and transform regressions, restored explicit ambient tracking for deep proxy reads in managed components, bounded collection metadata sweep work, and expanded the bilingual managed migration guidance. Changes are integrated on `main` and pushed to `origin/main` at `03be0e96cb12f526baa63a93d93c863b8fabf53a`.
@@ -20,8 +32,8 @@ The v0.2.1/v0.3.0 comparison used the same keyed-row React consumer fixture. v0.
 
 The post-fix workflows ran against pushed commit `03be0e96cb12f526baa63a93d93c863b8fabf53a`: [Test run 38482796213](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38482796213) passed, and [E2E run 38482796188](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38482796188) passed. The baseline failures remain available for comparison: [Test run 38468534814](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534814) failed at the original coverage gate, and [E2E run 38468534839](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38468534839) had the stale-row failure.
 
-## Freeze decision
+## Prior freeze decision
 
-M8 is **re-frozen** at package version 0.3.0. Every requested local qualification gate passed after the review fixes, including the full coverage gate and the CI-serial 59-case browser E2E matrix. The post-fix GitHub Test and E2E workflows also passed. The five-worker WebKit transient was retained in the evidence and did not recur in the isolated test, full CI-serial matrix, or GitHub E2E workflow.
+The earlier review closure re-froze M8 at package version 0.3.0 after local qualification and successful GitHub Actions runs. The final symbol-key closure above supersedes that code qualification for the current local `main` state.
 
-No release tag, npm publish, or GitHub Release was created. This freeze is backed by both local qualification and the successful GitHub Actions runs above.
+No release tag, npm publish, or GitHub Release was created. The current local re-freeze is backed by the local qualification above; the post-symbol-fix GitHub Actions check remains outstanding.
