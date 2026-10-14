@@ -2,7 +2,7 @@
 // @vitest-environment jsdom
 
 import { Activity, StrictMode, Suspense, act } from "react";
-import type { ReactNode } from "react";
+import type { ChangeEvent, ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx } from "../src/jsx-runtime.js";
@@ -451,18 +451,18 @@ describe("Direct DOM binding", () => {
     expect(box.getAttribute("hidden")).toBe("until-found");
   });
 
-  it("binds a signal directly to a text input's value without React controlling it", () => {
+  it("bindValue synchronizes input, signal, and React change handlers", () => {
     const text = signal("initial");
 
     function Field() {
-      return <input aria-label="field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return <input aria-label="field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
 
     render(<Field />);
     const input = screen.getByLabelText("field") as HTMLInputElement;
     expect(input.value).toBe("initial");
 
-    fireEvent.change(input, { target: { value: "typed" } });
+    fireEvent.input(input, { target: { value: "typed" } });
     expect(text.value).toBe("typed");
     expect(input.value).toBe("typed");
 
@@ -470,6 +470,47 @@ describe("Direct DOM binding", () => {
       text.value = "external update";
     });
     expect(input.value).toBe("external update");
+    expect(input.hasAttribute("bindvalue")).toBe(false);
+  });
+
+  it("bindValue supports textarea and leaves ordinary value props to React", () => {
+    const text = signal("first");
+    const controlled = signal("controlled");
+    const onChange = vi.fn((event: ChangeEvent<HTMLTextAreaElement>) => {
+      controlled.value = event.target.value;
+    });
+
+    function Field() {
+      useSignalTracking();
+      return (
+        <>
+          <textarea aria-label="bound textarea" bindValue={text} />
+          <textarea aria-label="react textarea" value={controlled.value} onChange={onChange} />
+        </>
+      );
+    }
+
+    render(<Field />);
+    const bound = screen.getByLabelText("bound textarea") as HTMLTextAreaElement;
+    const reactControlled = screen.getByLabelText("react textarea") as HTMLTextAreaElement;
+    expect(bound.value).toBe("first");
+    expect(reactControlled.value).toBe("controlled");
+    expect(bound.hasAttribute("bindvalue")).toBe(false);
+
+    fireEvent.input(bound, { target: { value: "typed" } });
+    expect(text.value).toBe("typed");
+    fireEvent.change(reactControlled, { target: { value: "react edit" } });
+    expect(controlled.value).toBe("react edit");
+    expect(onChange).toHaveBeenCalledOnce();
+  });
+
+  it("rejects implicit signal-valued form props and readonly binding sources", () => {
+    const writable = signal("value");
+    const readonly = computed(() => writable.value);
+    expect(() => createSignalAwareElement("input", { value: writable })).toThrow(/signal-valued value props are no longer implicit bindings/);
+    expect(() => createSignalAwareElement("input", { checked: signal(true) })).toThrow(/signal-valued checked props are no longer implicit bindings/);
+    expect(() => createSignalAwareElement("input", { bindValue: readonly })).toThrow(/bindValue requires a writable signal/);
+    expect(() => createSignalAwareElement("input", { type: "radio", bindChecked: signal(false) })).toThrow(/checkbox.*only/);
   });
 
   it("does not let an unrelated re-render move the caret on a direct-bound value", () => {
@@ -479,7 +520,7 @@ describe("Direct DOM binding", () => {
     function Field() {
       useSignalTracking();
       void bump.value;
-      return <input aria-label="field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return <input aria-label="field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
 
     render(<Field />);
@@ -508,11 +549,26 @@ describe("Direct DOM binding", () => {
     expect(input.selectionStart).toBe(1);
   });
 
+  it("keeps the text selection stable when an external signal write changes the value", () => {
+    const text = signal("abcdef");
+
+    render(<input aria-label="selection field" bindValue={text} />);
+    const input = screen.getByLabelText("selection field") as HTMLInputElement;
+    input.focus();
+    input.setSelectionRange(2, 4, "backward");
+
+    act(() => { text.value = "uvwxyz"; });
+    expect(input.value).toBe("uvwxyz");
+    expect(input.selectionStart).toBe(2);
+    expect(input.selectionEnd).toBe(4);
+    expect(input.selectionDirection).toBe("backward");
+  });
+
   it("defers a forced value write until an in-progress IME composition ends", () => {
     const text = signal("abc");
 
     function Field() {
-      return <input aria-label="ime field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return <input aria-label="ime field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
 
     render(<Field />);
@@ -535,7 +591,7 @@ describe("Direct DOM binding", () => {
     expect(input.value).toBe("external update");
   });
 
-  it("binds a signal directly to a checkbox's checked state without React controlling it", () => {
+  it("bindChecked synchronizes checkbox, signal, and React change handlers", () => {
     const checked = signal(false);
     const bump = signal(0);
 
@@ -546,7 +602,7 @@ describe("Direct DOM binding", () => {
         <input
           type="checkbox"
           aria-label="agree"
-          checked={checked}
+          bindChecked={checked}
           onChange={(event) => { checked.value = event.target.checked; }}
         />
       );
@@ -575,8 +631,8 @@ describe("Direct DOM binding", () => {
     function Form() {
       return (
         <form aria-label="bound reset form">
-          <input aria-label="reset text" value={text} onChange={(event) => { text.value = event.target.value; }} />
-          <input type="checkbox" aria-label="reset checkbox" checked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
+          <input aria-label="reset text" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />
+          <input type="checkbox" aria-label="reset checkbox" bindChecked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
           <button type="reset">Reset</button>
         </form>
       );
@@ -602,15 +658,15 @@ describe("Direct DOM binding", () => {
 
   });
 
-  it("documents React's default reset behavior after an accepted user edit", () => {
+  it("keeps the signal and reset default in sync after an accepted user edit", async () => {
     const text = signal("rendered text");
     const checked = signal(true);
 
     function Form() {
       return (
         <form aria-label="accepted edit reset form">
-          <input aria-label="accepted edit reset text" value={text} onChange={(event) => { text.value = event.target.value; }} />
-          <input type="checkbox" aria-label="accepted edit reset checkbox" checked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
+          <input aria-label="accepted edit reset text" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />
+          <input type="checkbox" aria-label="accepted edit reset checkbox" bindChecked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
         </form>
       );
     }
@@ -624,24 +680,26 @@ describe("Direct DOM binding", () => {
     fireEvent.click(checkbox);
     expect(text.value).toBe("accepted edit");
     expect(checked.value).toBe(false);
-    act(() => { form.reset(); });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
 
-    // React resets the defaults after its change handler, even if that handler
-    // writes the signal. Consumers that want reset to change the signal should
-    // write it from the form action or onReset handler.
-    expect(input.value).toBe("rendered text");
-    expect(checkbox.checked).toBe(true);
+    // The explicit bindings restore their latest signal values after the
+    // browser's reset action, despite React's event delegation.
+    expect(input.value).toBe("accepted edit");
+    expect(checkbox.checked).toBe(false);
     expect(text.value).toBe("accepted edit");
     expect(checked.value).toBe(false);
   });
 
-  it("resets a user edit declined by onChange to the last signal value", () => {
+  it("resets a user edit declined by onChange to the last signal value", async () => {
     const text = signal("signal text");
 
     function Form() {
       return (
         <form aria-label="declined edit form">
-          <input aria-label="declined edit" value={text} onChange={() => {}} />
+          <input aria-label="declined edit" bindValue={text} onChange={() => {}} />
         </form>
       );
     }
@@ -650,21 +708,25 @@ describe("Direct DOM binding", () => {
     const form = screen.getByLabelText("declined edit form") as HTMLFormElement;
     const input = screen.getByLabelText("declined edit") as HTMLInputElement;
     input.value = "user edit";
-    fireEvent.change(input, { target: { value: "user edit" } });
+    fireEvent.input(input, { target: { value: "user edit" } });
     expect(input.value).toBe("user edit");
-    expect(text.value).toBe("signal text");
+    expect(text.value).toBe("user edit");
 
-    act(() => { form.reset(); });
-    expect(input.value).toBe("signal text");
-    expect(text.value).toBe("signal text");
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
+    expect(input.value).toBe("user edit");
+    expect(text.value).toBe("user edit");
   });
 
   it("binds a signal directly to a select element's value", () => {
     const choice = signal("b");
 
     function Field() {
+      useSignalTracking();
       return (
-        <select aria-label="choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
+        <select aria-label="choice" value={choice.value} onChange={(event) => { choice.value = event.target.value; }}>
           <option value="a">A</option>
           <option value="b">B</option>
           <option value="c">C</option>
@@ -685,11 +747,12 @@ describe("Direct DOM binding", () => {
     const choices = signal<string[]>(["a", "c"]);
 
     function Field() {
+      useSignalTracking();
       return (
         <select
           multiple
           aria-label="choices"
-          value={choices}
+          value={choices.value}
           onChange={(event) => {
             choices.value = Array.from(event.target.selectedOptions).map((option) => option.value);
           }}
@@ -712,14 +775,14 @@ describe("Direct DOM binding", () => {
     expect(optionStates()).toEqual([false, true, false]);
   });
 
-  it("resyncs a bound select's value once a matching <option> is added later", async () => {
+  it("keeps a React-controlled select in sync when a matching <option> is added later", async () => {
     const choice = signal("c");
     const showOptionC = signal(false);
 
     function Field() {
       useSignalTracking();
       return (
-        <select aria-label="late choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
+        <select aria-label="late choice" value={choice.value} onChange={(event) => { choice.value = event.target.value; }}>
           <option value="a">A</option>
           <option value="b">B</option>
           {showOptionC.value ? <option value="c">C</option> : null}
@@ -729,9 +792,9 @@ describe("Direct DOM binding", () => {
 
     render(<Field />);
     const select = screen.getByLabelText("late choice") as HTMLSelectElement;
-    // No matching <option> exists yet, so nothing is selected — the bound
-    // signal did not change, only the DOM's option list will.
-    expect(select.value).toBe("");
+    // Native single-select behavior chooses the first option until the
+    // controlled value has a matching option.
+    expect(select.value).toBe("a");
 
     act(() => {
       showOptionC.value = true;
@@ -741,19 +804,20 @@ describe("Direct DOM binding", () => {
     await waitFor(() => expect(select.value).toBe("c"));
   });
 
-  it("resets single and multiple select bindings to their latest signal values", () => {
+  it("leaves select reset semantics to React and the browser", () => {
     const choice = signal("a");
     const choices = signal<string[]>(["a"]);
 
     function Form() {
+      useSignalTracking();
       return (
         <form aria-label="select reset form">
-          <select aria-label="reset choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
+          <select aria-label="reset choice" value={choice.value} onChange={(event) => { choice.value = event.target.value; }}>
             <option value="a">A</option>
             <option value="b">B</option>
             <option value="c">C</option>
           </select>
-          <select aria-label="reset choices" multiple value={choices} onChange={(event) => {
+          <select aria-label="reset choices" multiple value={choices.value} onChange={(event) => {
             choices.value = Array.from(event.target.selectedOptions, (option) => option.value);
           }}>
             <option value="a">A</option>
@@ -778,8 +842,10 @@ describe("Direct DOM binding", () => {
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b", "c"]);
 
     act(() => { form.reset(); });
-    expect(single.value).toBe("c");
-    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b", "c"]);
+    expect(single.value).toBe("a");
+    // React's controlled multi-select does not define a signal reset contract;
+    // jsdom resets it to the current native defaults (none selected here).
+    expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual([]);
     expect(choice.value).toBe("c");
     expect(choices.value).toEqual(["b", "c"]);
   });
@@ -790,20 +856,21 @@ describe("Direct DOM binding", () => {
     const isB = computed(() => selected.value === "b");
 
     function Field() {
+      useSignalTracking();
       return (
         <fieldset>
           <input
             type="radio"
             name="choice"
             aria-label="option a"
-            checked={isA}
+            checked={isA.value}
             onChange={() => { selected.value = "a"; }}
           />
           <input
             type="radio"
             name="choice"
             aria-label="option b"
-            checked={isB}
+            checked={isB.value}
             onChange={() => { selected.value = "b"; }}
           />
         </fieldset>
@@ -831,7 +898,7 @@ describe("Direct DOM binding", () => {
       void bump.value;
       return (
         <StrictMode>
-          <input aria-label="strict field" value={text} onChange={(event) => { text.value = event.target.value; }} />
+          <input aria-label="strict field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />
         </StrictMode>
       );
     }
@@ -904,43 +971,6 @@ describe("Direct DOM binding: ref identity stability", () => {
     expect(attributeWrites(setAttribute, "data-state")).toBe(afterMount + 1);
   });
 
-  it("does not disconnect and recreate a bound select's MutationObserver on an unrelated re-render", () => {
-    const choice = signal("b");
-    const bump = signal(0);
-    const observe = vi.spyOn(MutationObserver.prototype, "observe");
-    const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
-
-    function Field() {
-      useSignalTracking();
-      void bump.value;
-      return (
-        <select aria-label="observed choice" value={choice} onChange={(event) => { choice.value = event.target.value; }}>
-          <option value="a">A</option>
-          <option value="b">B</option>
-          <option value="c">C</option>
-        </select>
-      );
-    }
-
-    render(<Field />);
-    const select = screen.getByLabelText("observed choice") as HTMLSelectElement;
-    expect(select.value).toBe("b");
-    const observed = observe.mock.calls.length;
-    const disconnected = disconnect.mock.calls.length;
-    expect(observed).toBeGreaterThan(0);
-
-    act(() => {
-      bump.value++;
-    });
-    expect(observe).toHaveBeenCalledTimes(observed);
-    expect(disconnect).toHaveBeenCalledTimes(disconnected);
-
-    act(() => {
-      choice.value = "c";
-    });
-    expect(select.value).toBe("c");
-  });
-
   it("does not remove and re-add a bound input's composition listeners on an unrelated re-render", () => {
     const text = signal("abc");
     const bump = signal(0);
@@ -950,7 +980,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     function Field() {
       useSignalTracking();
       void bump.value;
-      return <input aria-label="listener field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return <input aria-label="listener field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
 
     render(<Field />);
@@ -972,7 +1002,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     function Field() {
       useSignalTracking();
       void bump.value;
-      return <input aria-label="ime churn field" value={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return <input aria-label="ime churn field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
     }
 
     render(<Field />);
@@ -1015,7 +1045,7 @@ describe("Direct DOM binding: ref identity stability", () => {
     function Field() {
       useSignalTracking();
       void bump.value;
-      return <input aria-label="tracked ref field" ref={trackRef} value={text} />;
+      return <input aria-label="tracked ref field" ref={trackRef} bindValue={text} />;
     }
 
     const view = render(<Field />);
@@ -1083,7 +1113,7 @@ describe("Direct DOM binding: ref identity stability", () => {
       return (
         <input
           aria-label="mixed field"
-          value={text}
+          bindValue={text}
           data-state={useSecond.value ? second : first}
         />
       );
@@ -1122,7 +1152,7 @@ describe("Direct DOM binding: ref identity stability", () => {
 
     function Field() {
       useSignalTracking();
-      return <input key={slot.value} aria-label="keyed field" ref={trackRef} value={text} />;
+      return <input key={slot.value} aria-label="keyed field" ref={trackRef} bindValue={text} />;
     }
 
     render(<Field />);

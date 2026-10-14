@@ -57,7 +57,7 @@ export function Heading() {
 }
 ```
 
-対象になるのは、Reactが子要素をDOMノードとして描画する通常の子要素の位置です。`<title>`、`<textarea>`、`<style>` など、Reactが子要素を要素ごとの特別な方法で扱うhost要素は対象外です。そこに置いたsignalの子要素は、Reactがテキストを期待する位置でReact要素になるため、Reactが警告を出す、要素が空になる、または `[object Object]` が描画される、のいずれかになります(SSRでも同様です)。これらの要素では、追跡されたコンポーネント内で値を読む(`<title>{title.value}</title>`)か、テキスト入力欄であれば代わりに `value` をbindingしてください。`<option>{signal}</option>` は通常の子要素と同じように動作します。
+対象になるのは、Reactが子要素をDOMノードとして描画する通常の子要素の位置です。`<title>`、`<textarea>`、`<style>` など、Reactが子要素を要素ごとの特別な方法で扱うhost要素は対象外です。そこに置いたsignalの子要素は、Reactがテキストを期待する位置でReact要素になるため、Reactが警告を出す、要素が空になる、または `[object Object]` が描画される、のいずれかになります(SSRでも同様です)。これらの要素では、追跡されたコンポーネント内で値を読む(`<title>{title.value}</title>`)か、テキスト入力欄であれば `bindValue` を使ってください。`<option>{signal}</option>` は通常の子要素と同じように動作します。
 
 ## bindingできるhost props
 
@@ -65,7 +65,8 @@ export function Heading() {
 
 - `title`、`id`、`className`、`hidden`、`disabled`
 - `style`。object全体(`style={signal}`)とsignal entryを含むobject(例: `style={{ color: colorSignal, width: 12 }}`)をbindingします
-- `input`、`textarea`、`select` の `value`、および `input` の `checked`
+- text系 `input` と `textarea` の `bindValue`、checkbox `input` の `bindChecked`
+- `value` と `checked` はReact標準の意味論を維持し、`select`もReact標準のcontrolled inputとして扱います
 - `data-*` と `aria-*` 属性
 
 ```tsx
@@ -73,6 +74,7 @@ const title = signal("Initial title");
 const disabled = signal(false);
 const boxStyle = signal({ color: "crimson" });
 const newTitle = signal("");
+const enabled = signal(false);
 
 export function Field() {
   return (
@@ -80,7 +82,8 @@ export function Field() {
       <button title={title} disabled={disabled} style={boxStyle}>
         {title}
       </button>
-      <input value={newTitle} onChange={(e) => { newTitle.value = e.target.value; }} />
+      <input bindValue={newTitle} />
+      <input type="checkbox" bindChecked={enabled} />
     </>
   );
 }
@@ -94,14 +97,29 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 
 個々のstyle valueにもsignalを指定できます。host refのcommit時にentryごとのsubscriptionを設置するため、signalの変更はowner componentを再レンダーせずCSS propertyへ反映されます。同じobjectにあるplain entryは、componentが再レンダーするまで固定です。後のrenderでstyle objectを置き換えるとbindingを再差分し、新しいshapeで削除されたpropertyをclearします。対象はwhole-object style bindingと同じHTML hostです。
 
-## value と checked
+## form binding
 
-`value` と `checked` は双方向bindingのため、他のallowlistとは異なる戦略を取ります。JSX runtimeはcontrolled propの代わりに `.peek()` から得た値で `defaultValue`/`defaultChecked` を代入します。Reactはmount時に一度だけそれを適用し、以降の再レンダーでは再適用しません。それ以降はdirect bindingのeffectがDOM propertyを保持し、`onChange` はそのまま残ります。DOMが既にその値を保持している場合は書き込みを省略するため、無関係な再レンダーや `onChange` からの同じ値のechoが編集中の状態を乱すことはありません。
+`value` と `checked` はReact標準の意味論を維持します。React controlled inputには通常の値を渡し、従来どおり `onChange` でstateを更新してください。RFSGの `bindValue` と `bindChecked` は別のdirect binding APIで、書き込み可能なsignalが必要です。
 
-- `value` にbindingされた*派生*値(例えばユーザーの入力をtrimしたりupper-caseしたりするsignal)は、派生後の文字列が入力と異なる場合、caretが動くことがあります。この部分はここでは解決していません。
-- 他の要素の `value`/`checked`(`<li value>`、`<option value>`、`<meter value>` など)は双方向bindingではない単なるwrite-only属性なので、`title`/`disabled` と同じdirect attribute bindingを使います。
-- bindingした `value`/`checked` は、Reactのcontrolled inputのように編集を拒否しません。bindingはsignalに従うだけで、`onChange` もそのまま残るため、`onChange` がsignalへ書き込まないことで編集を拒否しても、ブラウザはユーザーが入力した内容を保持します。例えば入力欄は `123a` を表示したままsignalは `123` のまま、あるいはcheckboxはチェックされた表示のままsignalは `false` のまま、となります。入力マスクやvalidationで入力欄を元に戻す必要がある場合は、`onChange` の中で `event.target.value = signal.peek()`(checkboxなら `event.target.checked = signal.peek()`)のように自分で戻してください。signalに変わらない値を書き込んでもbindingは実行されません。あるいは、その入力欄には素の `value`/`checked` を使ったReactのcontrolled inputを使ってください。これは次のform resetの挙動とは別の話です。
-- formのresetは要素のdefault(`defaultValue`、`defaultChecked`、optionの `defaultSelected`)に戻します。bindingはsignalへの書き込みを反映するたびにdefaultも書き込んだ値へそろえるため、書き込みの後であれば(`<form action>` の中でも、`onReset` handlerの中でも、それ以外の場所でも)、`form.reset()`、resetボタン、`<form action>` 実行後のReact 19の自動resetはsignalの値に戻します。ただし、ユーザーがfieldを編集した後はこの限りではありません。`onChange` がsignalへ書き込んでいても、change eventに対するReact自身の処理がdefaultをownerが最後にレンダーした値へ戻すため、resetはそのレンダー時の値に戻り、fieldとsignalの値が食い違います。resetで表示する値を決めたい場合は、actionの中や `onReset` など、resetする時点でsignalへ書き込んでください。
+```tsx
+const name = signal("");
+const enabled = signal(false);
+
+<input bindValue={name} />
+<textarea bindValue={name} />
+<input type="checkbox" bindChecked={enabled} />
+```
+
+`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）と`textarea`に対応します。`bindChecked`はcheckbox inputのみ対応し、radio groupは非対応です。共有の選択値bindingが用意されるまでは、radio groupにはReact controlled propsを使ってください。`select`もReact標準の`value`/`onChange` contractのままです。
+
+host refのattach後にbindingをsubscribeしてsignalの初期値を反映し、その後のsignal更新をownerの再レンダーなしでDOMへ書き込みます。native `input` eventはテキストをsignalへ、native `change` eventはcheckboxの状態をsignalへ反映します。`onChange`と`onInput` propsは変更せずReactへ渡します。direct listenerはReactのbubble handlerより先に動くため、`onChange` handlerでsignalへ書き戻せば入力値を補正できます。`onChange`が編集を無視しても、native bindingがすでにDOM値をsignalへコピーしています。
+
+text controlでは同じ値の書き込みを省略します。focused fieldへの外部更新ではselection rangeを新しい文字列の長さに収まるように維持します。selection APIがないinput typeではcaret位置をブラウザに任せます。IME変換中の外部更新は`compositionend`まで遅延するため変換を中断せず、最後にpending signal値を適用します。signalへ反映した値は`defaultValue`/`defaultChecked`にも同期されるため、form resetは最後にbindingされたsignal値へ戻ります。
+
+SSRではsignalの初期値を対応するdefault valueとして出力します。serverとclientの初期値を一致させてください。hydration時に既存host nodeへbindingをattachしますが、hydration前に行われた編集はsignalの初期値で上書きされる場合があります。
+
+これらのpropsはRFSG JSX runtime（`jsxImportSource: "react-fine-grained-signals"`）でのみ認識され、DOMへ渡す前に取り除かれます。`value`または`checked`へsignalを渡すとmigration errorになります。direct bindingには`bindValue`/`bindChecked`を使い、React controlled semanticsには`signal.value`を渡してください。
+
 
 ## 制約
 

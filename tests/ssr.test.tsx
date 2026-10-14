@@ -175,8 +175,9 @@ describe("SSR and hydration", () => {
     const selected = signal(["b", "c"]);
 
     function App() {
+      useSignalTracking();
       return (
-        <select data-testid="multi-select" multiple value={selected} onChange={(event) => {
+        <select data-testid="multi-select" multiple value={selected.value} onChange={(event) => {
           selected.value = Array.from(event.target.selectedOptions, (option) => option.value);
         }}>
           <option value="a">A</option>
@@ -212,8 +213,9 @@ describe("SSR and hydration", () => {
     const selected = signal("b");
 
     function App() {
+      useSignalTracking();
       return (
-        <select data-testid="single-select" value={selected} onChange={(event) => {
+        <select data-testid="single-select" value={selected.value} onChange={(event) => {
           selected.value = event.target.value;
         }}>
           <option value="a">A</option>
@@ -251,7 +253,7 @@ describe("SSR and hydration", () => {
     function App() {
       useSignalTracking();
       return (
-        <select data-testid="late-single-select" value={selected} onChange={(event) => {
+        <select data-testid="late-single-select" value={selected.value} onChange={(event) => {
           selected.value = event.target.value;
         }}>
           <option value="a">A</option>
@@ -270,7 +272,7 @@ describe("SSR and hydration", () => {
 
     await act(async () => { await Promise.resolve(); });
     const select = container.querySelector("[data-testid=late-single-select]") as HTMLSelectElement;
-    expect(select.value).toBe("");
+    expect(select.value).toBe("a");
     expect(consoleError).not.toHaveBeenCalled();
 
     await act(async () => { showOptionC.value = true; });
@@ -293,7 +295,7 @@ describe("SSR and hydration", () => {
       return (
         <input
           data-testid="field"
-          value={text}
+          bindValue={text}
           onChange={(event) => { text.value = event.target.value; }}
         />
       );
@@ -339,7 +341,7 @@ describe("SSR and hydration", () => {
         <input
           type="checkbox"
           data-testid="agree"
-          checked={checked}
+          bindChecked={checked}
           onChange={(event) => { checked.value = event.target.checked; }}
         />
       );

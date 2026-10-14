@@ -4,6 +4,7 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signal } from "../src/index.js";
+import { useSignalTracking } from "../src/react/hooks.js";
 
 // Filters a console.error spy's calls down to React's dev-mode "Each child in
 // a list should have a unique key prop" warning, so tests pinning that
@@ -98,22 +99,24 @@ describe("Direct DOM binding: missing-key warnings", () => {
     expect(missingKeyWarnings(consoleError.mock.calls)).toHaveLength(1);
   });
 
-  it("keeps DOM structure, value binding, and ref cleanup working for a signal-bound select with multiple unkeyed children", () => {
+  it("keeps DOM structure, controlled select updates, and ref cleanup working with multiple unkeyed children", () => {
     const choice = signal("b");
     const setups = vi.fn();
     const cleanups = vi.fn();
+    const trackRef = (node: HTMLSelectElement | null) => {
+      if (!node) return;
+      setups();
+      return cleanups;
+    };
 
     function Field() {
+      useSignalTracking();
       return (
         <select
           aria-label="unkeyed choice with ref"
-          value={choice}
+          value={choice.value}
           onChange={(event) => { choice.value = event.target.value; }}
-          ref={(node) => {
-            if (!node) return;
-            setups();
-            return cleanups;
-          }}
+          ref={trackRef}
         >
           <option value="a">A</option>
           <option value="b">B</option>

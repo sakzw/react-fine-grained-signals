@@ -2,7 +2,7 @@
 // @vitest-environment jsdom
 
 import { act } from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { batch, computed, signal } from "../src/index.js";
 
@@ -112,110 +112,4 @@ describe("Direct DOM binding: error handling", () => {
     expect(consoleError).toHaveBeenCalledTimes(1);
   });
 
-  it("bindSelectValue's MutationObserver survives its computed source's failure episode and resyncs once it recovers", async () => {
-    const shouldFail = signal(false);
-    const choice = computed(() => {
-      if (shouldFail.value) throw new Error("select boom");
-      return "c";
-    });
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    function Field() {
-      return (
-        <select aria-label="late failing choice" value={choice}>
-          <option value="a">A</option>
-          <option value="b">B</option>
-        </select>
-      );
-    }
-
-    render(<Field />);
-    const select = screen.getByLabelText("late failing choice") as HTMLSelectElement;
-    // No matching <option> exists yet, so nothing is selected.
-    expect(select.value).toBe("");
-
-    act(() => {
-      shouldFail.value = true;
-    });
-    expect(consoleError).toHaveBeenCalledTimes(1);
-
-    // Mutate the option list directly (bypassing React, so the `<select>`'s
-    // own JSX/props are never re-evaluated) so only the MutationObserver
-    // reacts. Its own `source.peek()` hits the same cached error and must not
-    // crash, and — sharing this binding's single episode latch with the
-    // subscription update above — must not log a second time.
-    const option = document.createElement("option");
-    option.value = "c";
-    option.textContent = "C";
-    act(() => {
-      select.appendChild(option);
-    });
-    await waitFor(() => expect(consoleError).toHaveBeenCalledTimes(1));
-    // The browser's own "no option selected" default (auto-selecting the
-    // first option once one exists) applies regardless of our binding — the
-    // binding itself wrote nothing, which is what the unchanged call count
-    // above already pins.
-    expect(select.value).toBe("a");
-
-    // Recovery: the live subscription re-reads successfully and applies the
-    // selection (the now-existing <option value="c"> makes it stick).
-    act(() => {
-      shouldFail.value = false;
-    });
-    await waitFor(() => expect(select.value).toBe("c"));
-    expect(consoleError).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not corrupt bindTextValue's pending buffer when a read fails during an active IME composition", () => {
-    const shouldFail = signal(false);
-    const raw = signal("abc");
-    const text = computed(() => {
-      const value = raw.value;
-      if (shouldFail.value) throw new Error("text boom");
-      return value;
-    });
-    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    function Field() {
-      return <input aria-label="failing ime field" value={text} />;
-    }
-
-    render(<Field />);
-    const input = screen.getByLabelText("failing ime field") as HTMLInputElement;
-    input.focus();
-
-    fireEvent.compositionStart(input);
-    // The browser renders composing IME candidates directly into `.value`.
-    input.value = "こんに";
-
-    // A failed read while composing must bail out before touching
-    // `pending`/`hasPending` at all, leaving the composing text alone.
-    act(() => {
-      shouldFail.value = true;
-    });
-    expect(consoleError).toHaveBeenCalledTimes(1);
-    expect(input.value).toBe("こんに");
-
-    fireEvent.compositionEnd(input);
-    // No successful read was ever pending, so composition end applies nothing.
-    expect(input.value).toBe("こんに");
-
-    // A second failing write during the same episode does not log again.
-    fireEvent.compositionStart(input);
-    input.value = "ignored candidate";
-    act(() => {
-      raw.value = "still failing";
-    });
-    expect(consoleError).toHaveBeenCalledTimes(1);
-
-    // Recovery is what latches as pending, not anything from a failed read.
-    act(() => {
-      raw.value = "recovered";
-      shouldFail.value = false;
-    });
-    expect(input.value).toBe("ignored candidate");
-    fireEvent.compositionEnd(input);
-    expect(input.value).toBe("recovered");
-    expect(consoleError).toHaveBeenCalledTimes(1);
-  });
 });

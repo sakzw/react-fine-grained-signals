@@ -57,7 +57,7 @@ export function Heading() {
 }
 ```
 
-This covers ordinary child positions, where React renders children as DOM nodes. It does not cover host elements whose children React handles in an element-specific way, including `<title>`, `<textarea>`, and `<style>`. A signal child there becomes a React element where React expects text, so React warns, the element ends up empty, or `[object Object]` is rendered, including during SSR. For those elements, read the value in a tracked component (`<title>{title.value}</title>`) or, for a text field, bind `value` instead. `<option>{signal}</option>` works like an ordinary child.
+This covers ordinary child positions, where React renders children as DOM nodes. It does not cover host elements whose children React handles in an element-specific way, including `<title>`, `<textarea>`, and `<style>`. A signal child there becomes a React element where React expects text, so React warns, the element ends up empty, or `[object Object]` is rendered, including during SSR. For those elements, read the value in a tracked component (`<title>{title.value}</title>`) or use `bindValue` for a text field. `<option>{signal}</option>` works like an ordinary child.
 
 ## Bound host props
 
@@ -65,7 +65,8 @@ The same runtime supports direct bindings only for these native HTML props:
 
 - `title`, `id`, `className`, `hidden`, and `disabled`
 - `style`, bound as a whole object (`style={signal}`) or with signal-valued entries such as `style={{ color: colorSignal, width: 12 }}`
-- `value` on `input`, `textarea`, and `select`, and `checked` on `input`
+- `bindValue` on text-like `input` elements and `textarea`, and `bindChecked` on checkbox inputs
+- `value` and `checked` retain React's standard semantics; `select` remains React-controlled
 - `data-*` and `aria-*` attributes
 
 ```tsx
@@ -73,6 +74,7 @@ const title = signal("Initial title");
 const disabled = signal(false);
 const boxStyle = signal({ color: "crimson" });
 const newTitle = signal("");
+const enabled = signal(false);
 
 export function Field() {
   return (
@@ -80,7 +82,8 @@ export function Field() {
       <button title={title} disabled={disabled} style={boxStyle}>
         {title}
       </button>
-      <input value={newTitle} onChange={(e) => { newTitle.value = e.target.value; }} />
+      <input bindValue={newTitle} />
+      <input type="checkbox" bindChecked={enabled} />
     </>
   );
 }
@@ -94,24 +97,38 @@ A number bound to a CSS property is written with a `px` suffix unless the proper
 
 Individual style values may also be signals. The JSX runtime subscribes to those entries when the host ref commits, so a change updates the affected CSS property without re-rendering the owning component. Plain entries in the same object remain fixed until the component renders again. Replacing the style object across renders re-diffs the binding and clears properties removed from the new shape. This applies to HTML hosts, like the whole-object style binding.
 
-## value and checked
+## Form bindings
 
-`value` and `checked` are two-way bound, so they take a different strategy than the rest of the allowlist: the JSX runtime substitutes `defaultValue`/`defaultChecked` for the controlled prop, seeded from `.peek()`, so React only applies it once at mount and never re-applies it on a later re-render — the direct-binding subscription owns the DOM property from then on, `onChange` is untouched, and each write is skipped when the DOM already holds that exact value so an unrelated re-render or a same-value echo from `onChange` does not disturb an in-progress edit.
+`value` and `checked` retain React's standard semantics. Use plain values and update state in `onChange` for React-controlled inputs. RFSG's `bindValue` and `bindChecked` props are separate direct bindings and require writable signals:
 
-- A *derived* value bound to `value` (for example a signal that trims or upper-cases what the user typed) can still move the caret when the derived string differs from what was typed. That part is not solved here.
-- `value`/`checked` on other elements (`<li value>`, `<option value>`, `<meter value>`, ...) are plain write-only attributes, not two-way bound, so they use the same direct-attribute binding as `title`/`disabled`.
-- A bound `value`/`checked` does not reject edits the way a React-controlled input does. The binding only follows the signal, and `onChange` is left untouched, so if `onChange` declines an edit by not writing the signal, the browser keeps what the user entered: an input shows `123a` while the signal still holds `123`, or a checkbox shows checked while the signal is `false`. Input masks and validation that need the field to snap back must restore it themselves, for example with `event.target.value = signal.peek()` (or `event.target.checked = signal.peek()`) in `onChange`, since writing the signal its unchanged value does not run the binding. Alternatively, use a React-controlled input with a plain `value`/`checked` for that field. This is separate from the form-reset behavior below.
-- A form reset restores the element's default (`defaultValue`, `defaultChecked`, an option's `defaultSelected`). Every signal write the binding applies sets that default to the written value too, so after a write — in a `<form action>`, in an `onReset` handler, or anywhere else — `form.reset()`, a reset button, and React 19's automatic reset after a `<form action>` restore the signal's value. That does not hold after the user edits the field: React's own handling of the change event sets the default back to the value the owner last rendered, even when `onChange` writes the signal, so a reset then restores that rendered value and the field and the signal disagree. To decide what a reset shows, write the signal when it resets, for example in the action or in `onReset`.
+```tsx
+const name = signal("");
+const enabled = signal(false);
+
+<input bindValue={name} />
+<textarea bindValue={name} />
+<input type="checkbox" bindChecked={enabled} />
+```
+
+`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`) and `textarea`. `bindChecked` supports checkbox inputs only. Radio groups are not supported by `bindChecked`; use React-controlled props until a shared-selection binding is available. `select` also remains under React's usual `value`/`onChange` contract.
+
+The binding subscribes after the host ref attaches, initializes from the signal, and writes signal changes to the DOM without rerendering the owner. Native `input` events write text into the signal, and native `change` events write checkbox state. `onChange` and `onInput` props are forwarded unchanged and still run through React. The direct listener runs before React's bubbled handler, so an `onChange` handler may normalize the entered value by writing the signal again. An `onChange` handler that ignores an edit does not reject it: the native binding has already copied the DOM value to the signal.
+
+For text controls, equal-value writes are skipped. When an external write changes a focused field, the binding restores its selection range, clamped to the new string length; input types without a selection API use the browser's normal caret behavior. During IME composition, external writes are deferred until `compositionend`, so composition is not interrupted; the latest pending signal value is applied then. Form reset uses the last bound signal value because each applied update also synchronizes `defaultValue` or `defaultChecked`.
+
+On the server, the initial signal value is rendered as the corresponding default value. Server and client initial values must match. Hydration attaches the binding to the existing host node; an edit made before hydration may be replaced by the initial signal value.
+
+These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "react-fine-grained-signals"`) and are removed before props reach the DOM. A signal passed as `value` or `checked` is rejected with a migration error: use `bindValue`/`bindChecked` for direct binding, or pass `signal.value` to keep React-controlled semantics.
+
 
 ## Constraints
 
 - No event handlers, SVG props, or other host props outside the allowlist above are direct-bound.
 - Direct-binding writes happen outside the React scheduler and remain an experimental optimization.
-- A host prop can switch between a plain value and a signal across renders. The element keeps its type and its children keep their state; only the binding is attached or detached. (Switching `value`/`checked` between a signal and a plain value still switches the input between React's uncontrolled and controlled modes, with React's usual warning.)
+- Binding props can switch between writable signals across renders. The element keeps its type and children keep their state; only the binding is attached or detached. Keep `value`/`checked` for ordinary React-controlled behavior.
 - Bindings are attached through a ref on the host element itself. A ref you pass is still called with the element exactly as React would call it. As long as it is stable, a re-render does not re-invoke it unless the bindings changed: a binding switched to another signal or to a plain value, or a bound prop or `style` now renders a different value than the previous render did (after a write between the two renders). Then the ref is detached and attached again within the same commit.
 - A `deepSignal` is not accepted as a signal child or a bound prop. Those positions follow root replacement only, so nested mutations would never show; TypeScript rejects them. Read deep state inside a tracked component, or select a primitive with [`useDeepSignalValue`](./hooks.md#usedeepsignalvalue).
 - For SSR and hydration, ensure the initial signal values are identical on server and client. Do not place request-specific signals in shared module scope; create them per request.
-- A computed signal whose getter throws after binding will skip DOM writes for that cycle and log the error via `console.error` — once per contiguous failure episode, not per write. The error message is `"react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` with `{ cause: error }`. Direct bindings bypass React's render cycle, so there is no Error Boundary to catch thrown errors; use [`useSignalValue`](./hooks.md#usesignalvalue) if you need Error Boundary semantics for a failing computed.
-- Caret preservation for a *derived* `value` remains an open limitation — see [the direct-binding design note](../../development/design/direct-binding-value-checked-style.md).
+- Writable signals are required; read-only computed signals cannot be used with `bindValue` or `bindChecked`.
 
 See also: [rendering optimization](./rendering-optimization.md), [JSX control-flow utilities](./control-flow.md).

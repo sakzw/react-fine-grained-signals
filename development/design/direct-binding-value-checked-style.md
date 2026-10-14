@@ -1,35 +1,17 @@
-# Direct binding for `value`, `checked`, and `style`
+# Direct binding for form values and `style`
 
 [English](./direct-binding-value-checked-style.md) | [日本語](./direct-binding-value-checked-style.ja.md)
 
-**Status:** `value`/`checked` and whole-object plus per-property signal `style` binding are implemented. Derived-value caret preservation remains open.
+**Status:** Explicit `bindValue`/`bindChecked` bindings for text-like inputs, textareas, and checkboxes are implemented. React's ordinary `value`/`checked` semantics remain unchanged. Whole-object and per-property signal `style` binding are implemented.
 
-## Implemented (shipped)
+## Implemented contract
 
-The JSX runtime direct-binds a signal passed to an allowlisted native host prop: seed the DOM from `.peek()` at mount, then write later changes through a ref-installed ReadableInterop V1 subscription that bypasses React's re-render for that prop (`transformHostProps` / `ReactiveHost` in `src/runtime/jsx.ts`; structural readables without V1 retain an effect-backed compatibility fallback; see [JSX signal children and host bindings](../../docs/guides/jsx-bindings.md) for the full allowlist).
+The JSX runtime recognizes explicit writable-signal props `bindValue` and `bindChecked`. `bindValue` supports text-like inputs and textareas; `bindChecked` supports checkbox inputs. They initialize from the signal at mount and subscribe after the host ref attaches. Native `input` and `change` events write user edits back to the signal. Binding props are removed before reaching the DOM. Passing a signal to React's ordinary `value` or `checked` prop is rejected with migration guidance; pass `signal.value` to retain React-controlled behavior. See [JSX signal children and host bindings](../../docs/guides/jsx-bindings.md) for API details and edge cases.
 
-- **`value`/`checked`.** `isControlledTwoWayProp` + `setControlledProp` restrict two-way handling to the tags React itself treats as controlled — `value` on `input`/`textarea`/`select`, `checked` on `input`. The controlled prop is replaced with `defaultValue`/`defaultChecked` seeded from `.peek()`, so React never re-diffs it, and the DOM write is skipped when it already matches. `<select multiple>` goes through `setMultiSelectValue` (toggles each `<option>.selected`, not `String(value)`). Every other `value`/`checked` host (`<li value>`, `<option value>`, `<meter value>`, ...) keeps the ordinary peek-and-substitute path.
-- **`<select>` resync.** `bindSelectValue` adds a `MutationObserver` on the select's subtree alongside the value subscription, so a matching `<option>` added after mount (for example when the options are themselves rendered from a signal) still gets selected, instead of the selection getting stuck empty because only the bound signal, not the DOM's `<option>` list, was being watched.
-- **IME composition safety.** `bindTextValue` tracks `compositionstart`/`compositionend` directly on the node, independent of whether the component declares its own composition handlers. A `value` write requested while composing — including one triggered by another subscriber of the same signal, not the input's own `onChange` — is deferred until composition ends instead of applied immediately, so it can no longer abort an in-progress composition.
+Text bindings skip equal-value writes, preserve focused selection where the browser exposes a selection API, defer external writes during IME composition, and apply the latest value at `compositionend`. Form reset returns to the latest bound signal value. SSR emits the initial value as a default, and hydration expects matching server/client initial values; edits before hydration may be overwritten.
+
 - **`style`, coarse whole-object form.** `applyStyle` assigns the resolved object, adds `px` to non-unitless numeric properties, writes `--custom-property` entries via `setProperty`, and clears keys dropped between renders. HTML hosts only.
-- Tested in `tests/react-dom-binding.test.tsx` (including the `<select>` resync, IME composition, an independent-`computed` radio group unchecking its siblings, and a StrictMode-wrapped double-invoke of the `value` binding), `tests/ssr.test.tsx`, `tests/jsx-types.tsx`.
-
-## Not implemented — open design work
-
-### Caret preservation for a *derived* `value`
-
-The shipped write-skip guard (`if (input.value !== next) input.value = next`) only helps when the signal echoes back exactly the string the DOM already holds — the ordinary `onChange` round-trip. It does nothing for a *derived* value: a signal that trims, upper-cases, or otherwise transforms what the user typed. When the derived string differs from what was typed, the identity check fails, the write happens, and the caret can jump to the end of the field.
-
-Every reactive UI library that direct-binds `value` runs into this. Right now it is a **documented, accepted limitation** — this project has not committed to fixing it, and no implementation has been attempted.
-
-**Candidate fix, undecided:** before a forced write, capture `selectionStart`/`selectionEnd` and restore them afterward, only while the element is focused.
-
-- Would extend caret preservation to the derived-value case the shipped guard cannot cover.
-- `selectionStart`/`selectionEnd` do not exist on every input `type` (`number`, `date`, `color`, and others throw or return `null`) — needs a type-aware guard.
-- Restoring a selection mid-IME-composition can itself corrupt the composition — this needs to compose *with* the existing write-skip check, not just run alongside it.
-- No prototype exists. This is unscoped beyond the bullet points above.
-
-**Until this ships:** extract the reactive prop into its own leaf component (the pattern [`TaskRow` already demonstrates](../../examples/react-router/app/components/TaskRow.tsx)), so only that leaf re-renders.
+- The form contract is covered by `tests/react-dom-binding.test.tsx`, `tests/ssr.test.tsx`, and `tests/jsx-types.tsx`.
 
 ### Fine-grained per-property `style` tracking
 
@@ -41,5 +23,5 @@ Qualification lives in `tests/react-dom-binding.test.tsx` and `tests/jsx-types.t
 
 ## Non-goals
 
-- Reproducing every React controlled-input behavior (for example `defaultValue` fallback semantics) for a direct-bound element.
+- Reproducing every React controlled-input behavior for direct-bound elements.
 - Changing the leaf-component pattern (`TaskRow` demonstrates it) as the fallback answer for anything the above does not cover.

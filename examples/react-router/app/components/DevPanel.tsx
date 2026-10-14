@@ -76,17 +76,11 @@ export function DevPanel({
       <p>現在のフィルタ: {FILTER_LABEL[currentFilter]}</p>
       <p>総タスク数: {totalTasks}</p>
       <RawSignalProbe label="store.remaining" source={store.remaining} />
-      {/* checked={verbose} direct-binds the write direction (signal -> DOM),
-          same as home.tsx's newTitle input value={}; reading the user's
-          toggle back into the signal is still the ordinary onChange, which
-          direct binding does not automate away — see docs/guides/jsx-bindings.md. */}
+      {/* Explicit direct bindings write checkbox changes back to the signal. */}
       <label>
         <input
           type="checkbox"
-          checked={verbose}
-          onChange={(event) => {
-            verbose.value = event.target.checked;
-          }}
+          bindChecked={verbose}
         />
         詳細ログ(アクティビティ追加時のみconsoleに出力。このチェックボックス自体の
         切り替えでは再実行されない)

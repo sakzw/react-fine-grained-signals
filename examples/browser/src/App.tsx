@@ -457,10 +457,7 @@ export function App({ state }: { state: DemoState }) {
         <input
           id="ime-field"
           aria-label="ime field"
-          value={state.imeText}
-          onChange={(event) => {
-            state.imeText.value = event.target.value;
-          }}
+          bindValue={state.imeText}
         />
         <button
           id="external-ime-write"
@@ -486,15 +483,13 @@ export function App({ state }: { state: DemoState }) {
           <input
             id="bound-reset-text"
             aria-label="bound reset text"
-            value={state.resetText}
-            onChange={(event) => { state.resetText.value = event.target.value; }}
+            bindValue={state.resetText}
           />
           <input
             id="bound-reset-checkbox"
             aria-label="bound reset checkbox"
             type="checkbox"
-            checked={state.resetChecked}
-            onChange={(event) => { state.resetChecked.value = event.target.checked; }}
+            bindChecked={state.resetChecked}
           />
           <button id="bound-reset-submit" type="button" onClick={() => {
             state.resetText.value = "signal updated";

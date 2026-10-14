@@ -2,7 +2,7 @@ import { isSignal, untracked } from "../core/index.js";
 import { detachedEffect } from "../core/base.js";
 import { subscribeReadableV1 } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
-import type { ReadonlySignal } from "../core/index.js";
+import type { ReadonlySignal, Signal } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
 import { useSignalValue } from "../react/hooks.js";
 import { createElement, Fragment } from "react";
@@ -20,14 +20,8 @@ const REACTIVE_PROP_NAMES = new Set([
   "checked",
 ]);
 
-// `value`/`checked` are two-way bound only on these tags — the ones where React
-// itself treats them as a controlled/uncontrolled input. Elsewhere (`<li value>`,
-// `<option value>`, `<meter value>`, ...) they are plain, write-only attributes,
-// so those keep the same peek-and-substitute treatment as `title`/`disabled`/etc.
-function isControlledTwoWayProp(tagName: string, name: string): boolean {
-  if (name === "value") return tagName === "input" || tagName === "textarea" || tagName === "select";
-  if (name === "checked") return tagName === "input";
-  return false;
+function domBindingProp(name: string): string {
+  return name === "bindValue" ? "value" : name === "bindChecked" ? "checked" : name;
 }
 
 /**
@@ -43,11 +37,10 @@ function isControlledTwoWayProp(tagName: string, name: string): boolean {
 type BindingKind = "style" | "style-properties" | "select-value" | "text-value" | "checked" | "prop";
 
 function resolveBindingKind(tagName: string, name: string): BindingKind {
+  if (name === "bindValue") return "text-value";
+  if (name === "bindChecked") return "checked";
   if (name === "style") return "style";
-  if (isControlledTwoWayProp(tagName, name)) {
-    if (name === "value") return tagName === "select" ? "select-value" : "text-value";
-    return "checked";
-  }
+  if (name === "value" && tagName === "select") return "select-value";
   return "prop";
 }
 
@@ -74,6 +67,8 @@ function sameBindingSource(a: BindingSource, b: BindingSource): boolean {
 const UNCONTROLLED_PROP_NAMES: Record<string, string> = {
   value: "defaultValue",
   checked: "defaultChecked",
+  bindValue: "defaultValue",
+  bindChecked: "defaultChecked",
 };
 
 // CSS properties React also treats as unitless: a bound number is written as-is
@@ -181,6 +176,17 @@ function normalizeArrayItem(value: unknown, index: number): React.ReactNode {
 function isReactiveHostProp(name: string, value: unknown): value is ReadonlySignal<unknown> {
   if (!isSignal(value)) return false;
   return REACTIVE_PROP_NAMES.has(name) || name.startsWith("data-") || name.startsWith("aria-");
+}
+
+function isWritableSignal(value: unknown): value is Signal<unknown> {
+  if (!isSignal(value)) return false;
+  let target: object | null = value;
+  while (target !== null) {
+    const descriptor = Object.getOwnPropertyDescriptor(target, "value");
+    if (descriptor !== undefined) return typeof descriptor.set === "function" || descriptor.writable === true;
+    target = Object.getPrototypeOf(target) as object | null;
+  }
+  return false;
 }
 
 function getStylePropertyBinding(value: unknown): { source: StylePropertyBinding; snapshot: Record<string, unknown> } | undefined {
@@ -381,7 +387,30 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
     }
     const next = value == null ? "" : String(value);
     const input = node as HTMLInputElement | HTMLTextAreaElement;
-    if (input.value !== next) input.value = next;
+    if (input.value !== next) {
+      const active = input.ownerDocument.activeElement === input;
+      let start: number | null = null;
+      let end: number | null = null;
+      let direction: "forward" | "backward" | "none" | null = null;
+      if (active) {
+        try {
+          start = input.selectionStart;
+          end = input.selectionEnd;
+          direction = input.selectionDirection;
+        } catch {
+          // Some input types do not expose a text selection API.
+        }
+      }
+      input.value = next;
+      if (active && start !== null && end !== null) {
+        const limit = next.length;
+        try {
+          input.setSelectionRange(Math.min(start, limit), Math.min(end, limit), direction ?? undefined);
+        } catch {
+          // Selection restoration is best-effort for text-like controls.
+        }
+      }
+    }
     // The default is what a form reset restores (`form.reset()`, a reset
     // button, React 19's reset after a form action). Keeping it equal to the
     // bound value makes a reset land on the signal's value, as React does for a
@@ -394,6 +423,22 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
   const input = node as HTMLInputElement;
   if (input.checked !== next) input.checked = next;
   if (input.defaultChecked !== next) input.defaultChecked = next;
+}
+
+function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement, refresh: () => void): () => void {
+  const form = node.form;
+  if (form === null) return () => {};
+  const onReset = (event: Event) => {
+    // The browser applies native defaults after dispatching `reset`; React may
+    // also restore its last rendered default during its delegated event pass.
+    // Refresh in a microtask so the binding's current signal value wins only
+    // after an accepted reset has completed.
+    queueMicrotask(() => {
+      if (!event.defaultPrevented) refresh();
+    });
+  };
+  form.addEventListener("reset", onReset);
+  return () => form.removeEventListener("reset", onReset);
 }
 
 /**
@@ -464,7 +509,7 @@ function bindSelectValue(select: HTMLSelectElement, source: ReadonlySignal<unkno
  */
 function bindTextValue(
   node: HTMLInputElement | HTMLTextAreaElement,
-  source: ReadonlySignal<unknown>,
+  source: Signal<unknown>,
   write: (value: unknown) => void,
 ): BindingSubscription {
   let composing = false;
@@ -482,9 +527,13 @@ function bindTextValue(
       write(pending);
     }
   };
+  const onInput = () => {
+    source.value = node.value;
+  };
 
   node.addEventListener("compositionstart", onCompositionStart);
   node.addEventListener("compositionend", onCompositionEnd);
+  node.addEventListener("input", onInput);
 
   // A failed read must bail out before this touches `pending`/`hasPending` —
   // a stale or garbage value must never latch in. `createBindingSubscription`
@@ -497,12 +546,15 @@ function bindTextValue(
     }
     write(next);
   }, episode);
+  const disposeReset = bindFormReset(node, subscription.refresh);
 
   return {
     dispose() {
       subscription.dispose();
+      disposeReset();
       node.removeEventListener("compositionstart", onCompositionStart);
       node.removeEventListener("compositionend", onCompositionEnd);
+      node.removeEventListener("input", onInput);
     },
     refresh: subscription.refresh,
   };
@@ -712,11 +764,29 @@ function subscribeBinding(
       };
     case "text-value":
       return {
-        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source as Signal<unknown>, whileAttached((value: unknown) => setControlledProp(node, domBindingProp(name), value))),
         getStyleKeys: undefined,
         restore: undefined,
       };
     case "checked":
+      if (name === "bindChecked") {
+        const input = node as HTMLInputElement;
+        const writableSource = source as Signal<unknown>;
+        const onChange = () => { writableSource.value = input.checked; };
+        input.addEventListener("change", onChange);
+        const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, domBindingProp(name), value)));
+        const disposeReset = bindFormReset(input, subscription.refresh);
+        return {
+          ...subscription,
+          dispose() {
+            subscription.dispose();
+            disposeReset();
+            input.removeEventListener("change", onChange);
+          },
+          getStyleKeys: undefined,
+          restore: undefined,
+        };
+      }
       return {
         ...createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, name, value))),
         getStyleKeys: undefined,
@@ -992,6 +1062,26 @@ type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) 
 function findHostBindings(props: HostProps, tagName: string): Binding[] {
   const bindings: Binding[] = [];
   for (const [name, value] of Object.entries(props)) {
+    if (name === "bindValue" || name === "bindChecked") {
+      if (!isWritableSignal(value)) {
+        throw new TypeError(`react-fine-grained-signals: ${name} requires a writable signal.`);
+      }
+      if (name === "bindValue") {
+        const inputType = String(props.type ?? "text").toLowerCase();
+        const textInputTypes = new Set(["text", "search", "tel", "url", "password", "email"]);
+        if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(inputType))) {
+          throw new TypeError("react-fine-grained-signals: bindValue is supported on text-like <input> elements and <textarea> only.");
+        }
+      } else if (tagName !== "input" || String(props.type ?? "text").toLowerCase() !== "checkbox") {
+        throw new TypeError("react-fine-grained-signals: bindChecked is supported on <input type=\"checkbox\"> only; radio groups need a shared selection value.");
+      }
+      const kind = resolveBindingKind(tagName, name);
+      bindings.push([name, value, kind, readInitialValue(value, kind)]);
+      continue;
+    }
+    if ((name === "value" || name === "checked") && isSignal(value)) {
+      throw new TypeError(`react-fine-grained-signals: signal-valued ${name} props are no longer implicit bindings. Use ${name === "value" ? "bindValue" : "bindChecked"}={signal} for direct binding, or pass signal.value for React-controlled semantics.`);
+    }
     if (isReactiveHostProp(name, value)) {
       const kind = resolveBindingKind(tagName, name);
       bindings.push([name, value, kind, readInitialValue(value, kind)]);
@@ -1042,9 +1132,9 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
     props.children = normalizeChild(rawChildren);
   }
   for (const [name, , kind, snapshot] of bindings) {
-    // A two-way kind is only ever derived from a `value`/`checked` name (see
-    // `resolveBindingKind`), so the lookup always hits; should it ever not, the
-    // prop is written directly, which is the pre-substitution behaviour.
+    // Only explicit `bindValue`/`bindChecked` bindings use two-way kinds, so
+    // this lookup maps them to their React initialization props. Should a new
+    // kind ever miss the table, keep the previous direct-prop behavior.
     const uncontrolledName = isTwoWayBindingKind(kind) ? UNCONTROLLED_PROP_NAMES[name] : undefined;
     if (uncontrolledName !== undefined) {
       // Leaving the controlled prop in place would keep the element
@@ -1144,7 +1234,7 @@ type Signalable<T> = T | (ReadonlySignal<T> & NotDeepSignal);
 type SignalableStyleObject<T> = {
   [Name in keyof T]: T[Name] | (ReadonlySignal<T[Name]> & NotDeepSignal);
 };
-type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style" | "value" | "checked";
+type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style";
 type AriaPropName = `aria-${string}`;
 type SignalableHtmlProp<Name extends PropertyKey, Value> = Signalable<
   Value | (Name extends "title" | "id" ? null : never)
@@ -1156,11 +1246,16 @@ type SignalizeKnownHtmlProps<P> = {
   [Name in keyof P as Name extends DirectSignalPropName | AriaPropName ? Name : never]:
     SignalableHtmlProp<Name, P[Name]>;
 };
-type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "children"> & {
+type AddHtmlSignalProps<Tag extends keyof React.JSX.IntrinsicElements, P> = Omit<P, DirectSignalPropName | AriaPropName | "children"> & {
   [Name in keyof SignalizeKnownHtmlProps<P>]: SignalizeKnownHtmlProps<P>[Name];
 } & {
   [name: `data-${string}`]: Signalable<string | number | boolean | undefined>;
-} & AddSignalChildren<{}>;
+} & (Tag extends "input" ? {
+  bindValue?: Signal<string> & NotDeepSignal;
+  bindChecked?: Signal<boolean> & NotDeepSignal;
+} : Tag extends "textarea" ? {
+  bindValue?: Signal<string> & NotDeepSignal;
+} : {}) & AddSignalChildren<{}>;
 
 /** Types exposed by `jsxImportSource: "react-fine-grained-signals"`. */
 export namespace JSX {
@@ -1181,5 +1276,5 @@ export namespace JSX {
 type SignalIntrinsicElements = {
   [Tag in keyof React.JSX.IntrinsicElements]: Tag extends NonHtmlHostElement
     ? AddSignalChildren<React.JSX.IntrinsicElements[Tag]>
-    : AddHtmlSignalProps<React.JSX.IntrinsicElements[Tag]>;
+    : AddHtmlSignalProps<Tag, React.JSX.IntrinsicElements[Tag]>;
 };

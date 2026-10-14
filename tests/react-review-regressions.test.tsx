@@ -246,8 +246,8 @@ describe("form reset keeps bound value/checked in sync with the signal (J2)", ()
     const checked = signal(false);
     render(
       <form data-testid="form">
-        <input data-testid="text" value={text} onChange={(event) => { text.value = event.currentTarget.value; }} />
-        <input data-testid="box" type="checkbox" checked={checked} onChange={(event) => { checked.value = event.currentTarget.checked; }} />
+        <input data-testid="text" bindValue={text} />
+        <input data-testid="box" type="checkbox" bindChecked={checked} />
       </form>,
     );
     const input = screen.getByTestId("text") as HTMLInputElement;
@@ -267,8 +267,8 @@ describe("form reset keeps bound value/checked in sync with the signal (J2)", ()
     const select = signal("b");
     render(
       <form data-testid="form" action={async () => {}}>
-        <input data-testid="text" name="text" value={text} onChange={(event) => { text.value = event.currentTarget.value; }} />
-        <select data-testid="select" name="select" value={select} onChange={(event) => { select.value = event.currentTarget.value; }}>
+        <input data-testid="text" name="text" bindValue={text} />
+        <select data-testid="select" name="select" value={select.value} onChange={(event) => { select.value = event.currentTarget.value; }}>
           <option value="a">a</option>
           <option value="b">b</option>
         </select>
