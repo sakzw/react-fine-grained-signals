@@ -20,6 +20,7 @@ if (!internalRuntime) throw new Error("Could not locate the internal ReactiveRun
 const adapters = [
   {
     name: "RFSG public API",
+    supportsWritableComputed: true,
     signal: (value) => {
       const source = publicApi.signal(value);
       return { get: () => source.value, set: (next) => { source.value = next; } };
@@ -28,10 +29,12 @@ const adapters = [
       ? publicApi.computed(getter)
       : publicApi.computed({ get: getter, set: setter }),
     read: (value) => value.value,
+    write: (value, next) => { value.value = next; },
     effect: publicApi.effect,
   },
   {
     name: "RFSG internal runtime",
+    supportsWritableComputed: true,
     signal: (value) => {
       const source = internalRuntime.signal(value);
       return { get: () => source.value, set: (next) => { source.value = next; } };
@@ -40,10 +43,12 @@ const adapters = [
       ? internalRuntime.computed(getter)
       : internalRuntime.computed(getter, setter),
     read: (value) => value.value,
+    write: (value, next) => { value.value = next; },
     effect: internalRuntime.effect,
   },
   {
     name: "RFSG public + benchmark adapter",
+    supportsWritableComputed: true,
     signal: (value) => {
       const source = publicApi.signal(value);
       return { get: () => source.value, set: (next) => { source.value = next; }, raw: source };
@@ -55,19 +60,22 @@ const adapters = [
       return { get: () => readable.value, set: (next) => { readable.value = next; }, raw: readable };
     },
     read: (value) => value.get(),
+    write: (value, next) => value.set(next),
     effect: (fn) => publicApi.effect(fn),
   },
   {
     name: "alien-signals raw",
+    supportsWritableComputed: false,
     signal: (value) => {
       const source = alienSignal(value);
       return { get: () => source(), set: (next) => source(next) };
     },
     computed: (getter, setter) => {
-      const readable = alienComputed(getter, setter);
-      return readable;
+      if (setter !== undefined) throw new TypeError("alien-signals computed is read-only");
+      return alienComputed(getter);
     },
     read: (value) => value(),
+    write: (value, next) => { value(next); },
     effect: alienEffect,
   },
 ];
@@ -81,47 +89,53 @@ const quantile = (values, fraction) => {
 };
 
 function cases(adapter) {
-  return [
+  const allCases = [
     ["getter-only/create-discarded", (count) => {
       let last;
       for (let i = 0; i < count; i += 1) last = adapter.computed(() => 14);
       return adapter.read(last);
-    }],
+    }, () => 14],
     ["getter-only/create-retained", (count) => {
       const retained = Array.from({ length: count }, () => adapter.computed(() => 14));
       let sum = 0;
       for (const item of retained) sum += adapter.read(item);
       return sum;
-    }],
+    }, (count) => 14 * count],
     ["writable/create-discarded", (count) => {
       let last;
       for (let i = 0; i < count; i += 1) last = adapter.computed(() => 14, () => {});
       return adapter.read(last);
-    }],
+    }, () => 14],
     ["writable/create-retained", (count) => {
       const retained = Array.from({ length: count }, () => adapter.computed(() => 14, () => {}));
       let sum = 0;
       for (const item of retained) sum += adapter.read(item);
       return sum;
-    }],
+    }, (count) => 14 * count],
+    ["writable/set+read", (count) => {
+      const source = adapter.signal(0);
+      const value = adapter.computed(() => source.get(), (next) => source.set(next));
+      for (let i = 0; i < count; i += 1) adapter.write(value, i + 1);
+      return adapter.read(value);
+    }, (count) => count],
     ["create+first-read", (count) => {
       let sum = 0;
       for (let i = 0; i < count; i += 1) sum += adapter.read(adapter.computed(() => i * 2));
       return sum;
-    }],
+    }, (count) => count * (count - 1)],
     ["cached-read", (count) => {
       const value = adapter.computed(() => 14);
       let sum = 0;
       for (let i = 0; i < count; i += 1) sum += adapter.read(value);
       return sum;
-    }],
+    }, (count) => 14 * count],
     ["update+read", (count) => {
       const source = adapter.signal(0);
       const value = adapter.computed(() => source.get() * 2);
       let sum = 0;
       for (let i = 0; i < count; i += 1) { source.set(i + 1); sum += adapter.read(value); }
       return sum + adapter.read(value);
-    }],
+    }, (count) => count * (count + 3)],
     ["observed-update", (count) => {
       const source = adapter.signal(0);
       const value = adapter.computed(() => source.get() * 2);
@@ -130,8 +144,15 @@ function cases(adapter) {
       for (let i = 0; i < count; i += 1) source.set(i + 1);
       dispose();
       return observed;
-    }],
+    }, (count) => 2 * count],
   ];
+  return adapter.supportsWritableComputed ? allCases : allCases.filter(([name]) => !name.startsWith("writable/"));
+}
+
+function assertChecksum(adapter, name, actual, expected) {
+  if (!Number.isFinite(actual) || !Object.is(actual, expected)) {
+    throw new Error(`${adapter.name} ${name} checksum mismatch: expected ${expected}, got ${actual}`);
+  }
 }
 
 const results = [];
@@ -140,13 +161,17 @@ const definitionsByAdapter = new Map(adapters.map((adapter) => [adapter, cases(a
 for (let sample = 0; sample < samples + warmups; sample += 1) {
   const order = sample % 2 === 0 ? adapters : adapters.toReversed();
   for (const adapter of order) {
-    for (const [name, run] of definitionsByAdapter.get(adapter)) {
-      if (sample < warmups) { run(Math.min(iterations, 1_000)); continue; }
+    for (const [name, run, expected] of definitionsByAdapter.get(adapter)) {
+      if (sample < warmups) {
+        const warmupCount = Math.min(iterations, 1_000);
+        assertChecksum(adapter, name, run(warmupCount), expected(warmupCount));
+        continue;
+      }
       global.gc?.();
       const start = process.hrtime.bigint();
       const checksum = run(iterations);
       const ms = Number(process.hrtime.bigint() - start) / 1e6;
-      if (!Number.isFinite(checksum)) throw new Error(`${adapter.name} ${name} checksum is not finite`);
+      assertChecksum(adapter, name, checksum, expected(iterations));
       results.push({ adapter: adapter.name, case: name, sample: sample - warmups, ms });
     }
   }
@@ -166,7 +191,7 @@ function retainedHeapDelta(adapter, retained, count) {
   const checksum = retained ? live.reduce((sum, value) => sum + adapter.read(value), 0) : adapter.read(live);
   global.gc();
   const delta = process.memoryUsage().heapUsed - baseline;
-  if (!Number.isFinite(checksum)) throw new Error(`${adapter.name} heap checksum is not finite`);
+  assertChecksum(adapter, "heap", checksum, retained ? 14 * count : 14);
   return delta;
 }
 
@@ -192,4 +217,5 @@ for (const adapter of adapters) {
       retained: retainedHeapDelta(adapter, true, iterations),
     }]);
   }
+  if (!adapter.supportsWritableComputed) console.log("writable computed cases: unsupported (alien-signals computed is read-only)");
 }

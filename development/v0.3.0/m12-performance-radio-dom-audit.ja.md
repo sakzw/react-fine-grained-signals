@@ -30,13 +30,15 @@ RFSG public API、built runtimeから得た`ReactiveRuntime`、public resultを�
 |---|---:|---:|---:|---:|
 | getter-only create/discard | 134.747 ms (121.616–145.259), 148k ops/s | 110.267 ms (97.178–155.812), 181k ops/s | 127.799 ms (115.197–145.445), 156k ops/s | 1.196 ms (1.093–1.849), 16.72M ops/s |
 | getter-only create/retain | 142.618 ms (132.910–143.938), 140k ops/s | 102.761 ms (86.065–126.241), 195k ops/s | 147.697 ms (120.394–178.231), 135k ops/s | 10.047 ms (9.061–11.541), 1.99M ops/s |
-| writable create/discard | 127.609 ms (101.152–140.284), 157k ops/s | 110.508 ms (97.069–114.303), 181k ops/s | 112.058 ms (101.226–139.085), 178k ops/s | 1.149 ms (1.078–1.451), 17.41M ops/s |
+| writable create/discard | 127.609 ms (101.152–140.284), 157k ops/s | 110.508 ms (97.069–114.303), 181k ops/s | 112.058 ms (101.226–139.085), 178k ops/s | n/a (read-only computed) |
 | create + first read | 127.662 ms (104.975–136.636), 157k ops/s | 125.025 ms (116.755–128.596), 160k ops/s | 113.582 ms (105.304–134.916), 176k ops/s | 3.597 ms (2.931–3.846), 5.56M ops/s |
 | cached read | 5.281 ms (4.360–5.894) | 6.039 ms (5.251–6.093) | 7.022 ms (6.739–8.074) | 1.065 ms (1.031–1.093) |
 | update + read | 45.982 ms (37.063–48.146) | 40.633 ms (37.215–43.347) | 36.693 ms (31.626–38.370) | 17.394 ms (15.894–19.735) |
 | observed update | 37.743 ms (36.286–44.263) | 39.015 ms (37.933–42.329) | 35.561 ms (32.527–40.160) | 25.322 ms (23.854–30.843) |
 
 計測は層別化できたが、public/internal createの分布は重なる。wrapperが主因という帰属はできない。raw `alien-signals`との生成差は大きいが、raw側にはRFSGのbrand、readable interop protocol、WeakMap登録、React/ownership契約がない。比較値をそのまま最適化目標やrelease性能保証にしない。
+
+補足: 初版scriptはraw `alien-signals`のread-only `computed(getter)`へ2番目のsetter引数を渡していた。この引数はAPI上サポートされず無視されるため、上表の初版「writable create/discard」のraw値はwritable computed測定ではない。M12.1でこの比較値を撤回し、scriptはread-only adapterからwritable workloadを除外する。詳細は[M12.1 regression/benchmark closure](m12.1-radio-binding-benchmark.ja.md)。
 
 同じHEADで実行した既存`benchmarks/core.mjs`の50,000 operations、2 warmups、5 samplesではcomputed/create中央値はraw `alien-signals` 9.675M ops/s (p25–p75 4.954–5.519 ms) / RFSG 525k ops/s (94.204–96.506 ms)。これはgetter-onlyを作り、最後の値を読むadapter benchmarkであり、広い傾向を示す参考値である。M11の約36倍差は同条件のA/Bではなく、今回の計測値も分布と保持方式に依存する。
 

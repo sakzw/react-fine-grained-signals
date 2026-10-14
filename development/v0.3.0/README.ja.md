@@ -29,6 +29,7 @@
 | M10 | 細粒度renderingとWritable computed | M8 | API・DOM同期・イベント順序を検証 | 完了。`For`/`Index`最適化は証拠不足のため採用せず。Writable computed coreとform bindingを追加 |
 | M11 | React hook/form group APIとobject snapshot評価 | M10 | writable `useComputed`、radio/checkbox group、immutable deep object snapshotの契約と性能を確認 | writable hookとradio/checkbox group完了。object snapshot prototypeはO(subtree)の高コストと不安定なheap計測により見送り。full coverage、browser、consumer、mixed-version、size gateを通過。詳細は[M11 closure record](m11-react-hooks-and-form-groups.ja.md) |
 | M12 | computed生成profile、radio/checkbox group境界、DOM retention監査 | M11 | benchmarkを層別化し、効果が実測できる変更のみ採用。group native semanticsとunsubscribe/DOM cleanupを検証 | 完了。性能最適化は効果が確認できず見送り。radio source mismatchを拒否。local qualificationとGitHub Actions Test/E2E成功。詳細は[M12 audit](m12-performance-radio-dom-audit.ja.md) |
+| M12.1 | radio binding source一括切替、computed benchmark比較の妥当性 | M12 | 同一commitで全radioをSignal差し替えし、ref lifecycleとgroup競合契約を維持。benchmark capabilityとchecksumを検証 | 完了。detached済みpeerを差し替え中に限り無視。writable比較と全checksum検査を修正。詳細は[M12.1 closure](m12.1-radio-binding-benchmark.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
