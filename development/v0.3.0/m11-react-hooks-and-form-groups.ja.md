@@ -74,4 +74,7 @@ radio factory costは従来のtext/checkbox direct bindingに近く、checkbox-g
 
 ## Commits / push
 
-最終commit、`origin/main` SHA、push後Actionsはpush完了後に追記する。
+## Commits / push
+
+- `ec657f0194fcbbbe6bbcb56d37553d036eb1cb92` — `feat: complete M11 hooks and form groups`。`origin/main`へpush済み。
+- pushによりGitHub ActionsのTest / E2E workflowを起動。CIの最終結果は完了報告で示す。
