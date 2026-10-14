@@ -77,4 +77,5 @@ radio factory costは従来のtext/checkbox direct bindingに近く、checkbox-g
 ## Commits / push
 
 - `ec657f0194fcbbbe6bbcb56d37553d036eb1cb92` — `feat: complete M11 hooks and form groups`。`origin/main`へpush済み。
-- pushによりGitHub ActionsのTest / E2E workflowを起動。CIの最終結果は完了報告で示す。
+- push後のGitHub Actionsは両方成功: [Test #146](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38586490331)、[E2E #146](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38586490068)。
+- 追跡用のdocumentation commitでも`origin/main` SHAと上記のCI結果を記録した。
