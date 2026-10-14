@@ -21,13 +21,14 @@ function Counter({ step }: { step: number }) {
 ## useSignal
 
 ```ts
-useSignal<T>(initialValue: T): Signal<T>
+useSignal<T>(initialValue: T): FormBindableSignal<T>
 ```
 
 コンポーネントの生存期間中、同じsignalを1つ保持します。
 
 - `initialValue` が使われるのは初回レンダーのみで、以降は同じsignalが返ります。
 - レンダー中に `.value` を読むには、そのコンポーネント自身で [`useSignalTracking()`](#usesignaltracking)（またはplugin）が必要です。
+- `useSignal()` は書き込み可能な `Signal<T>` の一種である `FormBindableSignal<T>` を返します。汎用フォームコンポーネントへ渡す場合も、この型を保ってください。`Signal<T>` に注釈すると型が広がり、`bindValue` / `bindChecked` が要求するcapabilityが失われます。
 
 ## useDeepSignal
 

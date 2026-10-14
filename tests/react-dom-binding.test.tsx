@@ -6,7 +6,7 @@ import type { ChangeEvent, ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx } from "../src/jsx-runtime.js";
-import { computed, createElement as createSignalAwareElement, signal, useSignal, useSignalTracking } from "../src/index.js";
+import { computed, createElement as createSignalAwareElement, effect, signal, useSignal, useSignalTracking } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -698,6 +698,181 @@ describe("Direct DOM binding", () => {
     expect([first.value, last.value, checkedSource.value, selectedSource.value, manySource.value]).toEqual([
       "Grace", "Hopper", false, "a", ["a", "c"],
     ]);
+  });
+
+  it("re-synchronizes a text binding when a writable computed rejects an input", () => {
+    const source = signal("123");
+    const digits = computed({
+      get: () => source.value,
+      set: (next: string) => {
+        if (/^\d+$/.test(next)) source.value = next;
+      },
+    });
+
+    render(<input aria-label="digits" bindValue={digits} />);
+    const input = screen.getByLabelText("digits") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "123x" } });
+
+    expect(source.value).toBe("123");
+    expect(digits.value).toBe("123");
+    expect(input.value).toBe("123");
+  });
+
+  it("re-synchronizes same-value normalization without disturbing the caret or onChange", () => {
+    const source = signal("ABC");
+    const normalized = computed({
+      get: () => source.value,
+      set: (next: string) => { source.value = next.trim().toUpperCase(); },
+    });
+    const onChange = vi.fn();
+    render(<input aria-label="normalized text" bindValue={normalized} onChange={onChange} />);
+    const input = screen.getByLabelText("normalized text") as HTMLInputElement;
+
+    input.focus();
+    // React's synthetic onChange is tested through its native change event;
+    // the following input event exercises the direct binding listener.
+    fireEvent.change(input, { target: { value: "ABC " } });
+    const setNativeValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    setNativeValue.call(input, "ABC ");
+    input.setSelectionRange(4, 4);
+    fireEvent.input(input);
+
+    expect(source.value).toBe("ABC");
+    expect(input.value).toBe("ABC");
+    expect(input.selectionStart).toBe(3);
+    expect(onChange).toHaveBeenCalledOnce();
+  });
+
+  it("re-synchronizes a normalized computed value after its getter changes", () => {
+    const source = signal("before");
+    const normalized = computed({
+      get: () => source.value,
+      set: (next: string) => { source.value = next.trim().toUpperCase(); },
+    });
+    render(<input aria-label="normalized changed text" bindValue={normalized} />);
+    const input = screen.getByLabelText("normalized changed text") as HTMLInputElement;
+
+    fireEvent.input(input, { target: { value: "  grace  " } });
+
+    expect(source.value).toBe("GRACE");
+    expect(input.value).toBe("GRACE");
+  });
+
+  it("defers a rejected computed text edit until IME composition ends", () => {
+    const source = signal("123");
+    const digits = computed({
+      get: () => source.value,
+      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+    });
+    render(<input aria-label="composing digits" bindValue={digits} />);
+    const input = screen.getByLabelText("composing digits") as HTMLInputElement;
+
+    fireEvent.compositionStart(input);
+    input.value = "123あ";
+    fireEvent.input(input);
+    expect(input.value).toBe("123あ");
+    expect(source.value).toBe("123");
+
+    fireEvent.compositionEnd(input);
+    expect(input.value).toBe("123");
+  });
+
+  it("restores rejected writable computed values for checkboxes and selects", () => {
+    const checkedSource = signal(true);
+    const checked = computed({
+      get: () => checkedSource.value,
+      set: (next: boolean) => { if (next) checkedSource.value = next; },
+    });
+    const singleSource = signal("b");
+    const single = computed({
+      get: () => singleSource.value,
+      set: (next: string) => { if (next === "c") singleSource.value = next; },
+    });
+    const multipleSource = signal<string[]>(["a"]);
+    const multiple = computed({
+      get: () => multipleSource.value,
+      set: (next: string[]) => { if (next.length > 0 && next.every((value) => value !== "b")) multipleSource.value = next; },
+    });
+    const checkboxChange = vi.fn();
+
+    render(<>
+      <input type="checkbox" aria-label="computed checkbox" bindChecked={checked} onChange={checkboxChange} />
+      <select aria-label="computed single" bindValue={single}>
+        <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+      </select>
+      <select aria-label="computed multiple" multiple bindValue={multiple}>
+        <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+      </select>
+    </>);
+
+    const checkbox = screen.getByLabelText("computed checkbox") as HTMLInputElement;
+    const singleSelect = screen.getByLabelText("computed single") as HTMLSelectElement;
+    const multipleSelect = screen.getByLabelText("computed multiple") as HTMLSelectElement;
+    fireEvent.click(checkbox);
+    fireEvent.change(singleSelect, { target: { value: "a" } });
+    multipleSelect.options[0]!.selected = false;
+    multipleSelect.options[1]!.selected = true;
+    fireEvent.change(multipleSelect);
+
+    expect(checkedSource.value).toBe(true);
+    expect(checkbox.checked).toBe(true);
+    expect(checkboxChange).toHaveBeenCalledOnce();
+    expect(singleSource.value).toBe("b");
+    expect(singleSelect.value).toBe("b");
+    expect(multipleSource.value).toEqual(["a"]);
+    expect(Array.from(multipleSelect.selectedOptions, (option) => option.value)).toEqual(["a"]);
+  });
+
+  it("batches a writable computed setter that updates multiple dependencies", () => {
+    const first = signal("John");
+    const last = signal("Smith");
+    const fullName = computed({
+      get: () => `${first.value} ${last.value}`,
+      set: (next: string) => {
+        const [nextFirst = "", ...rest] = next.split(" ");
+        first.value = nextFirst;
+        last.value = rest.join(" ");
+      },
+    });
+    const observations: string[] = [];
+    const dispose = effect(() => { observations.push(fullName.value); });
+    render(<input aria-label="batched full name" bindValue={fullName} />);
+    const input = screen.getByLabelText("batched full name") as HTMLInputElement;
+
+    fireEvent.input(input, { target: { value: "Grace Hopper" } });
+
+    expect([first.value, last.value]).toEqual(["Grace", "Hopper"]);
+    expect(observations).toEqual(["John Smith", "Grace Hopper"]);
+    expect(input.value).toBe("Grace Hopper");
+    dispose();
+  });
+
+  it("resets a writable computed form binding to the latest accepted getter value", async () => {
+    const source = signal("123");
+    const digits = computed({
+      get: () => source.value,
+      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+    });
+    function Form() {
+      return <form aria-label="computed reset form">
+        <input aria-label="computed reset text" bindValue={digits} />
+        <button type="reset">Reset</button>
+      </form>;
+    }
+
+    render(<Form />);
+    const form = screen.getByLabelText("computed reset form") as HTMLFormElement;
+    const input = screen.getByLabelText("computed reset text") as HTMLInputElement;
+    fireEvent.input(input, { target: { value: "456" } });
+    expect(source.value).toBe("456");
+    expect(input.value).toBe("456");
+
+    fireEvent.input(input, { target: { value: "456x" } });
+    expect(input.value).toBe("456");
+    await act(async () => { form.reset(); await Promise.resolve(); });
+    expect(source.value).toBe("456");
+    expect(digits.value).toBe("456");
+    expect(input.value).toBe("456");
   });
 
   it("keeps a bound checkbox's form value available to FormData", () => {

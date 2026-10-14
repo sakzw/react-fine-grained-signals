@@ -12,10 +12,12 @@ export interface Signal<T> extends ReadonlySignal<T> {
   value: T;
 }
 
+declare const formBindableSignalType: unique symbol;
+
 /** A package signal accepted by the direct JSX binding runtime. */
 export interface FormBindableSignal<T> extends Signal<T> {
-  /** Type-only capability matching the runtime's RFSG signal brand check. */
-  readonly "__rfgs_form_bindable__": true;
+  /** Type-only capability; runtime validation uses the private RFSG signal brand. */
+  readonly [formBindableSignalType]: true;
 }
 
 const signalInstances = new WeakSet<object>();

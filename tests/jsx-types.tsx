@@ -1,6 +1,6 @@
 /** @jsxImportSource react-fine-grained-signals */
 
-import { computed, signal, useSignal, type Signal } from "../src/index.js";
+import { computed, signal, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
 
 const text = signal("value");
 const enabled = signal(false);
@@ -18,6 +18,14 @@ const customWritableSignal: Signal<string> = {
   set value(value: string) { text.value = value; },
   peek: () => text.peek(),
 };
+const widenedSignal: Signal<string> = signal("annotated");
+
+function GenericTextField<TLabel extends string>({ label, value }: {
+  label: TLabel;
+  value: FormBindableSignal<string>;
+}) {
+  return <label>{label}<input bindValue={value} /></label>;
+}
 
 function Custom({ value, children }: { value: typeof text; children: typeof text }) {
   return <output>{value === children ? "same" : "different"}</output>;
@@ -43,6 +51,10 @@ const partiallyStyled = <div style={{ color, width: 12 }} />;
 // explicit bindings require writable signals and the package JSX runtime.
 const controlledInput = <input value={text.value} checked={enabled.value} onChange={() => {}} />;
 const boundInput = <input bindValue={text} />;
+// Widening a package signal to Signal<T> erases the direct-binding capability.
+// @ts-expect-error Keep FormBindableSignal<T> when a value will be used by bindValue.
+const widenedSignalBinding = <input bindValue={widenedSignal} />;
+const genericTextField = <GenericTextField label="name" value={text} />;
 const boundCheckbox = <input type="checkbox" bindChecked={enabled} />;
 const writableComputedInput = <input bindValue={writableText} />;
 // @ts-expect-error Structural writable signals remain assignable to Signal<T>, but JSX binding requires an RFSG-created source.
@@ -110,6 +122,8 @@ void [
   partiallyStyled,
   controlledInput,
   boundInput,
+  widenedSignalBinding,
+  genericTextField,
   boundCheckbox,
   writableComputedInput,
   unsupportedCustomBinding,

@@ -21,13 +21,14 @@ function Counter({ step }: { step: number }) {
 ## useSignal
 
 ```ts
-useSignal<T>(initialValue: T): Signal<T>
+useSignal<T>(initialValue: T): FormBindableSignal<T>
 ```
 
 Keeps one signal for the component lifetime.
 
 - `initialValue` is used on the first render only; later renders return the same signal.
 - Reading `.value` during render requires [`useSignalTracking()`](#usesignaltracking) (or the plugin) in that same component.
+- `useSignal()` returns `FormBindableSignal<T>`, which is also a writable `Signal<T>`. Keep this specific type when passing the value through a generic form component; annotating it as `Signal<T>` widens away the capability required by `bindValue` and `bindChecked`.
 
 ## useDeepSignal
 

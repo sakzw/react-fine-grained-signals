@@ -120,11 +120,33 @@ const enabled = signal(false);
 </select>
 ```
 
-`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`), `textarea`, single selects with `Signal<string>`, and `multiple` selects with `Signal<string[]>`. The `multiple` attribute must be a literal `true` for the array form; dynamic booleans are checked at runtime against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later are observed and the current signal selection is reapplied. `bindChecked` supports checkbox inputs only. Radio groups are not supported by `bindChecked`; use React-controlled props.
+`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`), `textarea`, single selects with `FormBindableSignal<string>`, and `multiple` selects with `FormBindableSignal<string[]>`. `bindChecked` requires `FormBindableSignal<boolean>`. The `multiple` attribute must be a literal `true` for the array form; dynamic booleans are checked at runtime against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later are observed and the current signal selection is reapplied. Radio groups are not supported by `bindChecked`; use React-controlled props.
+
+The binding types require the package capability `FormBindableSignal<T>`. `signal()`, `useSignal()`, and writable `computed({ get, set })` return this type. Keep it in reusable form props instead of widening the value to `Signal<T>`:
+
+```tsx
+import type { FormBindableSignal } from "react-fine-grained-signals";
+
+type TextFieldProps<TMeta> = {
+  value: FormBindableSignal<string>;
+  label: string;
+  metadata?: TMeta;
+};
+
+function TextField<TMeta>({ value, label }: TextFieldProps<TMeta>) {
+  return <label>{label}<input bindValue={value} /></label>;
+}
+```
+
+The capability is a TypeScript-only opaque marker; it is not a JavaScript property. Runtime binding validates the package's private signal brand and writable value descriptor. A value annotated as plain `Signal<T>` no longer carries enough type information for JSX binding. Getter-only computed values remain rejected.
 
 An explicit binding owns that DOM state: do not combine `bindValue` with `value` or `defaultValue`, or `bindChecked` with `checked` or `defaultChecked`. The runtime rejects those combinations, and the RFSG JSX types reject statically visible conflicts. Standard React-controlled selects remain available with `value={selected.value}` and an `onChange` handler. With `bindValue`, the native change listener updates the signal before React's `onChange` runs, so no signal assignment is needed in that handler unless it normalizes the value.
 
 The binding subscribes after the host ref attaches, initializes from the signal, and writes signal changes to the DOM without rerendering the owner. Native `input` events write text into the signal, and native `change` events write checkbox state or select values (an array for `multiple`). `onChange` and `onInput` props are forwarded unchanged and still run through React. The direct listener runs before React's bubbled handler, so an `onChange` handler may normalize the entered value by writing the signal again. An `onChange` handler that ignores an edit does not reject it: the native binding has already copied the DOM value to the signal.
+
+For writable computed bindings, the getter is the source of truth. If a setter rejects an input or normalizes it, the binding reads the getter after the write and updates the DOM only when the DOM value differs. Text bindings defer that correction until IME composition ends, preserving the active composition. This also applies to checkbox and select bindings; React `onChange` still runs for additional side effects.
+
+For writable computed bindings, the getter is the source of truth. If a setter rejects an input or normalizes it, the binding reads the getter after the write and updates the DOM only when the DOM value differs. Text bindings defer that correction until IME composition ends, preserving the active composition. This also applies to checkbox and select bindings; React `onChange` still runs for additional side effects.
 
 For text controls and selects, equal-value writes are skipped. When an external text write changes a focused field, the binding restores its selection range, clamped to the new string length; input types without a selection API use the browser's normal caret behavior. During IME composition, external text writes are deferred until `compositionend`, so composition is not interrupted; the latest pending signal value is applied then. Form reset restores the latest signal value for both single and multiple selects. A canceled reset leaves the DOM and signal untouched. Select option changes update both current selection and reset defaults, so a later-added matching option is selected and retained through reset.
 

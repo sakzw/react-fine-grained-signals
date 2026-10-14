@@ -60,7 +60,9 @@ fullName.value = "Ada Lovelace";
 console.log(fullName.value); // "Ada Lovelace"
 ```
 
-getterだけの形式は引き続き`ReadonlySignal<T>`で、書き込みが必要なJSX form bindingには使えません。getter/setter形式は書き込み可能な`Signal<T>`となり、値の型が合えば`bindValue`、`bindChecked`、単一・複数select bindingで使えます。setterとgetterが完全な逆変換でなくてもかまいません。代入後の読み取り値は、setterが変更した状態からgetterが導出した値です。
+getterだけの形式は引き続き`ReadonlySignal<T>`で、書き込みが必要なJSX form bindingには使えません。getter/setter形式はpackageの書き込み可能な`Signal<T>`である`FormBindableSignal<T>`を返し、値の型が合えば`bindValue`、`bindChecked`、単一・複数select bindingで使えます。setterとgetterが完全な逆変換でなくてもかまいません。代入後の読み取り値は、setterが変更した状態からgetterが導出した値です。再利用可能なform propsを通す場合も`FormBindableSignal<T>`のまま保ってください。`Signal<T>`へ広げるとbinding capabilityが失われ、JSX型が拒否します。
+
+`FormBindableSignal<T>`は、packageが作った書き込み可能signalと任意のstructural signalやgetter-only computedをTypeScriptで区別するための、型専用capabilityを持ちます。このmarkerはJavaScript propertyとして存在しません。runtimeではpackageのprivate signal brandと書き込み可能性を確認します。
 
 ### getterが例外を投げた場合
 

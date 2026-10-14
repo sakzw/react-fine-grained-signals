@@ -272,6 +272,28 @@ function applyBoundSignal<T>(
   if (result.ok) apply(result.value);
 }
 
+function areFormValuesEqual(left: unknown, right: unknown): boolean {
+  if (!Array.isArray(left) || !Array.isArray(right)) return Object.is(left, right);
+  return left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+}
+
+/**
+ * A writable computed can reject a DOM write or normalize it to its current
+ * getter result without notifying subscribers. Read the source after the
+ * write and restore the DOM only when its current value differs from what the
+ * user entered. Ordinary signals and accepted exact values keep the same
+ * no-write path.
+ */
+function resyncRejectedFormWrite(
+  source: Signal<unknown>,
+  attempted: unknown,
+  apply: (value: unknown) => void,
+  episode: FailureEpisode,
+): void {
+  const result = readBoundSignal(() => source.peek(), episode);
+  if (result.ok && !areFormValuesEqual(result.value, attempted)) apply(result.value);
+}
+
 /**
  * The common case built on `applyBoundSignal`: subscribe to a readable and
  * re-run `apply` whenever it changes. V1 readables use a direct protocol
@@ -479,9 +501,11 @@ function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, app
   const episode: FailureEpisode = { hasReported: false };
   const subscription = createBindingSubscription(source, apply, episode);
   const onChange = () => {
-    source.value = select.multiple
+    const attempted = select.multiple
       ? Array.from(select.selectedOptions, (option) => option.value)
       : select.value;
+    source.value = attempted;
+    resyncRejectedFormWrite(source, attempted, apply, episode);
   };
   select.addEventListener("change", onChange);
   const disposeReset = bindFormReset(select, subscription.refresh);
@@ -531,7 +555,17 @@ function bindTextValue(
     }
   };
   const onInput = () => {
-    source.value = node.value;
+    const attempted = node.value;
+    source.value = attempted;
+    if (composing) {
+      const result = readBoundSignal(() => source.peek(), episode);
+      if (result.ok && !areFormValuesEqual(result.value, attempted)) {
+        hasPending = true;
+        pending = result.value;
+      }
+      return;
+    }
+    resyncRejectedFormWrite(source, attempted, write, episode);
   };
 
   node.addEventListener("compositionstart", onCompositionStart);
@@ -775,9 +809,15 @@ function subscribeBinding(
       if (name === "bindChecked") {
         const input = node as HTMLInputElement;
         const writableSource = source as Signal<unknown>;
-        const onChange = () => { writableSource.value = input.checked; };
+        const episode: FailureEpisode = { hasReported: false };
+        const apply = whileAttached((value: unknown) => setControlledProp(node, "checked", value));
+        const onChange = () => {
+          const attempted = input.checked;
+          writableSource.value = attempted;
+          resyncRejectedFormWrite(writableSource, attempted, apply, episode);
+        };
         input.addEventListener("change", onChange);
-        const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "checked", value)));
+        const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, apply, episode);
         const disposeReset = bindFormReset(input, subscription.refresh);
         return {
           ...subscription,

@@ -60,7 +60,9 @@ fullName.value = "Ada Lovelace";
 console.log(fullName.value); // "Ada Lovelace"
 ```
 
-The getter-only form remains `ReadonlySignal<T>` and cannot be used with writable JSX form bindings. The getter/setter form is a writable `Signal<T>`, so it works with `bindValue`, `bindChecked`, and single or multiple select bindings when its value type matches. A setter need not be a mathematical inverse: after assignment, reads show whatever the getter derives from the state the setter wrote.
+The getter-only form remains `ReadonlySignal<T>` and cannot be used with writable JSX form bindings. The getter/setter form returns `FormBindableSignal<T>`, a writable package `Signal<T>` that works with `bindValue`, `bindChecked`, and single or multiple select bindings when its value type matches. A setter need not be a mathematical inverse: after assignment, reads show whatever the getter derives from the state the setter wrote. Keep the `FormBindableSignal<T>` type when passing it through reusable form props; widening it to `Signal<T>` loses the binding capability and is rejected by JSX types.
+
+`FormBindableSignal<T>` carries a type-only capability so TypeScript can distinguish package-created writable sources from arbitrary structural signals and getter-only computed values. That marker is not a JavaScript property. At runtime, the binding checks the package's private signal brand and writability.
 
 ### When the getter throws
 

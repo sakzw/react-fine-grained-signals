@@ -120,11 +120,33 @@ const enabled = signal(false);
 <input type="checkbox" bindChecked={enabled} />
 ```
 
-`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）、`textarea`、`Signal<string>`を使う単一選択select、`Signal<string[]>`を使うmultiple selectに対応します。配列bindingでは`multiple`を静的に`true`にしてください。動的booleanは現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。`bindChecked`はcheckbox inputのみ対応し、radio groupは対象外です。radio groupにはReact controlled propsを使ってください。
+`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）、`textarea`、`FormBindableSignal<string>`を使う単一選択select、`FormBindableSignal<string[]>`を使うmultiple selectに対応します。`bindChecked`は`FormBindableSignal<boolean>`が必要です。配列bindingでは`multiple`を静的に`true`にしてください。動的booleanは現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。`bindChecked`はcheckbox inputのみ対応し、radio groupは対象外です。radio groupにはReact controlled propsを使ってください。
+
+JSX bindingの型はpackage capabilityである`FormBindableSignal<T>`を要求します。`signal()`、`useSignal()`、書き込み可能な`computed({ get, set })`はこの型を返します。再利用可能なform propsでも`Signal<T>`へ広げず、この型を保ってください。
+
+```tsx
+import type { FormBindableSignal } from "react-fine-grained-signals";
+
+type TextFieldProps<TMeta> = {
+  value: FormBindableSignal<string>;
+  label: string;
+  metadata?: TMeta;
+};
+
+function TextField<TMeta>({ value, label }: TextFieldProps<TMeta>) {
+  return <label>{label}<input bindValue={value} /></label>;
+}
+```
+
+このcapabilityはTypeScript専用のopaque markerであり、JavaScript propertyとしては存在しません。runtimeはpackageのprivate signal brandとvalueの書き込み可能性を検証します。`Signal<T>`と注釈した値にはJSX bindingに必要な型情報が残らず、getter-only computedも引き続き拒否されます。
 
 明示bindingがDOM stateを所有します。`bindValue`と`value`/`defaultValue`、`bindChecked`と`checked`/`defaultChecked`は併用できません。runtimeで拒否し、静的に分かる競合はRFSG JSX型でも拒否します。React標準のcontrolled selectは引き続き`value={selected.value}`と`onChange`で利用できます。`bindValue`ではnative change listenerがReactの`onChange`より前にsignalを更新するため、正規化処理がなければhandler内のsignal代入は不要です。
 
 host refのattach後にbindingをsubscribeしてsignalの初期値を反映し、その後のsignal更新をownerの再レンダーなしでDOMへ書き込みます。native `input` eventはテキストを、native `change` eventはcheckboxの状態またはselectの選択値（multipleでは配列）をsignalへ反映します。`onChange`と`onInput` propsは変更せずReactへ渡します。direct listenerはReactのbubble handlerより先に動くため、`onChange` handlerでsignalへ書き戻せば入力値を補正できます。`onChange`が編集を無視しても、native bindingがすでにDOM値をsignalへコピーしています。
+
+書き込み可能なcomputed bindingではgetterの値を正本とします。setterが入力を拒否した場合や値を正規化した場合、bindingは書き込み後にgetterを読み、DOM値が異なる場合だけDOMを同期し直します。text bindingではIME composition中の入力を中断しないよう、補正をcomposition終了まで遅らせます。checkboxとselectにも同じ契約を適用し、追加処理のためのReact `onChange`も通常どおり実行されます。
+
+書き込み可能なcomputed bindingではgetterの値を正本とします。setterが入力を拒否した場合や値を正規化した場合、bindingは書き込み後にgetterを読み、DOM値が異なる場合だけDOMを同期し直します。text bindingではIME composition中の入力を中断しないよう、補正をcomposition終了まで遅らせます。checkboxとselectにも同じ契約を適用し、追加処理のためのReact `onChange`も通常どおり実行されます。
 
 text controlとselectでは同じ値の書き込みを省略します。focused fieldへの外部更新ではselection rangeを新しい文字列の長さに収まるように維持します。selection APIがないinput typeではcaret位置をブラウザに任せます。IME変換中の外部更新は`compositionend`まで遅延するため変換を中断せず、最後にpending signal値を適用します。form resetは単一／複数selectを含め最新のsignal値へ戻します。reset eventがcancelされた場合はDOMとsignalを変更しません。optionが後から追加された場合は、その時点でsignalに一致する選択とreset用defaultを反映します。
 

@@ -21,8 +21,10 @@ import { For, Index, Show } from "react-fine-grained-signals/utils";
 
 describe("SSR and hydration", () => {
   it("hydrates single and multiple explicit select bindings with their initial values", async () => {
-    const singleValue = signal("b");
-    const multipleValues = signal<string[]>(["a", "c"]);
+    const singleSource = signal("b");
+    const singleValue = computed({ get: () => singleSource.value, set: (next: string) => { singleSource.value = next; } });
+    const multipleSource = signal<string[]>(["a", "c"]);
+    const multipleValues = computed({ get: () => multipleSource.value, set: (next: string[]) => { multipleSource.value = next; } });
     function App() {
       return <>
         <select aria-label="hydrated single" bindValue={singleValue}>
@@ -48,7 +50,49 @@ describe("SSR and hydration", () => {
     expect(single.value).toBe("b");
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a", "c"]);
     await act(async () => { multiple.options[1]!.selected = true; multiple.dispatchEvent(new Event("change", { bubbles: true })); });
-    expect(multipleValues.value).toEqual(["a", "b", "c"]);
+    expect(multipleSource.value).toEqual(["a", "b", "c"]);
+    expect(consoleError).not.toHaveBeenCalled();
+
+    root.unmount();
+    container.remove();
+    consoleError.mockRestore();
+  });
+
+  it("hydrates writable computed input and checkbox bindings and accepts user edits", async () => {
+    const textSource = signal("server value");
+    const text = computed({ get: () => textSource.value, set: (next: string) => { textSource.value = next; } });
+    const checkedSource = signal(true);
+    const checked = computed({ get: () => checkedSource.value, set: (next: boolean) => { checkedSource.value = next; } });
+    function App() {
+      return <>
+        <input aria-label="hydrated computed input" bindValue={text} />
+        <input type="checkbox" aria-label="hydrated computed checkbox" bindChecked={checked} />
+      </>;
+    }
+
+    const html = renderToString(<App />);
+    expect(html).toContain('value="server value"');
+    expect(html).toContain('checked=""');
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    document.body.appendChild(container);
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, <App />);
+    await act(async () => { await Promise.resolve(); });
+
+    const input = container.querySelector('[aria-label="hydrated computed input"]') as HTMLInputElement;
+    const checkbox = container.querySelector('[aria-label="hydrated computed checkbox"]') as HTMLInputElement;
+    expect(input.value).toBe("server value");
+    expect(checkbox.checked).toBe(true);
+    await act(async () => {
+      input.value = "client value";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+      checkbox.click();
+    });
+    expect(textSource.value).toBe("client value");
+    expect(checkedSource.value).toBe(false);
+    expect(input.value).toBe("client value");
+    expect(checkbox.checked).toBe(false);
     expect(consoleError).not.toHaveBeenCalled();
 
     root.unmount();
