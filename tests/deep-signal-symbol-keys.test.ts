@@ -84,6 +84,37 @@ describe("deepSignal reactive symbol keys", () => {
     }
   });
 
+  it("treats opaque proxy objects as native weak collection keys", () => {
+    let ownKeysCalls = 0;
+    const opaque = new Proxy({}, {
+      ownKeys() {
+        ownKeysCalls += 1;
+        throw new Error("weak collection keys must not be traversed");
+      },
+    });
+    const revocable = Proxy.revocable({}, {});
+    revocable.revoke();
+    const keys = [opaque, revocable.proxy];
+    const nativeMap = new WeakMap<object, number>();
+    const reactiveMap = deepSignal(new WeakMap<object, number>());
+    const nativeSet = new WeakSet<object>();
+    const reactiveSet = deepSignal(new WeakSet<object>());
+
+    for (const key of keys) {
+      expect(capture(() => reactiveMap.value.get(key))).toEqual(capture(() => nativeMap.get(key)));
+      expect(capture(() => reactiveMap.value.has(key))).toEqual(capture(() => nativeMap.has(key)));
+      expect(capture(() => reactiveSet.value.has(key))).toEqual(capture(() => nativeSet.has(key)));
+      expect(capture(() => { reactiveMap.value.set(key, 1); return "ok"; }))
+        .toEqual(capture(() => { nativeMap.set(key, 1); return "ok"; }));
+      expect(capture(() => { reactiveSet.value.add(key); return "ok"; }))
+        .toEqual(capture(() => { nativeSet.add(key); return "ok"; }));
+      expect(reactiveMap.value.get(key)).toBe(1);
+      expect(reactiveSet.value.has(key)).toBe(true);
+    }
+
+    expect(ownKeysCalls).toBe(0);
+  });
+
   it("preserves reactive reads for local and well-known symbols", () => {
     const local = Symbol("local-map-key");
     const wellKnown = Symbol.iterator;

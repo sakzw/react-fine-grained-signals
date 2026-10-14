@@ -833,7 +833,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         metadata.prunableSweepRevision = undefined;
         return;
       }
-      const [key, candidates] = next.value;
+      // Avoid spelling this as `.value`: the managed transform treats static
+      // `.value` reads as signal reads and would capture this iterator result.
+      const [key, candidates] = Reflect.get(next, "value") as [unknown, number];
       processed += 1;
       let remaining = candidates;
       if ((candidates & 1) !== 0) {
@@ -882,11 +884,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       if (isObjectLike(value)) {
         const raw = toRaw(value);
         if (raw !== undefined) return raw;
-        // Weak collections treat keys as opaque identities. An object with no
-        // own properties cannot contain a nested deep proxy, so avoid building
-        // a graph traversal stack for this common key shape. Keys with own data
-        // still go through full validation before entering the weak collection.
-        if (Reflect.ownKeys(value).length === 0) return value;
+        // Native weak collections treat every object key as an opaque identity,
+        // including proxies whose ownKeys/getPrototypeOf traps throw. Only
+        // unwrap proxies created by this deepSignal factory; traversing an
+        // arbitrary key would change native acceptance and identity semantics.
+        return value;
       }
       return normalize(value);
     };
