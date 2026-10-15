@@ -143,7 +143,21 @@ const unsupportedSvgStyle = <svg style={boxStyle} />;
 // Component props and children remain fully transparent.
 const component = <Custom value={text}>{text}</Custom>;
 
+const mode = signal<"a" | "b">("a");
+// @ts-expect-error A text input can write any string, so a literal-union signal is rejected.
+const literalTextBinding = <input bindValue={mode} />;
+// @ts-expect-error A textarea can write any string, so a literal-union signal is rejected.
+const literalTextareaBinding = <textarea bindValue={mode} />;
+const literalRadioBinding = <input type="radio" name="mode" value="a" bindValue={mode} />;
+const literalSelectBinding = <select bindValue={mode}><option value="a">A</option></select>;
+const literalMany = signal<Array<"a" | "b">>([]);
+const literalCheckboxGroupBinding = <input type="checkbox" name="modes" value="a" bindValue={literalMany} />;
 void [
+  literalTextBinding,
+  literalTextareaBinding,
+  literalRadioBinding,
+  literalSelectBinding,
+  literalCheckboxGroupBinding,
   html,
   styled,
   partiallyStyled,

@@ -16,9 +16,22 @@ declare const formBindableSignalType: unique symbol;
 
 /** A package signal accepted by the direct JSX binding runtime. */
 export interface FormBindableSignal<T> extends Signal<T> {
-  /** Type-only capability; runtime validation uses the private RFSG signal brand. */
-  readonly [formBindableSignalType]: true;
+  /**
+   * Type-only capability; runtime validation uses the private RFSG signal
+   * brand. Its parameter makes the capability contravariant in `T`: a binding
+   * that writes any string (`<input bindValue>`) rejects a signal typed as a
+   * narrower union, which the user could otherwise fill with other values.
+   */
+  readonly [formBindableSignalType]: (value: T) => void;
 }
+
+/**
+ * A form-bindable signal whose value may be narrower than `T`. Option-based
+ * bindings (radio, select, checkbox groups) only write the option values the
+ * author rendered, so they accept a literal-union signal.
+ * @internal Used by the JSX binding prop types.
+ */
+export type FormBindableChoiceSignal<T> = Signal<T> & { readonly [formBindableSignalType]: (value: never) => void };
 
 const signalInstances = new WeakSet<object>();
 

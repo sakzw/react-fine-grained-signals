@@ -1,5 +1,5 @@
 import { isSignal, untracked } from "../core/index.js";
-import { detachedEffect } from "../core/base.js";
+import { detachedEffect, type FormBindableChoiceSignal } from "../core/base.js";
 import { subscribeReadableV1 } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
 import type { FormBindableSignal, ReadonlySignal, Signal } from "../core/index.js";
@@ -502,18 +502,40 @@ function setSelectValue(select: HTMLSelectElement, value: unknown): void {
  * the signal's current value whenever its `<option>` list changes, closing
  * that gap without requiring the signal to change too.
  */
+function readSelectValue(select: HTMLSelectElement): string | string[] {
+  return select.multiple ? Array.from(select.selectedOptions, (option) => option.value) : select.value;
+}
+
 function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, apply: (value: unknown) => void): BindingSubscription {
   // Shared by both read sites below: a subscription-triggered failure and a
   // MutationObserver-triggered failure are the same underlying computed
   // erroring, so they report as one episode, not two.
   const episode: FailureEpisode = { hasReported: false };
-  const subscription = createBindingSubscription(source, apply, episode);
+  // While a user change is being written, a normalizing or rejecting setter
+  // must not move the DOM before React's delegated onChange sees the user's
+  // selection. Defer that correction to the next task, as text bindings do.
+  let handlingChange = false;
+  let correctionTimer: ReturnType<typeof setTimeout> | undefined;
+  const guardedApply = (value: unknown) => {
+    if (!handlingChange) apply(value);
+  };
+  const subscription = createBindingSubscription(source, guardedApply, episode);
   const onChange = () => {
-    const attempted = select.multiple
-      ? Array.from(select.selectedOptions, (option) => option.value)
-      : select.value;
-    source.value = attempted;
-    resyncRejectedFormWrite(source, attempted, apply, episode);
+    const attempted = readSelectValue(select);
+    handlingChange = true;
+    try {
+      source.value = attempted;
+    } finally {
+      handlingChange = false;
+      // Also after a throwing setter: put the DOM back on the signal's value.
+      if (correctionTimer !== undefined) clearTimeout(correctionTimer);
+      // Always re-apply: it also brings the reset defaults up to date, which
+      // the skipped synchronous apply would have done for an accepted change.
+      correctionTimer = setTimeout(() => {
+        correctionTimer = undefined;
+        applyBoundSignal(() => source.peek(), apply, episode);
+      }, 0);
+    }
   };
   select.addEventListener("change", onChange);
   const disposeReset = bindFormReset(select, subscription.refresh);
@@ -523,6 +545,7 @@ function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, app
   observer.observe(select, { childList: true, subtree: true });
   return {
     dispose() {
+      if (correctionTimer !== undefined) clearTimeout(correctionTimer);
       subscription.dispose();
       observer.disconnect();
       disposeReset();
@@ -536,6 +559,20 @@ type InputValueGroupKind = "radio-value" | "checkbox-group";
 type InputValueGroupMember = () => void;
 const inputValueGroupMembers = new WeakMap<object, Set<InputValueGroupMember>>();
 const boundRadioSources = new WeakMap<HTMLInputElement, Signal<unknown>>();
+/** The input whose user click is being written into each group source. */
+const groupClickTargets = new WeakMap<object, HTMLInputElement>();
+
+/**
+ * Whether `member`'s DOM write must wait for the click on `target`: the
+ * target itself (React's click tracker) and, for radios, every peer in the
+ * same native group, which the browser would uncheck the target for.
+ */
+function defersToGroupClick(member: HTMLInputElement, target: HTMLInputElement | undefined): boolean {
+  if (target === undefined) return false;
+  if (member === target) return true;
+  return member.type === "radio" && target.type === "radio" && member.name === target.name
+    && member.form === target.form && member.getRootNode() === target.getRootNode();
+}
 
 function getNativeRadioPeers(input: HTMLInputElement): HTMLInputElement[] {
   const form = input.form;
@@ -631,25 +668,34 @@ function bindInputValueGroup(
       throw error;
     }
   }
-  let deferUserElementWrite = false;
   const apply = (value: unknown) => {
-    if (!deferUserElementWrite) write(isInputValueGroupChecked(value, kind, optionValue));
+    // During a user click, the target and its native radio peers wait: the
+    // browser already moved the native state, and checking a peer (a
+    // normalizing setter selecting another radio) would uncheck the target
+    // before React's delegated onChange runs. Members elsewhere update now.
+    if (!defersToGroupClick(input, groupClickTargets.get(source))) write(isInputValueGroupChecked(value, kind, optionValue));
   };
   const subscription = createBindingSubscription(source, apply, episode);
   let active = true;
-  let correctionVersion = 0;
+  let pendingCorrection: (() => void) | undefined;
   let correctionTimer: ReturnType<typeof setTimeout> | undefined;
-  const cancelCorrection = () => {
-    correctionVersion += 1;
-    if (correctionTimer !== undefined) {
-      clearTimeout(correctionTimer);
-      correctionTimer = undefined;
-    }
+  /** Runs a correction still waiting for its task now, before the next click. */
+  const flushCorrection = () => {
+    if (correctionTimer !== undefined) clearTimeout(correctionTimer);
+    correctionTimer = undefined;
+    const correction = pendingCorrection;
+    pendingCorrection = undefined;
+    correction?.();
+  };
+  const scheduleCorrection = (correction: () => void) => {
+    pendingCorrection = correction;
+    correctionTimer = setTimeout(flushCorrection, 0);
   };
   const refreshGroup = () => applyBoundSignal(() => source.peek(), apply, episode);
   const unregisterMember = registerInputValueGroupMember(source, refreshGroup);
   const onClick = (event: MouseEvent) => {
     if (!active || input.disabled) return;
+    flushCorrection();
     if (kind === "radio-value") assertRadioGroupSource(input, source);
     let attempted: unknown;
     if (kind === "radio-value") {
@@ -663,40 +709,43 @@ function bindInputValueGroup(
         : current.filter((value) => value !== optionValue);
     }
 
-    cancelCorrection();
     const previous = source.peek();
-    deferUserElementWrite = true;
+    let written: unknown = previous;
+    groupClickTargets.set(source, input);
     try {
       source.value = attempted;
+      written = source.peek();
     } finally {
-      deferUserElementWrite = false;
-    }
-    const written = source.peek();
-    // Let React's delegated click/change handlers observe the native user
-    // selection before synchronizing every member to a rejected, normalized,
-    // or cross-root group value in the next task.
-    const getterMatchesUserState = isInputValueGroupChecked(written, kind, optionValue) === input.checked;
-    if (active && getterMatchesUserState) {
-      // The target's subscription deliberately skipped its checked write
-      // above to preserve React's click tracker. Keep the browser reset
-      // default current without touching that tracker.
-      if (input.defaultChecked !== input.checked) input.defaultChecked = input.checked;
-    }
-    if (!active) return;
-    // A handler that calls `preventDefault()` cancels the activation; the
-    // browser restores the previous checked state only after dispatch. Revert
-    // the signal then too, unless a handler has written it since.
-    const version = correctionVersion;
-    correctionTimer = setTimeout(() => {
-      correctionTimer = undefined;
-      if (!active || version !== correctionVersion) return;
-      if (event.defaultPrevented) {
-        if (areFormValuesEqual(source.peek(), written)) source.value = previous;
+      groupClickTargets.delete(source);
+      // Let React's delegated click/change handlers observe the native user
+      // selection, then settle in the next task: revert a canceled click
+      // (`preventDefault()`; the browser restores the checked state only
+      // after dispatch) and synchronize every member to a rejected,
+      // normalized, thrown-away, or cross-root group value. The settle also
+      // runs if the control unmounts in the meantime, so a canceled click
+      // that hides its control still leaves the signal unchanged.
+      scheduleCorrection(() => {
+        if (event.defaultPrevented) {
+          const current = source.peek();
+          if (kind === "radio-value") {
+            if (areFormValuesEqual(current, written)) source.value = previous;
+          } else if (isCheckboxGroupValue(current) && isCheckboxGroupValue(previous)) {
+            // Revert only this option's membership, so a later click on
+            // another member in the same task is kept.
+            const wasMember = previous.includes(optionValue);
+            if (current.includes(optionValue) !== wasMember) {
+              source.value = wasMember ? [...current, optionValue] : current.filter((value) => value !== optionValue);
+            }
+          }
+        }
         refreshInputValueGroup(source);
-      } else if (!getterMatchesUserState) {
-        refreshInputValueGroup(source);
-      }
-    }, 0);
+      });
+    }
+    if (isInputValueGroupChecked(written, kind, optionValue) === input.checked && input.defaultChecked !== input.checked) {
+      // The target's write was deferred above to preserve React's click
+      // tracker. Keep the browser reset default current without touching it.
+      input.defaultChecked = input.checked;
+    }
   };
   // React 19 synthesizes checkbox/radio onChange from the bubbling click
   // path. Updating at the target keeps the shared signal current before that
@@ -707,8 +756,9 @@ function bindInputValueGroup(
   return {
     refresh: subscription.refresh,
     dispose() {
+      // A pending settle is left to run: it only touches the signal and the
+      // members that are still registered.
       active = false;
-      cancelCorrection();
       subscription.dispose();
       unregisterMember();
       if (kind === "radio-value" && boundRadioSources.get(input) === source) boundRadioSources.delete(input);
@@ -760,24 +810,30 @@ function bindTextValue(
       correctionTimer = undefined;
     }
     handlingInput = true;
+    let setterError: { error: unknown } | undefined;
     try {
       source.value = attempted;
+    } catch (error) {
+      setterError = { error };
     } finally {
       handlingInput = false;
     }
-    if (composing) {
-      const result = readBoundSignal(() => source.peek(), episode);
-      if (result.ok && !areFormValuesEqual(result.value, attempted)) {
-        hasPending = true;
-        pending = result.value;
+    if (setterError === undefined) {
+      if (composing) {
+        const result = readBoundSignal(() => source.peek(), episode);
+        if (result.ok && !areFormValuesEqual(result.value, attempted)) {
+          hasPending = true;
+          pending = result.value;
+        }
+        return;
       }
-      return;
+      const current = readBoundSignal(() => source.peek(), episode);
+      if (current.ok && areFormValuesEqual(current.value, attempted)) return;
     }
-    const current = readBoundSignal(() => source.peek(), episode);
-    if (current.ok && areFormValuesEqual(current.value, attempted)) return;
     // Some browsers run a microtask checkpoint between the target listener
     // and React's delegated listener. Use a task so React always observes the
-    // attempted value before any corrective DOM write.
+    // attempted value before any corrective DOM write. A setter that threw
+    // left the signal unchanged; the same correction puts the DOM back.
     const timer = setTimeout(() => {
       if (correctionTimer === timer) correctionTimer = undefined;
       if (!active || version !== inputVersion || !Object.is(node.value, attempted)) return;
@@ -792,6 +848,7 @@ function bindTextValue(
       resyncRejectedFormWrite(source, attempted, write, episode);
     }, 0);
     correctionTimer = timer;
+    if (setterError !== undefined) throw setterError.error;
   };
 
   node.addEventListener("compositionstart", onCompositionStart);
@@ -1074,27 +1131,42 @@ function subscribeBinding(
         const episode: FailureEpisode = { hasReported: false };
         const apply = whileAttached((value: unknown) => setControlledProp(node, "checked", value));
         let settleTimer: ReturnType<typeof setTimeout> | undefined;
+        let pendingSettle: (() => void) | undefined;
+        const flushSettle = () => {
+          if (settleTimer !== undefined) clearTimeout(settleTimer);
+          settleTimer = undefined;
+          const settle = pendingSettle;
+          pendingSettle = undefined;
+          settle?.();
+        };
         // React 19 synthesizes checkbox onChange from the bubbling click, before
         // the native `change` event. Writing at the click target keeps the
         // signal current for React's handlers, like the group bindings do.
         const onClick = (event: MouseEvent) => {
+          if (input.disabled) return;
+          flushSettle();
           const attempted = input.checked;
           const previous = writableSource.peek();
-          writableSource.value = attempted;
-          const written = writableSource.peek();
-          if (settleTimer !== undefined) clearTimeout(settleTimer);
-          // A canceled click (`preventDefault()`) is reverted by the browser
-          // only after dispatch, and a rejected write must not touch the DOM
-          // while React still compares the click's checked state. Settle both
-          // once the event has finished.
-          settleTimer = setTimeout(() => {
-            settleTimer = undefined;
-            if (event.defaultPrevented && areFormValuesEqual(writableSource.peek(), written)) {
-              writableSource.value = previous;
-            }
-            const current = readBoundSignal(() => writableSource.peek(), episode);
-            if (current.ok) apply(current.value);
-          }, 0);
+          let written: unknown = previous;
+          try {
+            writableSource.value = attempted;
+            written = writableSource.peek();
+          } finally {
+            // A canceled click (`preventDefault()`) is reverted by the browser
+            // only after dispatch, and a rejected or throwing write must not
+            // touch the DOM while React still compares the click's checked
+            // state. Settle both once the event has finished; the signal
+            // revert runs even if the control unmounted meanwhile (`apply`
+            // skips a detached node).
+            pendingSettle = () => {
+              if (event.defaultPrevented && areFormValuesEqual(writableSource.peek(), written)) {
+                writableSource.value = previous;
+              }
+              const current = readBoundSignal(() => writableSource.peek(), episode);
+              if (current.ok) apply(current.value);
+            };
+            settleTimer = setTimeout(flushSettle, 0);
+          }
         };
         input.addEventListener("click", onClick);
         const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, apply, episode);
@@ -1102,7 +1174,6 @@ function subscribeBinding(
         return {
           ...subscription,
           dispose() {
-            if (settleTimer !== undefined) clearTimeout(settleTimer);
             subscription.dispose();
             disposeReset();
             input.removeEventListener("click", onClick);
@@ -1404,7 +1475,10 @@ type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) 
  */
 function findHostBindings(props: HostProps, tagName: string): Binding[] {
   const bindings: Binding[] = [];
-  const has = (name: string) => Object.prototype.hasOwnProperty.call(props, name);
+  // A prop explicitly set to `undefined` is absent, as React treats it:
+  // `bindValue={cond ? field : undefined}` and `value={undefined}` next to a
+  // binding must not count as a binding or a conflict.
+  const has = (name: string) => Object.prototype.hasOwnProperty.call(props, name) && props[name] !== undefined;
   const inputType = tagName === "input" ? String(props.type ?? "text").toLowerCase() : undefined;
   const isInputValueGroup = inputType === "radio" || inputType === "checkbox";
   if (has("bindValue") && has("bindChecked")) {
@@ -1424,6 +1498,7 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
   }
   for (const [name, value] of Object.entries(props)) {
     if (name === "bindValue" || name === "bindChecked") {
+      if (value === undefined) continue;
       if (!isWritableSignal(value)) {
         throw new TypeError(`${name} requires writable signal.`);
       }
@@ -1493,7 +1568,13 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
   const normalizedProps = styleProperties === undefined
     ? inputProps
     : { ...inputProps, style: styleProperties.snapshot };
+  if (!isHtmlHost && (normalizedProps.bindValue !== undefined || normalizedProps.bindChecked !== undefined)) {
+    throw new TypeError(`${normalizedProps.bindValue !== undefined ? "bindValue: text input/textarea/select only." : "bindChecked: checkbox only."}`);
+  }
   const bindings = isHtmlHost ? findHostBindings(normalizedProps, type) : [];
+  // Binding props never reach the DOM, including ones left `undefined`.
+  const strayBindingProps = Object.prototype.hasOwnProperty.call(normalizedProps, "bindValue")
+    || Object.prototype.hasOwnProperty.call(normalizedProps, "bindChecked");
   if (styleProperties !== undefined) {
     bindings.push(["style", styleProperties.source, "style-properties", styleProperties.snapshot]);
   }
@@ -1502,7 +1583,7 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
   const childrenNeedNormalization =
     "children" in normalizedProps && (isSignal(rawChildren) || Array.isArray(rawChildren));
 
-  if (bindings.length === 0 && !childrenNeedNormalization) {
+  if (bindings.length === 0 && !childrenNeedNormalization && !strayBindingProps) {
     return { props: normalizedProps, bindings };
   }
 
@@ -1512,6 +1593,10 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
   const props: HostProps = { ...normalizedProps };
   if (childrenNeedNormalization) {
     props.children = normalizeChild(rawChildren);
+  }
+  if (strayBindingProps) {
+    delete props.bindValue;
+    delete props.bindChecked;
   }
   for (const [name, , kind, snapshot] of bindings) {
     // Only explicit `bindValue`/`bindChecked` bindings use two-way kinds, so
@@ -1668,7 +1753,7 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     defaultValue?: never;
     checked?: never;
     defaultChecked?: never;
-    bindValue: FormBindableSignal<string> & NotDeepSignal;
+    bindValue: FormBindableChoiceSignal<string> & NotDeepSignal;
     bindChecked?: never;
   }
   | {
@@ -1678,7 +1763,7 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     defaultValue?: never;
     checked?: never;
     defaultChecked?: never;
-    bindValue: FormBindableSignal<string[]> & NotDeepSignal;
+    bindValue: FormBindableChoiceSignal<string[]> & NotDeepSignal;
     bindChecked?: never;
   }
 );
@@ -1699,13 +1784,13 @@ type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<Ad
     multiple?: false;
     value?: never;
     defaultValue?: never;
-    bindValue?: FormBindableSignal<string> & NotDeepSignal;
+    bindValue?: FormBindableChoiceSignal<string> & NotDeepSignal;
   }
   | {
     multiple: true;
     value?: never;
     defaultValue?: never;
-    bindValue?: FormBindableSignal<string[]> & NotDeepSignal;
+    bindValue?: FormBindableChoiceSignal<string[]> & NotDeepSignal;
   }
 );
 

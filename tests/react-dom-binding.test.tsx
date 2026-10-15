@@ -2128,3 +2128,134 @@ describe("Direct DOM binding: ref identity stability", () => {
     expect(firstNode.value).toBe("first");
   });
 });
+
+describe("M17.4 form binding review fixes", () => {
+  const nextTask = async () => { await act(async () => { await waitForNextTask(); }); };
+
+  it("reverts a canceled click even when the handler unmounts the control", async () => {
+    const agree = signal(false);
+    const tags = signal<string[]>([]);
+    const choice = signal("a");
+    function Panel() {
+      const [open, setOpen] = useState(true);
+      const close = (event: { preventDefault(): void }) => { event.preventDefault(); setOpen(false); };
+      if (!open) return <p>closed</p>;
+      return <form>
+        <input type="checkbox" aria-label="agree" bindChecked={agree} onClick={close} />
+        <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} onClick={close} />
+        <input type="radio" name="choice" value="a" bindValue={choice} />
+        <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onClick={close} />
+      </form>;
+    }
+    for (const label of ["agree", "tag x", "choice b"]) {
+      const view = render(<Panel />);
+      fireEvent.click(screen.getByLabelText(label));
+      await nextTask();
+      view.unmount();
+    }
+    expect(agree.value).toBe(false);
+    expect(tags.value).toEqual([]);
+    expect(choice.value).toBe("a");
+  });
+
+  it("keeps React's onChange for a radio whose setter normalizes to another option", async () => {
+    const base = signal("a");
+    const normalized = computed({ get: () => base.value, set: (next: string) => { base.value = next === "b" ? "c" : next; } });
+    const seen: string[] = [];
+    render(<form>
+      {["a", "b", "c"].map((option) => (
+        <input key={option} type="radio" name="n" value={option} aria-label={`n ${option}`} bindValue={normalized}
+          onChange={(event) => seen.push(`${option}:${event.target.checked}`)} />
+      ))}
+    </form>);
+    fireEvent.click(screen.getByLabelText("n b"));
+    expect(seen).toEqual(["b:true"]);
+    await nextTask();
+    expect(base.value).toBe("c");
+    expect((screen.getByLabelText("n c") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("n b") as HTMLInputElement).checked).toBe(false);
+  });
+
+  it("lets React's onChange see the user's selection before a select correction", async () => {
+    const base = signal("a");
+    const rejecting = computed({ get: () => base.value, set: (next: string) => { if (next !== "b") base.value = next; } });
+    const seen: string[] = [];
+    render(<select aria-label="rejecting" bindValue={rejecting} onChange={(event) => seen.push(event.target.value)}>
+      <option value="a">A</option><option value="b">B</option>
+    </select>);
+    const select = screen.getByLabelText("rejecting") as HTMLSelectElement;
+    fireEvent.change(select, { target: { value: "b" } });
+    expect(seen).toEqual(["b"]);
+    await nextTask();
+    expect(select.value).toBe("a");
+  });
+
+  it("reverts only the canceled option when another group member is clicked in the same task", async () => {
+    const tags = signal<string[]>([]);
+    render(<form>
+      <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} onClick={(event) => event.preventDefault()} />
+      <input type="checkbox" name="tags" value="y" aria-label="tag y" bindValue={tags} />
+    </form>);
+    fireEvent.click(screen.getByLabelText("tag x"));
+    fireEvent.click(screen.getByLabelText("tag y"));
+    await nextTask();
+    expect(tags.value).toEqual(["y"]);
+    expect((screen.getByLabelText("tag x") as HTMLInputElement).checked).toBe(false);
+    expect((screen.getByLabelText("tag y") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("treats binding props explicitly set to undefined as absent", () => {
+    const text = signal("t");
+    const agree = signal(true);
+    const conditional = undefined as typeof text | undefined;
+    render(<>
+      <input aria-label="optional binding" {...({ bindValue: conditional } as object)} />
+      <input aria-label="undefined value" bindValue={text} {...({ value: undefined } as object)} />
+      <input type="checkbox" aria-label="undefined checked" bindChecked={agree} {...({ checked: undefined } as object)} />
+    </>);
+    expect(screen.getByLabelText("optional binding").hasAttribute("bindvalue")).toBe(false);
+    expect((screen.getByLabelText("undefined value") as HTMLInputElement).value).toBe("t");
+    expect((screen.getByLabelText("undefined checked") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("restores the DOM after a throwing setter and ignores clicks on disabled checkboxes", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const windowErrors: unknown[] = [];
+    const onError = (event: ErrorEvent) => { windowErrors.push(event.error); event.preventDefault(); };
+    window.addEventListener("error", onError);
+    try {
+      const textBase = signal("ok");
+      const text = computed({ get: () => textBase.value, set: () => { throw new Error("no text"); } });
+      const flagBase = signal(false);
+      const flag = computed({ get: () => flagBase.value, set: () => { throw new Error("no flag"); } });
+      const disabledFlag = signal(false);
+      render(<>
+        <input aria-label="throwing text" bindValue={text} />
+        <input type="checkbox" aria-label="throwing flag" bindChecked={flag} />
+        <input type="checkbox" aria-label="disabled flag" disabled bindChecked={disabledFlag} />
+      </>);
+      const input = screen.getByLabelText("throwing text") as HTMLInputElement;
+      dispatchUserTextInput(input, "ok!");
+      fireEvent.click(screen.getByLabelText("throwing flag"));
+      fireEvent.click(screen.getByLabelText("disabled flag"));
+      await nextTask();
+      expect(input.value).toBe("ok");
+      expect((screen.getByLabelText("throwing flag") as HTMLInputElement).checked).toBe(false);
+      expect(disabledFlag.value).toBe(false);
+    } finally {
+      window.removeEventListener("error", onError);
+      errors.mockRestore();
+    }
+  });
+
+  it("never passes binding props to non-HTML hosts", () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      render(<svg>{createSignalAwareElement("circle", { bindValue: undefined, r: 1 }) as ReactNode}</svg>);
+      expect(errors).not.toHaveBeenCalled();
+      expect(() => createSignalAwareElement("circle", { bindValue: signal("x") })).toThrow(/text input\/textarea\/select only/);
+    } finally {
+      errors.mockRestore();
+    }
+  });
+});
