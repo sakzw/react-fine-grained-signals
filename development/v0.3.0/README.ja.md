@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M15.1でflat/nested static `const` object destructuringのbatch expansionとsemantic testsを追加。focused tests、React Compiler、typecheck/lint/build/size、consumer smokeがpass。ローカルaggregate coverage/browser実行には環境負荷由来のtimeoutがあったが、push SHA `9acb19c804f4148312b23cd4a7be5d31239a91cf`のGitHub Test/E2Eは両方pass。500件dependent chainは時間・heapの幅を制約として記録し、runtime変更は行わない。詳細は[M15.1 hardening](m15.1-transform-hardening.ja.md)、[M15 tracking expansion](m15-managed-tracking-expansion.ja.md)、[M8 qualification status](m8-qualification-status.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
+- 状態: M15.2でdependent-chain fixtureを件数に合う深さへ修正し、変換後コードの初期値とdeep updateを検証した。100件chainはbaseline 6.56秒 / candidate 2.98秒の中央値、500件candidateは5.77秒（3回の幅4.57–15.69秒）。500件baseline chain/independentは各60秒でtimeout。500件CPU profileではBabel visitor/AST traversalと`hasTrackedSource`が主なself-timeで、scope crawl/codegenは小さく、追加製品最適化はしない。M15.1の古いchain結果はfixture不備のため撤回。Transform suite 425件と再実行2件、focused React regression pass。詳細は[M15.2 audit](m15.2-benchmark-validity.ja.md)。M15.1のReact Compiler、typecheck/lint/build/size、consumer smokeおよびGitHub Test/E2Eの記録は引き継ぐ。公開tag、npm publish、GitHub Releaseは未実施。
 - 統合ブランチ: `main`
-- 最新マイルストーン: M15.1 transform scalability & semantic hardening。既存flat patternをbatch展開し、static nested object subsetを追加。100件ケースはbaseline比で独立約6.6倍、alias chain約7.9倍速い計測値だが、500件chainは測定幅が大きいため制約として記録。M16ではJSDOM selector cacheのretainer pathを特定し、製品コード変更はなし。該当push SHAのTest/E2E CIは成功。
+- 最新マイルストーン: M15.2 benchmark validity & transform stress audit。M15.1 chain表の旧値を無効とし、正しいfixtureの再測定へ置き換えた。500件baselineのchain/independent完走値は得られていない。M15.1製品コードは維持し、今回runtime/transform実装に変更はない。M16ではJSDOM selector cacheのretainer pathを特定し、製品コード変更はなし。既存のpush SHAに対するTest/E2E CIは成功。
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -33,6 +33,8 @@
 | M13 | v0.3.0 release readiness review | M12.1 | Public API/types、package/tarball/consumer、docs/migration、React/browser、performance/bundle、final qualificationを監査。重大問題を修正してM8 freezeを判断 | **READY WITH KNOWN LIMITATIONS（当時の判定）。** GitHub Test `38662092010`とE2E `38662092091` success。M14開始時に追加performance workのためfreezeを解除。結果と制約は[M13 record](m13-release-readiness.ja.md) |
 | M14 | computed performance deep dive / M15-M16先行調査 | M13 | CPU/allocation profile、複数の異なる最適化prototype、paired benchmark、tracking・browser retention auditを実施し、根拠ある改善だけ統合 | 実装・local qualification完了。interop protocol lazy materializationを採用、brand descriptor共有は不採用。M8を再freeze。GitHub Actions post-push結果を最終確認する。詳細は[M14 record](m14-computed-performance-and-next-audits.ja.md) |
 | M15 | managed tracking coverage expansion | M14 | 既存alias契約を維持し、意味論を保てるdestructuring subsetのみ追加。React runtime動作、diagnostics、performance、M16 retentionを検証 | 完了。static `const` object destructuringを追加。runtime 621/621、transform 417/417 + final diagnostic 1/1、React Compiler 27/27、Browser E2E 71/71 passed。M8を再freeze、GitHub Actions post-push結果待ち。詳細は[M15 record](m15-managed-tracking-expansion.ja.md) |
+| M15.1 | Transform scalability & semantic hardening | M15 | flat alias patternをbatch展開し、nested static subsetを追加。React/compiler/semanticsとstressを検証 | 完了。旧chain benchmark fixtureは誤りがあり、そのchain表をM15.2で撤回。詳細は[M15.1 record](m15.1-transform-hardening.ja.md) |
+| M15.2 | Benchmark validity & transform stress audit | M15.1 | chain fixtureを修正し、baseline/candidateをfresh processで交互に計測。runtime正確性とCPU profileを確認 | 完了。0/5/20/100/500の正しいfixtureを実行。500 baseline chain/independentは60秒timeout、candidateは全ケースのinitial/deep update pass。profileを根拠に実装変更なし。詳細は[M15.2 record](m15.2-benchmark-validity.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 

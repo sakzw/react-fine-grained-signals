@@ -1238,6 +1238,44 @@ describe("managed destructured signal reads", () => {
     expect(container.textContent).toBe("Cleo");
   });
 
+  it("tracks a valid multi-stage destructuring chain through deep writes and replacement", async () => {
+    const depth = 8;
+    type Node = { name?: string; child?: Node };
+    const sourceObject = (name: string) => {
+      let value: Node = { name };
+      for (let index = 0; index < depth; index += 1) value = { child: value };
+      return value;
+    };
+    const module = await loadModule(`
+      import { deepSignal } from "react-fine-grained-signals";
+      export const state = deepSignal(${JSON.stringify(sourceObject("Ada"))});
+      export function Profile() {
+        const { child: value0 } = state.value;
+        const { child: value1 } = value0;
+        const { child: value2 } = value1;
+        const { child: value3 } = value2;
+        const { child: value4 } = value3;
+        const { child: value5 } = value4;
+        const { child: value6 } = value5;
+        const { child: value7 } = value6;
+        return <p>{value7.name}</p>;
+      }
+    `);
+    const container = mount(module.Profile);
+    const state = module.state as Signal<Node>;
+    expect(container.textContent).toBe("Ada");
+
+    act(() => {
+      let target = state.value;
+      for (let index = 0; index < depth; index += 1) target = target.child!;
+      target.name = "Bea";
+    });
+    expect(container.textContent).toBe("Bea");
+
+    act(() => { state.value = sourceObject("Cleo"); });
+    expect(container.textContent).toBe("Cleo");
+  });
+
   it("hydrates a nested static pattern and keeps its capture live", async () => {
     const module = await loadModule(`
       import { deepSignal } from "react-fine-grained-signals";

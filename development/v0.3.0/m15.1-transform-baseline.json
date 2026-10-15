@@ -14,8 +14,8 @@
       "maxMs": 125.797,
       "outputBytes": 364,
       "captureCount": 1,
-      "peakHeapDeltaMiB": 0.8,
-      "retainedHeapDeltaMiB": 0.19
+      "heapUsedDeltaAfterTransformMiB": 0.8,
+      "postGcHeapUsedDeltaMiB": 0.19
     },
     {
       "case": "independent",
@@ -25,8 +25,8 @@
       "maxMs": 274.762,
       "outputBytes": 1118,
       "captureCount": 15,
-      "peakHeapDeltaMiB": 3.18,
-      "retainedHeapDeltaMiB": 0.09
+      "heapUsedDeltaAfterTransformMiB": 3.18,
+      "postGcHeapUsedDeltaMiB": 0.09
     },
     {
       "case": "independent",
@@ -36,8 +36,8 @@
       "maxMs": 912.95,
       "outputBytes": 3571,
       "captureCount": 60,
-      "peakHeapDeltaMiB": 5.48,
-      "retainedHeapDeltaMiB": 0.15
+      "heapUsedDeltaAfterTransformMiB": 5.48,
+      "postGcHeapUsedDeltaMiB": 0.15
     },
     {
       "case": "independent",
@@ -47,8 +47,8 @@
       "maxMs": 6015.063,
       "outputBytes": 16771,
       "captureCount": 300,
-      "peakHeapDeltaMiB": 25.34,
-      "retainedHeapDeltaMiB": 0.41
+      "heapUsedDeltaAfterTransformMiB": 25.34,
+      "postGcHeapUsedDeltaMiB": 0.41
     },
     {
       "case": "dependent-chain",
@@ -58,8 +58,9 @@
       "maxMs": 197.108,
       "outputBytes": 850,
       "captureCount": 7,
-      "peakHeapDeltaMiB": 2.22,
-      "retainedHeapDeltaMiB": 0.03
+      "heapUsedDeltaAfterTransformMiB": 2.22,
+      "postGcHeapUsedDeltaMiB": 0.03,
+      "validity": "invalid-fixture-depth"
     },
     {
       "case": "dependent-chain",
@@ -69,8 +70,9 @@
       "maxMs": 298.024,
       "outputBytes": 2298,
       "captureCount": 22,
-      "peakHeapDeltaMiB": 13.35,
-      "retainedHeapDeltaMiB": 0.13
+      "heapUsedDeltaAfterTransformMiB": 13.35,
+      "postGcHeapUsedDeltaMiB": 0.13,
+      "validity": "invalid-fixture-depth"
     },
     {
       "case": "dependent-chain",
@@ -80,8 +82,13 @@
       "maxMs": 4894.22,
       "outputBytes": 10138,
       "captureCount": 102,
-      "peakHeapDeltaMiB": 28.53,
-      "retainedHeapDeltaMiB": 0.27
+      "heapUsedDeltaAfterTransformMiB": 28.53,
+      "postGcHeapUsedDeltaMiB": 0.27,
+      "validity": "invalid-fixture-depth"
     }
+  ],
+  "measurementNotes": [
+    "Historical M15.1 measurements; transform timing and heap deltas are observational, not peak heap or total allocations.",
+    "Dependent-chain rows are invalid: their fixture only contained one child level, so counts above one did not represent a valid chain. See m15.2-benchmark-validity.ja.md."
   ]
 }
