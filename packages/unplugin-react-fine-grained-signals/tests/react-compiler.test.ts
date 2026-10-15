@@ -396,6 +396,29 @@ export function Counter() {
     expect(container.textContent).toBe("2");
   });
 
+  it("tracks nested static destructuring through an explicitly memoized component", async () => {
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+export const state = deepSignal({ user: { profile: { name: "Ada" } } });
+export function Profile() {
+  "use memo";
+  const { user: { profile: { name } } } = state.value;
+  return <output>{name}</output>;
+}
+`;
+    const compiled = compilePipeline(source);
+    expect(compiled.events.map((event) => event.kind)).toEqual(["CompileSuccess"]);
+
+    const module = await loadModule(source);
+    const container = mount(module.Profile);
+    const state = module.state as Signal<{ user: { profile: { name: string } } }>;
+    expect(container.textContent).toBe("Ada");
+    act(() => { state.value.user.profile.name = "Bea"; });
+    expect(container.textContent).toBe("Bea");
+    act(() => { state.value.user = { profile: { name: "Cleo" } }; });
+    expect(container.textContent).toBe("Cleo");
+  });
+
   it("keeps an authored use no memo component live while the compiler skips it", async () => {
     const source = `
 import { signal } from "react-fine-grained-signals";

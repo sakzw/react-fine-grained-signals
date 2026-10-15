@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M14のlazy interop performance改善を維持し、M15で安全なstatic `const` object destructuringのmanaged trackingを追加。runtime/transform full coverage、typecheck/lint/build、consumer、cross-copy/mixed-version、React Compiler、CI serial browser E2E、bundle budgetがpass。M8をM15 candidateで再freezeし、push後GitHub Test/E2Eを確認する。公開tag、npm publish、GitHub Releaseは未実施。詳細は[M15 managed tracking expansion](m15-managed-tracking-expansion.ja.md)と[M8 qualification status](m8-qualification-status.ja.md)。
+- 状態: M15.1でflat/nested static `const` object destructuringのbatch expansionとsemantic testsを追加。transform focused、React実行focused、React Compiler、typecheck、transform buildはpass。aggregate coverage/browser rerunはhost負荷によるtimeoutを含み、consumer smokeもsandbox subprocess起動制限で未確認のため、M8再freezeは保留。詳細は[M15.1 hardening](m15.1-transform-hardening.ja.md)、[M15 tracking expansion](m15-managed-tracking-expansion.ja.md)、[M8 qualification status](m8-qualification-status.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
 - 統合ブランチ: `main`
-- 最新マイルストーン: M15 managed tracking coverage expansion。M14のlazy interop protocolを保ち、simple static-key `const` object destructuringを既存capture/alias passへ安全に展開。runtime/transform coverage、React Compiler、Fast Refresh、71/71 browser E2E、consumer smoke、size budgetsを通過。M16 JSDOM recheckではhost retentionを再現せず、RFSG固有retainerは未確認。詳細は[M15 record](m15-managed-tracking-expansion.ja.md)。
+- 最新マイルストーン: M15.1 transform scalability & semantic hardening。既存flat patternをbatch展開し、static nested object subsetを追加。100件ケースはbaseline比で独立約6.6倍、alias chain約7.9倍速い計測値だが、500件chainは測定幅が大きく最適化済みとは結論していない。M16ではJSDOM selector cacheのretainer pathを特定し、製品コード変更はなし。M8の再freezeはaggregate qualificationとGitHub Actions確認後に判断する。
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。

@@ -1,0 +1,109 @@
+{
+  "date": "2026-10-15T06:02:12.677Z",
+  "node": "v24.21.0",
+  "platform": "win32 x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "warmups": 1,
+  "samples": 3,
+  "rows": [
+    {
+      "case": "no-destructuring-control",
+      "destructurings": 0,
+      "medianMs": 27.534,
+      "minMs": 20.335,
+      "maxMs": 40.127,
+      "outputBytes": 364,
+      "captureCount": 1,
+      "peakHeapDeltaMiB": 0.98,
+      "retainedHeapDeltaMiB": 0.19
+    },
+    {
+      "case": "independent",
+      "destructurings": 5,
+      "medianMs": 146.758,
+      "minMs": 51.94,
+      "maxMs": 231.961,
+      "outputBytes": 1118,
+      "captureCount": 15,
+      "peakHeapDeltaMiB": 2.77,
+      "retainedHeapDeltaMiB": 0.09
+    },
+    {
+      "case": "independent",
+      "destructurings": 20,
+      "medianMs": 127.161,
+      "minMs": 123.683,
+      "maxMs": 243.621,
+      "outputBytes": 3571,
+      "captureCount": 60,
+      "peakHeapDeltaMiB": 6.97,
+      "retainedHeapDeltaMiB": 0.07
+    },
+    {
+      "case": "independent",
+      "destructurings": 100,
+      "medianMs": 772.968,
+      "minMs": 612.655,
+      "maxMs": 1077.419,
+      "outputBytes": 16771,
+      "captureCount": 300,
+      "peakHeapDeltaMiB": 15.62,
+      "retainedHeapDeltaMiB": 0.19
+    },
+    {
+      "case": "independent",
+      "destructurings": 500,
+      "medianMs": 2245.91,
+      "minMs": 2165.578,
+      "maxMs": 2260.495,
+      "outputBytes": 84369,
+      "captureCount": 1500,
+      "peakHeapDeltaMiB": 21.52,
+      "retainedHeapDeltaMiB": 0.42
+    },
+    {
+      "case": "dependent-chain",
+      "destructurings": 5,
+      "medianMs": 68.433,
+      "minMs": 40.597,
+      "maxMs": 436.871,
+      "outputBytes": 850,
+      "captureCount": 7,
+      "peakHeapDeltaMiB": 1.5,
+      "retainedHeapDeltaMiB": 0
+    },
+    {
+      "case": "dependent-chain",
+      "destructurings": 20,
+      "medianMs": 149.159,
+      "minMs": 124.963,
+      "maxMs": 265.454,
+      "outputBytes": 2298,
+      "captureCount": 22,
+      "peakHeapDeltaMiB": 4.32,
+      "retainedHeapDeltaMiB": 0.04
+    },
+    {
+      "case": "dependent-chain",
+      "destructurings": 100,
+      "medianMs": 465.826,
+      "minMs": 435.252,
+      "maxMs": 540.157,
+      "outputBytes": 10138,
+      "captureCount": 102,
+      "peakHeapDeltaMiB": 24.41,
+      "retainedHeapDeltaMiB": 0.11
+    },
+    {
+      "case": "dependent-chain",
+      "destructurings": 500,
+      "medianMs": 10132.934,
+      "minMs": 4244.682,
+      "maxMs": 17316.862,
+      "outputBytes": 50936,
+      "captureCount": 502,
+      "peakHeapDeltaMiB": 67.16,
+      "retainedHeapDeltaMiB": 0.34
+    }
+  ]
+}

@@ -1012,6 +1012,107 @@ export function Feed() {
 });
 
 describe("managed destructured signal reads", () => {
+  it("preserves getter order and neighboring declarator order", async () => {
+    const module = await loadModule(`
+      export const events = [];
+      const mark = (name) => (events.push(name), name);
+      const state = {
+        get value() {
+          events.push("source");
+          return {
+            get first() {
+              events.push("first");
+              return { get nested() { events.push("nested"); return "A"; } };
+            },
+            get second() { events.push("second"); return "B"; },
+          };
+        },
+      };
+      export function Profile() {
+        const before = mark("before"), { first: { nested }, second } = state.value, after = mark("after");
+        return <p>{before + nested + second + after}</p>;
+      }
+    `, {
+      modules: {
+        "react-fine-grained-signals/runtime": {
+          useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+        },
+      },
+    });
+
+    const element = (module.Profile as () => { props: { children: string } })();
+    expect(element.props.children).toBe("beforeABafter");
+    expect(module.events).toEqual(["before", "source", "first", "nested", "second", "after"]);
+  });
+
+  it("preserves nullish errors and TDZ when a property getter reads its own binding", async () => {
+    const module = await loadModule(`
+      const nullSource = { value: null };
+      const undefinedSource = { value: undefined };
+      export function ReadNull() {
+        const { child } = nullSource.value;
+        return <p>{child}</p>;
+      }
+      export function ReadUndefined() {
+        const { child } = undefinedSource.value;
+        return <p>{child}</p>;
+      }
+      export function ReadTDZ() {
+        const source = { value: { get chosen() { return chosen; } } };
+        const { chosen } = source.value;
+        return <p>{chosen}</p>;
+      }
+    `, {
+      modules: {
+        "react-fine-grained-signals/runtime": {
+          useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+        },
+      },
+    });
+    const readNull = module.ReadNull as () => unknown;
+    const readUndefined = module.ReadUndefined as () => unknown;
+    const readTDZ = module.ReadTDZ as () => unknown;
+    const nativeDestructure = (value: unknown) => {
+      const { child } = value as { child: string };
+      return child;
+    };
+
+    expect(() => readNull()).toThrow(TypeError);
+    expect(() => nativeDestructure(null)).toThrow(TypeError);
+    expect(() => readUndefined()).toThrow(TypeError);
+    expect(() => nativeDestructure(undefined)).toThrow(TypeError);
+    expect(() => readTDZ()).toThrow(ReferenceError);
+  });
+
+  it("stops property evaluation at the same throwing getter", async () => {
+    const module = await loadModule(`
+      export const events = [];
+      const failure = new Error("first getter failed");
+      const state = {
+        get value() {
+          events.push("source");
+          return {
+            get first() { events.push("first"); throw failure; },
+            get second() { events.push("second"); return "unreachable"; },
+          };
+        },
+      };
+      export function Read() {
+        const { first, second } = state.value;
+        return <p>{first + second}</p>;
+      }
+    `, {
+      modules: {
+        "react-fine-grained-signals/runtime": {
+          useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+        },
+      },
+    });
+
+    expect(() => (module.Read as () => unknown)()).toThrow("first getter failed");
+    expect(module.events).toEqual(["source", "first"]);
+  });
+
   it("evaluates the source and extracted getter once each", async () => {
     const module = await loadModule(`
       export const reads = { source: 0, user: 0 };
@@ -1115,6 +1216,84 @@ describe("managed destructured signal reads", () => {
       await act(async () => root.unmount());
       container.remove();
     }
+  });
+
+  it("tracks nested static object patterns through deep writes and replacement", async () => {
+    const module = await loadModule(`
+      import { deepSignal } from "react-fine-grained-signals";
+      export const state = deepSignal({ user: { profile: { name: "Ada" } } });
+      export function Profile() {
+        const { user: { profile: { name } } } = state.value;
+        return <p>{name}</p>;
+      }
+    `);
+    const container = mount(module.Profile);
+    const state = module.state as Signal<{ user: { profile: { name: string } } }>;
+    expect(container.textContent).toBe("Ada");
+
+    act(() => { state.value.user.profile.name = "Bea"; });
+    expect(container.textContent).toBe("Bea");
+
+    act(() => { state.value.user = { profile: { name: "Cleo" } }; });
+    expect(container.textContent).toBe("Cleo");
+  });
+
+  it("hydrates a nested static pattern and keeps its capture live", async () => {
+    const module = await loadModule(`
+      import { deepSignal } from "react-fine-grained-signals";
+      export const state = deepSignal({ user: { profile: { name: "Server" } } });
+      export function Profile() {
+        const { user: { profile: { name } } } = state.value;
+        return <p>{name}</p>;
+      }
+    `);
+    const Profile = module.Profile as FunctionComponent;
+    const state = module.state as Signal<{ user: { profile: { name: string } } }>;
+    const container = document.createElement("div");
+    container.innerHTML = renderToString(createElement(Profile));
+    document.body.append(container);
+    let root: Root | undefined;
+    try {
+      expect(container.textContent).toBe("Server");
+      await act(async () => { root = hydrateRoot(container, createElement(Profile)); });
+      await act(async () => { state.value.user.profile.name = "Client"; });
+      expect(container.textContent).toBe("Client");
+    } finally {
+      if (root !== undefined) await act(async () => root?.unmount());
+      container.remove();
+    }
+  });
+
+  it("keeps same-named aliases in separate conditional scopes bound to their own source", async () => {
+    const module = await loadModule(`
+      import { deepSignal } from "react-fine-grained-signals";
+      export const state = deepSignal({ primary: { name: "Ada" }, secondary: { name: "Grace" } });
+      export function Profile({ alternate }) {
+        if (alternate) {
+          const { secondary: person } = state.value;
+          return <p>{person.name}</p>;
+        }
+        const { primary: person } = state.value;
+        return <p>{person.name}</p>;
+      }
+    `);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    mounted.push({ root, container });
+    const state = module.state as Signal<{ primary: { name: string }; secondary: { name: string } }>;
+    await act(async () => root.render(createElement(
+      module.Profile as FunctionComponent<{ alternate: boolean }>,
+      { alternate: false },
+    )));
+    expect(container.textContent).toBe("Ada");
+    await act(async () => root.render(createElement(
+      module.Profile as FunctionComponent<{ alternate: boolean }>,
+      { alternate: true },
+    )));
+    expect(container.textContent).toBe("Grace");
+    await act(async () => { state.value.secondary.name = "Lin"; });
+    expect(container.textContent).toBe("Lin");
   });
 });
 

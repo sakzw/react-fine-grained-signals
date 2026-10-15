@@ -2409,32 +2409,57 @@ function warnUntrackedChildrenCallbackRead(
   reportWarning(options, warning, expression);
 }
 
+type StaticConstObjectPattern = {
+  properties: Array<
+    | { key: t.Identifier; id: t.Identifier }
+    | { key: t.Identifier; pattern: StaticConstObjectPattern }
+  >;
+};
+
 function getStaticConstDestructuredBindings(
   declarator: NodePath<t.VariableDeclarator>,
-): Array<{ key: t.Identifier; id: t.Identifier }> | undefined {
+): StaticConstObjectPattern | undefined {
   if (
     !declarator.parentPath.isVariableDeclaration({ kind: "const" }) ||
     !declarator.get("id").isObjectPattern()
   ) return undefined;
-  const pattern = declarator.get("id") as NodePath<t.ObjectPattern>;
-  if (pattern.node.typeAnnotation != null || pattern.node.properties.length === 0) return undefined;
-  const bindings: Array<{ key: t.Identifier; id: t.Identifier }> = [];
-  for (const property of pattern.get("properties")) {
-    if (
-      !property.isObjectProperty() || property.node.computed ||
-      !t.isIdentifier(property.node.key) || !t.isIdentifier(property.node.value) ||
-      property.node.value.typeAnnotation != null
-    ) return undefined;
-    const binding = property.scope.getBinding(property.node.value.name);
-    if (binding?.kind !== "const" || !binding.constant || binding.constantViolations.length !== 0) {
-      return undefined;
+  const buildPattern = (pattern: NodePath<t.ObjectPattern>): StaticConstObjectPattern | undefined => {
+    if (pattern.node.typeAnnotation != null || pattern.node.properties.length === 0) return undefined;
+    const properties: StaticConstObjectPattern["properties"] = [];
+    for (const property of pattern.get("properties")) {
+      if (!property.isObjectProperty() || property.node.computed || !t.isIdentifier(property.node.key)) {
+        return undefined;
+      }
+      const key = t.cloneNode(property.node.key);
+      const value = property.get("value");
+      if (value.isIdentifier() && value.node.typeAnnotation == null) {
+        const binding = value.scope.getBinding(value.node.name);
+        if (binding?.kind !== "const" || !binding.constant || binding.constantViolations.length !== 0) {
+          return undefined;
+        }
+        properties.push({ key, id: t.cloneNode(value.node) });
+      } else if (value.isObjectPattern()) {
+        const nested = buildPattern(value);
+        if (nested === undefined) return undefined;
+        properties.push({ key, pattern: nested });
+      } else {
+        return undefined;
+      }
     }
-    bindings.push({
-      key: t.cloneNode(property.node.key),
-      id: t.cloneNode(property.node.value),
-    });
+    return { properties };
+  };
+  return buildPattern(declarator.get("id") as NodePath<t.ObjectPattern>);
+}
+
+function getStaticConstDestructuredIdentifiers(
+  pattern: StaticConstObjectPattern,
+): t.Identifier[] {
+  const identifiers: t.Identifier[] = [];
+  for (const property of pattern.properties) {
+    if ("id" in property) identifiers.push(property.id);
+    else identifiers.push(...getStaticConstDestructuredIdentifiers(property.pattern));
   }
-  return bindings;
+  return identifiers;
 }
 
 function warnUntrackedDestructuringRead(
@@ -2528,7 +2553,7 @@ function inspectKnownRenderPropReads(
       if (bindings !== undefined) {
         trackedAliases ??= collectTrackedReadAliases(functionPath);
         if (hasTrackedReadInExpression(init, functionPath, trackedAliases)) {
-          for (const { id: identifier } of bindings) {
+          for (const identifier of getStaticConstDestructuredIdentifiers(bindings)) {
             const binding = declarator.scope.getBinding(identifier.name);
             if (binding !== undefined) trackedAliases.add(binding);
           }
@@ -3339,7 +3364,10 @@ function collectTrackedReadAliases(
         if (!hasTrackedReadInExpression(init, functionPath, trackedAliases)) return;
         const identifiers = id.isIdentifier()
           ? [id.node]
-          : getStaticConstDestructuredBindings(path)?.map(({ id: bindingId }) => bindingId) ?? [];
+          : (() => {
+            const pattern = getStaticConstDestructuredBindings(path);
+            return pattern === undefined ? [] : getStaticConstDestructuredIdentifiers(pattern);
+          })();
         for (const identifier of identifiers) {
           const binding = path.scope.getBinding(identifier.name);
           if (binding !== undefined && !trackedAliases.has(binding)) {
@@ -3534,14 +3562,15 @@ function captureTrackedReadExpressions(
 /**
  * A plain identifier declarator can become a tracked alias directly, but a
  * destructuring pattern hides each property read from that analysis. Expand
- * only a `const` object pattern made entirely of static identifier keys and
- * identifier bindings. The initializer is moved to one generated declarator,
- * then each property read is represented once as an ordinary member
- * expression; the normal capture pass and alias analysis handle those reads.
+ * only a `const` object pattern made entirely of static identifier keys,
+ * identifier bindings, and nested object patterns. The initializer is moved
+ * to one generated declarator, then each property read is represented once as
+ * an ordinary member expression; the normal capture pass and alias analysis
+ * handle those reads.
  *
- * Defaults, rest, nesting, computed keys, mutable declarations, reassigned
- * bindings, and patterns with TS annotations stay untouched because rewriting
- * them needs additional proof to preserve their binding/evaluation semantics.
+ * Defaults, rest, computed keys, mutable declarations, reassigned bindings,
+ * and patterns with TS annotations stay untouched because rewriting them
+ * needs additional proof to preserve their binding/evaluation semantics.
  */
 function expandTrackedObjectDestructuring(
   functionPath: NodePath<t.Function>,
@@ -3555,6 +3584,7 @@ function expandTrackedObjectDestructuring(
     },
   });
 
+  const expansions = new Map<t.VariableDeclaration, Map<t.VariableDeclarator, t.VariableDeclarator[]>>();
   for (const candidate of candidates) {
     if (candidate.removed || !candidate.isVariableDeclarator()) continue;
     const declaration = candidate.parentPath;
@@ -3569,20 +3599,45 @@ function expandTrackedObjectDestructuring(
     const source = candidate.scope.generateUidIdentifier("trackedSource");
     const expanded: t.VariableDeclarator[] = [
       t.variableDeclarator(t.cloneNode(source), t.cloneNode(init.node, true)),
-      ...bindings.map(({ key, id }) => t.variableDeclarator(
-        id,
-        t.memberExpression(t.cloneNode(source), key),
-      )),
     ];
-    const index = declaration.node.declarations.indexOf(candidate.node);
-    if (index < 0) continue;
-    declaration.node.declarations.splice(index, 1, ...expanded);
-    // Rebuild Babel scopes and aliases before considering the next pattern.
-    // A later destructuring can depend on the alias introduced here, and the
-    // candidate paths collected above are stale after the declaration splice.
-    return true;
+    const appendProperties = (pattern: StaticConstObjectPattern, base: t.Identifier): void => {
+      for (const property of pattern.properties) {
+        if ("id" in property) {
+          expanded.push(t.variableDeclarator(
+            t.cloneNode(property.id),
+            t.memberExpression(t.cloneNode(base), t.cloneNode(property.key)),
+          ));
+        } else {
+          const nested = candidate.scope.generateUidIdentifier("trackedNested");
+          expanded.push(t.variableDeclarator(
+            t.cloneNode(nested),
+            t.memberExpression(t.cloneNode(base), t.cloneNode(property.key)),
+          ));
+          appendProperties(property.pattern, nested);
+        }
+      }
+    };
+    appendProperties(bindings, source);
+    let declarations = expansions.get(declaration.node);
+    if (declarations === undefined) {
+      declarations = new Map();
+      expansions.set(declaration.node, declarations);
+    }
+    declarations.set(candidate.node, expanded);
   }
-  return false;
+
+  // The alias collector already closes over statically proven const aliases,
+  // including lexically ordered destructuring chains. Apply every proven
+  // replacement from this snapshot together so we rebuild scopes once per
+  // function instead of once per destructuring. Keep declaration order intact:
+  // each source and its extracted properties stay at the original declarator's
+  // position among neighboring initializers.
+  for (const [declaration, replacements] of expansions) {
+    declaration.declarations = declaration.declarations.flatMap((candidate) =>
+      replacements.get(candidate) ?? [candidate]
+    );
+  }
+  return expansions.size > 0;
 }
 
 /** Codegen: add a top-level capture hook and wrap proven synchronous reads. */

@@ -1,0 +1,87 @@
+{
+  "date": "2026-10-15T05:28:09.175Z",
+  "node": "v24.21.0",
+  "platform": "win32 x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "warmups": 1,
+  "samples": 3,
+  "rows": [
+    {
+      "case": "no-destructuring-control",
+      "destructurings": 0,
+      "medianMs": 64.233,
+      "minMs": 30.291,
+      "maxMs": 125.797,
+      "outputBytes": 364,
+      "captureCount": 1,
+      "peakHeapDeltaMiB": 0.8,
+      "retainedHeapDeltaMiB": 0.19
+    },
+    {
+      "case": "independent",
+      "destructurings": 5,
+      "medianMs": 225.264,
+      "minMs": 213.912,
+      "maxMs": 274.762,
+      "outputBytes": 1118,
+      "captureCount": 15,
+      "peakHeapDeltaMiB": 3.18,
+      "retainedHeapDeltaMiB": 0.09
+    },
+    {
+      "case": "independent",
+      "destructurings": 20,
+      "medianMs": 607.569,
+      "minMs": 596.104,
+      "maxMs": 912.95,
+      "outputBytes": 3571,
+      "captureCount": 60,
+      "peakHeapDeltaMiB": 5.48,
+      "retainedHeapDeltaMiB": 0.15
+    },
+    {
+      "case": "independent",
+      "destructurings": 100,
+      "medianMs": 5078.173,
+      "minMs": 4967.54,
+      "maxMs": 6015.063,
+      "outputBytes": 16771,
+      "captureCount": 300,
+      "peakHeapDeltaMiB": 25.34,
+      "retainedHeapDeltaMiB": 0.41
+    },
+    {
+      "case": "dependent-chain",
+      "destructurings": 5,
+      "medianMs": 125.165,
+      "minMs": 101.665,
+      "maxMs": 197.108,
+      "outputBytes": 850,
+      "captureCount": 7,
+      "peakHeapDeltaMiB": 2.22,
+      "retainedHeapDeltaMiB": 0.03
+    },
+    {
+      "case": "dependent-chain",
+      "destructurings": 20,
+      "medianMs": 290.782,
+      "minMs": 223.157,
+      "maxMs": 298.024,
+      "outputBytes": 2298,
+      "captureCount": 22,
+      "peakHeapDeltaMiB": 13.35,
+      "retainedHeapDeltaMiB": 0.13
+    },
+    {
+      "case": "dependent-chain",
+      "destructurings": 100,
+      "medianMs": 3689.536,
+      "minMs": 3202.182,
+      "maxMs": 4894.22,
+      "outputBytes": 10138,
+      "captureCount": 102,
+      "peakHeapDeltaMiB": 28.53,
+      "retainedHeapDeltaMiB": 0.27
+    }
+  ]
+}

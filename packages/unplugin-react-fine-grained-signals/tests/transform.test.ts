@@ -3471,8 +3471,33 @@ export function App() {
     expect(warnings).toEqual([]);
   });
 
+  it("captures nested static const object patterns in access order", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ user: { profile: { name: "Ada" } } });
+export function App() {
+  const { user: { profile: { name } } } = state.value;
+  return <span>{name}</span>;
+}
+`;
+    const output = transformReactFineGrainedSignals(source, "NestedDestructuring.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    })?.code;
+
+    expect(output).toMatch(/_signals\.capture\(\(\) => _trackedSource\.user\)/);
+    expect(output).toMatch(/_signals\.capture\(\(\) => _trackedNested\.profile\)/);
+    expect(output).toMatch(/_signals\.capture\(\(\) => _trackedNested2\.name\)/);
+    expect(warnings).toEqual([]);
+  });
+
   it.each([
-    ["nested", "const { profile: { name } } = state.value;"],
+    ["empty nested", "const { profile: {} } = state.value;"],
     ["default", "const { profile = fallback } = state.value;"],
     ["rest", "const { ...profile } = state.value;"],
     ["computed key", "const { [key]: profile } = state.value;"],

@@ -172,7 +172,7 @@ export default {
 | pattern | managedの動作 |
 | --- | --- |
 | 選択済み関数内の`state.value.user.name` | 1つの同期read式としてcaptureします。 |
-| `const { user } = state.value; user.name` | staticなidentifier keyとidentifier bindingだけを持ち、TypeScript annotationがなく、再代入しない単純な`const` object patternは、initializerとproperty readを各1回だけ評価する形に展開します。`state.value.user`と後続の`user.name`の両方をcaptureします。nested pattern、default、rest、computed key、annotation付きpattern/binding、mutable declarationは未対応で、tracked sourceを確認できる場合はdiagnosticを出します。 |
+| `const { user: { profile } } = state.value; profile.name` | static identifier key・identifier binding・nested object patternだけで構成された、空でない`const` object patternを元の順序で各readが1回になる形へ展開します。source、中間property、後続の`profile.name`をcaptureします。default、rest、computed key、空のnested pattern、annotation、mutable declaration、再代入bindingは未対応で、tracked sourceが分かる場合はdiagnosticを出します。 |
 | `const { value } = signal` | destructured signal accessorは追跡されません。`signal.value`と直接読んでください。 |
 | 同期helper call | 選択済みのtransformが同期呼び出しと証明できれば、呼び出し位置でcaptureできます。`auto`で関数を選ぶ際、import helperの中身は解析しません。 |
 | runtime key / alias | 関数が別の条件で選択されていればruntime-key readをcaptureできますが、dynamic readだけでは`auto`選択されません。対応する単純な`const` destructuringで作るstatic aliasは追跡しますが、dynamic destructuringは追跡しません。 |
