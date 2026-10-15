@@ -9,6 +9,7 @@
 ## ドキュメント
 
 ユーザー向けドキュメントの索引は[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
+v0.2.1からの移行については[v0.3移行ガイド](./docs/migration/v0.3.ja.md)を参照してください。
 v0.1.1からの移行については[v0.2移行ガイド](./docs/migration/v0.2.ja.md)を参照してください。
 
 ## インストール
@@ -64,9 +65,9 @@ Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側�
 
 このランタイムが対象とするのはネイティブ要素と、意図的に絞ったpropsだけです。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。許可リスト全体と、JSXをBabelで変換するツールチェーン（`tsconfig.json` を読みません）については[JSXのsignal子要素とhost binding](./docs/guides/jsx-bindings.ja.md)を参照してください。
 
-### ビルドplugin — `useSignalTracking()` の自動挿入
+### ビルドplugin — managed trackingの自動変換
 
-追跡境界をbuild時に挿入するため、コンポーネント側で `useSignalTracking()` を手書きする必要がなくなります。別packageなので個別にinstallします。
+対象関数へtop-level capture Hookとper-read trackingをbuild時に追加します。best-effortな `useSignalTracking()` boundaryが必要な場合は `transform: "inject"` を選んでください。pluginは別packageなので個別にinstallします。
 
 ```sh
 pnpm add -D unplugin-react-fine-grained-signals

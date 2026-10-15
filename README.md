@@ -9,7 +9,8 @@ An experimental fine-grained rendering layer for React 19, built on [alien-signa
 ## Documentation
 
 See [`docs/README.md`](docs/README.md) for the user documentation index.
-For upgrades from v0.1.1, see the [v0.2 migration guide](./docs/migration/v0.2.md).
+For upgrades from v0.2.1, see the [v0.3 migration guide](./docs/migration/v0.3.md).
+For earlier upgrades from v0.1.1, see the [v0.2 migration guide](./docs/migration/v0.2.md).
 
 ## Installation
 
@@ -76,10 +77,11 @@ unwrapped. See [JSX signal children and host bindings](./docs/guides/jsx-binding
 for the full allow-list, and for toolchains that transform JSX through Babel,
 which do not read `tsconfig.json`.
 
-### Build plugin — automatic `useSignalTracking()`
+### Build plugin — automatic managed tracking
 
-Inserts the tracking boundary during the build, so components no longer call
-`useSignalTracking()` by hand. It is a separate package:
+Adds a top-level capture Hook and per-read tracking to eligible functions during
+the build. For the best-effort `useSignalTracking()` boundary, select
+`transform: "inject"`. The plugin is a separate package:
 
 ```sh
 pnpm add -D unplugin-react-fine-grained-signals

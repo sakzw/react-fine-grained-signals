@@ -137,6 +137,30 @@ try {
       "utf8",
     ),
   );
+  const installedPluginManifest = JSON.parse(
+    await readFile(
+      join(consumerRoot, "node_modules", "unplugin-react-fine-grained-signals", "package.json"),
+      "utf8",
+    ),
+  );
+  const installedRuntimePath = join(consumerRoot, "node_modules", "react-fine-grained-signals");
+  const installedPluginPath = join(consumerRoot, "node_modules", "unplugin-react-fine-grained-signals");
+  const publishedRuntimePeer = installedPluginManifest.peerDependencies?.["react-fine-grained-signals"];
+  if (publishedRuntimePeer !== `^${installedManifest.version}`) {
+    throw new Error(
+      `Packed plugin must rewrite workspace:^ to ^${installedManifest.version}; got ${publishedRuntimePeer}`,
+    );
+  }
+  if (
+    !existsSync(join(installedRuntimePath, "LICENSE")) ||
+    !existsSync(join(installedRuntimePath, "LICENSE-ALIEN-SIGNALS.txt")) ||
+    !existsSync(join(installedPluginPath, "LICENSE"))
+  ) {
+    throw new Error("Packed runtime and plugin must include their MIT/license notices");
+  }
+  if (existsSync(join(installedRuntimePath, "src")) || existsSync(join(installedPluginPath, "src"))) {
+    throw new Error("Packed packages must not depend on or contain source directories");
+  }
   if (installedManifest.dependencies?.["alien-signals"] === undefined) {
     throw new Error("alien-signals must be published as a runtime dependency");
   }

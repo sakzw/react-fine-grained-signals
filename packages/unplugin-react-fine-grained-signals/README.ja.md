@@ -12,13 +12,14 @@ integrationです。
 ## インストール
 
 ```sh
+pnpm add react-fine-grained-signals@^0.3.0
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
 `react-fine-grained-signals` はpeer dependencyです。Node.jsは
 `^22.18.0 || >=24.11.0` が必要です。変換が依存するBabel 8が宣言している範囲です。
 
-pluginとruntimeは同じrelease line(v0.2同士)で使ってください。生成されるコードが
+pluginとruntimeは同じrelease line(0.3.x同士)で使ってください。生成されるコードが
 importするruntimeのentry pointはline間で変わります。v0.1からupgradeする場合は、
 両方のpackageを同時に更新し、`@useSignals` / `@noUseSignals` commentを書き換えて
 ください。[v0.2移行ガイド](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.2.ja.md#transform-plugin)を参照してください。
@@ -96,15 +97,16 @@ v0.1.1から存在するものです。
 - **作者が書いた `"use memo"` はそのまま残る。** すでにmemoizationの
   directiveを持つ関数には、pluginは `"use no memo"` を追加しません。
   `babel-plugin-react-compiler` 1.0で確認した動作は次のとおりです。
-  - managed変換では、compilerは生成された `try` / `finally` をcompileしません。
-    既定の `panicThreshold` ではその関数をskipし、
-    `panicThreshold: "all_errors"` ではbuildが失敗します（"Handle TryStatement
-    without a catch clause"）。
+  - managed変換では、作者指定の `"use memo"` を維持し、統合testで複数回の
+    signal更新を追跡できることを確認しています。明示的にmemoizationを選んだ
+    関数には、transformは `"use no memo"` を追加しません。
   - `transform: "inject"` では、compilerがその関数をcompileし、signalの
     読み取りをmemoizationで消してしまうことがあるため、componentが更新され
     なくなることがあります。
 
-  signalを読む関数では `"use memo"` を使わないでください。
+  React Compilerとの併用ではmanaged transformを推奨します。inject modeは
+  best-effortな追跡であり、compilerがsignal readをmemoizationで除去すると
+  更新されない場合があります。
 
 ## その他のbundler
 
@@ -132,8 +134,9 @@ export default {
     `@signalTracking` を付けた名前付きcomponent/custom hookだけを変換します。
   - `"auto"`（既定）: さらに `.value` を読む名前付きJSX componentと
     名前付き `useX` custom hookを変換します。
-  - `"all"`: さらにすべての名前付きJSX componentを変換します。ネストした
-    callbackの読み取りは親componentが収集しますが、callback自体は変換しません。
+  - `"all"`: さらに変換可能な名前付きJSX componentを選びます。認識対象の
+    同期的なarray render callback内のreadはownerが収集できますが、callback自体は
+    変換しません。JSX render propや`children` callbackのreadはcaptureを保証しません。
 - `transform`
   - `"managed"`（既定・推奨）: top-levelに `useSignalCapture()` を追加し、静的に
     証明できる同期的signal readを短いcapture scopeで囲みます。生成コードはuser Hookを

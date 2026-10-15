@@ -13,13 +13,14 @@ supported bundlers.
 ## Installation
 
 ```sh
+pnpm add react-fine-grained-signals@^0.3.0
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
 `react-fine-grained-signals` is a peer dependency. Node.js `^22.18.0 || >=24.11.0`
 is required — the range Babel 8, which the transform runs on, declares.
 
-Use the plugin and the runtime from the same release line (v0.2 with v0.2): the
+Use the plugin and the runtime from the same release line (`0.3.x` with `0.3.x`): the
 generated code imports runtime entry points that change between lines. When
 upgrading from v0.1, upgrade both packages together and rename the
 `@useSignals` / `@noUseSignals` comments — see the
@@ -95,14 +96,16 @@ Two known limitations apply with React Compiler. Both were present in v0.1.1.
 - **An author-written `"use memo"` is kept.** The plugin does not add
   `"use no memo"` to a function that already states a memoization directive.
   Tested with `babel-plugin-react-compiler` 1.0:
-  - With the managed transform, the compiler does not add the protective
-    `"use no memo"` directive. The generated capture wrapper can be memoized,
-    so the component may stop updating. Keep the directive or use the default
-    `reactCompiler: "auto"`.
+  - With the managed transform, the authored `"use memo"` is preserved and
+    repeated signal writes still update the component in the integration test.
+    The transform does not add `"use no memo"` when an author explicitly opts
+    that function into memoization.
   - With `transform: "inject"`, the compiler compiles the function and can
     memoize away its signal reads, so the component can stop updating.
 
-  Do not use `"use memo"` in functions that read signals.
+  Prefer the managed transform with React Compiler. The injection mode has a
+  best-effort tracking contract and can become stale when compiler memoization
+  removes signal reads.
 
 ## Other bundlers
 
@@ -130,9 +133,10 @@ export default {
     or a `@signalTracking` comment on a named component/custom hook opts it in.
   - `"auto"` (default): additionally transforms named JSX components and
     named `useX` custom hooks that read `.value`.
-  - `"all"`: additionally transforms every named JSX component. Nested
-    callbacks are collected by their owning component but are never transform
-    targets themselves.
+  - `"all"`: additionally transforms every eligible named JSX component.
+    Reads in recognized synchronous array render callbacks can be collected by
+    their owner; the callbacks themselves are not transform targets. Reads in
+    JSX render props or `children` callbacks are not guaranteed to be captured.
 - `transform`:
   - `"managed"` (default and recommended): adds a top-level `useSignalCapture()`
     hook and wraps statically proven synchronous signal reads in short capture
