@@ -2058,6 +2058,155 @@ export function useFirst() {
     expect((module.log as string[]).slice(0, 3)).toEqual(["next", "return", "body threw"]);
   });
 
+  it("tracks for-of over reactive collections and Iterator helpers", async () => {
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+export const state = deepSignal({ map: new Map([["a", 1]]), set: new Set(["x"]) });
+export function App() {
+  let out = "";
+  for (const [key, value] of state.value.map) out += key + value;
+  for (const key of state.value.map.keys().map((key) => key.toUpperCase())) out += key;
+  for (const member of state.value.set) out += member;
+  return <p>{out}</p>;
+}
+`;
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("a1Ax");
+    type State = { value: { map: Map<string, number>; set: Set<string> } };
+    act(() => { (module.state as State).value.map.set("b", 2); });
+    expect(container.textContent).toBe("a1b2ABx");
+    act(() => { (module.state as State).value.map.set("a", 3); });
+    expect(container.textContent).toBe("a3b2ABx");
+    act(() => { (module.state as State).value.set.add("y"); });
+    expect(container.textContent).toBe("a3b2ABxy");
+  });
+
+  it("tracks signal reads in iterator next/return getters and result done/value getters", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+export const nextTag = signal("n0");
+export const doneLimit = signal(2);
+export const valueTag = signal("v");
+export const returnTag = signal("r0");
+let closedWith = "";
+const iterable = signal({
+  [Symbol.iterator]() {
+    let index = 0;
+    return {
+      get next() {
+        const tag = nextTag.value;
+        return () => {
+          index += 1;
+          const step = index;
+          return {
+            get done() { return step > doneLimit.value; },
+            get value() { return valueTag.value + step + tag; },
+          };
+        };
+      },
+      get return() {
+        closedWith = returnTag.value;
+        return () => ({ done: true });
+      },
+    };
+  },
+});
+export function App() {
+  let out = "";
+  for (const item of iterable.value) out += item;
+  for (const item of iterable.value) { out += "|" + item; break; }
+  return <p>{out + "/" + closedWith}</p>;
+}
+`;
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("v1n0v2n0|v1n0/r0");
+    write(module, "nextTag", "n1");
+    expect(container.textContent).toBe("v1n1v2n1|v1n1/r0");
+    write(module, "doneLimit", 3);
+    expect(container.textContent).toBe("v1n1v2n1v3n1|v1n1/r0");
+    write(module, "valueTag", "w");
+    expect(container.textContent).toBe("w1n1w2n1w3n1|w1n1/r0");
+    write(module, "returnTag", "r1");
+    expect(container.textContent).toBe("w1n1w2n1w3n1|w1n1/r1");
+  });
+
+  it("matches native for-of order, laziness, closing, and getter exceptions", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+const tick = signal(0);
+function makeIterable(log, mode) {
+  return {
+    [Symbol.iterator]() {
+      log.push("iterator");
+      let index = 0;
+      return {
+        get next() {
+          log.push("get next");
+          if (mode === "next getter") throw new Error("next getter");
+          return function () {
+            log.push("next:" + (this === undefined ? "no this" : "this"));
+            index += 1;
+            const step = index;
+            return {
+              get done() {
+                log.push("done " + step);
+                if (mode === "done getter" && step === 2) throw new Error("done getter");
+                return step > 3;
+              },
+              get value() {
+                log.push("value " + step);
+                if (mode === "value getter" && step === 2) throw new Error("value getter");
+                return step;
+              },
+            };
+          };
+        },
+        get return() {
+          log.push("get return");
+          if (mode === "return getter") throw new Error("return getter");
+          return () => { log.push("return"); return {}; };
+        },
+      };
+    },
+  };
+}
+export function useScenarios() {
+  void tick.value;
+  const results = [];
+  for (const mode of ["complete", "break", "continue", "throw", "next getter", "done getter", "value getter", "return getter", "return getter + throw"]) {
+    const log = [];
+    try {
+      for (const item of tick.value >= 0 ? makeIterable(log, mode === "return getter + throw" ? "return getter" : mode) : []) {
+        log.push("body " + item);
+        if (mode === "continue" && item === 1) continue;
+        if ((mode === "break" || mode === "return getter") && item === 2) break;
+        if ((mode === "throw" || mode === "return getter + throw") && item === 2) throw new Error("body");
+      }
+    } catch (error) {
+      log.push("caught " + error.message);
+    }
+    results.push(mode + ": " + log.join(", "));
+  }
+  return results;
+}
+`;
+    const transformed = await loadModule(source);
+    const native = await loadModule(source, { transform: false });
+    expect(managedOutput(source)).toContain("_signals.iterate(");
+    let transformedResults: string[] = [];
+    let nativeResults: string[] = [];
+    function Probe() {
+      transformedResults = (transformed.useScenarios as () => string[])();
+      nativeResults = (native.useScenarios as () => string[])();
+      return null;
+    }
+    mount(Probe);
+    expect(transformedResults).toEqual(nativeResults);
+    expect(nativeResults.find((line) => line.startsWith("complete:"))).not.toContain("value 4");
+  });
+
   it("tracks reads performed by a custom iterator while the loop pulls it", async () => {
     const source = `
 import { signal } from "react-fine-grained-signals";

@@ -537,6 +537,76 @@ describe("managed useManagedSignals render scope", () => {
   });
 });
 
+describe("useSignalCapture iterate", () => {
+  it("tracks reads in the source, built-in steps, and custom next/done/value/return getters", () => {
+    const list = signal(["a"]);
+    const limit = signal(1);
+    const prefix = signal("p");
+    const nextTag = signal(0);
+    const closeTag = signal(0);
+    const custom = {
+      [Symbol.iterator]() {
+        let index = 0;
+        return {
+          get next() {
+            void nextTag.value;
+            return () => {
+              const step = ++index;
+              return { get done() { return step > limit.value; }, get value() { return prefix.value + step; } };
+            };
+          },
+          get return() {
+            void closeTag.value;
+            return () => ({ done: true, value: undefined });
+          },
+        };
+      },
+    };
+    const renders = vi.fn();
+    function Reader() {
+      const scope = useSignalCapture();
+      renders();
+      let out = "";
+      for (const item of scope.iterate(() => list.value)) out += item;
+      for (const item of scope.iterate(() => custom)) out += item;
+      for (const item of scope.iterate(() => custom)) { out += `|${item}`; break; }
+      return <output aria-label="iterated">{out}</output>;
+    }
+    render(<Reader />);
+    const read = () => screen.getByLabelText("iterated").textContent;
+    expect(read()).toBe("ap1|p1");
+    act(() => { list.value = ["a", "b"]; });
+    expect(read()).toBe("abp1|p1");
+    act(() => { limit.value = 2; });
+    expect(read()).toBe("abp1p2|p1");
+    act(() => { prefix.value = "q"; });
+    expect(read()).toBe("abq1q2|q1");
+    const before = renders.mock.calls.length;
+    act(() => { nextTag.value = 1; });
+    act(() => { closeTag.value = 1; });
+    expect(renders.mock.calls.length).toBe(before + 2);
+  });
+
+  it("matches native errors and closing for malformed iterators", () => {
+    let scope!: ReturnType<typeof useSignalCapture>;
+    function Holder() {
+      scope = useSignalCapture();
+      return null;
+    }
+    render(<Holder />);
+    const loop = (iterable: unknown) => {
+      const seen: unknown[] = [];
+      for (const item of scope.iterate(() => iterable as Iterable<unknown>)) { seen.push(item); break; }
+      return seen;
+    };
+    expect(() => loop({ [Symbol.iterator]: () => 1 })).toThrow(TypeError);
+    expect(() => loop({ [Symbol.iterator]: () => ({ next: () => 1 }) })).toThrow(TypeError);
+    // No `return` method: breaking out simply stops.
+    expect(loop({ [Symbol.iterator]: () => ({ next: () => ({ done: false, value: 7 }) }) })).toEqual([7]);
+    expect(() => loop({ [Symbol.iterator]: () => ({ next: () => ({ done: false, value: 1 }), return: () => 1 }) })).toThrow(TypeError);
+  });
+});
+
 describe("per-read useSignalCapture prototype", () => {
   it("tracks shallow and deep reads while restoring the render context after each capture", () => {
     const shallow = signal("before");

@@ -6,6 +6,7 @@ import {
   markInteropSpeculativeDeepRead,
 } from "./interop.js";
 import { hasActiveRenderCollector } from "./render-tracking.js";
+import { plainResultIteratorNext } from "./plain-result-iterators.js";
 import { SIGNAL_BRAND } from "./signal-brand.js";
 
 const ITERATOR_PROTOTYPE: object = /* @__PURE__ */ Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
@@ -934,18 +935,17 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     // Inherit %IteratorPrototype% like native Map/Set iterators, so Iterator
     // helpers (`keys().toArray()`, `values().map()`) and `instanceof Iterator`
     // keep working where the engine provides them.
-    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } =>
-      Object.create(ITERATOR_PROTOTYPE, {
-        next: {
-          value() {
-            const step = iterator.next();
-            return step.done ? step : { done: false, value: convert(step.value) };
-          },
-          writable: true,
-          configurable: true,
-        },
+    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } => {
+      function next() {
+        const step = iterator.next();
+        return step.done ? step : { done: false, value: convert(step.value) };
+      }
+      plainResultIteratorNext.add(next);
+      return Object.create(ITERATOR_PROTOTYPE, {
+        next: { value: next, writable: true, configurable: true },
         [Symbol.toStringTag]: { value: tag, configurable: true },
       });
+    };
     const proxy = new Proxy(raw, {
       get(target, key) {
         if (kind === "Map" && key === "size" || kind === "Set" && key === "size") {

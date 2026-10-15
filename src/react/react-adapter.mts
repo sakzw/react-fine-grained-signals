@@ -2,6 +2,7 @@
 import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import type { AlienDerivedRenderAdapter, RenderAttempt, RuntimeReadable } from "../core/alien-derived-types.js";
 import type { ReadableProtocolV1 } from "../core/execution-owner.js";
+import { plainResultIteratorNext } from "../core/plain-result-iterators.js";
 
 type ScopePolicy = "managed" | "bare";
 type SubscriptionMode = "combined" | "per-readable";
@@ -13,27 +14,68 @@ interface SignalCaptureScope extends ManagedScope {
   iterate<T>(getIterable: () => Iterable<T>): Iterable<T>;
 }
 
+type Capture = <R>(callback: () => R) => R;
+
+const isObject = (value: unknown): value is object =>
+  value !== null && (typeof value === "object" || typeof value === "function");
+
+/**
+ * Built-in `next` methods always return a fresh ordinary result object whose
+ * `done`/`value` are data properties, so reading them can never run user code.
+ */
+const NATIVE_ITERATOR_NEXT: ReadonlySet<unknown> = new Set<unknown>([
+  Object.getPrototypeOf([][Symbol.iterator]()).next,
+  Object.getPrototypeOf(new Map().entries()).next,
+  Object.getPrototypeOf(new Set().values()).next,
+  Object.getPrototypeOf(""[Symbol.iterator]()).next,
+  Object.getPrototypeOf(Object.getPrototypeOf((function* () {})())).next,
+  // Iterator helpers (`values().map(...)`) where the engine provides them.
+  Object.getPrototypeOf(
+    (([].values() as unknown as { map?: (fn: (value: unknown) => unknown) => object }).map?.((value) => value)) ?? {},
+  ).next,
+].filter((next) => typeof next === "function"));
+
+/**
+ * Defers `done`/`value` to the moment the loop reads them, each in its own
+ * capture, so getter reads on a custom result stay tracked. The loop reads
+ * `value` only when `done` is false, exactly as it would on the original.
+ */
+class CapturedIteratorResult<T> {
+  readonly #result: IteratorResult<T>;
+  readonly #capture: Capture;
+  constructor(result: IteratorResult<T>, capture: Capture) {
+    this.#result = result;
+    this.#capture = capture;
+  }
+  get done(): boolean | undefined { return this.#capture(() => this.#result.done); }
+  get value(): T { return this.#capture(() => this.#result.value); }
+}
+
 /**
  * `for (x of source)` pulls each element after the source expression returns.
- * Capture the source, GetIterator, and every `next()` call one at a time, and
- * forward `return()` lazily, so the loop keeps native laziness, early exit and
- * iterator closing while the reads performed during iteration stay tracked.
+ * Capture the source, GetIterator (including the single `next` lookup), every
+ * `next()` call, each result's `done`/`value` read, and the `return` lookup and
+ * call at close, one at a time and only when the loop performs them. The loop
+ * keeps native laziness, order, `this` binding, early exit, iterator closing
+ * and exception propagation while the reads performed during iteration stay
+ * tracked.
  */
-function captureIteration<T>(
-  capture: <R>(callback: () => R) => R,
-  getIterable: () => Iterable<T>,
-): Iterable<T> {
+function captureIteration<T>(capture: Capture, getIterable: () => Iterable<T>): Iterable<T> {
   const iterable = capture(getIterable);
   const iterator = capture(() => (iterable as Iterable<T>)[Symbol.iterator]());
-  if (iterator === null || (typeof iterator !== "object" && typeof iterator !== "function")) {
-    throw new TypeError("Result of the Symbol.iterator method is not an object");
-  }
+  if (!isObject(iterator)) throw new TypeError("Result of the Symbol.iterator method is not an object");
   // GetIterator reads `next` once and reuses it for the whole loop.
-  const next = iterator.next;
+  const next = capture(() => iterator.next);
+  const nativeResults = NATIVE_ITERATOR_NEXT.has(next) || plainResultIteratorNext.has(next as Function);
   const forwarded: Iterator<T> & Iterable<T> = {
-    next: () => capture(() => Reflect.apply(next, iterator, []) as IteratorResult<T>),
+    next: () => {
+      const result = capture(() => Reflect.apply(next, iterator, []) as IteratorResult<T>);
+      if (nativeResults) return result;
+      if (!isObject(result)) throw new TypeError(`Iterator result ${String(result)} is not an object`);
+      return new CapturedIteratorResult(result, capture) as IteratorResult<T>;
+    },
     return: () => {
-      const close = iterator.return;
+      const close = capture(() => iterator.return);
       // IteratorClose skips an absent method; report a completed result so the
       // outer loop's own close step sees an object, as with no method at all.
       if (close == null) return { done: true, value: undefined };
