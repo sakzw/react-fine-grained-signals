@@ -324,14 +324,13 @@ describe("deepSignal reactive collections", () => {
     expect(entries[Symbol.iterator]()).toBe(entries);
     // Iterator helpers postdate the ES2022 lib this project typechecks against.
     type Helpers = { toArray(): unknown[]; map(callback: (value: unknown) => unknown): Helpers };
-    const IteratorConstructor = (globalThis as { Iterator?: abstract new () => unknown }).Iterator;
-    if (IteratorConstructor !== undefined) {
-      const helpers = (iterator: unknown) => iterator as Helpers;
-      expect(entries).toBeInstanceOf(IteratorConstructor);
-      expect(helpers(state.value.map.keys()).toArray()).toEqual(["a"]);
-      expect(helpers(state.value.set.values()).map((value) => String(value).toUpperCase()).toArray()).toEqual(["X"]);
-      expect(helpers(state.value.map.values()).toArray()[0]).toBe(state.value.map.get("a"));
-    }
+    // Node >= 22 (the supported engines) always provides the global.
+    const IteratorConstructor = (globalThis as unknown as { Iterator: abstract new () => unknown }).Iterator;
+    const helpers = (iterator: unknown) => iterator as Helpers;
+    expect(entries).toBeInstanceOf(IteratorConstructor);
+    expect(helpers(state.value.map.keys()).toArray()).toEqual(["a"]);
+    expect(helpers(state.value.set.values()).map((value) => String(value).toUpperCase()).toArray()).toEqual(["X"]);
+    expect(helpers(state.value.map.values()).toArray()[0]).toBe(state.value.map.get("a"));
   });
 
   it("releases lookup-only primitive keys once their readers are gone", async () => {
