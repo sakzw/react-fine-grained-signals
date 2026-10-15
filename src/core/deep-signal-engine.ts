@@ -280,10 +280,17 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   }
 
   function isStandardCollection(value: unknown): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
-    const kind = getNativeCollectionKind(value);
-    if (kind === undefined) return false;
-    const expectedPrototype = kind === "Map" ? Map.prototype : kind === "Set" ? Set.prototype : kind === "WeakMap" ? WeakMap.prototype : WeakSet.prototype;
-    return Object.getPrototypeOf(value) === expectedPrototype;
+    if (!isObjectLike(value) || isPlainObjectOrArray(value)) return false;
+    // `wrap()` runs this for every opaque value read through a proxy (Dates,
+    // class instances). Match the prototype first so those reads skip the
+    // throwing internal-slot probes in `getNativeCollectionKind`.
+    const prototype = Object.getPrototypeOf(value);
+    const expectedKind = prototype === Map.prototype ? "Map"
+      : prototype === Set.prototype ? "Set"
+      : prototype === WeakMap.prototype ? "WeakMap"
+      : prototype === WeakSet.prototype ? "WeakSet"
+      : undefined;
+    return expectedKind !== undefined && getNativeCollectionKind(value) === expectedKind;
   }
 
   function assertRootValue(value: unknown): asserts value is object {
@@ -880,6 +887,13 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       prunable: new Map(), prunableRevision: 0, methods: new Map(), proxy: undefined as unknown as object,
     };
     const normalize = (value: unknown): unknown => unwrap(value);
+    // Lookups (`get`/`has`/`delete`) only need the identity a stored key would
+    // have. Validating the key's whole reachable graph like a write would make
+    // every lookup O(graph) and throw for values that are merely absent.
+    const normalizeLookupKey = (value: unknown): unknown => {
+      if (!isObjectLike(value)) return value;
+      return toRaw(value) ?? normalizedProxyCarriers.get(value) ?? value;
+    };
     const normalizeWeakKey = (value: unknown): unknown => {
       if (isObjectLike(value)) {
         const raw = toRaw(value);
@@ -922,7 +936,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         if (typeof method !== "function") return Reflect.get(target, key, target);
 
         if ((kind === "Map" || kind === "WeakMap") && key === "get") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalize(input);
+          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
           if (kind === "WeakMap") {
             if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.get, target, [normalized]);
             if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakValues", "values", normalized));
@@ -932,7 +946,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return wrapRead(Map.prototype.get.call(target, normalized));
         });
         if ((kind === "Map" || kind === "WeakMap") && key === "has") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalize(input);
+          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
           if (kind === "WeakMap") {
             if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
             if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakExistence", "existence", normalized));
@@ -974,7 +988,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return proxy;
         });
         if ((kind === "Map" || kind === "WeakMap") && key === "delete") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalize(input);
+          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
           const had = kind === "Map" ? Map.prototype.has.call(target, normalized) : WeakMap.prototype.has.call(target, normalized as object);
           if (!had) return false;
           batchWrite(() => {
@@ -1016,7 +1030,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return undefined;
         });
         if ((kind === "Set" || kind === "WeakSet") && key === "has") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalize(input);
+          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeLookupKey(input);
           if (kind === "WeakSet") {
             if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
             if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakMembers", "members", normalized));
@@ -1046,7 +1060,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return proxy;
         });
         if ((kind === "Set" || kind === "WeakSet") && key === "delete") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalize(input);
+          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeLookupKey(input);
           const had = kind === "Set" ? Set.prototype.has.call(target, normalized) : WeakSet.prototype.has.call(target, normalized as object);
           if (!had) return false;
           batchWrite(() => {

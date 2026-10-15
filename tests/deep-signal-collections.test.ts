@@ -282,4 +282,36 @@ describe("deepSignal reactive collections", () => {
     expect(() => map.value.forEach(null as never)).toThrow(/callback must be a function/);
     expect(() => set.value.forEach(null as never)).toThrow(/callback must be a function/);
   });
+
+  it("looks up Map and Set keys by identity without validating the key graph", () => {
+    const keyCalls = { count: 0 };
+    const accessorKey = { get x() { keyCalls.count += 1; return 1; } };
+    const frozenKey = Object.freeze({});
+    class Opaque { constructor(readonly inner: unknown) {} }
+    const state = deepSignal({ map: new Map<unknown, string>(), set: new Set<unknown>(), nested: { a: 1 } });
+    const opaqueKey = new Opaque(state.value.nested);
+
+    for (const key of [accessorKey, frozenKey, opaqueKey, Object.prototype, new (class extends Map {})()]) {
+      expect(state.value.map.get(key)).toBeUndefined();
+      expect(state.value.map.has(key)).toBe(false);
+      expect(state.value.map.delete(key)).toBe(false);
+      expect(state.value.set.has(key)).toBe(false);
+      expect(state.value.set.delete(key)).toBe(false);
+    }
+    expect(keyCalls.count).toBe(0);
+
+    const stored = { child: state.value.nested };
+    state.value.map.set(stored, "stored");
+    state.value.set.add(stored);
+    expect(state.value.map.get(stored)).toBe("stored");
+    expect(state.value.set.has(stored)).toBe(true);
+    const [storedKey] = state.value.map.keys();
+    expect(state.value.map.get(storedKey)).toBe("stored");
+
+    const seen: Array<string | undefined> = [];
+    disposers.push(effect(() => { seen.push(state.value.map.get(stored)); }));
+    expect(state.value.map.delete(stored)).toBe(true);
+    expect(state.value.set.delete(stored)).toBe(true);
+    expect(seen).toEqual(["stored", undefined]);
+  });
 });
