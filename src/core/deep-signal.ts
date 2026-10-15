@@ -40,6 +40,7 @@ function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
     },
     markWatched(source) { coreRuntime.markDeepSignalWatched(source); },
     hasSubscribers(source) { return coreRuntime.hasDeepSignalSubscribers(source); },
+    hasLinkedSubscribers(source) { return coreRuntime.hasSubscribers(source); },
     batch,
     untracked,
     isSignal,
@@ -70,6 +71,13 @@ export function inspectDeepSignalMetadata(value: object): ReturnType<
   ReturnType<typeof createDeepSignalFactory>["inspectDeepSignalMetadata"]
 > {
   return getProductionDeepSignals().inspectDeepSignalMetadata(value);
+}
+
+/** Package-internal: primitive collection keys that still retain version metadata. */
+export function inspectCollectionMetadata(value: object): ReturnType<
+  ReturnType<typeof createDeepSignalFactory>["inspectCollectionMetadata"]
+> {
+  return getProductionDeepSignals().inspectCollectionMetadata(value);
 }
 
 /**

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { runInNewContext } from "node:vm";
-import { batch, deepSignal, effect, untracked } from "../src/index.js";
+import { batch, deepSignal, effect, signal, untracked } from "../src/index.js";
+import { coreRuntime } from "../src/core/core-runtime.js";
+import { inspectCollectionMetadata } from "../src/core/deep-signal.js";
 
 describe("deepSignal reactive collections", () => {
   const disposers: Array<() => void> = [];
@@ -313,5 +315,59 @@ describe("deepSignal reactive collections", () => {
     expect(state.value.map.delete(stored)).toBe(true);
     expect(state.value.set.delete(stored)).toBe(true);
     expect(seen).toEqual(["stored", undefined]);
+  });
+
+  it("returns iterators that inherit Iterator helpers", () => {
+    const state = deepSignal({ map: new Map([["a", { n: 1 }]]), set: new Set(["x"]) });
+    const entries = state.value.map.entries();
+    expect(Object.prototype.toString.call(entries)).toBe("[object Map Iterator]");
+    expect(entries[Symbol.iterator]()).toBe(entries);
+    // Iterator helpers postdate the ES2022 lib this project typechecks against.
+    type Helpers = { toArray(): unknown[]; map(callback: (value: unknown) => unknown): Helpers };
+    const IteratorConstructor = (globalThis as { Iterator?: abstract new () => unknown }).Iterator;
+    if (IteratorConstructor !== undefined) {
+      const helpers = (iterator: unknown) => iterator as Helpers;
+      expect(entries).toBeInstanceOf(IteratorConstructor);
+      expect(helpers(state.value.map.keys()).toArray()).toEqual(["a"]);
+      expect(helpers(state.value.set.values()).map((value) => String(value).toUpperCase()).toArray()).toEqual(["X"]);
+      expect(helpers(state.value.map.values()).toArray()[0]).toBe(state.value.map.get("a"));
+    }
+  });
+
+  it("releases lookup-only primitive keys once their readers are gone", async () => {
+    const map = deepSignal(new Map<string, number>([["kept", 1]]));
+    const set = deepSignal(new Set<string>());
+    const query = signal("q0");
+    const dispose = effect(() => {
+      map.value.has(query.value);
+      map.value.get(query.value);
+      set.value.has(query.value);
+    });
+    for (let index = 1; index < 300; index += 1) query.value = `q${index}`;
+    dispose();
+    const live: boolean[] = [];
+    disposers.push(effect(() => { live.push(map.value.has("kept")); }));
+
+    map.value.set("other", 2);
+    set.value.add("other");
+    for (let turn = 0; turn < 10; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const mapKeys = inspectCollectionMetadata(map.value)!;
+    expect(mapKeys.existence).toEqual(["kept"]);
+    expect(mapKeys.values).toEqual([]);
+    expect(inspectCollectionMetadata(set.value)!.members).toEqual([]);
+    map.value.delete("kept");
+    expect(live).toEqual([true, false]);
+  });
+
+  it("makes a render attempt that read a released key observe the change at commit", () => {
+    const map = deepSignal(new Map<string, number>());
+    const render = coreRuntime.renderAdapter;
+    const attempt = render.createRenderAttempt();
+    render.withRenderScope(attempt, () => { map.value.get("pending"); });
+    // The attempt has not subscribed yet; an unrelated mutation sweeps the key.
+    map.value.set("other", 1);
+    expect(inspectCollectionMetadata(map.value)!.values).toEqual([]);
+    expect(render.settleRenderAttempt(attempt)).toBe(false);
   });
 });

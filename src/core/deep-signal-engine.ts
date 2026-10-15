@@ -8,6 +8,8 @@ import {
 import { hasActiveRenderCollector } from "./render-tracking.js";
 import { SIGNAL_BRAND } from "./signal-brand.js";
 
+const ITERATOR_PROTOTYPE: object = /* @__PURE__ */ Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
+
 export interface DeepSignalSource<T> {
   value: T;
   peek(): T;
@@ -25,6 +27,8 @@ export interface DeepSignalRuntimeAdapter {
   createVersionSignal<T>(initial: T): DeepSignalSource<T>;
   markWatched(source: DeepSignalSource<unknown>): void;
   hasSubscribers(source: DeepSignalSource<unknown>): boolean;
+  /** Graph links only, ignoring the watched flag; defaults to `hasSubscribers`. */
+  hasLinkedSubscribers?(source: DeepSignalSource<unknown>): boolean;
   batch<T>(callback: () => T): T;
   /** Runs a callback without collecting dependencies, as the public `untracked`. */
   untracked<T>(callback: () => T): T;
@@ -810,6 +814,17 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     if (version !== undefined) version.value += 1;
   };
 
+  // Collection keys are often only looked up (search, cache, existence checks)
+  // and never written, so the write-cleared watched flag would retain them
+  // forever. Sweep them by actual graph links instead, and advance a dropped
+  // version once more: a render attempt that read it but has not subscribed
+  // yet sees the revision change at commit and re-renders onto a fresh version.
+  const hasLinkedSubscribers = (version: VersionSignal): boolean =>
+    (adapter.hasLinkedSubscribers ?? adapter.hasSubscribers)(version);
+  const retireCollectionVersion = (version: VersionSignal | undefined): void => {
+    if (version !== undefined) adapter.untracked(() => { version.value = version.peek() + 1; });
+  };
+
   const sweepCollectionKeys = (metadata: CollectionMetadata): void => {
     // Primitive-key versions are the only strong metadata retained here. Avoid
     // creating an empty iterator after collection writes with no subscribers.
@@ -847,15 +862,15 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       let remaining = candidates;
       if ((candidates & 1) !== 0) {
         const version = metadata.values.get(key);
-        if (version === undefined || !adapter.hasSubscribers(version)) { metadata.values.delete(key); remaining &= ~1; }
+        if (version === undefined || !hasLinkedSubscribers(version)) { retireCollectionVersion(version); metadata.values.delete(key); remaining &= ~1; }
       }
       if ((candidates & 2) !== 0) {
         const version = metadata.existence.get(key);
-        if (version === undefined || !adapter.hasSubscribers(version)) { metadata.existence.delete(key); remaining &= ~2; }
+        if (version === undefined || !hasLinkedSubscribers(version)) { retireCollectionVersion(version); metadata.existence.delete(key); remaining &= ~2; }
       }
       if ((candidates & 4) !== 0) {
         const version = metadata.members.get(key);
-        if (version === undefined || !adapter.hasSubscribers(version)) { metadata.members.delete(key); remaining &= ~4; }
+        if (version === undefined || !hasLinkedSubscribers(version)) { retireCollectionVersion(version); metadata.members.delete(key); remaining &= ~4; }
       }
       if (remaining === 0) metadata.prunable.delete(key);
       else if (remaining !== candidates) metadata.prunable.set(key, remaining);
@@ -916,14 +931,21 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       if (method === undefined) metadata.methods.set(key, method = create());
       return method as T;
     };
-    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } => ({
-      next() {
-        const step = iterator.next();
-        return step.done ? step : { done: false, value: convert(step.value) };
-      },
-      [Symbol.iterator]() { return this; },
-      get [Symbol.toStringTag]() { return tag; },
-    });
+    // Inherit %IteratorPrototype% like native Map/Set iterators, so Iterator
+    // helpers (`keys().toArray()`, `values().map()`) and `instanceof Iterator`
+    // keep working where the engine provides them.
+    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } =>
+      Object.create(ITERATOR_PROTOTYPE, {
+        next: {
+          value() {
+            const step = iterator.next();
+            return step.done ? step : { done: false, value: convert(step.value) };
+          },
+          writable: true,
+          configurable: true,
+        },
+        [Symbol.toStringTag]: { value: tag, configurable: true },
+      });
     const proxy = new Proxy(raw, {
       get(target, key) {
         if (kind === "Map" && key === "size" || kind === "Set" && key === "size") {
@@ -1449,6 +1471,21 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     };
   }
 
+  /** Primitive collection keys that still retain version metadata. */
+  function inspectCollectionMetadata(value: object): {
+    values: unknown[];
+    existence: unknown[];
+    members: unknown[];
+  } | undefined {
+    const metadata = reactiveCollections.get(toRaw(value) ?? value);
+    if (metadata === undefined) return undefined;
+    return {
+      values: [...metadata.values.keys()],
+      existence: [...metadata.existence.keys()],
+      members: [...metadata.members.keys()],
+    };
+  }
+
   /**
    * Creates a signal that lazily tracks nested plain-object, array, and standard
    * collection reads. Mutations must go through `.value`; changes made through
@@ -1464,5 +1501,5 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     adapter.registerDeepSignal?.(result);
     return result;
   }
-  return { deepSignal, inspectDeepSignalMetadata };
+  return { deepSignal, inspectDeepSignalMetadata, inspectCollectionMetadata };
 }
