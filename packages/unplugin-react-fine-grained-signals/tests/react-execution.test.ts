@@ -11,7 +11,7 @@
  * transform used to produce, so each regression is shown to be real.
  */
 
-import { transformSync, type PluginItem, type PluginObject } from "@babel/core";
+import { parseSync, transformSync, traverse, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
 import { act, createElement, Suspense, useState, type FunctionComponent } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
@@ -1984,34 +1984,217 @@ export function App() {
     expect(transformed).toContain("String(useMemo(() => 1, []), _signals.capture(() => items.filter(item => item.value)).length)");
   });
 
-  it("copies a tracked for-of iterable in a single capture and leaves other iterables lazy", async () => {
+  const managedOutput = (source: string): string => transformReactFineGrainedSignals(source, "Fixture.jsx", {
+    importSource: "react-fine-grained-signals",
+    mode: "auto",
+    transform: "managed",
+    reactCompiler: "auto",
+    reactImportSource: "react",
+  })?.code ?? "";
+
+  it("iterates a tracked for-of source lazily with native control flow and closing", async () => {
     const source = `
 import { signal } from "react-fine-grained-signals";
-export const list = signal(["a"]);
 export const log = [];
-function* gen() { log.push("start"); yield list.value.length; }
+const lazy = ["a", "b", "c"];
+Object.defineProperty(lazy, 2, { get() { log.push("read 2"); return "c"; }, enumerable: true });
+export const list = signal(lazy);
+export const growing = signal(["x"]);
+export const closing = signal({
+  [Symbol.iterator]() {
+    let index = 0;
+    return {
+      next() { log.push("next"); index += 1; return { done: index > 3, value: index }; },
+      return() { log.push("return"); return { done: true }; },
+    };
+  },
+});
+const Array = { isArray() { throw new Error("shadowed Array was consulted"); } };
 export function App() {
   let out = "";
+  for (const item of list.value) { if (item === "b") break; out += item; }
+  for (const item of growing.value) { out += item; if (item === "x" && growing.peek().length < 3) growing.peek().push("y"); }
+  for (const step of closing.value) { if (step === 2) break; out += step; }
+  return <p>{out + String(Array.length)}</p>;
+}
+`;
+    const transformed = managedOutput(source);
+    expect(transformed).not.toContain("[..._iterable]");
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("axy1undefined");
+    // No element after the break was read; the custom iterator was closed.
+    expect(module.log).toEqual(["next", "next", "return"]);
+  });
+
+  it("propagates throws from the loop body and closes the iterator once", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+export const log = [];
+export const values = signal({
+  [Symbol.iterator]() {
+    return {
+      next() { log.push("next"); return { done: false, value: 1 }; },
+      return() { log.push("return"); return {}; },
+    };
+  },
+});
+export function read() {
+  return values.value;
+}
+export function useFirst() {
+  for (const value of values.value) {
+    if (value === 1) throw new Error("body threw");
+  }
+  return 0;
+}
+`;
+    const module = await loadModule(source);
+    function Probe() {
+      try { (module.useFirst as () => number)(); } catch (error) { (module.log as string[]).push((error as Error).message); }
+      return null;
+    }
+    mount(Probe);
+    expect((module.log as string[]).slice(0, 3)).toEqual(["next", "return", "body threw"]);
+  });
+
+  it("tracks reads performed by a custom iterator while the loop pulls it", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+export const limit = signal(2);
+export const list = signal(["a"]);
+export const source = signal({
+  *[Symbol.iterator]() { for (let index = 0; index < limit.value; index += 1) yield index; },
+});
+export function App() {
+  let out = "";
+  for (const index of source.value) out += index;
   for (const item of list.value) out += item;
-  for (const size of [gen()][0]) { log.push("body"); out += size; }
   return <p>{out}</p>;
 }
 `;
-    const transformed = transformReactFineGrainedSignals(source, "Fixture.jsx", {
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("01a");
+    write(module, "limit", 3);
+    expect(container.textContent).toBe("012a");
+    write(module, "list", ["a", "b"]);
+    expect(container.textContent).toBe("012ab");
+  });
+
+  it("does not move Hook calls into a capture closure", () => {
+    const shapes = [
+      `import { format } from "./format";\nconst text = format(useContext(Ctx), count.value);`,
+      `function format(a, b) { return String(a) + b; }\nconst text = format(useContext(Ctx), count.value);`,
+      `import { helpers } from "./format";\nconst text = helpers.format(useContext(Ctx), count.value);`,
+      `import { format } from "./format";\nconst text = format(React.useContext(Ctx), count.value);`,
+      `import { format } from "./format";\nconst text = format(useAppContext(), count.value);`,
+      `import { format } from "./format";\nconst text = format(use(promise), count.value);`,
+      `const text = [count].map((item) => item.value + useContext(Ctx)).join("");`,
+      `const text = useCountSignal().value;`,
+      `const text = \`\${useContext(Ctx)}\${count.value}\`;`,
+    ];
+    /** Hook calls whose enclosing function is the callback of a `.capture(...)` call. */
+    const hooksInsideCapture = (code: string): string[] => {
+      const ast = parseSync(code, { babelrc: false, configFile: false, filename: "Out.jsx", parserOpts: { plugins: ["jsx"] } });
+      const found: string[] = [];
+      traverse(ast!, {
+        CallExpression(path) {
+          const callee = path.node.callee;
+          const name = t.isIdentifier(callee) ? callee.name
+            : t.isMemberExpression(callee) && t.isIdentifier(callee.property) ? callee.property.name : "";
+          if (!/^use(?:[A-Z]|$)/.test(name) || name === "useSignalCapture") return;
+          for (let fn = path.getFunctionParent(); fn !== null; fn = fn.getFunctionParent()) {
+            const call = fn.parentPath;
+            if (call?.isCallExpression() && t.isMemberExpression(call.node.callee) &&
+              t.isIdentifier(call.node.callee.property, { name: "capture" })) found.push(name);
+          }
+        },
+      });
+      return found;
+    };
+    for (const shape of shapes) {
+      const lines = shape.split("\n");
+      const statement = lines.pop()!;
+      const imports = lines.join("\n");
+      const transformed = managedOutput(`
+import * as React from "react";
+import { useContext, use } from "react";
+import { signal } from "react-fine-grained-signals";
+${imports}
+const count = signal(1);
+const Ctx = React.createContext(0);
+const promise = Promise.resolve(0);
+function useAppContext() { return useContext(Ctx); }
+function useCountSignal() { return count; }
+export function App() {
+  ${statement}
+  return <p>{text}</p>;
+}
+`);
+      // Every Hook stays a direct call in the component body.
+      expect({ shape, hooks: hooksInsideCapture(transformed), selected: transformed.includes("useSignalCapture()") })
+        .toEqual({ shape, hooks: [], selected: true });
+    }
+  });
+
+  it("keeps separable reads tracked when a Hook shares the call", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+import { useState } from "react";
+export const count = signal(1);
+function format(state, value) { return state + ":" + value; }
+export function App() {
+  const text = format(useState("s")[0], count.value);
+  return <p>{text}</p>;
+}
+`;
+    const transformed = managedOutput(source);
+    expect(transformed).toContain("_signals.capture(() => count.value)");
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("s:1");
+    write(module, "count", 2);
+    expect(container.textContent).toBe("s:2");
+  });
+
+  it("captures the read after a Hook result and warns when a Hook hides a call's own reads", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+import { useState } from "react";
+export const count = signal(1);
+function useCount() { useState(0); return count; }
+export function App() {
+  const value = useCount().value;
+  return <p>{value}</p>;
+}
+`;
+    const transformed = managedOutput(source);
+    expect(transformed).toMatch(/\(_hookResult => _signals\.capture\(\(\) => _hookResult\.value\)\)\(useCount\(\)\)/);
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("1");
+    write(module, "count", 2);
+    expect(container.textContent).toBe("2");
+
+    const warnings: string[] = [];
+    transformReactFineGrainedSignals(`
+import { useContext } from "react";
+import { signal } from "react-fine-grained-signals";
+import { format } from "./format";
+const count = signal(1);
+export function App() {
+  const text = format(useContext(Ctx), count.value);
+  return <p>{text}</p>;
+}
+`, "Fixture.jsx", {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
       reactCompiler: "auto",
       reactImportSource: "react",
-    })?.code ?? "";
-    expect(transformed.match(/\.capture\(\(\) => \{/g)).toHaveLength(1);
-    expect(transformed).not.toMatch(/capture\(\(\) => _signals\.capture/);
-
-    const module = await loadModule(source);
-    const container = mount(module.App);
-    expect(container.textContent).toBe("a1");
-    expect((module.log as string[]).slice(0, 2)).toEqual(["start", "body"]);
-    write(module, "list", ["a", "b"]);
-    expect(container.textContent).toBe("ab2");
+      warn: (warning) => warnings.push(warning.message),
+    });
+    expect(warnings.some((message) => message.includes("Hook call shares this call"))).toBe(true);
   });
 });

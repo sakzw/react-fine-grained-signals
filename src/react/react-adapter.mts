@@ -10,6 +10,38 @@ interface SnapshotCache { readonly readable: object; current: SnapshotEntry | un
 interface ManagedScope { finish(): void; getSnapshot(): number }
 interface SignalCaptureScope extends ManagedScope {
   capture<T>(callback: () => T): T;
+  iterate<T>(getIterable: () => Iterable<T>): Iterable<T>;
+}
+
+/**
+ * `for (x of source)` pulls each element after the source expression returns.
+ * Capture the source, GetIterator, and every `next()` call one at a time, and
+ * forward `return()` lazily, so the loop keeps native laziness, early exit and
+ * iterator closing while the reads performed during iteration stay tracked.
+ */
+function captureIteration<T>(
+  capture: <R>(callback: () => R) => R,
+  getIterable: () => Iterable<T>,
+): Iterable<T> {
+  const iterable = capture(getIterable);
+  const iterator = capture(() => (iterable as Iterable<T>)[Symbol.iterator]());
+  if (iterator === null || (typeof iterator !== "object" && typeof iterator !== "function")) {
+    throw new TypeError("Result of the Symbol.iterator method is not an object");
+  }
+  // GetIterator reads `next` once and reuses it for the whole loop.
+  const next = iterator.next;
+  const forwarded: Iterator<T> & Iterable<T> = {
+    next: () => capture(() => Reflect.apply(next, iterator, []) as IteratorResult<T>),
+    return: () => {
+      const close = iterator.return;
+      // IteratorClose skips an absent method; report a completed result so the
+      // outer loop's own close step sees an object, as with no method at all.
+      if (close == null) return { done: true, value: undefined };
+      return capture(() => Reflect.apply(close, iterator, []) as IteratorResult<T>);
+    },
+    [Symbol.iterator]() { return forwarded; },
+  };
+  return forwarded;
 }
 
 export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDerivedRenderAdapter) {
@@ -175,10 +207,12 @@ function createReactAdapter(
   }
   function useSignalCapture(): SignalCaptureScope {
     const { store, attempt } = useTrackingStore("managed", false);
+    const capture = <T,>(callback: () => T): T => store.capture(attempt, callback);
     return {
       finish: () => store.finish(attempt),
       getSnapshot: store.getSnapshot,
-      capture: (callback) => store.capture(attempt, callback),
+      capture,
+      iterate: (getIterable) => captureIteration(capture, getIterable),
     };
   }
   return { useSignalValue, useSignalTracking, useManagedSignals, useSignalCapture };

@@ -11,6 +11,8 @@ export interface ManagedSignalsStore {
 /** Per-read render-attempt capture handle used by the experimental transform prototype. */
 export interface SignalCaptureStore extends ManagedSignalsStore {
   capture<T>(callback: () => T): T;
+  /** Lazily forwards a `for...of` source, capturing GetIterator and each `next()`/`return()`. */
+  iterate<T>(getIterable: () => Iterable<T>): Iterable<T>;
 }
 
 /** Best-effort render tracking for untransformed components. */

@@ -742,6 +742,34 @@ describe("React Compiler runtime behavior", () => {
     expect(button?.textContent).toBe("1:1");
   });
 
+  it("keeps Hook calls direct and for-of capture live in a compiled managed component", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+import { useState } from "react";
+
+export const count = signal(0);
+const items = signal(["a"]);
+function label(prefix, value) { return prefix + value; }
+function useCount() { useState(0); return count; }
+
+export function Counter() {
+  const text = label(useState("n")[0], count.value);
+  let joined = "";
+  for (const item of items.value) joined += item;
+  return <p>{text + ":" + useCount().value + ":" + joined}</p>;
+}
+`;
+    const options = { transform: "managed" as const, reactCompiler: "off" as const };
+    const { events } = compilePipeline(source, options);
+    expect(events.map((event) => event.kind)).toContain("CompileSuccess");
+
+    const module = await loadModule(source, options);
+    const container = mount(module.Counter);
+    expect(container.textContent).toBe("n0:0:a");
+    write(module, 1);
+    expect(container.textContent).toBe("n1:1:a");
+  });
+
   it("updates a hand-written runtime-import component compiled by the compiler", async () => {
     // No directive anywhere: the bail-out on `try` without `catch` is enough on
     // its own to keep every render re-reading the signal.
