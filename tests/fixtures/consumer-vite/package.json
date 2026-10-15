@@ -9,6 +9,9 @@
     "unplugin-react-fine-grained-signals": "file:__PLUGIN_TARBALL__"
   },
   "devDependencies": {
+    "@vitejs/plugin-react": "6.1.2",
+    "babel-plugin-react-compiler": "1.0.0",
+    "oxc-transform-react": "0.152.0",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.5",
     "typescript": "7.0.2",

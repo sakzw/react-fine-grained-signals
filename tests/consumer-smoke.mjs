@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createRequire } from "node:module";
 import { existsSync, readFileSync } from "node:fs";
 import { cp, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -80,6 +81,7 @@ const pnpmInvocation = resolvePnpmInvocation();
 const temporaryRoot = await mkdtemp(join(tmpdir(), "react-fine-grained-signals-consumer-"));
 
 async function run(command, arguments_, cwd) {
+  process.stdout.write(`[consumer] ${basename(command)} ${arguments_.join(" ")}\n`);
   try {
     const { stdout, stderr } = await execFileAsync(command, arguments_, {
       cwd,
@@ -252,14 +254,13 @@ try {
     throw new Error("Consumer output must import createElement from the package root for a key after a spread");
   }
   // Managed codegen keeps user Hooks at function top level and captures proven
-  // reads individually. The fixture opts ManagedBoundary out of the transform,
-  // leaving exactly one automatic candidate (Counter) plus its hand-written
-  // boundary. A successful consumer build must therefore retain one capture
-  // call from Counter and one finish call from ManagedBoundary.
+  // reads individually. The consumer canary adds several interacting managed
+  // components and a destructured deep read; require those captures to survive
+  // the actual packed Vite + React Compiler build without pinning their count.
   const captureCalls = output.match(/\.capture\s*\(/g) ?? [];
-  if (captureCalls.length !== 1) {
+  if (captureCalls.length < 4) {
     throw new Error(
-      `Vite consumer output should contain the one automatically transformed Counter read capture, found ${captureCalls.length}`,
+      `Vite consumer output should retain managed captures for the consumer canary, found ${captureCalls.length}`,
     );
   }
   const finishCalls = output.match(/\.finish\s*\(/g) ?? [];
@@ -267,6 +268,110 @@ try {
     throw new Error(
       `Vite consumer output should retain ManagedBoundary's hand-written finish call, found ${finishCalls.length}`,
     );
+  }
+  if (!output.includes("react/compiler-runtime")) {
+    throw new Error("Packed consumer Vite build did not run React Compiler");
+  }
+
+  // Execute the packed Vite output under real React SSR and hydrate it in
+  // JSDOM. Browser E2E covers actual browser input/StrictMode/HMR behavior;
+  // this consumer run verifies package exports, managed codegen, nested
+  // destructuring, and hydration together after installing the tarballs.
+  const { JSDOM } = await import("jsdom");
+  const consumerRequire = createRequire(join(consumerRoot, "package.json"));
+  const React = consumerRequire("react");
+  const { renderToString } = consumerRequire("react-dom/server");
+  const { hydrateRoot } = consumerRequire("react-dom/client");
+  const { act } = React;
+  const canaryBundle = await import(pathToFileURL(join(consumerRoot, "dist", "consumer.js")).href);
+  const canaryElement = React.createElement(
+    React.StrictMode,
+    null,
+    React.createElement(canaryBundle.ConsumerCanary),
+  );
+  console.log("[consumer] rendering the packed canary on the server");
+  canaryBundle.resetConsumerCanary();
+  const markup = renderToString(canaryElement);
+  const dom = new JSDOM(`<!doctype html><div id="root">${markup}</div>`, { url: "http://consumer.test" });
+  const globalValues = new Map(
+    ["window", "document", "navigator", "HTMLElement", "MutationObserver", "IS_REACT_ACT_ENVIRONMENT"]
+      .map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]),
+  );
+  for (const [key, value] of Object.entries({
+    window: dom.window,
+    document: dom.window.document,
+    navigator: dom.window.navigator,
+    HTMLElement: dom.window.HTMLElement,
+    MutationObserver: dom.window.MutationObserver,
+    IS_REACT_ACT_ENVIRONMENT: true,
+  })) {
+    Object.defineProperty(globalThis, key, { configurable: true, writable: true, value });
+  }
+  try {
+    const rootElement = dom.window.document.querySelector("#root");
+    let reactRoot;
+    await act(() => {
+      reactRoot = hydrateRoot(rootElement, canaryElement);
+    });
+    console.log("[consumer] packed canary hydrated");
+    const read = (id) => dom.window.document.querySelector(`[data-testid="${id}"]`);
+    if (read("deep-name").textContent !== "Ada" || read("map-value").textContent !== "Ada") {
+      throw new Error("Packed canary SSR/hydration lost deep destructuring or reactive collection values");
+    }
+    const unrelatedRenders = canaryBundle.readUnrelatedCommitCount();
+    await act(() => read("count-up").click());
+    console.log("[consumer] shared signal update completed");
+    if (
+      read("count").textContent !== "2" ||
+      read("computed").textContent !== "4" ||
+      read("shared-child").textContent !== "2" ||
+      read("deep-name").textContent !== "Grace" ||
+      read("map-value").textContent !== "Grace" ||
+      read("set-has").textContent !== "true" ||
+      canaryBundle.readUnrelatedCommitCount() !== unrelatedRenders ||
+      read("count-up").getAttribute("title") !== "updated title"
+    ) {
+      throw new Error("Packed canary update failed or caused a parent React rerender");
+    }
+    await act(() => read("replace-and-delete").click());
+    if (read("deep-name").textContent !== "Lin" || read("map-value").textContent !== "" || read("set-has").textContent !== "false") {
+      throw new Error("Packed deep destructuring replacement or collection deletion became stale");
+    }
+    await act(() => read("toggle-conditional").click());
+    if (read("conditional") !== null) throw new Error("Packed canary conditional did not unmount");
+    await act(() => read("react-count-up").click());
+    if (read("react-state").textContent !== "1") throw new Error("React state stopped updating alongside signals");
+
+    const input = read("text");
+    const nativeInputValue = Object.getOwnPropertyDescriptor(dom.window.HTMLInputElement.prototype, "value").set;
+    await act(() => {
+      nativeInputValue.call(input, "consumer");
+      input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+    });
+    if (input.value !== "consumer") throw new Error("Packed writable computed input binding did not update");
+    await act(() => {
+      read("checkbox").click();
+      read("radio-second").click();
+      const select = read("select");
+      select.value = "two";
+      select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
+    });
+    if (
+      !read("checkbox").checked ||
+      !read("radio-second").checked ||
+      read("select").value !== "two"
+    ) {
+      throw new Error("Packed consumer form bindings did not accept native events");
+    }
+    await act(() => reactRoot.unmount());
+    canaryBundle.canaryState.count.value += 1;
+    console.log("Packed consumer SSR/hydration and combined signal/form updates passed.");
+  } finally {
+    dom.window.close();
+    for (const [key, descriptor] of globalValues) {
+      if (descriptor === undefined) delete globalThis[key];
+      else Object.defineProperty(globalThis, key, descriptor);
+    }
   }
 
   // Build a second entry as a real installed consumer. Do not externalize
