@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M15.2でdependent-chain fixtureを件数に合う深さへ修正し、変換後コードの初期値とdeep updateを検証した。100件chainはbaseline 6.56秒 / candidate 2.98秒の中央値、500件candidateは5.77秒（3回の幅4.57–15.69秒）。500件baseline chain/independentは各60秒でtimeout。500件CPU profileではBabel visitor/AST traversalと`hasTrackedSource`が主なself-timeで、scope crawl/codegenは小さく、追加製品最適化はしない。M15.1の古いchain結果はfixture不備のため撤回。Transform suite 425件と再実行2件、focused React regression pass。詳細は[M15.2 audit](m15.2-benchmark-validity.ja.md)。M15.1のReact Compiler、typecheck/lint/build/size、consumer smokeおよびGitHub Test/E2Eの記録は引き継ぐ。公開tag、npm publish、GitHub Releaseは未実施。
+- 状態: M15.2でdependent-chain fixtureを件数に合う深さへ修正し、変換後コードの初期値とdeep updateを検証した。100件chainはbaseline 6.56秒 / candidate 2.98秒の中央値、500件candidateは5.77秒（3回の幅4.57–15.69秒）。500件baseline chain/independentは各60秒でtimeout。500件CPU profileではBabel visitor/AST traversalと`hasTrackedSource`が主なself-timeで、scope crawl/codegenは小さく、追加製品最適化はしない。M15.1の古いchain結果はfixture不備のため撤回。Transform suite 425件と再実行2件、focused React regression pass。push SHA `e0750e9c623c6809cbb3b89f7664bc182f9fc9bc`の[GitHub Test](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38708562104) / [E2E](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38708562102)はsuccess。詳細は[M15.2 audit](m15.2-benchmark-validity.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
 - 統合ブランチ: `main`
 - 最新マイルストーン: M15.2 benchmark validity & transform stress audit。M15.1 chain表の旧値を無効とし、正しいfixtureの再測定へ置き換えた。500件baselineのchain/independent完走値は得られていない。M15.1製品コードは維持し、今回runtime/transform実装に変更はない。M16ではJSDOM selector cacheのretainer pathを特定し、製品コード変更はなし。既存のpush SHAに対するTest/E2E CIは成功。
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
