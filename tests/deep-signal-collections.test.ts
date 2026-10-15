@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { runInNewContext } from "node:vm";
 import { batch, deepSignal, effect, signal, untracked } from "../src/index.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
@@ -359,14 +359,86 @@ describe("deepSignal reactive collections", () => {
     expect(live).toEqual([true, false]);
   });
 
-  it("makes a render attempt that read a released key observe the change at commit", () => {
+  it("keeps a pending render attempt valid across an unrelated write and releases its key in a later task", async () => {
     const map = deepSignal(new Map<string, number>());
     const render = coreRuntime.renderAdapter;
     const attempt = render.createRenderAttempt();
     render.withRenderScope(attempt, () => { map.value.get("pending"); });
-    // The attempt has not subscribed yet; an unrelated mutation sweeps the key.
+    // An unrelated write in the same task does not invalidate the attempt.
     map.value.set("other", 1);
+    expect(inspectCollectionMetadata(map.value)!.values).toEqual(["pending"]);
+    expect(render.settleRenderAttempt(attempt)).toBe(true);
+    // If the attempt still has not subscribed by a later task, the key is
+    // released and the attempt sees the change when it finally commits.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(inspectCollectionMetadata(map.value)!.values).toEqual([]);
     expect(render.settleRenderAttempt(attempt)).toBe(false);
+  });
+
+  it("compares raw identities in Set composition methods with object members", () => {
+    const a = { n: "a" };
+    const b = { n: "b" };
+    const c = { n: "c" };
+    const state = deepSignal({ left: new Set([a, b, c]), right: new Set([a]) });
+    // Set composition methods postdate the ES2022 lib this project typechecks against.
+    type Item = { n: string };
+    type Composable = Set<Item> & {
+      union(other: unknown): Set<Item>; intersection(other: unknown): Set<Item>; difference(other: unknown): Set<Item>;
+      symmetricDifference(other: unknown): Set<Item>; isSubsetOf(other: unknown): boolean;
+      isSupersetOf(other: unknown): boolean; isDisjointFrom(other: unknown): boolean;
+    };
+    const left = state.value.left as Composable;
+    const right = state.value.right as Composable;
+    const names = (set: Set<Item>) => [...set].map((item) => item.n).sort().join(",");
+    expect(names(left.difference(right))).toBe("b,c");
+    expect(names(left.intersection(right))).toBe("a");
+    expect(left.union(right).size).toBe(3);
+    expect(names(left.symmetricDifference(right))).toBe("b,c");
+    expect(left.isSupersetOf(right)).toBe(true);
+    expect(right.isSubsetOf(left)).toBe(true);
+    expect(left.isDisjointFrom(right)).toBe(false);
+    // A plain Set built from reactive iteration holds proxies.
+    expect(left.isSupersetOf(new Set([...right]))).toBe(true);
+    expect(right.isSubsetOf(new Set([...left]))).toBe(true);
+    state.value.left = left.union(right);
+    expect(state.value.left.size).toBe(3);
+    expect(() => left.union({ size: 1, has: 1, keys: () => [][Symbol.iterator]() } as never)).toThrow(TypeError);
+  });
+
+  it("composes Map upsert methods from reactive reads and writes", () => {
+    const prototype = Map.prototype as unknown as Record<string, unknown>;
+    const had = { getOrInsert: prototype.getOrInsert, getOrInsertComputed: prototype.getOrInsertComputed };
+    prototype.getOrInsert = function () { throw new Error("native getOrInsert must not run on the raw target"); };
+    prototype.getOrInsertComputed = function () { throw new Error("native getOrInsertComputed must not run on the raw target"); };
+    try {
+      const map = deepSignal(new Map<string, number>([["a", 1]]));
+      const seen: Array<number | undefined> = [];
+      disposers.push(effect(() => { seen.push(map.value.get("b")); }));
+      const upsert = map.value as unknown as {
+        getOrInsert(key: string, value: number): number;
+        getOrInsertComputed(key: string, callback: (key: string) => number): number;
+      };
+      expect(upsert.getOrInsert("a", 9)).toBe(1);
+      expect(upsert.getOrInsert("b", 2)).toBe(2);
+      expect(upsert.getOrInsertComputed("c", (key) => key.length)).toBe(1);
+      expect(seen).toEqual([undefined, 2]);
+    } finally {
+      if (had.getOrInsert === undefined) delete prototype.getOrInsert; else prototype.getOrInsert = had.getOrInsert;
+      if (had.getOrInsertComputed === undefined) delete prototype.getOrInsertComputed; else prototype.getOrInsertComputed = had.getOrInsertComputed;
+    }
+  });
+
+  it("stores opaque values without probing them as collections", () => {
+    const probe = vi.spyOn(Map.prototype, "has");
+    try {
+      const state = deepSignal({ rows: [] as Array<{ at: Date; owner: object }> });
+      class Owner {}
+      state.value.rows = Array.from({ length: 50 }, () => ({ at: new Date(0), owner: new Owner() }));
+      expect(probe).not.toHaveBeenCalled();
+      expect(state.value.rows[0]!.at).toBeInstanceOf(Date);
+    } finally {
+      probe.mockRestore();
+    }
   });
 });

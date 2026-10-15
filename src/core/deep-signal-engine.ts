@@ -11,6 +11,36 @@ import { SIGNAL_BRAND } from "./signal-brand.js";
 
 const ITERATOR_PROTOTYPE: object = /* @__PURE__ */ Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
 
+/**
+ * Map/Set iteration through a reactive collection: converts each step's value
+ * on the way out. One shared `next` (registered once as returning plain data
+ * results) instead of a closure and a descriptor object per iterator.
+ */
+class ReactiveCollectionIterator {
+  readonly #iterator: Iterator<unknown>;
+  readonly #convert: (value: unknown) => unknown;
+  readonly #tag: string;
+  constructor(iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string) {
+    this.#iterator = iterator;
+    this.#convert = convert;
+    this.#tag = tag;
+  }
+  next(): IteratorResult<unknown> {
+    const step = this.#iterator.next();
+    return step.done ? step : { done: false, value: this.#convert(step.value) };
+  }
+  get [Symbol.toStringTag](): string { return this.#tag; }
+}
+
+let reactiveIteratorSetUp = false;
+/** Inherit %IteratorPrototype% (Iterator helpers) and register the shared `next`, once. */
+function setUpReactiveCollectionIterator(): void {
+  if (reactiveIteratorSetUp) return;
+  reactiveIteratorSetUp = true;
+  Object.setPrototypeOf(ReactiveCollectionIterator.prototype, ITERATOR_PROTOTYPE);
+  plainResultIteratorNext.add(ReactiveCollectionIterator.prototype.next);
+}
+
 export interface DeepSignalSource<T> {
   value: T;
   peek(): T;
@@ -70,6 +100,10 @@ interface CollectionMetadata {
   prunableSweepIterator?: Iterator<[unknown, number]> | undefined;
   prunableRevision: number;
   prunableSweepRevision?: number | undefined;
+  /** Whether the current sweep iteration began in a settled (later-task) pass. */
+  prunableSweepSettled?: boolean | undefined;
+  /** An unsettled pass of the current iteration kept read-only candidates for a settled one. */
+  prunableSweepDeferred?: boolean | undefined;
   methods: Map<PropertyKey, Function>;
   proxy: object;
 }
@@ -145,6 +179,7 @@ const notifyIteration = (metadata: PropertyMetadata): void => {
 };
 
 export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
+  setUpReactiveCollectionIterator();
   const ARRAY_MUTATORS = new Set<PropertyKey>([
     "copyWithin",
     "fill",
@@ -276,6 +311,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     if ((value as object) instanceof Set) return "Set";
     if ((value as object) instanceof WeakMap) return "WeakMap";
     if ((value as object) instanceof WeakSet) return "WeakSet";
+    // What remains for the throwing brand probes is a collection from another
+    // realm or one whose prototype was replaced. A chain that reaches this
+    // realm's Object.prototype without passing a collection prototype (Dates,
+    // class instances: every opaque value in stored state) is neither, so the
+    // store path does not pay four exceptions per opaque value.
+    for (let prototype = Object.getPrototypeOf(value); prototype !== null; prototype = Object.getPrototypeOf(prototype)) {
+      if (prototype === Object.prototype) return undefined;
+    }
     const probe = {};
     try { Map.prototype.has.call(value, probe); return "Map"; } catch { /* try next brand */ }
     try { Set.prototype.has.call(value, probe); return "Set"; } catch { /* try next brand */ }
@@ -286,6 +329,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
 
   function isStandardCollection(value: unknown): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
     if (!isObjectLike(value) || isPlainObjectOrArray(value)) return false;
+    return isStandardCollectionPrototype(value);
+  }
+
+  /** `isStandardCollection` for a value already known not to be plain data. */
+  function isStandardCollectionPrototype(value: object): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
     // `wrap()` runs this for every opaque value read through a proxy (Dates,
     // class instances). Match the prototype first so those reads skip the
     // throwing internal-slot probes in `getNativeCollectionKind`.
@@ -817,16 +865,19 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
 
   // Collection keys are often only looked up (search, cache, existence checks)
   // and never written, so the write-cleared watched flag would retain them
-  // forever. Sweep them by actual graph links instead, and advance a dropped
-  // version once more: a render attempt that read it but has not subscribed
-  // yet sees the revision change at commit and re-renders onto a fresh version.
+  // forever. A settled sweep (a later task) drops them by actual graph links
+  // instead and advances each dropped version once more: a render attempt that
+  // read it but has not subscribed yet sees the revision change at commit and
+  // re-renders onto a fresh version. The synchronous sweep that follows a
+  // mutation drops only versions nothing has read since their last write, so
+  // an unrelated write never invalidates a render that is still in progress.
   const hasLinkedSubscribers = (version: VersionSignal): boolean =>
     (adapter.hasLinkedSubscribers ?? adapter.hasSubscribers)(version);
   const retireCollectionVersion = (version: VersionSignal | undefined): void => {
     if (version !== undefined) adapter.untracked(() => { version.value = version.peek() + 1; });
   };
 
-  const sweepCollectionKeys = (metadata: CollectionMetadata): void => {
+  const sweepCollectionKeys = (metadata: CollectionMetadata, settled = false): void => {
     // Primitive-key versions are the only strong metadata retained here. Avoid
     // creating an empty iterator after collection writes with no subscribers.
     if (metadata.prunable.size === 0) return;
@@ -842,18 +893,35 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       iterator = metadata.prunable.entries();
       metadata.prunableSweepIterator = iterator;
       metadata.prunableSweepRevision = metadata.prunableRevision;
+      metadata.prunableSweepSettled = settled;
+      metadata.prunableSweepDeferred = false;
     }
+    const release = (version: VersionSignal | undefined): boolean => {
+      if (version === undefined) return true;
+      if (settled) {
+        if (hasLinkedSubscribers(version)) return false;
+        retireCollectionVersion(version);
+        return true;
+      }
+      if (!adapter.hasSubscribers(version)) return true;
+      // Read since its last write but not linked yet: a render in progress
+      // or a reader already gone. Leave it to the settled sweep.
+      if (adapter.hasLinkedSubscribers !== undefined && !adapter.hasLinkedSubscribers(version)) metadata.prunableSweepDeferred = true;
+      return false;
+    };
     let processed = 0;
     while (processed < 128) {
       const next = iterator.next();
       if (next.done) {
         metadata.prunableSweepIterator = undefined;
-        if (metadata.prunableSweepRevision !== metadata.prunableRevision) {
-          metadata.prunableSweepRevision = undefined;
-          scheduleCollectionSweep(metadata, true);
-          return;
-        }
+        const revised = metadata.prunableSweepRevision !== metadata.prunableRevision;
+        // Candidates an unsettled pass kept may sit before the point a later
+        // settled pass resumed from; revisit them all in a fresh settled pass.
+        const deferred = metadata.prunableSweepDeferred === true && metadata.prunableSweepSettled !== true;
         metadata.prunableSweepRevision = undefined;
+        metadata.prunableSweepSettled = undefined;
+        metadata.prunableSweepDeferred = undefined;
+        if (revised || deferred) scheduleCollectionSweep(metadata, true);
         return;
       }
       // Avoid spelling this as `.value`: the managed transform treats static
@@ -861,18 +929,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       const [key, candidates] = Reflect.get(next, "value") as [unknown, number];
       processed += 1;
       let remaining = candidates;
-      if ((candidates & 1) !== 0) {
-        const version = metadata.values.get(key);
-        if (version === undefined || !hasLinkedSubscribers(version)) { retireCollectionVersion(version); metadata.values.delete(key); remaining &= ~1; }
-      }
-      if ((candidates & 2) !== 0) {
-        const version = metadata.existence.get(key);
-        if (version === undefined || !hasLinkedSubscribers(version)) { retireCollectionVersion(version); metadata.existence.delete(key); remaining &= ~2; }
-      }
-      if ((candidates & 4) !== 0) {
-        const version = metadata.members.get(key);
-        if (version === undefined || !hasLinkedSubscribers(version)) { retireCollectionVersion(version); metadata.members.delete(key); remaining &= ~4; }
-      }
+      if ((candidates & 1) !== 0 && release(metadata.values.get(key))) { metadata.values.delete(key); remaining &= ~1; }
+      if ((candidates & 2) !== 0 && release(metadata.existence.get(key))) { metadata.existence.delete(key); remaining &= ~2; }
+      if ((candidates & 4) !== 0 && release(metadata.members.get(key))) { metadata.members.delete(key); remaining &= ~4; }
       if (remaining === 0) metadata.prunable.delete(key);
       else if (remaining !== candidates) metadata.prunable.set(key, remaining);
     }
@@ -887,7 +946,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     scheduledCollectionSweeps.add(metadata);
     const resume = () => {
       scheduledCollectionSweeps.delete(metadata);
-      sweepCollectionKeys(metadata);
+      sweepCollectionKeys(metadata, yieldToTask);
     };
     if (yieldToTask) setTimeout(resume, 0);
     else queueMicrotask(resume);
@@ -923,6 +982,40 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       return normalize(value);
     };
     const wrapRead = <T>(value: T): T => wrap(value);
+    /**
+     * GetSetRecord reads `size`, `has`, and `keys` once each, in that order,
+     * and rejects non-callable methods; mirror that, then translate between
+     * raw members and their proxies on every `has` call and `keys` step.
+     */
+    const normalizedSetLike = (other: unknown): unknown => {
+      if (!isObjectLike(other)) return other;
+      const record = other as { size: unknown; has: unknown; keys: unknown };
+      const size = record.size;
+      const has = record.has;
+      const keys = record.keys;
+      if (typeof has !== "function") throw new TypeError("The 'has' property of the set-like argument is not a function");
+      if (typeof keys !== "function") throw new TypeError("The 'keys' property of the set-like argument is not a function");
+      return {
+        size,
+        has(value: unknown): boolean {
+          if (Reflect.apply(has, other, [value])) return true;
+          const reactive = wrapRead(value);
+          return reactive !== value && Boolean(Reflect.apply(has, other, [reactive]));
+        },
+        keys(): Iterator<unknown> {
+          const iterator = Reflect.apply(keys, other, []) as Iterator<unknown>;
+          if (!isObjectLike(iterator)) throw new TypeError("The 'keys' method of the set-like argument returned a non-object");
+          const next = iterator.next;
+          return {
+            next(): IteratorResult<unknown> {
+              const step = Reflect.apply(next, iterator, []) as IteratorResult<unknown>;
+              if (!isObjectLike(step) || step.done) return step;
+              return { done: false, value: normalizeLookupKey(step.value) };
+            },
+          };
+        },
+      };
+    };
     const trackAggregate = (name: "size" | "keysIteration" | "entriesIteration"): void => {
       if (shouldTrackDeepRead()) trackCollectionVersion(collectionAggregate(metadata, name));
     };
@@ -935,17 +1028,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     // Inherit %IteratorPrototype% like native Map/Set iterators, so Iterator
     // helpers (`keys().toArray()`, `values().map()`) and `instanceof Iterator`
     // keep working where the engine provides them.
-    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } => {
-      function next() {
-        const step = iterator.next();
-        return step.done ? step : { done: false, value: convert(step.value) };
-      }
-      plainResultIteratorNext.add(next);
-      return Object.create(ITERATOR_PROTOTYPE, {
-        next: { value: next, writable: true, configurable: true },
-        [Symbol.toStringTag]: { value: tag, configurable: true },
-      });
-    };
+    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } =>
+      new ReactiveCollectionIterator(iterator, convert, tag) as unknown as IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string };
     const proxy = new Proxy(raw, {
       get(target, key) {
         if (kind === "Map" && key === "size" || kind === "Set" && key === "size") {
@@ -1124,10 +1208,31 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         });
         if (kind === "Set" && ["union", "intersection", "difference", "symmetricDifference", "isSubsetOf", "isSupersetOf", "isDisjointFrom"].includes(String(key))) return memoMethod(key, () => (other: unknown) => {
           trackAggregate("entriesIteration");
-          // Set proposal methods consume their other operand through the set-like
-          // protocol (size/has/keys). Keeping the proxy intact collects those
-          // reads when `other` is another reactive collection.
-          return Reflect.apply(method, target, [other]);
+          // Set methods consume `other` through the set-like protocol
+          // (size/has/keys) against this raw target. Reading through a reactive
+          // `other` keeps its tracking, but its keys come back as proxies and a
+          // plain Set built from reactive iteration holds proxies too, so
+          // members would never match the raw ones here. Hand native code a
+          // record that compares raw identities in both directions.
+          return Reflect.apply(method, target, [normalizedSetLike(other)]);
+        });
+        // Map upsert methods, where the engine has them: compose them from the
+        // reactive `has`/`get`/`set` so reads are tracked and inserts notify.
+        // Calling the native method on the raw target would bypass both.
+        if ((kind === "Map" || kind === "WeakMap") && key === "getOrInsert") return memoMethod(key, () => (entryKey: unknown, value: unknown) => {
+          const map = proxy as Map<unknown, unknown>;
+          if (!map.has(entryKey)) map.set(entryKey, value);
+          return map.get(entryKey);
+        });
+        if ((kind === "Map" || kind === "WeakMap") && key === "getOrInsertComputed") return memoMethod(key, () => (entryKey: unknown, callback: unknown) => {
+          if (typeof callback !== "function") throw new TypeError("getOrInsertComputed callback must be a function");
+          const map = proxy as Map<unknown, unknown>;
+          if (map.has(entryKey)) return map.get(entryKey);
+          map.set(entryKey, Reflect.apply(callback, undefined, [entryKey]));
+          return map.get(entryKey);
+        });
+        if ((kind === "Map" || kind === "WeakMap") && key === "emplace") return memoMethod(key, () => () => {
+          throw new TypeError("deepSignal() reactive collections do not support emplace; use getOrInsert or has/get/set");
         });
         return Reflect.get(target, key, target);
       },
@@ -1190,11 +1295,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
 
   const wrap = <T>(value: T): T => {
     const rawValue = (toRaw(value) as T | undefined) ?? value;
-    if (isStandardCollection(rawValue)) {
-      const kind = rawValue instanceof Map ? "Map" : rawValue instanceof Set ? "Set" : rawValue instanceof WeakMap ? "WeakMap" : "WeakSet";
+    if (!isObjectLike(rawValue)) return rawValue;
+    // Plain data first: it is the common case, and testing it once also
+    // answers the collection check below for every non-plain value.
+    if (!isPlainObjectOrArray(rawValue)) {
+      if (!isStandardCollectionPrototype(rawValue)) return rawValue;
+      const kind = (rawValue as object) instanceof Map ? "Map" : (rawValue as object) instanceof Set ? "Set" : (rawValue as object) instanceof WeakMap ? "WeakMap" : "WeakSet";
       return reactiveCollectionProxy(rawValue, kind) as T;
     }
-    if (!isPlainObjectOrArray(rawValue)) return rawValue;
     assertExtensible(rawValue);
 
     const cached = rawToMetadata.get(rawValue);

@@ -81,8 +81,19 @@ export function createForeignReadableAdapter({
     return protocol;
   }
 
-  function readLocalProtocol(this: CandidateReadable): ReadableProtocolV1 {
-    return getLocalProtocol(this);
+  function readLocalProtocol(this: CandidateReadable): ReadableProtocolV1 | undefined {
+    // The accessor can be reached with a receiver that is not the signal
+    // itself: an object inheriting from it (`Object.create(signal)`), as the
+    // former data property allowed, or a foreign Proxy around it. Resolve the
+    // signal through the prototype chain; with none, there is no protocol.
+    for (
+      let candidate: unknown = this;
+      candidate !== null && (typeof candidate === "object" || typeof candidate === "function");
+      candidate = Object.getPrototypeOf(candidate)
+    ) {
+      if (readableNodes.has(candidate as object)) return getLocalProtocol(candidate as CandidateReadable);
+    }
+    return undefined;
   }
 
   // A bridge is a source whose value is the other copy's revision. Like a

@@ -948,3 +948,17 @@ describe("computed error propagation", () => {
     expect(reported?.cause).toBeInstanceOf(Error);
   });
 });
+
+describe("readable interop protocol accessor", () => {
+  const READABLE_INTEROP_V1 = Symbol.for("react-fine-grained-signals.readable-interop.v1");
+
+  it("resolves the signal through an inheriting receiver and ignores unrelated receivers", () => {
+    const source = signal(1);
+    const own = Reflect.get(source, READABLE_INTEROP_V1) as { getRevision(): number } | undefined;
+    expect(typeof own?.getRevision).toBe("function");
+    expect(Reflect.get(Object.create(source) as object, READABLE_INTEROP_V1)).toBe(own);
+    const getter = Object.getOwnPropertyDescriptor(source, READABLE_INTEROP_V1)?.get;
+    expect(getter?.call({})).toBeUndefined();
+    expect(Reflect.get(new Proxy({}, { get: (_target, key, receiver) => Reflect.get(source, key, receiver) }), READABLE_INTEROP_V1)).toBeUndefined();
+  });
+});
