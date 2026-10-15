@@ -1007,6 +1007,29 @@ describe("private reactive runtime", () => {
     expect(Object.getOwnPropertyDescriptor(sourceA, READABLE_INTEROP_V1)?.enumerable).toBe(false);
   });
 
+  it("materializes a stable interop protocol only when another runtime requests it", () => {
+    const runtime = createReactiveRuntime();
+    const source = runtime.signal(2);
+    const sourceNode = runtime.getNodeForReadable(source)!;
+    const derived = runtime.computed(() => source.value * 2);
+    const derivedNode = runtime.getNodeForReadable(derived)!;
+
+    expect(sourceNode.readableProtocol).toBeUndefined();
+    expect(derivedNode.readableProtocol).toBeUndefined();
+    expect(derived.value).toBe(4);
+    expect(sourceNode.readableProtocol).toBeUndefined();
+    expect(derivedNode.readableProtocol).toBeUndefined();
+
+    const descriptor = Object.getOwnPropertyDescriptor(derived, READABLE_INTEROP_V1);
+    expect(descriptor?.get).toBeTypeOf("function");
+    expect(descriptor?.enumerable).toBe(false);
+    const protocol = getReadableInterop(derived) as ReadableInteropV1;
+    expect(protocol.version).toBe(1);
+    expect(derivedNode.readableProtocol).toBe(protocol);
+    expect(Reflect.get(derived, READABLE_INTEROP_V1)).toBe(protocol);
+    expect(getReadableInterop(derived)).toBe(protocol);
+  });
+
   it("keeps local source and computed reads on the direct graph path", () => {
     const runtime = createReactiveRuntime();
     const source = runtime.signal(2);

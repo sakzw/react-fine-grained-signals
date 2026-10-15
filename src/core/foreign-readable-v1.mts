@@ -39,6 +39,7 @@ export function createForeignReadableAdapter({
 }: ForeignReadableAdapterOptions) {
   const readableNodes = new WeakMap<object, RuntimeNode>();
   const foreignNodes = new WeakMap<ReadableProtocolV1, RuntimeNode>();
+  const localProtocols = new WeakMap<object, ReadableProtocolV1>();
   const localReadable = Symbol("localReadable");
   type LocalReadableProtocol = ReadableProtocolV1 & { readonly [localReadable]: CandidateReadable };
 
@@ -61,6 +62,27 @@ export function createForeignReadableAdapter({
       else listener(observeRevision(node));
     });
     return { unsubscribe, revision };
+  }
+
+  function getLocalProtocol(readable: CandidateReadable): ReadableProtocolV1 {
+    let protocol = localProtocols.get(readable as object);
+    if (protocol === undefined) {
+      protocol = {
+        version: 1,
+        runtimeToken,
+        [localReadable]: readable,
+        getRevision: getLocalReadableRevision,
+        subscribe: subscribeLocalReadable,
+      } as LocalReadableProtocol;
+      localProtocols.set(readable as object, protocol);
+      const node = readableNodes.get(readable as object)!;
+      node.readableProtocol = protocol;
+    }
+    return protocol;
+  }
+
+  function readLocalProtocol(this: CandidateReadable): ReadableProtocolV1 {
+    return getLocalProtocol(this);
   }
 
   // A bridge is a source whose value is the other copy's revision. Like a
@@ -146,26 +168,17 @@ export function createForeignReadableAdapter({
 
   function publishForeignReadable(readable: object, node: RuntimeNode, owner: ExecutionContextOwnerV2 | undefined): void {
     if (owner === UNTRACKED_OWNER || ((isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken === runtimeToken)) return;
-    const protocol = node.readableProtocol;
-    if (protocol !== undefined) {
-      if (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) owner.add(protocol, observeRevision(node));
+    if (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) {
+      const protocol = getLocalProtocol(readable as CandidateReadable);
+      owner.add(protocol, observeRevision(node));
     }
   }
 
   function attachProtocol(readable: CandidateReadable, node: RuntimeNode): void {
     readableNodes.set(readable, node);
-    const protocol: LocalReadableProtocol = {
-      version: 1 as const,
-      runtimeToken,
-      [localReadable]: readable,
-      getRevision: getLocalReadableRevision,
-      subscribe: subscribeLocalReadable,
-    };
-    node.readableProtocol = protocol;
     Object.defineProperty(readable, READABLE_INTEROP_V1, {
-      value: protocol,
+      get: readLocalProtocol,
       enumerable: false,
-      writable: false,
       configurable: false,
     });
   }
