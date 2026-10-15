@@ -55,3 +55,11 @@ M10の[qualification record](m10-fine-grained-rendering-computed.ja.md)にある
 以上により、M10変更を含むv0.3.0 candidateを**再freeze**と判断する。GitHub E2Eが最初のpushでReact Router consumer fixtureの型検査に失敗し、`useSignal()`の実際のsignal生成能力を戻り値型へ反映して修正した。次のpushではTestとE2Eの両workflowが通過した。release tag、npm publish、GitHub Releaseは作成しない。
 
 最終revision `96edb7e926309df3934f519646da3fccbebe6a09` を`origin/main`へpush済み。GitHub [Test run 38546331446](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38546331446) と [E2E run 38546331467](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38546331467) はどちらもsuccess。Testではlint、typecheck、runtime/transform coverage、build、size budget、consumer smoke、mixed-version smokeが完了し、E2EではReact Router typecheckとbrowser suiteが完了した。
+
+## M13 — v0.3.0 release readiness re-freeze (2026-10-15)
+
+M13ではPublic API / generated type、tarball / installed consumer、v0.2.1 migration docs、React 19/browser、performance / size evidenceを監査した。managed transformの追跡境界、explicit form binding、collection API、package engine rangeの説明をそろえ、consumer smokeがpack後の`workspace:^` peer rewrite、license files、standalone `src`不在を検査するよう拡張した。詳細な根拠・known limitationsは[M13 release readiness record](m13-release-readiness.ja.md)。
+
+local full coverageではruntime 619/620 (fan-out case 5.419秒で既存5秒timeout)、transform 405/408 (esbuild 3 casesが5秒timeout)だった。全4ケースは単独実行でpassした。Local browser E2Eは70/71で、Firefox初回hydration navigationがcold startでtimeoutしたが、単独Firefox testはpassした。1-worker full coverage再診断はhost memoryが増えたため途中停止。これらのlocal aggregate結果はpassとして扱わない。
+
+同一M13 candidate `58ca8ed4f0cedc3bc9c59097ee92f1f8e4335e2d`のGitHub [Test run 38662092010](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38662092010)はfull coverageを含めsuccess、[E2E run 38662092091](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38662092091)はReact Router typecheckとmulti-browser E2Eを含めsuccess。従ってローカルworker-load timeoutはrelease blockerとは判定しない。M8を**READY WITH KNOWN LIMITATIONS**として再freezeする。Final freeze recordの追加commit後のmain SHAとActionsも照合する。npm publish、Git tag、GitHub Releaseは行っていない。

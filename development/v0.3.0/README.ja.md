@@ -4,7 +4,7 @@
 
 - 状態: registered-symbol key regressionを修正し、runtime 571/571・transform 404/404のcoverage、typecheck/lint/build、consumer、interop、browser E2E 59/59、bundle budgetsを通過。M8を再freezeし、変更を`main`へpush済み。post-fix GitHub Test/E2Eも成功（[Test](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38489399215)、[E2E](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38489399223)）。公開tag、npm publish、GitHub Releaseは未実施。詳細は[M8 qualification status](m8-qualification-status.ja.md)。
 - 統合ブランチ: `main`
-- 最新マイルストーン: M12のqualificationと再freeze判断を実施中。computed生成差を分解するbenchmarkを追加し、実測で安定した効果のないprototypeは採用しない。native radio groupで異なるSignalを使うケースをruntimeで拒否する。M12記録は[M12 performance/radio/retention audit](m12-performance-radio-dom-audit.ja.md)。
+- 最新マイルストーン: M13 release readiness audit完了。公開API/package/consumer/doc整合性とperformance記録を確認。README/migration/plugin記述のずれを修正し、packed consumer assertionsを追加。typecheck/lint/build、consumer、cross-copy/mixed-version、bundle budgets、GitHub Test coverage・E2Eはpass。localのfull coverage/browser suiteに高負荷時timeoutがあったが、対象test単独とGitHub Actionsはpass。M8をv0.3.0 candidateとして再freeze。詳細は[release readiness review](m13-release-readiness.ja.md)。
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -30,6 +30,7 @@
 | M11 | React hook/form group APIとobject snapshot評価 | M10 | writable `useComputed`、radio/checkbox group、immutable deep object snapshotの契約と性能を確認 | writable hookとradio/checkbox group完了。object snapshot prototypeはO(subtree)の高コストと不安定なheap計測により見送り。full coverage、browser、consumer、mixed-version、size gateを通過。詳細は[M11 closure record](m11-react-hooks-and-form-groups.ja.md) |
 | M12 | computed生成profile、radio/checkbox group境界、DOM retention監査 | M11 | benchmarkを層別化し、効果が実測できる変更のみ採用。group native semanticsとunsubscribe/DOM cleanupを検証 | 完了。性能最適化は効果が確認できず見送り。radio source mismatchを拒否。local qualificationとGitHub Actions Test/E2E成功。詳細は[M12 audit](m12-performance-radio-dom-audit.ja.md) |
 | M12.1 | radio binding source一括切替、computed benchmark比較の妥当性 | M12 | 同一commitで全radioをSignal差し替えし、ref lifecycleとgroup競合契約を維持。benchmark capabilityとchecksumを検証 | 完了。detached済みpeerを差し替え中に限り無視。writable比較と全checksum検査を修正。詳細は[M12.1 closure](m12.1-radio-binding-benchmark.ja.md) |
+| M13 | v0.3.0 release readiness review | M12.1 | Public API/types、package/tarball/consumer、docs/migration、React/browser、performance/bundle、final qualificationを監査。重大問題を修正してM8 freezeを判断 | **READY WITH KNOWN LIMITATIONS。** GitHub Test `38662092010`とE2E `38662092091` success。local高負荷timeoutは単独test/CIで解消。M8再freeze。release手順は未実施。結果と制約は[M13 record](m13-release-readiness.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
