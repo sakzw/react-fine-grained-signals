@@ -7,6 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/re
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { jsx } from "../src/jsx-runtime.js";
 import { computed, createElement as createSignalAwareElement, effect, signal, useSignal, useSignalTracking } from "../src/index.js";
+import { coreRuntime } from "../src/core/core-runtime.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -753,6 +754,18 @@ describe("Direct DOM binding", () => {
       <input type="radio" name="mismatch" value="a" aria-label="mismatch a" bindValue={selectedA} />
       <input type="radio" name="mismatch" value="b" aria-label="mismatch b" bindValue={selectedB} />
     </form>)).toThrow("Radio bindValue controls in the same native group must share one signal.");
+  });
+
+  it("disposes bindings mounted before a later binding on the same node throws", async () => {
+    const selectedA = signal("a");
+    const selectedB = signal("b");
+    const title = signal("t0");
+    expect(() => render(<form>
+      <input type="radio" name="partial" value="a" bindValue={selectedA} />
+      <input type="radio" name="partial" value="b" title={title} bindValue={selectedB} />
+    </form>)).toThrow("Radio bindValue controls in the same native group must share one signal.");
+    await act(async () => { await waitForNextTask(); });
+    expect(coreRuntime.hasSubscribers(title)).toBe(false);
   });
 
   it("switches every radio in one group to a new source in one StrictMode commit", () => {

@@ -1219,7 +1219,15 @@ class NodeBinder {
         if (isSameBinding(entry.binding, next)) entry.refresh(next[3]);
       }
     }
-    this.#sync(bindings);
+    try {
+      this.#sync(bindings);
+    } catch (error) {
+      // React receives no cleanup from a ref callback that threw, so nothing
+      // would ever release the bindings that did mount on this node.
+      this.#detached = true;
+      this.#dispose();
+      throw error;
+    }
     let userCleanup: RefCleanup;
     try {
       userCleanup = applyRef(userRef, this.#node);
@@ -1308,9 +1316,19 @@ class NodeBinder {
     // a rebuilt binding never briefly holds two live subscriptions on one node.
     for (const stale of reusable.values()) stale.dispose();
     const node = this.#node;
-    this.#mounted = bindings.map(
-      (binding, index) => reused[index] ?? mountBinding(node, binding, this, staleStyleKeys.get(binding[0])),
-    );
+    const next: MountedBinding[] = [];
+    try {
+      bindings.forEach((binding, index) => {
+        next.push(reused[index] ?? mountBinding(node, binding, this, staleStyleKeys.get(binding[0])));
+      });
+    } catch (error) {
+      // Keep every live subscription reachable so `attach` can dispose them:
+      // the ones mounted before the throw and the reused ones not yet reached.
+      for (const entry of reused) if (entry !== undefined && !next.includes(entry)) next.push(entry);
+      this.#mounted = next;
+      throw error;
+    }
+    this.#mounted = next;
   }
 }
 
