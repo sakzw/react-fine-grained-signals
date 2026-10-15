@@ -656,6 +656,59 @@ describe("Direct DOM binding", () => {
     expect(input.checked).toBe(true);
   });
 
+  it("bindChecked writes the signal before React's onChange reads it", () => {
+    const checked = signal(false);
+    const seen: Array<[boolean, boolean]> = [];
+    render(
+      <input
+        type="checkbox"
+        aria-label="seen"
+        bindChecked={checked}
+        onChange={(event) => { seen.push([event.target.checked, checked.value]); }}
+      />,
+    );
+    fireEvent.click(screen.getByLabelText("seen"));
+    expect(seen).toEqual([[true, true]]);
+  });
+
+  it("reverts checkbox, radio, and checkbox-group signals when a click is canceled", async () => {
+    const agree = signal(false);
+    const choice = signal("a");
+    const tags = signal<string[]>(["x"]);
+    const cancel = (event: { preventDefault(): void }) => { event.preventDefault(); };
+    render(<form>
+      <input type="checkbox" aria-label="agree" bindChecked={agree} onClick={cancel} />
+      <input type="radio" name="choice" value="a" aria-label="choice a" bindValue={choice} />
+      <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onClick={cancel} />
+      <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} />
+      <input type="checkbox" name="tags" value="y" aria-label="tag y" bindValue={tags} onClick={cancel} />
+    </form>);
+
+    fireEvent.click(screen.getByLabelText("agree"));
+    fireEvent.click(screen.getByLabelText("choice b"));
+    fireEvent.click(screen.getByLabelText("tag y"));
+    await act(async () => { await waitForNextTask(); });
+
+    expect(agree.value).toBe(false);
+    expect((screen.getByLabelText("agree") as HTMLInputElement).checked).toBe(false);
+    expect(choice.value).toBe("a");
+    expect((screen.getByLabelText("choice a") as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText("choice b") as HTMLInputElement).checked).toBe(false);
+    expect(tags.value).toEqual(["x"]);
+    expect((screen.getByLabelText("tag y") as HTMLInputElement).checked).toBe(false);
+
+    // Cancel now, accept after a later confirmation: the deferred write wins.
+    render(<input type="checkbox" aria-label="manual" bindChecked={agree} onClick={(event) => {
+      event.preventDefault();
+      setTimeout(() => { agree.value = true; }, 0);
+    }} />);
+    fireEvent.click(screen.getByLabelText("manual"));
+    await act(async () => { await waitForNextTask(); });
+    await act(async () => { await waitForNextTask(); });
+    expect(agree.value).toBe(true);
+    expect((screen.getByLabelText("manual") as HTMLInputElement).checked).toBe(true);
+  });
+
   it("bindValue synchronizes a radio group through one shared string signal", () => {
     const choice = signal("b");
     const renders = vi.fn();
@@ -1212,7 +1265,7 @@ describe("Direct DOM binding", () => {
     expect(input.value).toBe("123");
   });
 
-  it("restores rejected writable computed values for checkboxes and selects", () => {
+  it("restores rejected writable computed values for checkboxes and selects", async () => {
     const checkedSource = signal(true);
     const checked = computed({
       get: () => checkedSource.value,
@@ -1248,6 +1301,8 @@ describe("Direct DOM binding", () => {
     multipleSelect.options[0]!.selected = false;
     multipleSelect.options[1]!.selected = true;
     fireEvent.change(multipleSelect);
+    // A rejected checkbox write is restored after the click dispatch finishes.
+    await act(async () => { await waitForNextTask(); });
 
     expect(checkedSource.value).toBe(true);
     expect(checkbox.checked).toBe(true);

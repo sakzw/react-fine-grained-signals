@@ -648,7 +648,7 @@ function bindInputValueGroup(
   };
   const refreshGroup = () => applyBoundSignal(() => source.peek(), apply, episode);
   const unregisterMember = registerInputValueGroupMember(source, refreshGroup);
-  const onClick = () => {
+  const onClick = (event: MouseEvent) => {
     if (!active || input.disabled) return;
     if (kind === "radio-value") assertRadioGroupSource(input, source);
     let attempted: unknown;
@@ -664,28 +664,39 @@ function bindInputValueGroup(
     }
 
     cancelCorrection();
+    const previous = source.peek();
     deferUserElementWrite = true;
     try {
       source.value = attempted;
     } finally {
       deferUserElementWrite = false;
     }
+    const written = source.peek();
     // Let React's delegated click/change handlers observe the native user
     // selection before synchronizing every member to a rejected, normalized,
     // or cross-root group value in the next task.
-    const getterMatchesUserState = isInputValueGroupChecked(source.peek(), kind, optionValue) === input.checked;
+    const getterMatchesUserState = isInputValueGroupChecked(written, kind, optionValue) === input.checked;
     if (active && getterMatchesUserState) {
       // The target's subscription deliberately skipped its checked write
       // above to preserve React's click tracker. Keep the browser reset
       // default current without touching that tracker.
       if (input.defaultChecked !== input.checked) input.defaultChecked = input.checked;
-    } else if (active) {
-      const version = correctionVersion;
-      correctionTimer = setTimeout(() => {
-        correctionTimer = undefined;
-        if (active && version === correctionVersion) refreshInputValueGroup(source);
-      }, 0);
     }
+    if (!active) return;
+    // A handler that calls `preventDefault()` cancels the activation; the
+    // browser restores the previous checked state only after dispatch. Revert
+    // the signal then too, unless a handler has written it since.
+    const version = correctionVersion;
+    correctionTimer = setTimeout(() => {
+      correctionTimer = undefined;
+      if (!active || version !== correctionVersion) return;
+      if (event.defaultPrevented) {
+        if (areFormValuesEqual(source.peek(), written)) source.value = previous;
+        refreshInputValueGroup(source);
+      } else if (!getterMatchesUserState) {
+        refreshInputValueGroup(source);
+      }
+    }, 0);
   };
   // React 19 synthesizes checkbox/radio onChange from the bubbling click
   // path. Updating at the target keeps the shared signal current before that
@@ -1062,20 +1073,39 @@ function subscribeBinding(
         const writableSource = source as Signal<unknown>;
         const episode: FailureEpisode = { hasReported: false };
         const apply = whileAttached((value: unknown) => setControlledProp(node, "checked", value));
-        const onChange = () => {
+        let settleTimer: ReturnType<typeof setTimeout> | undefined;
+        // React 19 synthesizes checkbox onChange from the bubbling click, before
+        // the native `change` event. Writing at the click target keeps the
+        // signal current for React's handlers, like the group bindings do.
+        const onClick = (event: MouseEvent) => {
           const attempted = input.checked;
+          const previous = writableSource.peek();
           writableSource.value = attempted;
-          resyncRejectedFormWrite(writableSource, attempted, apply, episode);
+          const written = writableSource.peek();
+          if (settleTimer !== undefined) clearTimeout(settleTimer);
+          // A canceled click (`preventDefault()`) is reverted by the browser
+          // only after dispatch, and a rejected write must not touch the DOM
+          // while React still compares the click's checked state. Settle both
+          // once the event has finished.
+          settleTimer = setTimeout(() => {
+            settleTimer = undefined;
+            if (event.defaultPrevented && areFormValuesEqual(writableSource.peek(), written)) {
+              writableSource.value = previous;
+            }
+            const current = readBoundSignal(() => writableSource.peek(), episode);
+            if (current.ok) apply(current.value);
+          }, 0);
         };
-        input.addEventListener("change", onChange);
+        input.addEventListener("click", onClick);
         const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, apply, episode);
         const disposeReset = bindFormReset(input, subscription.refresh);
         return {
           ...subscription,
           dispose() {
+            if (settleTimer !== undefined) clearTimeout(settleTimer);
             subscription.dispose();
             disposeReset();
-            input.removeEventListener("change", onChange);
+            input.removeEventListener("click", onClick);
           },
           getStyleKeys: undefined,
           restore: undefined,
