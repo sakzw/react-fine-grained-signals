@@ -172,10 +172,11 @@ export default {
 | pattern | managedの動作 |
 | --- | --- |
 | 選択済み関数内の`state.value.user.name` | 1つの同期read式としてcaptureします。 |
-| `const { user: { profile } } = state.value; profile.name` | static identifier key・identifier binding・nested object patternだけで構成された、空でない`const` object patternを元の順序で各readが1回になる形へ展開します。source、中間property、後続の`profile.name`をcaptureします。default、rest、computed key、空のnested pattern、annotation、mutable declaration、再代入bindingは未対応で、tracked sourceが分かる場合はdiagnosticを出します。 |
+| `const { user: { profile } } = state.value; profile.name` | static identifier key・identifier binding・nested object patternだけで構成された、空でない`const` object patternを元の順序で各readが1回になる形へ展開します。source、中間property、後続の`profile.name`をcaptureします。その他のpattern(default、rest、computed key、配列、annotation、`let`、destructuring代入、destructuringのloop head)は記述どおりの評価を1つのcapture内で行い、bindingをaliasとして追跡します。 |
 | `const { value } = signal` | destructured signal accessorは追跡されません。`signal.value`と直接読んでください。 |
 | 同期helper call | 選択済みのtransformが同期呼び出しと証明できれば、呼び出し位置でcaptureできます。`auto`で関数を選ぶ際、import helperの中身は解析しません。 |
 | 同期式の内部で行われるread | tracked値を読むinline callbackを持つcall (`items.filter((item) => item.done.value)`、`reduce`、IIFE)、tracked値を受け取るcall (`JSON.stringify(state.value.profile)`、局所helper)、`"key" in state.value.profile`、tracked値のobject/array spreadは式全体をcaptureし、callee内やproxy trapが後から行うreadも含めます。`for (const item of state.value.items)` はsource、iteratorの取得、loopが行う各`next()`/`return()`呼び出しをその時点でcaptureするため、早期終了、反復中の変更、遅延iterable、iterator closingは記述どおりに動作します。`item`はaliasとして追跡します。 |
+| 名前付き関数、JSX spread、getter、読み取りを伴う代入 | callに渡した名前付きの局所またはmodule関数(`items.filter(isVisible)`)はinline callbackと同じくcallごとcaptureします。`<p {...state.value.props} />`はcapture内でpropsをcopyします。signalを読む局所object literalのgetter、後から代入する`let` alias、`state.value.count ??= 1`や`+=`のような読み取りを伴う代入もcaptureします。Hookを呼びつつsignalを読む関数をplain call(`{Title()}`)するとcaptureできないため、警告を出します。 |
 | read式の中のHook呼び出し | Hookをcapture closureへ移動しません。Hookとtracked引数が同じcallにある場合 (`format(useContext(Ctx), count.value)`)、callは直接呼び出しのまま各引数のreadを個別にcaptureします。callee内部のreadは追跡されないため、source位置付きの警告を出します。Hookの戻り値に対するread (`useStore().value.name`) はHookをその位置で呼び、後続のreadだけをcaptureします。その他のHookを含むread式は警告付きでcapture対象外になります。Hookは別の文で呼び出してください。 |
 | runtime key / alias | 関数が別の条件で選択されていればruntime-key readをcaptureできますが、dynamic readだけでは`auto`選択されません。対応する単純な`const` destructuringで作るstatic aliasは追跡しますが、dynamic destructuringは追跡しません。 |
 | JSX render prop / `children` callback | receiverがいつ、何回呼ぶかを証明できず、captureは保証されません。静的に見える場合は位置付きwarningを出します。 |

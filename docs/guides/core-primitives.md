@@ -24,7 +24,7 @@ dispose();
 ## signal
 
 ```ts
-signal<T>(initialValue: T): Signal<T>
+signal<T>(initialValue: T): FormBindableSignal<T>
 ```
 
 Creates a writable reactive value.
@@ -37,7 +37,7 @@ Creates a writable reactive value.
 
 ```ts
 computed<T>(getter: () => T): ReadonlySignal<T>
-computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): FormBindableSignal<T>
 ```
 
 Creates a lazily evaluated, read-only derived value. It exposes the same `.value` and `.peek()` as `signal`, and re-evaluates on the next read after a dependency its getter read has changed.

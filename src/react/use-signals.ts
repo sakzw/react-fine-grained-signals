@@ -8,7 +8,7 @@ export interface ManagedSignalsStore {
   finish(): void;
 }
 
-/** Per-read render-attempt capture handle used by the experimental transform prototype. */
+/** Per-read render-attempt capture handle used by the managed transform's generated code. */
 export interface SignalCaptureStore extends ManagedSignalsStore {
   capture<T>(callback: () => T): T;
   /** Lazily forwards a `for...of` source, capturing GetIterator and each `next()`/`return()`. */
@@ -20,7 +20,7 @@ export function useSignalTracking(): void {
   reactAdapter.useSignalTracking();
 }
 
-/** Exact render scope used by the transform-managed boundary. */
+/** Exact lexical render scope for a hand-written `try`/`finally` boundary (the managed transform now emits `useSignalCapture`). */
 export function useManagedSignals(): ManagedSignalsStore {
   return reactAdapter.useManagedSignals();
 }

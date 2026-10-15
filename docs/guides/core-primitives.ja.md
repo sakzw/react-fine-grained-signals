@@ -24,7 +24,7 @@ dispose();
 ## signal
 
 ```ts
-signal<T>(initialValue: T): Signal<T>
+signal<T>(initialValue: T): FormBindableSignal<T>
 ```
 
 書き込み可能なリアクティブ値を作成します。
@@ -37,7 +37,7 @@ signal<T>(initialValue: T): Signal<T>
 
 ```ts
 computed<T>(getter: () => T): ReadonlySignal<T>
-computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): FormBindableSignal<T>
 ```
 
 遅延評価される読み取り専用の派生値を作成します。`signal` と同じ `.value` と `.peek()` を公開し、getterが読んだ依存が変化したあと、次の読み取り時に再評価されます。

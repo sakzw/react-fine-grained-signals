@@ -48,12 +48,12 @@ useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal
 useComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
 ```
 
-Creates a computed signal with a stable identity. Pass a getter for a read-only computed, or `{ get, set }` for a writable computed. The writable overload returns `FormBindableSignal<T>` and can be passed to a matching `bindValue` or `bindChecked`; getter-only calls remain `ReadonlySignal<T>`. A component must keep to one of the two dependency modes and keep the call site's read-only or writable capability fixed for its lifetime.
+Creates a computed signal whose identity stays stable while its dependency array (if any) is unchanged. Pass a getter for a read-only computed, or `{ get, set }` for a writable computed. The writable overload returns `FormBindableSignal<T>` and can be passed to a matching `bindValue` or `bindChecked`; getter-only calls remain `ReadonlySignal<T>`. A component must keep to one of the two dependency modes and keep the call site's read-only or writable capability fixed for its lifetime.
 
 - **Without a dependency array**, the getter must read only signals. Its initial closure is retained for the component lifetime, so it must not capture props, React state, or other non-signal values.
 - **With a dependency array**, list every non-signal value the getter captures: `useComputed(() => count.value * step, [step])`.
 
-The `{ get, set }` overload follows the same dependency rules. When dependencies change, both callbacks update together after a committed render; an interrupted render does not replace the committed callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
+The `{ get, set }` overload follows the same dependency rules. When dependencies change, the render creates a separate computed with the new getter and setter, so the returned signal's identity changes; the previous signal keeps its own callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
 
 ## useSignalEffect
 
