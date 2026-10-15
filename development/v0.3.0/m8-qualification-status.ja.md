@@ -38,6 +38,16 @@ M8 is **re-frozen** at package version 0.3.0. Local qualification and both GitHu
 
 No release tag, npm publish, or GitHub Release was created. The current re-freeze is backed by local qualification and the post-fix GitHub Actions runs above.
 
+## M14 — Computed performance deep dive (2026-10-15)
+
+M13 READY判定は履歴として維持し、computed生成profileとM15/M16先行調査のためM8 freezeを解除した。詳細なA/B、採用・不採用prototype、managed tracking提案、実ブラウザretention結果は[M14 record](m14-computed-performance-and-next-audits.ja.md)に記載した。
+
+**ローカルM14 qualification:** runtime coverage 621/621 pass（Statements 94.13%、Branches 90.30%、Functions 97.52%、Lines 95.91%）。transform coverageのpackage単独run 408/408 pass（Statements 92.85%、Branches 90.36%、Functions 97.37%、Lines 95.47%）。後続のaggregate retryはhost負荷時に未変更のesbuild testが固定5秒timeoutを越えたため、一部runはpass扱いしない。失敗test・時間・単独runの結果と環境負荷はM14 recordに記録し、GitHub Test runを最終aggregate判定とする。`pnpm typecheck`、`pnpm lint`（既存warningあり・exit 0）、`pnpm build`、consumer pack/install/Vite smoke、3-copy duplicate runtime、mixed-version smoke、7つのbundle budgetsがpass。Playwrightは5 workers時に69/71（Firefox hydration timeoutとWebKit Activity assertion）、`CI=true`・1 worker時に71/71 passした。test、timeout、coverage threshold、budgetは緩和していない。
+
+性能面ではlazy ReadableInterop protocolを採用し、getter-only create/discard A/Bで新規process 2回とも46–51%短縮、10,000 retained computed heap deltaは約22%減。cross-copy checksumとforeign subscriptionを確認した。Observed update / React timingにはhost noiseがあり、React全般の高速化は主張しない。brand descriptor共有prototypeは一貫した効果がなく不採用。Chromium CDP retention probeでは112/112 detached host nodeが回収され、RFSG固有retaining pathは未確認。
+
+以上によりM8をM14 candidateで**再freeze**する。computedのprotocol初期化削減はpaired A/Bで再現し、read/update・cross-copy correctness、retained heap、package surface、size budgetへの影響を評価した。transform集約timeoutと並列browser flakeは、変更していない既存testの5秒/worker負荷限界として分離し、standalone全coverage・CI serial browser E2Eでbehaviorを確認した。push後はGitHub Test/E2Eを最終ゲートとして確認する。失敗があればfreezeを再openして原因を修正する。npm publish、release tag、GitHub Releaseは作成しない。
+
 ## M9 — API redesign and performance re-freeze (2026-10-14)
 
 The M8 re-freeze was reopened for the v0.3.0 API/performance development recorded in [M9](m9-api-performance-development.ja.md). The `deepSignal` collection option was removed and collections became reactive by default; explicit `bindValue`/`bindChecked` APIs replaced implicit signal-valued form props; weak collection keys now retain native opaque-object semantics; managed tracking diagnostics and cleanup measurements were updated. M8 is re-frozen again on the final M9-qualified candidate integrated to `main`.

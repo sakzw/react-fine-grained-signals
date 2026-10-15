@@ -1,0 +1,84 @@
+Node v24.21.0; win32 x64; AMD Ryzen 7 PRO 6850U with Radeon Graphics     
+10000 iterations, 2 warmups, 5 samples; --expose-gc=true
+
+RFSG public API
+┌─────────┬────────────────────────────────┬──────────┬────────┬────────┬──────────────┐
+│ (index) │ case                           │ medianMs │ p25Ms  │ p75Ms  │ opsPerSecond │
+├─────────┼────────────────────────────────┼──────────┼────────┼────────┼──────────────┤
+│ 0       │ 'getter-only/create-discarded' │ 47.856   │ 45.089 │ 49.834 │ 208960       │
+│ 1       │ 'getter-only/create-retained'  │ 50.755   │ 47.851 │ 62.721 │ 197026       │
+│ 2       │ 'writable/create-discarded'    │ 60.45    │ 44.069 │ 68.196 │ 165425       │
+│ 3       │ 'writable/create-retained'     │ 51.972   │ 49.006 │ 77.263 │ 192412       │
+│ 4       │ 'writable/set+read'            │ 5.356    │ 5.206  │ 6.371  │ 1866926      │
+│ 5       │ 'create+first-read'            │ 60.283   │ 48.941 │ 69.34  │ 165884       │
+│ 6       │ 'cached-read'                  │ 2.771    │ 2.695  │ 2.879  │ 3609326      │
+│ 7       │ 'update+read'                  │ 16.894   │ 11.295 │ 17.109 │ 591930       │
+│ 8       │ 'observed-update'              │ 23.103   │ 16.489 │ 28.364 │ 432844       │
+└─────────┴────────────────────────────────┴──────────┴────────┴────────┴──────────────┘
+retained heap delta after GC, 10000 getter-only computed objects (diagnostic bytes)
+┌─────────┬───────────┬──────────┐
+│ (index) │ discarded │ retained │
+├─────────┼───────────┼──────────┤
+│ 0       │ -45232    │ 3297624  │
+└─────────┴───────────┴──────────┘
+
+RFSG internal runtime
+┌─────────┬────────────────────────────────┬──────────┬────────┬────────┬──────────────┐
+│ (index) │ case                           │ medianMs │ p25Ms  │ p75Ms  │ opsPerSecond │
+├─────────┼────────────────────────────────┼──────────┼────────┼────────┼──────────────┤
+│ 0       │ 'getter-only/create-discarded' │ 48.138   │ 47.609 │ 53.004 │ 207737       │
+│ 1       │ 'getter-only/create-retained'  │ 75.707   │ 58.389 │ 77.047 │ 132089       │
+│ 2       │ 'writable/create-discarded'    │ 55.543   │ 39.474 │ 57.331 │ 180039       │
+│ 3       │ 'writable/create-retained'     │ 50.888   │ 42.947 │ 53.305 │ 196511       │
+│ 4       │ 'writable/set+read'            │ 5.784    │ 5.667  │ 8.225  │ 1728937      │
+│ 5       │ 'create+first-read'            │ 58.682   │ 47.163 │ 63.017 │ 170409       │
+│ 6       │ 'cached-read'                  │ 2.48     │ 2.341  │ 4.424  │ 4032909      │
+│ 7       │ 'update+read'                  │ 20.518   │ 15.585 │ 27.206 │ 487382       │
+│ 8       │ 'observed-update'              │ 22.518   │ 18.705 │ 22.661 │ 444087       │
+└─────────┴────────────────────────────────┴──────────┴────────┴────────┴──────────────┘
+retained heap delta after GC, 10000 getter-only computed objects (diagnostic bytes)
+┌─────────┬───────────┬──────────┐
+│ (index) │ discarded │ retained │
+├─────────┼───────────┼──────────┤
+│ 0       │ -248904   │ 3289016  │
+└─────────┴───────────┴──────────┘
+
+RFSG public + benchmark adapter
+┌─────────┬────────────────────────────────┬──────────┬────────┬────────┬──────────────┐
+│ (index) │ case                           │ medianMs │ p25Ms  │ p75Ms  │ opsPerSecond │
+├─────────┼────────────────────────────────┼──────────┼────────┼────────┼──────────────┤
+│ 0       │ 'getter-only/create-discarded' │ 58.653   │ 40.799 │ 65.734 │ 170495       │
+│ 1       │ 'getter-only/create-retained'  │ 73.208   │ 57.363 │ 85.808 │ 136597       │
+│ 2       │ 'writable/create-discarded'    │ 51.423   │ 44.772 │ 56.785 │ 194465       │
+│ 3       │ 'writable/create-retained'     │ 49.889   │ 47.747 │ 63.179 │ 200444       │
+│ 4       │ 'writable/set+read'            │ 4.751    │ 4.573  │ 7.283  │ 2104953      │
+│ 5       │ 'create+first-read'            │ 49.569   │ 36.599 │ 49.714 │ 201741       │
+│ 6       │ 'cached-read'                  │ 4.079    │ 3.488  │ 4.327  │ 2451641      │
+│ 7       │ 'update+read'                  │ 13.781   │ 12.433 │ 20.573 │ 725621       │
+│ 8       │ 'observed-update'              │ 21.378   │ 19.39  │ 28.792 │ 467775       │
+└─────────┴────────────────────────────────┴──────────┴────────┴────────┴──────────────┘
+retained heap delta after GC, 10000 getter-only computed objects (diagnostic bytes)
+┌─────────┬───────────┬──────────┐
+│ (index) │ discarded │ retained │
+├─────────┼───────────┼──────────┤
+│ 0       │ -2472     │ 5297264  │
+└─────────┴───────────┴──────────┘
+
+alien-signals raw
+┌─────────┬────────────────────────────────┬──────────┬───────┬────────┬──────────────┐
+│ (index) │ case                           │ medianMs │ p25Ms │ p75Ms  │ opsPerSecond │
+├─────────┼────────────────────────────────┼──────────┼───────┼────────┼──────────────┤
+│ 0       │ 'getter-only/create-discarded' │ 0.655    │ 0.605 │ 0.881  │ 15264845     │
+│ 1       │ 'getter-only/create-retained'  │ 5.091    │ 4.913 │ 5.554  │ 1964173      │
+│ 2       │ 'create+first-read'            │ 2.053    │ 1.905 │ 2.077  │ 4870921      │
+│ 3       │ 'cached-read'                  │ 0.57     │ 0.516 │ 0.6    │ 17553098     │
+│ 4       │ 'update+read'                  │ 12.491   │ 4.847 │ 13.482 │ 800551       │
+│ 5       │ 'observed-update'              │ 14.3     │ 8.485 │ 17.074 │ 699320       │
+└─────────┴────────────────────────────────┴──────────┴───────┴────────┴──────────────┘
+retained heap delta after GC, 10000 getter-only computed objects (diagnostic bytes)
+┌─────────┬───────────┬──────────┐
+│ (index) │ discarded │ retained │
+├─────────┼───────────┼──────────┤
+│ 0       │ -480      │ 1923912  │
+└─────────┴───────────┴──────────┘
+writable computed cases: unsupported (alien-signals computed is read-only)

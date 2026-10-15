@@ -1,0 +1,3 @@
+Node v24.21.0; win32 x64; AMD Ryzen 7 PRO 6850U with Radeon Graphics     
+1000 cross-copy computed mount/subscribe/update/unsubscribe cycles, 2 warmups, 7 samples; --expose-gc=true
+median 18.903 ms; p25–p75 17.167–22.154 ms
