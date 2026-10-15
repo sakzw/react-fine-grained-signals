@@ -175,6 +175,7 @@ export default {
 | `const { user: { profile } } = state.value; profile.name` | static identifier key・identifier binding・nested object patternだけで構成された、空でない`const` object patternを元の順序で各readが1回になる形へ展開します。source、中間property、後続の`profile.name`をcaptureします。default、rest、computed key、空のnested pattern、annotation、mutable declaration、再代入bindingは未対応で、tracked sourceが分かる場合はdiagnosticを出します。 |
 | `const { value } = signal` | destructured signal accessorは追跡されません。`signal.value`と直接読んでください。 |
 | 同期helper call | 選択済みのtransformが同期呼び出しと証明できれば、呼び出し位置でcaptureできます。`auto`で関数を選ぶ際、import helperの中身は解析しません。 |
+| 同期式の内部で行われるread | tracked値を読むinline callbackを持つcall (`items.filter((item) => item.done.value)`、`reduce`、IIFE)、tracked値を受け取るcall (`JSON.stringify(state.value.profile)`、局所helper)、`"key" in state.value.profile`、tracked値のobject/array spreadは式全体をcaptureし、callee内やproxy trapが後から行うreadも含めます。Hook呼び出しを含む式は従来どおりread単位でcaptureします。`for (const item of state.value.items)` はarray・Map・Set sourceを1つのcapture内でcopyし、`item`をaliasとして追跡します。それ以外のiterableは遅延評価のままです。 |
 | runtime key / alias | 関数が別の条件で選択されていればruntime-key readをcaptureできますが、dynamic readだけでは`auto`選択されません。対応する単純な`const` destructuringで作るstatic aliasは追跡しますが、dynamic destructuringは追跡しません。 |
 | JSX render prop / `children` callback | receiverがいつ、何回呼ぶかを証明できず、captureは保証されません。静的に見える場合は位置付きwarningを出します。 |
 

@@ -1909,3 +1909,109 @@ export function Table() {
     }
   }
 });
+
+describe("managed reads performed inside a synchronous expression", () => {
+  const deepState = `
+import { deepSignal, signal } from "react-fine-grained-signals";
+
+export const items = [signal(false), signal(true)];
+export const deep = deepSignal({ profile: { name: "Ada" }, tasks: [{ title: "a" }] });
+`;
+  type DeepState = { value: { profile: Record<string, string>; tasks: Array<{ title: string }> } };
+  const updateDeep = (module: Record<string, unknown>, update: (state: DeepState["value"]) => void): void => {
+    act(() => { update((module.deep as DeepState).value); });
+  };
+
+  it("captures reads made by inline callbacks of any synchronous call", async () => {
+    const module = await loadModule(`${deepState}
+export function App() {
+  const done = items.filter((item) => item.value).length;
+  const total = items.reduce((sum, item) => sum + (item.value ? 1 : 0), 0);
+  const first = (() => items[0].value)();
+  const nested = [items].map((row) => row.filter((item) => item.value).length)[0];
+  return <p>{done + "/" + total + "/" + String(first) + "/" + nested}</p>;
+}
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("1/1/false/1");
+    act(() => { (module.items as Array<Signal<boolean>>)[0]!.value = true; });
+    expect(container.textContent).toBe("2/2/true/2");
+  });
+
+  it("captures deep reads that a call, `in`, spread, or for-of performs after the source read", async () => {
+    const module = await loadModule(`${deepState}
+function nameOf(profile) { return profile.name; }
+export function App() {
+  const json = JSON.stringify(deep.value.profile);
+  const hasAge = "age" in deep.value.profile;
+  const copy = { ...deep.value.profile };
+  const helper = nameOf(deep.value.profile);
+  let titles = "";
+  for (const task of deep.value.tasks) titles += task.title;
+  return <p>{json + "|" + String(hasAge) + "|" + copy.name + "|" + helper + "|" + titles}</p>;
+}
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe('{"name":"Ada"}|false|Ada|Ada|a');
+    updateDeep(module, (state) => { state.profile.name = "Grace"; });
+    expect(container.textContent).toBe('{"name":"Grace"}|false|Grace|Grace|a');
+    updateDeep(module, (state) => { state.profile.age = "36"; });
+    expect(container.textContent).toBe('{"name":"Grace","age":"36"}|true|Grace|Grace|a');
+    updateDeep(module, (state) => { state.tasks[0]!.title = "b"; });
+    expect(container.textContent).toBe('{"name":"Grace","age":"36"}|true|Grace|Grace|b');
+    updateDeep(module, (state) => { state.tasks.push({ title: "c" }); });
+    expect(container.textContent).toBe('{"name":"Grace","age":"36"}|true|Grace|Grace|bc');
+  });
+
+  it("keeps Hook calls out of a widened capture", () => {
+    const transformed = transformReactFineGrainedSignals(`
+import { signal } from "react-fine-grained-signals";
+import { useMemo } from "react";
+const items = [signal(false)];
+export function App() {
+  const memo = useMemo(() => items.filter((item) => item.value), []);
+  const label = String(useMemo(() => 1, []), items.filter((item) => item.value).length);
+  return <p>{memo.length + label}</p>;
+}
+`, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })?.code;
+    expect(transformed).toContain("useMemo(() => items.filter(item => item.value), [])");
+    expect(transformed).toContain("String(useMemo(() => 1, []), _signals.capture(() => items.filter(item => item.value)).length)");
+  });
+
+  it("copies a tracked for-of iterable in a single capture and leaves other iterables lazy", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+export const list = signal(["a"]);
+export const log = [];
+function* gen() { log.push("start"); yield list.value.length; }
+export function App() {
+  let out = "";
+  for (const item of list.value) out += item;
+  for (const size of [gen()][0]) { log.push("body"); out += size; }
+  return <p>{out}</p>;
+}
+`;
+    const transformed = transformReactFineGrainedSignals(source, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })?.code ?? "";
+    expect(transformed.match(/\.capture\(\(\) => \{/g)).toHaveLength(1);
+    expect(transformed).not.toMatch(/capture\(\(\) => _signals\.capture/);
+
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("a1");
+    expect((module.log as string[]).slice(0, 2)).toEqual(["start", "body"]);
+    write(module, "list", ["a", "b"]);
+    expect(container.textContent).toBe("ab2");
+  });
+});

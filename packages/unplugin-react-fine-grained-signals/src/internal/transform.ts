@@ -3376,6 +3376,20 @@ function collectTrackedReadAliases(
           }
         }
       },
+      ForOfStatement(path) {
+        // `for (const task of state.value.tasks) task.title`: each element of a
+        // tracked iterable is read through the same deep proxy as its source.
+        const left = path.get("left");
+        if (!left.isVariableDeclaration() || left.node.declarations.length !== 1) return;
+        const id = left.get("declarations")[0]!.get("id");
+        if (!id.isIdentifier()) return;
+        if (!hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
+        const binding = id.scope.getBinding(id.node.name);
+        if (binding !== undefined && !trackedAliases.has(binding)) {
+          trackedAliases.add(binding);
+          changed = true;
+        }
+      },
     });
   }
   return trackedAliases;
@@ -3431,6 +3445,110 @@ function isWriteTarget(path: NodePath): boolean {
   return parent.isUnaryExpression({ operator: "delete" }) && parent.get("argument") === target;
 }
 
+function callNameIsHook(node: t.Node): boolean {
+  const callee = unwrapTransparent(node);
+  const name = t.isIdentifier(callee)
+    ? callee.name
+    : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+      ? getStaticMemberChain(callee)?.keys.at(-1)
+      : undefined;
+  return name !== undefined && isHookName(name);
+}
+
+/** Does evaluating this expression call a Hook outside nested functions? */
+function expressionCallsHook(path: NodePath): boolean {
+  if ((path.isCallExpression() || path.isOptionalCallExpression()) && callNameIsHook(path.node.callee)) return true;
+  let found = false;
+  const inspectCall = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
+    if (callNameIsHook(call.node.callee)) {
+      found = true;
+      call.stop();
+    }
+  };
+  path.traverse({
+    Function(nested) { nested.skip(); },
+    CallExpression: inspectCall,
+    OptionalCallExpression: inspectCall,
+  });
+  return found;
+}
+
+/**
+ * Does an inline callback read a tracked value when it runs? Callbacks nested
+ * in its own call arguments are followed too (`rows.map(r => r.cells.filter(c
+ * => c.value))`); async, generator, Hook-calling, and event-handler functions
+ * are not synchronous render reads.
+ */
+function inlineCallbackReadsTrackedValue(
+  path: NodePath,
+  trackedAliases: Set<object>,
+): boolean {
+  let target = path;
+  while (target.isTSAsExpression() || target.isTSSatisfiesExpression() || target.isTSNonNullExpression() || target.isParenthesizedExpression()) {
+    target = target.get("expression") as NodePath;
+  }
+  if (!target.isArrowFunctionExpression() && !target.isFunctionExpression()) return false;
+  if (target.node.async || target.node.generator || functionCallsHook(target)) return false;
+  const body = target.get("body") as NodePath;
+  if (hasTrackedReadInExpression(body, target, trackedAliases)) return true;
+  const callbackReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>): boolean =>
+    !callNameIsHook(call.node.callee) &&
+    [call.get("callee") as NodePath, ...(call.get("arguments") as NodePath[])]
+      .some((argument) => inlineCallbackReadsTrackedValue(argument, trackedAliases));
+  // `traverse` does not visit its root, which is the call in an expression body.
+  if ((body.isCallExpression() || body.isOptionalCallExpression() || body.isNewExpression()) && callbackReads(body)) {
+    return true;
+  }
+  let found = false;
+  const inspectCall = (call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>): void => {
+    if (callbackReads(call)) {
+      found = true;
+      call.stop();
+    }
+  };
+  body.traverse({
+    Function(nested) { nested.skip(); },
+    CallExpression: inspectCall,
+    OptionalCallExpression: inspectCall,
+    NewExpression: inspectCall,
+  });
+  return found;
+}
+
+/**
+ * A capture scope only sees reads made while it is open. When a tracked value
+ * is handed to a call (`JSON.stringify(state.value.profile)`, a local helper)
+ * or an inline callback reads one (`items.filter((item) => item.done.value)`,
+ * an IIFE), the reads happen inside the call, so the whole call is captured.
+ */
+function callReadsTrackedValue(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>,
+  functionPath: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+): boolean {
+  if (callNameIsHook(call.node.callee)) return false;
+  const callee = call.get("callee") as NodePath;
+  if (inlineCallbackReadsTrackedValue(callee, trackedAliases)) return true;
+  for (const argument of call.get("arguments") as NodePath[]) {
+    const value = argument.isSpreadElement() ? argument.get("argument") as NodePath : argument;
+    if (inlineCallbackReadsTrackedValue(value, trackedAliases)) return true;
+    if (!value.isFunction() && hasTrackedReadInExpression(value, functionPath, trackedAliases)) return true;
+  }
+  return false;
+}
+
+/** `{ ...state.value.profile }` / `[...state.value.list]` read the source while spreading. */
+function spreadsTrackedValue(
+  path: NodePath<t.ObjectExpression | t.ArrayExpression>,
+  functionPath: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+): boolean {
+  const entries = (path.isObjectExpression() ? path.get("properties") : path.get("elements")) as NodePath[];
+  return entries.some((entry) =>
+    entry.isSpreadElement() &&
+    hasTrackedReadInExpression(entry.get("argument"), functionPath, trackedAliases));
+}
+
 /**
  * Managed codegen: capture statically proven synchronous `.value` reads and
  * runtime-key computed member reads in a short-lived scope. The latter are
@@ -3446,6 +3564,7 @@ function captureTrackedReadExpressions(
   reactImportSource: string,
   trackedAliases: Set<object>,
 ): void {
+  const generated = new WeakSet<t.Node>();
   const wrap = (path: NodePath<t.Expression>): void => {
     path.replaceWith(
       t.callExpression(
@@ -3465,6 +3584,10 @@ function captureTrackedReadExpressions(
     },
     CallExpression: {
       enter(path) {
+        if (generated.has(path.node)) {
+          path.skip();
+          return;
+        }
         const callee = path.get("callee");
         if (
           ((callee.isMemberExpression() || callee.isOptionalMemberExpression()) &&
@@ -3477,7 +3600,8 @@ function captureTrackedReadExpressions(
               importSource,
               managedRuntimeSource,
               reactImportSource,
-            )) &&
+            ) ||
+            (callReadsTrackedValue(path, functionPath, trackedAliases) && !expressionCallsHook(path))) &&
           !isDeferredReadContext(path, functionPath)
         ) {
           wrap(path as NodePath<t.Expression>);
@@ -3499,7 +3623,8 @@ function captureTrackedReadExpressions(
               importSource,
               managedRuntimeSource,
               reactImportSource,
-            )) &&
+            ) ||
+            (callReadsTrackedValue(path, functionPath, trackedAliases) && !expressionCallsHook(path))) &&
           !isDeferredReadContext(path, functionPath)
         ) {
           wrap(path as NodePath<t.Expression>);
@@ -3510,9 +3635,67 @@ function captureTrackedReadExpressions(
       enter(path) {
         const callee = path.get("callee");
         if (
-          hasTrackedReadInExpression(callee, functionPath, trackedAliases) &&
+          (hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
+            (callReadsTrackedValue(path, functionPath, trackedAliases) && !expressionCallsHook(path))) &&
           !isDeferredReadContext(path, functionPath)
         ) {
+          wrap(path as NodePath<t.Expression>);
+        }
+      },
+    },
+    ForOfStatement: {
+      enter(path) {
+        // The loop pulls each element after the iterable expression returns,
+        // outside any capture. Copy arrays, Maps, and Sets inside the capture
+        // so the structural reads belong to the render; other iterables (e.g.
+        // generators) are iterated lazily as authored.
+        const right = path.get("right");
+        if (path.node.await || !hasTrackedReadInExpression(right, functionPath, trackedAliases) || expressionCallsHook(right)) return;
+        const iterable = path.scope.generateUidIdentifier("iterable");
+        const copy = t.logicalExpression(
+          "||",
+          t.logicalExpression(
+            "||",
+            t.callExpression(t.memberExpression(t.identifier("Array"), t.identifier("isArray")), [t.cloneNode(iterable)]),
+            t.binaryExpression("instanceof", t.cloneNode(iterable), t.identifier("Map")),
+          ),
+          t.binaryExpression("instanceof", t.cloneNode(iterable), t.identifier("Set")),
+        );
+        const captured = t.callExpression(
+          t.memberExpression(t.cloneNode(store), t.identifier("capture")),
+          [t.arrowFunctionExpression([], t.blockStatement([
+            t.variableDeclaration("const", [t.variableDeclarator(iterable, t.cloneNode(right.node, true))]),
+            t.returnStatement(t.conditionalExpression(copy, t.arrayExpression([t.spreadElement(t.cloneNode(iterable))]), t.cloneNode(iterable))),
+          ]))],
+        );
+        generated.add(captured);
+        right.replaceWith(captured);
+        right.skip();
+      },
+    },
+    BinaryExpression: {
+      enter(path) {
+        // `"key" in state.value.profile` runs the proxy `has` trap after the
+        // right operand has been evaluated.
+        if (
+          path.node.operator === "in" &&
+          hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases) &&
+          !expressionCallsHook(path)
+        ) {
+          wrap(path as NodePath<t.Expression>);
+        }
+      },
+    },
+    ObjectExpression: {
+      enter(path) {
+        if (spreadsTrackedValue(path, functionPath, trackedAliases) && !expressionCallsHook(path)) {
+          wrap(path as NodePath<t.Expression>);
+        }
+      },
+    },
+    ArrayExpression: {
+      enter(path) {
+        if (spreadsTrackedValue(path, functionPath, trackedAliases) && !expressionCallsHook(path)) {
           wrap(path as NodePath<t.Expression>);
         }
       },
