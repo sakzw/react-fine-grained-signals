@@ -328,17 +328,43 @@ try {
       read("deep-name").textContent !== "Grace" ||
       read("map-value").textContent !== "Grace" ||
       read("set-has").textContent !== "true" ||
+      read("helper").textContent !== "2" ||
       canaryBundle.readUnrelatedCommitCount() !== unrelatedRenders ||
-      read("count-up").getAttribute("title") !== "updated title"
+      read("count-up").getAttribute("title") !== "updated title" ||
+      read("count-up").getAttribute("data-active") !== "true"
     ) {
       throw new Error("Packed canary update failed or caused a parent React rerender");
+    }
+    await act(() => read("count-only-up").click());
+    if (
+      read("count").textContent !== "3" ||
+      read("computed").textContent !== "6" ||
+      read("shared-child").textContent !== "3" ||
+      read("helper").textContent !== "3" ||
+      canaryBundle.readUnrelatedCommitCount() !== unrelatedRenders
+    ) {
+      throw new Error("Packed isolated signal update failed or committed the unrelated sibling");
     }
     await act(() => read("replace-and-delete").click());
     if (read("deep-name").textContent !== "Lin" || read("map-value").textContent !== "" || read("set-has").textContent !== "false") {
       throw new Error("Packed deep destructuring replacement or collection deletion became stale");
     }
+    const conditionalBeforeUnmount = read("conditional");
     await act(() => read("toggle-conditional").click());
     if (read("conditional") !== null) throw new Error("Packed canary conditional did not unmount");
+    await act(() => read("toggle-conditional").click());
+    const conditionalAfterRemount = read("conditional");
+    if (conditionalAfterRemount === null || conditionalAfterRemount === conditionalBeforeUnmount || conditionalAfterRemount.textContent !== "3") {
+      throw new Error("Packed canary conditional component did not remount with the current signal value");
+    }
+    await act(() => read("count-only-up").click());
+    if (
+      read("conditional").textContent !== "4" ||
+      read("helper").textContent !== "4" ||
+      canaryBundle.readUnrelatedCommitCount() !== unrelatedRenders
+    ) {
+      throw new Error("Remounted conditional component did not track subsequent isolated signal updates");
+    }
     await act(() => read("react-count-up").click());
     if (read("react-state").textContent !== "1") throw new Error("React state stopped updating alongside signals");
 
@@ -348,7 +374,21 @@ try {
       nativeInputValue.call(input, "consumer");
       input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
     });
-    if (input.value !== "consumer") throw new Error("Packed writable computed input binding did not update");
+    if (input.value !== "consumer" || canaryBundle.canaryState.text.value !== "consumer") {
+      throw new Error("Packed writable computed input did not update both the DOM and its source signal");
+    }
+    await act(() => {
+      canaryBundle.canaryState.text.value = "direct-text";
+    });
+    if (input.value !== "direct-text") throw new Error("Packed writable computed source update did not reach the input DOM");
+    await act(async () => {
+      nativeInputValue.call(input, "input longer than twelve");
+      input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    if (input.value !== "direct-text" || canaryBundle.canaryState.text.value !== "direct-text") {
+      throw new Error("Packed writable computed did not reject and restore an overlong input");
+    }
     await act(() => {
       read("checkbox").click();
       read("radio-second").click();
@@ -357,11 +397,19 @@ try {
       select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     });
     if (
-      !read("checkbox").checked ||
-      !read("radio-second").checked ||
-      read("select").value !== "two"
+      !read("checkbox").checked || canaryBundle.canaryState.checked.value !== true ||
+      !read("radio-second").checked || canaryBundle.canaryState.radio.value !== "second" ||
+      read("select").value !== "two" || canaryBundle.canaryState.selected.value !== "two"
     ) {
       throw new Error("Packed consumer form bindings did not accept native events");
+    }
+    await act(() => {
+      canaryBundle.canaryState.checked.value = false;
+      canaryBundle.canaryState.radio.value = "first";
+      canaryBundle.canaryState.selected.value = "one";
+    });
+    if (read("checkbox").checked || !read("radio-first").checked || read("select").value !== "one") {
+      throw new Error("Packed consumer form binding source updates did not reach the DOM");
     }
     await act(() => reactRoot.unmount());
     canaryBundle.canaryState.count.value += 1;

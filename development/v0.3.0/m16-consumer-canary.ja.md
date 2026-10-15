@@ -49,6 +49,19 @@ packed bundleからReact SSR markupを生成し、JSDOMでStrictMode hydration�
 | GitHub Test | pass: [run 38719386261](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38719386261) (`73438a31e8a52b7f7cd91a7b057850cde46743b4`) |
 | GitHub E2E | pass: [run 38719386105](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38719386105) (`73438a31e8a52b7f7cd91a7b057850cde46743b4`) |
 
+## M16.1 — Packed consumer assertion closure
+
+開始main HEAD: `8ac89d4825431ae862db88611473b05f472fb13f`。既存のpacked Vite consumer smokeを拡張し、Runtime/Transformの変更や新しいテスト環境は追加していない。
+
+- Text input: native input `"consumer"`でDOMと`canaryState.text.value`が一致。Signalを`"direct-text"`へ直接変更するとDOMも更新。writable computedが拒否する長文`"input longer than twelve"`はSignalを変えず、非同期補正後のDOMも`"direct-text"`へ戻る。
+- Checkbox: click後は`checked.value === true`、Signalを`false`へ変えるとDOMのcheckedもfalse。
+- Radio: second選択後は`radio.value === "second"`、Signalを`"first"`へ変えるとfirstが選択される。
+- Select: change後は`selected.value === "two"`、Signalを`"one"`へ変えるとDOMもoneになる。
+- 共有countの複合更新後、helperは`2`、`data-active`は`true`。その後の単独count更新ではcount/computed/child/helperが`3`/`6`/`3`/`3`へ更新し、無関係なmemoized siblingのcommit数は変化しない。
+- Conditional componentをunmount後に再mountし、DOM nodeが新しくなり値`3`を表示することを確認。再mount後の単独count更新で表示とhelperが`4`へ更新し、無関係なsiblingのcommit数は維持される。
+
+`pnpm test:consumer`はpass。runtimeとpluginのtarball pack、temporary consumer install/typecheck、Vite + Compiler build、packed SSR/StrictMode hydration、上記DOM操作、core-only bundle、3-copy runtime smokeまで完了した。初回sandbox実行はpnpm store operation lockの権限で開始できなかったため、同じコマンドを昇格実行して完了した。検査失敗や製品コードの不具合はなく、Runtime/Transform変更なし。
+
 ### 結果と次の判断
 
-M16 consumer canaryでは、release blockerとなる再現可能な不具合は見つからなかった。既存の制約は診断可能なmanaged tracking契約として残し、API再設計は行わない。v0.3.0は未公開のまま維持する。M8のfreeze判断を変更する新しい証拠はなく、対象SHAのGitHub Test/E2Eも成功したため、この監査を閉じる。
+M16/M16.1 consumer canaryでは、release blockerとなる再現可能な不具合は見つからなかった。既存の制約は診断可能なmanaged tracking契約として残し、API再設計は行わない。v0.3.0は未公開のまま維持する。M8のfreeze判断を変更する新しい証拠はなく、M16対象SHAのGitHub Test/E2Eも成功している。M16.1の変更はconsumer testと記録のみであり、そのSHAのGitHub Test/E2Eはpush後に追記する。

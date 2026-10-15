@@ -65,6 +65,10 @@ const UnrelatedConsumer = memo(function UnrelatedConsumer() {
   return <output data-testid="unrelated-renders">stable</output>;
 });
 
+function ConditionalCanary() {
+  return <output data-testid="conditional">{canaryState.count}</output>;
+}
+
 export function ConsumerCanary() {
   const [reactCount, setReactCount] = useState(0);
   const { user } = canaryState.profile.value;
@@ -87,6 +91,9 @@ export function ConsumerCanary() {
         canaryState.title.value = "updated title";
         canaryState.active.value = true;
       }}>Update shared state</button>
+      <button data-testid="count-only-up" onClick={() => {
+        canaryState.count.value += 1;
+      }}>Update only count</button>
       <button data-testid="react-count-up" onClick={() => setReactCount((value) => value + 1)}>Update React state</button>
       <button data-testid="replace-and-delete" onClick={() => {
         canaryState.profile.value = { user: { name: "Lin" } };
@@ -96,7 +103,7 @@ export function ConsumerCanary() {
       <button data-testid="toggle-conditional" onClick={() => {
         canaryState.visible.value = !canaryState.visible.value;
       }}>Toggle conditional</button>
-      {canaryState.visible.value ? <output data-testid="conditional">mounted</output> : null}
+      {canaryState.visible.value ? <ConditionalCanary /> : null}
       <input data-testid="text" bindValue={writableCanaryText} />
       <input data-testid="checkbox" type="checkbox" value="admin" bindChecked={canaryState.checked} />
       <input data-testid="radio-first" type="radio" name="canary-radio" value="first" bindValue={canaryState.radio} />
