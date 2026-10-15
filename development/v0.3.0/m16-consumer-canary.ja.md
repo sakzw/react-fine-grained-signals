@@ -46,8 +46,9 @@ packed bundleからReact SSR markupを生成し、JSDOMでStrictMode hydration�
 | Browser E2E | pass: 71/71、Chromium/Firefox/WebKit、production build、React Router SSR。 |
 | Fast Refresh | pass: 6 variant、18 supported scenario。managed Oxc 4/4、managed Babel 4/4を含む。既知のfailure 6件は通常React `try/finally` Oxc controlとPreact Oxc controlに限定され、RFSG経路ではない。 |
 | Cross-copy | pass。consumer smokeで3個のruntime copyを使ったbatch/interoperability検証。 |
-| GitHub Test / E2E | push後に対象SHAのworkflow結果を追記する。 |
+| GitHub Test | pass: [run 38719386261](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38719386261) (`73438a31e8a52b7f7cd91a7b057850cde46743b4`) |
+| GitHub E2E | pass: [run 38719386105](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38719386105) (`73438a31e8a52b7f7cd91a7b057850cde46743b4`) |
 
 ### 結果と次の判断
 
-M16 consumer canaryでは、release blockerとなる再現可能な不具合は見つからなかった。既存の制約は診断可能なmanaged tracking契約として残し、API再設計は行わない。v0.3.0は未公開のまま維持する。M8のfreeze判断を変更する新しい証拠はなく、Test/E2E CIの最終結果を確認してこの監査を閉じる。
+M16 consumer canaryでは、release blockerとなる再現可能な不具合は見つからなかった。既存の制約は診断可能なmanaged tracking契約として残し、API再設計は行わない。v0.3.0は未公開のまま維持する。M8のfreeze判断を変更する新しい証拠はなく、対象SHAのGitHub Test/E2Eも成功したため、この監査を閉じる。

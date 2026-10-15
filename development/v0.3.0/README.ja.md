@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M16 Consumer Canaryを実施し、runtime/unpluginのpacked tarballをReact 19 + Vite + React Compiler consumerへinstallしたSSR/hydration統合fixtureを追加。deep update/replacement、Map/Set、複数form binding、React state、無関係sibling isolationを確認し、製品不具合は未検出。typecheck/lint/build/7 bundle budgets、packed consumer、Fast Refresh managed Oxc/Babel、Chromium/Firefox/WebKit E2E 71/71がpass。Test/E2E GitHub Actionsの最終結果はpush後に追記する。詳細は[M16 consumer canary](m16-consumer-canary.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
+- 状態: M16 Consumer Canaryを実施し、runtime/unpluginのpacked tarballをReact 19 + Vite + React Compiler consumerへinstallしたSSR/hydration統合fixtureを追加。deep update/replacement、Map/Set、複数form binding、React state、無関係sibling isolationを確認し、製品不具合は未検出。typecheck/lint/build/7 bundle budgets、packed consumer、Fast Refresh managed Oxc/Babel、Chromium/Firefox/WebKit E2E 71/71がpass。対象SHA `73438a31e8a52b7f7cd91a7b057850cde46743b4`のGitHub Test/E2Eもsuccess。詳細は[M16 consumer canary](m16-consumer-canary.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
 - 統合ブランチ: `main`
 - 最新マイルストーン: M15.2 benchmark validity & transform stress audit。M15.1 chain表の旧値を無効とし、正しいfixtureの再測定へ置き換えた。500件baselineのchain/independent完走値は得られていない。M15.1製品コードは維持し、今回runtime/transform実装に変更はない。M16ではJSDOM selector cacheのretainer pathを特定し、製品コード変更はなし。既存のpush SHAに対するTest/E2E CIは成功。
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
@@ -35,7 +35,7 @@
 | M15 | managed tracking coverage expansion | M14 | 既存alias契約を維持し、意味論を保てるdestructuring subsetのみ追加。React runtime動作、diagnostics、performance、M16 retentionを検証 | 完了。static `const` object destructuringを追加。runtime 621/621、transform 417/417 + final diagnostic 1/1、React Compiler 27/27、Browser E2E 71/71 passed。M8を再freeze、GitHub Actions post-push結果待ち。詳細は[M15 record](m15-managed-tracking-expansion.ja.md) |
 | M15.1 | Transform scalability & semantic hardening | M15 | flat alias patternをbatch展開し、nested static subsetを追加。React/compiler/semanticsとstressを検証 | 完了。旧chain benchmark fixtureは誤りがあり、そのchain表をM15.2で撤回。詳細は[M15.1 record](m15.1-transform-hardening.ja.md) |
 | M15.2 | Benchmark validity & transform stress audit | M15.1 | chain fixtureを修正し、baseline/candidateをfresh processで交互に計測。runtime正確性とCPU profileを確認 | 完了。0/5/20/100/500の正しいfixtureを実行。500 baseline chain/independentは60秒timeout、candidateは全ケースのinitial/deep update pass。profileを根拠に実装変更なし。詳細は[M15.2 record](m15.2-benchmark-validity.ja.md) |
-| M16 | Consumer canary & integration audit | M15.2 | packed runtime/pluginを使うconsumer appでAPI組み合わせ、SSR/hydration、Compiler、form、collections、lifecycleを確認。実ブラウザ/ Fast Refreshは既存fixtureを再利用 | 完了。packed Vite + React Compiler consumerとStrictMode hydration pass。Browser E2E 71/71、Fast Refresh RFSG経路 pass。正確性bugなし、既存tracking境界はdocsで説明済み。最終CI記録は[M16 record](m16-consumer-canary.ja.md) |
+| M16 | Consumer canary & integration audit | M15.2 | packed runtime/pluginを使うconsumer appでAPI組み合わせ、SSR/hydration、Compiler、form、collections、lifecycleを確認。実ブラウザ/ Fast Refreshは既存fixtureを再利用 | 完了。packed Vite + React Compiler consumerとStrictMode hydration pass。Browser E2E 71/71、Fast Refresh RFSG経路 pass。正確性bugなし、既存tracking境界はdocsで説明済み。GitHub Test `38719386261` / E2E `38719386105` success。詳細は[M16 record](m16-consumer-canary.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
