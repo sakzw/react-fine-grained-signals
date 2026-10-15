@@ -84,10 +84,10 @@ transform package buildではbaseline `unplugin` chunkが121.52 kB / 32.99 kB gz
 - `pnpm typecheck`、`pnpm lint`、`pnpm build` passed。lintは既存warningを出すがexit 0。
 - Consumer pack/install/Vite smoke、3-copy duplicate runtime smoke、mixed-version smoke passed。
 - React Compiler **27/27**、final CI serial multi-browser E2E **71/71** passed in 8.4m。
-- 全7 bundle budgets passed。runtime core 46.58 kB / 10.12 kB gzip、transform plugin 124.57 kB / 33.72 kB gzip。M14比transform pluginは+3.05 kB raw / +0.73 kB gzip、runtime bundle差分なし。
+- 全7 bundle budgets passed。runtime core 46.58 kB / 10.12 kB gzip、transform plugin 125.11 kB / 33.83 kB gzip。M14比transform pluginは+3.59 kB raw / +0.84 kB gzip、runtime bundle差分なし。
 - Transform benchmarkはbaselineとcandidateの双方で実施。小sampleの測定ノイズがあるため速度向上は主張しない。no-destructuring fixtureの生成サイズは不変。
 - Fast RefreshはRFSG managed Oxc/Babelで18/18 passed。6 control failureは通常Reactのtry/finally OxcとPreact Oxcに限定された既知のHook signature問題。
 - M16 JSDOM再調査ではplain ReactとRFSGのinput/select hostすべてGCされ、RFSG固有retainerは未確認。製品変更なし。
-- `git diff --check` passed。GitHub Actions Test/E2Eはpush後に同じ最終SHAで確認し、結果をここへ追記する。
+- `git diff --check` passed。実装commit `696a16ac41c47a245075fe0dfacc2a8f4fd7dc45` のGitHub [Test run 38683023129](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38683023129) と [E2E run 38683023223](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38683023223) は両方success。Testはcoverageを含む全job、E2EはReact Router typecheckとbrowser suiteを通過した。
 
 以上によりM8をM15 candidateで再freezeする。対象patternは安全性を証明できる単純なstatic `const` object destructuringに限定し、未対応構文は変換しない。npm publish、release tag、GitHub Releaseは作成しない。

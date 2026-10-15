@@ -80,4 +80,4 @@ M15開始時にM8 freezeを解除し、M14のlazy interop protocolを維持し�
 
 local qualificationはruntime coverage 621/621、transform coverage 417/417（final diagnostic test 1/1 focused）、typecheck、lint、build、consumer pack/install smoke、3-copy duplicate runtime、mixed-version、React Compiler 27/27、Fast Refresh RFSG managed 18/18、CI serial browser E2E 71/71、7 bundle budgetsでpass。M16 JSDOM input/select recheckで全hostがGCされ、RFSG固有retainerは未確認。transform coverage初回runのesbuild fixed-timeoutはsingle testでpassし、suite isolationを保った1-worker full runもpassした。後続retryはhost load時のworker startup failureで集約passには含めていない。timeout/coverage thresholdは変更していない。
 
-以上によりM8をM15 candidateで再freezeする。変更を`main`へcommit・pushした後、同じ最終SHAのGitHub Test/E2E workflowがsuccessであることを確認してfreezeを確定する。npm publish、Git tag、GitHub Releaseは行わない。
+以上によりM8をM15 candidateで再freezeする。実装を含むmain SHAでTest/E2Eがsuccessであることを確認済み。今回のqualification記録更新commitについてもpush後に両workflowを再確認する。npm publish、Git tag、GitHub Releaseは行わない。
