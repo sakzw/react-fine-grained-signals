@@ -2,11 +2,11 @@
 
 ## 現在の状態
 
-- 状態: M16 Consumer Canaryを実施し、runtime/unpluginのpacked tarballをReact 19 + Vite + React Compiler consumerへinstallしたSSR/hydration統合fixtureを追加。M16.1ではformのDOM/Signal双方向assertion、writable computedの拒否入力、単独signal更新、conditional componentのremount後trackingを追加し、packed consumer smokeがpass。製品不具合は未検出。M16 qualificationのtypecheck/lint/build/7 bundle budgets、Fast Refresh managed Oxc/Babel、Chromium/Firefox/WebKit E2E 71/71と、M16 (`73438a31e8a52b7f7cd91a7b057850cde46743b4`)・M16.1 (`86d6bc7a9bc7cbd73a267f0950713045cffaaf53`)のGitHub Test/E2Eがsuccess。詳細は[M16 consumer canary](m16-consumer-canary.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
+- 状態: M17 Final API & Scope Decisionを完了。M16.1 packed consumerでformの双方向assertion、writable computed拒否入力、単独Signal更新、conditional remount後trackingがpassし、Runtime/Transform変更はなし。GitHub Test/E2Eも成功。v0.3.0へ追加する製品変更はなく、release candidateとしてfreeze可能と判断した。公開操作は未実施。詳細は[M17 decision](m17-api-scope-decision.ja.md)。
 - 統合ブランチ: `main`
-- 最新マイルストーン: M15.2 benchmark validity & transform stress audit。M15.1 chain表の旧値を無効とし、正しいfixtureの再測定へ置き換えた。500件baselineのchain/independent完走値は得られていない。M15.1製品コードは維持し、今回runtime/transform実装に変更はない。M16ではJSDOM selector cacheのretainer pathを特定し、製品コード変更はなし。既存のpush SHAに対するTest/E2E CIは成功。
-- v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
-- 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
+- 最新実装マイルストーン: M16.1 Consumer Canary Assertion Closure。最新の判断マイルストーン: M17。M16.1はformのDOM/Signal両方向、Signal単独更新、helper/属性、conditional component lifecycleをpack済みconsumerから検証。製品Runtime/Transform変更はない。M16.1実装SHA `86d6bc7a9bc7cbd73a267f0950713045cffaaf53` と記録SHA `2394e4ccf1e7de9ef3d37aef82fb08ac2df24425`のGitHub Test/E2Eはいずれもsuccess。詳細は[M16](m16-consumer-canary.ja.md) / [M17](m17-api-scope-decision.ja.md)。
+- v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
+- M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
 - Vue参照: [Release](https://github.com/vuejs/core/releases/tag/v3.6.0-rc.11)、[collectionHandlers.ts](https://github.com/vuejs/core/blob/v3.6.0-rc.11/packages/reactivity/src/collectionHandlers.ts)、[reactive.ts](https://github.com/vuejs/core/blob/v3.6.0-rc.11/packages/reactivity/src/reactive.ts)。参照テストは同タグの `packages/reactivity/__tests__/collections/` 以下。
 
@@ -31,11 +31,12 @@
 | M12 | computed生成profile、radio/checkbox group境界、DOM retention監査 | M11 | benchmarkを層別化し、効果が実測できる変更のみ採用。group native semanticsとunsubscribe/DOM cleanupを検証 | 完了。性能最適化は効果が確認できず見送り。radio source mismatchを拒否。local qualificationとGitHub Actions Test/E2E成功。詳細は[M12 audit](m12-performance-radio-dom-audit.ja.md) |
 | M12.1 | radio binding source一括切替、computed benchmark比較の妥当性 | M12 | 同一commitで全radioをSignal差し替えし、ref lifecycleとgroup競合契約を維持。benchmark capabilityとchecksumを検証 | 完了。detached済みpeerを差し替え中に限り無視。writable比較と全checksum検査を修正。詳細は[M12.1 closure](m12.1-radio-binding-benchmark.ja.md) |
 | M13 | v0.3.0 release readiness review | M12.1 | Public API/types、package/tarball/consumer、docs/migration、React/browser、performance/bundle、final qualificationを監査。重大問題を修正してM8 freezeを判断 | **READY WITH KNOWN LIMITATIONS（当時の判定）。** GitHub Test `38662092010`とE2E `38662092091` success。M14開始時に追加performance workのためfreezeを解除。結果と制約は[M13 record](m13-release-readiness.ja.md) |
-| M14 | computed performance deep dive / M15-M16先行調査 | M13 | CPU/allocation profile、複数の異なる最適化prototype、paired benchmark、tracking・browser retention auditを実施し、根拠ある改善だけ統合 | 実装・local qualification完了。interop protocol lazy materializationを採用、brand descriptor共有は不採用。M8を再freeze。GitHub Actions post-push結果を最終確認する。詳細は[M14 record](m14-computed-performance-and-next-audits.ja.md) |
-| M15 | managed tracking coverage expansion | M14 | 既存alias契約を維持し、意味論を保てるdestructuring subsetのみ追加。React runtime動作、diagnostics、performance、M16 retentionを検証 | 完了。static `const` object destructuringを追加。runtime 621/621、transform 417/417 + final diagnostic 1/1、React Compiler 27/27、Browser E2E 71/71 passed。M8を再freeze、GitHub Actions post-push結果待ち。詳細は[M15 record](m15-managed-tracking-expansion.ja.md) |
+| M14 | computed performance deep dive / M15-M16先行調査 | M13 | CPU/allocation profile、複数の異なる最適化prototype、paired benchmark、tracking・browser retention auditを実施し、根拠ある改善だけ統合 | 完了。interop protocol lazy materializationを採用、brand descriptor共有は不採用。M15.1/M16の後続CIでもTest/E2Eを確認。M13時点のperformance/retention不確定を更新。詳細は[M14 record](m14-computed-performance-and-next-audits.ja.md) |
+| M15 | managed tracking coverage expansion | M14 | 既存alias契約を維持し、意味論を保てるdestructuring subsetのみ追加。React runtime動作、diagnostics、performance、M16 retentionを検証 | 完了。static `const` object destructuringを追加。runtime 621/621、transform 417/417 + final diagnostic 1/1、React Compiler 27/27、Browser E2E 71/71 passed。GitHub Test `38683023129` / E2E `38683023223` success。後続M15.2/M16でcontractを維持。詳細は[M15 record](m15-managed-tracking-expansion.ja.md) |
 | M15.1 | Transform scalability & semantic hardening | M15 | flat alias patternをbatch展開し、nested static subsetを追加。React/compiler/semanticsとstressを検証 | 完了。旧chain benchmark fixtureは誤りがあり、そのchain表をM15.2で撤回。詳細は[M15.1 record](m15.1-transform-hardening.ja.md) |
 | M15.2 | Benchmark validity & transform stress audit | M15.1 | chain fixtureを修正し、baseline/candidateをfresh processで交互に計測。runtime正確性とCPU profileを確認 | 完了。0/5/20/100/500の正しいfixtureを実行。500 baseline chain/independentは60秒timeout、candidateは全ケースのinitial/deep update pass。profileを根拠に実装変更なし。詳細は[M15.2 record](m15.2-benchmark-validity.ja.md) |
-| M16 | Consumer canary & integration audit | M15.2 | packed runtime/pluginを使うconsumer appでAPI組み合わせ、SSR/hydration、Compiler、form、collections、lifecycleを確認。実ブラウザ/ Fast Refreshは既存fixtureを再利用 | 完了。packed Vite + React Compiler consumerとStrictMode hydration pass。M16.1でform双方向assertionと単独Signal/conditional componentの確認を追加。Browser E2E 71/71、Fast Refresh RFSG経路 pass。正確性bugなし、既存tracking境界はdocsで説明済み。GitHub Test `38719386261` / E2E `38719386105` success。詳細は[M16 record](m16-consumer-canary.ja.md) |
+| M16 | Consumer canary & integration audit | M15.2 | packed runtime/pluginを使うconsumer appでAPI組み合わせ、SSR/hydration、Compiler、form、collections、lifecycleを確認。実ブラウザ/Fast Refreshは既存fixtureを再利用 | 完了。M16.1のpacked consumer双方向assertionまで統合。Browser E2E 71/71、Fast Refresh RFSG経路pass、製品不具合なし。M16 Test `38719386261` / E2E `38719386105`、M16.1 Test `38738193370` / E2E `38738193375` success。詳細は[M16 record](m16-consumer-canary.ja.md) |
+| M17 | Final API & scope decision | M16.1 | v0.2.1との差、公開API/型、現行制約と既解決事項、機能scope、公開可能性を評価 | 完了。現APIはrelease candidateとしてfreeze可能。v0.3.0に追加すべき製品変更なし。M14〜M16.1で閉じた証拠と後続へ送る性能課題を分類。提案M18はrelease execution checklist。詳細は[M17 decision](m17-api-scope-decision.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -52,11 +53,8 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 - cross-copy interop、effect ownership、cleanup、speculative render、現在のReact root/leaf binding契約を回帰基準とする。
 - v0.2.1 release qualificationの性能記録は方向性の資料として扱い、単一の小規模値を新しい性能保証にしない。M7で同条件の基準値を再収集する。
 
-## 直近の作業
+## 次の作業案
 
-1. M3現行実装とstrict tracking gateは [React tracking audit](m3-react-tracking-audit.ja.md) を参照する。
-2. managedの静的追跡契約、警告可能範囲、unsupported callback/deep destructuring、root/concurrent ownershipを実装・実環境で閉じる。
-3. M3方式に対するM4 Compiler matrixを完了する。M5のdiagnostics/RSC/adapter監査は [M5 audit](m5-transform-reliability-audit.ja.md)、M6のdirect-binding qualification gapsは [M6 audit](m6-binding-qualification-audit.ja.md) を参照する。
-4. 各マイルストーン完了時にdiff review、必要な検証、記録、意味のあるcommitを行う。テスト実行は該当する変更の正しさを確認するために行う。
+M18は新機能開発ではなくrelease execution checklistとする。公開を明示的に開始するまでは、version/tag/publish/Release操作を行わない。公開前の確認が必要になった場合は、[M17 scope decision](m17-api-scope-decision.ja.md)に記録した固定scopeと、ユーザーに見える現行契約を基準にする。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。
