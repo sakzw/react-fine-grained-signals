@@ -399,8 +399,8 @@ describe("deepSignal reactive collections", () => {
     expect(right.isSubsetOf(left)).toBe(true);
     expect(left.isDisjointFrom(right)).toBe(false);
     // A plain Set built from reactive iteration holds proxies.
-    expect(left.isSupersetOf(new Set([...right]))).toBe(true);
-    expect(right.isSubsetOf(new Set([...left]))).toBe(true);
+    expect(left.isSupersetOf(new Set(right))).toBe(true);
+    expect(right.isSubsetOf(new Set(left))).toBe(true);
     state.value.left = left.union(right);
     expect(state.value.left.size).toBe(3);
     expect(() => left.union({ size: 1, has: 1, keys: () => [][Symbol.iterator]() } as never)).toThrow(TypeError);
