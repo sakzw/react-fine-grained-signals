@@ -73,3 +73,11 @@ M13ではPublic API / generated type、tarball / installed consumer、v0.2.1 mig
 local full coverageではruntime 619/620 (fan-out case 5.419秒で既存5秒timeout)、transform 405/408 (esbuild 3 casesが5秒timeout)だった。全4ケースは単独実行でpassした。Local browser E2Eは70/71で、Firefox初回hydration navigationがcold startでtimeoutしたが、単独Firefox testはpassした。1-worker full coverage再診断はhost memoryが増えたため途中停止。これらのlocal aggregate結果はpassとして扱わない。
 
 同一M13 candidate `58ca8ed4f0cedc3bc9c59097ee92f1f8e4335e2d`のGitHub [Test run 38662092010](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38662092010)はfull coverageを含めsuccess、[E2E run 38662092091](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38662092091)はReact Router typecheckとmulti-browser E2Eを含めsuccess。従ってローカルworker-load timeoutはrelease blockerとは判定しない。M8を**READY WITH KNOWN LIMITATIONS**として再freezeする。Final freeze recordの追加commit後のmain SHAとActionsも照合する。npm publish、Git tag、GitHub Releaseは行っていない。
+
+## M15 — Managed Tracking Coverage Expansion (2026-10-15)
+
+M15開始時にM8 freezeを解除し、M14のlazy interop protocolを維持したまま、既存のdirect alias captureに欠けていた単純なstatic `const` object destructuringをmanaged trackingへ追加した。対応subset、未対応syntax、diagnostics、benchmarkとM16 retention調査は[M15 record](m15-managed-tracking-expansion.ja.md)に記録した。
+
+local qualificationはruntime coverage 621/621、transform coverage 417/417（final diagnostic test 1/1 focused）、typecheck、lint、build、consumer pack/install smoke、3-copy duplicate runtime、mixed-version、React Compiler 27/27、Fast Refresh RFSG managed 18/18、CI serial browser E2E 71/71、7 bundle budgetsでpass。M16 JSDOM input/select recheckで全hostがGCされ、RFSG固有retainerは未確認。transform coverage初回runのesbuild fixed-timeoutはsingle testでpassし、suite isolationを保った1-worker full runもpassした。後続retryはhost load時のworker startup failureで集約passには含めていない。timeout/coverage thresholdは変更していない。
+
+以上によりM8をM15 candidateで再freezeする。変更を`main`へcommit・pushした後、同じ最終SHAのGitHub Test/E2E workflowがsuccessであることを確認してfreezeを確定する。npm publish、Git tag、GitHub Releaseは行わない。

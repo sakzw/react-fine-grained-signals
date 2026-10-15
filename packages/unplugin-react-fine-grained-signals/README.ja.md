@@ -172,10 +172,10 @@ export default {
 | pattern | managedの動作 |
 | --- | --- |
 | 選択済み関数内の`state.value.user.name` | 1つの同期read式としてcaptureします。 |
-| `const { user } = state.value; user.name` | diagnosticを出します。proxy property readは`.value` captureの外なのでstaleになる可能性があります。完全なproperty pathで読むか、明示的な`useSignalTracking()`を残してください。 |
+| `const { user } = state.value; user.name` | staticなidentifier keyとidentifier bindingだけを持ち、TypeScript annotationがなく、再代入しない単純な`const` object patternは、initializerとproperty readを各1回だけ評価する形に展開します。`state.value.user`と後続の`user.name`の両方をcaptureします。nested pattern、default、rest、computed key、annotation付きpattern/binding、mutable declarationは未対応で、tracked sourceを確認できる場合はdiagnosticを出します。 |
 | `const { value } = signal` | destructured signal accessorは追跡されません。`signal.value`と直接読んでください。 |
 | 同期helper call | 選択済みのtransformが同期呼び出しと証明できれば、呼び出し位置でcaptureできます。`auto`で関数を選ぶ際、import helperの中身は解析しません。 |
-| runtime key / alias | 関数が別の条件で選択されていればruntime-key readをcaptureできますが、dynamic readだけでは`auto`選択されません。destructured aliasは一般に追跡しません。 |
+| runtime key / alias | 関数が別の条件で選択されていればruntime-key readをcaptureできますが、dynamic readだけでは`auto`選択されません。対応する単純な`const` destructuringで作るstatic aliasは追跡しますが、dynamic destructuringは追跡しません。 |
 | JSX render prop / `children` callback | receiverがいつ、何回呼ぶかを証明できず、captureは保証されません。静的に見える場合は位置付きwarningを出します。 |
 
 先頭文に直接importした明示的な`useSignalTracking()`は、`transform: "managed"`でもambient runtime boundaryとして残ります。pluginはこれを`useSignalCapture()`へ置き換えません。per-read transformでwrapできる`.value`式がない`task.done`のようなdeep-proxy readに必要です。async関数とgenerator関数は引き続き対象外です。
@@ -487,7 +487,7 @@ TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析しま
 
 `managed` output now inserts `useSignalCapture()` at each transformed function's top level and wraps statically proven synchronous reads in short capture scopes. User Hooks remain at the function's top level, and generated code does not wrap user code in `try/finally`. A captured expression that throws still restores its temporary scope; render attempts that never commit do not install subscriptions.
 
-過去に記録したVite 8 / Oxc Fast RefreshのHook signature問題は、以前の生成`try/finally`構造が原因でした。現行出力は実browserのVite 8/Oxc HMRでJSXのみの編集とHook追加・削除・並べ替えを通過し、managed OxcとBabelのHook形状変更6ケースはすべて成功しました。6 variantのmatrixは18 passedで完了し、残る6件の既知失敗は通常Reactの`try/finally` controlとPreactの同じOxc構造だけでした。HMR subgateは完了です。exactness契約は静的に特定できる同期readが対象です。上記callback、destructuring、dynamic selectionは移行時に扱う制約であり、対応patternでstale renderingが起きた場合は不具合です。
+過去に記録したVite 8 / Oxc Fast RefreshのHook signature問題は、以前の生成`try/finally`構造が原因でした。現行出力は実browserのVite 8/Oxc HMRでJSXのみの編集とHook追加・削除・並べ替えを通過し、managed OxcとBabelのHook形状変更6ケースはすべて成功しました。6 variantのmatrixは18 passedで完了し、残る6件の既知失敗は通常Reactの`try/finally` controlとPreactの同じOxc構造だけでした。HMR subgateは完了です。exactness契約は静的に特定できる同期readが対象です。未対応のcallback ownership、destructuring variant、dynamic selectionは移行時に扱う制約であり、対応patternでstale renderingが起きた場合は不具合です。
 
 `transform: "inject"` は従来どおりbareな `useSignalTracking()` を挿入し、best-effortなambient boundaryを提供します。`managed` は暗黙のsignal-read検出を保ちながら、文書化した静的・同期範囲の各readを個別に捕捉します。静的に証明できないcallback所有権やdynamic patternは、範囲を明記し、検出可能なケースをwarningにします。
 

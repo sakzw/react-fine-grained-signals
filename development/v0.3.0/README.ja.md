@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M14でcomputed生成時のinterop protocolをlazy materializeする設計を採用し、A/Bでcreate/discard 46–51%短縮、10k retained heap約22%減を確認。runtime/transform coverage、typecheck/lint/build、consumer、cross-copy/mixed-version、bundle budgetにpass。CI相当serial browser E2E 71/71。M8をM14候補で再freezeし、post-push GitHub Test/E2E結果は最終確認する。公開tag、npm publish、GitHub Releaseは未実施。詳細は[M14 performance and next audits](m14-computed-performance-and-next-audits.ja.md)と[M8 qualification status](m8-qualification-status.ja.md)。
+- 状態: M14のlazy interop performance改善を維持し、M15で安全なstatic `const` object destructuringのmanaged trackingを追加。runtime/transform full coverage、typecheck/lint/build、consumer、cross-copy/mixed-version、React Compiler、CI serial browser E2E、bundle budgetがpass。M8をM15 candidateで再freezeし、push後GitHub Test/E2Eを確認する。公開tag、npm publish、GitHub Releaseは未実施。詳細は[M15 managed tracking expansion](m15-managed-tracking-expansion.ja.md)と[M8 qualification status](m8-qualification-status.ja.md)。
 - 統合ブランチ: `main`
-- 最新マイルストーン: M14 computed performance deep dive。Profileで`attachProtocol()`のper-computed protocol object生成が主要hotspot候補となり、protocol lazy materializationを採用。追加のbrand descriptor共有案は改善根拠不足で不採用。managed trackingはM15調査候補を提示し、Chromium DOM retentionでは112/112 nodeがGCされRFSG retaining pathは未確認。M13 READYは当時の判定として維持し、M14統合後のqualificationとCIをもってM8再freezeを判断する。詳細は[M14 record](m14-computed-performance-and-next-audits.ja.md)。
+- 最新マイルストーン: M15 managed tracking coverage expansion。M14のlazy interop protocolを保ち、simple static-key `const` object destructuringを既存capture/alias passへ安全に展開。runtime/transform coverage、React Compiler、Fast Refresh、71/71 browser E2E、consumer smoke、size budgetsを通過。M16 JSDOM recheckではhost retentionを再現せず、RFSG固有retainerは未確認。詳細は[M15 record](m15-managed-tracking-expansion.ja.md)。
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
 - 開始時の作業ツリー: clean。ローカルタグは `v0.1.0`、`v0.1.1`、`v0.2.0`。`v0.2.1` タグはこのcloneに存在しない。公開済みversionはpackage metadataとrelease記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -32,6 +32,7 @@
 | M12.1 | radio binding source一括切替、computed benchmark比較の妥当性 | M12 | 同一commitで全radioをSignal差し替えし、ref lifecycleとgroup競合契約を維持。benchmark capabilityとchecksumを検証 | 完了。detached済みpeerを差し替え中に限り無視。writable比較と全checksum検査を修正。詳細は[M12.1 closure](m12.1-radio-binding-benchmark.ja.md) |
 | M13 | v0.3.0 release readiness review | M12.1 | Public API/types、package/tarball/consumer、docs/migration、React/browser、performance/bundle、final qualificationを監査。重大問題を修正してM8 freezeを判断 | **READY WITH KNOWN LIMITATIONS（当時の判定）。** GitHub Test `38662092010`とE2E `38662092091` success。M14開始時に追加performance workのためfreezeを解除。結果と制約は[M13 record](m13-release-readiness.ja.md) |
 | M14 | computed performance deep dive / M15-M16先行調査 | M13 | CPU/allocation profile、複数の異なる最適化prototype、paired benchmark、tracking・browser retention auditを実施し、根拠ある改善だけ統合 | 実装・local qualification完了。interop protocol lazy materializationを採用、brand descriptor共有は不採用。M8を再freeze。GitHub Actions post-push結果を最終確認する。詳細は[M14 record](m14-computed-performance-and-next-audits.ja.md) |
+| M15 | managed tracking coverage expansion | M14 | 既存alias契約を維持し、意味論を保てるdestructuring subsetのみ追加。React runtime動作、diagnostics、performance、M16 retentionを検証 | 完了。static `const` object destructuringを追加。runtime 621/621、transform 417/417 + final diagnostic 1/1、React Compiler 27/27、Browser E2E 71/71 passed。M8を再freeze、GitHub Actions post-push結果待ち。詳細は[M15 record](m15-managed-tracking-expansion.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
