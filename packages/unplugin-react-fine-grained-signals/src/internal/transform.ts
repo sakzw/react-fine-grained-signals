@@ -2409,6 +2409,34 @@ function warnUntrackedChildrenCallbackRead(
   reportWarning(options, warning, expression);
 }
 
+function getStaticConstDestructuredBindings(
+  declarator: NodePath<t.VariableDeclarator>,
+): Array<{ key: t.Identifier; id: t.Identifier }> | undefined {
+  if (
+    !declarator.parentPath.isVariableDeclaration({ kind: "const" }) ||
+    !declarator.get("id").isObjectPattern()
+  ) return undefined;
+  const pattern = declarator.get("id") as NodePath<t.ObjectPattern>;
+  if (pattern.node.typeAnnotation != null || pattern.node.properties.length === 0) return undefined;
+  const bindings: Array<{ key: t.Identifier; id: t.Identifier }> = [];
+  for (const property of pattern.get("properties")) {
+    if (
+      !property.isObjectProperty() || property.node.computed ||
+      !t.isIdentifier(property.node.key) || !t.isIdentifier(property.node.value) ||
+      property.node.value.typeAnnotation != null
+    ) return undefined;
+    const binding = property.scope.getBinding(property.node.value.name);
+    if (binding?.kind !== "const" || !binding.constant || binding.constantViolations.length !== 0) {
+      return undefined;
+    }
+    bindings.push({
+      key: t.cloneNode(property.node.key),
+      id: t.cloneNode(property.node.value),
+    });
+  }
+  return bindings;
+}
+
 function warnUntrackedDestructuringRead(
   path: NodePath,
   options: InternalTransformOptions,
@@ -2421,24 +2449,26 @@ function warnUntrackedDestructuringRead(
   reportWarning(options, warning, path);
 }
 
+function hasTrackedSource(path: NodePath, seen = new Set<object>()): boolean {
+  if (containsSyntacticValueRead(path)) return true;
+  if (path.isMemberExpression() || path.isOptionalMemberExpression()) {
+    return hasTrackedSource(path.get("object"), seen);
+  }
+  if (!path.isIdentifier()) return false;
+  const binding = path.scope.getBinding(path.node.name);
+  if (binding === undefined || seen.has(binding) || !binding.path.isVariableDeclarator()) return false;
+  seen.add(binding);
+  const init = binding.path.get("init");
+  return init.node !== null && init.node !== undefined && hasTrackedSource(init, seen);
+}
+
 function inspectKnownRenderPropReads(
   functionPath: NodePath<t.Function>,
   options: InternalTransformOptions,
   reactImportSource: string,
 ): void {
   if (options.mode === "manual" && !hasOwnedLeadingComment(functionPath, useSignalTrackingComment)) return;
-  const hasTrackedSource = (path: NodePath, seen = new Set<object>()): boolean => {
-    if (containsSyntacticValueRead(path)) return true;
-    if (path.isMemberExpression() || path.isOptionalMemberExpression()) {
-      return hasTrackedSource(path.get("object"), seen);
-    }
-    if (!path.isIdentifier()) return false;
-    const binding = path.scope.getBinding(path.node.name);
-    if (binding === undefined || seen.has(binding) || !binding.path.isVariableDeclarator()) return false;
-    seen.add(binding);
-    const init = binding.path.get("init");
-    return init.node !== null && init.node !== undefined && hasTrackedSource(init, seen);
-  };
+  let trackedAliases: Set<object> | undefined;
   functionPath.traverse({
     JSXExpressionContainer(expression) {
       if (!expression.parentPath.isJSXElement() && !expression.parentPath.isJSXFragment()) return;
@@ -2494,6 +2524,17 @@ function inspectKnownRenderPropReads(
       const init = declarator.get("init");
       if (!init.node) return;
       if (!hasTrackedSource(init)) return;
+      const bindings = getStaticConstDestructuredBindings(declarator);
+      if (bindings !== undefined) {
+        trackedAliases ??= collectTrackedReadAliases(functionPath);
+        if (hasTrackedReadInExpression(init, functionPath, trackedAliases)) {
+          for (const { id: identifier } of bindings) {
+            const binding = declarator.scope.getBinding(identifier.name);
+            if (binding !== undefined) trackedAliases.add(binding);
+          }
+          return;
+        }
+      }
       warnUntrackedDestructuringRead(declarator, options);
     },
     AssignmentExpression(assignment) {
@@ -3114,6 +3155,10 @@ function hasTrackedReadInExpression(
   functionPath: NodePath<t.Function>,
   trackedAliases: Set<object>,
 ): boolean {
+  if (path.isIdentifier()) {
+    const binding = path.scope.getBinding(path.node.name);
+    if (binding !== undefined && trackedAliases.has(binding)) return true;
+  }
   const isTracked = (candidate: NodePath): boolean =>
     (candidate.isMemberExpression() || candidate.isOptionalMemberExpression()) &&
     (isTrackedValueRead(candidate.node, candidate, functionPath) ||
@@ -3290,12 +3335,17 @@ function collectTrackedReadAliases(
       VariableDeclarator(path) {
         const id = path.get("id");
         const init = path.get("init");
-        if (!id.isIdentifier() || !init.node) return;
+        if (!init.node) return;
         if (!hasTrackedReadInExpression(init, functionPath, trackedAliases)) return;
-        const binding = path.scope.getBinding(id.node.name);
-        if (binding !== undefined && !trackedAliases.has(binding)) {
-          trackedAliases.add(binding);
-          changed = true;
+        const identifiers = id.isIdentifier()
+          ? [id.node]
+          : getStaticConstDestructuredBindings(path)?.map(({ id: bindingId }) => bindingId) ?? [];
+        for (const identifier of identifiers) {
+          const binding = path.scope.getBinding(identifier.name);
+          if (binding !== undefined && !trackedAliases.has(binding)) {
+            trackedAliases.add(binding);
+            changed = true;
+          }
         }
       },
     });
@@ -3481,6 +3531,60 @@ function captureTrackedReadExpressions(
   });
 }
 
+/**
+ * A plain identifier declarator can become a tracked alias directly, but a
+ * destructuring pattern hides each property read from that analysis. Expand
+ * only a `const` object pattern made entirely of static identifier keys and
+ * identifier bindings. The initializer is moved to one generated declarator,
+ * then each property read is represented once as an ordinary member
+ * expression; the normal capture pass and alias analysis handle those reads.
+ *
+ * Defaults, rest, nesting, computed keys, mutable declarations, reassigned
+ * bindings, and patterns with TS annotations stay untouched because rewriting
+ * them needs additional proof to preserve their binding/evaluation semantics.
+ */
+function expandTrackedObjectDestructuring(
+  functionPath: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+): boolean {
+  const candidates: NodePath<t.VariableDeclarator>[] = [];
+  functionPath.get("body").traverse({
+    Function(nested) { nested.skip(); },
+    VariableDeclarator(candidate) {
+      candidates.push(candidate);
+    },
+  });
+
+  for (const candidate of candidates) {
+    if (candidate.removed || !candidate.isVariableDeclarator()) continue;
+    const declaration = candidate.parentPath;
+    const init = candidate.get("init");
+    const bindings = getStaticConstDestructuredBindings(candidate);
+    if (
+      bindings === undefined ||
+      !init.node ||
+      !hasTrackedReadInExpression(init, functionPath, trackedAliases)
+    ) continue;
+
+    const source = candidate.scope.generateUidIdentifier("trackedSource");
+    const expanded: t.VariableDeclarator[] = [
+      t.variableDeclarator(t.cloneNode(source), t.cloneNode(init.node, true)),
+      ...bindings.map(({ key, id }) => t.variableDeclarator(
+        id,
+        t.memberExpression(t.cloneNode(source), key),
+      )),
+    ];
+    const index = declaration.node.declarations.indexOf(candidate.node);
+    if (index < 0) continue;
+    declaration.node.declarations.splice(index, 1, ...expanded);
+    // Rebuild Babel scopes and aliases before considering the next pattern.
+    // A later destructuring can depend on the alias introduced here, and the
+    // candidate paths collected above are stale after the declaration splice.
+    return true;
+  }
+  return false;
+}
+
 /** Codegen: add a top-level capture hook and wrap proven synchronous reads. */
 function applyManaged(
   path: NodePath<t.Function>,
@@ -3506,7 +3610,11 @@ function applyManaged(
     : [t.returnStatement(body.node as t.Expression)];
   const directives = body.isBlockStatement() ? body.node.directives : [];
   body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
-  const trackedAliases = collectTrackedReadAliases(path);
+  let trackedAliases = collectTrackedReadAliases(path);
+  while (expandTrackedObjectDestructuring(path, trackedAliases)) {
+    path.scope.crawl();
+    trackedAliases = collectTrackedReadAliases(path);
+  }
   captureTrackedReadExpressions(
     path,
     store,

@@ -3398,7 +3398,7 @@ export function App() {
     expect(warnings).toEqual([]);
   });
 
-  it("warns when a destructuring declaration reads a .value expression", () => {
+  it("captures a simple const destructuring declaration without an obsolete warning", () => {
     const warnings: Error[] = [];
     const source = `
 import { deepSignal } from "react-fine-grained-signals";
@@ -3408,25 +3408,21 @@ export function App() {
   return <span>{profile.name}</span>;
 }
 `;
-    transformReactFineGrainedSignals(source, "DestructuredDeepRead.tsx", {
+    const output = transformReactFineGrainedSignals(source, "DestructuredDeepRead.tsx", {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
       reactCompiler: "auto",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
-    });
+    })?.code;
 
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
-    expect(warnings[0]?.message).toContain("useSignalTracking()");
-    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
-      line: 5,
-      column: 8,
-    });
+    expect(output).toMatch(/_signals\.capture\(\(\) => _trackedSource\.profile\)/);
+    expect(output).toMatch(/_signals\.capture\(\(\) => profile\.name\)/);
+    expect(warnings).toEqual([]);
   });
 
-  it("warns when destructuring reads a property from an alias of a deep proxy", () => {
+  it("captures simple const destructuring from a tracked deep proxy alias", () => {
     const warnings: Error[] = [];
     const source = `
 import { deepSignal } from "react-fine-grained-signals";
@@ -3446,14 +3442,66 @@ export function App() {
       warn: (warning) => warnings.push(warning),
     })?.code;
 
-    expect(output).toMatch(/const \{\s*name\s*\} = _signals\.capture\(\(\) => profile\.settings\);/);
+    expect(output).toMatch(/_signals\.capture\(\(\) => _trackedSource\.name\)/);
+    expect(warnings).toEqual([]);
+  });
+
+  it("does not warn for chained supported const destructuring", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ profile: { name: "Ada" } });
+export function App() {
+  const { profile } = state.value;
+  const { name } = profile;
+  return <span>{name}</span>;
+}
+`;
+    const output = transformReactFineGrainedSignals(source, "ChainedDestructuring.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    })?.code;
+
+    expect(output).toMatch(/_signals\.capture\(\(\) => _trackedSource\.profile\)/);
+    expect(output).toMatch(/_signals\.capture\(\(\) => _trackedSource2\.name\)/);
+    expect(warnings).toEqual([]);
+  });
+
+  it.each([
+    ["nested", "const { profile: { name } } = state.value;"],
+    ["default", "const { profile = fallback } = state.value;"],
+    ["rest", "const { ...profile } = state.value;"],
+    ["computed key", "const { [key]: profile } = state.value;"],
+    ["mutable", "let { profile } = state.value;"],
+    ["TypeScript-annotated", "const { profile }: { profile: { name: string } } = state.value;"],
+  ])("keeps a diagnostic for unsupported %s destructuring", (_kind, declaration) => {
+    const warnings: Error[] = [];
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+const state = deepSignal({ profile: { name: "Ada" } });
+const fallback = {};
+const key = "profile";
+export function App() {
+  ${declaration}
+  return <span>{state.value.profile.name}</span>;
+}
+`;
+    transformReactFineGrainedSignals(source, "UnsupportedDestructuring.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
     expect(warnings).toHaveLength(1);
     expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
-    expect(warnings[0]?.message).toContain("complete property path");
-    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
-      line: 6,
-      column: 8,
-    });
+    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc?.line).toBe(7);
   });
 
   it("warns when a destructuring assignment reads a deep proxy", () => {

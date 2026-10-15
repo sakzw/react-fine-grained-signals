@@ -1011,6 +1011,113 @@ export function Feed() {
   }
 });
 
+describe("managed destructured signal reads", () => {
+  it("evaluates the source and extracted getter once each", async () => {
+    const module = await loadModule(`
+      export const reads = { source: 0, user: 0 };
+      const state = {
+        get value() {
+          reads.source++;
+          return {
+            get user() {
+              reads.user++;
+              return { name: "Ada" };
+            },
+          };
+        },
+      };
+      export function Profile() {
+        const { user } = state.value;
+        return <p>{user.name}</p>;
+      }
+    `);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    try {
+      await act(async () => {
+        root.render(createElement(module.Profile as FunctionComponent));
+      });
+      expect(container.textContent).toBe("Ada");
+      expect(module.reads).toEqual({ source: 1, user: 1 });
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
+  it("tracks the destructured property and later nested writes in React", async () => {
+    const module = await loadModule(`
+      import { deepSignal } from "react-fine-grained-signals";
+      export const state = deepSignal({ user: { name: "Ada" } });
+      export function Profile() {
+        const { user } = state.value;
+        return <p>{user.name}</p>;
+      }
+    `);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const state = module.state as Signal<{ user: { name: string } }>;
+    try {
+      await act(async () => {
+        root.render(createElement(module.Profile as FunctionComponent));
+      });
+      expect(container.textContent).toBe("Ada");
+
+      await act(async () => {
+        state.value.user.name = "Bea";
+      });
+      expect(container.textContent).toBe("Bea");
+
+      await act(async () => {
+        state.value.user = { name: "Cleo" };
+      });
+      expect(container.textContent).toBe("Cleo");
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+
+  it("tracks nested const destructuring through a later alias", async () => {
+    const module = await loadModule(`
+      import { deepSignal } from "react-fine-grained-signals";
+      export const state = deepSignal({ user: { profile: { name: "Ada" } } });
+      export function Profile() {
+        const { user } = state.value;
+        const alias = user;
+        const { profile } = alias;
+        const { name } = profile;
+        return <p>{name}</p>;
+      }
+    `);
+    const container = document.createElement("div");
+    document.body.append(container);
+    const root = createRoot(container);
+    const state = module.state as Signal<{ user: { profile: { name: string } } }>;
+    try {
+      await act(async () => {
+        root.render(createElement(module.Profile as FunctionComponent));
+      });
+      expect(container.textContent).toBe("Ada");
+
+      await act(async () => {
+        state.value.user.profile.name = "Bea";
+      });
+      expect(container.textContent).toBe("Bea");
+
+      await act(async () => {
+        state.value.user = { profile: { name: "Cleo" } };
+      });
+      expect(container.textContent).toBe("Cleo");
+    } finally {
+      await act(async () => root.unmount());
+      container.remove();
+    }
+  });
+});
+
 function transformedCode(
   source: string,
   mode: ReactFineGrainedSignalsMode,
