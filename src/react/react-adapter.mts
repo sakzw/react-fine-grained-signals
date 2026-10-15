@@ -2,6 +2,7 @@
 import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import type { AlienDerivedRenderAdapter, RenderAttempt, RuntimeReadable } from "../core/alien-derived-types.js";
 import type { ReadableProtocolV1 } from "../core/execution-owner.js";
+import { executionContext, isRenderExecutionOwner } from "../core/execution-owner.js";
 import { plainResultIteratorNext } from "../core/plain-result-iterators.js";
 
 type ScopePolicy = "managed" | "bare";
@@ -28,7 +29,8 @@ const NATIVE_ITERATOR_NEXT: ReadonlySet<unknown> = new Set<unknown>([
   Object.getPrototypeOf(new Map().entries()).next,
   Object.getPrototypeOf(new Set().values()).next,
   Object.getPrototypeOf(""[Symbol.iterator]()).next,
-  Object.getPrototypeOf(Object.getPrototypeOf((function* () {})())).next,
+  // Generators are not listed: `yield*` hands back the delegate's result
+  // object as is, which can be any custom result with getters.
   // Iterator helpers (`values().map(...)`) where the engine provides them.
   Object.getPrototypeOf(
     (([].values() as unknown as { map?: (fn: (value: unknown) => unknown) => object }).map?.((value) => value)) ?? {},
@@ -142,6 +144,13 @@ class RenderStore {
     if (ambient) {
       attempt.restoreScope = render.pushRenderScope(attempt, scopePolicy);
       queueMicrotask(() => this.finish(attempt));
+    } else {
+      // A capture-only component pushes no scope of its own, but a bare scope
+      // a previous sibling left open (`useSignalTracking()`) must not collect
+      // this component's uncaptured reads. Pushing a managed scope closes it;
+      // do the same here without opening one.
+      const parent = executionContext.owner;
+      if (isRenderExecutionOwner(parent) && parent.scopePolicy === "bare") parent.closeScope?.();
     }
     return attempt;
   }

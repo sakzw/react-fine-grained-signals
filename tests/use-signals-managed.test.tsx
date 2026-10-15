@@ -587,6 +587,47 @@ describe("useSignalCapture iterate", () => {
     expect(renders.mock.calls.length).toBe(before + 2);
   });
 
+  it("tracks getter reads on results a generator delegates with yield*", () => {
+    const tag = signal("a");
+    const custom = {
+      [Symbol.iterator]() {
+        let step = 0;
+        return { next: () => { step += 1; return { done: false, get value() { return tag.value + step; } }; } };
+      },
+    };
+    function* delegate() { yield* custom; }
+    function Reader() {
+      const scope = useSignalCapture();
+      let out = "";
+      for (const item of scope.iterate(() => delegate())) { out += item; break; }
+      return <output aria-label="delegated">{out}</output>;
+    }
+    render(<Reader />);
+    expect(screen.getByLabelText("delegated").textContent).toBe("a1");
+    act(() => { tag.value = "b"; });
+    expect(screen.getByLabelText("delegated").textContent).toBe("b1");
+  });
+
+  it("does not let a sibling's open bare scope collect a capture-only component's reads", () => {
+    const own = signal("a");
+    const hidden = signal("h");
+    const siblingRenders = vi.fn();
+    function Sibling() {
+      useSignalTracking();
+      siblingRenders();
+      return <span>{own.value}</span>;
+    }
+    function Capturing() {
+      useSignalCapture();
+      // A read the transform could not capture.
+      return <span>{hidden.value}</span>;
+    }
+    render(<><Sibling /><Capturing /></>);
+    const before = siblingRenders.mock.calls.length;
+    act(() => { hidden.value = "changed"; });
+    expect(siblingRenders.mock.calls.length).toBe(before);
+  });
+
   it("matches native errors and closing for malformed iterators", () => {
     let scope!: ReturnType<typeof useSignalCapture>;
     function Holder() {
