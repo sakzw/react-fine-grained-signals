@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M17 Final API & Scope Decisionを完了。M16.1 packed consumerでformの双方向assertion、writable computed拒否入力、単独Signal更新、conditional remount後trackingがpassし、Runtime/Transform変更はなし。GitHub Test/E2Eも成功。v0.3.0へ追加する製品変更はなく、release candidateとしてfreeze可能と判断した。公開操作は未実施。詳細は[M17 decision](m17-api-scope-decision.ja.md)。
+- 状態: M17.1 v0.2.1比較レビューと回帰修正を完了。M17後のv0.2.1比較レビューで、managed transformのcallback内read欠落、opaque値readの劣化、Map/Set lookupのgraph走査という3件の回帰と、form binding・collection sweep・Iterator helpersの不具合4件を確認し、すべて修正した。GitHub Test/E2Eは`2d57af1`で成功。公開操作は未実施。詳細は[M17.1 record](m17.1-v021-regression-review.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M16.1 Consumer Canary Assertion Closure。最新の判断マイルストーン: M17。M16.1はformのDOM/Signal両方向、Signal単独更新、helper/属性、conditional component lifecycleをpack済みconsumerから検証。製品Runtime/Transform変更はない。M16.1実装SHA `86d6bc7a9bc7cbd73a267f0950713045cffaaf53` と記録SHA `2394e4ccf1e7de9ef3d37aef82fb08ac2df24425`のGitHub Test/E2Eはいずれもsuccess。詳細は[M16](m16-consumer-canary.ja.md) / [M17](m17-api-scope-decision.ja.md)。
+- 最新実装マイルストーン: M17.1 v0.2.1比較レビューと回帰修正(Runtime/Transform修正あり、終了SHA `2d57af1`)。最新の判断マイルストーン: M17(M17.1の修正を前提に読み替える)。以前の実装マイルストーンはM16.1 Consumer Canary Assertion Closure。M16.1はformのDOM/Signal両方向、Signal単独更新、helper/属性、conditional component lifecycleをpack済みconsumerから検証。製品Runtime/Transform変更はない。M16.1実装SHA `86d6bc7a9bc7cbd73a267f0950713045cffaaf53` と記録SHA `2394e4ccf1e7de9ef3d37aef82fb08ac2df24425`のGitHub Test/E2Eはいずれもsuccess。詳細は[M16](m16-consumer-canary.ja.md) / [M17](m17-api-scope-decision.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -37,6 +37,7 @@
 | M15.2 | Benchmark validity & transform stress audit | M15.1 | chain fixtureを修正し、baseline/candidateをfresh processで交互に計測。runtime正確性とCPU profileを確認 | 完了。0/5/20/100/500の正しいfixtureを実行。500 baseline chain/independentは60秒timeout、candidateは全ケースのinitial/deep update pass。profileを根拠に実装変更なし。詳細は[M15.2 record](m15.2-benchmark-validity.ja.md) |
 | M16 | Consumer canary & integration audit | M15.2 | packed runtime/pluginを使うconsumer appでAPI組み合わせ、SSR/hydration、Compiler、form、collections、lifecycleを確認。実ブラウザ/Fast Refreshは既存fixtureを再利用 | 完了。M16.1のpacked consumer双方向assertionまで統合。Browser E2E 71/71、Fast Refresh RFSG経路pass、製品不具合なし。M16 Test `38719386261` / E2E `38719386105`、M16.1 Test `38738193370` / E2E `38738193375` success。詳細は[M16 record](m16-consumer-canary.ja.md) |
 | M17 | Final API & scope decision | M16.1 | v0.2.1との差、公開API/型、現行制約と既解決事項、機能scope、公開可能性を評価 | 完了。現APIはrelease candidateとしてfreeze可能。v0.3.0に追加すべき製品変更なし。M14〜M16.1で閉じた証拠と後続へ送る性能課題を分類。提案M18はrelease execution checklist。詳細は[M17 decision](m17-api-scope-decision.ja.md) |
+| M17.1 | v0.2.1比較レビューと回帰修正 | M17 | v0.2.1との差分をcore/deepSignal、JSX runtime/React、transformの3領域で独立にレビューし、比較実行で確認した回帰と不具合を修正 | 完了。P0回帰3件(managed captureの欠落、opaque値read、Map/Set lookup)とP1不具合4件(group clickの`preventDefault()`、`bindChecked`の`onChange`順序、lookup専用keyのsweep、Iterator helpers)を修正。runtime 627/627、transform 431/431。GitHub Test `38798261165` / E2E `38798261275` success。残る項目とmigration guide未記載事項は[M17.1 record](m17.1-v021-regression-review.ja.md)に分類 |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -55,6 +56,6 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 ## 次の作業案
 
-M18は新機能開発ではなくrelease execution checklistとする。公開を明示的に開始するまでは、version/tag/publish/Release操作を行わない。公開前の確認が必要になった場合は、[M17 scope decision](m17-api-scope-decision.ja.md)に記録した固定scopeと、ユーザーに見える現行契約を基準にする。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
+M18は新機能開発ではなくrelease execution checklistとする。公開前に、[M17.1 record](m17.1-v021-regression-review.ja.md)に挙げたmigration guide未記載のbreaking changeを追記する。公開を明示的に開始するまでは、version/tag/publish/Release操作を行わない。公開前の確認が必要になった場合は、[M17 scope decision](m17-api-scope-decision.ja.md)に記録した固定scopeと、ユーザーに見える現行契約を基準にする。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。

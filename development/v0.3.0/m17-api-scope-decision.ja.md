@@ -6,6 +6,8 @@
 
 ## 結論
 
+> 追記: M17後のv0.2.1比較レビューで回帰3件と不具合4件が見つかり、[M17.1](m17.1-v021-regression-review.ja.md)で修正した。以下の「release blockerなし」は、M17.1の修正を前提とした判断として読む。
+
 v0.3.0の現在の公開APIと対象機能は、React 19向けのfine-grained signal rendering libraryとして一貫した範囲にまとまっている。今回の監査で、公開前に必要なRuntime再設計、新しい公開API、breaking change、または再現性のあるrelease blockerは見つからなかった。**v0.3.0の機能スコープをここで固定し、新機能を加えずにrelease candidateとして扱える。** 実際のpublishやrelease操作は別途行う。
 
 M17は既存qualificationの再実行ではなく、v0.2.1との差分、現行実装・型・英日ユーザーガイド、M13〜M16.1の証拠を突き合わせたscope判断である。開始時のmainはcleanでbaselineと一致していた。
