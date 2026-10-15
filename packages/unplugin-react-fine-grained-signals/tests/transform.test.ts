@@ -3503,11 +3503,12 @@ export function App() {
     ["computed key", "const { [key]: profile } = state.value;"],
     ["mutable", "let { profile } = state.value;"],
     ["TypeScript-annotated", "const { profile }: { profile: { name: string } } = state.value;"],
-  ])("keeps a diagnostic for unsupported %s destructuring", (_kind, declaration) => {
+    ["array", "const [first] = state.value.list;"],
+  ])("captures %s destructuring as one evaluation of the authored pattern", (_kind, declaration) => {
     const warnings: Error[] = [];
     const source = `
 import { deepSignal } from "react-fine-grained-signals";
-const state = deepSignal({ profile: { name: "Ada" } });
+const state = deepSignal({ profile: { name: "Ada" }, list: [1] });
 const fallback = {};
 const key = "profile";
 export function App() {
@@ -3515,21 +3516,20 @@ export function App() {
   return <span>{state.value.profile.name}</span>;
 }
 `;
-    transformReactFineGrainedSignals(source, "UnsupportedDestructuring.tsx", {
+    const output = transformReactFineGrainedSignals(source, "UnsupportedDestructuring.tsx", {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
       reactCompiler: "auto",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
-    });
+    })?.code ?? "";
 
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
-    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc?.line).toBe(7);
+    expect(output).toMatch(/= _signals\.capture\(\(\) => \{\s*const /);
+    expect(warnings).toEqual([]);
   });
 
-  it("warns when a destructuring assignment reads a deep proxy", () => {
+  it("captures a destructuring assignment from a deep proxy", () => {
     const warnings: Error[] = [];
     const source = `
 import { deepSignal } from "react-fine-grained-signals";
@@ -3549,16 +3549,11 @@ export function App() {
       warn: (warning) => warnings.push(warning),
     })?.code;
 
-    expect(output).toMatch(/\(\{\s*name\s*\}\s*=\s*_signals\.capture\(\(\) => state\.value\.profile\)\);/);
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
-    expect((warnings[0] as Error & { loc?: { line: number; column: number } }).loc).toEqual({
-      line: 6,
-      column: 3,
-    });
+    expect(output).toMatch(/_signals\.capture\(\(\) => \(\{\s*name\s*\} = state\.value\.profile\)\);/);
+    expect(warnings).toEqual([]);
   });
 
-  it("warns when a destructuring assignment reads from a deep proxy alias", () => {
+  it("captures a destructuring assignment from a deep proxy alias", () => {
     const warnings: Error[] = [];
     const source = `
 import { deepSignal } from "react-fine-grained-signals";
@@ -3570,16 +3565,16 @@ export function App() {
   return <span>{name}</span>;
 }
 `;
-    transformReactFineGrainedSignals(source, "DestructuringAliasAssignment.tsx", {
+    const output = transformReactFineGrainedSignals(source, "DestructuringAliasAssignment.tsx", {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
       reactCompiler: "auto",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
-    });
+    })?.code;
 
-    expect(warnings).toHaveLength(1);
-    expect(warnings[0]?.message).toContain("Destructuring from a tracked value");
+    expect(output).toMatch(/_signals\.capture\(\(\) => \(\{\s*name\s*\} = profile\.settings\)\);/);
+    expect(warnings).toEqual([]);
   });
 });

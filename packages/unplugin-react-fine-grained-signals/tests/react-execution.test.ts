@@ -2347,3 +2347,136 @@ export function App() {
     expect(warnings.some((message) => message.includes("Hook call shares this call"))).toBe(true);
   });
 });
+
+describe("M17.4 transform review fixes", () => {
+  const transformWithWarnings = (source: string, file = "Fixture.jsx") => {
+    const warnings: string[] = [];
+    const code = transformReactFineGrainedSignals(source, file, {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning.message),
+    })?.code ?? "";
+    return { code, warnings };
+  };
+  type Deep<T> = { value: T };
+
+  it("keeps transform time linear on long call chains", () => {
+    const chain = ".opt(x)".repeat(40);
+    const started = performance.now();
+    transformWithWarnings(`
+import { signal } from "react-fine-grained-signals";
+import { z } from "z";
+const count = signal(1);
+export function App({ x }) { const r = z.schema()${chain}; return <p>{String(count.value)}{r}</p>; }
+`);
+    expect(performance.now() - started).toBeLessThan(5000);
+  });
+
+  it("keeps optional chains and method receivers intact through TypeScript wrappers", () => {
+    const { code } = transformWithWarnings(`
+import { signal } from "react-fine-grained-signals";
+const count = signal(1);
+const box = signal({ label: "b", get() { return this.label; } });
+export function App({ user }: { user?: { value: { name: string } } }) {
+  return <p>{user?.value!.name}{box.value.get!()}{(box.value.get as () => string)()}{count.value}</p>;
+}
+`, "Fixture.tsx");
+    expect(code).toContain("_signals.capture(() => user?.value!.name)");
+    expect(code).toContain("_signals.capture(() => box.value.get!())");
+    expect(code).toContain("_signals.capture(() => (box.value.get as () => string)())");
+  });
+
+  it("tracks destructuring loop heads, named predicates, JSX spread, let aliases, getters, and Hook results", async () => {
+    const source = `
+import { deepSignal, signal } from "react-fine-grained-signals";
+import { useState } from "react";
+export const state = deepSignal({ items: [{ a: 1 }], map: { k: { n: 1 } }, props: { title: "a" }, todos: [1] });
+export const limit = signal(1);
+export const count = signal(1);
+const isSmallModule = (value) => value <= limit.value;
+function useTodos() { useState(0); return state; }
+export function App() {
+  function isSmall(value) { return value <= limit.value; }
+  let out = "";
+  for (const { a } of state.value.items) out += a;
+  for (const [key, entry] of Object.entries(state.value.map)) out += key + entry.n;
+  out += "|" + [1, 2, 3].filter(isSmall).length + [1, 2, 3].filter(isSmallModule).length;
+  let items;
+  items = state.value.items;
+  out += "|" + items.length;
+  const view = { get doubled() { return count.value * 2; } };
+  out += "|" + view.doubled;
+  for (const todo of useTodos().value.todos) out += "|" + todo;
+  return <p {...state.value.props}>{out}</p>;
+}
+`;
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    const text = () => container.querySelector("p")!.textContent;
+    const title = () => container.querySelector("p")!.getAttribute("title");
+    expect(text()).toBe("1k1|11|1|2|1");
+    expect(title()).toBe("a");
+    type State = { items: Array<{ a: number }>; map: Record<string, { n: number }>; props: { title: string }; todos: number[] };
+    const state = () => (module.state as Deep<State>).value;
+    act(() => { state().items[0]!.a = 5; });
+    expect(text()).toBe("5k1|11|1|2|1");
+    act(() => { state().map.k!.n = 7; });
+    expect(text()).toBe("5k7|11|1|2|1");
+    write(module, "limit", 2);
+    expect(text()).toBe("5k7|22|1|2|1");
+    act(() => { state().items.push({ a: 2 }); });
+    expect(text()).toBe("52k7|22|2|2|1");
+    write(module, "count", 5);
+    expect(text()).toBe("52k7|22|2|10|1");
+    act(() => { state().todos.push(2); });
+    expect(text()).toBe("52k7|22|2|10|1|2");
+    act(() => { state().props.title = "b"; });
+    expect(title()).toBe("b");
+  });
+
+  it("captures reading assignments and warns for Hook-calling helpers", () => {
+    const { code, warnings } = transformWithWarnings(`
+import { deepSignal } from "react-fine-grained-signals";
+import { useState } from "react";
+const state = deepSignal({ x: undefined, n: 1 });
+function Title() { useState(0); return <b>{state.value.n}</b>; }
+export function App() {
+  state.value.x ??= 1;
+  return <p>{Title()}{state.value.n}</p>;
+}
+`);
+    expect(code).toContain("_signals.capture(() => state.value.x ??= 1)");
+    expect(warnings.some((message) => message.includes("calls a Hook and reads signals"))).toBe(true);
+  });
+
+  it("does not warn for valid Hook callbacks, closure defaults, or captured helper destructuring", () => {
+    const { warnings } = transformWithWarnings(`
+import { deepSignal, signal } from "react-fine-grained-signals";
+import { useCallback, useEffect } from "react";
+const count = signal(1);
+const state = deepSignal({ list: [1] });
+function util() { const [first] = state.value.list; return first; }
+export function App({ onPick = () => count.value }) {
+  useEffect(() => { document.title = String(count.value); }, []);
+  const log = useCallback(() => console.log(count.value), []);
+  return <p onClick={log}>{util()}{onPick()}{count.value}</p>;
+}
+`);
+    expect(warnings).toEqual([]);
+  });
+
+  it("reports a render-prop read once even when nested functions are inspected again", () => {
+    const { warnings } = transformWithWarnings(`
+import { signal } from "react-fine-grained-signals";
+const count = signal(1);
+function List({ renderItem }) { return renderItem(); }
+export function App({ items }) {
+  return <ul>{items.map((item) => <List key={item} renderItem={() => count.value} />)}{count.value}</ul>;
+}
+`);
+    expect(warnings.filter((message) => message.includes("JSX callback prop"))).toHaveLength(1);
+  });
+});

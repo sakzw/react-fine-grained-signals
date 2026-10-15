@@ -1888,6 +1888,9 @@ function containsSyntacticValueRead(path: NodePath): boolean {
   };
   if (path.isMemberExpression() || path.isOptionalMemberExpression()) inspect(path);
   path.traverse({
+    // A function in a default (`onPick = () => count.value`) reads only when
+    // called later, not while the parameter initializer runs.
+    Function(nested) { nested.skip(); },
     MemberExpression: inspect,
     OptionalMemberExpression: inspect,
   });
@@ -2154,6 +2157,25 @@ function inspectFunction(
     if (nested.readsValue) inspection.readsValue = true;
   };
 
+  // `items.filter(isBig)`: a named synchronous function handed to a call
+  // runs in this render just like an inline callback. Hook calls are skipped:
+  // their callbacks belong to React, not to this render's reads.
+  const foldFunctionArguments = (
+    call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
+  ): void => {
+    if (inspection.readsValue || callNameIsHook(call.node.callee)) return;
+    if (isDeferredReadContext(call, functionPath)) return;
+    for (const argument of call.get("arguments") as NodePath[]) {
+      if (!argument.isIdentifier()) continue;
+      const target = resolveReferencedFunction(argument, argument.node.name);
+      if (target === undefined || visited.has(target.node)) continue;
+      visited.add(target.node);
+      if (target.node.async || target.node.generator || functionCallsHook(target)) continue;
+      const nested = inspectFunction(target, importSource, managedRuntimeSource, reactImportSource, visited, true);
+      if (nested.readsValue) inspection.readsValue = true;
+    }
+  };
+
   const recordValueRead = (
     node: t.MemberExpression | t.OptionalMemberExpression,
     path: NodePath,
@@ -2193,6 +2215,7 @@ function inspectFunction(
       foldReferencedRenderCallbacks(path);
       foldDirectlyCalledRenderCallbacks(path);
       foldDirectlyCalledHelpers(path);
+      foldFunctionArguments(path);
       // Compared by node, as the equivalent checks in `isDeferredReadContext`
       // and `foldDirectlyCalledRenderCallbacks` are: a re-crawled scope can hand
       // back a fresh NodePath for the very same function.
@@ -2224,6 +2247,7 @@ function inspectFunction(
       foldReferencedRenderCallbacks(path);
       foldDirectlyCalledRenderCallbacks(path);
       foldDirectlyCalledHelpers(path);
+      foldFunctionArguments(path);
     },
   });
   return inspection;
@@ -2365,11 +2389,22 @@ function isUnverifiableBarrelSignalTracking(
 // plugins use for non-fatal diagnostics, rather than `path.buildCodeFrameError`
 // thrown outright (reserved for the genuinely invalid async/generator case
 // below).
+/**
+ * A nested function is inspected once on its own and again as part of each
+ * enclosing function, so the same site can be reached more than once in a
+ * single transform. Report each message once per node.
+ */
+const reportedWarnings = new WeakMap<t.Node, Set<string>>();
+
 function reportWarning(
   options: InternalTransformOptions,
   warning: Error,
   path: NodePath,
 ): void {
+  let reported = reportedWarnings.get(path.node);
+  if (reported === undefined) reportedWarnings.set(path.node, reported = new Set());
+  if (reported.has(warning.message)) return;
+  reported.add(warning.message);
   const start = path.node.loc?.start;
   if (start !== undefined) {
     (warning as Error & { loc?: { filename?: string; line: number; column: number } }).loc = {
@@ -2450,49 +2485,12 @@ function getStaticConstDestructuredBindings(
   return buildPattern(declarator.get("id") as NodePath<t.ObjectPattern>);
 }
 
-function getStaticConstDestructuredIdentifiers(
-  pattern: StaticConstObjectPattern,
-): t.Identifier[] {
-  const identifiers: t.Identifier[] = [];
-  for (const property of pattern.properties) {
-    if ("id" in property) identifiers.push(property.id);
-    else identifiers.push(...getStaticConstDestructuredIdentifiers(property.pattern));
-  }
-  return identifiers;
-}
-
-function warnUntrackedDestructuringRead(
-  path: NodePath,
-  options: InternalTransformOptions,
-): void {
-  const warning = path.buildCodeFrameError(
-    "Destructuring from a tracked value reads properties outside the transform's per-read capture " +
-      "boundary; deep-proxy reads may stay stale. Read the complete property path in one tracked " +
-      "expression, or keep/add useSignalTracking() for ambient deep-proxy tracking.",
-  );
-  reportWarning(options, warning, path);
-}
-
-function hasTrackedSource(path: NodePath, seen = new Set<object>()): boolean {
-  if (containsSyntacticValueRead(path)) return true;
-  if (path.isMemberExpression() || path.isOptionalMemberExpression()) {
-    return hasTrackedSource(path.get("object"), seen);
-  }
-  if (!path.isIdentifier()) return false;
-  const binding = path.scope.getBinding(path.node.name);
-  if (binding === undefined || seen.has(binding) || !binding.path.isVariableDeclarator()) return false;
-  seen.add(binding);
-  const init = binding.path.get("init");
-  return init.node !== null && init.node !== undefined && hasTrackedSource(init, seen);
-}
-
 function inspectKnownRenderPropReads(
   functionPath: NodePath<t.Function>,
   options: InternalTransformOptions,
   reactImportSource: string,
 ): void {
   if (options.mode === "manual" && !hasOwnedLeadingComment(functionPath, useSignalTrackingComment)) return;
-  let trackedAliases: Set<object> | undefined;
   functionPath.traverse({
     JSXExpressionContainer(expression) {
       if (!expression.parentPath.isJSXElement() && !expression.parentPath.isJSXFragment()) return;
@@ -2542,32 +2540,9 @@ function inspectKnownRenderPropReads(
       ).readsValue;
       if (reads) warnUntrackedRenderPropRead(attribute, options);
     },
-    VariableDeclarator(declarator) {
-      const id = declarator.get("id");
-      if (!id.isObjectPattern() && !id.isArrayPattern()) return;
-      const init = declarator.get("init");
-      if (!init.node) return;
-      if (!hasTrackedSource(init)) return;
-      const bindings = getStaticConstDestructuredBindings(declarator);
-      if (bindings !== undefined) {
-        trackedAliases ??= collectTrackedReadAliases(functionPath);
-        if (hasTrackedReadInExpression(init, functionPath, trackedAliases)) {
-          for (const identifier of getStaticConstDestructuredIdentifiers(bindings)) {
-            const binding = declarator.scope.getBinding(identifier.name);
-            if (binding !== undefined) trackedAliases.add(binding);
-          }
-          return;
-        }
-      }
-      warnUntrackedDestructuringRead(declarator, options);
-    },
-    AssignmentExpression(assignment) {
-      const left = assignment.get("left");
-      if (!left.isObjectPattern() && !left.isArrayPattern()) return;
-      const right = assignment.get("right");
-      if (!hasTrackedSource(right)) return;
-      warnUntrackedDestructuringRead(assignment, options);
-    },
+    // Destructuring from a tracked source is captured by the managed pass
+    // (static expansion or a captured pattern), so it needs no warning here;
+    // a pattern whose initializer calls a Hook is reported by that pass.
   });
 }
 
@@ -3165,7 +3140,7 @@ function hasTrackedReadInMemberChain(
       isTrackedValueRead(current.node, current, functionPath) ||
       isPotentialDynamicMemberRead(current.node, current, functionPath)
     ) return true;
-    const object = current.get("object") as NodePath;
+    const object = unwrapTransparentPath(current.get("object") as NodePath);
     if (object.isCallExpression() || object.isOptionalCallExpression()) {
       return hasTrackedReadInExpression(object, functionPath, trackedAliases);
     }
@@ -3174,7 +3149,35 @@ function hasTrackedReadInMemberChain(
   return current.isIdentifier() && trackedAliases.has(current.scope.getBinding(current.node.name) as object);
 }
 
+/**
+ * Results of `hasTrackedReadInExpression`, per alias set and owning function.
+ * A member chain whose object is a call re-enters the expression check for that
+ * call, so without this a call chain like `z.a().b().c()` re-walks every inner
+ * call once per enclosing link (exponential in the chain length). The alias set
+ * only grows; a size change invalidates the cached answers for it.
+ */
+const trackedReadCache = new WeakMap<Set<object>, { size: number; byFunction: WeakMap<t.Node, WeakMap<t.Node, boolean>> }>();
+
 function hasTrackedReadInExpression(
+  path: NodePath,
+  functionPath: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+): boolean {
+  let entry = trackedReadCache.get(trackedAliases);
+  if (entry === undefined || entry.size !== trackedAliases.size) {
+    entry = { size: trackedAliases.size, byFunction: new WeakMap() };
+    trackedReadCache.set(trackedAliases, entry);
+  }
+  let results = entry.byFunction.get(functionPath.node);
+  if (results === undefined) entry.byFunction.set(functionPath.node, results = new WeakMap());
+  const cached = results.get(path.node);
+  if (cached !== undefined) return cached;
+  const result = computeTrackedReadInExpression(path, functionPath, trackedAliases);
+  results.set(path.node, result);
+  return result;
+}
+
+function computeTrackedReadInExpression(
   path: NodePath,
   functionPath: NodePath<t.Function>,
   trackedAliases: Set<object>,
@@ -3307,6 +3310,24 @@ function externalCallMayReadTrackedValue(
 
 const targetMayReadTrackedValue = new WeakMap<t.Node, boolean>();
 
+/** Cached `targetFunctionMayReadTrackedValue` for a resolved function. */
+function functionTargetMayReadTrackedValue(
+  target: NodePath<t.Function>,
+  importSource: string,
+  managedRuntimeSource: string,
+  reactImportSource: string,
+): boolean {
+  if (target.node.async || target.node.generator) return false;
+  const cached = targetMayReadTrackedValue.get(target.node);
+  if (cached !== undefined) return cached;
+  const result = targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
+  targetMayReadTrackedValue.set(target.node, result);
+  return result;
+}
+
+/** Per function: does it call a Hook and also read signals synchronously? */
+const hookCallingReader = new WeakMap<t.Node, boolean>();
+
 function targetFunctionMayReadTrackedValue(
   target: NodePath<t.Function>,
   importSource: string,
@@ -3362,11 +3383,31 @@ function hasDynamicCallTarget(functionPath: NodePath<t.Function>): boolean {
   return found;
 }
 
+/** `{ get total() { return count.value * 2 } }`: reading the getter is a tracked read. */
+function objectHasTrackedGetter(path: NodePath, trackedAliases: Set<object>): boolean {
+  const object = unwrapTransparentPath(path);
+  if (!object.isObjectExpression()) return false;
+  return (object.get("properties") as NodePath[]).some((property) =>
+    property.isObjectMethod() && property.node.kind === "get" && !property.node.async &&
+    hasTrackedReadInExpression(property.get("body"), property, trackedAliases));
+}
+
 function collectTrackedReadAliases(
   functionPath: NodePath<t.Function>,
 ): Set<object> {
   const trackedAliases = new Set<object>();
   let changed = true;
+  const addBindings = (path: NodePath, identifiers: Iterable<t.Identifier>): void => {
+    for (const identifier of identifiers) {
+      const binding = path.scope.getBinding(identifier.name);
+      if (binding !== undefined && !trackedAliases.has(binding)) {
+        trackedAliases.add(binding);
+        changed = true;
+      }
+    }
+  };
+  const patternIdentifiers = (node: t.Node): t.Identifier[] =>
+    Object.values(t.getBindingIdentifiers(node) as Record<string, t.Identifier>);
   while (changed) {
     changed = false;
     functionPath.traverse({
@@ -3374,37 +3415,33 @@ function collectTrackedReadAliases(
         nested.skip();
       },
       VariableDeclarator(path) {
-        const id = path.get("id");
         const init = path.get("init");
         if (!init.node) return;
-        if (!hasTrackedReadInExpression(init, functionPath, trackedAliases)) return;
-        const identifiers = id.isIdentifier()
-          ? [id.node]
-          : (() => {
-            const pattern = getStaticConstDestructuredBindings(path);
-            return pattern === undefined ? [] : getStaticConstDestructuredIdentifiers(pattern);
-          })();
-        for (const identifier of identifiers) {
-          const binding = path.scope.getBinding(identifier.name);
-          if (binding !== undefined && !trackedAliases.has(binding)) {
-            trackedAliases.add(binding);
-            changed = true;
-          }
-        }
+        if (
+          !hasTrackedReadInExpression(init, functionPath, trackedAliases) &&
+          !objectHasTrackedGetter(init, trackedAliases)
+        ) return;
+        // Every name a pattern binds holds a value read through the tracked
+        // source, whatever the pattern's shape (defaults, rest, arrays).
+        addBindings(path, patternIdentifiers(path.node.id));
+      },
+      AssignmentExpression(path) {
+        // `let items; items = state.value.items;` aliases as a declaration would.
+        if (path.node.operator !== "=") return;
+        const left = path.get("left");
+        if (!left.isIdentifier()) return;
+        const binding = path.scope.getBinding(left.node.name);
+        if (binding === undefined || binding.scope.getFunctionParent()?.path.node !== functionPath.node) return;
+        if (!hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
+        addBindings(path, [left.node]);
       },
       ForOfStatement(path) {
         // `for (const task of state.value.tasks) task.title`: each element of a
         // tracked iterable is read through the same deep proxy as its source.
         const left = path.get("left");
         if (!left.isVariableDeclaration() || left.node.declarations.length !== 1) return;
-        const id = left.get("declarations")[0]!.get("id");
-        if (!id.isIdentifier()) return;
         if (!hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
-        const binding = id.scope.getBinding(id.node.name);
-        if (binding !== undefined && !trackedAliases.has(binding)) {
-          trackedAliases.add(binding);
-          changed = true;
-        }
+        addBindings(path, patternIdentifiers(left.node.declarations[0]!.id));
       },
     });
   }
@@ -3593,6 +3630,10 @@ const HOOK_IN_CAPTURED_CALL_WARNING =
   "[react-fine-grained-signals] A Hook call shares this call with signal reads that only the call itself performs. " +
   "The managed transform keeps Hooks out of capture closures, so those reads are not tracked here. " +
   "Call the Hook in its own statement and pass its result to the call.";
+const HOOK_CALLING_HELPER_WARNING =
+  "[react-fine-grained-signals] This call runs a function that both calls a Hook and reads signals inside the caller's render. " +
+  "The managed transform keeps Hooks out of capture closures, so those reads are not tracked here. " +
+  "Render it as a component (<Title />) or make it a custom Hook (useTitle()) so it gets its own tracking.";
 const HOOK_IN_CAPTURED_READ_WARNING =
   "[react-fine-grained-signals] A Hook call is nested inside this signal read expression. " +
   "The managed transform keeps Hooks out of capture closures, so this read is not tracked. " +
@@ -3617,13 +3658,37 @@ function captureTrackedReadExpressions(
     );
     path.skip();
   };
+  /**
+   * `{Title()}` where `Title` calls a Hook and reads signals: its body runs in
+   * this render but cannot be captured without moving the Hook into a closure.
+   */
+  const warnHookCallingHelperRead = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
+    const callee = unwrapTransparent(path.node.callee);
+    const target = t.isIdentifier(callee)
+      ? resolveReferencedFunction(path, callee.name)
+      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+        ? resolveKeyedFunction(path, callee)
+        : undefined;
+    if (target === undefined || target.node.async || target.node.generator) return;
+    let reads = hookCallingReader.get(target.node);
+    if (reads === undefined) {
+      reads = functionCallsHook(target) &&
+        inspectFunction(target, importSource, managedRuntimeSource, reactImportSource, undefined, true).readsValue;
+      hookCallingReader.set(target.node, reads);
+    }
+    if (reads) reportWarning(options, new Error(HOOK_CALLING_HELPER_WARNING), path);
+  };
   const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
     if (generated.has(path.node)) {
       path.skip();
       return;
     }
     if (isDeferredReadContext(path, functionPath)) return;
-    const callee = path.get("callee");
+    // A Hook call itself (`useEffect(() => ...)`, `useMemo(...)`) is never
+    // captured and its callbacks belong to React, so there is nothing to warn
+    // about here; reads in its arguments are still visited one by one.
+    if (callNameIsHook(path.node.callee)) return;
+    const callee = unwrapTransparentPath(path.get("callee") as NodePath);
     // Reads only the call itself performs: a tracked callee, a parameter or
     // helper invoked synchronously, or an inline callback it runs.
     const readsInsideCall =
@@ -3632,8 +3697,18 @@ function captureTrackedReadExpressions(
       (callee.isIdentifier() && path.scope.getBinding(callee.node.name)?.kind === "param") ||
       externalCallMayReadTrackedValue(path, functionPath, importSource, managedRuntimeSource, reactImportSource) ||
       [callee as NodePath, ...(path.get("arguments") as NodePath[])]
-        .some((part) => inlineCallbackReadsTrackedValue(part.isSpreadElement() ? part.get("argument") as NodePath : part, trackedAliases));
-    if (!readsInsideCall && !callReadsTrackedValue(path, functionPath, trackedAliases)) return;
+        .some((part) => inlineCallbackReadsTrackedValue(part.isSpreadElement() ? part.get("argument") as NodePath : part, trackedAliases)) ||
+      // `items.filter(isBig)`: a named local or module function handed to the
+      // call reads during it, exactly like an inline callback would.
+      (path.get("arguments") as NodePath[]).some((argument) => {
+        if (!argument.isIdentifier()) return false;
+        const target = resolveReferencedFunction(argument, argument.node.name);
+        return target !== undefined && functionTargetMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
+      });
+    if (!readsInsideCall && !callReadsTrackedValue(path, functionPath, trackedAliases)) {
+      warnHookCallingHelperRead(path);
+      return;
+    }
     if (expressionCallsHook(path)) {
       // Never move a Hook call into a capture closure. Reads in the arguments
       // are still captured one by one as the traversal continues; reads the
@@ -3669,6 +3744,69 @@ function captureTrackedReadExpressions(
     path.replaceWith(read);
     path.skip();
     return true;
+  };
+  /**
+   * Splits `useStore().value.items` into the Hook call, evaluated in place by
+   * the caller, and the read that follows it on `_hookResult`. Returns
+   * undefined when a Hook appears anywhere other than the chain's base.
+   * Mutates `path`; the caller replaces it.
+   */
+  const splitHookBase = (
+    path: NodePath<t.Expression>,
+    scope: NodePath["scope"],
+  ): { result: t.Identifier; hookCall: t.Expression; read: t.Expression } | undefined => {
+    let base: NodePath = path;
+    while (base.isMemberExpression() || base.isOptionalMemberExpression() || isTransparentWrapper(base.node)) {
+      if ((base.isMemberExpression() || base.isOptionalMemberExpression()) && base.node.computed &&
+        expressionCallsHook(base.get("property") as NodePath)) return undefined;
+      base = (isTransparentWrapper(base.node) ? base.get("expression") : base.get("object")) as NodePath;
+    }
+    if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee)) return undefined;
+    const result = scope.generateUidIdentifier("hookResult");
+    const hookCall = t.cloneNode(base.node, true);
+    base.replaceWith(t.cloneNode(result));
+    return { result, hookCall, read: t.cloneNode(path.node, true) };
+  };
+  /**
+   * `KIND { ...authored pattern } = INIT` evaluated inside one capture, with
+   * the bound names handed back out: every read the pattern performs
+   * (property getters, defaults, rest, array iteration) happens in its
+   * authored order inside the capture.
+   */
+  const capturedDestructuring = (
+    kind: t.VariableDeclaration["kind"],
+    pattern: t.Node,
+    init: t.Expression,
+  ): t.VariableDeclaration => {
+    const names = Object.keys(t.getBindingIdentifiers(pattern));
+    const handOut = (): t.ObjectExpression =>
+      t.objectExpression(names.map((name) => t.objectProperty(t.identifier(name), t.identifier(name), false, true)));
+    const call = t.callExpression(
+      t.memberExpression(t.cloneNode(store), t.identifier("capture")),
+      [generatedCallback([], t.blockStatement([
+        t.variableDeclaration("const", [t.variableDeclarator(t.cloneNode(pattern, true) as t.ObjectPattern | t.ArrayPattern, t.cloneNode(init, true))]),
+        t.returnStatement(handOut()),
+      ]))],
+    );
+    generated.add(call);
+    const outer = t.objectPattern(names.map((name) => t.objectProperty(t.identifier(name), t.identifier(name), false, true)));
+    return t.variableDeclaration(kind, [t.variableDeclarator(outer, call)]);
+  };
+  const visitMember = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
+    // `!`, `as`, and `satisfies` erase to nothing, so the slot that decides
+    // whether this member is the object of a longer chain, a call's callee
+    // (whose `this` must stay attached), or a tagged template's tag is the
+    // one above those wrappers.
+    const slot = climbTransparentWrappers(path);
+    const parent = slot.parentPath;
+    if (
+      ((parent?.isMemberExpression() || parent?.isOptionalMemberExpression()) && parent.node.object === slot.node) ||
+      ((parent?.isCallExpression() || parent?.isOptionalCallExpression()) && parent.node.callee === slot.node) ||
+      (parent?.isTaggedTemplateExpression() && parent.node.tag === slot.node) ||
+      isWriteTarget(path) ||
+      !hasTrackedReadInMemberChain(path, functionPath, trackedAliases)
+    ) return;
+    wrapMemberRead(path);
   };
   const wrapMemberRead = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
     if (!expressionCallsHook(path)) {
@@ -3708,14 +3846,117 @@ function captureTrackedReadExpressions(
         // early exit, mutation during iteration, and iterator closing stay
         // exactly as authored.
         const right = path.get("right");
-        if (path.node.await || !hasTrackedReadInExpression(right, functionPath, trackedAliases) || expressionCallsHook(right)) return;
-        const captured = t.callExpression(
+        if (path.node.await || !hasTrackedReadInExpression(right, functionPath, trackedAliases)) return;
+        const iterate = (source: t.Expression): t.CallExpression => t.callExpression(
           t.memberExpression(t.cloneNode(store), t.identifier("iterate")),
-          [generatedCallback([], t.cloneNode(right.node, true))],
+          [generatedCallback([], source)],
         );
+        let captured: t.CallExpression;
+        if (expressionCallsHook(right)) {
+          // `for (const item of useTodos().value.items)`: call the Hook in
+          // place, then iterate what is read from its result.
+          const split = splitHookBase(right as NodePath<t.Expression>, path.scope);
+          if (split === undefined) {
+            reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), right);
+            return;
+          }
+          captured = t.callExpression(generatedCallback([split.result], iterate(split.read)), [split.hookCall]);
+        } else {
+          captured = iterate(t.cloneNode(right.node, true) as t.Expression);
+        }
         generated.add(captured);
         right.replaceWith(captured);
         right.skip();
+
+        // A destructuring loop head reads from each element after the step,
+        // outside the iteration's captures. Bind the element to a temporary
+        // and evaluate the authored pattern inside a capture in the body.
+        const left = path.get("left");
+        if (!left.isVariableDeclaration()) return;
+        const declarator = left.node.declarations[0];
+        if (declarator === undefined || t.isIdentifier(declarator.id)) return;
+        const item = path.scope.generateUidIdentifier("item");
+        const destructured = capturedDestructuring(left.node.kind, declarator.id, t.cloneNode(item));
+        left.replaceWith(t.variableDeclaration(left.node.kind, [t.variableDeclarator(item)]));
+        left.skip();
+        const body = path.get("body");
+        if (!body.isBlockStatement()) body.replaceWith(t.blockStatement([body.node as t.Statement]));
+        const [inserted] = (path.get("body") as NodePath<t.BlockStatement>).unshiftContainer("body", destructured);
+        // The names now bind inside the body; keep them tracked aliases so
+        // later reads such as `entry.n` are captured too.
+        inserted!.scope.registerDeclaration(inserted!);
+        for (const name of Object.keys(t.getBindingIdentifiers(declarator.id))) {
+          const binding = inserted!.scope.getBinding(name);
+          if (binding !== undefined) trackedAliases.add(binding);
+        }
+      },
+    },
+    VariableDeclarator: {
+      enter(path) {
+        // Patterns the static expansion did not take (array patterns,
+        // defaults, rest, `let`) read the source while they bind. Evaluate
+        // the authored declaration inside one capture and hand its bindings out.
+        const id = path.get("id");
+        const init = path.get("init");
+        if ((!id.isObjectPattern() && !id.isArrayPattern()) || !init.node) return;
+        if (!hasTrackedReadInExpression(init, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
+        if (expressionCallsHook(init)) {
+          reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), init);
+          return;
+        }
+        const declaration = path.parentPath;
+        if (!declaration.isVariableDeclaration()) return;
+        const replacement = capturedDestructuring(declaration.node.kind, id.node, init.node);
+        path.replaceWith(replacement.declarations[0]!);
+        path.skip();
+      },
+    },
+    AssignmentExpression: {
+      enter(path) {
+        // `({ a } = state.value)` and `state.value.count ??= 1` read before
+        // they write; capture the whole assignment.
+        const left = path.get("left");
+        const destructuring = path.node.operator === "=" && (left.isObjectPattern() || left.isArrayPattern());
+        // The target chain of `state.value.count ??= 1` is read, although
+        // the generic read checks treat assignment targets as writes only.
+        const targetReadsTrackedValue = (): boolean => {
+          let current: NodePath = left;
+          while (current.isMemberExpression() || current.isOptionalMemberExpression() || isTransparentWrapper(current.node)) {
+            if ((current.isMemberExpression() || current.isOptionalMemberExpression()) &&
+              getTrackedReadPropertyName(current) === "value") return true;
+            current = (isTransparentWrapper(current.node) ? current.get("expression") : current.get("object")) as NodePath;
+          }
+          return current.isIdentifier() && trackedAliases.has(current.scope.getBinding(current.node.name) as object);
+        };
+        const readingWrite = path.node.operator !== "=" &&
+          (left.isMemberExpression() || left.isOptionalMemberExpression()) && targetReadsTrackedValue();
+        if (!destructuring && !readingWrite) return;
+        if (destructuring && !hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
+        if (isDeferredReadContext(path, functionPath)) return;
+        if (expressionCallsHook(path)) {
+          reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), path);
+          return;
+        }
+        wrap(path as NodePath<t.Expression>);
+      },
+    },
+    JSXSpreadAttribute: {
+      enter(path) {
+        // `<p {...state.value.props} />` copies the props inside the JSX
+        // runtime, after the source read. Copy them inside the capture.
+        const argument = path.get("argument");
+        if (!hasTrackedReadInExpression(argument, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
+        if (expressionCallsHook(argument)) {
+          reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), argument);
+          return;
+        }
+        const copied = t.callExpression(
+          t.memberExpression(t.cloneNode(store), t.identifier("capture")),
+          [generatedCallback([], t.objectExpression([t.spreadElement(t.cloneNode(argument.node, true))]))],
+        );
+        generated.add(copied);
+        argument.replaceWith(copied);
+        argument.skip();
       },
     },
     BinaryExpression: {
@@ -3748,42 +3989,18 @@ function captureTrackedReadExpressions(
     TaggedTemplateExpression: {
       enter(path) {
         const tag = path.get("tag");
-        if (
-          hasTrackedReadInExpression(tag, functionPath, trackedAliases) && !expressionCallsHook(path) &&
-          !isDeferredReadContext(path, functionPath)
-        ) {
-          wrap(path as NodePath<t.Expression>);
+        if (!hasTrackedReadInExpression(tag, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
+        if (expressionCallsHook(path)) {
+          // The tag keeps its `this` only when the whole tagged template is
+          // captured, which a Hook in the template forbids.
+          reportWarning(options, new Error(HOOK_IN_CAPTURED_CALL_WARNING), path);
+          return;
         }
+        wrap(path as NodePath<t.Expression>);
       },
     },
-    MemberExpression: {
-      enter(path) {
-        const parent = path.parentPath;
-        if (
-          ((parent?.isMemberExpression() || parent?.isOptionalMemberExpression()) &&
-            parent.get("object") === path) ||
-          ((parent?.isCallExpression() || parent?.isOptionalCallExpression()) &&
-            parent.get("callee") === path) ||
-          isWriteTarget(path) ||
-          !hasTrackedReadInMemberChain(path, functionPath, trackedAliases)
-        ) return;
-        wrapMemberRead(path);
-      },
-    },
-    OptionalMemberExpression: {
-      enter(path) {
-        const parent = path.parentPath;
-        if (
-          ((parent?.isMemberExpression() || parent?.isOptionalMemberExpression()) &&
-            parent.get("object") === path) ||
-          ((parent?.isCallExpression() || parent?.isOptionalCallExpression()) &&
-            parent.get("callee") === path) ||
-          isWriteTarget(path) ||
-          !hasTrackedReadInMemberChain(path, functionPath, trackedAliases)
-        ) return;
-        wrapMemberRead(path);
-      },
-    },
+    MemberExpression: { enter: visitMember },
+    OptionalMemberExpression: { enter: visitMember },
   });
 }
 
