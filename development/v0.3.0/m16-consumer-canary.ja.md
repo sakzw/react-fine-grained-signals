@@ -60,8 +60,8 @@ packed bundleからReact SSR markupを生成し、JSDOMでStrictMode hydration�
 - 共有countの複合更新後、helperは`2`、`data-active`は`true`。その後の単独count更新ではcount/computed/child/helperが`3`/`6`/`3`/`3`へ更新し、無関係なmemoized siblingのcommit数は変化しない。
 - Conditional componentをunmount後に再mountし、DOM nodeが新しくなり値`3`を表示することを確認。再mount後の単独count更新で表示とhelperが`4`へ更新し、無関係なsiblingのcommit数は維持される。
 
-`pnpm test:consumer`はpass。runtimeとpluginのtarball pack、temporary consumer install/typecheck、Vite + Compiler build、packed SSR/StrictMode hydration、上記DOM操作、core-only bundle、3-copy runtime smokeまで完了した。初回sandbox実行はpnpm store operation lockの権限で開始できなかったため、同じコマンドを昇格実行して完了した。検査失敗や製品コードの不具合はなく、Runtime/Transform変更なし。
+`pnpm test:consumer`はpass。runtimeとpluginのtarball pack、temporary consumer install/typecheck、Vite + Compiler build、packed SSR/StrictMode hydration、上記DOM操作、core-only bundle、3-copy runtime smokeまで完了した。初回sandbox実行はpnpm store operation lockの権限で開始できなかったため、同じコマンドを昇格実行して完了した。検査失敗や製品コードの不具合はなく、Runtime/Transform変更なし。commit `86d6bc7a9bc7cbd73a267f0950713045cffaaf53`の[GitHub Test](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38738193370)と[E2E](https://github.com/sakzw/react-fine-grained-signals/actions/runs/38738193375)もsuccess。
 
 ### 結果と次の判断
 
-M16/M16.1 consumer canaryでは、release blockerとなる再現可能な不具合は見つからなかった。既存の制約は診断可能なmanaged tracking契約として残し、API再設計は行わない。v0.3.0は未公開のまま維持する。M8のfreeze判断を変更する新しい証拠はなく、M16対象SHAのGitHub Test/E2Eも成功している。M16.1の変更はconsumer testと記録のみであり、そのSHAのGitHub Test/E2Eはpush後に追記する。
+M16/M16.1 consumer canaryでは、release blockerとなる再現可能な不具合は見つからなかった。既存の制約は診断可能なmanaged tracking契約として残し、API再設計は行わない。v0.3.0は未公開のまま維持する。M8のfreeze判断を変更する新しい証拠はなく、M16とM16.1対象SHAのGitHub Test/E2Eはいずれも成功した。

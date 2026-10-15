@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M16 Consumer Canaryを実施し、runtime/unpluginのpacked tarballをReact 19 + Vite + React Compiler consumerへinstallしたSSR/hydration統合fixtureを追加。M16.1ではformのDOM/Signal双方向assertion、writable computedの拒否入力、単独signal更新、conditional componentのremount後trackingを追加し、packed consumer smokeがpass。製品不具合は未検出。M16 qualificationのtypecheck/lint/build/7 bundle budgets、Fast Refresh managed Oxc/Babel、Chromium/Firefox/WebKit E2E 71/71と、対象SHA `73438a31e8a52b7f7cd91a7b057850cde46743b4`のGitHub Test/E2Eがsuccess。M16.1 push SHAのGitHub Test/E2Eを確認後に記録する。詳細は[M16 consumer canary](m16-consumer-canary.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
+- 状態: M16 Consumer Canaryを実施し、runtime/unpluginのpacked tarballをReact 19 + Vite + React Compiler consumerへinstallしたSSR/hydration統合fixtureを追加。M16.1ではformのDOM/Signal双方向assertion、writable computedの拒否入力、単独signal更新、conditional componentのremount後trackingを追加し、packed consumer smokeがpass。製品不具合は未検出。M16 qualificationのtypecheck/lint/build/7 bundle budgets、Fast Refresh managed Oxc/Babel、Chromium/Firefox/WebKit E2E 71/71と、M16 (`73438a31e8a52b7f7cd91a7b057850cde46743b4`)・M16.1 (`86d6bc7a9bc7cbd73a267f0950713045cffaaf53`)のGitHub Test/E2Eがsuccess。詳細は[M16 consumer canary](m16-consumer-canary.ja.md)。公開tag、npm publish、GitHub Releaseは未実施。
 - 統合ブランチ: `main`
 - 最新マイルストーン: M15.2 benchmark validity & transform stress audit。M15.1 chain表の旧値を無効とし、正しいfixtureの再測定へ置き換えた。500件baselineのchain/independent完走値は得られていない。M15.1製品コードは維持し、今回runtime/transform実装に変更はない。M16ではJSDOM selector cacheのretainer pathを特定し、製品コード変更はなし。既存のpush SHAに対するTest/E2E CIは成功。
 - v0.2.1 ベースライン: `58f01b9314a1b09b88b162c57912ff736201e790` (`main`、package version `0.2.1`)
