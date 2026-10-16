@@ -967,7 +967,31 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     // every lookup O(graph) and throw for values that are merely absent.
     const normalizeLookupKey = (value: unknown): unknown => {
       if (!isObjectLike(value)) return value;
-      return toRaw(value) ?? normalizedProxyCarriers.get(value) ?? value;
+      return toRaw(value) ?? storedCarrierKey(value) ?? normalizedProxyCarriers.get(value) ?? value;
+    };
+    // A key/member that is a carrier (a plain object holding a deep proxy) is
+    // stored as a normalized clone. Its entry identity is fixed by the first
+    // insertion: later mutation of the caller's object must keep addressing the
+    // same entry, as it does for a native Map/Set, instead of re-cloning the
+    // carrier into a second entry. Entries are per collection and only honored
+    // while the stored clone is still a key/member of it.
+    const carrierKeys = new WeakMap<object, object>();
+    const hasStoredKey = (key: unknown): boolean =>
+      kind === "Map" ? Map.prototype.has.call(raw, key) : Set.prototype.has.call(raw, key);
+    const storedCarrierKey = (value: object): object | undefined => {
+      if (kind !== "Map" && kind !== "Set") return undefined;
+      const stored = carrierKeys.get(value);
+      return stored !== undefined && hasStoredKey(stored) ? stored : undefined;
+    };
+    // Writes validate a new key's whole graph, but a key that already identifies
+    // an entry was validated when it was stored, so re-setting it stays O(1).
+    const normalizeWriteKey = (value: unknown): unknown => {
+      if (kind !== "Map" && kind !== "Set") return normalize(value);
+      const existing = normalizeLookupKey(value);
+      if (hasStoredKey(existing)) return existing;
+      const normalized = normalize(value);
+      if (isObjectLike(value) && normalized !== value && toRaw(value) === undefined) carrierKeys.set(value, normalized as object);
+      return normalized;
     };
     const normalizeWeakKey = (value: unknown): unknown => {
       if (isObjectLike(value)) {
@@ -983,22 +1007,34 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     };
     const wrapRead = <T>(value: T): T => wrap(value);
     /**
-     * GetSetRecord reads `size`, `has`, and `keys` once each, in that order,
-     * and rejects non-callable methods; mirror that, then translate between
-     * raw members and their proxies on every `has` call and `keys` step.
+     * Mirrors GetSetRecord so native Set methods observe `other` in spec order:
+     * `size` is read, converted, and validated (NaN -> TypeError, negative ->
+     * RangeError) before `has` is read and checked, then `keys` is read and
+     * checked. Members are translated between raw and reactive identities
+     * without adding observable accesses: `done` and `value` are read once per
+     * step, and `return` is only looked up when the method closes the iterator.
+     * `has` is retried with the reactive proxy only for arguments known to hold
+     * proxies (built-in Sets/Maps, whose `has` is unobservable, and reactive
+     * collections); other set-likes see exactly one `has` call per member.
+     * `origins` records the caller-visible member behind each translated key.
      */
-    const normalizedSetLike = (other: unknown): unknown => {
+    const normalizedSetLike = (other: unknown, origins?: Map<unknown, unknown>): unknown => {
       if (!isObjectLike(other)) return other;
       const record = other as { size: unknown; has: unknown; keys: unknown };
-      const size = record.size;
+      const numSize = +(record.size as number);
+      if (Number.isNaN(numSize)) throw new TypeError("The 'size' property of the set-like argument is not a number");
+      const size = Math.trunc(numSize);
+      if (size < 0) throw new RangeError("The 'size' property of the set-like argument must not be negative");
       const has = record.has;
-      const keys = record.keys;
       if (typeof has !== "function") throw new TypeError("The 'has' property of the set-like argument is not a function");
+      const keys = record.keys;
       if (typeof keys !== "function") throw new TypeError("The 'keys' property of the set-like argument is not a function");
+      const retryWithProxy = has === Set.prototype.has || has === Map.prototype.has || toRaw(other) !== undefined;
       return {
-        size,
+        size: size === 0 ? 0 : size,
         has(value: unknown): boolean {
           if (Reflect.apply(has, other, [value])) return true;
+          if (!retryWithProxy) return false;
           const reactive = wrapRead(value);
           return reactive !== value && Boolean(Reflect.apply(has, other, [reactive]));
         },
@@ -1009,8 +1045,12 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return {
             next(): IteratorResult<unknown> {
               const step = Reflect.apply(next, iterator, []) as IteratorResult<unknown>;
-              if (!isObjectLike(step) || step.done) return step;
-              return { done: false, value: normalizeLookupKey(step.value) };
+              if (!isObjectLike(step)) return step;
+              if (step.done) return { done: true, value: undefined };
+              const original = step.value;
+              const converted = normalizeLookupKey(original);
+              if (origins !== undefined && converted !== original) origins.set(converted, original);
+              return { done: false, value: converted };
             },
             // A method that stops early (`isDisjointFrom`, `isSubsetOf`)
             // closes the keys iterator. Look `return` up on the original only
@@ -1071,11 +1111,12 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return Map.prototype.has.call(target, normalized);
         });
         if (kind === "Map" && key === "set" || kind === "WeakMap" && key === "set") return memoMethod(key, () => (inputKey: unknown, inputValue: unknown) => {
-          const normalizedKey = kind === "WeakMap" ? normalizeWeakKey(inputKey) : normalize(inputKey);
-          const normalizedValue = normalize(inputValue);
-          if (kind === "WeakMap" && !isWeakCollectionKey(normalizedKey)) return WeakMap.prototype.set.call(target, normalizedKey as object, normalizedValue);
+          const normalizedKey = kind === "WeakMap" ? normalizeWeakKey(inputKey) : normalizeWriteKey(inputKey);
+          if (kind === "WeakMap" && !isWeakCollectionKey(normalizedKey)) return WeakMap.prototype.set.call(target, normalizedKey as object, normalize(inputValue));
           const had = kind === "Map" ? Map.prototype.has.call(target, normalizedKey) : WeakMap.prototype.has.call(target, normalizedKey as object);
           const oldValue = kind === "Map" ? Map.prototype.get.call(target, normalizedKey) : WeakMap.prototype.get.call(target, normalizedKey as object);
+          // Re-storing the very value an entry already holds needs no revalidation.
+          const normalizedValue = had && isObjectLike(inputValue) && Object.is(oldValue, inputValue) ? oldValue : normalize(inputValue);
           batchWrite(() => {
             if (kind === "Map") Map.prototype.set.call(target, normalizedKey, normalizedValue);
             else WeakMap.prototype.set.call(target, normalizedKey as object, normalizedValue);
@@ -1155,7 +1196,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return Set.prototype.has.call(target, normalized);
         });
         if ((kind === "Set" || kind === "WeakSet") && key === "add") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalize(input);
+          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeWriteKey(input);
           if (kind === "WeakSet" && !isWeakCollectionKey(normalized)) return WeakSet.prototype.add.call(target, normalized as object);
           const had = kind === "Set" ? Set.prototype.has.call(target, normalized) : WeakSet.prototype.has.call(target, normalized as object);
           batchWrite(() => {
@@ -1215,15 +1256,34 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           const native = kind === "Map" ? Map.prototype.forEach : Set.prototype.forEach;
           return Reflect.apply(native, target, [(value: unknown, entryKey: unknown) => Reflect.apply(callback, thisArg, [wrapRead(value), wrapRead(entryKey), proxy])]);
         });
-        if (kind === "Set" && ["union", "intersection", "difference", "symmetricDifference", "isSubsetOf", "isSupersetOf", "isDisjointFrom"].includes(String(key))) return memoMethod(key, () => (other: unknown) => {
-          trackAggregate("entriesIteration");
-          // Set methods consume `other` through the set-like protocol
-          // (size/has/keys) against this raw target. Reading through a reactive
-          // `other` keeps its tracking, but its keys come back as proxies and a
-          // plain Set built from reactive iteration holds proxies too, so
-          // members would never match the raw ones here. Hand native code a
-          // record that compares raw identities in both directions.
-          return Reflect.apply(method, target, [normalizedSetLike(other)]);
+        if (kind === "Set" && ["union", "intersection", "difference", "symmetricDifference", "isSubsetOf", "isSupersetOf", "isDisjointFrom"].includes(String(key))) return memoMethod(key, () => {
+          const producesSet = key === "union" || key === "intersection" || key === "difference" || key === "symmetricDifference";
+          return (other: unknown) => {
+            trackAggregate("entriesIteration");
+            // Set methods consume `other` through the set-like protocol
+            // (size/has/keys) against this raw target. Reading through a reactive
+            // `other` keeps its tracking, but its keys come back as proxies and a
+            // plain Set built from reactive iteration holds proxies too, so
+            // members would never match the raw ones here. Hand native code a
+            // record that compares raw identities in both directions.
+            if (!producesSet) return Reflect.apply(method, target, [normalizedSetLike(other)]);
+            const origins = new Map<unknown, unknown>();
+            const result = Reflect.apply(method, target, [normalizedSetLike(other, origins)]) as Set<unknown>;
+            // The native result holds raw members. Return a plain Set whose
+            // members read like every other path: receiver members become
+            // proxies; members that only came from `other` keep the identity
+            // `other` held, except that a reactive collection's are proxies too.
+            const fromReactive = isObjectLike(other) && toRaw(other) !== undefined;
+            const wrapped = new Set<unknown>();
+            for (const member of Set.prototype.values.call(result) as IterableIterator<unknown>) {
+              if (Set.prototype.has.call(target, member)) wrapped.add(wrapRead(member));
+              else {
+                const original = origins.has(member) ? origins.get(member) : member;
+                wrapped.add(fromReactive ? wrapRead(original) : original);
+              }
+            }
+            return wrapped;
+          };
         });
         // Map upsert methods, where the engine has them: compose them from the
         // reactive `has`/`get`/`set` so reads are tracked and inserts notify.
@@ -1234,11 +1294,16 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return map.get(entryKey);
         });
         if ((kind === "Map" || kind === "WeakMap") && key === "getOrInsertComputed") return memoMethod(key, () => (entryKey: unknown, callback: unknown) => {
+          // Spec order: a WeakMap rejects an unusable key before anything else,
+          // then the callback must be callable; a Map canonicalizes -0 to +0
+          // before the callback sees the key.
+          if (kind === "WeakMap" && !isWeakCollectionKey(normalizeWeakKey(entryKey))) throw new TypeError("Invalid value used as weak map key");
           if (typeof callback !== "function") throw new TypeError("getOrInsertComputed callback must be a function");
           const map = proxy as Map<unknown, unknown>;
-          if (map.has(entryKey)) return map.get(entryKey);
-          map.set(entryKey, Reflect.apply(callback, undefined, [entryKey]));
-          return map.get(entryKey);
+          const canonicalKey = kind === "Map" && Object.is(entryKey, -0) ? 0 : entryKey;
+          if (map.has(canonicalKey)) return map.get(canonicalKey);
+          map.set(canonicalKey, Reflect.apply(callback, undefined, [canonicalKey]));
+          return map.get(canonicalKey);
         });
         if ((kind === "Map" || kind === "WeakMap") && key === "emplace") return memoMethod(key, () => () => {
           throw new TypeError("deepSignal() reactive collections do not support emplace; use getOrInsert or has/get/set");
