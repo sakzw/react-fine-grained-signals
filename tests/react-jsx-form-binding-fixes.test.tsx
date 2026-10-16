@@ -222,6 +222,28 @@ describe("J5: form association that begins after mount", () => {
   });
 });
 
+describe("form reset inside a shadow root", () => {
+  it("restores the signal's value although reset does not leave the shadow root", async () => {
+    const s = signal("init");
+    const host = document.createElement("div");
+    document.body.append(host);
+    const shadow = host.attachShadow({ mode: "open" });
+    const container = document.createElement("div");
+    shadow.append(container);
+    const root = createRoot(container);
+    roots.push(root);
+    act(() => root.render(<form><input bindValue={s} /></form>));
+    const input = shadow.querySelector("input")!;
+    // Drift the DOM and its native reset default away from the signal, then
+    // check that the reset re-applies the signal.
+    input.defaultValue = "drift";
+    input.value = "drift";
+    act(() => shadow.querySelector("form")!.reset());
+    await tick();
+    expect(input.value).toBe("init");
+  });
+});
+
 describe("J6: a throwing revert still refreshes the DOM", () => {
   it("radio group shows the signal's actual value", async () => {
     const base = signal("r3");

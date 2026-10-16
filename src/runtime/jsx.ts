@@ -452,10 +452,11 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
 }
 
 function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, refresh: () => void): () => void {
-  // Listen at the document, filtering by the control's *current* form: the
+  // Listen at the control's root (its document, or the shadow root that
+  // `reset` does not cross), filtering by the control's *current* form: the
   // association can begin or change after mount (`form="id"` naming a form
   // that mounts later, or a moved control).
-  const doc = node.ownerDocument;
+  const root = node.getRootNode();
   const onReset = (event: Event) => {
     if (event.target === null || event.target !== node.form) return;
     // The browser applies native defaults after dispatching `reset`; React may
@@ -466,8 +467,8 @@ function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelect
       if (!event.defaultPrevented) refresh();
     });
   };
-  doc.addEventListener("reset", onReset, true);
-  return () => doc.removeEventListener("reset", onReset, true);
+  root.addEventListener("reset", onReset, true);
+  return () => root.removeEventListener("reset", onReset, true);
 }
 
 /**
