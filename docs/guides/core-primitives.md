@@ -149,6 +149,10 @@ Map `get` and `has` track independently per key; `size`, key iteration, and entr
 
 Collection keys, members, and values that are plain objects or arrays are stored raw and returned as deep proxies. Raw keys and proxies created by this runtime identify the same entry. Mutating the original collection or a collection returned by `.peek()` bypasses notifications. Weak collection entries cannot be scanned during initialization; method calls through the reactive proxy normalize keys and wrap returned values lazily. Symbol keys follow the native runtime's WeakMap/WeakSet key rules. Only same-realm built-in collections are supported.
 
+A Map key or Set member that is a plain object containing a deep proxy (a "carrier") is stored as a normalized copy, and its entry identity is fixed by the caller's object at first insertion: mutating the carrier afterwards keeps addressing the same entry (`set`, `add`, `get`, `has`, and `delete` do not create a second one), and the stored copy does not see the later mutation. If the entry is deleted, re-adding the carrier stores a fresh copy. Writing an already-present key or an unchanged value does not revalidate it, so `Map.set(existingKey, value)` does not cost a walk of the key graph.
+
+`Set.prototype.union`, `intersection`, `difference`, and `symmetricDifference` called through the reactive proxy return a plain (non-reactive) `Set` whose members read like every other path: members of the receiver are deep proxies, and members that only came from the argument keep the identity the argument held (a reactive collection's members are proxies; objects in a plain `Set` stay as they are). Mutating a returned proxy member updates the state; adding to or removing from the returned `Set` does not. The argument is consumed in the order the native `GetSetRecord` algorithm uses (`size`, then `has`, then `keys`, each read once, with native validation errors). Built-in `Set`/`Map` arguments and reactive collections may hold either raw members or proxies; any other set-like object sees one `has` call per member with the raw member.
+
 ## isSignal
 
 ```ts

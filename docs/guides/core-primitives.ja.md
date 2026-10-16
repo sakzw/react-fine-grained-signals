@@ -149,6 +149,10 @@ Mapの`get`と`has`はkeyごとに別々に追跡されます。`size`、key ite
 
 plain objectや配列であるcollectionのkey、member、valueはrawで保存され、読み出し時にdeep proxyとして返ります。このruntimeが作ったraw keyとproxy keyは同じentryとして扱います。元のcollectionや`.peek()`からcollectionを変更しても通知されません。Weak collectionの初期entryは走査できないため、reactive proxy経由のmethod呼び出し時にkeyを正規化し、戻り値を遅延wrapします。symbol keyの可否はnative runtimeのWeakMap/WeakSet key規則に従います。同一realmの組み込みcollectionのみ対応します。
 
+deep proxyを含むplain object(carrier)をMapのkeyまたはSetのmemberにすると、正規化されたコピーが保存され、entryの同一性は最初に挿入した呼び出し側のobjectで固定されます。その後carrierを変更しても同じentryを指し続け(`set`、`add`、`get`、`has`、`delete`で2つ目のentryは作られません)、保存済みコピーには後の変更は反映されません。entryを削除してから再追加すると新しいコピーが保存されます。すでに存在するkeyや変更のないvalueは再検証されないため、`Map.set(existingKey, value)`がkeyのグラフ全体を走査することはありません。
+
+リアクティブなSetの`union`、`intersection`、`difference`、`symmetricDifference`は、リアクティブでない通常の`Set`を返します。メンバーは他の読み出し経路と同じで、レシーバのメンバーはdeep proxy、引数にしかないメンバーは引数が保持していた同一性のままです(リアクティブなcollectionのメンバーはproxy、通常の`Set`内のobjectはそのまま)。返されたproxyを変更するとstateが更新されますが、返された`Set`自体への追加・削除はstateに影響しません。引数はネイティブの`GetSetRecord`と同じ順序(`size`、`has`、`keys`を各1回)で検証・読み出しされます。
+
 ## isSignal
 
 ```ts
