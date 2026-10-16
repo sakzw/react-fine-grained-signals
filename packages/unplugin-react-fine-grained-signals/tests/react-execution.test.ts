@@ -2980,6 +2980,31 @@ export function App() {
         expect(await run.observe()).toEqual(run.expected);
       });
     }
+    // A local name for such an object is still that object: where the
+    // receiver came from, not that it is a local, decides.
+    const aliasShapes: Array<[string, string]> = [
+      ["a local alias", "const localStore = extStore;\n    return <p>{tick.value}:{localStore.METHOD()}</p>;"],
+      ["a two-step local alias", "const first = extStore;\n    const second = first;\n    return <p>{tick.value}:{second.METHOD()}</p>;"],
+      ["a conditional", "const picked = tick.value >= 0 ? extStore : null;\n    return <p>{tick.value}:{picked.METHOD()}</p>;"],
+      ["an object property", "const holder = { store: extStore };\n    return <p>{tick.value}:{holder.store.METHOD()}</p>;"],
+      ["a destructured property", "const { store } = { store: extStore };\n    return <p>{tick.value}:{store.METHOD()}</p>;"],
+      ["an array element", "const [store] = [extStore];\n    return <p>{tick.value}:{store.METHOD()}</p>;"],
+      ["a reassigned let", "let target = [];\n    target = extStore;\n    return <p>{tick.value}:{target.METHOD()}</p>;"],
+    ];
+    for (const method of ["map", "filter", "toString"]) {
+      for (const [shape, body] of aliasShapes) {
+        it(`captures an imported object's \`${method}\` through ${shape}`, async () => {
+          const run = scenario({
+            name: `${shape} ${method}`,
+            prelude: `import { extStore } from "./ext";\n`,
+            modules: { "./ext": { extStore: { [method]: () => extSignal.value } } },
+            body: `export function App() {\n    ${body.replaceAll("METHOD", method)}\n  }`,
+            steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: bumpExt, text: "0:5" }],
+          });
+          expect(await run.observe()).toEqual(run.expected);
+        });
+      }
+    }
     it("captures a callback returned by a Hook", async () => {
       const run = scenario({
         name: "useCallback",
@@ -3234,6 +3259,33 @@ export function App(p) {
     for (const builtin of ["p.items.map", "local.map", "label.toString", "split(", ".join(", "rows.map", "visible.map"]) {
       const captured = new RegExp(`capture\\(\\(\\) => [^\\n]*${builtin.replace(/[.()|]/g, "\\$&")}`).test(code);
       expect(`${builtin} captured: ${captured}`).toBe(`${builtin} captured: false`);
+    }
+  });
+
+  it("judges a builtin method name by where the receiver came from, not by its being a local", () => {
+    for (const mode of ["auto", "all"] as const) {
+      const { code } = shape(`${head}
+import { store } from "./store";
+export function List({ items, title }) {
+  const visible = items.filter(Boolean);
+  const label = title ?? "none";
+  const names = ["a", "b"];
+  return <p>{s.value}{visible.map(String).join(",")}{label.toString()}{names.map((n) => n).join()}</p>;
+}
+export function Aliased() {
+  const first = store;
+  const second = first;
+  const holder = { store };
+  return <p>{s.value}{second.map()}{holder.store.filter(Boolean)}{first.toString()}</p>;
+}
+`, mode);
+      for (const builtin of ["visible.map", "label.toString", "names.map", "items.filter"]) {
+        const captured = code.includes(`capture(() => ${builtin}`);
+        expect(`${mode} ${builtin} captured: ${captured}`).toBe(`${mode} ${builtin} captured: false`);
+      }
+      for (const reads of ["second.map()", "holder.store.filter(Boolean)", "first.toString()"]) {
+        expect(code).toContain(`capture(() => ${reads})`);
+      }
     }
   });
 

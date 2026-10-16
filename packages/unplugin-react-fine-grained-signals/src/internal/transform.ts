@@ -3488,16 +3488,16 @@ function callChainRoot(node: t.Node): t.Node {
  */
 /**
  * May a builtin method name (`map`, `toString`, ...) on this receiver be taken
- * as the builtin? Only for data the selected function owns: a parameter, or a
- * local not produced by a call. An imported or module-level object, `this`, or
- * a local returned by a call (a custom Hook result) can define such a method
- * itself, and its body may read signals.
+ * as the builtin? Only when the receiver provably holds data the selected
+ * function owns; see `isOwnedData`. Anything else (an imported or
+ * module-level object, `this`, a custom Hook result, or any local whose value
+ * traces back to one) can define such a method itself and read signals in it.
  */
 function receiverIsLocalData(
   call: NodePath<t.CallExpression | t.OptionalCallExpression>,
   callee: t.MemberExpression | t.OptionalMemberExpression,
 ): boolean {
-  return expressionIsLocalData(call, callee.object, 0);
+  return isOwnedData(call, callee.object, 0);
 }
 
 /** React Hooks whose results are plain state the component owns. */
@@ -3505,29 +3505,55 @@ const stateHookNames = new Set([
   "useState", "useReducer", "useDeferredValue", "useTransition", "useOptimistic", "useActionState", "useId",
 ]);
 
-function expressionIsLocalData(path: NodePath, expression: t.Node, depth: number): boolean {
-  if (depth > 8) return false;
-  const root = callChainRoot(expression);
-  // A literal, template, or call chain on one (`[..].map`, `"a".trim`).
-  if (!t.isIdentifier(root)) return !t.isThisExpression(root);
-  const binding = path.scope.getBinding(root.name);
-  if (binding === undefined) return false;
-  if (binding.path.isImportSpecifier() || binding.path.isImportDefaultSpecifier() || binding.path.isImportNamespaceSpecifier()) return false;
-  if (binding.scope.path.isProgram()) return false;
+/**
+ * Does `expression` provably evaluate to data the function owns? Proven by
+ * where the value comes from, never by being a local name:
+ * - an array, string, template, or number literal;
+ * - a parameter (props) or a member read from one;
+ * - React state (`const [rows] = useState(...)`);
+ * - a builtin method applied to owned data (`items.filter(Boolean)`);
+ * - a `const`/never-reassigned local initialized with owned data, or a
+ *   conditional/logical choice between owned values.
+ * Object literals are not owned data: their properties can hold anything
+ * (`{ store: extStore }`).
+ */
+function isOwnedData(path: NodePath, node: t.Node, depth: number): boolean {
+  if (depth > 16) return false;
+  const expression = unwrapTransparent(node);
+  if (
+    t.isArrayExpression(expression) || t.isStringLiteral(expression) ||
+    t.isTemplateLiteral(expression) || t.isNumericLiteral(expression)
+  ) return true;
+  if (t.isConditionalExpression(expression)) {
+    return isOwnedData(path, expression.consequent, depth + 1) && isOwnedData(path, expression.alternate, depth + 1);
+  }
+  if (t.isLogicalExpression(expression)) {
+    return isOwnedData(path, expression.left, depth + 1) && isOwnedData(path, expression.right, depth + 1);
+  }
+  if (t.isMemberExpression(expression) || t.isOptionalMemberExpression(expression)) {
+    // A member of owned data (`props.items`) is owned; a member of an object
+    // literal or a module value is not.
+    return isOwnedData(path, expression.object, depth + 1);
+  }
+  if (t.isCallExpression(expression) || t.isOptionalCallExpression(expression)) {
+    const callee = unwrapTransparent(expression.callee);
+    if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return false;
+    const method = getStaticMemberChain(callee)?.keys.at(-1);
+    return method !== undefined && pureMethodNames.has(method) && isOwnedData(path, callee.object, depth + 1);
+  }
+  if (!t.isIdentifier(expression)) return false;
+  const binding = path.scope.getBinding(expression.name);
+  if (binding === undefined || binding.scope.path.isProgram()) return false;
   if (binding.kind === "param") return true;
-  if (!binding.path.isVariableDeclarator()) return true;
-  const init = binding.path.node.init == null ? undefined : unwrapTransparent(binding.path.node.init);
-  if (init === undefined) return true;
-  if (t.isAwaitExpression(init) || t.isNewExpression(init)) return false;
-  if (!t.isCallExpression(init) && !t.isOptionalCallExpression(init)) return true;
-  const initCallee = unwrapTransparent(init.callee);
-  // `const [items] = useState(...)`: React state, not an object with methods.
-  if (t.isIdentifier(initCallee)) return stateHookNames.has(initCallee.name);
-  // `const visible = items.filter(...)`: a builtin method on local data.
-  if (t.isMemberExpression(initCallee) || t.isOptionalMemberExpression(initCallee)) {
-    const method = getStaticMemberChain(initCallee)?.keys.at(-1);
-    return method !== undefined && pureMethodNames.has(method) &&
-      expressionIsLocalData(binding.path, initCallee.object, depth + 1);
+  if (!binding.path.isVariableDeclarator() || binding.constantViolations.length > 0) return false;
+  const declarator = binding.path.node;
+  const init = declarator.init == null ? undefined : unwrapTransparent(declarator.init);
+  if (init === undefined) return false;
+  if (t.isIdentifier(declarator.id)) return isOwnedData(binding.path, init, depth + 1);
+  // `const [rows, setRows] = useState(...)`: React state, not an object with methods.
+  if (t.isArrayPattern(declarator.id) && (t.isCallExpression(init) || t.isOptionalCallExpression(init))) {
+    const stateHook = unwrapTransparent(init.callee);
+    return t.isIdentifier(stateHook) && stateHookNames.has(stateHook.name);
   }
   return false;
 }
