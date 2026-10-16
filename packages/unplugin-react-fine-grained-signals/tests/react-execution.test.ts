@@ -3118,6 +3118,86 @@ export function App() {
     });
   });
 
+  // M17.7: a call skips capture only when its callee is proven, never because
+  // of the shape of the expression that reaches it.
+  describe("M17.7: callee resolution and value provenance", () => {
+    const extSignal = library.signal(1);
+    const ext = {
+      extStore: {
+        map: () => extSignal.value,
+        total: () => extSignal.value,
+        self() { return this; },
+      },
+      extFn: () => extSignal.value,
+    };
+    const steps: Step[] = [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: () => { extSignal.value = 5; }, text: "0:5" }];
+    const shapes: Array<[string, string]> = [
+      // How the callee is reached.
+      ["a conditional receiver", "return <p>{tick.value}:{(ok ? extStore : extStore).METHOD()}</p>;"],
+      ["a conditional callee", "return <p>{tick.value}:{(ok ? extStore.METHOD : extStore.METHOD)()}</p>;"],
+      ["a logical receiver", "return <p>{tick.value}:{(extStore || extStore).METHOD()}</p>;"],
+      ["a nullish receiver", "return <p>{tick.value}:{(extStore ?? extStore).METHOD()}</p>;"],
+      ["a guarded receiver", "return <p>{tick.value}:{(ok && extStore).METHOD()}</p>;"],
+      ["a sequence receiver", "return <p>{tick.value}:{(0, extStore).METHOD()}</p>;"],
+      ["a sequence callee", "return <p>{tick.value}:{(0, extStore.METHOD)()}</p>;"],
+      ["an IIFE result", "return <p>{tick.value}:{(() => extStore)().METHOD()}</p>;"],
+      ["a module function result", "return <p>{tick.value}:{pick(extStore).METHOD()}</p>;"],
+      ["a method chain", "return <p>{tick.value}:{extStore.self().METHOD()}</p>;"],
+      ["a mapped primitive array", "return <p>{tick.value}:{[0].map(() => extStore)[0].METHOD()}</p>;"],
+      ["a string literal chain", 'return <p>{tick.value}:{"x".split("").map(() => extStore)[0].METHOD()}</p>;'],
+      ["a global wrapper", "return <p>{tick.value}:{Object(extStore).METHOD()}</p>;"],
+      ["a global factory", "return <p>{tick.value}:{Array.of(extStore)[0].METHOD()}</p>;"],
+      // Parameters hold what their caller passes.
+      ["an element callback of a local array", "return <p>{tick.value}:{[extStore].map((x) => x.METHOD()).join()}</p>;"],
+      ["a reduce accumulator", "return <p>{tick.value}:{[1].reduce((acc) => acc.METHOD(), extStore)}</p>;"],
+      ["an IIFE parameter", "return <p>{tick.value}:{((v) => v.METHOD())(extStore)}</p>;"],
+      ["a local helper parameter", "function h(v) { return v.METHOD(); }\n    return <p>{tick.value}:{h(extStore)}</p>;"],
+      ["a module helper body", "return <p>{tick.value}:{viaHelper()}</p>;"],
+      ["a props default", "return <p>{tick.value}:{store.METHOD()}</p>;"],
+      // A name bound to a function chosen at run time.
+      ["a reassigned function", "let f = () => 1;\n    f = () => extStore.METHOD();\n    return <p>{tick.value}:{f()}</p>;"],
+      ["a reassigned object", "let o = { METHOD() { return 1; } };\n    o = extStore;\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
+      ["a reassigned slot", "const o = { METHOD() { return 1; } };\n    o.METHOD = () => extStore.METHOD();\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
+      // Writes that put other values into trusted data.
+      ["an element pushed into a props copy", "const list = items.filter(Boolean);\n    list.push(extStore);\n    return <p>{tick.value}:{list.pop().METHOD()}</p>;"],
+      ["an element assigned into a props copy", "const list = items.slice();\n    list[0] = extStore;\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;"],
+      ["an element spliced into a props copy", "const list = items.slice();\n    list.splice(0, 0, extStore);\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;"],
+    ];
+    for (const method of ["map", "total"]) {
+      for (const [shape, body] of shapes) {
+        it(`captures \`${method}\` reached through ${shape}`, async () => {
+          const run = scenario({
+            name: `${shape} ${method}`,
+            prelude: `import { extStore } from "./ext";\nfunction pick(x) { return x; }\nfunction viaHelper() { return extStore.${method}(); }\n`,
+            modules: { "./ext": ext },
+            body: `export function App({ items = [1, 2], store = extStore } = {}) {\n    const ok = items.length > 0;\n    ${body.replaceAll("METHOD", method)}\n  }`,
+            steps,
+          });
+          expect(await run.observe()).toEqual(run.expected);
+        });
+      }
+    }
+    // A function a builtin calls back is a call too.
+    const callbackSteps: Step[] = [{ run: () => { extSignal.value = 1; }, text: "0:1,1" }, { run: () => { extSignal.value = 5; }, text: "0:5,5" }];
+    for (const [name, callback] of [
+      ["an imported function", "extFn"],
+      ["a method of an imported object", "extStore.total"],
+      ["a function from props", "fmt"],
+      ["a local picked at run time", "picked"],
+    ] as const) {
+      it(`captures a builtin that calls back ${name}`, async () => {
+        const run = scenario({
+          name,
+          prelude: `import { extStore, extFn } from "./ext";\nconst same = (x) => x;\n`,
+          modules: { "./ext": ext },
+          body: `export function App({ items = [1, 2], fmt = () => extStore.total() } = {}) {\n    const picked = items.length ? fmt : same;\n    return <p>{tick.value}:{items.map(${callback}).join()}</p>;\n  }`,
+          steps: callbackSteps,
+        });
+        expect(await run.observe()).toEqual(run.expected);
+      });
+    }
+  });
+
   describe("more alias flows", () => {
     const flowCases: Scenario[] = [
       {
@@ -3310,6 +3390,125 @@ export function Aliased() {
     }
   });
 
+  it("leaves builtins on proven data alone and never moves a Hook picked by an expression", () => {
+    for (const mode of ["auto", "all"] as const) {
+      const { code } = shape(`${head}
+import { useA, useB } from "./hooks";
+function label(row) { return row.name.trim(); }
+export function List(props) {
+  const { items, title } = props;
+  const visible = items.filter(Boolean);
+  const fmt = new Intl.NumberFormat();
+  const picked = (props.flag ? useA : useB)();
+  const seq = (0, useA)();
+  return <p>{s.value}{visible.map(String).join(",")}{title.toUpperCase()}{items.map((item) => item.name.trim()).join()}{items.map(label).join()}{fmt.format(1)}{label(items[0])}{[1, 2].at(0)}{picked}{seq}</p>;
+}
+`, mode);
+      for (const builtin of [
+        "visible.map", "title.toUpperCase", "items.map((item)", "items.map(label)", "fmt.format", "label(items[0])", "[1, 2].at",
+      ]) {
+        const captured = code.includes(`capture(() => ${builtin}`);
+        expect(`${mode} ${builtin} captured: ${captured}`).toBe(`${mode} ${builtin} captured: false`);
+      }
+      expect(code).toContain("(props.flag ? useA : useB)()");
+      expect(code).toContain("(0, useA)()");
+      expect(code).not.toMatch(/capture\(\(\) => \(props\.flag|capture\(\(\) => \(0, useA/);
+    }
+  });
+
+  it("decides each provenance and callee rule from the code that proves it", () => {
+    // [JSX child, captured?]: one child per line, so each decision is read on its own.
+    const children: Array<[string, boolean]> = [
+      // Functions a builtin calls back.
+      ["items.slice().sort()", false],
+      ["JSON.stringify(items, null, 2)", false],
+      ["JSON.stringify(items, undefined, 2)", false],
+      ["JSON.stringify(items, replacer)", true],
+      ["items.map(holder.fn)", true],
+      ["items.map(local)", false],
+      ["Array.prototype.map.call(items, String)", true],
+      ["Array.from(items, String)", false],
+      ["unknownGlobal(1)", true],
+      ["lib.signal(1)", false],
+      // Writes into owned data.
+      ["deepWritten.pop().trim()", false],
+      ["namedWritten.map(String)", false],
+      ["assigned.map(String)", true],
+      ["assignedElement.pop().trim()", true],
+      ["pushedOwned.pop().trim()", false],
+      // Expression forms.
+      ["(0, items).map(String)", false],
+      ["(copy = items).map(String)", false],
+      ["objectOfPrimitives.toString()", false],
+      ["objectWithUnknownKey.toString()", true],
+      ["[...items].map(String)", false],
+      ["[...items][0].trim()", true],
+      ["items?.filter(Boolean)", false],
+      ["items.concat([1]).pop().trim()", false],
+      ["items.concat(ext).pop().trim()", true],
+      // Destructuring and defaults.
+      ["restOf.items.map(String)", false],
+      ["firstRow.trim()", false],
+      ["defaulted.map(String)", true],
+      ["deepDefault.map(String)", false],
+      // Module helpers.
+      ["exportedHelper(items)", true],
+      ["arrowHelper(items)", false],
+      ["spreadHelper(...items)", true],
+      ["missingArgHelper()", false],
+      ["recursiveHelper(items, 3)", false],
+      // Standard instances.
+      ["formatter.format(1)", false],
+      ["reassignedFormatter.format(1)", true],
+    ];
+    for (const mode of ["auto", "all"] as const) {
+      const { code } = shape(`${head}
+import * as lib from "react-fine-grained-signals";
+import { ext } from "./ext";
+const holder = { fn: (x) => x };
+export function exportedHelper(list) { return list.map(String).join(); }
+const arrowHelper = (list) => list.map(String).join();
+function spreadHelper(list) { return list.map(String).join(); }
+function missingArgHelper(list) { return list?.map(String).join(); }
+function recursiveHelper(list, n) { return n > 0 ? recursiveHelper(list, n - 1) : list.map(String).join(); }
+export function App(props) {
+  const { items, key, replacer, ...restOf } = props;
+  const [firstRow = "none"] = items;
+  const { defaulted = ext } = props;
+  const { deepDefault = [1] } = props;
+  const local = (x) => x;
+  const objectOfPrimitives = { a: 1, ["b"]: 2 };
+  const objectWithUnknownKey = { [ext]: 1 };
+  const deepWritten = items.slice();
+  deepWritten[0] = "x";
+  const namedWritten = items.slice();
+  namedWritten.label = "x";
+  const assigned = items.slice();
+  assigned.map = ext;
+  const assignedElement = items.slice();
+  assignedElement[0] = ext;
+  const pushedOwned = items.slice();
+  pushedOwned.push(1);
+  Object.assign(pushedOwned, { a: 1 });
+  let copy;
+  const formatter = new Intl.NumberFormat();
+  let reassignedFormatter = new Intl.NumberFormat();
+  reassignedFormatter = ext;
+  return (
+    <p>
+      {s.value}
+${children.map(([child]) => `      {${child}}`).join("\n")}
+    </p>
+  );
+}
+`, mode);
+      for (const [child, expected] of children) {
+        const captured = code.includes(`capture(() => ${child}`);
+        expect(`${mode} ${child} captured: ${captured}`).toBe(`${mode} ${child} captured: ${expected}`);
+      }
+    }
+  });
+
   it("captures calls into code it cannot see and leaves provably unrelated calls alone", () => {
     const { code, warnings } = shape(`${head}
 import * as ns from "./ns";
@@ -3329,8 +3528,10 @@ export function App(p) {
     expect(code).toContain("capture(() => ns.f(1))");
     expect(code).toContain("capture(() => named.g(2))");
     expect(code).toContain("capture(() => getFn()(3))");
-    for (const unrelated of ["Math.max", "JSON.stringify", "signal(2)", ".at(0)", "named.Header", "p.a || p.b", "trim()", "Intl.NumberFormat"]) {
-      const captured = new RegExp(`capture\\(\\(\\) => [^\\n]*${unrelated.replace(/[.()|]/g, "\\$&")}`).test(code);
+    // A function picked at run time from props is a prop function call like `p.a()`.
+    expect(code).toContain("capture(() => (p.a || p.b)())");
+    for (const unrelated of ["Math.max", "JSON.stringify", "signal(2)", "[1, 2].at(0)", "named.Header", "p.name.trim()", "new Intl.NumberFormat"]) {
+      const captured = code.includes(`capture(() => ${unrelated}`);
       expect(`${unrelated} captured: ${captured}`).toBe(`${unrelated} captured: false`);
     }
     expect(warnings).toEqual([]);

@@ -1533,7 +1533,8 @@ function resolveReferencedFunction(
   name: string,
 ): NodePath<t.Function> | undefined {
   const binding = origin.scope.getBinding(name);
-  if (binding === undefined) return undefined;
+  // A reassigned name (`let f = a; f = b;`) holds a function chosen at run time.
+  if (binding === undefined || binding.constantViolations.length > 0) return undefined;
   const bindingPath = binding.path;
   if (bindingPath.isFunctionDeclaration()) return bindingPath;
   if (bindingPath.isVariableDeclarator()) {
@@ -1585,15 +1586,23 @@ function resolveKeyedFunction(
   if (binding === undefined) return undefined;
   // An object literal bound directly to the root: walk the keys down through
   // nested literals.
+  // A reassigned root (`let o = {...}; o = extStore`) is chosen at run time.
+  if (binding.constantViolations.length > 0) return undefined;
+  const slotUses = getKeyedSlotUses({ origin, ...access });
   if (binding.path.isVariableDeclarator()) {
     const found = resolveObjectLiteralSlot(unwrapTransparentPath(binding.path.get("init") as NodePath), access.keys);
-    if (found !== undefined) return found;
+    // ...and so is a literal's slot the module assigns again (`o.total = ext`).
+    if (found !== undefined) {
+      return slotUses.some((slot) => slot.parentPath?.isAssignmentExpression() === true && (slot.parentPath.node as t.AssignmentExpression).left === slot.node)
+        ? undefined
+        : found;
+    }
   }
   // A member assignment (`Card.Header = () => ...`) anywhere in the module.
   // Only an assignment of the one exact slot counts, and only a single one:
   // two different functions assigned to the same slot are a runtime decision.
   const assigned: NodePath<t.AssignmentExpression>[] = [];
-  for (const slot of getKeyedSlotUses({ origin, ...access })) {
+  for (const slot of slotUses) {
     const parent = slot.parentPath;
     if (
       parent !== null &&
@@ -3431,13 +3440,7 @@ function externalCallMayReadTrackedValue(
   // Iterating a generator runs its body later, outside this call; the loop
   // that pulls from it captures those steps (see the `for...of` visitor).
   if (target.node.generator) return false;
-  // The answer depends only on the target function, so a helper called from
-  // many sites is inspected once instead of once per call.
-  const cached = targetMayReadTrackedValue.get(target.node);
-  if (cached !== undefined) return cached;
-  const result = targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
-  targetMayReadTrackedValue.set(target.node, result);
-  return result;
+  return cachedTargetMayRead(target, importSource, managedRuntimeSource, reactImportSource);
 }
 
 interface ReadContext {
@@ -3446,9 +3449,14 @@ interface ReadContext {
   reactImportSource: string;
 }
 
-/** Receivers that are never module state: only an own binding can be one. */
+/**
+ * Method names taken as the builtin when the receiver is a value the function
+ * owns (see `ownership`). The name alone proves nothing: an imported object can
+ * define `map` or `toString` itself.
+ */
 const pureMethodNames = new Set([
   "map", "filter", "reduce", "reduceRight", "forEach", "some", "every", "flatMap", "flat",
+  "find", "findIndex", "findLast", "findLastIndex", "at", "includes",
   "slice", "concat", "join", "indexOf", "lastIndexOf", "sort", "reverse", "toSorted",
   "toReversed", "push", "pop", "shift", "unshift", "splice",
   "toString", "toUpperCase", "toLowerCase", "toLocaleUpperCase", "toLocaleLowerCase",
@@ -3458,47 +3466,36 @@ const pureMethodNames = new Set([
   "toLocaleDateString", "toLocaleTimeString", "toISOString", "toJSON", "valueOf",
 ]);
 
-/** The base expression a member/call chain hangs off: `a.b().c` -> `a`. */
-function callChainRoot(node: t.Node): t.Node {
-  let current = unwrapTransparent(node);
-  for (;;) {
-    if (t.isMemberExpression(current) || t.isOptionalMemberExpression(current)) {
-      current = unwrapTransparent(current.object);
-    } else if (t.isCallExpression(current) || t.isOptionalCallExpression(current)) {
-      current = unwrapTransparent(current.callee);
-    } else if (t.isNewExpression(current)) {
-      current = unwrapTransparent(current.callee);
-    } else {
-      return current;
-    }
-  }
-}
+/**
+ * Standard globals whose functions, and static members (`Math.max`,
+ * `JSON.stringify`, `Object.keys`), are the engine's own. Any other free name
+ * (`window.store`, a global a script defined) is unresolved module code.
+ */
+const standardGlobals = new Set([
+  "Math", "JSON", "Object", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Date",
+  "Reflect", "Intl", "Promise", "Map", "Set", "WeakMap", "WeakSet", "RegExp", "Error", "TypeError",
+  "RangeError", "parseInt", "parseFloat", "isNaN", "isFinite", "encodeURIComponent", "decodeURIComponent",
+  "encodeURI", "decodeURI", "console", "structuredClone",
+]);
 
 /**
- * A synchronous call whose callee this module cannot resolve to a function
- * body -- a method of an imported or module-level object, a function held in a
- * variable (`useCallback`, a Hook's result, an alias), an optional call -- may
- * still read signals while it runs. It is captured unless it is provably not
- * module code: a Hook or component-shaped callee (never moved into a closure),
- * a global (`Math.max`, `JSON.stringify`), a builtin method that no store would
- * define (`items.map`, `s.trim`), or an import from the library or React.
- *
- * Calls that resolve to a function this module defines are decided by that
- * function's body instead, so they are never "unresolved".
+ * Builtins that call a function they are handed: the argument index of that
+ * function. That function runs inside the call, so it must be proven too.
  */
-/**
- * May a builtin method name (`map`, `toString`, ...) on this receiver be taken
- * as the builtin? Only when the receiver provably holds data the selected
- * function owns; see `isOwnedData`. Anything else (an imported or
- * module-level object, `this`, a custom Hook result, or any local whose value
- * traces back to one) can define such a method itself and read signals in it.
- */
-function receiverIsLocalData(
-  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
-  callee: t.MemberExpression | t.OptionalMemberExpression,
-): boolean {
-  return isOwnedData(call, callee.object, 0);
-}
+const builtinCallbackArguments: ReadonlyMap<string, number> = new Map([
+  ["map", 0], ["filter", 0], ["forEach", 0], ["some", 0], ["every", 0], ["flatMap", 0],
+  ["find", 0], ["findIndex", 0], ["findLast", 0], ["findLastIndex", 0],
+  ["reduce", 0], ["reduceRight", 0], ["sort", 0], ["toSorted", 0],
+  ["replace", 1], ["replaceAll", 1],
+]);
+const globalCallbackArguments: ReadonlyMap<string, number> = new Map([
+  ["Array.from", 1], ["JSON.stringify", 1], ["JSON.parse", 1], ["Object.groupBy", 1], ["Map.groupBy", 1],
+]);
+/** Builtins whose callback receives receiver elements (and, for `reduce*`, an accumulator first). */
+const elementCallbackMethods = new Set([
+  "map", "filter", "forEach", "some", "every", "flatMap", "find", "findIndex", "findLast", "findLastIndex",
+  "reduce", "reduceRight", "sort", "toSorted",
+]);
 
 /** React Hooks whose results are plain state the component owns. */
 const stateHookNames = new Set([
@@ -3511,132 +3508,496 @@ const enum Ownership {
   Unknown = 0,
   /** The value itself is a builtin (array, string, number), but not its elements. */
   Builtin = 1,
-  /** Props or React state: the value and everything read from it. */
+  /**
+   * The value and everything read from it: a primitive, a literal of such
+   * values, or -- by convention, not by proof -- props and React state.
+   */
   Deep = 2,
 }
 
 /** Builtin methods that return one of the receiver's elements. */
-const elementReturningMethods = new Set(["pop", "shift"]);
+const elementReturningMethods = new Set(["pop", "shift", "at", "find", "findLast"]);
 /**
  * Builtin methods whose result is whatever their callback or initial value
  * returns (`items.reduce(() => extStore, extStore)`), not a receiver element.
  */
 const callbackResultMethods = new Set(["reduce", "reduceRight"]);
-/** Builtin methods whose result holds only the receiver's own elements. */
+/** Builtin methods whose result holds only the receiver's own elements, or is the receiver. */
 const elementPreservingMethods = new Set([
-  "filter", "slice", "sort", "reverse", "toSorted", "toReversed", "splice", "flat",
+  "filter", "slice", "sort", "reverse", "toSorted", "toReversed", "splice", "flat", "valueOf",
+]);
+/** Builtin methods whose result is a new array of callback results or arguments. */
+const newCollectionMethods = new Set(["map", "flatMap", "concat"]);
+/** Builtin methods that put their arguments into the receiver. */
+const insertingMethods: ReadonlyMap<string, number> = new Map([
+  ["push", 0], ["unshift", 0], ["splice", 2], ["fill", 0], ["set", 1], ["add", 0],
 ]);
 
-function isOwnedData(path: NodePath, node: t.Node, depth: number): boolean {
-  return ownership(path, node, depth) !== Ownership.Unknown;
+/**
+ * May a call skip capture because its callee is a builtin method of data the
+ * function owns? The receiver must hold such data (`ownership`), the method
+ * name must be a builtin one, and a function the builtin calls back must be
+ * provable as well (`calledBackIsKnown`).
+ */
+function receiverIsLocalData(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  callee: t.MemberExpression | t.OptionalMemberExpression,
+  context: ReadContext,
+): boolean {
+  return ownership(call, callee.object, 0, context) !== Ownership.Unknown;
+}
+
+/**
+ * Is a function a builtin is handed, and will call, one whose reads are
+ * decided elsewhere? An inline function or a never-reassigned local function
+ * is inspected by the call-site checks; a standard global (`String`) is the
+ * engine's. A function from props, an import, or any other value is not.
+ */
+function calledBackIsKnown(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  index: number | undefined,
+): boolean {
+  if (index === undefined) return true;
+  const argument = call.node.arguments[index];
+  if (argument === undefined) return true;
+  const value = unwrapTransparent(argument);
+  if (t.isArrowFunctionExpression(value) || t.isFunctionExpression(value)) return true;
+  if (t.isNullLiteral(value)) return true;
+  if (!t.isIdentifier(value)) return false;
+  if (value.name === "undefined" && call.scope.getBinding("undefined") === undefined) return true;
+  if (call.scope.getBinding(value.name) === undefined) return standardGlobals.has(value.name);
+  return resolveReferencedFunction(call, value.name) !== undefined;
+}
+
+/** `Math.max` / `JSON.stringify` / `String`: the dotted name of a standard global function, if it is one. */
+function standardGlobalCallee(call: NodePath, callee: t.Node): string | undefined {
+  if (t.isIdentifier(callee)) {
+    return call.scope.getBinding(callee.name) === undefined && standardGlobals.has(callee.name) ? callee.name : undefined;
+  }
+  if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return undefined;
+  const chain = getStaticMemberChain(callee);
+  if (chain === undefined) return undefined;
+  const root = unwrapTransparent(chain.root);
+  if (!t.isIdentifier(root) || call.scope.getBinding(root.name) !== undefined || !standardGlobals.has(root.name)) {
+    return undefined;
+  }
+  // `.call`/`.apply`/`.bind` choose `this` and the arguments at run time.
+  const last = chain.keys.at(-1);
+  if (last === "call" || last === "apply" || last === "bind") return undefined;
+  return [root.name, ...chain.keys].join(".");
+}
+
+/** Is `value` the receiver, a member of it, or nested deeper (`x`, `x.a`, `x[0].b`)? */
+function climbMemberChain(reference: NodePath): NodePath {
+  let current = reference;
+  while (
+    current.parentPath !== null &&
+    (current.parentPath.isMemberExpression() || current.parentPath.isOptionalMemberExpression()) &&
+    current.parentPath.node.object === current.node
+  ) {
+    current = current.parentPath;
+  }
+  return current;
+}
+
+type Binding = NonNullable<ReturnType<NodePath["scope"]["getBinding"]>>;
+
+const mutationCache = new WeakMap<object, Ownership>();
+
+/**
+ * The most a binding can still be trusted for after the writes this module
+ * makes into it: `list.push(extStore)`, `list[0] = extStore`, or
+ * `Object.assign(list, ...)` put values of other provenance in its elements
+ * (Builtin at most), and an assignment to a named member can replace one of its
+ * methods (Unknown). A value handed to code this module cannot see may be
+ * written there as well; that is not followed.
+ */
+function mutationLimit(binding: Binding, context: ReadContext, depth: number): Ownership {
+  const cached = mutationCache.get(binding);
+  if (cached !== undefined) return cached;
+  // Assume the best while answering, so a value written back into its own binding does not recurse.
+  mutationCache.set(binding, Ownership.Deep);
+  let limit = Ownership.Deep;
+  const lower = (to: Ownership): void => { if (to < limit) limit = to; };
+  const isDeep = (path: NodePath, node: t.Node): boolean => ownership(path, node, depth + 1, context) === Ownership.Deep;
+  for (const reference of binding.referencePaths) {
+    const top = climbMemberChain(reference);
+    const parent = top.parentPath;
+    if (parent === null) continue;
+    if (top !== reference && parent.isAssignmentExpression() && parent.node.left === top.node) {
+      const key = getReadPropertyName(top.node as t.MemberExpression);
+      const element = key !== undefined && /^\d+$/.test(key);
+      // An element may take trusted data; any other key may become a method (`m.get = p.g`).
+      if (element ? isDeep(parent, parent.node.right) : isPrimitiveExpression(parent.node.right)) continue;
+      lower(element ? Ownership.Builtin : Ownership.Unknown);
+      continue;
+    }
+    if (top !== reference && (parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.callee === top.node) {
+      const method = getStaticMemberChain(top.node as t.MemberExpression)?.keys.at(-1);
+      const from = method === undefined ? undefined : insertingMethods.get(method);
+      if (from !== undefined && !parent.node.arguments.slice(from).every((argument) => isDeep(parent, argument))) {
+        lower(Ownership.Builtin);
+      }
+      continue;
+    }
+    // `Object.assign(list, extra)` writes the later arguments into the first.
+    if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.arguments[0] === top.node) {
+      const callee = standardGlobalCallee(parent, unwrapTransparent(parent.node.callee));
+      if (
+        (callee === "Object.assign" || callee === "Object.defineProperty" || callee === "Object.defineProperties" ||
+          callee === "Reflect.set" || callee === "Reflect.defineProperty" || callee === "Object.setPrototypeOf") &&
+        !parent.node.arguments.slice(1).every((argument) => isDeep(parent, argument))
+      ) {
+        lower(Ownership.Unknown);
+      }
+    }
+  }
+  mutationCache.set(binding, limit);
+  return limit;
+}
+
+/**
+ * What a parameter holds. Props (and a forwarded ref) of a component are
+ * trusted by convention: the transform has no types to prove them. A callback
+ * a builtin array method calls with the receiver's elements gets that
+ * receiver's trust (`items.map((item) => ...)`), except `reduce`'s
+ * accumulator. Any other parameter -- a helper's, an IIFE's, a Hook's, one of
+ * a callback some other function calls -- holds whatever its caller passes.
+ */
+function parameterOwnership(binding: Binding, context: ReadContext, depth: number): Ownership {
+  const owner = binding.scope.path;
+  if (!owner.isFunction()) return Ownership.Unknown;
+  const parameterPath = (owner.get("params") as NodePath[]).find((param) =>
+    param === binding.path || param.node === binding.path.node || binding.path.isDescendant(param));
+  const parameter = parameterPath?.node;
+  const index = parameterPath === undefined ? -1 : (owner.get("params") as NodePath[]).indexOf(parameterPath);
+  let trust = Ownership.Unknown;
+  if (isComponentIdentity(resolveComponentIdentity(owner, context.reactImportSource))) {
+    trust = Ownership.Deep;
+  } else if (parameter !== undefined) {
+    trust = elementCallbackOwnership(owner, index, context, depth);
+    if (trust === Ownership.Unknown && t.isIdentifier(parameter)) trust = helperArgumentOwnership(owner, index, context, depth);
+  }
+  if (trust === Ownership.Unknown || parameter === undefined) return Ownership.Unknown;
+  // `{ store = extStore }`: a default value is visible code with its own provenance.
+  let defaultsTrusted = true;
+  const checkDefaults = (node: t.Node): void => {
+    if (!defaultsTrusted) return;
+    if (t.isAssignmentPattern(node)) {
+      if (ownership(owner, node.right, depth + 1, context) !== Ownership.Deep) defaultsTrusted = false;
+      checkDefaults(node.left);
+    } else if (t.isObjectPattern(node)) {
+      for (const property of node.properties) checkDefaults(t.isRestElement(property) ? property.argument : property.value);
+    } else if (t.isArrayPattern(node)) {
+      for (const element of node.elements) if (element !== null) checkDefaults(element);
+    } else if (t.isRestElement(node)) {
+      checkDefaults(node.argument);
+    }
+  };
+  checkDefaults(parameter);
+  return defaultsTrusted ? trust : Ownership.Unknown;
+}
+
+/**
+ * `items.map((item) => ...)`: the elements a builtin array method hands its
+ * callback carry the receiver's trust; `reduce`'s accumulator does not.
+ */
+function elementCallbackOwnership(owner: NodePath, index: number, context: ReadContext, depth: number): Ownership {
+  const slot = climbTransparentWrappers(owner);
+  const call = slot.parentPath;
+  if (call === null || !(call.isCallExpression() || call.isOptionalCallExpression()) || call.node.arguments[0] !== slot.node) {
+    return Ownership.Unknown;
+  }
+  const callee = unwrapTransparent(call.node.callee);
+  if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return Ownership.Unknown;
+  const method = getStaticMemberChain(callee)?.keys.at(-1);
+  if (method === undefined || !elementCallbackMethods.has(method) || (callbackResultMethods.has(method) && index === 0)) {
+    return Ownership.Unknown;
+  }
+  return ownership(call, callee.object, depth + 1, context) === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
+}
+
+/**
+ * A module function that is only ever called directly in this module
+ * (`function label(item) {...}` ... `label(row)`) holds, in a parameter,
+ * what the weakest of those calls passes. A function that is exported,
+ * handed elsewhere, or reassigned can be called with anything.
+ */
+function helperArgumentOwnership(owner: NodePath<t.Function>, index: number, context: ReadContext, depth: number): Ownership {
+  let binding: Binding | undefined;
+  if (owner.isFunctionDeclaration() && owner.node.id) {
+    binding = owner.parentPath.scope.getBinding(owner.node.id.name);
+  } else {
+    const slot = climbTransparentWrappers(owner).parentPath;
+    if (slot?.isVariableDeclarator() && t.isIdentifier(slot.node.id)) binding = slot.scope.getBinding(slot.node.id.name);
+  }
+  if (binding === undefined || binding.constantViolations.length > 0 || binding.referencePaths.length === 0) return Ownership.Unknown;
+  if (binding.path.parentPath?.isExportNamedDeclaration() || binding.path.parentPath?.parentPath?.isExportNamedDeclaration() ||
+    binding.path.parentPath?.isExportDefaultDeclaration()) return Ownership.Unknown;
+  // A helper that passes its own parameter on to itself is answered by its other callers.
+  if (helpersInProgress.has(owner.node)) return Ownership.Deep;
+  helpersInProgress.add(owner.node);
+  try {
+    return weakestArgument(binding, index, context, depth);
+  } finally {
+    helpersInProgress.delete(owner.node);
+  }
+}
+
+const helpersInProgress = new WeakSet<t.Node>();
+
+function weakestArgument(binding: Binding, index: number, context: ReadContext, depth: number): Ownership {
+  let trust = Ownership.Deep;
+  for (const reference of binding.referencePaths) {
+    const site = climbTransparentWrappers(reference);
+    const call = site.parentPath;
+    if (call === null || !(call.isCallExpression() || call.isOptionalCallExpression())) return Ownership.Unknown;
+    if (call.node.callee !== site.node) {
+      // `items.map(label)`: the builtin calls it with the receiver's elements.
+      if (call.node.arguments[0] !== site.node) return Ownership.Unknown;
+      trust = Math.min(trust, elementCallbackOwnership(site as NodePath<t.Function>, index, context, depth));
+      if (trust === Ownership.Unknown) return trust;
+      continue;
+    }
+    const args = call.node.arguments;
+    if (args.slice(0, index + 1).some((argument) => t.isSpreadElement(argument))) return Ownership.Unknown;
+    const argument = args[index];
+    // A missing argument is `undefined`.
+    if (argument !== undefined) trust = Math.min(trust, ownership(call, argument, depth + 1, context));
+    if (trust === Ownership.Unknown) return trust;
+  }
+  return trust;
 }
 
 /**
  * Does `expression` provably evaluate to data the function owns? Proven by
  * where the value comes from, never by being a local name:
- * - Deep (the value and anything read from it): a parameter (props) or a
- *   member of one, React state (`const [rows] = useState(...)`), and the
- *   element-preserving builtin methods applied to such data.
- * - Builtin (the value only): an array, string, template, or number literal,
- *   and any other builtin method result except `reduce`/`reduceRight`, whose
- *   result is whatever the callback or initial value returns (Unknown). An element read from such an array
- *   (`[extStore][0]`, `box.pop()`, `ids.map(() => extStore)[0]`) is Unknown.
- * - A conditional/logical choice is the weaker of its branches; a
- *   never-reassigned local is its initializer.
- * Object literals are Unknown: their properties can hold anything.
+ * - Deep (the value and anything read from it): a primitive-valued expression
+ *   (literal, template, arithmetic, comparison), an array or object literal of
+ *   such values, props of a component and members of them, React state
+ *   (`const [rows] = useState(...)`), the elements a builtin array method hands
+ *   its callback from such data, element-preserving and element-returning
+ *   builtin methods applied to such data, and builtin methods that return a
+ *   primitive.
+ * - Builtin (the value only): any other array literal, and the new array
+ *   `map`/`flatMap`/`concat` build from callback results or arguments. An
+ *   element read from such an array (`[extStore][0]`, `box.pop()`,
+ *   `ids.map(() => extStore)[0]`) is Unknown.
+ * - Unknown: everything else, including `reduce`/`reduceRight` results, any
+ *   other call, `this`, module-level values, imports, and parameters other
+ *   than props and element callbacks (see `parameterOwnership`).
+ * A conditional/logical choice is the weaker of its branches; a
+ * never-reassigned local is its initializer, capped by the writes made into it
+ * (`mutationLimit`).
  */
-function ownership(path: NodePath, node: t.Node, depth: number): Ownership {
+/** An expression whose value is always a primitive, whatever its operands are. */
+function isPrimitiveExpression(node: t.Node): boolean {
+  const expression = unwrapTransparent(node);
+  return t.isStringLiteral(expression) || t.isNumericLiteral(expression) || t.isBooleanLiteral(expression) ||
+    t.isNullLiteral(expression) || t.isBigIntLiteral(expression) || t.isTemplateLiteral(expression) ||
+    t.isBinaryExpression(expression) || t.isUpdateExpression(expression) ||
+    (t.isUnaryExpression(expression) && expression.operator !== "delete");
+}
+
+function ownership(path: NodePath, node: t.Node, depth: number, context: ReadContext): Ownership {
   if (depth > 16) return Ownership.Unknown;
   const expression = unwrapTransparent(node);
-  if (
-    t.isArrayExpression(expression) || t.isStringLiteral(expression) ||
-    t.isTemplateLiteral(expression) || t.isNumericLiteral(expression)
-  ) return Ownership.Builtin;
+  if (isPrimitiveExpression(expression)) return Ownership.Deep;
+  if (t.isArrayExpression(expression) || t.isObjectExpression(expression)) {
+    return literalHoldsOnly(path, expression, depth, context) ? Ownership.Deep : t.isArrayExpression(expression) ? Ownership.Builtin : Ownership.Unknown;
+  }
   if (t.isConditionalExpression(expression)) {
-    return Math.min(ownership(path, expression.consequent, depth + 1), ownership(path, expression.alternate, depth + 1));
+    return Math.min(ownership(path, expression.consequent, depth + 1, context), ownership(path, expression.alternate, depth + 1, context));
   }
   if (t.isLogicalExpression(expression)) {
-    return Math.min(ownership(path, expression.left, depth + 1), ownership(path, expression.right, depth + 1));
+    return Math.min(ownership(path, expression.left, depth + 1, context), ownership(path, expression.right, depth + 1, context));
+  }
+  if (t.isSequenceExpression(expression)) {
+    const last = expression.expressions.at(-1);
+    return last === undefined ? Ownership.Unknown : ownership(path, last, depth + 1, context);
+  }
+  if (t.isAssignmentExpression(expression)) {
+    return expression.operator === "=" ? ownership(path, expression.right, depth + 1, context) : Ownership.Deep;
   }
   if (t.isMemberExpression(expression) || t.isOptionalMemberExpression(expression)) {
-    // Only a member of props or state is known; an element of a local array
-    // or a property of an object literal can be anything.
-    return ownership(path, expression.object, depth + 1) === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
+    // Only a member of props, state, or a literal of primitives is known; an
+    // element of another local array or a property of an object can be anything.
+    return ownership(path, expression.object, depth + 1, context) === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
   }
   if (t.isCallExpression(expression) || t.isOptionalCallExpression(expression)) {
     const callee = unwrapTransparent(expression.callee);
     if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return Ownership.Unknown;
     const method = getStaticMemberChain(callee)?.keys.at(-1);
     if (method === undefined || !pureMethodNames.has(method)) return Ownership.Unknown;
-    const receiver = ownership(path, callee.object, depth + 1);
+    const receiver = ownership(path, callee.object, depth + 1, context);
     if (receiver === Ownership.Unknown || callbackResultMethods.has(method)) return Ownership.Unknown;
     if (elementReturningMethods.has(method)) return receiver === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
     if (elementPreservingMethods.has(method)) return receiver;
-    return Ownership.Builtin;
+    if (newCollectionMethods.has(method)) {
+      return method === "concat" && receiver === Ownership.Deep &&
+          expression.arguments.every((argument) => ownership(path, argument, depth + 1, context) === Ownership.Deep)
+        ? Ownership.Deep
+        : Ownership.Builtin;
+    }
+    // Every other builtin in the list returns a primitive (or `split`'s array of strings).
+    return Ownership.Deep;
   }
   if (!t.isIdentifier(expression)) return Ownership.Unknown;
   const binding = path.scope.getBinding(expression.name);
   if (binding === undefined || binding.scope.path.isProgram()) return Ownership.Unknown;
-  if (binding.kind === "param") return Ownership.Deep;
+  if (binding.kind === "param") {
+    const trust = parameterOwnership(binding, context, depth + 1);
+    return trust === Ownership.Unknown ? trust : Math.min(trust, mutationLimit(binding, context, depth + 1));
+  }
   if (!binding.path.isVariableDeclarator() || binding.constantViolations.length > 0) return Ownership.Unknown;
   const declarator = binding.path.node;
   const init = declarator.init == null ? undefined : unwrapTransparent(declarator.init);
   if (init === undefined) return Ownership.Unknown;
-  if (t.isIdentifier(declarator.id)) return ownership(binding.path, init, depth + 1);
-  // `const [rows, setRows] = useState(...)`: React state, not an object with methods.
-  if (t.isArrayPattern(declarator.id) && (t.isCallExpression(init) || t.isOptionalCallExpression(init))) {
-    const stateHook = unwrapTransparent(init.callee);
-    return t.isIdentifier(stateHook) && stateHookNames.has(stateHook.name) ? Ownership.Deep : Ownership.Unknown;
+  let trust: Ownership;
+  if (t.isIdentifier(declarator.id)) {
+    trust = ownership(binding.path, init, depth + 1, context);
+  } else if (t.isArrayPattern(declarator.id) && (t.isCallExpression(init) || t.isOptionalCallExpression(init)) &&
+    t.isIdentifier(unwrapTransparent(init.callee)) && stateHookNames.has((unwrapTransparent(init.callee) as t.Identifier).name)) {
+    // `const [rows, setRows] = useState(...)`: React state, not an object with methods.
+    trust = Ownership.Deep;
+  } else {
+    // `const { a, b: [c] } = props`: a part of trusted data is trusted, unless
+    // a default value of other provenance can stand in for it.
+    trust = ownership(binding.path, init, depth + 1, context) === Ownership.Deep &&
+        patternDefaultsAreDeep(binding.path, declarator.id, depth, context)
+      ? Ownership.Deep
+      : Ownership.Unknown;
   }
-  return Ownership.Unknown;
+  return trust === Ownership.Unknown ? trust : Math.min(trust, mutationLimit(binding, context, depth + 1));
 }
 
-/** Does an array/object literal hold anything but primitive literals? */
-function literalHoldsValues(node: t.ArrayExpression | t.ObjectExpression): boolean {
-  const entries = t.isArrayExpression(node)
-    ? node.elements
-    : node.properties.map((property) => t.isObjectProperty(property) && !property.computed ? property.value : property);
-  return entries.some((entry) => {
-    if (entry === null) return false;
-    const value = unwrapTransparent(entry);
-    if (t.isArrayExpression(value) || t.isObjectExpression(value)) return literalHoldsValues(value);
-    return !(t.isStringLiteral(value) || t.isNumericLiteral(value) || t.isBooleanLiteral(value) || t.isNullLiteral(value));
-  });
+function patternDefaultsAreDeep(path: NodePath, pattern: t.Node, depth: number, context: ReadContext): boolean {
+  if (t.isAssignmentPattern(pattern)) {
+    return ownership(path, pattern.right, depth + 1, context) === Ownership.Deep &&
+      patternDefaultsAreDeep(path, pattern.left, depth, context);
+  }
+  if (t.isObjectPattern(pattern)) {
+    return pattern.properties.every((property) =>
+      patternDefaultsAreDeep(path, t.isRestElement(property) ? property.argument : property.value, depth, context));
+  }
+  if (t.isArrayPattern(pattern)) {
+    return pattern.elements.every((element) => element === null || patternDefaultsAreDeep(path, element, depth, context));
+  }
+  if (t.isRestElement(pattern)) return patternDefaultsAreDeep(path, pattern.argument, depth, context);
+  return true;
 }
 
+/** Does an array/object literal hold only Deep data properties (no methods, accessors, or other values)? */
+function literalHoldsOnly(
+  path: NodePath,
+  node: t.ArrayExpression | t.ObjectExpression,
+  depth: number,
+  context: ReadContext,
+): boolean {
+  if (t.isArrayExpression(node)) {
+    return node.elements.every((element) =>
+      element === null || (!t.isSpreadElement(element) && ownership(path, element, depth + 1, context) === Ownership.Deep));
+  }
+  return node.properties.every((property) =>
+    t.isObjectProperty(property) &&
+    (!property.computed || ownership(path, property.key, depth + 1, context) === Ownership.Deep) &&
+    ownership(path, property.value, depth + 1, context) === Ownership.Deep);
+}
+
+/**
+ * A synchronous call whose callee this module cannot resolve to a function
+ * body may still read signals while it runs, so it is captured unless the
+ * callee is proven:
+ * - a Hook or component-shaped name (never moved into a closure),
+ * - a never-reassigned local or module function, or a function expression
+ *   called in place (decided by its body instead),
+ * - a standard global (`Math.max`, `JSON.stringify`, `String`) or an import
+ *   from the library or React,
+ * - a builtin-named method of data the function owns (`items.map`, `s.trim`;
+ *   see `ownership`),
+ * and, for a builtin that calls a function it is handed (`items.map(fn)`,
+ * `JSON.stringify(v, fn)`), that function is proven as well.
+ *
+ * How the callee is reached does not matter: `(flag ? a : b).total()`,
+ * `(0, a.total)()`, `getStore().total()`, and `[0].map(() => a)[0].total()`
+ * are all captured, because none of them proves what `total` is.
+ *
+ * User code a proven builtin runs implicitly on a value that is not a tracked
+ * alias -- `toString`/`valueOf` while converting, a getter, `toJSON`, an
+ * iterator, `Symbol.species`, a Proxy trap -- is not followed, exactly as for
+ * `"" + extStore`.
+ */
 function unresolvedCallMayRead(
   call: NodePath<t.CallExpression | t.OptionalCallExpression>,
   context: ReadContext,
 ): boolean {
   if (callNameIsHook(call.node.callee)) return false;
   const callee = unwrapTransparent(call.node.callee);
+  // An IIFE: its body is inspected where it is called.
+  if (t.isArrowFunctionExpression(callee) || t.isFunctionExpression(callee)) return false;
+  const global = standardGlobalCallee(call, callee);
+  if (global !== undefined) return !calledBackIsKnown(call, globalCallbackArguments.get(global));
   if (t.isIdentifier(callee)) {
     if (isComponentName(callee.name) || resolveReferencedFunction(call, callee.name) !== undefined) return false;
-  } else if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
+    const binding = call.scope.getBinding(callee.name);
+    if (binding === undefined) return true;
+    const specifier = binding.path;
+    if (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier()) {
+      return importIsForeign(specifier, context);
+    }
+    return true;
+  }
+  if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
     const name = getStaticMemberChain(callee)?.keys.at(-1);
-    if (name !== undefined && (isComponentName(name) || (pureMethodNames.has(name) && receiverIsLocalData(call, callee)))) return false;
+    if (name !== undefined && isComponentName(name)) return false;
+    if (
+      name !== undefined && pureMethodNames.has(name) && receiverIsLocalData(call, callee, context) &&
+      calledBackIsKnown(call, builtinCallbackArguments.get(name))
+    ) return false;
     if (resolveKeyedFunction(call, callee) !== undefined) return false;
-  } else if (!t.isCallExpression(callee) && !t.isOptionalCallExpression(callee)) {
-    return false;
+    // `new Intl.NumberFormat().format(n)`: a fresh instance of a standard class has only its methods.
+    if (
+      name !== undefined && isStandardInstance(call, callee.object, context) &&
+      calledBackIsKnown(call, builtinCallbackArguments.get(name))
+    ) return false;
+    // Namespace members of the library or React: `ns.signal(1)`.
+    const root = unwrapTransparent(getStaticMemberChain(callee)?.root ?? callee);
+    if (t.isIdentifier(root)) {
+      const specifier = call.scope.getBinding(root.name)?.path;
+      if (
+        specifier !== undefined &&
+        (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier())
+      ) {
+        return importIsForeign(specifier, context);
+      }
+    }
+    return true;
   }
-  const root = callChainRoot(callee);
-  if (t.isThisExpression(root)) return true;
-  // `[extStore][0].map()`: the call reaches a value the literal only holds.
-  if (t.isArrayExpression(root) || t.isObjectExpression(root)) return literalHoldsValues(root);
-  if (!t.isIdentifier(root)) return false;
-  const binding = call.scope.getBinding(root.name);
-  // An unbound name is a global (`Math`, `JSON`, `String`, `console`).
-  if (binding === undefined) return false;
-  const specifier = binding.path;
-  if (
-    specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() ||
-    specifier.isImportNamespaceSpecifier()
-  ) {
-    const source = (specifier.parentPath as NodePath<t.ImportDeclaration>).node.source.value;
-    return source !== context.importSource && source !== context.managedRuntimeSource &&
-      !isReactSource(source, context.reactImportSource);
-  }
+  // Any other callee expression -- a conditional, a sequence, a call result --
+  // selects its function at run time.
   return true;
+}
+
+/** `new Map()`, or a never-reassigned local holding one whose methods are never replaced. */
+function isStandardInstance(path: NodePath, node: t.Node, context: ReadContext): boolean {
+  const expression = unwrapTransparent(node);
+  if (t.isNewExpression(expression)) return standardGlobalCallee(path, unwrapTransparent(expression.callee)) !== undefined;
+  if (!t.isIdentifier(expression)) return false;
+  const binding = path.scope.getBinding(expression.name);
+  if (
+    binding === undefined || binding.constantViolations.length > 0 || !binding.path.isVariableDeclarator() ||
+    !t.isIdentifier(binding.path.node.id) || binding.path.node.init == null
+  ) return false;
+  const init = unwrapTransparent(binding.path.node.init);
+  return t.isNewExpression(init) && standardGlobalCallee(binding.path, unwrapTransparent(init.callee)) !== undefined &&
+    mutationLimit(binding, context, 0) !== Ownership.Unknown;
+}
+
+/** Is an import from a module other than this library or React? */
+function importIsForeign(specifier: NodePath, context: ReadContext): boolean {
+  const source = (specifier.parentPath as NodePath<t.ImportDeclaration>).node.source.value;
+  return source !== context.importSource && source !== context.managedRuntimeSource &&
+    !isReactSource(source, context.reactImportSource);
 }
 
 const targetMayReadTrackedValue = new WeakMap<t.Node, boolean>();
@@ -3649,8 +4010,23 @@ function functionTargetMayReadTrackedValue(
   reactImportSource: string,
 ): boolean {
   if (target.node.async || target.node.generator) return false;
+  return cachedTargetMayRead(target, importSource, managedRuntimeSource, reactImportSource);
+}
+
+/**
+ * The answer depends only on the target function, so a helper called from
+ * many sites is inspected once instead of once per call. A helper that
+ * reaches itself again (recursion) is answered by its other reads meanwhile.
+ */
+function cachedTargetMayRead(
+  target: NodePath<t.Function>,
+  importSource: string,
+  managedRuntimeSource: string,
+  reactImportSource: string,
+): boolean {
   const cached = targetMayReadTrackedValue.get(target.node);
   if (cached !== undefined) return cached;
+  targetMayReadTrackedValue.set(target.node, false);
   const result = targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
   targetMayReadTrackedValue.set(target.node, result);
   return result;
@@ -3682,7 +4058,12 @@ function targetFunctionMayReadTrackedValue(
     undefined,
     true,
   );
-  return inspection.readsValue || hasDynamicCallTarget(target);
+  if (inspection.readsValue || hasDynamicCallTarget(target)) return true;
+  // A call in the helper that this module cannot prove (`extStore.total()`,
+  // a callback from its caller) may read signals just as a call written at
+  // the call site would.
+  const body = target.get("body") as NodePath;
+  return bodyReadsTrackedValue(body, target, noAliases, { importSource, managedRuntimeSource, reactImportSource });
 }
 
 /** Does a synchronous helper invoke a function selected through a dynamic key? */
@@ -3938,6 +4319,13 @@ function isWriteTarget(path: NodePath): boolean {
 
 function callNameIsHook(node: t.Node): boolean {
   const callee = unwrapTransparent(node);
+  // `(flag ? useA : useB)()`, `(0, useA)()`: any function the callee may pick.
+  if (t.isConditionalExpression(callee)) return callNameIsHook(callee.consequent) || callNameIsHook(callee.alternate);
+  if (t.isLogicalExpression(callee)) return callNameIsHook(callee.left) || callNameIsHook(callee.right);
+  if (t.isSequenceExpression(callee)) {
+    const last = callee.expressions.at(-1);
+    return last !== undefined && callNameIsHook(last);
+  }
   const name = t.isIdentifier(callee)
     ? callee.name
     : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
