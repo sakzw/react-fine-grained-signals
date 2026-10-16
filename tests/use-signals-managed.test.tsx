@@ -646,6 +646,43 @@ describe("useSignalCapture iterate", () => {
     expect(loop({ [Symbol.iterator]: () => ({ next: () => ({ done: false, value: 7 }) }) })).toEqual([7]);
     expect(() => loop({ [Symbol.iterator]: () => ({ next: () => ({ done: false, value: 1 }), return: () => 1 }) })).toThrow(TypeError);
   });
+
+  it("throws a native-style TypeError for a source that is not iterable", () => {
+    let scope!: ReturnType<typeof useSignalCapture>;
+    function Holder() {
+      scope = useSignalCapture();
+      return null;
+    }
+    render(<Holder />);
+    const loop = (iterable: unknown) => { for (const _ of scope.iterate(() => iterable as Iterable<unknown>)) void _; };
+    expect(() => loop({})).toThrow(/object is not iterable/);
+    expect(() => loop(undefined)).toThrow(/undefined is not iterable/);
+    expect(() => loop(5)).toThrow(/5 is not iterable/);
+  });
+});
+
+describe("useSignalCapture forIn", () => {
+  it("tracks key enumeration, keeps inherited keys, and skips keys deleted before their turn", () => {
+    const state = deepSignal({ errors: { a: 1 } as Record<string, number> });
+    function Reader() {
+      const scope = useSignalCapture();
+      const keys: string[] = [];
+      for (const key of scope.forIn(() => state.value.errors)) keys.push(key);
+      const proto = { inherited: 1 };
+      const object: Record<string, number> = Object.create(proto);
+      object.a = 1; object.b = 2; object.c = 3;
+      const seen: string[] = [];
+      for (const key of scope.forIn(() => object)) { seen.push(key); if (key === "a") delete object.b; }
+      for (const key of scope.forIn(() => null)) seen.push(key);
+      for (const key of scope.forIn(() => "ab")) seen.push(key);
+      return <output aria-label="keys">{keys.join(",") + "|" + seen.join(",")}</output>;
+    }
+    render(<Reader />);
+    const read = () => screen.getByLabelText("keys").textContent;
+    expect(read()).toBe("a|a,c,inherited,0,1");
+    act(() => { state.value.errors.x = 1; });
+    expect(read()).toBe("a,x|a,c,inherited,0,1");
+  });
 });
 
 describe("per-read useSignalCapture prototype", () => {

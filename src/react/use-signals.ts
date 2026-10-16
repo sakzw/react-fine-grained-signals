@@ -13,6 +13,8 @@ export interface SignalCaptureStore extends ManagedSignalsStore {
   capture<T>(callback: () => T): T;
   /** Lazily forwards a `for...of` source, capturing GetIterator and each `next()`/`return()`. */
   iterate<T>(getIterable: () => Iterable<T>): Iterable<T>;
+  /** Enumerates a `for...in` source's keys inside a capture, skipping keys deleted before their turn. */
+  forIn(getObject: () => unknown): Iterable<string>;
 }
 
 /** Best-effort render tracking for untransformed components. */

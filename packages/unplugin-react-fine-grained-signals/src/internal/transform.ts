@@ -6,6 +6,7 @@ import {
   type PluginItem,
   type PluginObject,
   type PluginPass,
+  type Visitor,
 } from "@babel/core";
 import * as t from "@babel/types";
 
@@ -3626,6 +3627,15 @@ function generatedCallback(
   return callback;
 }
 
+/** Operators that run ToPrimitive/ToNumeric on object operands. `===` and `!==` do not coerce. */
+const COERCING_BINARY_OPERATORS: ReadonlySet<string> = new Set([
+  "+", "-", "*", "/", "%", "**", "<", ">", "<=", ">=", "==", "!=",
+  "&", "|", "^", "<<", ">>", ">>>", "instanceof",
+]);
+const COERCING_COMPOUND_ASSIGNMENTS: ReadonlySet<string> = new Set([
+  "+=", "-=", "*=", "/=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>=", ">>>=",
+]);
+
 const HOOK_IN_CAPTURED_CALL_WARNING =
   "[react-fine-grained-signals] A Hook call shares this call with signal reads that only the call itself performs. " +
   "The managed transform keeps Hooks out of capture closures, so those reads are not tracked here. " +
@@ -3677,6 +3687,20 @@ function captureTrackedReadExpressions(
       hookCallingReader.set(target.node, reads);
     }
     if (reads) reportWarning(options, new Error(HOOK_CALLING_HELPER_WARNING), path);
+  };
+  /**
+   * Wraps a whole coercing operation (`a + b`, a template literal, ...) when
+   * an operand reads a tracked value: the coercion calls the operand's
+   * `toString`/`valueOf`/`Symbol.toPrimitive`, which can read signals. Hooks
+   * stay outside; their operands' own reads are still captured one by one.
+   */
+  const wrapCoercion = (path: NodePath<t.Expression>, operands: NodePath[]): void => {
+    if (
+      !operands.some((operand) => hasTrackedReadInExpression(operand, functionPath, trackedAliases)) ||
+      isDeferredReadContext(path, functionPath) ||
+      expressionCallsHook(path)
+    ) return;
+    wrap(path);
   };
   const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
     if (generated.has(path.node)) {
@@ -3743,7 +3767,16 @@ function captureTrackedReadExpressions(
     generated.add(read);
     path.replaceWith(read);
     path.skip();
+    visitHookCallArguments(path as unknown as NodePath<t.CallExpression>);
     return true;
+  };
+  /**
+   * The extracted Hook call stays outside the capture closure, but the reads
+   * in its own arguments are captured one by one, exactly as for a Hook call
+   * visited directly. `call` is `(_hookResult => ...)(hookCall)`.
+   */
+  const visitHookCallArguments = (call: NodePath<t.CallExpression>): void => {
+    (call.get("arguments")[0] as NodePath).traverse(visitor);
   };
   /**
    * Splits `useStore().value.items` into the Hook call, evaluated in place by
@@ -3815,7 +3848,7 @@ function captureTrackedReadExpressions(
     }
     if (!wrapAfterHookBase(path)) reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), path);
   };
-  functionPath.get("body").traverse({
+  const visitor: Visitor = {
     Function(path) {
       // Reads inside another function need a call-site boundary. Capturing the
       // body itself would leave a stale handle in callbacks that escape render;
@@ -3846,12 +3879,14 @@ function captureTrackedReadExpressions(
         // early exit, mutation during iteration, and iterator closing stay
         // exactly as authored.
         const right = path.get("right");
-        if (path.node.await || !hasTrackedReadInExpression(right, functionPath, trackedAliases)) return;
+        // A `for...in` already converted below carries its generated source.
+        if (path.node.await || generated.has(right.node) || !hasTrackedReadInExpression(right, functionPath, trackedAliases)) return;
         const iterate = (source: t.Expression): t.CallExpression => t.callExpression(
           t.memberExpression(t.cloneNode(store), t.identifier("iterate")),
           [generatedCallback([], source)],
         );
         let captured: t.CallExpression;
+        let hookSplit = false;
         if (expressionCallsHook(right)) {
           // `for (const item of useTodos().value.items)`: call the Hook in
           // place, then iterate what is read from its result.
@@ -3861,12 +3896,14 @@ function captureTrackedReadExpressions(
             return;
           }
           captured = t.callExpression(generatedCallback([split.result], iterate(split.read)), [split.hookCall]);
+          hookSplit = true;
         } else {
           captured = iterate(t.cloneNode(right.node, true) as t.Expression);
         }
         generated.add(captured);
         right.replaceWith(captured);
         right.skip();
+        if (hookSplit) visitHookCallArguments(right as unknown as NodePath<t.CallExpression>);
 
         // A destructuring loop head reads from each element after the step,
         // outside the iteration's captures. Bind the element to a temporary
@@ -3884,9 +3921,11 @@ function captureTrackedReadExpressions(
           generated.add(assignment);
           left.replaceWith(t.variableDeclaration("const", [t.variableDeclarator(item)]));
           left.skip();
+          // The authored body stays in its own block, so a default or
+          // computed target in the pattern still resolves in the scope the
+          // loop head had, never to a name the body declares.
           const body = path.get("body");
-          if (!body.isBlockStatement()) body.replaceWith(t.blockStatement([body.node as t.Statement]));
-          (path.get("body") as NodePath<t.BlockStatement>).unshiftContainer("body", t.expressionStatement(assignment));
+          body.replaceWith(t.blockStatement([t.expressionStatement(assignment), body.node as t.Statement]));
           return;
         }
         if (!left.isVariableDeclaration()) return;
@@ -3896,16 +3935,51 @@ function captureTrackedReadExpressions(
         const destructured = capturedDestructuring(left.node.kind, declarator.id, t.cloneNode(item));
         left.replaceWith(t.variableDeclaration(left.node.kind, [t.variableDeclarator(item)]));
         left.skip();
+        // The pattern's names are declared next to the authored body, which
+        // stays in its own nested block: defaults resolve outside the body's
+        // declarations and the body may redeclare a bound name.
         const body = path.get("body");
-        if (!body.isBlockStatement()) body.replaceWith(t.blockStatement([body.node as t.Statement]));
-        const [inserted] = (path.get("body") as NodePath<t.BlockStatement>).unshiftContainer("body", destructured);
-        // The names now bind inside the body; keep them tracked aliases so
+        body.replaceWith(t.blockStatement([destructured, body.node as t.Statement]));
+        const [inserted] = (path.get("body") as NodePath<t.BlockStatement>).get("body");
+        // The names now bind inside the wrapper; keep them tracked aliases so
         // later reads such as `entry.n` are captured too.
         inserted!.scope.registerDeclaration(inserted!);
         for (const name of Object.keys(t.getBindingIdentifiers(declarator.id))) {
           const binding = inserted!.scope.getBinding(name);
           if (binding !== undefined) trackedAliases.add(binding);
         }
+      },
+    },
+    ForInStatement: {
+      enter(path) {
+        // The key enumeration (own and inherited, via proxy traps) happens
+        // when the loop starts, outside any capture. `forIn` enumerates inside
+        // one and hands the keys out lazily, skipping keys deleted before
+        // their turn. It is a `for...of` over those keys from here on.
+        const right = path.get("right");
+        if (!hasTrackedReadInExpression(right, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
+        const forIn = (source: t.Expression): t.CallExpression => t.callExpression(
+          t.memberExpression(t.cloneNode(store), t.identifier("forIn")),
+          [generatedCallback([], source)],
+        );
+        let captured: t.CallExpression;
+        let hookSplit = false;
+        if (expressionCallsHook(right)) {
+          const split = splitHookBase(right as NodePath<t.Expression>, path.scope);
+          if (split === undefined) {
+            reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), right);
+            return;
+          }
+          captured = t.callExpression(generatedCallback([split.result], forIn(split.read)), [split.hookCall]);
+          hookSplit = true;
+        } else {
+          captured = forIn(t.cloneNode(right.node, true) as t.Expression);
+        }
+        generated.add(captured);
+        path.replaceWith(t.forOfStatement(path.node.left, captured, path.node.body));
+        const converted = (path as unknown as NodePath<t.ForOfStatement>).get("right");
+        converted.skip();
+        if (hookSplit) visitHookCallArguments(converted as unknown as NodePath<t.CallExpression>);
       },
     },
     VariableDeclarator: {
@@ -3933,6 +4007,17 @@ function captureTrackedReadExpressions(
         // `({ a } = state.value)` and `state.value.count ??= 1` read before
         // they write; capture the whole assignment.
         const left = path.get("left");
+        // `text += state.value.tags` coerces the right operand after the read.
+        if (
+          COERCING_COMPOUND_ASSIGNMENTS.has(path.node.operator) &&
+          (left.isIdentifier() || left.isMemberExpression()) &&
+          hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases) &&
+          !isDeferredReadContext(path, functionPath) &&
+          !expressionCallsHook(path)
+        ) {
+          wrap(path as NodePath<t.Expression>);
+          return;
+        }
         const destructuring = path.node.operator === "=" && (left.isObjectPattern() || left.isArrayPattern());
         // The target chain of `state.value.count ??= 1` is read, although
         // the generic read checks treat assignment targets as writes only.
@@ -3986,7 +4071,31 @@ function captureTrackedReadExpressions(
           !expressionCallsHook(path)
         ) {
           wrap(path as NodePath<t.Expression>);
+          return;
         }
+        // `"" + state.value.tags` or `state.value.tags < "b"` coerce the
+        // operand (ToPrimitive: `toString`, `valueOf`, `Symbol.toPrimitive`)
+        // after the read has returned. Capture the whole operation.
+        if (COERCING_BINARY_OPERATORS.has(path.node.operator) && !t.isPrivateName(path.node.left)) {
+          wrapCoercion(path as NodePath<t.Expression>, [path.get("left") as NodePath, path.get("right") as NodePath]);
+        }
+      },
+    },
+    UnaryExpression: {
+      enter(path) {
+        if (path.node.operator === "+" || path.node.operator === "-" || path.node.operator === "~") {
+          wrapCoercion(path as NodePath<t.Expression>, [path.get("argument")]);
+        }
+      },
+    },
+    TemplateLiteral: {
+      enter(path) {
+        // `${state.value.tags}` coerces its operands after they were read. A
+        // tagged template's quasi hands the tag raw strings and values, so
+        // nothing is coerced there.
+        const parent = path.parentPath;
+        if (parent.isTaggedTemplateExpression() && parent.node.quasi === path.node) return;
+        wrapCoercion(path as NodePath<t.Expression>, path.get("expressions") as NodePath[]);
       },
     },
     ObjectExpression: {
@@ -4018,7 +4127,8 @@ function captureTrackedReadExpressions(
     },
     MemberExpression: { enter: visitMember },
     OptionalMemberExpression: { enter: visitMember },
-  });
+  };
+  functionPath.get("body").traverse(visitor);
 }
 
 /**

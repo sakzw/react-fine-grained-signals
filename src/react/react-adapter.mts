@@ -13,6 +13,7 @@ interface ManagedScope { finish(): void; getSnapshot(): number }
 interface SignalCaptureScope extends ManagedScope {
   capture<T>(callback: () => T): T;
   iterate<T>(getIterable: () => Iterable<T>): Iterable<T>;
+  forIn(getObject: () => unknown): Iterable<string>;
 }
 
 type Capture = <R>(callback: () => R) => R;
@@ -64,7 +65,14 @@ class CapturedIteratorResult<T> {
  */
 function captureIteration<T>(capture: Capture, getIterable: () => Iterable<T>): Iterable<T> {
   const iterable = capture(getIterable);
-  const iterator = capture(() => (iterable as Iterable<T>)[Symbol.iterator]());
+  const iterator = capture(() => {
+    // GetIterator: one @@iterator lookup, called with the source as `this`.
+    const method = iterable == null ? undefined : (iterable as Iterable<T>)[Symbol.iterator];
+    if (typeof method !== "function") {
+      throw new TypeError(`${isObject(iterable) ? typeof iterable : String(iterable)} is not iterable`);
+    }
+    return Reflect.apply(method, iterable, []) as Iterator<T>;
+  });
   if (!isObject(iterator)) throw new TypeError("Result of the Symbol.iterator method is not an object");
   // GetIterator reads `next` once and reuses it for the whole loop.
   const next = capture(() => iterator.next);
@@ -86,6 +94,23 @@ function captureIteration<T>(capture: Capture, getIterable: () => Iterable<T>): 
     [Symbol.iterator]() { return forwarded; },
   };
   return forwarded;
+}
+
+/**
+ * `for (k in source)`: enumerate the keys (own and inherited, as the native
+ * loop does) inside a capture so the enumeration is tracked, then hand them
+ * out lazily, skipping any key deleted before its turn like the native loop.
+ */
+function captureForIn(capture: Capture, getObject: () => unknown): Iterable<string> {
+  const value = capture(getObject);
+  const target = value == null ? undefined : Object(value) as object;
+  const keys: string[] = [];
+  if (target !== undefined) capture(() => { for (const key in target) keys.push(key); });
+  return {
+    *[Symbol.iterator]() {
+      for (const key of keys) if (capture(() => key in target!)) yield key;
+    },
+  };
 }
 
 export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDerivedRenderAdapter) {
@@ -264,6 +289,7 @@ function createReactAdapter(
       getSnapshot: store.getSnapshot,
       capture,
       iterate: (getIterable) => captureIteration(capture, getIterable),
+      forIn: (getObject) => captureForIn(capture, getObject),
     };
   }
   return { useSignalValue, useSignalTracking, useManagedSignals, useSignalCapture };

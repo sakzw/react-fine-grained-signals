@@ -3649,3 +3649,47 @@ export function App() {
     expect(warnings).toEqual([]);
   });
 });
+
+describe("managed coercion, for-in, Hook arguments and loop-head scope output", () => {
+  const wrapIn = (body: string): string => compile(`
+    import { deepSignal, signal } from "react-fine-grained-signals";
+    const st = deepSignal({ tags: [], errors: {}, items: [] });
+    const id = signal("a");
+    function useStore(key) { return st; }
+    export function App() {
+      ${body}
+      return <p>{0}</p>;
+    }
+  `, "auto");
+
+  it("enumerates for...in keys inside a capture", () => {
+    const output = wrapIn("const keys = []; for (const k in st.value.errors) keys.push(k);");
+    expect(output).toContain("for (const k of _signals.forIn(() => st.value.errors))");
+    expect(wrapIn("const o = st.value.errors; for (const k in o) {}")).toContain("_signals.forIn(() => o)");
+    expect(wrapIn("for (const k in useStore(id.value).value.errors) {}"))
+      .toContain("_hookResult => _signals.forIn(() => _hookResult.value.errors))(useStore(_signals.capture(() => id.value)))");
+  });
+
+  it("captures reads in a split Hook's own arguments and keeps the Hook outside", () => {
+    const output = wrapIn("const n = useStore(id.value).value.tags;");
+    expect(output).toContain("(_hookResult => _signals.capture(() => _hookResult.value.tags))(useStore(_signals.capture(() => id.value)))");
+    const loop = wrapIn("for (const r of useStore(id.value).value.items) {}");
+    expect(loop).toContain("useStore(_signals.capture(() => id.value))");
+  });
+
+  it("captures coercing operations as a whole", () => {
+    expect(wrapIn("const a = `tags: ${st.value.tags}`;")).toContain("_signals.capture(() => `tags: ${st.value.tags}`)");
+    expect(wrapIn("const a = '' + st.value.tags;")).toContain("_signals.capture(() => '' + st.value.tags)");
+    expect(wrapIn("const a = st.value.tags < 'b';")).toContain("_signals.capture(() => st.value.tags < 'b')");
+    expect(wrapIn("let s = ''; s += st.value.tags;")).toContain("_signals.capture(() => s += st.value.tags)");
+    expect(wrapIn("const a = String`x${st.value.tags}`;")).not.toContain("capture(() => `x");
+    expect(wrapIn("const a = st.value.tags === 'b';")).not.toContain("capture(() => st.value.tags === 'b')");
+  });
+
+  it("evaluates a destructuring loop head outside the body's block", () => {
+    const output = wrapIn("const label = 'n'; for (const { id: b, label: l = label } of st.value.items) { const label = 1; const b = 2; }");
+    expect(output).toMatch(/for \(const _item of _signals\.iterate\(\(\) => st\.value\.items\)\) \{\s*const \{\s*b,\s*l\s*\} = _signals\.capture\([^]*\n\s*\{\s*const label = 1;/);
+    const assign = wrapIn("let a; for ({ a } of st.value.items) { const x = 1; }");
+    expect(assign).toMatch(/_signals\.capture\(\(\) => \(\{\s*a\s*\} = _item\)\);\s*\{\s*const x = 1;/);
+  });
+});

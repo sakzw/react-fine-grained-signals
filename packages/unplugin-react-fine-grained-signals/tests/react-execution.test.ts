@@ -2504,3 +2504,131 @@ export function App() {
     expect(container.textContent).toBe("2:9:1");
   });
 });
+
+describe("managed coercion, for-in, Hook arguments and loop-head scope", () => {
+  type Deep<T> = { value: T };
+  for (const mode of ["auto", "all"] as const) {
+    describe(`mode ${mode}`, () => {
+      it("tracks for...in key enumeration over a tracked object", async () => {
+        const module = await loadModule(`
+import { deepSignal } from "react-fine-grained-signals";
+export const st = deepSignal({ errors: { a: 1 }, obj: { p: 1 } });
+export function App() {
+  const keys = [];
+  for (const k in st.value.errors) keys.push(k);
+  const o = st.value.obj;
+  const aliased = [];
+  for (const k in o) aliased.push(k);
+  return <p>{keys.join(",") + "|" + aliased.join(",")}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        expect(container.textContent).toBe("a|p");
+        type S = { errors: Record<string, number>; obj: Record<string, number> };
+        act(() => { (module.st as Deep<S>).value.errors.x = 1; });
+        expect(container.textContent).toBe("a,x|p");
+        act(() => { (module.st as Deep<S>).value.obj.q = 1; });
+        expect(container.textContent).toBe("a,x|p,q");
+      });
+
+      it("keeps for...in semantics: inherited keys, deletion during iteration, break", async () => {
+        const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+export const base = signal({ own: 1, gone: 2, last: 3 });
+export function App() {
+  const proto = { inherited: 1 };
+  const obj = Object.create(proto);
+  obj.a = 1; obj.b = 2; obj.c = 3;
+  const seen = [];
+  for (const k in obj) { seen.push(k); if (k === "a") delete obj.b; }
+  const seen2 = [];
+  for (const k in base.value) { seen2.push(k); if (k === "own") delete base.peek().gone; if (k === "last") break; }
+  return <p>{seen.join(",") + "|" + seen2.join(",")}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        expect(container.textContent).toBe("a,c,inherited|own,last");
+      });
+
+      it("tracks reads in the arguments of a Hook whose result is read", async () => {
+        const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+export const id = signal("a");
+export const filter = signal("x");
+const stores = { a: signal({ name: "A" }), b: signal({ name: "B" }) };
+const rows = { x: signal({ items: [1, 2] }), y: signal({ items: [3] }) };
+function useStore(key) { return stores[key]; }
+function useRows(key) { return rows[key]; }
+export function App() {
+  let sum = 0;
+  for (const r of useRows(filter.value).value.items) sum += r;
+  return <p>{useStore(id.value).value.name + ":" + sum}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        expect(container.textContent).toBe("A:3");
+        write(module, "id", "b");
+        expect(container.textContent).toBe("B:3");
+        write(module, "filter", "y");
+        expect(container.textContent).toBe("B:3");
+      });
+
+      it("tracks ToPrimitive coercion of tracked values", async () => {
+        const module = await loadModule(`
+import { deepSignal } from "react-fine-grained-signals";
+export const st = deepSignal({ tags: ["a"], n: { v: 1 } });
+export function App() {
+  const t = \`tags: \${st.value.tags}\`;
+  const c = "" + st.value.tags;
+  const lt = st.value.tags < "b" ? "lt" : "ge";
+  const num = st.value.n + 1;
+  return <p>{t + "|" + c + "|" + lt + "|" + num}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        expect(container.textContent).toBe("tags: a|a|lt|[object Object]1");
+        type S = { tags: string[] };
+        act(() => { (module.st as Deep<S>).value.tags.push("x"); });
+        expect(container.textContent).toBe("tags: a,x|a,x|lt|[object Object]1");
+      });
+
+      it("keeps the loop-head default's outer scope when the body redeclares a name", async () => {
+        const module = await loadModule(`
+import { deepSignal } from "react-fine-grained-signals";
+export const st = deepSignal({ items: [{ id: 1 }, { id: 2, label: "two" }] });
+export function App() {
+  const label = "none";
+  const out = [];
+  for (const { id, label: l = label } of st.value.items) { const label = l + "!"; out.push(id + label); }
+  const outB = [];
+  for (const { id: b } of st.value.items) { const b2 = 1; outB.push(b + b2); }
+  for (const { id: b } of st.value.items) { const b = 1; outB.push(b); }
+  return <p>{out.join(",") + "|" + outB.join(",")}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        expect(container.textContent).toBe("1none!,2two!|2,3,1,1");
+        type S = { items: Array<{ id: number; label?: string }> };
+        act(() => { (module.st as Deep<S>).value.items[0]!.label = "one"; });
+        expect(container.textContent).toBe("1one!,2two!|2,3,1,1");
+      });
+
+      it("keeps an assignment-target loop head's scope when the body redeclares a name", async () => {
+        const module = await loadModule(`
+import { deepSignal } from "react-fine-grained-signals";
+export const st = deepSignal({ items: [{ a: 1 }] });
+export function App() {
+  let a = 0;
+  let seen = "";
+  for ({ a } of st.value.items) { const _item = "shadow"; seen += _item; }
+  return <p>{a + ":" + seen}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        expect(container.textContent).toBe("1:shadow");
+        act(() => { (module.st as Deep<{ items: Array<{ a: number }> }>).value.items[0]!.a = 5; });
+        expect(container.textContent).toBe("5:shadow");
+      });
+    });
+  }
+});
