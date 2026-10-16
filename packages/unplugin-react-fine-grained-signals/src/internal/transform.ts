@@ -3486,6 +3486,52 @@ function callChainRoot(node: t.Node): t.Node {
  * Calls that resolve to a function this module defines are decided by that
  * function's body instead, so they are never "unresolved".
  */
+/**
+ * May a builtin method name (`map`, `toString`, ...) on this receiver be taken
+ * as the builtin? Only for data the selected function owns: a parameter, or a
+ * local not produced by a call. An imported or module-level object, `this`, or
+ * a local returned by a call (a custom Hook result) can define such a method
+ * itself, and its body may read signals.
+ */
+function receiverIsLocalData(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  callee: t.MemberExpression | t.OptionalMemberExpression,
+): boolean {
+  return expressionIsLocalData(call, callee.object, 0);
+}
+
+/** React Hooks whose results are plain state the component owns. */
+const stateHookNames = new Set([
+  "useState", "useReducer", "useDeferredValue", "useTransition", "useOptimistic", "useActionState", "useId",
+]);
+
+function expressionIsLocalData(path: NodePath, expression: t.Node, depth: number): boolean {
+  if (depth > 8) return false;
+  const root = callChainRoot(expression);
+  // A literal, template, or call chain on one (`[..].map`, `"a".trim`).
+  if (!t.isIdentifier(root)) return !t.isThisExpression(root);
+  const binding = path.scope.getBinding(root.name);
+  if (binding === undefined) return false;
+  if (binding.path.isImportSpecifier() || binding.path.isImportDefaultSpecifier() || binding.path.isImportNamespaceSpecifier()) return false;
+  if (binding.scope.path.isProgram()) return false;
+  if (binding.kind === "param") return true;
+  if (!binding.path.isVariableDeclarator()) return true;
+  const init = binding.path.node.init == null ? undefined : unwrapTransparent(binding.path.node.init);
+  if (init === undefined) return true;
+  if (t.isAwaitExpression(init) || t.isNewExpression(init)) return false;
+  if (!t.isCallExpression(init) && !t.isOptionalCallExpression(init)) return true;
+  const initCallee = unwrapTransparent(init.callee);
+  // `const [items] = useState(...)`: React state, not an object with methods.
+  if (t.isIdentifier(initCallee)) return stateHookNames.has(initCallee.name);
+  // `const visible = items.filter(...)`: a builtin method on local data.
+  if (t.isMemberExpression(initCallee) || t.isOptionalMemberExpression(initCallee)) {
+    const method = getStaticMemberChain(initCallee)?.keys.at(-1);
+    return method !== undefined && pureMethodNames.has(method) &&
+      expressionIsLocalData(binding.path, initCallee.object, depth + 1);
+  }
+  return false;
+}
+
 function unresolvedCallMayRead(
   call: NodePath<t.CallExpression | t.OptionalCallExpression>,
   context: ReadContext,
@@ -3496,7 +3542,7 @@ function unresolvedCallMayRead(
     if (isComponentName(callee.name) || resolveReferencedFunction(call, callee.name) !== undefined) return false;
   } else if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
     const name = getStaticMemberChain(callee)?.keys.at(-1);
-    if (name !== undefined && (isComponentName(name) || pureMethodNames.has(name))) return false;
+    if (name !== undefined && (isComponentName(name) || (pureMethodNames.has(name) && receiverIsLocalData(call, callee)))) return false;
     if (resolveKeyedFunction(call, callee) !== undefined) return false;
   } else if (!t.isCallExpression(callee) && !t.isOptionalCallExpression(callee)) {
     return false;

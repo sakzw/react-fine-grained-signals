@@ -2956,6 +2956,30 @@ export function App() {
       });
       expect(await run.observe()).toEqual(run.expected);
     });
+    // A builtin-looking method name says nothing about the receiver: an
+    // imported or module-level object can define `map`/`filter`/`toString`
+    // that read signals.
+    for (const method of ["map", "filter", "toString", "join", "valueOf"]) {
+      it(`captures an imported object's \`${method}\` method`, async () => {
+        const run = scenario({
+          name: `imported ${method}`,
+          prelude: `import { extStore } from "./ext";\n`,
+          modules: { "./ext": { extStore: { [method]: () => extSignal.value } } },
+          body: `export function App() { return <p>{tick.value}:{extStore.${method}()}</p>; }`,
+          steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: bumpExt, text: "0:5" }],
+        });
+        expect(await run.observe()).toEqual(run.expected);
+      });
+      it(`captures a module-level object's \`${method}\` method`, async () => {
+        const run = scenario({
+          name: `module ${method}`,
+          prelude: `const store = { ${method}() { return s.value; } };\n`,
+          body: `export function App() { return <p>{tick.value}:{store.${method}()}</p>; }`,
+          steps: readsS,
+        });
+        expect(await run.observe()).toEqual(run.expected);
+      });
+    }
     it("captures a callback returned by a Hook", async () => {
       const run = scenario({
         name: "useCallback",
@@ -3187,6 +3211,31 @@ describe("capture decisions for aliases, unresolved calls, and folded helpers", 
     return { code, warnings };
   };
   const head = `import { signal } from "react-fine-grained-signals";\nconst s = signal(1);\n`;
+
+  it("trusts a builtin method name only on data the function owns", () => {
+    const { code } = shape(`${head}
+import { useState } from "react";
+import { store } from "./store";
+const moduleStore = makeStore();
+function useReader() { return { map: () => s.value }; }
+export function App(p) {
+  const r = useReader();
+  const local = [1, 2];
+  const label = p.title;
+  const [rows] = useState([1]);
+  const visible = p.items.filter(Boolean);
+  const keep = [p.items.map((x) => x), local.map((x) => x), label.toString(), "a b".split(" "), [3].join(), rows.map((x) => x), visible.map((x) => x)];
+  return <p>{s.value}{store.map()}{store.list.filter(Boolean)}{moduleStore.toString()}{r.map()}{keep}</p>;
+}
+`);
+    for (const reads of ["store.map()", "store.list.filter(Boolean)", "moduleStore.toString()", "r.map()"]) {
+      expect(code).toContain(`capture(() => ${reads})`);
+    }
+    for (const builtin of ["p.items.map", "local.map", "label.toString", "split(", ".join(", "rows.map", "visible.map"]) {
+      const captured = new RegExp(`capture\\(\\(\\) => [^\\n]*${builtin.replace(/[.()|]/g, "\\$&")}`).test(code);
+      expect(`${builtin} captured: ${captured}`).toBe(`${builtin} captured: false`);
+    }
+  });
 
   it("captures calls into code it cannot see and leaves provably unrelated calls alone", () => {
     const { code, warnings } = shape(`${head}
