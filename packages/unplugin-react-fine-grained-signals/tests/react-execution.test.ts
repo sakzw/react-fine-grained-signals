@@ -2996,6 +2996,10 @@ export function App() {
       ["an element of a builtin method result", "const box = [extStore];\n    return <p>{tick.value}:{box.filter(Boolean)[0].METHOD()}</p>;"],
       ["an element removed from a local array", "const box = [extStore];\n    return <p>{tick.value}:{box.slice().pop().METHOD()}</p>;"],
       ["an element of a mapped array", "const ids = [1];\n    return <p>{tick.value}:{ids.map(() => extStore)[0].METHOD()}</p>;"],
+      ["a props reduce result", "return <p>{tick.value}:{items.reduce(() => extStore, extStore).METHOD()}</p>;"],
+      ["a props reduce initial value", "return <p>{tick.value}:{empty.reduce((acc) => acc, extStore).METHOD()}</p>;"],
+      ["a props reduceRight result", "return <p>{tick.value}:{items.reduceRight(() => extStore, extStore).METHOD()}</p>;"],
+      ["a local holding a props reduce result", "const acc = items.reduce(() => extStore, null);\n    return <p>{tick.value}:{acc.METHOD()}</p>;"],
     ];
     for (const method of ["map", "filter", "toString"]) {
       for (const [shape, body] of aliasShapes) {
@@ -3004,7 +3008,7 @@ export function App() {
             name: `${shape} ${method}`,
             prelude: `import { extStore } from "./ext";\n`,
             modules: { "./ext": { extStore: { [method]: () => extSignal.value } } },
-            body: `export function App() {\n    ${body.replaceAll("METHOD", method)}\n  }`,
+            body: `export function App({ items = [1, 2], empty = [] } = {}) {\n    ${body.replaceAll("METHOD", method)}\n  }`,
             steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: bumpExt, text: "0:5" }],
           });
           expect(await run.observe()).toEqual(run.expected);
@@ -3277,7 +3281,9 @@ export function List({ items, title }) {
   const label = title ?? "none";
   const names = ["a", "b"];
   const first = items.filter(Boolean)[0];
-  return <p>{s.value}{visible.map(String).join(",")}{label.toString()}{names.map((n) => n).join()}{first.trim()}{[1, 2].at(0)}</p>;
+  const last = items.slice().pop();
+  const picked = items.reduce(() => store, store);
+  return <p>{s.value}{visible.map(String).join(",")}{label.toString()}{names.map((n) => n).join()}{first.trim()}{[1, 2].at(0)}{last.trim()}{picked.map()}</p>;
 }
 export function Elements() {
   const box = [store];
@@ -3291,13 +3297,13 @@ export function Aliased() {
   return <p>{s.value}{second.map()}{holder.store.filter(Boolean)}{first.toString()}</p>;
 }
 `, mode);
-      for (const builtin of ["visible.map", "label.toString", "names.map", "items.filter", "first.trim", "[1, 2].at", "box.map"]) {
+      for (const builtin of ["visible.map", "label.toString", "names.map", "items.filter", "first.trim", "[1, 2].at", "box.map", "last.trim"]) {
         const captured = code.includes(`capture(() => ${builtin}`);
         expect(`${mode} ${builtin} captured: ${captured}`).toBe(`${mode} ${builtin} captured: false`);
       }
       for (const reads of [
         "second.map()", "holder.store.filter(Boolean)", "first.toString()",
-        "item.map()", "[store][0].filter(Boolean)", "box.slice().pop().toString()", "[store][0].total()",
+        "item.map()", "[store][0].filter(Boolean)", "box.slice().pop().toString()", "[store][0].total()", "picked.map()",
       ]) {
         expect(code).toContain(`capture(() => ${reads})`);
       }

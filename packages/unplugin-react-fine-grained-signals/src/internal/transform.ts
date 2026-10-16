@@ -3516,7 +3516,12 @@ const enum Ownership {
 }
 
 /** Builtin methods that return one of the receiver's elements. */
-const elementReturningMethods = new Set(["pop", "shift", "reduce", "reduceRight"]);
+const elementReturningMethods = new Set(["pop", "shift"]);
+/**
+ * Builtin methods whose result is whatever their callback or initial value
+ * returns (`items.reduce(() => extStore, extStore)`), not a receiver element.
+ */
+const callbackResultMethods = new Set(["reduce", "reduceRight"]);
 /** Builtin methods whose result holds only the receiver's own elements. */
 const elementPreservingMethods = new Set([
   "filter", "slice", "sort", "reverse", "toSorted", "toReversed", "splice", "flat",
@@ -3533,7 +3538,8 @@ function isOwnedData(path: NodePath, node: t.Node, depth: number): boolean {
  *   member of one, React state (`const [rows] = useState(...)`), and the
  *   element-preserving builtin methods applied to such data.
  * - Builtin (the value only): an array, string, template, or number literal,
- *   and any other builtin method result. An element read from such an array
+ *   and any other builtin method result except `reduce`/`reduceRight`, whose
+ *   result is whatever the callback or initial value returns (Unknown). An element read from such an array
  *   (`[extStore][0]`, `box.pop()`, `ids.map(() => extStore)[0]`) is Unknown.
  * - A conditional/logical choice is the weaker of its branches; a
  *   never-reassigned local is its initializer.
@@ -3563,7 +3569,7 @@ function ownership(path: NodePath, node: t.Node, depth: number): Ownership {
     const method = getStaticMemberChain(callee)?.keys.at(-1);
     if (method === undefined || !pureMethodNames.has(method)) return Ownership.Unknown;
     const receiver = ownership(path, callee.object, depth + 1);
-    if (receiver === Ownership.Unknown) return Ownership.Unknown;
+    if (receiver === Ownership.Unknown || callbackResultMethods.has(method)) return Ownership.Unknown;
     if (elementReturningMethods.has(method)) return receiver === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
     if (elementPreservingMethods.has(method)) return receiver;
     return Ownership.Builtin;
