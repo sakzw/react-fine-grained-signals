@@ -3505,57 +3505,97 @@ const stateHookNames = new Set([
   "useState", "useReducer", "useDeferredValue", "useTransition", "useOptimistic", "useActionState", "useId",
 ]);
 
+/** How much is known about a value's provenance; see `ownership`. */
+const enum Ownership {
+  /** Nothing proven: it may be an object with its own `map`/`toString`. */
+  Unknown = 0,
+  /** The value itself is a builtin (array, string, number), but not its elements. */
+  Builtin = 1,
+  /** Props or React state: the value and everything read from it. */
+  Deep = 2,
+}
+
+/** Builtin methods that return one of the receiver's elements. */
+const elementReturningMethods = new Set(["pop", "shift", "reduce", "reduceRight"]);
+/** Builtin methods whose result holds only the receiver's own elements. */
+const elementPreservingMethods = new Set([
+  "filter", "slice", "sort", "reverse", "toSorted", "toReversed", "splice", "flat",
+]);
+
+function isOwnedData(path: NodePath, node: t.Node, depth: number): boolean {
+  return ownership(path, node, depth) !== Ownership.Unknown;
+}
+
 /**
  * Does `expression` provably evaluate to data the function owns? Proven by
  * where the value comes from, never by being a local name:
- * - an array, string, template, or number literal;
- * - a parameter (props) or a member read from one;
- * - React state (`const [rows] = useState(...)`);
- * - a builtin method applied to owned data (`items.filter(Boolean)`);
- * - a `const`/never-reassigned local initialized with owned data, or a
- *   conditional/logical choice between owned values.
- * Object literals are not owned data: their properties can hold anything
- * (`{ store: extStore }`).
+ * - Deep (the value and anything read from it): a parameter (props) or a
+ *   member of one, React state (`const [rows] = useState(...)`), and the
+ *   element-preserving builtin methods applied to such data.
+ * - Builtin (the value only): an array, string, template, or number literal,
+ *   and any other builtin method result. An element read from such an array
+ *   (`[extStore][0]`, `box.pop()`, `ids.map(() => extStore)[0]`) is Unknown.
+ * - A conditional/logical choice is the weaker of its branches; a
+ *   never-reassigned local is its initializer.
+ * Object literals are Unknown: their properties can hold anything.
  */
-function isOwnedData(path: NodePath, node: t.Node, depth: number): boolean {
-  if (depth > 16) return false;
+function ownership(path: NodePath, node: t.Node, depth: number): Ownership {
+  if (depth > 16) return Ownership.Unknown;
   const expression = unwrapTransparent(node);
   if (
     t.isArrayExpression(expression) || t.isStringLiteral(expression) ||
     t.isTemplateLiteral(expression) || t.isNumericLiteral(expression)
-  ) return true;
+  ) return Ownership.Builtin;
   if (t.isConditionalExpression(expression)) {
-    return isOwnedData(path, expression.consequent, depth + 1) && isOwnedData(path, expression.alternate, depth + 1);
+    return Math.min(ownership(path, expression.consequent, depth + 1), ownership(path, expression.alternate, depth + 1));
   }
   if (t.isLogicalExpression(expression)) {
-    return isOwnedData(path, expression.left, depth + 1) && isOwnedData(path, expression.right, depth + 1);
+    return Math.min(ownership(path, expression.left, depth + 1), ownership(path, expression.right, depth + 1));
   }
   if (t.isMemberExpression(expression) || t.isOptionalMemberExpression(expression)) {
-    // A member of owned data (`props.items`) is owned; a member of an object
-    // literal or a module value is not.
-    return isOwnedData(path, expression.object, depth + 1);
+    // Only a member of props or state is known; an element of a local array
+    // or a property of an object literal can be anything.
+    return ownership(path, expression.object, depth + 1) === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
   }
   if (t.isCallExpression(expression) || t.isOptionalCallExpression(expression)) {
     const callee = unwrapTransparent(expression.callee);
-    if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return false;
+    if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return Ownership.Unknown;
     const method = getStaticMemberChain(callee)?.keys.at(-1);
-    return method !== undefined && pureMethodNames.has(method) && isOwnedData(path, callee.object, depth + 1);
+    if (method === undefined || !pureMethodNames.has(method)) return Ownership.Unknown;
+    const receiver = ownership(path, callee.object, depth + 1);
+    if (receiver === Ownership.Unknown) return Ownership.Unknown;
+    if (elementReturningMethods.has(method)) return receiver === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
+    if (elementPreservingMethods.has(method)) return receiver;
+    return Ownership.Builtin;
   }
-  if (!t.isIdentifier(expression)) return false;
+  if (!t.isIdentifier(expression)) return Ownership.Unknown;
   const binding = path.scope.getBinding(expression.name);
-  if (binding === undefined || binding.scope.path.isProgram()) return false;
-  if (binding.kind === "param") return true;
-  if (!binding.path.isVariableDeclarator() || binding.constantViolations.length > 0) return false;
+  if (binding === undefined || binding.scope.path.isProgram()) return Ownership.Unknown;
+  if (binding.kind === "param") return Ownership.Deep;
+  if (!binding.path.isVariableDeclarator() || binding.constantViolations.length > 0) return Ownership.Unknown;
   const declarator = binding.path.node;
   const init = declarator.init == null ? undefined : unwrapTransparent(declarator.init);
-  if (init === undefined) return false;
-  if (t.isIdentifier(declarator.id)) return isOwnedData(binding.path, init, depth + 1);
+  if (init === undefined) return Ownership.Unknown;
+  if (t.isIdentifier(declarator.id)) return ownership(binding.path, init, depth + 1);
   // `const [rows, setRows] = useState(...)`: React state, not an object with methods.
   if (t.isArrayPattern(declarator.id) && (t.isCallExpression(init) || t.isOptionalCallExpression(init))) {
     const stateHook = unwrapTransparent(init.callee);
-    return t.isIdentifier(stateHook) && stateHookNames.has(stateHook.name);
+    return t.isIdentifier(stateHook) && stateHookNames.has(stateHook.name) ? Ownership.Deep : Ownership.Unknown;
   }
-  return false;
+  return Ownership.Unknown;
+}
+
+/** Does an array/object literal hold anything but primitive literals? */
+function literalHoldsValues(node: t.ArrayExpression | t.ObjectExpression): boolean {
+  const entries = t.isArrayExpression(node)
+    ? node.elements
+    : node.properties.map((property) => t.isObjectProperty(property) && !property.computed ? property.value : property);
+  return entries.some((entry) => {
+    if (entry === null) return false;
+    const value = unwrapTransparent(entry);
+    if (t.isArrayExpression(value) || t.isObjectExpression(value)) return literalHoldsValues(value);
+    return !(t.isStringLiteral(value) || t.isNumericLiteral(value) || t.isBooleanLiteral(value) || t.isNullLiteral(value));
+  });
 }
 
 function unresolvedCallMayRead(
@@ -3575,6 +3615,8 @@ function unresolvedCallMayRead(
   }
   const root = callChainRoot(callee);
   if (t.isThisExpression(root)) return true;
+  // `[extStore][0].map()`: the call reaches a value the literal only holds.
+  if (t.isArrayExpression(root) || t.isObjectExpression(root)) return literalHoldsValues(root);
   if (!t.isIdentifier(root)) return false;
   const binding = call.scope.getBinding(root.name);
   // An unbound name is a global (`Math`, `JSON`, `String`, `console`).

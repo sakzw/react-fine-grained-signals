@@ -2990,6 +2990,12 @@ export function App() {
       ["a destructured property", "const { store } = { store: extStore };\n    return <p>{tick.value}:{store.METHOD()}</p>;"],
       ["an array element", "const [store] = [extStore];\n    return <p>{tick.value}:{store.METHOD()}</p>;"],
       ["a reassigned let", "let target = [];\n    target = extStore;\n    return <p>{tick.value}:{target.METHOD()}</p>;"],
+      ["an element of a local array", "const box = [extStore];\n    return <p>{tick.value}:{box[0].METHOD()}</p>;"],
+      ["an element of an array literal", "return <p>{tick.value}:{[extStore][0].METHOD()}</p>;"],
+      ["a local taken from an array element", "const box = [extStore];\n    const item = box[0];\n    return <p>{tick.value}:{item.METHOD()}</p>;"],
+      ["an element of a builtin method result", "const box = [extStore];\n    return <p>{tick.value}:{box.filter(Boolean)[0].METHOD()}</p>;"],
+      ["an element removed from a local array", "const box = [extStore];\n    return <p>{tick.value}:{box.slice().pop().METHOD()}</p>;"],
+      ["an element of a mapped array", "const ids = [1];\n    return <p>{tick.value}:{ids.map(() => extStore)[0].METHOD()}</p>;"],
     ];
     for (const method of ["map", "filter", "toString"]) {
       for (const [shape, body] of aliasShapes) {
@@ -3270,7 +3276,13 @@ export function List({ items, title }) {
   const visible = items.filter(Boolean);
   const label = title ?? "none";
   const names = ["a", "b"];
-  return <p>{s.value}{visible.map(String).join(",")}{label.toString()}{names.map((n) => n).join()}</p>;
+  const first = items.filter(Boolean)[0];
+  return <p>{s.value}{visible.map(String).join(",")}{label.toString()}{names.map((n) => n).join()}{first.trim()}{[1, 2].at(0)}</p>;
+}
+export function Elements() {
+  const box = [store];
+  const item = box[0];
+  return <p>{s.value}{box.map(String)}{item.map()}{[store][0].filter(Boolean)}{box.slice().pop().toString()}{[store][0].total()}</p>;
 }
 export function Aliased() {
   const first = store;
@@ -3279,11 +3291,14 @@ export function Aliased() {
   return <p>{s.value}{second.map()}{holder.store.filter(Boolean)}{first.toString()}</p>;
 }
 `, mode);
-      for (const builtin of ["visible.map", "label.toString", "names.map", "items.filter"]) {
+      for (const builtin of ["visible.map", "label.toString", "names.map", "items.filter", "first.trim", "[1, 2].at", "box.map"]) {
         const captured = code.includes(`capture(() => ${builtin}`);
         expect(`${mode} ${builtin} captured: ${captured}`).toBe(`${mode} ${builtin} captured: false`);
       }
-      for (const reads of ["second.map()", "holder.store.filter(Boolean)", "first.toString()"]) {
+      for (const reads of [
+        "second.map()", "holder.store.filter(Boolean)", "first.toString()",
+        "item.map()", "[store][0].filter(Boolean)", "box.slice().pop().toString()", "[store][0].total()",
+      ]) {
         expect(code).toContain(`capture(() => ${reads})`);
       }
     }
