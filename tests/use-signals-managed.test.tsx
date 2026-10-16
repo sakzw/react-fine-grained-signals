@@ -451,10 +451,10 @@ describe("managed useManagedSignals render scope", () => {
     expect(renders).toHaveBeenCalledTimes(4);
   });
 
-  it("does not restore a force-closed bare parent after a nested managed scope finishes", () => {
+  it("restores the component's own bare parent after a nested managed scope finishes", () => {
     const beforeManaged = signal("bare");
     const insideManaged = signal("managed");
-    const afterManaged = signal("untracked");
+    const afterManaged = signal("bare again");
     const renders = vi.fn();
     let owners: { bare: object; managed: object; ownerAfterManaged: object | undefined } | undefined;
 
@@ -480,16 +480,102 @@ describe("managed useManagedSignals render scope", () => {
     }
 
     render(<Reader />);
-    expect(owners?.ownerAfterManaged).toBeUndefined();
+    expect(owners?.ownerAfterManaged).toBe(owners?.bare);
     expect(owners?.bare).not.toBe(owners?.managed);
-    expect(screen.getByLabelText("bare then managed").textContent).toBe("bare/managed/untracked");
+    expect(screen.getByLabelText("bare then managed").textContent).toBe("bare/managed/bare again");
 
     act(() => { beforeManaged.value = "bare updated"; });
     expect(renders).toHaveBeenCalledTimes(2);
     act(() => { insideManaged.value = "managed updated"; });
     expect(renders).toHaveBeenCalledTimes(3);
-    act(() => { afterManaged.value = "bare remains active"; });
-    expect(renders).toHaveBeenCalledTimes(3);
+    act(() => { afterManaged.value = "bare resumed"; });
+    expect(renders).toHaveBeenCalledTimes(4);
+    expect(screen.getByLabelText("bare then managed").textContent).toBe("bare updated/managed updated/bare resumed");
+  });
+
+  it("keeps a useSignalTracking() window open across a capture hook", () => {
+    const count = signal(1);
+    const other = signal("o0");
+    function useCount() {
+      const c = useSignalCapture();
+      return c.capture(() => count.value);
+    }
+    function Comp() {
+      useSignalTracking();
+      const n = useCount();
+      return <b aria-label="capture hook">{n}:{other.value}</b>;
+    }
+    render(<Comp />);
+    expect(screen.getByLabelText("capture hook").textContent).toBe("1:o0");
+    act(() => { other.value = "o1"; });
+    expect(screen.getByLabelText("capture hook").textContent).toBe("1:o1");
+    act(() => { count.value = 2; });
+    expect(screen.getByLabelText("capture hook").textContent).toBe("2:o1");
+  });
+
+  it("keeps deep-proxy reads after a capture hook tracked in a useSignalTracking() row", () => {
+    const task = deepSignal({ done: false });
+    const theme = signal("light");
+    function useTheme() {
+      const c = useSignalCapture();
+      return c.capture(() => theme.value);
+    }
+    function Row({ item }: { item: { done: boolean } }) {
+      useSignalTracking();
+      const t = useTheme();
+      return <i aria-label="row">{t}:{item.done ? "done" : "todo"}</i>;
+    }
+    render(<Row item={task.value} />);
+    expect(screen.getByLabelText("row").textContent).toBe("light:todo");
+    act(() => { task.value.done = true; });
+    expect(screen.getByLabelText("row").textContent).toBe("light:done");
+  });
+
+  it("keeps a useSignalTracking() window open across a hand-written managed hook", () => {
+    const count = signal(1);
+    const other = signal("o0");
+    function useCount() {
+      const scope = useManagedSignals();
+      try { return count.value; } finally { scope.finish(); }
+    }
+    function Comp() {
+      useSignalTracking();
+      const n = useCount();
+      return <b aria-label="managed hook">{n}:{other.value}</b>;
+    }
+    render(<Comp />);
+    act(() => { other.value = "o1"; });
+    expect(screen.getByLabelText("managed hook").textContent).toBe("1:o1");
+  });
+
+  // React exposes no component identity, so a capture cannot tell a previous
+  // sibling's still-open bare window from its own component's window. It
+  // suspends either one rather than closing it (closing the component's own
+  // window loses its later reads). A leftover sibling window can therefore
+  // collect an uncaptured read: at most an extra sibling render, never stale UI.
+  it("lets a previous sibling's bare window over-collect past a nested capture hook without going stale", () => {
+    const own = signal("a");
+    const hidden = signal("h");
+    const siblingRenders = vi.fn();
+    function Sibling() {
+      useSignalTracking();
+      siblingRenders();
+      return <span>{own.value}</span>;
+    }
+    function useCaptured() {
+      const c = useSignalCapture();
+      return c.capture(() => 1);
+    }
+    function Capturing() {
+      const n = useCaptured();
+      return <span>{n}{hidden.value}</span>;
+    }
+    render(<><Sibling /><Capturing /></>);
+    const before = siblingRenders.mock.calls.length;
+    act(() => { hidden.value = "changed"; });
+    expect(siblingRenders.mock.calls.length).toBeLessThanOrEqual(before + 1);
+    act(() => { own.value = "b"; });
+    expect(screen.getAllByText("b").length).toBeGreaterThan(0);
   });
 
   it("recovers the render collector after managed scopes close", () => {
@@ -608,7 +694,7 @@ describe("useSignalCapture iterate", () => {
     expect(screen.getByLabelText("delegated").textContent).toBe("b1");
   });
 
-  it("does not let a sibling's open bare scope collect a capture-only component's reads", () => {
+  it("keeps a capture-only component fresh when a sibling's bare scope is still open", () => {
     const own = signal("a");
     const hidden = signal("h");
     const siblingRenders = vi.fn();
@@ -625,7 +711,9 @@ describe("useSignalCapture iterate", () => {
     render(<><Sibling /><Capturing /></>);
     const before = siblingRenders.mock.calls.length;
     act(() => { hidden.value = "changed"; });
-    expect(siblingRenders.mock.calls.length).toBe(before);
+    expect(siblingRenders.mock.calls.length).toBeLessThanOrEqual(before + 1);
+    act(() => { own.value = "b"; });
+    expect(screen.getAllByText("b").length).toBeGreaterThan(0);
   });
 
   it("matches native errors and closing for malformed iterators", () => {

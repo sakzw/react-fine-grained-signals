@@ -286,6 +286,28 @@ export function App() {
     expect(container.querySelector("li")?.className).toBe("task-row done");
   });
 
+  it.each(["auto", "all"] as const)("keeps a component's explicit useSignalTracking() window open after a compiled custom hook (mode %s)", async (mode) => {
+    const module = await loadModule(`
+import { signal, useSignalTracking } from "react-fine-grained-signals";
+export const count = signal(1);
+export const other = signal("o0");
+export function useCount() { return count.value; }
+export function Comp() {
+  useSignalTracking();
+  const n = useCount();
+  return <b>{n}:{other.value}</b>;
+}
+`, { mode });
+    const container = mount(module.Comp);
+    expect(container.textContent).toBe("1:o0");
+    write(module, "other", "o1");
+    expect(container.textContent).toBe("1:o1");
+    write(module, "count", 2);
+    expect(container.textContent).toBe("2:o1");
+    write(module, "other", "o2");
+    expect(container.textContent).toBe("2:o2");
+  });
+
   it("tracks a computed signal accessor with a runtime key", async () => {
     const module = await loadModule(`
 import { signal } from "react-fine-grained-signals";

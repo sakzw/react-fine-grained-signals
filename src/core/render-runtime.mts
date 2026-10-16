@@ -119,9 +119,13 @@ function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bar
   };
 }
 
-function pushRenderScope(attempt: RenderAttempt, scopePolicy: "managed" | "bare" = "managed"): () => void {
+// `suspendParent` is set by a caller that has proved the open parent is the
+// calling component's own bare window: the new scope then sits on top of it and
+// popping it hands collection back, instead of closing it. Without the proof
+// the parent is a previous component's leftover and is closed.
+function pushRenderScope(attempt: RenderAttempt, scopePolicy: "managed" | "bare" = "managed", suspendParent = false): () => void {
   const parent = executionContext.owner;
-  if (isRenderExecutionOwner(parent) && !(parent.scopePolicy === "managed" && scopePolicy === "managed")) {
+  if (!suspendParent && isRenderExecutionOwner(parent) && !(parent.scopePolicy === "managed" && scopePolicy === "managed")) {
     parent.closeScope?.();
   }
   const restoreAttempt = core.pushRenderAttempt(attempt);
@@ -147,8 +151,8 @@ function pushRenderScope(attempt: RenderAttempt, scopePolicy: "managed" | "bare"
   return restoreScope;
 }
 
-function withRenderScope<T>(attempt: RenderAttempt, callback: () => T, scopePolicy: "managed" | "bare" = "managed"): T {
-  const restore = pushRenderScope(attempt, scopePolicy);
+function withRenderScope<T>(attempt: RenderAttempt, callback: () => T, scopePolicy: "managed" | "bare" = "managed", suspendParent = false): T {
+  const restore = pushRenderScope(attempt, scopePolicy, suspendParent);
   try { return callback(); }
   finally { restore(); }
 }

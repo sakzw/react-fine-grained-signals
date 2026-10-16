@@ -16,10 +16,22 @@ interface SignalCaptureScope extends ManagedScope {
   forIn(getObject: () => unknown): Iterable<string>;
 }
 
-type Capture = <R>(callback: () => R) => R;
-
 const isObject = (value: unknown): value is object =>
   value !== null && (typeof value === "object" || typeof value === "function");
+/**
+ * A capture or managed scope opened on top of an open bare window
+ * (`useSignalTracking()`) suspends it and hands collection back when it pops,
+ * instead of closing it: the window is usually the calling component's own,
+ * and closing it would leave that component's later reads untracked. React
+ * exposes no component identity to tell it apart from a window a previous
+ * sibling left open; such a leftover window keeps collecting until the next
+ * `useSignalTracking()`, commit, or microtask, which can only over-subscribe
+ * (an extra render), never miss a dependency.
+ */
+const suspendsBareParent = (owner: unknown): boolean =>
+  isRenderExecutionOwner(owner) && owner.scopePolicy === "bare";
+
+type Capture = <R>(callback: () => R) => R;
 
 /**
  * Built-in `next` methods always return a fresh ordinary result object whose
@@ -167,15 +179,12 @@ class RenderStore {
   begin(scopePolicy: ScopePolicy, ambient = true): RenderAttempt {
     const attempt = render.createRenderAttempt();
     if (ambient) {
-      attempt.restoreScope = render.pushRenderScope(attempt, scopePolicy);
+      attempt.restoreScope = render.pushRenderScope(
+        attempt,
+        scopePolicy,
+        scopePolicy === "managed" && suspendsBareParent(executionContext.owner),
+      );
       queueMicrotask(() => this.finish(attempt));
-    } else {
-      // A capture-only component pushes no scope of its own, but a bare scope
-      // a previous sibling left open (`useSignalTracking()`) must not collect
-      // this component's uncaptured reads. Pushing a managed scope closes it;
-      // do the same here without opening one.
-      const parent = executionContext.owner;
-      if (isRenderExecutionOwner(parent) && parent.scopePolicy === "bare") parent.closeScope?.();
     }
     return attempt;
   }
@@ -186,7 +195,7 @@ class RenderStore {
   }
   capture<T>(attempt: RenderAttempt, callback: () => T): T {
     if (this.#closedAttempts.has(attempt)) return callback();
-    return render.withRenderScope(attempt, callback, "managed");
+    return render.withRenderScope(attempt, callback, "managed", suspendsBareParent(executionContext.owner));
   }
   commit(attempt: RenderAttempt): void {
     this.#lifecycle += 1;

@@ -89,8 +89,8 @@ export interface RenderAdapterForCore {
 export interface AlienDerivedRenderAdapter {
   createRenderAttempt(): RenderAttempt;
   createRenderOwner(attempt: RenderAttempt, scopePolicy?: "managed" | "bare"): object;
-  pushRenderScope(attempt: RenderAttempt, scopePolicy?: "managed" | "bare"): () => void;
-  withRenderScope<T>(attempt: RenderAttempt, callback: () => T, scopePolicy?: "managed" | "bare"): T;
+  pushRenderScope(attempt: RenderAttempt, scopePolicy?: "managed" | "bare", suspendParent?: boolean): () => void;
+  withRenderScope<T>(attempt: RenderAttempt, callback: () => T, scopePolicy?: "managed" | "bare", suspendParent?: boolean): T;
   promoteRenderAttempt(attempt: RenderAttempt): boolean;
   settleRenderAttempt(attempt: RenderAttempt): boolean;
   getRenderVersion(readable: object): number;
