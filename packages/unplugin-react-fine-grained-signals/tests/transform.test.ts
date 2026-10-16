@@ -3578,3 +3578,74 @@ export function App() {
     expect(warnings).toEqual([]);
   });
 });
+
+describe("M17.4 managed capture edge shapes", () => {
+  const run = (body: string, extra = "") => {
+    const warnings: string[] = [];
+    const code = transformReactFineGrainedSignals(`
+import { deepSignal, signal } from "react-fine-grained-signals";
+import { useContext, useState } from "react";
+const state = deepSignal({ items: [{ a: 1 }], profile: { name: "n" }, count: 1, fn: (s) => s });
+const count = signal(1);
+const Ctx = {};
+function useStore() { useState(0); return state; }
+${extra}
+export function App() {
+  ${body}
+  return <p>{count.value}</p>;
+}
+`, "Edge.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning.message),
+    })?.code ?? "";
+    return { code, warnings };
+  };
+  const hookRead = /Hook call is nested inside this signal read expression/;
+  const hookCall = /Hook call shares this call/;
+
+  it.each([
+    ["for-of over a Hook in a computed key", "for (const item of state.value[useContext(Ctx)]) item;", hookRead],
+    ["destructuring a Hook-calling initializer", "const [first] = (useContext(Ctx), state.value.items);", hookRead],
+    ["reading assignment with a Hook", "state.value.count += useContext(Ctx);", hookRead],
+    ["JSX spread with a Hook", "const el = <p {...(useContext(Ctx), state.value.profile)} />;", hookRead],
+    ["tagged template with a Hook", "const t = state.value.fn`${useContext(Ctx)}`;", hookCall],
+    ["member read through a Hook in a computed key", "const v = state.value[useContext(Ctx)];", hookRead],
+  ])("warns instead of capturing a Hook: %s", (_label, body, message) => {
+    const { code, warnings } = run(body);
+    expect(warnings.some((warning) => message.test(warning))).toBe(true);
+    expect(code).not.toMatch(/capture\(\(\) => [^;]*useContext/);
+  });
+
+  it("captures loop heads without a block body and with let patterns", () => {
+    const { code, warnings } = run(`
+  let out = 0;
+  for (let { a } of state.value.items) out += a;
+  for (const [first] of [state.value.items]) out += first.a;
+  for (const item of useStore().value.items) out += item.a;
+`);
+    expect(warnings).toEqual([]);
+    expect(code).toContain("let {\n      a\n    } = _signals.capture(() => {");
+    expect(code).toMatch(/_signals\.iterate\(\(\) => _hookResult\.value\.items\)\)\(useStore\(\)\)/);
+  });
+
+  it("keeps outer-scope assignments, plain writes, and non-getter objects untracked", () => {
+    const { code, warnings } = run(`
+  outer = state.value.items;
+  const view = { total: 1, method() { return count.value; } };
+  state.value.count = 2;
+  const total = view.total;
+`, "let outer;");
+    expect(warnings).toEqual([]);
+    expect(code).toContain("state.value.count = 2;");
+    expect(code).toContain("const total = view.total;");
+  });
+
+  it("does not warn for a plain-called helper that calls a Hook without reading signals", () => {
+    const { warnings } = run("const title = renderTitle();", "function renderTitle() { useState(0); return 1; }");
+    expect(warnings).toEqual([]);
+  });
+});
