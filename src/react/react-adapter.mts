@@ -28,7 +28,7 @@ const isObject = (value: unknown): value is object =>
  * `useSignalTracking()`, commit, or microtask, which can only over-subscribe
  * (an extra render), never miss a dependency.
  */
-const suspendsBareParent = (owner: unknown): boolean =>
+const suspendsBareParent = (owner: typeof executionContext.owner): boolean =>
   isRenderExecutionOwner(owner) && owner.scopePolicy === "bare";
 
 type Capture = <R>(callback: () => R) => R;

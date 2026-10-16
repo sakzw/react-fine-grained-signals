@@ -1451,15 +1451,44 @@ function isAlsoMountedThroughJsx(path: NodePath<t.Function>): boolean {
 // a transparent TypeScript wrapper -- `items.map(Row!)`, or an inline
 // `items.map(((item) => <li />) as Fn)` -- stands between the two.
 //
-// `visited` guards the mutual recursion with `isCalledFromRenderCallback`
-// below against a reference cycle between two functions that call each other.
-function isRenderCallback(
-  path: NodePath<t.Function>,
-  visited: Set<t.Node> = new Set(),
-): boolean {
-  if (visited.has(path.node)) return false;
-  visited.add(path.node);
+// Whether a function is one is reachability over its callers (a function
+// called from a render callback is itself one), answered iteratively: a long
+// chain of helpers must not recurse once per link, nor re-walk the whole chain
+// once per helper. A positive answer marks every function on the path to it;
+// a negative one marks every function walked, since each was walked with all
+// of its callers.
+const renderCallbackMemo = new WeakMap<t.Node, boolean>();
 
+function isRenderCallback(path: NodePath<t.Function>): boolean {
+  const known = renderCallbackMemo.get(path.node);
+  if (known !== undefined) return known;
+  const parentOf = new Map<t.Node, t.Node | undefined>();
+  const pending: Array<[NodePath<t.Function>, t.Node | undefined]> = [[path, undefined]];
+  while (pending.length > 0) {
+    const [current, from] = pending.pop()!;
+    if (parentOf.has(current.node)) continue;
+    parentOf.set(current.node, from);
+    const remembered = current === path ? undefined : renderCallbackMemo.get(current.node);
+    if (remembered === false) continue;
+    const callers = remembered === true ? true : renderCallbackCallers(current);
+    if (callers === true) {
+      for (let node: t.Node | undefined = current.node; node !== undefined; node = parentOf.get(node)) {
+        renderCallbackMemo.set(node, true);
+      }
+      return true;
+    }
+    for (const owner of callers) pending.push([owner, current.node]);
+  }
+  for (const node of parentOf.keys()) renderCallbackMemo.set(node, false);
+  return false;
+}
+
+/**
+ * One step of `isRenderCallback`: `true` when `path` is handed to a render
+ * callback method itself, otherwise the functions that call it (whose own
+ * answer then decides).
+ */
+function renderCallbackCallers(path: NodePath<t.Function>): true | NodePath<t.Function>[] {
   const argument = climbTransparentWrappers(path);
   const enclosing = argument.parentPath;
   if (enclosing !== null && isRenderCallbackInvocation(enclosing.node, argument.node)) return true;
@@ -1470,42 +1499,32 @@ function isRenderCallback(
   if (keyedHolder !== null && isKeyedRenderCallback(keyedHolder)) return true;
 
   const name = getOwnBindingName(path);
-  if (name === undefined || enclosing === null) return false;
+  if (name === undefined || enclosing === null) return [];
   const binding = enclosing.scope.getBinding(name);
-  if (binding === undefined) return false;
+  if (binding === undefined) return [];
   // Only this function's own binding may speak for it, so a same-named binding
   // from an outer scope cannot disqualify an unrelated function. The declarator
   // is compared against the climbed position for the same reason
   // `getOwnBindingName` reads the name from there: a wrapped initializer puts
   // the wrapper, not the function, directly under the declarator.
-  if (binding.path.node !== path.node && binding.path.node !== enclosing.node) return false;
-  return binding.referencePaths.some((reference) => {
+  if (binding.path.node !== path.node && binding.path.node !== enclosing.node) return [];
+  const callers: NodePath<t.Function>[] = [];
+  for (const reference of binding.referencePaths) {
     const slot = climbTransparentWrappers(reference);
     if (slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)) {
       return true;
     }
-    return isCalledFromRenderCallback(slot, visited);
-  });
-}
-
-/**
- * Is `slot` the callee of a call that happens inside a render callback --
- * `items.map((item) => Row(item))` rather than `items.map(Row)`?
- *
- * Both forms run `Row` once per item inside the owner's single render pass, so
- * both must keep `Row` off a boundary of its own: `Row` called as a plain
- * function is never mounted as a fiber, so three hooks injected into it would
- * run in a loop and crash with "Rendered more hooks than during the previous
- * render" the moment the array length changes. The by-reference form is caught
- * by `isRenderCallbackInvocation`; this is the direct-call twin of it.
- */
-function isCalledFromRenderCallback(slot: NodePath, visited: Set<t.Node>): boolean {
-  const call = slot.parentPath;
-  if (call === null) return false;
-  const parts = getCallParts(call.node);
-  if (parts === undefined || parts.callee !== slot.node) return false;
-  const owner = call.getFunctionParent();
-  return owner !== null && isRenderCallback(owner, visited);
+    // `items.map((item) => Row(item))` rather than `items.map(Row)`: both run
+    // `Row` once per item inside the owner's single render pass, so both must
+    // keep `Row` off a boundary of its own. `Row` called as a plain function is
+    // never mounted as a fiber, so three hooks injected into it would run in a
+    // loop and crash with "Rendered more hooks than during the previous render"
+    // the moment the array length changes.
+    const call = slot.parentPath!;
+    const owner = call.getFunctionParent();
+    if (owner !== null && getCallParts(call.node)?.callee === slot.node) callers.push(owner);
+  }
+  return callers;
 }
 
 /** The function `name`, referenced from `origin`'s scope, is bound to. */
@@ -1990,21 +2009,136 @@ function isPotentialDynamicMemberRead(
   return !isDeferredReadContext(path, functionPath);
 }
 
+/**
+ * One function's own findings plus the functions its render runs that must be
+ * folded in. Folding is a graph reachability question, so it is answered
+ * iteratively over memoized per-function scans rather than by recursing into
+ * each target: a long helper chain neither overflows the stack nor re-walks
+ * every callee once per ancestor.
+ */
+interface FoldEdge {
+  target: NodePath<t.Function>;
+  /** Does the target's JSX count as the caller's own (render callbacks)? */
+  jsx: boolean;
+}
+
+interface FunctionScan {
+  own: FunctionInspection;
+  edges: FoldEdge[];
+}
+
+/** Per function: does a read lie anywhere along its fold edges? (see `inspectFunction`) */
+const readsReachable = new WeakMap<t.Node, boolean>();
+
+/** Scans of functions inspected for their synchronous body only, per node. */
+const synchronousScans = new WeakMap<t.Node, FunctionScan>();
+
+function synchronousScan(
+  functionPath: NodePath<t.Function>,
+  importSource: string,
+  managedRuntimeSource: string,
+  reactImportSource: string,
+): FunctionScan {
+  let scan = synchronousScans.get(functionPath.node);
+  if (scan === undefined) {
+    scan = scanFunction(functionPath, importSource, managedRuntimeSource, reactImportSource, true);
+    synchronousScans.set(functionPath.node, scan);
+  }
+  return scan;
+}
+
 function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
   managedRuntimeSource: string,
   reactImportSource: string,
-  // Guards the render-callback recursion below against reference cycles
-  // (mutually referencing helpers) and re-inspecting the same body twice.
-  visited: Set<t.Node> = new Set([functionPath.node]),
+  // Functions the fold must not enter: the function being inspected itself,
+  // and any owner the caller has already accounted for.
+  excluded: ReadonlySet<t.Node> = new Set([functionPath.node]),
   synchronousBodyOnly = false,
 ): FunctionInspection {
+  const root = synchronousBodyOnly
+    ? synchronousScan(functionPath, importSource, managedRuntimeSource, reactImportSource)
+    : scanFunction(functionPath, importSource, managedRuntimeSource, reactImportSource, false);
+  const inspection = { ...root.own };
+  const rootNode = functionPath.node;
+  // With only the function itself excluded, what one query learns holds for
+  // every function it walked through, so a chain of N helpers costs O(N)
+  // overall rather than O(N^2): a read found marks the whole path to it, and a
+  // negative answer marks everything reachable (all of it was walked).
+  const memoizable = excluded.size === 1 && excluded.has(rootNode);
+  if (!inspection.readsValue && root.edges.length > 0) {
+    const parentOf = new Map<t.Node, t.Node>();
+    const seen = new Set(excluded);
+    const pending: Array<[NodePath<t.Function>, t.Node]> = root.edges.map((edge) => [edge.target, rootNode]);
+    let found = false;
+    while (pending.length > 0) {
+      const [target, from] = pending.pop()!;
+      if (seen.has(target.node)) continue;
+      seen.add(target.node);
+      parentOf.set(target.node, from);
+      const known = memoizable ? readsReachable.get(target.node) : undefined;
+      const scan = known === undefined
+        ? synchronousScan(target, importSource, managedRuntimeSource, reactImportSource)
+        : undefined;
+      if (known === true || scan?.own.readsValue === true) {
+        if (memoizable) {
+          for (let node: t.Node | undefined = target.node; node !== undefined && node !== rootNode; node = parentOf.get(node)) {
+            readsReachable.set(node, true);
+          }
+        }
+        found = true;
+        break;
+      }
+      if (scan !== undefined) for (const next of scan.edges) pending.push([next.target, target.node]);
+    }
+    inspection.readsValue = found;
+    if (!found && memoizable) {
+      for (const node of seen) if (node !== rootNode) readsReachable.set(node, false);
+    }
+  }
+  if (!inspection.containsJSX && root.edges.some((edge) => edge.jsx)) {
+    const seen = new Set(excluded);
+    const pending = root.edges.filter((edge) => edge.jsx);
+    while (pending.length > 0 && !inspection.containsJSX) {
+      const edge = pending.pop()!;
+      if (seen.has(edge.target.node)) continue;
+      seen.add(edge.target.node);
+      const scan = synchronousScan(edge.target, importSource, managedRuntimeSource, reactImportSource);
+      if (scan.own.containsJSX) inspection.containsJSX = true;
+      for (const next of scan.edges) if (next.jsx) pending.push(next);
+    }
+  }
+  return inspection;
+}
+
+function scanFunction(
+  functionPath: NodePath<t.Function>,
+  importSource: string,
+  managedRuntimeSource: string,
+  reactImportSource: string,
+  synchronousBodyOnly: boolean,
+): FunctionScan {
   const inspection: FunctionInspection = {
     containsJSX: false,
     readsValue: false,
     hasSignalTrackingCall: false,
     hasUseManagedSignalsCall: false,
+  };
+  const edges: FoldEdge[] = [];
+  // A helper called from many sites is one edge, not one per call.
+  const edgeIndex = new Map<t.Node, FoldEdge>();
+  const checkedHelpers = new Set<t.Node>();
+  const addEdge = (target: NodePath<t.Function>, jsx: boolean): void => {
+    if (target.node === functionPath.node) return;
+    const known = edgeIndex.get(target.node);
+    if (known !== undefined) {
+      if (jsx) known.jsx = true;
+      return;
+    }
+    const edge = { target, jsx };
+    edgeIndex.set(target.node, edge);
+    edges.push(edge);
   };
 
   // A render callback defined elsewhere in the module runs inside this
@@ -2038,18 +2172,7 @@ function inspectFunction(
     // a generator executes none of its body until iteration. Folding either
     // body into the caller would claim reads outside the active capture.
     if (target === undefined || target.node.async || target.node.generator) return;
-    if (visited.has(target.node)) return;
-    visited.add(target.node);
-    const nested = inspectFunction(
-      target,
-      importSource,
-      managedRuntimeSource,
-      reactImportSource,
-      visited,
-      true,
-    );
-    if (nested.containsJSX) inspection.containsJSX = true;
-    if (nested.readsValue) inspection.readsValue = true;
+    addEdge(target, true);
   };
 
   // The direct-call twin of the fold above: `items.map((item) => Row(item))`
@@ -2110,18 +2233,7 @@ function inspectFunction(
         ? resolveKeyedFunction(call, member)
         : undefined;
     if (target === undefined || target.node.async || target.node.generator) return;
-    if (visited.has(target.node)) return;
-    visited.add(target.node);
-    const nested = inspectFunction(
-      target,
-      importSource,
-      managedRuntimeSource,
-      reactImportSource,
-      visited,
-      true,
-    );
-    if (nested.containsJSX) inspection.containsJSX = true;
-    if (nested.readsValue) inspection.readsValue = true;
+    addEdge(target, true);
   };
 
   // Ordinary module-local helpers are part of the caller's synchronous render
@@ -2142,20 +2254,12 @@ function inspectFunction(
     const target = t.isIdentifier(callee)
       ? resolveReferencedFunction(call, name)
       : member === undefined ? undefined : resolveKeyedFunction(call, member);
-    // `visited` first: a helper called from many sites is walked once, not
-    // once per call by `functionCallsHook`.
-    if (target === undefined || visited.has(target.node)) return;
-    visited.add(target.node);
+    // A helper called from many sites is checked once, not once per call by
+    // `functionCallsHook`.
+    if (target === undefined || edgeIndex.has(target.node) || checkedHelpers.has(target.node)) return;
+    checkedHelpers.add(target.node);
     if (target.node.async || target.node.generator || functionCallsHook(target)) return;
-    const nested = inspectFunction(
-      target,
-      importSource,
-      managedRuntimeSource,
-      reactImportSource,
-      visited,
-      true,
-    );
-    if (nested.readsValue) inspection.readsValue = true;
+    addEdge(target, false);
   };
 
   // `items.filter(isBig)`: a named synchronous function handed to a call
@@ -2164,16 +2268,15 @@ function inspectFunction(
   const foldFunctionArguments = (
     call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
   ): void => {
-    if (inspection.readsValue || callNameIsHook(call.node.callee)) return;
+    if (callNameIsHook(call.node.callee)) return;
     if (isDeferredReadContext(call, functionPath)) return;
     for (const argument of call.get("arguments") as NodePath[]) {
       if (!argument.isIdentifier()) continue;
       const target = resolveReferencedFunction(argument, argument.node.name);
-      if (target === undefined || visited.has(target.node)) continue;
-      visited.add(target.node);
+      if (target === undefined || edgeIndex.has(target.node) || checkedHelpers.has(target.node)) continue;
+      checkedHelpers.add(target.node);
       if (target.node.async || target.node.generator || functionCallsHook(target)) continue;
-      const nested = inspectFunction(target, importSource, managedRuntimeSource, reactImportSource, visited, true);
-      if (nested.readsValue) inspection.readsValue = true;
+      addEdge(target, false);
     }
   };
 
@@ -2251,7 +2354,7 @@ function inspectFunction(
       foldFunctionArguments(path);
     },
   });
-  return inspection;
+  return { own: inspection, edges };
 }
 
 function findRuntimeImports(
@@ -3208,8 +3311,33 @@ function computeTrackedReadInExpression(
         candidate.stop();
       }
     },
+    // The alias itself, wherever it sits in the expression, is how the tracked
+    // value travels: `u as T`, `flag ? u : other`, `[u]`, `{ u }`, `f(u)`,
+    // `u ?? {}`. Whoever receives it reads through the same proxy.
+    Identifier(candidate) {
+      if (isTrackedAliasReference(candidate, functionPath, trackedAliases)) {
+        found = true;
+        candidate.stop();
+      }
+    },
   });
   return found;
+}
+
+function isTrackedAliasReference(
+  path: NodePath<t.Identifier>,
+  functionPath: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+): boolean {
+  if (trackedAliases.size === 0 || !path.isReferencedIdentifier()) return false;
+  // A Hook's argument is handed to React in place, never read by a capture.
+  const parent = path.parentPath;
+  if (
+    (parent.isCallExpression() || parent.isOptionalCallExpression()) &&
+    parent.node.callee !== path.node && callNameIsHook(parent.node.callee)
+  ) return false;
+  const binding = path.scope.getBinding(path.node.name);
+  return binding !== undefined && trackedAliases.has(binding) && !isDeferredReadContext(path, functionPath);
 }
 
 function functionCallsHook(functionPath: NodePath<t.Function>): boolean {
@@ -3300,6 +3428,9 @@ function externalCallMayReadTrackedValue(
     return init?.isMemberExpression() === true && init.node.computed &&
       getReadPropertyName(init.node) === undefined;
   }
+  // Iterating a generator runs its body later, outside this call; the loop
+  // that pulls from it captures those steps (see the `for...of` visitor).
+  if (target.node.generator) return false;
   // The answer depends only on the target function, so a helper called from
   // many sites is inspected once instead of once per call.
   const cached = targetMayReadTrackedValue.get(target.node);
@@ -3307,6 +3438,85 @@ function externalCallMayReadTrackedValue(
   const result = targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
   targetMayReadTrackedValue.set(target.node, result);
   return result;
+}
+
+interface ReadContext {
+  importSource: string;
+  managedRuntimeSource: string;
+  reactImportSource: string;
+}
+
+/** Receivers that are never module state: only an own binding can be one. */
+const pureMethodNames = new Set([
+  "map", "filter", "reduce", "reduceRight", "forEach", "some", "every", "flatMap", "flat",
+  "slice", "concat", "join", "indexOf", "lastIndexOf", "sort", "reverse", "toSorted",
+  "toReversed", "push", "pop", "shift", "unshift", "splice",
+  "toString", "toUpperCase", "toLowerCase", "toLocaleUpperCase", "toLocaleLowerCase",
+  "trim", "trimStart", "trimEnd", "split", "replace", "replaceAll", "padStart", "padEnd",
+  "startsWith", "endsWith", "charAt", "charCodeAt", "codePointAt", "localeCompare",
+  "substring", "repeat", "normalize", "toFixed", "toPrecision", "toLocaleString",
+  "toLocaleDateString", "toLocaleTimeString", "toISOString", "toJSON", "valueOf",
+]);
+
+/** The base expression a member/call chain hangs off: `a.b().c` -> `a`. */
+function callChainRoot(node: t.Node): t.Node {
+  let current = unwrapTransparent(node);
+  for (;;) {
+    if (t.isMemberExpression(current) || t.isOptionalMemberExpression(current)) {
+      current = unwrapTransparent(current.object);
+    } else if (t.isCallExpression(current) || t.isOptionalCallExpression(current)) {
+      current = unwrapTransparent(current.callee);
+    } else if (t.isNewExpression(current)) {
+      current = unwrapTransparent(current.callee);
+    } else {
+      return current;
+    }
+  }
+}
+
+/**
+ * A synchronous call whose callee this module cannot resolve to a function
+ * body -- a method of an imported or module-level object, a function held in a
+ * variable (`useCallback`, a Hook's result, an alias), an optional call -- may
+ * still read signals while it runs. It is captured unless it is provably not
+ * module code: a Hook or component-shaped callee (never moved into a closure),
+ * a global (`Math.max`, `JSON.stringify`), a builtin method that no store would
+ * define (`items.map`, `s.trim`), or an import from the library or React.
+ *
+ * Calls that resolve to a function this module defines are decided by that
+ * function's body instead, so they are never "unresolved".
+ */
+function unresolvedCallMayRead(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  context: ReadContext,
+): boolean {
+  if (callNameIsHook(call.node.callee)) return false;
+  const callee = unwrapTransparent(call.node.callee);
+  if (t.isIdentifier(callee)) {
+    if (isComponentName(callee.name) || resolveReferencedFunction(call, callee.name) !== undefined) return false;
+  } else if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
+    const name = getStaticMemberChain(callee)?.keys.at(-1);
+    if (name !== undefined && (isComponentName(name) || pureMethodNames.has(name))) return false;
+    if (resolveKeyedFunction(call, callee) !== undefined) return false;
+  } else if (!t.isCallExpression(callee) && !t.isOptionalCallExpression(callee)) {
+    return false;
+  }
+  const root = callChainRoot(callee);
+  if (t.isThisExpression(root)) return true;
+  if (!t.isIdentifier(root)) return false;
+  const binding = call.scope.getBinding(root.name);
+  // An unbound name is a global (`Math`, `JSON`, `String`, `console`).
+  if (binding === undefined) return false;
+  const specifier = binding.path;
+  if (
+    specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() ||
+    specifier.isImportNamespaceSpecifier()
+  ) {
+    const source = (specifier.parentPath as NodePath<t.ImportDeclaration>).node.source.value;
+    return source !== context.importSource && source !== context.managedRuntimeSource &&
+      !isReactSource(source, context.reactImportSource);
+  }
+  return true;
 }
 
 const targetMayReadTrackedValue = new WeakMap<t.Node, boolean>();
@@ -3384,67 +3594,174 @@ function hasDynamicCallTarget(functionPath: NodePath<t.Function>): boolean {
   return found;
 }
 
-/** `{ get total() { return count.value * 2 } }`: reading the getter is a tracked read. */
-function objectHasTrackedGetter(path: NodePath, trackedAliases: Set<object>): boolean {
-  const object = unwrapTransparentPath(path);
-  if (!object.isObjectExpression()) return false;
-  return (object.get("properties") as NodePath[]).some((property) =>
-    property.isObjectMethod() && property.node.kind === "get" && !property.node.async &&
-    hasTrackedReadInExpression(property.get("body"), property, trackedAliases));
+const noAliases: Set<object> = new Set();
+
+/** The bindings a declaration pattern introduces, as seen from `path`'s scope. */
+function patternBindings(path: NodePath, node: t.Node): object[] {
+  return Object.values(t.getBindingIdentifiers(node) as Record<string, t.Identifier>)
+    .map((identifier) => path.scope.getBinding(identifier.name)!);
 }
 
+/**
+ * The bindings that hold a value read through a tracked source (the `.value`
+ * of a signal, or anything reached through it), so later reads of them
+ * subscribe too. Each assignment-shaped statement is a flow from the bindings
+ * its source mentions to the bindings it writes; the flows are closed with one
+ * worklist, so the cost stays linear in the function however the statements
+ * are ordered.
+ */
 function collectTrackedReadAliases(
   functionPath: NodePath<t.Function>,
+  context: ReadContext,
 ): Set<object> {
   const trackedAliases = new Set<object>();
-  let changed = true;
-  const addBindings = (path: NodePath, identifiers: Iterable<t.Identifier>): void => {
-    for (const identifier of identifiers) {
-      const binding = path.scope.getBinding(identifier.name);
-      if (binding !== undefined && !trackedAliases.has(binding)) {
-        trackedAliases.add(binding);
-        changed = true;
-      }
+  // Per binding: the targets of every flow that mentions it.
+  const dependents = new Map<object, object[][]>();
+  const pending: object[] = [];
+  const alias = (binding: object): void => {
+    if (!trackedAliases.has(binding)) {
+      trackedAliases.add(binding);
+      pending.push(binding);
     }
   };
-  const patternIdentifiers = (node: t.Node): t.Identifier[] =>
-    Object.values(t.getBindingIdentifiers(node) as Record<string, t.Identifier>);
-  while (changed) {
-    changed = false;
-    functionPath.traverse({
-      Function(nested) {
-        nested.skip();
-      },
-      VariableDeclarator(path) {
-        const init = path.get("init");
-        if (!init.node) return;
-        if (
-          !hasTrackedReadInExpression(init, functionPath, trackedAliases) &&
-          !objectHasTrackedGetter(init, trackedAliases)
-        ) return;
-        // Every name a pattern binds holds a value read through the tracked
-        // source, whatever the pattern's shape (defaults, rest, arrays).
-        addBindings(path, patternIdentifiers(path.node.id));
-      },
-      AssignmentExpression(path) {
-        // `let items; items = state.value.items;` aliases as a declaration would.
-        if (path.node.operator !== "=") return;
-        const left = path.get("left");
-        if (!left.isIdentifier()) return;
+  const isLocalVariable = (binding: ReturnType<NodePath["scope"]["getBinding"]>): binding is NonNullable<typeof binding> =>
+    binding !== undefined && (binding.kind === "const" || binding.kind === "let" || binding.kind === "var") &&
+    binding.scope.getFunctionParent()?.path.node === functionPath.node;
+  const resolvedCallReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): boolean => {
+    if (callNameIsHook(call.node.callee)) return false;
+    const callee = unwrapTransparent(call.node.callee);
+    const target = t.isIdentifier(callee)
+      ? resolveReferencedFunction(call, callee.name)
+      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+        ? resolveKeyedFunction(call, callee)
+        : undefined;
+    return target !== undefined && functionTargetMayReadTrackedValue(
+      target,
+      context.importSource,
+      context.managedRuntimeSource,
+      context.reactImportSource,
+    );
+  };
+  /**
+   * Does `source` read a tracked value without help from any alias -- and if
+   * not, which bindings does it mention (so the flow fires when one becomes an
+   * alias)?
+   */
+  const scanSource = (source: NodePath, deps: Set<object>): boolean => {
+    if (hasTrackedReadInExpression(source, functionPath, noAliases)) return true;
+    let seeded = false;
+    const reference = (candidate: NodePath<t.Identifier>): void => {
+      if (!candidate.isReferencedIdentifier() || isDeferredReadContext(candidate, functionPath)) return;
+      const binding = candidate.scope.getBinding(candidate.node.name);
+      if (binding !== undefined) deps.add(binding);
+    };
+    const call = (candidate: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
+      if (resolvedCallReads(candidate)) {
+        seeded = true;
+        candidate.stop();
+      }
+    };
+    // `{ get total() { return count.value * 2 } }`: reading the getter is a
+    // tracked read, and a getter that mentions an alias reads through it.
+    const object = unwrapTransparentPath(source);
+    if (object.isObjectExpression()) {
+      for (const property of object.get("properties") as NodePath[]) {
+        if (!property.isObjectMethod() || property.node.kind !== "get" || property.node.async) continue;
+        const body = property.get("body");
+        if (bodyReadsTrackedValue(body, property, noAliases, context)) return true;
+        body.traverse({ Function(nested) { nested.skip(); }, Identifier: reference });
+      }
+    }
+    if (source.isIdentifier()) reference(source);
+    else if (source.isCallExpression() || source.isOptionalCallExpression()) call(source);
+    if (seeded) return true;
+    source.traverse({
+      Function(nested) { nested.skip(); },
+      Identifier: reference,
+      CallExpression: call,
+      OptionalCallExpression: call,
+    });
+    return seeded;
+  };
+  const flow = (targets: object[], sources: NodePath[]): void => {
+    const deps = new Set<object>();
+    for (const source of sources) {
+      if (scanSource(source, deps)) {
+        for (const target of targets) alias(target);
+        return;
+      }
+    }
+    for (const dep of deps) {
+      const list = dependents.get(dep);
+      if (list === undefined) dependents.set(dep, [targets]);
+      else list.push(targets);
+    }
+  };
+  // `visible.push(task)`, `box[0] = task`: a local container that receives an
+  // alias holds tracked values from then on.
+  const containerRoot = (path: NodePath): object | undefined => {
+    let current: NodePath = path;
+    while (current.isMemberExpression() || current.isOptionalMemberExpression() || isTransparentWrapper(current.node)) {
+      current = (isTransparentWrapper(current.node) ? current.get("expression") : current.get("object")) as NodePath;
+    }
+    if (!current.isIdentifier()) return undefined;
+    const binding = current.scope.getBinding(current.node.name);
+    return isLocalVariable(binding) ? binding : undefined;
+  };
+  const containerMethods = new Set(["push", "unshift", "add", "set"]);
+  const container = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
+    const callee = unwrapTransparentPath(call.get("callee") as NodePath);
+    if (!callee.isMemberExpression() && !callee.isOptionalMemberExpression()) return;
+    const method = getReadPropertyName(callee.node);
+    if (method === undefined || !containerMethods.has(method)) return;
+    const target = containerRoot(callee.get("object") as NodePath);
+    if (target === undefined) return;
+    flow([target], (call.get("arguments") as NodePath[]).map((argument) =>
+      argument.isSpreadElement() ? argument.get("argument") as NodePath : argument));
+  };
+  functionPath.traverse({
+    Function(nested) {
+      nested.skip();
+    },
+    VariableDeclarator(path) {
+      const init = path.get("init");
+      if (!init.node) return;
+      // Every name a pattern binds holds a value read through the tracked
+      // source, whatever the pattern's shape (defaults, rest, arrays).
+      flow(patternBindings(path, path.node.id), [init]);
+    },
+    AssignmentExpression(path) {
+      // `let items; items = state.value.items;` aliases as a declaration would.
+      const operator = path.node.operator;
+      if (operator !== "=" && operator !== "||=" && operator !== "&&=" && operator !== "??=") return;
+      const left = path.get("left");
+      if (left.isIdentifier()) {
         const binding = path.scope.getBinding(left.node.name);
         if (binding === undefined || binding.scope.getFunctionParent()?.path.node !== functionPath.node) return;
-        if (!hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
-        addBindings(path, [left.node]);
-      },
-      ForOfStatement(path) {
-        // `for (const task of state.value.tasks) task.title`: each element of a
-        // tracked iterable is read through the same deep proxy as its source.
-        const left = path.get("left");
-        if (!left.isVariableDeclaration() || left.node.declarations.length !== 1) return;
-        if (!hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
-        addBindings(path, patternIdentifiers(left.node.declarations[0]!.id));
-      },
-    });
+        flow([binding], [path.get("right")]);
+      } else if (left.isMemberExpression() || left.isOptionalMemberExpression()) {
+        const target = containerRoot(left);
+        if (target !== undefined) flow([target], [path.get("right")]);
+      }
+    },
+    ForOfStatement(path) {
+      // `for (const task of state.value.tasks) task.title`: each element of a
+      // tracked iterable is read through the same deep proxy as its source.
+      const left = path.get("left");
+      if (left.isVariableDeclaration()) {
+        flow(patternBindings(path, left.node.declarations[0]!.id), [path.get("right")]);
+      } else if (left.isIdentifier()) {
+        const binding = path.scope.getBinding(left.node.name);
+        if (isLocalVariable(binding)) flow([binding], [path.get("right")]);
+      }
+    },
+    CallExpression: container,
+    OptionalCallExpression: container,
+  });
+  while (pending.length > 0) {
+    for (const targets of dependents.get(pending.pop()!) ?? []) {
+      for (const target of targets) alias(target);
+    }
   }
   return trackedAliases;
 }
@@ -3531,12 +3848,14 @@ function expressionCallsHook(path: NodePath): boolean {
 /**
  * Does an inline callback read a tracked value when it runs? Callbacks nested
  * in its own call arguments are followed too (`rows.map(r => r.cells.filter(c
- * => c.value))`); async, generator, Hook-calling, and event-handler functions
- * are not synchronous render reads.
+ * => c.value))`), and so are the calls its body makes (`items.filter((x) =>
+ * matches(x))` reads through `matches`); async, generator, Hook-calling, and
+ * event-handler functions are not synchronous render reads.
  */
 function inlineCallbackReadsTrackedValue(
   path: NodePath,
   trackedAliases: Set<object>,
+  context: ReadContext,
 ): boolean {
   let target = path;
   while (target.isTSAsExpression() || target.isTSSatisfiesExpression() || target.isTSNonNullExpression() || target.isParenthesizedExpression()) {
@@ -3544,19 +3863,43 @@ function inlineCallbackReadsTrackedValue(
   }
   if (!target.isArrowFunctionExpression() && !target.isFunctionExpression()) return false;
   if (target.node.async || target.node.generator || functionCallsHook(target)) return false;
-  const body = target.get("body") as NodePath;
-  if (hasTrackedReadInExpression(body, target, trackedAliases)) return true;
-  const callbackReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>): boolean =>
-    !callNameIsHook(call.node.callee) &&
-    [call.get("callee") as NodePath, ...(call.get("arguments") as NodePath[])]
-      .some((argument) => inlineCallbackReadsTrackedValue(argument, trackedAliases));
+  return bodyReadsTrackedValue(target.get("body") as NodePath, target, trackedAliases, context);
+}
+
+/**
+ * Does evaluating `body` (the body of `owner`, a callback or an accessor) read
+ * a tracked value: directly, through a call that reaches one, or through a
+ * callback it hands to a call?
+ */
+function bodyReadsTrackedValue(
+  body: NodePath,
+  owner: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+  context: ReadContext,
+): boolean {
+  if (hasTrackedReadInExpression(body, owner, trackedAliases)) return true;
+  const callReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>): boolean => {
+    if (callNameIsHook(call.node.callee)) return false;
+    if (
+      !call.isNewExpression() &&
+      (externalCallMayReadTrackedValue(
+        call,
+        owner,
+        context.importSource,
+        context.managedRuntimeSource,
+        context.reactImportSource,
+      ) || unresolvedCallMayRead(call, context))
+    ) return true;
+    return [call.get("callee") as NodePath, ...(call.get("arguments") as NodePath[])]
+      .some((argument) => inlineCallbackReadsTrackedValue(argument, trackedAliases, context));
+  };
   // `traverse` does not visit its root, which is the call in an expression body.
-  if ((body.isCallExpression() || body.isOptionalCallExpression() || body.isNewExpression()) && callbackReads(body)) {
+  if ((body.isCallExpression() || body.isOptionalCallExpression() || body.isNewExpression()) && callReads(body)) {
     return true;
   }
   let found = false;
   const inspectCall = (call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>): void => {
-    if (callbackReads(call)) {
+    if (callReads(call)) {
       found = true;
       call.stop();
     }
@@ -3580,13 +3923,14 @@ function callReadsTrackedValue(
   call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>,
   functionPath: NodePath<t.Function>,
   trackedAliases: Set<object>,
+  context: ReadContext,
 ): boolean {
   if (callNameIsHook(call.node.callee)) return false;
   const callee = call.get("callee") as NodePath;
-  if (inlineCallbackReadsTrackedValue(callee, trackedAliases)) return true;
+  if (inlineCallbackReadsTrackedValue(callee, trackedAliases, context)) return true;
   for (const argument of call.get("arguments") as NodePath[]) {
     const value = argument.isSpreadElement() ? argument.get("argument") as NodePath : argument;
-    if (inlineCallbackReadsTrackedValue(value, trackedAliases)) return true;
+    if (inlineCallbackReadsTrackedValue(value, trackedAliases, context)) return true;
     if (!value.isFunction() && hasTrackedReadInExpression(value, functionPath, trackedAliases)) return true;
   }
   return false;
@@ -3659,6 +4003,7 @@ function captureTrackedReadExpressions(
   options: InternalTransformOptions,
 ): void {
   const generated = new WeakSet<t.Node>();
+  const context: ReadContext = { importSource, managedRuntimeSource, reactImportSource };
   const wrap = (path: NodePath<t.Expression>): void => {
     path.replaceWith(
       t.callExpression(
@@ -3702,6 +4047,21 @@ function captureTrackedReadExpressions(
     ) return;
     wrap(path);
   };
+  /** Would `visitCall` capture this call, or does it produce an iterator that reads when pulled? */
+  const iteratedCallMayRead = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): boolean => {
+    const callee = unwrapTransparent(call.node.callee);
+    const target = t.isIdentifier(callee)
+      ? resolveReferencedFunction(call, callee.name)
+      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+        ? resolveKeyedFunction(call, callee)
+        : undefined;
+    if (target !== undefined) {
+      return target.node.generator === true && !target.node.async &&
+        targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
+    }
+    return unresolvedCallMayRead(call, context) ||
+      externalCallMayReadTrackedValue(call, functionPath, importSource, managedRuntimeSource, reactImportSource);
+  };
   const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
     if (generated.has(path.node)) {
       path.skip();
@@ -3721,7 +4081,7 @@ function captureTrackedReadExpressions(
       (callee.isIdentifier() && path.scope.getBinding(callee.node.name)?.kind === "param") ||
       externalCallMayReadTrackedValue(path, functionPath, importSource, managedRuntimeSource, reactImportSource) ||
       [callee as NodePath, ...(path.get("arguments") as NodePath[])]
-        .some((part) => inlineCallbackReadsTrackedValue(part.isSpreadElement() ? part.get("argument") as NodePath : part, trackedAliases)) ||
+        .some((part) => inlineCallbackReadsTrackedValue(part.isSpreadElement() ? part.get("argument") as NodePath : part, trackedAliases, context)) ||
       // `items.filter(isBig)`: a named local or module function handed to the
       // call reads during it, exactly like an inline callback would.
       (path.get("arguments") as NodePath[]).some((argument) => {
@@ -3729,7 +4089,12 @@ function captureTrackedReadExpressions(
         const target = resolveReferencedFunction(argument, argument.node.name);
         return target !== undefined && functionTargetMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
       });
-    if (!readsInsideCall && !callReadsTrackedValue(path, functionPath, trackedAliases)) {
+    // A callee the module cannot see into (a method of an imported object, a
+    // function held in a variable) is captured as a precaution. Unlike the
+    // reads above this is not proof, so a Hook sharing the call is left alone
+    // without a warning.
+    const unresolved = !readsInsideCall && unresolvedCallMayRead(path, context);
+    if (!readsInsideCall && !unresolved && !callReadsTrackedValue(path, functionPath, trackedAliases, context)) {
       warnHookCallingHelperRead(path);
       return;
     }
@@ -3863,7 +4228,7 @@ function captureTrackedReadExpressions(
         const callee = path.get("callee");
         if (
           (hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
-            callReadsTrackedValue(path, functionPath, trackedAliases)) &&
+            callReadsTrackedValue(path, functionPath, trackedAliases, context)) &&
           !expressionCallsHook(path) &&
           !isDeferredReadContext(path, functionPath)
         ) {
@@ -3880,7 +4245,18 @@ function captureTrackedReadExpressions(
         // exactly as authored.
         const right = path.get("right");
         // A `for...in` already converted below carries its generated source.
-        if (path.node.await || generated.has(right.node) || !hasTrackedReadInExpression(right, functionPath, trackedAliases)) return;
+        if (path.node.await || generated.has(right.node)) return;
+        if (!hasTrackedReadInExpression(right, functionPath, trackedAliases)) {
+          // `for (const v of gen())`: a call that runs module code produces
+          // the iterator, and the loop pulls from it later -- outside the
+          // capture the call itself would get.
+          const source = unwrapTransparentPath(right);
+          if (
+            !(source.isCallExpression() || source.isOptionalCallExpression()) ||
+            callNameIsHook(source.node.callee) || expressionCallsHook(source) ||
+            !iteratedCallMayRead(source)
+          ) return;
+        }
         const iterate = (source: t.Expression): t.CallExpression => t.callExpression(
           t.memberExpression(t.cloneNode(store), t.identifier("iterate")),
           [generatedCallback([], source)],
@@ -4237,10 +4613,15 @@ function applyManaged(
     : [t.returnStatement(body.node as t.Expression)];
   const directives = body.isBlockStatement() ? body.node.directives : [];
   body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
-  let trackedAliases = collectTrackedReadAliases(path);
+  const readContext: ReadContext = {
+    importSource: options.importSource,
+    managedRuntimeSource: `${options.importSource}/runtime`,
+    reactImportSource: options.reactImportSource,
+  };
+  let trackedAliases = collectTrackedReadAliases(path, readContext);
   while (expandTrackedObjectDestructuring(path, trackedAliases)) {
     path.scope.crawl();
-    trackedAliases = collectTrackedReadAliases(path);
+    trackedAliases = collectTrackedReadAliases(path, readContext);
   }
   captureTrackedReadExpressions(
     path,
