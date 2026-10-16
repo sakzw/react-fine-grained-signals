@@ -106,9 +106,16 @@ function makeNode(kind: RuntimeNode["kind"], flags: number, fields: Partial<Runt
   return { kind, flags: flags as ReactiveFlags, deps: undefined, depsTail: undefined, subs: undefined, subsTail: undefined, renderRevision: 0, ...fields } as RuntimeNode;
 }
 
+// Set once this copy has read another copy's readable; until then no effect
+// can depend on a bridge, so `runEffect` skips the foreign revision walk.
+let hasForeignNodes = false;
+
 const foreignAdapter = createForeignReadableAdapter({
   runtimeToken,
-  makeNode,
+  makeNode: (kind, flags, fields) => {
+    hasForeignNodes = true;
+    return makeNode(kind, flags, fields);
+  },
   mutableFlag: Mutable,
   dirtyFlag: Dirty,
   getActiveSubscriber: () => activeSub,
@@ -464,7 +471,7 @@ function refreshForeignEffectDependencies(effect: RuntimeNode): void {
 }
 
 function runEffect(effect: RuntimeEffect): void {
-  if (effect.flags & Pending && effect.deps !== undefined) refreshForeignEffectDependencies(effect);
+  if (hasForeignNodes && effect.flags & Pending && effect.deps !== undefined) refreshForeignEffectDependencies(effect);
   const flags = effect.flags;
   if (flags & Dirty || (flags & Pending && effect.deps !== undefined && checkDirty(effect.deps, effect as unknown as ReactiveNode))) {
     if (flags & HasChildEffect) disposeChildEffects(effect);
