@@ -2575,6 +2575,51 @@ export function App() {
         expect(container.textContent).toBe("a,c,inherited|own,last");
       });
 
+      it("runs for...in over a signal holding a Proxy with the native loop's traps", async () => {
+        const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+export const log = [];
+// Every trap the engine calls lands in \`log\`; the descriptor of \`throwOn\`
+// throws, which a native loop that breaks before that key never sees.
+export function make(keys, throwOn) {
+  const target = {};
+  for (const key of keys) target[key] = 1;
+  return new Proxy(target, {
+    ownKeys(t) { log.push("ownKeys"); return Reflect.ownKeys(t); },
+    getOwnPropertyDescriptor(t, k) {
+      log.push("gOPD " + k);
+      if (k === throwOn) throw new Error("gOPD " + k);
+      return Reflect.getOwnPropertyDescriptor(t, k);
+    },
+    getPrototypeOf(t) { log.push("getPrototypeOf"); return Reflect.getPrototypeOf(t); },
+    has(t, k) { log.push("has " + k); return Reflect.has(t, k); },
+  });
+}
+export const box = signal(make(["a", "b", "c"], "b"));
+export function App() {
+  const firstOnly = [];
+  for (const k in box.value) { firstOnly.push(k); break; }
+  return <p>{firstOnly.join(",")}</p>;
+}
+`, { mode });
+        type M = { log: string[]; make: (keys: string[], throwOn?: string) => object; box: { value: object } };
+        const m = module as unknown as M;
+        // The trap sequence of one native \`for...in\` that breaks after its first key.
+        const nativeLog = (source: object): string[] => {
+          m.log.length = 0;
+          for (const key in source) { void key; break; }
+          return [...m.log];
+        };
+        const once = nativeLog(m.make(["a", "b", "c"], "b"));
+        m.log.length = 0;
+        const container = mount(module.App);
+        expect(container.textContent).toBe("a");
+        expect(m.log.length % once.length).toBe(0);
+        expect(m.log).toEqual(Array.from({ length: m.log.length / once.length }, () => once).flat());
+        act(() => { m.box.value = m.make(["z", "y"]); });
+        expect(container.textContent).toBe("z");
+      });
+
       it("tracks reads in the arguments of a Hook whose result is read", async () => {
         const module = await loadModule(`
 import { signal } from "react-fine-grained-signals";

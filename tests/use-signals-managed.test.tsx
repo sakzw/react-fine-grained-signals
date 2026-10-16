@@ -773,6 +773,75 @@ describe("useSignalCapture forIn", () => {
   });
 });
 
+describe("useSignalCapture forIn matches the native loop's trap calls", () => {
+  // A Proxy over an object whose prototype is also a Proxy: every trap the
+  // engine calls during enumeration lands in the log, in order.
+  function logged(log: string[], throwOn?: string): Record<string, number> {
+    const traps = (prefix: string, throwKey?: string): ProxyHandler<object> => ({
+      ownKeys(target) { log.push(`${prefix}ownKeys`); return Reflect.ownKeys(target); },
+      getOwnPropertyDescriptor(target, key) {
+        log.push(`${prefix}gOPD ${String(key)}`);
+        if (key === throwKey) throw new Error(`gOPD ${String(key)}`);
+        return Reflect.getOwnPropertyDescriptor(target, key);
+      },
+      getPrototypeOf(target) { log.push(`${prefix}getPrototypeOf`); return Reflect.getPrototypeOf(target); },
+      has(target, key) { log.push(`${prefix}has ${String(key)}`); return Reflect.has(target, key); },
+      deleteProperty(target, key) { log.push(`${prefix}delete ${String(key)}`); return Reflect.deleteProperty(target, key); },
+    });
+    const proto = new Proxy({ p: 1 }, traps("proto."));
+    const base = Object.create(proto) as Record<string, number>;
+    base.a = 1; base.b = 2; base.c = 3;
+    return new Proxy(base, traps("", throwOn)) as Record<string, number>;
+  }
+  type Loop = (keys: (object: Record<string, number>) => Iterable<string>, object: Record<string, number>, out: string[]) => void;
+  const loops: Record<string, Loop> = {
+    all: (keys, object, out) => { for (const key of keys(object)) out.push(key); },
+    breakFirst: (keys, object, out) => { for (const key of keys(object)) { out.push(key); break; } },
+    deleteAhead: (keys, object, out) => { for (const key of keys(object)) { out.push(key); if (key === "a") delete object.b; } },
+    continueThenThrow: (keys, object, out) => {
+      for (const key of keys(object)) {
+        if (key === "a") continue;
+        out.push(key);
+        if (key === "c") throw new Error("body");
+      }
+    },
+  };
+  // The same loops written with `for...in`.
+  const native: Record<string, (object: Record<string, number>, out: string[]) => void> = {
+    all: (object, out) => { for (const key in object) out.push(key); },
+    breakFirst: (object, out) => { for (const key in object) { out.push(key); break; } },
+    deleteAhead: (object, out) => { for (const key in object) { out.push(key); if (key === "a") delete object.b; } },
+    continueThenThrow: (object, out) => {
+      for (const key in object) {
+        if (key === "a") continue;
+        out.push(key);
+        if (key === "c") throw new Error("body");
+      }
+    },
+  };
+  const outcome = (run: (object: Record<string, number>, out: string[]) => void, throwOn?: string) => {
+    const log: string[] = [];
+    const out: string[] = [];
+    let error: string | undefined;
+    try { run(logged(log, throwOn), out); } catch (caught) { error = (caught as Error).message; }
+    return { out, error, log };
+  };
+
+  it.each(Object.keys(loops).flatMap((name) => [[name, undefined], [name, "b"]] as Array<[string, string | undefined]>))(
+    "%s (getOwnPropertyDescriptor throws on: %s)",
+    (name, throwOn) => {
+      let scope!: ReturnType<typeof useSignalCapture>;
+      function Holder() {
+        scope = useSignalCapture();
+        return null;
+      }
+      render(<Holder />);
+      const captured = outcome((object, out) => loops[name]!((source) => scope.forIn(() => source), object, out), throwOn);
+      expect(captured).toEqual(outcome(native[name]!, throwOn));
+    },
+  );
+});
+
 describe("per-read useSignalCapture prototype", () => {
   it("tracks shallow and deep reads while restoring the render context after each capture", () => {
     const shallow = signal("before");

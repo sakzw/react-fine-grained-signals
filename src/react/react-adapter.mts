@@ -108,21 +108,27 @@ function captureIteration<T>(capture: Capture, getIterable: () => Iterable<T>): 
   return forwarded;
 }
 
+/** The native loop itself, so enumeration order, laziness, and traps match. */
+function* forInKeys(source: unknown): Generator<string, void, undefined> {
+  for (const key in source as object) yield key;
+}
+
 /**
- * `for (k in source)`: enumerate the keys (own and inherited, as the native
- * loop does) inside a capture so the enumeration is tracked, then hand them
- * out lazily, skipping any key deleted before its turn like the native loop.
+ * `for (k in source)`: run the native `for...in` inside a generator and
+ * capture each step, the way `iterate` captures a `for...of`. The engine
+ * enumerates lazily (a Proxy's `getOwnPropertyDescriptor` and the prototype
+ * walk run as the loop advances, a key deleted before its turn is skipped, and
+ * `break` stops before the remaining keys are inspected); each step's reads
+ * are collected without adding any trap call the native loop would not make.
  */
 function captureForIn(capture: Capture, getObject: () => unknown): Iterable<string> {
-  const value = capture(getObject);
-  const target = value == null ? undefined : Object(value) as object;
-  const keys: string[] = [];
-  if (target !== undefined) capture(() => { for (const key in target) keys.push(key); });
-  return {
-    *[Symbol.iterator]() {
-      for (const key of keys) if (capture(() => key in target!)) yield key;
-    },
+  const keys = forInKeys(capture(getObject));
+  const forwarded: Iterator<string> & Iterable<string> = {
+    next: () => capture(() => keys.next()),
+    return: () => capture(() => keys.return()),
+    [Symbol.iterator]() { return forwarded; },
   };
+  return forwarded;
 }
 
 export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDerivedRenderAdapter) {
