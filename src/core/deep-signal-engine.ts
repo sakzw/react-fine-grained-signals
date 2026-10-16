@@ -1012,7 +1012,16 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
               if (!isObjectLike(step) || step.done) return step;
               return { done: false, value: normalizeLookupKey(step.value) };
             },
-          };
+            // A method that stops early (`isDisjointFrom`, `isSubsetOf`)
+            // closes the keys iterator. Look `return` up on the original only
+            // when that happens and call it with the original as receiver, so
+            // its lookup, call count, result check, and errors stay native.
+            get return(): (() => unknown) | undefined {
+              const close = (iterator as { return?: unknown }).return;
+              if (close == null) return undefined;
+              return () => Reflect.apply(close as Function, iterator, []);
+            },
+          } as Iterator<unknown>;
         },
       };
     };

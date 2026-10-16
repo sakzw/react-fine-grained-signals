@@ -441,4 +441,31 @@ describe("deepSignal reactive collections", () => {
       probe.mockRestore();
     }
   });
+
+  it("closes a set-like argument's keys iterator when a Set method stops early, like a native Set", () => {
+    type Composable = Set<string> & { isDisjointFrom(other: unknown): boolean; isSubsetOf(other: unknown): boolean };
+    const run = (target: Composable) => {
+      const log: string[] = [];
+      const other = {
+        size: 1,
+        has: () => false,
+        keys: function* () {
+          try {
+            log.push("yield a");
+            yield "a";
+            log.push("yield z");
+            yield "z";
+          } finally {
+            log.push("finally");
+          }
+        },
+      };
+      const disjoint = target.isDisjointFrom(other);
+      return { disjoint, log };
+    };
+    const native = run(new Set(["a", "b"]) as Composable);
+    const reactive = run(deepSignal(new Set(["a", "b"])).value as unknown as Composable);
+    expect(reactive).toEqual(native);
+    expect(native.log).toContain("finally");
+  });
 });
