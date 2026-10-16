@@ -448,7 +448,23 @@ function updateForeignDependencyAncestors(computed: RuntimeComputed): void {
   }
 }
 
+// Like `readComputed`, an effect must not trust bridge pushes either: another
+// copy's write may reach this graph only through a read made while the effect's
+// dependencies are being checked. A bridge advanced by such a read marks
+// subscribers Dirty that `checkDirty` has already walked past, which leaves a
+// computed Dirty but its effect clean and never notified again. Learn every
+// reachable revision first, so the check sees them all.
+function refreshForeignEffectDependencies(effect: RuntimeNode): void {
+  let visited: Set<RuntimeNode> | undefined;
+  for (let dependency = effect.deps; dependency !== undefined; dependency = dependency.nextDep) {
+    const dep = dependency.dep as RuntimeNode;
+    if (dep.kind === "external") foreignAdapter.observeForeignRevision(dep, dep.protocol!.getRevision());
+    else if (dep.kind === "computed" && dep.foreignDependent) refreshForeignDependencies(dep as RuntimeComputed, visited ??= new Set());
+  }
+}
+
 function runEffect(effect: RuntimeEffect): void {
+  if (effect.flags & Pending && effect.deps !== undefined) refreshForeignEffectDependencies(effect);
   const flags = effect.flags;
   if (flags & Dirty || (flags & Pending && effect.deps !== undefined && checkDirty(effect.deps, effect as unknown as ReactiveNode))) {
     if (flags & HasChildEffect) disposeChildEffects(effect);
@@ -610,7 +626,11 @@ function effect(fn: () => unknown, detached?: boolean): () => void {
     // instead and, as in Alien 3.2.1 and v0.1.1, does not. The bit is a literal
     // rather than a named constant to keep the signal-only bundle in budget.
     if (node.flags & 128) runEffect(node as RuntimeEffect);
-    if (queuedLength) flush();
+    // Library-internal subscriptions (a bridge for another copy's subscribe
+    // call may be created while one of that copy's computeds is evaluating up
+    // the stack) leave the queue to the flush that is already due: running it
+    // here would run effects that read that computed and see a false cycle.
+    if (queuedLength && !detached) flush();
   }
   return dispose;
 }
