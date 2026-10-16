@@ -3872,6 +3872,23 @@ function captureTrackedReadExpressions(
         // outside the iteration's captures. Bind the element to a temporary
         // and evaluate the authored pattern inside a capture in the body.
         const left = path.get("left");
+        if (left.isObjectPattern() || left.isArrayPattern()) {
+          // `for ({ a } of items)` assigns existing variables: bind the element
+          // to a temporary and perform the authored assignment inside a
+          // capture first thing in the body, in the same order as before.
+          const item = path.scope.generateUidIdentifier("item");
+          const assignment = t.callExpression(
+            t.memberExpression(t.cloneNode(store), t.identifier("capture")),
+            [generatedCallback([], t.assignmentExpression("=", t.cloneNode(left.node, true), t.cloneNode(item)))],
+          );
+          generated.add(assignment);
+          left.replaceWith(t.variableDeclaration("const", [t.variableDeclarator(item)]));
+          left.skip();
+          const body = path.get("body");
+          if (!body.isBlockStatement()) body.replaceWith(t.blockStatement([body.node as t.Statement]));
+          (path.get("body") as NodePath<t.BlockStatement>).unshiftContainer("body", t.expressionStatement(assignment));
+          return;
+        }
         if (!left.isVariableDeclaration()) return;
         const declarator = left.node.declarations[0];
         if (declarator === undefined || t.isIdentifier(declarator.id)) return;

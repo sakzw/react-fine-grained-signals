@@ -2479,4 +2479,28 @@ export function App({ items }) {
 `);
     expect(warnings.filter((message) => message.includes("JSX callback prop"))).toHaveLength(1);
   });
+
+  it("tracks for-of heads that assign through a pattern to existing variables", async () => {
+    const source = `
+import { deepSignal } from "react-fine-grained-signals";
+export const state = deepSignal({ items: [{ a: 1 }, { a: 5 }], pairs: [[1, 2]] });
+export const log = [];
+export function App() {
+  let a = 0;
+  let first = 0;
+  let count = 0;
+  for ({ a } of state.value.items) { count += 1; break; }
+  for ([first] of state.value.pairs) continue;
+  return <p>{a + ":" + first + ":" + count}</p>;
+}
+`;
+    const module = await loadModule(source);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("1:1:1");
+    type State = { items: Array<{ a: number }>; pairs: number[][] };
+    act(() => { (module.state as Deep<State>).value.items[0]!.a = 2; });
+    expect(container.textContent).toBe("2:1:1");
+    act(() => { (module.state as Deep<State>).value.pairs[0]![0] = 9; });
+    expect(container.textContent).toBe("2:9:1");
+  });
 });
