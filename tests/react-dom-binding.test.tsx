@@ -867,16 +867,13 @@ describe("Direct DOM binding", () => {
     form.remove();
   });
 
-  it("rebinds radio reset handling when the form owner prop changes", () => {
+  it("rebinds radio reset handling when the form owner prop changes", async () => {
     const selected = signal("a");
     const firstForm = document.createElement("form");
     firstForm.id = "first-radio-owner";
     const secondForm = document.createElement("form");
     secondForm.id = "second-radio-owner";
     document.body.append(firstForm, secondForm);
-    const firstAdd = vi.spyOn(firstForm, "addEventListener");
-    const firstRemove = vi.spyOn(firstForm, "removeEventListener");
-    const secondAdd = vi.spyOn(secondForm, "addEventListener");
     function Field() {
       const [owner, setOwner] = useState(firstForm.id);
       return <>
@@ -885,10 +882,25 @@ describe("Direct DOM binding", () => {
       </>;
     }
     const result = render(<Field />);
-    expect(firstAdd).toHaveBeenCalledWith("reset", expect.any(Function));
+    const radio = screen.getByLabelText("owner switched radio") as HTMLInputElement;
+    // Drift the DOM (and its native reset default) away from the signal, then
+    // observe which form's reset re-applies the signal.
+    const drift = () => {
+      radio.defaultChecked = false;
+      radio.checked = false;
+    };
+    drift();
+    firstForm.reset();
+    await Promise.resolve();
+    expect(radio.checked).toBe(true);
     fireEvent.click(screen.getByLabelText("move reset owner"));
-    expect(firstRemove).toHaveBeenCalledWith("reset", expect.any(Function));
-    expect(secondAdd).toHaveBeenCalledWith("reset", expect.any(Function));
+    drift();
+    firstForm.reset();
+    await Promise.resolve();
+    expect(radio.checked).toBe(false);
+    secondForm.reset();
+    await Promise.resolve();
+    expect(radio.checked).toBe(true);
     result.unmount();
     firstForm.remove();
     secondForm.remove();

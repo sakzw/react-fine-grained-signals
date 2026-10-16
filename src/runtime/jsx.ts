@@ -280,6 +280,13 @@ function applyBoundSignal<T>(
   if (result.ok) apply(result.value);
 }
 
+/** Surfaces an error from a settle that ran inside another event's listener. */
+function rethrowLater(error: unknown): void {
+  setTimeout(() => {
+    throw error;
+  }, 0);
+}
+
 function areFormValuesEqual(left: unknown, right: unknown): boolean {
   if (!Array.isArray(left) || !Array.isArray(right)) return Object.is(left, right);
   return left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
@@ -445,9 +452,12 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
 }
 
 function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, refresh: () => void): () => void {
-  const form = node.form;
-  if (form === null) return () => {};
+  // Listen at the document, filtering by the control's *current* form: the
+  // association can begin or change after mount (`form="id"` naming a form
+  // that mounts later, or a moved control).
+  const doc = node.ownerDocument;
   const onReset = (event: Event) => {
+    if (event.target === null || event.target !== node.form) return;
     // The browser applies native defaults after dispatching `reset`; React may
     // also restore its last rendered default during its delegated event pass.
     // Refresh in a microtask so the binding's current signal value wins only
@@ -456,8 +466,8 @@ function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelect
       if (!event.defaultPrevented) refresh();
     });
   };
-  form.addEventListener("reset", onReset);
-  return () => form.removeEventListener("reset", onReset);
+  doc.addEventListener("reset", onReset, true);
+  return () => doc.removeEventListener("reset", onReset, true);
 }
 
 /**
@@ -542,7 +552,15 @@ function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, app
   const observer = new MutationObserver(() => {
     applyBoundSignal(() => source.peek(), apply, episode);
   });
-  observer.observe(select, { childList: true, subtree: true });
+  // A kept option whose `value` attribute or text (its value when it has no
+  // attribute) changes also moves which option the signal selects.
+  observer.observe(select, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ["value"],
+    characterData: true,
+  });
   return {
     dispose() {
       if (correctionTimer !== undefined) clearTimeout(correctionTimer);
@@ -677,34 +695,46 @@ function bindInputValueGroup(
   };
   const subscription = createBindingSubscription(source, apply, episode);
   let active = true;
-  let pendingCorrection: (() => void) | undefined;
+  let pendingCorrection: ((revertOnly: boolean) => void) | undefined;
   let correctionTimer: ReturnType<typeof setTimeout> | undefined;
-  /** Runs a correction still waiting for its task now, before the next click. */
-  const flushCorrection = () => {
+  /**
+   * Runs a correction still waiting for its task. Before the next click only
+   * its signal revert runs (`revertOnly`): the DOM already holds that click's
+   * native state, which a refresh would undo.
+   */
+  const flushCorrection = (revertOnly = false) => {
     if (correctionTimer !== undefined) clearTimeout(correctionTimer);
     correctionTimer = undefined;
     const correction = pendingCorrection;
     pendingCorrection = undefined;
-    correction?.();
+    correction?.(revertOnly);
   };
-  const scheduleCorrection = (correction: () => void) => {
+  const scheduleCorrection = (correction: (revertOnly: boolean) => void) => {
     pendingCorrection = correction;
-    correctionTimer = setTimeout(flushCorrection, 0);
+    correctionTimer = setTimeout(() => flushCorrection(), 0);
   };
   const refreshGroup = () => applyBoundSignal(() => source.peek(), apply, episode);
   const unregisterMember = registerInputValueGroupMember(source, refreshGroup);
   const onClick = (event: MouseEvent) => {
     if (!active || input.disabled) return;
-    flushCorrection();
+    // The browser has already applied this click; a settle still waiting from
+    // a canceled earlier click in the same task must not undo it.
+    const native = input.checked;
+    try {
+      flushCorrection(true);
+    } catch (error) {
+      rethrowLater(error);
+    }
+    if (input.checked !== native) input.checked = native;
     if (kind === "radio-value") assertRadioGroupSource(input, source);
     let attempted: unknown;
     if (kind === "radio-value") {
-      if (!input.checked) return;
+      if (!native) return;
       attempted = input.value;
     } else {
       const current = source.peek();
       if (!isCheckboxGroupValue(current)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
-      attempted = input.checked
+      attempted = native
         ? current.includes(optionValue) ? current : [...current, optionValue]
         : current.filter((value) => value !== optionValue);
     }
@@ -724,21 +754,37 @@ function bindInputValueGroup(
       // normalized, thrown-away, or cross-root group value. The settle also
       // runs if the control unmounts in the meantime, so a canceled click
       // that hides its control still leaves the signal unchanged.
-      scheduleCorrection(() => {
-        if (event.defaultPrevented) {
-          const current = source.peek();
-          if (kind === "radio-value") {
-            if (areFormValuesEqual(current, written)) source.value = previous;
-          } else if (isCheckboxGroupValue(current) && isCheckboxGroupValue(previous)) {
-            // Revert only this option's membership, so a later click on
-            // another member in the same task is kept.
-            const wasMember = previous.includes(optionValue);
-            if (current.includes(optionValue) !== wasMember) {
-              source.value = wasMember ? [...current, optionValue] : current.filter((value) => value !== optionValue);
+      scheduleCorrection((revertOnly) => {
+        // Even a throwing revert setter must leave the members showing the
+        // signal's actual value.
+        try {
+          if (event.defaultPrevented) {
+            const current = source.peek();
+            if (kind === "radio-value") {
+              if (areFormValuesEqual(current, written)) source.value = previous;
+            } else if (isCheckboxGroupValue(current) && isCheckboxGroupValue(previous)) {
+              if (areFormValuesEqual(current, written)) {
+                // Nothing else touched the group: restore exactly.
+                source.value = previous;
+              } else {
+                // Revert only this option's membership, so a later click on
+                // another member in the same task is kept.
+                const wasMember = previous.includes(optionValue);
+                if (current.includes(optionValue) !== wasMember) {
+                  if (wasMember) {
+                    const next = [...current];
+                    next.splice(Math.min(previous.indexOf(optionValue), next.length), 0, optionValue);
+                    source.value = next;
+                  } else {
+                    source.value = current.filter((value) => value !== optionValue);
+                  }
+                }
+              }
             }
           }
+        } finally {
+          if (!revertOnly) refreshInputValueGroup(source);
         }
-        refreshInputValueGroup(source);
       });
     }
     if (isInputValueGroupChecked(written, kind, optionValue) === input.checked && input.defaultChecked !== input.checked) {
@@ -864,7 +910,13 @@ function bindTextValue(
       pending = next;
       return;
     }
-    if (handlingInput) return;
+    if (handlingInput) {
+      // The write is skipped (the DOM already holds the typed text), but an
+      // accepted value must still become the reset default.
+      const text = next == null ? "" : String(next);
+      if (node.value === text && node.defaultValue !== text) node.defaultValue = text;
+      return;
+    }
     write(next);
   }, episode);
   const disposeReset = bindFormReset(node, subscription.refresh);
@@ -1130,22 +1182,29 @@ function subscribeBinding(
         const writableSource = source as Signal<unknown>;
         const episode: FailureEpisode = { hasReported: false };
         const apply = whileAttached((value: unknown) => setControlledProp(node, "checked", value));
+        let active = true;
         let settleTimer: ReturnType<typeof setTimeout> | undefined;
-        let pendingSettle: (() => void) | undefined;
-        const flushSettle = () => {
+        let pendingSettle: ((revertOnly: boolean) => void) | undefined;
+        /** Before the next click only the signal revert runs: see `flushCorrection`. */
+        const flushSettle = (revertOnly = false) => {
           if (settleTimer !== undefined) clearTimeout(settleTimer);
           settleTimer = undefined;
           const settle = pendingSettle;
           pendingSettle = undefined;
-          settle?.();
+          settle?.(revertOnly);
         };
         // React 19 synthesizes checkbox onChange from the bubbling click, before
         // the native `change` event. Writing at the click target keeps the
         // signal current for React's handlers, like the group bindings do.
         const onClick = (event: MouseEvent) => {
           if (input.disabled) return;
-          flushSettle();
           const attempted = input.checked;
+          try {
+            flushSettle(true);
+          } catch (error) {
+            rethrowLater(error);
+          }
+          if (input.checked !== attempted) input.checked = attempted;
           const previous = writableSource.peek();
           let written: unknown = previous;
           try {
@@ -1158,14 +1217,20 @@ function subscribeBinding(
             // state. Settle both once the event has finished; the signal
             // revert runs even if the control unmounted meanwhile (`apply`
             // skips a detached node).
-            pendingSettle = () => {
-              if (event.defaultPrevented && areFormValuesEqual(writableSource.peek(), written)) {
-                writableSource.value = previous;
+            pendingSettle = (revertOnly) => {
+              try {
+                if (event.defaultPrevented && areFormValuesEqual(writableSource.peek(), written)) {
+                  writableSource.value = previous;
+                }
+              } finally {
+                // Not after dispose: the node may now show another source.
+                if (active && !revertOnly) {
+                  const current = readBoundSignal(() => writableSource.peek(), episode);
+                  if (current.ok) apply(current.value);
+                }
               }
-              const current = readBoundSignal(() => writableSource.peek(), episode);
-              if (current.ok) apply(current.value);
             };
-            settleTimer = setTimeout(flushSettle, 0);
+            settleTimer = setTimeout(() => flushSettle(), 0);
           }
         };
         input.addEventListener("click", onClick);
@@ -1174,6 +1239,7 @@ function subscribeBinding(
         return {
           ...subscription,
           dispose() {
+            active = false;
             subscription.dispose();
             disposeReset();
             input.removeEventListener("click", onClick);
