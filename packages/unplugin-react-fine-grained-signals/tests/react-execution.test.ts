@@ -3083,6 +3083,8 @@ export function App() {
       });
       return performance.now() - started;
     };
+    // The fastest of a few runs keeps a GC pause from skewing the ratios.
+    const fastest = (source: string): number => Math.min(run(source), run(source), run(source));
     const helperChain = (n: number): string => {
       const lines = [`import { signal } from "react-fine-grained-signals";`, `const s = signal(1);`];
       for (let i = 0; i < n; i += 1) lines.push(`function h${i}(x) { return h${i + 1}(x); }`);
@@ -3104,16 +3106,16 @@ export function App() {
     };
     it("handles a deep chain of same-module helpers without stack overflow or quadratic time", () => {
       run(helperChain(20));
-      const small = run(helperChain(50));
-      const large = run(helperChain(600));
+      const small = fastest(helperChain(50));
+      const large = fastest(helperChain(600));
       expect(large).toBeLessThan(5000);
       // Linear growth would be 12x; allow generous headroom, quadratic is 144x.
       expect(large / Math.max(small, 1)).toBeLessThan(48);
     });
     it("handles a long reverse-ordered alias chain in near-linear time", () => {
       run(aliasChain(20));
-      const small = run(aliasChain(100));
-      const large = run(aliasChain(800));
+      const small = fastest(aliasChain(100));
+      const large = fastest(aliasChain(800));
       // About 0.2s when linear; the per-pass relearning took several seconds.
       expect(large).toBeLessThan(2000);
       // Linear growth would be 8x; quadratic is 64x.
