@@ -3162,15 +3162,27 @@ export function App() {
       ["an element pushed into a props copy", "const list = items.filter(Boolean);\n    list.push(extStore);\n    return <p>{tick.value}:{list.pop().METHOD()}</p>;"],
       ["an element assigned into a props copy", "const list = items.slice();\n    list[0] = extStore;\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;"],
       ["an element spliced into a props copy", "const list = items.slice();\n    list.splice(0, 0, extStore);\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;"],
+      // Found by the independent review.
+      ["a constructor that returns its argument", "const o = new Object(extStore);\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
+      ["a method replaced through an alias", "const o = { METHOD() { return 1; } };\n    const a = o;\n    a.METHOD = () => extStore.METHOD();\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
+      ["a method replaced by Object.assign", "const o = { METHOD() { return 1; } };\n    Object.assign(o, { METHOD: () => extStore.METHOD() });\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
+      ["a method replaced by a destructuring write", "const o = { METHOD() { return 1; } };\n    ({ f: o.METHOD } = { f: () => extStore.METHOD() });\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
+      ["a standard instance method replaced through an alias", "const m = new Map();\n    const mm = m;\n    mm.get = () => extStore.METHOD();\n    return <p>{tick.value}:{m.get(1)}</p>;"],
+      ["a logical assignment", "let x = null;\n    return <p>{tick.value}:{(x ??= extStore).METHOD()}</p>;"],
+      ["a reassigned parameter", "function h(v) { v = extStore; return v.METHOD(); }\n    return <p>{tick.value}:{h(1)}</p>;"],
+      ["a reassigned callback parameter", "return <p>{tick.value}:{items.map((x) => { x = extStore; return x.METHOD(); })[0]}</p>;"],
+      ["a tagged template", "const tag = () => extStore.METHOD();\n    return <p>{tick.value}:{tag`x`}</p>;"],
+      ["a Promise executor passed by reference", "new Promise(exec);\n    return <p>{tick.value}:{box.got}</p>;"],
+      ["an async IIFE", "let got = 0;\n    (async () => { got = extStore.METHOD(); })();\n    return <p>{tick.value}:{got}</p>;"],
     ];
     for (const method of ["map", "total"]) {
       for (const [shape, body] of shapes) {
         it(`captures \`${method}\` reached through ${shape}`, async () => {
           const run = scenario({
             name: `${shape} ${method}`,
-            prelude: `import { extStore } from "./ext";\nfunction pick(x) { return x; }\nfunction viaHelper() { return extStore.${method}(); }\n`,
+            prelude: `import { extStore } from "./ext";\nfunction pick(x) { return x; }\nfunction viaHelper() { return extStore.${method}(); }\nconst box = { got: 0 };\n`,
             modules: { "./ext": ext },
-            body: `export function App({ items = [1, 2], store = extStore } = {}) {\n    const ok = items.length > 0;\n    ${body.replaceAll("METHOD", method)}\n  }`,
+            body: `export function App({ items = [1, 2], store = extStore, exec = () => { box.got = extStore.${method}(); } } = {}) {\n    const ok = items.length > 0;\n    ${body.replaceAll("METHOD", method)}\n  }`,
             steps,
           });
           expect(await run.observe()).toEqual(run.expected);
@@ -3288,6 +3300,16 @@ export function App() {
       lines.push(`  a${n} = st.value.x;`, `  return <p>{a0.y}</p>;`, `}`);
       return lines.join("\n");
     };
+    it("decides provenance through wide helper and literal fan-out in bounded time", () => {
+      const head = `import { signal } from "react-fine-grained-signals";\nconst s = signal(1);\n`;
+      // Each level calls (or holds) the previous one 10 times: 10^7 paths, one answer per node.
+      let helpers = `function h0(v) { return v.toFixed(); }\n`;
+      for (let i = 1; i <= 7; i += 1) helpers += `function h${i}(v) { return v ? 1 : [${Array.from({ length: 10 }, () => `h${i - 1}(v)`).join(", ")}]; }\n`;
+      let literals = "const a0 = 1;\n";
+      for (let i = 1; i <= 7; i += 1) literals += `  const a${i} = { ${Array.from({ length: 12 }, (_, j) => `p${j}: a${i - 1}`).join(", ")} };\n`;
+      expect(fastest(`${head}${helpers}export function Comp() { return <p>{s.value}{h7(1)}</p>; }`)).toBeLessThan(2000);
+      expect(fastest(`${head}export function Comp() {\n  ${literals}  return <p>{s.value}{a7.p0.toFixed()}</p>;\n}`)).toBeLessThan(2000);
+    });
     it("handles a deep chain of same-module helpers without stack overflow or quadratic time", () => {
       run(helperChain(20));
       const small = fastest(helperChain(50));
@@ -3456,7 +3478,8 @@ export function List(props) {
       ["arrowHelper(items)", false],
       ["spreadHelper(...items)", true],
       ["missingArgHelper()", false],
-      ["recursiveHelper(items, 3)", false],
+      // A parameter a helper passes back to itself is answered pessimistically.
+      ["recursiveHelper(items, 3)", true],
       // Standard instances.
       ["formatter.format(1)", false],
       ["reassignedFormatter.format(1)", true],
@@ -3506,6 +3529,21 @@ ${children.map(([child]) => `      {${child}}`).join("\n")}
         const captured = code.includes(`capture(() => ${child}`);
         expect(`${mode} ${child} captured: ${captured}`).toBe(`${mode} ${child} captured: ${expected}`);
       }
+    }
+  });
+
+  it("judges mutually recursive helpers the same whichever component is transformed first", () => {
+    for (const order of ["other first", "app first"]) {
+      const other = `export function Other() { return <p>{s.value}{a(1)}</p>; }`;
+      const app = `export function App() { return <p>{s.value}{b(1)}</p>; }`;
+      const { code } = shape(`${head}
+import { extFn } from "./ext";
+function a(n) { return n ? b(n - 1) : extFn(); }
+function b(n) { return a(n); }
+${order === "other first" ? `${other}\n${app}` : `${app}\n${other}`}
+`);
+      expect(`${order}: ${code.includes("capture(() => b(1))")}`).toBe(`${order}: true`);
+      expect(`${order}: ${code.includes("capture(() => a(1))")}`).toBe(`${order}: true`);
     }
   });
 

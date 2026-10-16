@@ -4,14 +4,11 @@
 //   npx tsx development/v0.3.0/m17.7-capture-perf.mjs <base transform.ts> <candidate transform.ts>
 //
 // Both arguments are copies of packages/unplugin-react-fine-grained-signals/src/internal/transform.ts.
-import { createRequire } from "node:module";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { performance } from "node:perf_hooks";
 
 const root = resolve(import.meta.dirname, "../..");
-const pluginDir = join(root, "packages/unplugin-react-fine-grained-signals");
-const requirePlugin = createRequire(join(pluginDir, "package.json"));
 const { transformWithOxc } = await import("vite");
 const React = await import("react");
 const { renderToString } = await import("react-dom/server");

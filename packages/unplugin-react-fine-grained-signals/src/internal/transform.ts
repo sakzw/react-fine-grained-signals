@@ -1586,8 +1586,9 @@ function resolveKeyedFunction(
   if (binding === undefined) return undefined;
   // An object literal bound directly to the root: walk the keys down through
   // nested literals.
-  // A reassigned root (`let o = {...}; o = extStore`) is chosen at run time.
-  if (binding.constantViolations.length > 0) return undefined;
+  // A reassigned root (`let o = {...}; o = extStore`), or one whose members
+  // other code rewrites, holds functions chosen at run time.
+  if (binding.constantViolations.length > 0 || objectMayBeRewritten(binding)) return undefined;
   const slotUses = getKeyedSlotUses({ origin, ...access });
   if (binding.path.isVariableDeclarator()) {
     const found = resolveObjectLiteralSlot(unwrapTransparentPath(binding.path.get("init") as NodePath), access.keys);
@@ -3475,7 +3476,9 @@ const standardGlobals = new Set([
   "Math", "JSON", "Object", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Date",
   "Reflect", "Intl", "Promise", "Map", "Set", "WeakMap", "WeakSet", "RegExp", "Error", "TypeError",
   "RangeError", "parseInt", "parseFloat", "isNaN", "isFinite", "encodeURIComponent", "decodeURIComponent",
-  "encodeURI", "decodeURI", "console", "structuredClone",
+  "encodeURI", "decodeURI", "console", "structuredClone", "URL", "URLSearchParams", "TextEncoder", "TextDecoder",
+  "ArrayBuffer", "DataView", "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
+  "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array",
 ]);
 
 /**
@@ -3554,7 +3557,7 @@ function receiverIsLocalData(
  * engine's. A function from props, an import, or any other value is not.
  */
 function calledBackIsKnown(
-  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>,
   index: number | undefined,
 ): boolean {
   if (index === undefined) return true;
@@ -3605,18 +3608,84 @@ type Binding = NonNullable<ReturnType<NodePath["scope"]["getBinding"]>>;
 const mutationCache = new WeakMap<object, Ownership>();
 
 /**
+ * Is `path` (a member chain) written to: the left side of an assignment, a
+ * slot inside a destructuring assignment pattern, or a loop head? Returns the
+ * assignment when it is a plain `x.k = v`, `true` for any other write.
+ */
+function memberWrite(path: NodePath): NodePath<t.AssignmentExpression> | boolean {
+  let current = path;
+  for (;;) {
+    const parent = current.parentPath;
+    if (parent === null) return false;
+    if (parent.isObjectProperty() && parent.node.value === current.node && parent.parentPath?.isObjectPattern()) {
+      current = parent.parentPath;
+    } else if (parent.isArrayPattern() || parent.isRestElement() || (parent.isAssignmentPattern() && parent.node.left === current.node)) {
+      current = parent;
+    } else if (parent.isAssignmentExpression() && parent.node.left === current.node) {
+      return current === path ? parent : true;
+    } else if ((parent.isForOfStatement() || parent.isForInStatement()) && parent.node.left === current.node) {
+      return true;
+    } else {
+      return false;
+    }
+  }
+}
+
+/** The standard functions that write their later arguments into their first. */
+const objectWriters = new Set([
+  "Object.assign", "Object.defineProperty", "Object.defineProperties", "Reflect.set", "Reflect.defineProperty",
+  "Object.setPrototypeOf", "Reflect.setPrototypeOf",
+]);
+
+/**
+ * Where else a reference's value goes: the bindings of a `const alias = value`
+ * (through a choice or a TS wrapper) or of a destructuring declaration
+ * (`const { list } = value`, whose parts are still the value's own),
+ * `"assigned"` when it is stored in a place this module cannot follow by name,
+ * or undefined.
+ */
+function referenceAlias(reference: NodePath): Binding[] | "assigned" | undefined {
+  let current = climbTransparentWrappers(reference);
+  for (;;) {
+    const parent = current.parentPath;
+    if (parent === null) return undefined;
+    if (
+      (parent.isConditionalExpression() && parent.node.test !== current.node) || parent.isLogicalExpression() ||
+      (parent.isSequenceExpression() && parent.node.expressions.at(-1) === current.node) ||
+      parent.isParenthesizedExpression() || isTransparentWrapper(parent.node)
+    ) {
+      current = parent;
+      continue;
+    }
+    if (parent.isVariableDeclarator() && parent.node.init === current.node) {
+      const names = Object.keys(t.getBindingIdentifiers(parent.node.id));
+      const bindings = names.map((name) => parent.scope.getBinding(name));
+      return bindings.every((binding) => binding !== undefined) ? bindings as Binding[] : "assigned";
+    }
+    if (parent.isAssignmentExpression() && parent.node.right === current.node) {
+      // `copy = value`: follow what is done through `copy`; a member target stores it out of reach.
+      const target = t.isIdentifier(parent.node.left) ? parent.scope.getBinding(parent.node.left.name) : undefined;
+      return target === undefined ? "assigned" : [target];
+    }
+    return undefined;
+  }
+}
+
+/**
  * The most a binding can still be trusted for after the writes this module
- * makes into it: `list.push(extStore)`, `list[0] = extStore`, or
- * `Object.assign(list, ...)` put values of other provenance in its elements
- * (Builtin at most), and an assignment to a named member can replace one of its
+ * makes into it, directly or through a `const` alias: `list.push(extStore)`
+ * or `list[0] = extStore` put values of other provenance in its elements
+ * (Builtin at most); an assignment to a named member (`m.get = p.g`), a
+ * destructuring or loop-head write, `Object.assign(list, ...)`, or storing the
+ * value somewhere that cannot be followed by name can replace one of its
  * methods (Unknown). A value handed to code this module cannot see may be
  * written there as well; that is not followed.
  */
 function mutationLimit(binding: Binding, context: ReadContext, depth: number): Ownership {
-  const cached = mutationCache.get(binding);
-  if (cached !== undefined) return cached;
-  // Assume the best while answering, so a value written back into its own binding does not recurse.
-  mutationCache.set(binding, Ownership.Deep);
+  return memoizedOwnership(mutationCache, binding, () => computeMutationLimit(binding, context, depth));
+}
+
+function computeMutationLimit(binding: Binding, context: ReadContext, depth: number): Ownership {
   let limit = Ownership.Deep;
   const lower = (to: Ownership): void => { if (to < limit) limit = to; };
   const isDeep = (path: NodePath, node: t.Node): boolean => ownership(path, node, depth + 1, context) === Ownership.Deep;
@@ -3624,36 +3693,82 @@ function mutationLimit(binding: Binding, context: ReadContext, depth: number): O
     const top = climbMemberChain(reference);
     const parent = top.parentPath;
     if (parent === null) continue;
-    if (top !== reference && parent.isAssignmentExpression() && parent.node.left === top.node) {
-      const key = getReadPropertyName(top.node as t.MemberExpression);
-      const element = key !== undefined && /^\d+$/.test(key);
-      // An element may take trusted data; any other key may become a method (`m.get = p.g`).
-      if (element ? isDeep(parent, parent.node.right) : isPrimitiveExpression(parent.node.right)) continue;
-      lower(element ? Ownership.Builtin : Ownership.Unknown);
-      continue;
-    }
-    if (top !== reference && (parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.callee === top.node) {
-      const method = getStaticMemberChain(top.node as t.MemberExpression)?.keys.at(-1);
-      const from = method === undefined ? undefined : insertingMethods.get(method);
-      if (from !== undefined && !parent.node.arguments.slice(from).every((argument) => isDeep(parent, argument))) {
-        lower(Ownership.Builtin);
+    if (top !== reference) {
+      const write = memberWrite(top);
+      if (write !== false) {
+        const key = getReadPropertyName(top.node as t.MemberExpression);
+        const element = key !== undefined && /^\d+$/.test(key);
+        if (write !== true) {
+          const { operator, right } = write.node;
+          const logical = operator === "??=" || operator === "||=" || operator === "&&=";
+          // `x.n += 1` stores a primitive.
+          if (operator !== "=" && !logical) continue;
+          // An element may take trusted data; any other key may become a method (`m.get = p.g`).
+          if (element ? isDeep(write, right) : isPrimitiveExpression(right)) continue;
+        }
+        lower(element ? Ownership.Builtin : Ownership.Unknown);
+        continue;
+      }
+      if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.callee === top.node) {
+        const method = getStaticMemberChain(top.node as t.MemberExpression)?.keys.at(-1);
+        const from = method === undefined ? undefined : insertingMethods.get(method);
+        if (from !== undefined && !parent.node.arguments.slice(from).every((argument) => isDeep(parent, argument))) {
+          lower(Ownership.Builtin);
+        }
       }
       continue;
     }
     // `Object.assign(list, extra)` writes the later arguments into the first.
     if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.arguments[0] === top.node) {
       const callee = standardGlobalCallee(parent, unwrapTransparent(parent.node.callee));
-      if (
-        (callee === "Object.assign" || callee === "Object.defineProperty" || callee === "Object.defineProperties" ||
-          callee === "Reflect.set" || callee === "Reflect.defineProperty" || callee === "Object.setPrototypeOf") &&
-        !parent.node.arguments.slice(1).every((argument) => isDeep(parent, argument))
-      ) {
+      if (callee !== undefined && objectWriters.has(callee) && !parent.node.arguments.slice(1).every((argument) => isDeep(parent, argument))) {
         lower(Ownership.Unknown);
       }
+      continue;
+    }
+    const alias = referenceAlias(reference);
+    if (alias === "assigned") lower(Ownership.Unknown);
+    else if (alias !== undefined) {
+      for (const target of alias) if (target !== binding) lower(mutationLimit(target, context, depth + 1));
     }
   }
-  mutationCache.set(binding, limit);
   return limit;
+}
+
+/**
+ * Can code this module shows rewrite a member of the object a binding holds
+ * in a way a single slot assignment does not show: `Object.assign(o, ...)`,
+ * `Object.defineProperty(o, ...)`, a destructuring or loop-head write, or a
+ * write through an alias (`const a = o; a.total = ...`)?
+ */
+function objectMayBeRewritten(binding: Binding, seen: Set<Binding> = new Set()): boolean {
+  if (seen.has(binding)) return false;
+  seen.add(binding);
+  for (const reference of binding.referencePaths) {
+    const top = climbMemberChain(reference);
+    const parent = top.parentPath;
+    if (parent === null) continue;
+    if (top !== reference) {
+      if (memberWrite(top) === true) return true;
+      continue;
+    }
+    if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.arguments[0] === top.node) {
+      const callee = standardGlobalCallee(parent, unwrapTransparent(parent.node.callee));
+      if (callee !== undefined && objectWriters.has(callee)) return true;
+      continue;
+    }
+    const alias = referenceAlias(reference);
+    if (alias === "assigned") return true;
+    for (const target of alias ?? []) {
+      if (objectMayBeRewritten(target, seen)) return true;
+      // Any member write through the alias counts: it is not the slot use the caller checks.
+      if (target.referencePaths.some((aliasReference) => {
+        const aliasTop = climbMemberChain(aliasReference);
+        return aliasTop !== aliasReference && memberWrite(aliasTop) !== false;
+      })) return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -3666,7 +3781,8 @@ function mutationLimit(binding: Binding, context: ReadContext, depth: number): O
  */
 function parameterOwnership(binding: Binding, context: ReadContext, depth: number): Ownership {
   const owner = binding.scope.path;
-  if (!owner.isFunction()) return Ownership.Unknown;
+  // `function h(v) { v = extStore; ... }`: the parameter no longer holds what was passed.
+  if (!owner.isFunction() || binding.constantViolations.length > 0) return Ownership.Unknown;
   const parameterPath = (owner.get("params") as NodePath[]).find((param) =>
     param === binding.path || param.node === binding.path.node || binding.path.isDescendant(param));
   const parameter = parameterPath?.node;
@@ -3734,17 +3850,8 @@ function helperArgumentOwnership(owner: NodePath<t.Function>, index: number, con
   if (binding === undefined || binding.constantViolations.length > 0 || binding.referencePaths.length === 0) return Ownership.Unknown;
   if (binding.path.parentPath?.isExportNamedDeclaration() || binding.path.parentPath?.parentPath?.isExportNamedDeclaration() ||
     binding.path.parentPath?.isExportDefaultDeclaration()) return Ownership.Unknown;
-  // A helper that passes its own parameter on to itself is answered by its other callers.
-  if (helpersInProgress.has(owner.node)) return Ownership.Deep;
-  helpersInProgress.add(owner.node);
-  try {
-    return weakestArgument(binding, index, context, depth);
-  } finally {
-    helpersInProgress.delete(owner.node);
-  }
+  return weakestArgument(binding, index, context, depth);
 }
-
-const helpersInProgress = new WeakSet<t.Node>();
 
 function weakestArgument(binding: Binding, index: number, context: ReadContext, depth: number): Ownership {
   let trust = Ownership.Deep;
@@ -3799,9 +3906,48 @@ function isPrimitiveExpression(node: t.Node): boolean {
     (t.isUnaryExpression(expression) && expression.operator !== "delete");
 }
 
+/**
+ * Answers per expression node for the current file. A node whose answer is
+ * still being computed reads as Unknown, so a cycle (a helper passing its own
+ * parameter on, a literal that refers back to itself) only ever errs toward
+ * capturing, and every node is decided once instead of once per path to it.
+ */
+const ownershipCache = new WeakMap<t.Node, Ownership>();
+const ownershipInProgress = new Set<object>();
+let provisionalOwnership = 0;
+
+/**
+ * Runs `compute` for `key` once: a key asked for again while it is being
+ * answered reads as Unknown, and an answer that relied on such a reading is
+ * not kept unless nothing else is still open (it is then the cycle's own,
+ * pessimistic, answer).
+ */
+function memoizedOwnership(cache: WeakMap<object, Ownership>, key: object, compute: () => Ownership): Ownership {
+  const cached = cache.get(key);
+  if (cached !== undefined) return cached;
+  if (ownershipInProgress.has(key)) {
+    provisionalOwnership += 1;
+    return Ownership.Unknown;
+  }
+  ownershipInProgress.add(key);
+  const before = provisionalOwnership;
+  let result: Ownership;
+  try {
+    result = compute();
+  } finally {
+    ownershipInProgress.delete(key);
+  }
+  if (provisionalOwnership === before || ownershipInProgress.size === 0) cache.set(key, result);
+  return result;
+}
+
 function ownership(path: NodePath, node: t.Node, depth: number, context: ReadContext): Ownership {
   if (depth > 16) return Ownership.Unknown;
   const expression = unwrapTransparent(node);
+  return memoizedOwnership(ownershipCache, expression, () => computeOwnership(path, expression, depth, context));
+}
+
+function computeOwnership(path: NodePath, expression: t.Node, depth: number, context: ReadContext): Ownership {
   if (isPrimitiveExpression(expression)) return Ownership.Deep;
   if (t.isArrayExpression(expression) || t.isObjectExpression(expression)) {
     return literalHoldsOnly(path, expression, depth, context) ? Ownership.Deep : t.isArrayExpression(expression) ? Ownership.Builtin : Ownership.Unknown;
@@ -3817,7 +3963,12 @@ function ownership(path: NodePath, node: t.Node, depth: number, context: ReadCon
     return last === undefined ? Ownership.Unknown : ownership(path, last, depth + 1, context);
   }
   if (t.isAssignmentExpression(expression)) {
-    return expression.operator === "=" ? ownership(path, expression.right, depth + 1, context) : Ownership.Deep;
+    if (expression.operator === "=") return ownership(path, expression.right, depth + 1, context);
+    // `x ??= extStore` is either the old value or the new one; `+=` and the like produce a primitive.
+    if (expression.operator === "??=" || expression.operator === "||=" || expression.operator === "&&=") {
+      return Math.min(ownership(path, expression.left, depth + 1, context), ownership(path, expression.right, depth + 1, context));
+    }
+    return Ownership.Deep;
   }
   if (t.isMemberExpression(expression) || t.isOptionalMemberExpression(expression)) {
     // Only a member of props, state, or a literal of primitives is known; an
@@ -3933,8 +4084,9 @@ function unresolvedCallMayRead(
 ): boolean {
   if (callNameIsHook(call.node.callee)) return false;
   const callee = unwrapTransparent(call.node.callee);
-  // An IIFE: its body is inspected where it is called.
-  if (t.isArrowFunctionExpression(callee) || t.isFunctionExpression(callee)) return false;
+  // An IIFE: its body is inspected where it is called. An async one runs up
+  // to its first `await` right here, which that inspection does not cover.
+  if (t.isArrowFunctionExpression(callee) || t.isFunctionExpression(callee)) return callee.async && !callee.generator;
   const global = standardGlobalCallee(call, callee);
   if (global !== undefined) return !calledBackIsKnown(call, globalCallbackArguments.get(global));
   if (t.isIdentifier(callee)) {
@@ -3978,10 +4130,16 @@ function unresolvedCallMayRead(
   return true;
 }
 
+/** `new Object(x)` returns `x` itself, so only these constructors are known to build a fresh instance. */
+function freshInstanceConstructor(path: NodePath, node: t.NewExpression): boolean {
+  const name = standardGlobalCallee(path, unwrapTransparent(node.callee));
+  return name !== undefined && name !== "Object" && name !== "Function";
+}
+
 /** `new Map()`, or a never-reassigned local holding one whose methods are never replaced. */
 function isStandardInstance(path: NodePath, node: t.Node, context: ReadContext): boolean {
   const expression = unwrapTransparent(node);
-  if (t.isNewExpression(expression)) return standardGlobalCallee(path, unwrapTransparent(expression.callee)) !== undefined;
+  if (t.isNewExpression(expression)) return freshInstanceConstructor(path, expression);
   if (!t.isIdentifier(expression)) return false;
   const binding = path.scope.getBinding(expression.name);
   if (
@@ -3989,8 +4147,32 @@ function isStandardInstance(path: NodePath, node: t.Node, context: ReadContext):
     !t.isIdentifier(binding.path.node.id) || binding.path.node.init == null
   ) return false;
   const init = unwrapTransparent(binding.path.node.init);
-  return t.isNewExpression(init) && standardGlobalCallee(binding.path, unwrapTransparent(init.callee)) !== undefined &&
+  return t.isNewExpression(init) && freshInstanceConstructor(binding.path, init) &&
     mutationLimit(binding, context, 0) !== Ownership.Unknown;
+}
+
+/**
+ * Does `new C(...)` run module code? Only a standard constructor is proven;
+ * `new Promise(executor)` also runs its executor right away.
+ */
+function constructorMayRead(path: NodePath<t.NewExpression>): boolean {
+  const name = standardGlobalCallee(path, unwrapTransparent(path.node.callee));
+  if (name === undefined) return !callNameIsHook(path.node.callee);
+  return name === "Promise" && !calledBackIsKnown(path, 0);
+}
+
+/** Does a tagged template's tag run module code? Only a standard global (`String.raw`) or a library/React import is proven. */
+function templateTagMayRead(path: NodePath<t.TaggedTemplateExpression>, context: ReadContext): boolean {
+  const tag = unwrapTransparent(path.node.tag);
+  if (callNameIsHook(tag) || standardGlobalCallee(path, tag) !== undefined) return false;
+  const root = t.isMemberExpression(tag) || t.isOptionalMemberExpression(tag) ? unwrapTransparent(getStaticMemberChain(tag)?.root ?? tag) : tag;
+  if (t.isIdentifier(root)) {
+    const specifier = path.scope.getBinding(root.name)?.path;
+    if (specifier !== undefined && (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier())) {
+      return importIsForeign(specifier, context);
+    }
+  }
+  return true;
 }
 
 /** Is an import from a module other than this library or React? */
@@ -4026,11 +4208,30 @@ function cachedTargetMayRead(
 ): boolean {
   const cached = targetMayReadTrackedValue.get(target.node);
   if (cached !== undefined) return cached;
-  targetMayReadTrackedValue.set(target.node, false);
-  const result = targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
-  targetMayReadTrackedValue.set(target.node, result);
+  if (targetsInProgress.has(target.node)) {
+    // Answered by its other reads for now; whoever asked must not keep the answer.
+    provisionalAnswers += 1;
+    return false;
+  }
+  targetsInProgress.add(target.node);
+  const before = provisionalAnswers;
+  let result: boolean;
+  try {
+    result = targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
+  } finally {
+    targetsInProgress.delete(target.node);
+  }
+  // `a` calls `b` calls `a`: `b`'s answer while `a` is open assumed `a` reads
+  // nothing. Keep it only once no such assumption is pending, i.e. at the
+  // outermost function of the cycle, or when it read anyway.
+  if (result || provisionalAnswers === before || targetsInProgress.size === 0) {
+    targetMayReadTrackedValue.set(target.node, result);
+  }
   return result;
 }
+
+const targetsInProgress = new Set<t.Node>();
+let provisionalAnswers = 0;
 
 /** Per function: does it call a Hook and also read signals synchronously? */
 const hookCallingReader = new WeakMap<t.Node, boolean>();
@@ -4388,6 +4589,7 @@ function bodyReadsTrackedValue(
   if (hasTrackedReadInExpression(body, owner, trackedAliases)) return true;
   const callReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>): boolean => {
     if (callNameIsHook(call.node.callee)) return false;
+    if (call.isNewExpression() && constructorMayRead(call)) return true;
     if (
       !call.isNewExpression() &&
       (externalCallMayReadTrackedValue(
@@ -4417,6 +4619,12 @@ function bodyReadsTrackedValue(
     CallExpression: inspectCall,
     OptionalCallExpression: inspectCall,
     NewExpression: inspectCall,
+    TaggedTemplateExpression(path) {
+      if (templateTagMayRead(path, context)) {
+        found = true;
+        path.stop();
+      }
+    },
   });
   return found;
 }
@@ -4736,7 +4944,8 @@ function captureTrackedReadExpressions(
         const callee = path.get("callee");
         if (
           (hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
-            callReadsTrackedValue(path, functionPath, trackedAliases, context)) &&
+            callReadsTrackedValue(path, functionPath, trackedAliases, context) ||
+            constructorMayRead(path)) &&
           !expressionCallsHook(path) &&
           !isDeferredReadContext(path, functionPath)
         ) {
@@ -4999,7 +5208,10 @@ function captureTrackedReadExpressions(
     TaggedTemplateExpression: {
       enter(path) {
         const tag = path.get("tag");
-        if (!hasTrackedReadInExpression(tag, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
+        if (
+          !(hasTrackedReadInExpression(tag, functionPath, trackedAliases) || templateTagMayRead(path, context)) ||
+          isDeferredReadContext(path, functionPath)
+        ) return;
         if (expressionCallsHook(path)) {
           // The tag keeps its `this` only when the whole tagged template is
           // captured, which a Hook in the template forbids.
