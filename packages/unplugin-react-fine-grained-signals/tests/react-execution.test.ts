@@ -13,7 +13,7 @@
 
 import { parseSync, transformSync, traverse, type PluginItem, type PluginObject } from "@babel/core";
 import * as t from "@babel/types";
-import { act, createElement, Suspense, useState, type FunctionComponent } from "react";
+import { act, createElement, Suspense, useCallback, useState, type FunctionComponent } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import * as reactJsxRuntime from "react/jsx-runtime";
@@ -37,7 +37,7 @@ const MODULES = "__modules";
 const EXPORTS = "__exports";
 
 const moduleRegistry: Record<string, unknown> = {
-  react: { Suspense, useState },
+  react: { Suspense, useCallback, useState },
   "react/jsx-runtime": reactJsxRuntime,
   "react-fine-grained-signals": library,
   "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
@@ -110,16 +110,19 @@ async function loadModule(
     codegen = "managed",
     experimentalCapture = false,
     modules = {},
+    typescript = false,
   }: {
     transform?: boolean;
     mode?: ReactFineGrainedSignalsMode;
     codegen?: ReactFineGrainedSignalsTransform;
     experimentalCapture?: boolean;
     modules?: Record<string, unknown>;
+    typescript?: boolean;
   } = {},
 ): Promise<Record<string, unknown>> {
+  const fixtureName = typescript ? "Fixture.tsx" : "Fixture.jsx";
   const transformed = transform
-    ? transformReactFineGrainedSignals(source, "Fixture.jsx", {
+    ? transformReactFineGrainedSignals(source, fixtureName, {
       importSource: "react-fine-grained-signals",
       mode,
       transform: codegen,
@@ -130,8 +133,8 @@ async function loadModule(
     : source;
   // `importSource: "react"` is the project-wide default a per-file
   // `@jsxImportSource` pragma overrides, exactly as under Vite.
-  const jsx = await transformWithOxc(transformed, "Fixture.jsx", {
-    lang: "jsx",
+  const jsx = await transformWithOxc(transformed, fixtureName, {
+    lang: typescript ? "tsx" : "jsx",
     jsx: { runtime: "automatic", importSource: "react" },
   });
   const linked = transformSync(jsx.code, {
@@ -2502,5 +2505,598 @@ export function App() {
     expect(container.textContent).toBe("2:1:1");
     act(() => { (module.state as Deep<State>).value.pairs[0]![0] = 9; });
     expect(container.textContent).toBe("2:9:1");
+  });
+});
+
+describe("stale-render regressions in the managed transform (per-read capture)", () => {
+  interface Step {
+    run?: (module: Record<string, any>) => void;
+    text: string;
+  }
+  interface Scenario {
+    name: string;
+    body: string;
+    steps: Step[];
+    typescript?: boolean;
+    prelude?: string;
+    modules?: Record<string, unknown>;
+  }
+  const prelude = `
+import { deepSignal, signal } from "react-fine-grained-signals";
+export const st = deepSignal({ user: { name: "a" }, tasks: [{ t: "a", done: false }], flag: true });
+export const q = signal("a");
+export const s = signal(1);
+export const tick = signal(0);
+`;
+  const items = `const items = ["ab", "b", "c"];`;
+  const rename = (module: Record<string, any>): void => { module.st.value.user.name = "b"; };
+  const bumpS = (module: Record<string, any>): void => { module.s.value = 5; };
+  const setQ = (module: Record<string, any>): void => { module.q.value = "b"; };
+  const push = (module: Record<string, any>): void => { module.st.value.tasks.push({ t: "b", done: false }); };
+  const retitle = (module: Record<string, any>): void => { module.st.value.tasks[0].t = "z"; };
+
+  /** The text the component shows at every step, in each selection mode. */
+  function scenario(definition: Scenario): { observe: () => Promise<Record<string, string[]>>; expected: Record<string, string[]> } {
+    const texts = definition.steps.map((step) => step.text);
+    return {
+      expected: { auto: texts, all: texts },
+      async observe() {
+        const observed: Record<string, string[]> = {};
+        for (const mode of ["auto", "all"] as const) {
+          const module = await loadModule(`${prelude}${definition.prelude ?? ""}\n${definition.body}`, {
+            mode,
+            typescript: definition.typescript === true,
+            modules: definition.modules ?? {},
+          });
+          const container = mount(module.App);
+          observed[mode] = definition.steps.map((step) => {
+            if (step.run !== undefined) act(() => { step.run!(module); });
+            return container.textContent ?? "";
+          });
+        }
+        return observed;
+      },
+    };
+  }
+
+  describe("T1: a tracked alias inside a larger expression is a read", () => {
+    const aliasCases: Scenario[] = [
+      {
+        name: "for-of over `alias ?? []`",
+        body: `export function App() {
+  const tasks = st.value.tasks; const out = [];
+  for (const x of tasks ?? []) out.push(x.t);
+  return <p>{out.join()}</p>;
+}`,
+        steps: [{ text: "a" }, { run: push, text: "a,b" }],
+      },
+      {
+        name: "destructuring `alias ?? {}`",
+        body: `export function App() {
+  const user = st.value.user; const { name } = user ?? {};
+  return <p>{name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "TS `as` of an alias",
+        typescript: true,
+        body: `export function App() {
+  const u = st.value.user; const v = u as { name: string };
+  return <p>{v.name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "TS non-null alias passed to a helper",
+        typescript: true,
+        body: `function show(x: { name: string }) { return x.name; }
+export function App() {
+  const u = st.value.user;
+  return <p>{show(u!)}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "TS satisfies of an alias",
+        typescript: true,
+        body: `export function App() {
+  const u = st.value.user; const v = u satisfies { name: string };
+  return <p>{v.name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "shorthand property in an object literal handed to a call",
+        body: `export function App() {
+  const user = st.value.user;
+  return <p>{JSON.stringify({ user })}</p>;
+}`,
+        steps: [{ text: '{"user":{"name":"a"}}' }, { run: rename, text: '{"user":{"name":"b"}}' }],
+      },
+      {
+        name: "conditional alias",
+        body: `export function App() {
+  const u = st.value.user; const other = { name: "o" };
+  const cur = other.name === "o" ? u : other;
+  return <p>{cur.name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "array literal holding an alias",
+        body: `export function App() {
+  const u = st.value.user; const list = [u];
+  return <p>{list.map((x) => x.name).join()}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "sequence expression",
+        body: `export function App() {
+  const u = st.value.user; const w = (0, u);
+  return <p>{w.name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "logical `||` alias",
+        body: `export function App() {
+  const u = st.value.user; const w = null || u;
+  return <p>{w.name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "logical `&&` alias",
+        body: `export function App() {
+  const u = st.value.user; const other = { name: "o" }; const w = other.name === "o" && u;
+  return <p>{w.name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "object literal property holding an alias",
+        body: `export function App() {
+  const u = st.value.user; const box = { inner: u };
+  return <p>{box.inner.name}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+    ];
+    for (const definition of aliasCases) {
+      it(`${definition.name}`, async () => {
+        const run = scenario(definition);
+        expect(await run.observe()).toEqual(run.expected);
+      });
+    }
+  });
+
+  describe("T6: aliases from capturing helper calls and local containers", () => {
+    it("treats the result of a capturing helper call as an alias", async () => {
+      const run = scenario({
+        name: "helper result",
+        body: `function getUser() { return st.value.user; }
+  export function App() {
+    const u = getUser();
+    return <p>{u.name}</p>;
+  }`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("treats a local array filled with aliases as an alias", async () => {
+      const run = scenario({
+        name: "visible.push(alias)",
+        body: `export function App() {
+    const visible = [];
+    for (const task of st.value.tasks) if (!task.done) visible.push(task);
+    return <ul>{visible.map((t) => <li key={t.t}>{t.t}</li>)}</ul>;
+  }`,
+        steps: [{ text: "a" }, { run: retitle, text: "z" }],
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("covers unshift and index assignment into a local container", async () => {
+      const run = scenario({
+        name: "unshift/index",
+        body: `export function App() {
+    const first = []; const second = {};
+    for (const task of st.value.tasks) { first.unshift(task); second[0] = task; }
+    return <p>{first[0].t + "/" + second[0].t}</p>;
+  }`,
+        steps: [{ text: "a/a" }, { run: retitle, text: "z/z" }],
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+  });
+
+  describe("T2: same-module helpers called from inline callbacks and getters", () => {
+    const matches = `function matches(x) { return x.includes(q.value); }\n${items}\n`;
+    const text = (body: string): string => `${matches}export function App() {\n${body}\n}`;
+    const cases: Array<[string, string, string, string]> = [
+      ["filter", "return <p>{items.filter((x) => matches(x)).join()}</p>;", "ab", "ab,b"],
+      ["reduce", "return <p>{items.reduce((n, x) => n + (matches(x) ? 1 : 0), 0)}</p>;", "1", "2"],
+      ["find", "return <p>{String(items.find((x) => matches(x) && x !== 'ab'))}</p>;", "undefined", "b"],
+      ["some", "return <p>{String(items.some((x) => matches(x) && x === 'b'))}</p>;", "false", "true"],
+      ["every", "return <p>{String(items.every((x) => !matches(x) || x === 'ab'))}</p>;", "true", "false"],
+      ["sort comparator", "return <p>{[...items].sort((a, b) => Number(matches(a)) - Number(matches(b))).join()}</p>;", "b,c,ab", "c,ab,b"],
+      ["IIFE", "return <p>{(() => String(matches('b')))()}</p>;", "false", "true"],
+      [
+        "component-local arrow",
+        "const hit = (x) => x.includes(q.value);\nreturn <p>{items.filter((x) => hit(x)).join()}</p>;",
+        "ab",
+        "ab,b",
+      ],
+      [
+        "object getter calling a reading helper",
+        "const o = { get hits() { return matches('b'); } };\nreturn <p>{String(o.hits)}</p>;",
+        "false",
+        "true",
+      ],
+    ];
+    for (const [name, body, before, after] of cases) {
+      it(`captures ${name}`, async () => {
+        const run = scenario({
+          name,
+          body: text(body),
+          steps: [{ text: before }, { run: setQ, text: after }],
+        });
+        expect(await run.observe()).toEqual(run.expected);
+      });
+    }
+  });
+
+  describe("T7: synchronous calls with an unresolvable callee", () => {
+    const extSignal = library.signal(1);
+    const bumpExt = (): void => { extSignal.value = 5; };
+    const readsS: Step[] = [{ text: "0:1" }, { run: bumpS, text: "0:5" }];
+    it("captures a method of an imported object", async () => {
+      const run = scenario({
+        name: "imported store",
+        prelude: `import { extStore } from "./ext";\n`,
+        modules: { "./ext": { extStore: { total: () => extSignal.value } } },
+        body: `export function App() { return <p>{tick.value}:{extStore.total()}</p>; }`,
+        steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: bumpExt, text: "0:5" }],
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("captures a callback returned by a Hook", async () => {
+      const run = scenario({
+        name: "useCallback",
+        prelude: `import { useCallback } from "react";\n`,
+        body: `export function App() {
+    const get = useCallback(() => s.value, []);
+    return <p>{tick.value}:{get()}</p>;
+  }`,
+        steps: readsS,
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("captures a method of a custom Hook result", async () => {
+      const run = scenario({
+        name: "custom hook result",
+        prelude: `function useReader() { return { read: () => s.value }; }\n`,
+        body: `export function App() {
+    const c = useReader();
+    return <p>{tick.value}:{c.read()}</p>;
+  }`,
+        steps: readsS,
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("captures a method of a module-level class instance", async () => {
+      const run = scenario({
+        name: "class instance",
+        prelude: `class Store { total() { return s.value; } }\nconst store = new Store();\n`,
+        body: `export function App() { return <p>{tick.value}:{store.total()}</p>; }`,
+        steps: readsS,
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("captures an alias of a reading function", async () => {
+      const run = scenario({
+        name: "alias call",
+        prelude: `function readS() { return s.value; }\n`,
+        body: `export function App() {
+    const r = readS;
+    return <p>{tick.value}:{r()}</p>;
+  }`,
+        steps: readsS,
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("captures a method reached through a shorthand property", async () => {
+      const run = scenario({
+        name: "shorthand",
+        prelude: `function readS() { return s.value; }\n`,
+        body: `export function App() {
+    const o = { readS };
+    return <p>{tick.value}:{o.readS()}</p>;
+  }`,
+        steps: readsS,
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("captures an optional call", async () => {
+      const run = scenario({
+        name: "optional call",
+        prelude: `function readS() { return s.value; }\n`,
+        body: `export function App() {
+    const f = tick.value >= 0 ? readS : null;
+    return <p>{tick.value}:{f?.()}</p>;
+  }`,
+        steps: readsS,
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("iterates a generator helper lazily inside the capture", async () => {
+      const run = scenario({
+        name: "generator",
+        prelude: `function* gen() { yield s.value; yield 2; }\n`,
+        body: `export function App() {
+    const out = [];
+    for (const v of gen()) out.push(v);
+    return <p>{tick.value}:{out.join()}</p>;
+  }`,
+        steps: [{ text: "0:1,2" }, { run: bumpS, text: "0:5,2" }],
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+    it("keeps Hook calls out of capture closures", () => {
+      const code = transformReactFineGrainedSignals(`
+import { signal } from "react-fine-grained-signals";
+import { useCallback } from "react";
+const s = signal(1);
+export function App() {
+  const get = useCallback(() => s.value, []);
+  return <p>{s.value}{get()}</p>;
+}
+`, "Fixture.jsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "auto",
+        reactImportSource: "react",
+      })?.code ?? "";
+      expect(code).not.toMatch(/capture\(\(\) => [^)]*useCallback/);
+      expect(code).toMatch(/const get = useCallback\(/);
+    });
+  });
+
+  describe("more alias flows", () => {
+    const flowCases: Scenario[] = [
+      {
+        name: "getter that reads through an alias",
+        body: `export function App() {
+  const u = st.value.user;
+  const o = { get n() { return u.name; }, plain: 1, m() { return 2; } };
+  return <p>{o.n}</p>;
+}`,
+        steps: [{ text: "a" }, { run: rename, text: "b" }],
+      },
+      {
+        name: "a Set and a Map that receive aliases",
+        body: `export function App() {
+  const seen = new Set(); const byKey = new Map();
+  for (const task of st.value.tasks) { seen.add(task); byKey.set("k", task); }
+  return <p>{[...seen].map((x) => x.t).join() + "/" + byKey.get("k").t}</p>;
+}`,
+        steps: [{ text: "a/a" }, { run: retitle, text: "z/z" }],
+      },
+      {
+        name: "for-of into an existing variable",
+        body: `export function App() {
+  let task;
+  for (task of st.value.tasks) { /* last one wins */ }
+  return <p>{task.t}</p>;
+}`,
+        steps: [{ text: "a" }, { run: retitle, text: "z" }],
+      },
+      {
+        name: "logical assignment and spread push",
+        body: `export function App() {
+  let w; w ||= st.value.tasks;
+  const out = []; out.push(...w);
+  return <p>{out[0].t}</p>;
+}`,
+        steps: [{ text: "a" }, { run: retitle, text: "z" }],
+      },
+      {
+        name: "TS-wrapped container and member write into it",
+        typescript: true,
+        body: `export function App() {
+  const list: Array<{ t: string }> = []; const box: Record<string, { t: string }> = {};
+  for (const task of st.value.tasks) { (list as Array<{ t: string }>).push(task); box.first = task; }
+  return <p>{list[0]!.t + "/" + box.first!.t}</p>;
+}`,
+        steps: [{ text: "a/a" }, { run: retitle, text: "z/z" }],
+      },
+    ];
+    for (const definition of flowCases) {
+      it(`${definition.name}`, async () => {
+        const run = scenario(definition);
+        expect(await run.observe()).toEqual(run.expected);
+      });
+    }
+  });
+
+  describe("scalability", () => {
+    const run = (source: string): number => {
+      const started = performance.now();
+      transformReactFineGrainedSignals(source, "Fixture.jsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "auto",
+        reactImportSource: "react",
+      });
+      return performance.now() - started;
+    };
+    const helperChain = (n: number): string => {
+      const lines = [`import { signal } from "react-fine-grained-signals";`, `const s = signal(1);`];
+      for (let i = 0; i < n; i += 1) lines.push(`function h${i}(x) { return h${i + 1}(x); }`);
+      lines.push(`function h${n}(x) { return s.value + x; }`);
+      lines.push(`export function Comp() { return <p>{h0(1)}</p>; }`);
+      return lines.join("\n");
+    };
+    const aliasChain = (n: number): string => {
+      const lines = [
+        `import { deepSignal } from "react-fine-grained-signals";`,
+        `const st = deepSignal({ x: { y: 1 } });`,
+        `export function Comp() {`,
+        `  let ${Array.from({ length: n + 1 }, (_, i) => `a${i}`).join(", ")};`,
+      ];
+      // Each alias is learned only from the statement after it.
+      for (let i = 0; i < n; i += 1) lines.push(`  a${i} = a${i + 1};`);
+      lines.push(`  a${n} = st.value.x;`, `  return <p>{a0.y}</p>;`, `}`);
+      return lines.join("\n");
+    };
+    it("handles a deep chain of same-module helpers without stack overflow or quadratic time", () => {
+      run(helperChain(20));
+      const small = run(helperChain(50));
+      const large = run(helperChain(600));
+      expect(large).toBeLessThan(5000);
+      // Linear growth would be 12x; allow generous headroom, quadratic is 144x.
+      expect(large / Math.max(small, 1)).toBeLessThan(48);
+    });
+    it("handles a long reverse-ordered alias chain in near-linear time", () => {
+      run(aliasChain(20));
+      const small = run(aliasChain(100));
+      const large = run(aliasChain(800));
+      // About 0.2s when linear; the per-pass relearning took several seconds.
+      expect(large).toBeLessThan(2000);
+      // Linear growth would be 8x; quadratic is 64x.
+      expect(large / Math.max(small, 1)).toBeLessThan(40);
+    });
+  });
+});
+
+describe("capture decisions for aliases, unresolved calls, and folded helpers", () => {
+  const shape = (
+    source: string,
+    mode: ReactFineGrainedSignalsMode = "auto",
+    file = "Fixture.jsx",
+  ): { code: string; warnings: string[] } => {
+    const warnings: string[] = [];
+    const code = transformReactFineGrainedSignals(source, file, {
+      importSource: "react-fine-grained-signals",
+      mode,
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning.message),
+    })?.code ?? "";
+    return { code, warnings };
+  };
+  const head = `import { signal } from "react-fine-grained-signals";\nconst s = signal(1);\n`;
+
+  it("captures calls into code it cannot see and leaves provably unrelated calls alone", () => {
+    const { code, warnings } = shape(`${head}
+import * as ns from "./ns";
+import ext, { named } from "./ext";
+function getFn() { return ext; }
+export function App(p) {
+  const a = ns.f(1);
+  const b = named.g(2);
+  const c = getFn()(3);
+  const keep = [
+    Math.max(1, 2), JSON.stringify(p), signal(2), [1, 2].at(0), p.items.map((x) => x),
+    named.Header(), (p.a || p.b)(), p.name.trim(), new Intl.NumberFormat().format(1),
+  ];
+  return <p>{s.value}{a}{b}{c}{keep}</p>;
+}
+`);
+    expect(code).toContain("capture(() => ns.f(1))");
+    expect(code).toContain("capture(() => named.g(2))");
+    expect(code).toContain("capture(() => getFn()(3))");
+    for (const unrelated of ["Math.max", "JSON.stringify", "signal(2)", ".at(0)", "named.Header", "p.a || p.b", "trim()", "Intl.NumberFormat"]) {
+      const captured = new RegExp(`capture\\(\\(\\) => [^\\n]*${unrelated.replace(/[.()|]/g, "\\$&")}`).test(code);
+      expect(`${unrelated} captured: ${captured}`).toBe(`${unrelated} captured: false`);
+    }
+    expect(warnings).toEqual([]);
+  });
+
+  it("captures an unresolved call through `this` in an object-literal component", () => {
+    const { code } = shape(`${head}
+export const holder = {
+  Panel() { return <p>{s.value}{this.missing()}</p>; },
+};
+`);
+    expect(code).toContain("capture(() => this.missing())");
+  });
+
+  it("leaves a Hook that shares an unresolved call alone without a warning", () => {
+    const { code, warnings } = shape(`${head}
+import { useId } from "react";
+import ext from "./ext";
+export function App() {
+  const hooked = ext.run(useId());
+  return <p>{s.value}{hooked}</p>;
+}
+`);
+    expect(code).toContain("ext.run(useId())");
+    expect(code).not.toContain("capture(() => ext.run");
+    expect(warnings).toEqual([]);
+  });
+
+  it("does not treat an alias handed to a Hook as a read", () => {
+    const { code, warnings } = shape(`
+import { deepSignal } from "react-fine-grained-signals";
+import { useState } from "react";
+const st = deepSignal({ user: { name: "a" } });
+export function App() {
+  const u = st.value.user;
+  const [seed] = useState(u);
+  const [{ name }] = useState(u);
+  return <p>{seed.name}{name}</p>;
+}
+`);
+    expect(code).toContain("useState(u)");
+    expect(code).not.toContain("capture(() => useState");
+    expect(warnings).toEqual([]);
+  });
+
+  it("selects only the components whose folded helper graph reads a signal", () => {
+    const { code } = shape(`${head}
+function h0() { return h1() + h2(); }
+function h1() { return h3(); }
+function h2() { return h3(); }
+function h3() { return s.value; }
+function p() { return q(); }
+function q() { return p() + r(); }
+function r() { return 1; }
+function m() { return n(); }
+function n() { return m() + s.value; }
+export function A() { return <p>{h0()}</p>; }
+export function B() { return <p>{h0()}</p>; }
+export function C() { return <p>{p()}</p>; }
+export function D() { return <p>{p()}</p>; }
+export function E() { return <p>{m()}</p>; }
+`);
+    expect(code.match(/= _useSignalCapture\(\)/g)).toHaveLength(3);
+    for (const name of ["A", "B", "E"]) {
+      expect(code).toMatch(new RegExp(`function ${name}\\(\\) \\{\\s+"use no memo";`));
+    }
+  });
+
+  it("carries JSX through render callbacks however they are also referenced", () => {
+    const { code } = shape(`${head}
+function Row() { return <li>{s.value}</li>; }
+function note(row) { return row; }
+export function ListA({ items }) { return items.map(Row); }
+export function ListB({ items }) { note(Row); return items.map(Row); }
+export function ListC({ items }) { items.map(Row); return note(Row); }
+`, "all");
+    expect(code.match(/= _useSignalCapture\(\)/g)).toHaveLength(3);
+  });
+
+  it("warns about a render prop whose callback reaches a signal through a helper", () => {
+    const { warnings } = shape(`${head}
+function helper() { return s.value; }
+function Grid({ renderItem }) { return renderItem(); }
+export function App() { return <Grid renderItem={() => helper()} />; }
+`);
+    expect(warnings.some((message) => message.includes("JSX callback prop"))).toBe(true);
   });
 });
