@@ -49,9 +49,10 @@
 | M17.7.1 | Synchronous execution boundary check | M17.7 | Promise executorとasync関数の同期部分の追跡を確認 | 完了。名前付きexecutor(helper経由を含む)と`some(async ...)`の漏れ3件を修正。await後のreadは依存にしないことを確認。capture数は不変。詳細は[M17.7.1 record](m17.7.1-sync-execution-boundary.ja.md) |
 | M18 | Feature & Improvement Exploration | M17.7.1 | 現API・既知制約・実アプリ利用・性能記録を見直し、v0.3.0候補と次の実装順を決める | 完了。baseline `4c15349`を固定。runtime製品コード変更なし。For/Index、JSX、transform候補を再評価し、managed diagnosticsを条件付きPoC候補に選定。詳細は[M18 exploration](m18-feature-exploration.ja.md) |
 | M18.1 | Independent Vocs documentation site | M18 | 依存管理とbuildが独立したVocsサイトを`website/`に作り、現在のRFSGで動くライブデモで検証 | 完了。英語9ページ、7デモ、`full-static`、GitHub Pagesのbase path。静的previewとdev serverのbrowser smoke、親workspace外での独立installを確認。ライブラリ変更なし。詳細は[M18.1 record](m18.1-vocs-website.ja.md) |
-| M18.2 | Managed diagnostics PoC | M18 | structured diagnostic IDとopt-in strict policyの利用者便益・5 bundler一貫性を確認 | 未着手。需要とCI便益を確認できた場合のみpublic API化を提案 |
-| M18.3 | 必要な候補の実装・性能qualification | M18.2 | 根拠のある候補だけ実装し、正確性・bundle・runtime/transform性能を測る | 未着手。v0.3.0へ入れるかは候補別に判断 |
-| M18.4 | 統合reviewと最終scope判断 | M18.3 | 選定候補のfull qualificationとv0.3.0 scopeを記録 | 未着手。公開操作は別判断 |
+| M18.2 | Website infrastructure & GitHub Actions | M18.1 | 独立Website CI、Actions pin、手動Pages deployment準備、初回表示asset量の確認 | 完了。Pages workflowは手動triggerのみ。browser smoke・basePath・`.nojekyll`を確認。deployは実行しない。詳細は[M18.2 record](m18.2-website-infrastructure.ja.md) |
+| M18.3 | Managed diagnostics PoC | M18.2 | structured diagnostic IDとopt-in strict policyの利用者便益・5 bundler一貫性を確認 | 未着手。需要とCI便益を確認できた場合のみpublic API化を提案 |
+| M18.4 | 必要な候補の実装・性能qualification | M18.3 | 根拠のある候補だけ実装し、正確性・bundle・runtime/transform性能を測る | 未着手。v0.3.0へ入れるかは候補別に判断 |
+| M18.5 | 統合reviewと最終scope判断 | M18.4 | 選定候補のfull qualificationとv0.3.0 scopeを記録 | 未着手。公開操作は別判断 |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 

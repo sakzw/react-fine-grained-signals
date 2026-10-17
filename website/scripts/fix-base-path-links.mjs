@@ -2,6 +2,11 @@ import { readdir, readFile, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+// Vocs 2.10.3's SkipToContent.client.tsx builds href from its router path
+// without applying config.basePath. Patch only generated static HTML so
+// GitHub Pages project sites keep the skip link on the current route. The
+// Chromium smoke test asserts this for every route; fail if Vocs changes its
+// markup so the workaround gets revisited rather than silently disappearing.
 const site = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const output = path.join(site, 'dist', 'public')
 const segments = (process.env.SITE_BASE_PATH ?? '/react-fine-grained-signals').split('/').filter(Boolean)

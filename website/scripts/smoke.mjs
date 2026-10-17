@@ -80,6 +80,10 @@ try {
   }
   const icon = await page.request.get(`${origin}${basePath}/favicon.svg`)
   check(icon.ok(), 'favicon loads under the base path')
+  if (external === undefined) {
+    const nojekyll = await page.request.get(`${origin}${basePath}/.nojekyll`)
+    check(nojekyll.ok(), '.nojekyll is present in the static Pages output')
+  }
   const before = problems.length
   if (external === undefined) {
   const missing = await page.goto(`${origin}${basePath}/no-such-page`, { waitUntil: 'networkidle' })

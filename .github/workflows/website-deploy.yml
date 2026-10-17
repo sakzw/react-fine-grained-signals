@@ -1,0 +1,66 @@
+# Deploy is deliberately manual. Ordinary pushes and pull requests never
+# publish the website; build and browser verification run in website-ci.yml.
+name: Deploy Website
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pages: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          cache: true
+          require-lockfile: true
+      - name: Pack local RFSG packages
+        working-directory: website
+        run: node scripts/pack-local-rfsg.mjs
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          working-directory: website
+          runtime: node@24.21.0
+          cache-dependency-path: website/pnpm-lock.yaml
+          cache: true
+          require-lockfile: true
+          install: false
+      - name: Install website dependencies
+        working-directory: website
+        run: pnpm install --no-frozen-lockfile
+      - name: Configure GitHub Pages
+        id: pages
+        uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
+      - name: Build static site
+        working-directory: website
+        env:
+          SITE_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+        run: pnpm build
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: website/dist/public
+          include-hidden-files: true
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
