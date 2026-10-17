@@ -48,10 +48,11 @@
 | M17.7 | Ownership & call resolution qualification | M17.6.3 | 値の出所とcallee解決の判定規則を差分実行で監査し、同種の漏れの原因となる規則を修正 | 完了。19件(P1 5件、P2 11件、P3 3件。うち3件は今回の置き換えで入った回帰をreviewで発見)を再現し全件修正。callee rootの形による除外を廃止し、parameterのDeepをpropsと要素callbackとmodule内helperに限定。examplesのcapture数は不変、分割代入propsは401→1。CONDITIONAL GO。詳細は[M17.7 record](m17.7-ownership-call-resolution.ja.md) |
 | M17.7.1 | Synchronous execution boundary check | M17.7 | Promise executorとasync関数の同期部分の追跡を確認 | 完了。名前付きexecutor(helper経由を含む)と`some(async ...)`の漏れ3件を修正。await後のreadは依存にしないことを確認。capture数は不変。詳細は[M17.7.1 record](m17.7.1-sync-execution-boundary.ja.md) |
 | M18 | Feature & Improvement Exploration | M17.7.1 | 現API・既知制約・実アプリ利用・性能記録を見直し、v0.3.0候補と次の実装順を決める | 完了。baseline `4c15349`を固定。runtime製品コード変更なし。For/Index、JSX、transform候補を再評価し、managed diagnosticsを条件付きPoC候補に選定。詳細は[M18 exploration](m18-feature-exploration.ja.md) |
-| M18.1 | Consumer dogfooding | M18 | React Router/browser exampleで実利用課題とReact 19/Compiler/Fast Refresh/SSR/5 bundler matrixを整理 | 未着手。現APIで代替できない具体例を記録 |
-| M18.2 | Managed diagnostics PoC | M18.1 | structured diagnostic IDとopt-in strict policyの利用者便益・5 bundler一貫性を確認 | 未着手。需要とCI便益を確認できた場合のみpublic API化を提案 |
-| M18.3 | 必要な候補の実装・性能qualification | M18.2 | 根拠のある候補だけ実装し、正確性・bundle・runtime/transform性能を測る | 未着手。v0.3.0へ入れるかは候補別に判断 |
-| M18.4 | 統合reviewと最終scope判断 | M18.3 | 選定候補のfull qualificationとv0.3.0 scopeを記録 | 未着手。公開操作は別判断 |
+| M18.1 | Independent Vocs documentation site | M18 | 独立したwebsite package、英語ガイド、React 19 client demos、full-static/Pages basePathを構築して実Viteでdogfood | 完了。isolated frozen install、typecheck、dev, full-static build/preview、7 demos、basePath、hydrationを確認。v0.3.0未公開のためnpm standalone installのみ未確認。詳細は[M18.1 record](m18.1-implementation.ja.md) |
+| M18.2 | Application dogfooding | M18.1 | 実アプリ相当のrouting/form/collection UIで既存APIの摩擦を記録し、React 19/Compiler/Fast Refresh/SSR/bundler適合を不足項目ごとに確認 | 未着手。サイトで見つけた問題は再現・範囲を確認してから候補化 |
+| M18.3 | Managed diagnostics PoC | M18.2 | structured diagnostic IDとopt-in strict policyの便益・bundler一貫性を確認 | 未着手。利用需要とCI便益を確認できた場合のみpublic API化を提案 |
+| M18.4 | 必要な候補の実装・性能qualification | M18.3 | 根拠のある候補だけ実装し、正確性・bundle・runtime/transform性能を測る | 未着手。v0.3.0へ入れるかは候補別に判断 |
+| M18.5 | 統合reviewと最終scope判断 | M18.4 | 選定候補のfull qualificationとv0.3.0 scopeを記録 | 未着手。公開操作は別判断 |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -70,6 +71,6 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 ## 次の作業案
 
-旧M18 Release Execution Checklistは延期した。現在の作業は[M18 Feature & Improvement Exploration](m18-feature-exploration.ja.md)に従い、まず既存exampleでdogfoodingし、具体的需要が確認できた場合にmanaged diagnosticsをPoCする。公開準備、version/tag/publish/GitHub Releaseは今回の計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
+旧M18 Release Execution Checklistは延期した。M18はリリース準備ではなく、v0.3.0の改善候補を実利用で検証する期間とする。現在は独立サイトの構築・検証を行い、その次に実アプリ相当のdogfoodingと証拠に基づく候補のPoCへ進む。公開準備、version/tag/publish/GitHub Releaseは今回の計画に含めない。進捗は[M18 exploration](m18-feature-exploration.ja.md)と[M18.1 implementation](m18.1-implementation.ja.md)に記録する。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。

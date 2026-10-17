@@ -1,0 +1,13 @@
+# React Hooks
+
+RFSG hooks connect signal state to React's lifetime. `useSignal(initial)` creates a stable signal; `useSignalEffect` scopes an effect to the component; `useSignalTracking` explicitly tracks reads during a render.
+
+```tsx
+function Search() {
+  const query = useSignal('')
+  useSignalEffect(() => console.log(query.value))
+  return <input bindValue={query} />
+}
+```
+
+See the [hooks guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/hooks.md) for cleanup, ownership, and API details.

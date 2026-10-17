@@ -1,0 +1,30 @@
+{
+  "name": "rfsg-website",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "scripts": {
+    "prepare:repository": "node scripts/prepare-repository.mjs",
+    "dev": "node scripts/vocs.mjs dev",
+    "build": "node scripts/vocs.mjs build",
+    "preview": "vocs preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-fine-grained-signals": "file:.repo-packages/react-fine-grained-signals-0.3.0.tgz",
+    "unplugin-react-fine-grained-signals": "file:.repo-packages/unplugin-react-fine-grained-signals-0.3.0.tgz",
+    "vite": "^8.3.4",
+    "waku": "^1.0.0-rc.1"
+  },
+  "devDependencies": {
+    "@mdx-js/react": "^3.1.1",
+    "@vitejs/plugin-react": "^6.1.2",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "typescript": "^5.9.3",
+    "vocs": "^2.8.5"
+  }
+}

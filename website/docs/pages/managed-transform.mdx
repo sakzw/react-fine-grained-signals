@@ -1,0 +1,15 @@
+# Managed Transform
+
+The optional unplugin tracks signal reads made while React renders a component. The website runs this transform in its actual Vite build, including this page's client demo.
+
+```ts
+import signals from 'unplugin-react-fine-grained-signals/vite'
+
+export default defineConfig({ plugins: [signals({ mode: 'auto' })] })
+```
+
+Only client components should use render-time tracking. In a Vocs/Waku site, put interactive components behind a `'use client'` directive. Keep server-rendered content free of hook-dependent transformed reads.
+
+Try automatic tracking in [Interactive Examples](./examples).
+
+For diagnostics and exclusions, see the [transform guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/packages/unplugin-react-fine-grained-signals/README.md).

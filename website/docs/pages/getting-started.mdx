@@ -1,0 +1,21 @@
+# Getting Started
+
+Create a signal with `signal`, read its `.value`, and write a new value to notify consumers.
+
+```tsx
+import { signal } from 'react-fine-grained-signals'
+
+const count = signal(0)
+count.value++
+```
+
+Use it in React with a tracked hook or JSX direct binding. This quick example uses the Managed Transform configured by the Vite plugin:
+
+```tsx
+function Counter() {
+  const count = useSignal(0)
+  return <button onClick={() => count.value++}>Count: {count.value}</button>
+}
+```
+
+The transform recognizes React render functions and inserts tracking where needed. For untransformed components, wrap reads in `useSignalTracking` or use RFSG's JSX runtime.

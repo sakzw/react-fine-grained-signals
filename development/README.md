@@ -13,6 +13,7 @@ Engineering records for contributors and maintainers. These documents may descri
 ## v0.3.0
 
 - [Roadmap and current status (日本語)](v0.3.0/README.ja.md)
+- [M18.1 independent Vocs documentation site (日本語)](v0.3.0/m18.1-implementation.ja.md)
 - [M0 architecture and contract review (日本語)](v0.3.0/m0-architecture-review.ja.md)
 - [M1 reactive core review (日本語)](v0.3.0/m1-core-review.ja.md)
 - [M2 collection reactivity contract (日本語)](v0.3.0/m2-collection-contract.ja.md)

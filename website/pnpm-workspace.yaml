@@ -1,0 +1,10 @@
+packages: []
+
+overrides:
+  react: ^19.3.0
+  react-dom: ^19.3.0
+
+allowBuilds:
+  esbuild: true
+  es5-ext: true
+  vue-demi: true
