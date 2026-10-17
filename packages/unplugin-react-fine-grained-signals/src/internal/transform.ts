@@ -4084,9 +4084,9 @@ function unresolvedCallMayRead(
 ): boolean {
   if (callNameIsHook(call.node.callee)) return false;
   const callee = unwrapTransparent(call.node.callee);
-  // An IIFE: its body is inspected where it is called. An async one runs up
-  // to its first `await` right here, which that inspection does not cover.
-  if (t.isArrowFunctionExpression(callee) || t.isFunctionExpression(callee)) return callee.async && !callee.generator;
+  // An IIFE (async included: it runs up to its first `await` right here) is
+  // judged by its body where it is called.
+  if (t.isArrowFunctionExpression(callee) || t.isFunctionExpression(callee)) return false;
   const global = standardGlobalCallee(call, callee);
   if (global !== undefined) return !calledBackIsKnown(call, globalCallbackArguments.get(global));
   if (t.isIdentifier(callee)) {
@@ -4175,6 +4175,27 @@ function templateTagMayRead(path: NodePath<t.TaggedTemplateExpression>, context:
   return true;
 }
 
+/**
+ * `items.filter(isBig)`, `new Promise(executor)`: a named local or module
+ * function handed to a call runs during it, exactly like an inline callback.
+ * `calledBackIsKnown` only says such a function is one this module can see;
+ * this is where its body is judged.
+ */
+function namedArgumentMayRead(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>,
+  context: ReadContext,
+): boolean {
+  if (callNameIsHook(call.node.callee)) return false;
+  return (call.get("arguments") as NodePath[]).some((argument) => {
+    const value = unwrapTransparentPath(argument);
+    if (!value.isIdentifier()) return false;
+    const target = resolveReferencedFunction(value, value.node.name);
+    return target !== undefined && functionTargetMayReadTrackedValue(
+      target, context.importSource, context.managedRuntimeSource, context.reactImportSource, true,
+    );
+  });
+}
+
 /** Is an import from a module other than this library or React? */
 function importIsForeign(specifier: NodePath, context: ReadContext): boolean {
   const source = (specifier.parentPath as NodePath<t.ImportDeclaration>).node.source.value;
@@ -4190,8 +4211,12 @@ function functionTargetMayReadTrackedValue(
   importSource: string,
   managedRuntimeSource: string,
   reactImportSource: string,
+  // An async function runs up to its first `await` inside the call that
+  // starts it, so a function a call runs counts its body. Its result is a
+  // Promise, though, never the value read, so it is not an alias source.
+  allowAsync = false,
 ): boolean {
-  if (target.node.async || target.node.generator) return false;
+  if ((target.node.async && !allowAsync) || target.node.generator) return false;
   return cachedTargetMayRead(target, importSource, managedRuntimeSource, reactImportSource);
 }
 
@@ -4571,7 +4596,9 @@ function inlineCallbackReadsTrackedValue(
     target = target.get("expression") as NodePath;
   }
   if (!target.isArrowFunctionExpression() && !target.isFunctionExpression()) return false;
-  if (target.node.async || target.node.generator || functionCallsHook(target)) return false;
+  // An async callback runs up to its first `await` during the call; a
+  // generator's body runs only when it is iterated.
+  if (target.node.generator || functionCallsHook(target)) return false;
   return bodyReadsTrackedValue(target.get("body") as NodePath, target, trackedAliases, context);
 }
 
@@ -4601,7 +4628,8 @@ function bodyReadsTrackedValue(
       ) || unresolvedCallMayRead(call, context))
     ) return true;
     return [call.get("callee") as NodePath, ...(call.get("arguments") as NodePath[])]
-      .some((argument) => inlineCallbackReadsTrackedValue(argument, trackedAliases, context));
+      .some((argument) => inlineCallbackReadsTrackedValue(argument, trackedAliases, context)) ||
+      namedArgumentMayRead(call, context);
   };
   // `traverse` does not visit its root, which is the call in an expression body.
   if ((body.isCallExpression() || body.isOptionalCallExpression() || body.isNewExpression()) && callReads(body)) {
@@ -4798,13 +4826,7 @@ function captureTrackedReadExpressions(
       externalCallMayReadTrackedValue(path, functionPath, importSource, managedRuntimeSource, reactImportSource) ||
       [callee as NodePath, ...(path.get("arguments") as NodePath[])]
         .some((part) => inlineCallbackReadsTrackedValue(part.isSpreadElement() ? part.get("argument") as NodePath : part, trackedAliases, context)) ||
-      // `items.filter(isBig)`: a named local or module function handed to the
-      // call reads during it, exactly like an inline callback would.
-      (path.get("arguments") as NodePath[]).some((argument) => {
-        if (!argument.isIdentifier()) return false;
-        const target = resolveReferencedFunction(argument, argument.node.name);
-        return target !== undefined && functionTargetMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
-      });
+      namedArgumentMayRead(path, context);
     // A callee the module cannot see into (a method of an imported object, a
     // function held in a variable) is captured as a precaution. Unlike the
     // reads above this is not proof, so a Hook sharing the call is left alone
@@ -4945,6 +4967,7 @@ function captureTrackedReadExpressions(
         if (
           (hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
             callReadsTrackedValue(path, functionPath, trackedAliases, context) ||
+            namedArgumentMayRead(path, context) ||
             constructorMayRead(path)) &&
           !expressionCallsHook(path) &&
           !isDeferredReadContext(path, functionPath)

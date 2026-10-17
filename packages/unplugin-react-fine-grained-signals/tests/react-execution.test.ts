@@ -3210,6 +3210,115 @@ export function App() {
     }
   });
 
+  // M17.7.1: functions that run synchronously inside a call -- a Promise
+  // executor, the part of an async function before its first `await` -- read
+  // during render, so the call that runs them is captured.
+  describe("M17.7.1: synchronous execution boundaries", () => {
+    const extSignal = library.signal(1);
+    const extBox = { got: 0 };
+    const ext = {
+      extBox,
+      extExec(resolve: () => void) { extBox.got = extSignal.value; resolve(); },
+    };
+    const readsS: Step[] = [{ text: "0:1" }, { run: bumpS, text: "0:5" }];
+    const shapes: Array<[string, string]> = [
+      ["a named Promise executor", "let seen = 0;\n  function executor(resolve) {\n    seen = s.value;\n    resolve();\n  }\n  new Promise(executor);"],
+      ["a const Promise executor", "let seen = 0;\n  const executor = (resolve) => { seen = s.value; resolve(); };\n  new Promise(executor);"],
+      ["an inline Promise executor", "let seen = 0;\n  new Promise((resolve) => { seen = s.value; resolve(); });"],
+      ["a named async function before its first await", "let seen = 0;\n  async function read() {\n    seen = s.value;\n    await Promise.resolve();\n  }\n  void read();"],
+      ["a const async arrow before its first await", "let seen = 0;\n  const read = async () => { seen = s.value; await null; };\n  read();"],
+      ["an async IIFE before its first await", "let seen = 0;\n  (async () => { seen = s.value; await null; })();"],
+      ["an async forEach callback before its first await", "let seen = 0;\n  [1].forEach(async () => { seen = s.value; await null; });"],
+      ["a Promise executor started by a helper", "let seen = 0;\n  function executor(resolve) { seen = s.value; resolve(); }\n  function start() { return new Promise(executor); }\n  start();"],
+      ["an async callback handed to some", "let seen = 0;\n  [1].some(async () => { seen = s.value; await null; });"],
+      ["a named async callback", "let seen = 0;\n  async function each() { seen = s.value; await null; }\n  [1].forEach(each);"],
+    ];
+    for (const [name, setup] of shapes) {
+      it(`captures ${name}`, async () => {
+        const run = scenario({
+          name,
+          body: `export function App() {\n  ${setup}\n  return <p>{tick.value}:{seen}</p>;\n}`,
+          steps: readsS,
+        });
+        expect(await run.observe()).toEqual(run.expected);
+      });
+    }
+    it("captures an imported Promise executor", async () => {
+      const run = scenario({
+        name: "imported executor",
+        prelude: `import { extBox, extExec } from "./ext";\n`,
+        modules: { "./ext": ext },
+        body: `export function App() {\n  new Promise(extExec);\n  return <p>{tick.value}:{extBox.got}</p>;\n}`,
+        steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: () => { extSignal.value = 5; }, text: "0:5" }],
+      });
+      expect(await run.observe()).toEqual(run.expected);
+    });
+
+    for (const mode of ["auto", "all"] as const) {
+      it(`does not subscribe to reads after the first await (${mode})`, async () => {
+        const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+export const s = signal(1);
+export const late = signal(1);
+export const tick = signal(0);
+export const seenLate = [];
+let renders = 0;
+export function getRenders() { return renders; }
+export function App() {
+  renders += 1;
+  let seen = 0;
+  async function read() {
+    seen = s.value;
+    await Promise.resolve();
+    seenLate.push(late.value);
+  }
+  void read();
+  return <p>{tick.value}:{seen}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        await act(async () => { await Promise.resolve(); });
+        const getRenders = module.getRenders as () => number;
+        const before = getRenders();
+        expect(container.textContent).toBe("0:1");
+        expect(module.seenLate).toEqual([1]);
+        await act(async () => { (module.late as Signal<number>).value = 2; });
+        expect(getRenders()).toBe(before);
+        await act(async () => { (module.s as Signal<number>).value = 5; });
+        expect(container.textContent).toBe("0:5");
+      });
+
+      it(`keeps Promise results, rejections, and order around captured executors (${mode})`, async () => {
+        const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+export const s = signal(1);
+export const tick = signal(0);
+export const log = [];
+export const settled = [];
+export function App() {
+  log.length = 0;
+  function executor(resolve) { log.push("executor"); resolve(s.value); }
+  function failing() { log.push("failing"); throw new TypeError("boom"); }
+  async function early() { log.push("early"); throw new RangeError("early"); }
+  log.push("before");
+  const ok = new Promise(executor);
+  const bad = new Promise(failing);
+  const rejected = early();
+  log.push("after");
+  Promise.allSettled([ok, bad, rejected]).then((results) => {
+    settled.push(results.map((r) => r.status + ":" + (r.value ?? r.reason.constructor.name)).join(","));
+  });
+  return <p>{tick.value}:{log.join(",")}</p>;
+}
+`, { mode });
+        const container = mount(module.App);
+        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+        expect(container.textContent).toBe("0:before,executor,failing,early,after");
+        expect((module.settled as string[]).at(-1)).toBe("fulfilled:1,rejected:TypeError,rejected:RangeError");
+      });
+    }
+  });
+
   describe("more alias flows", () => {
     const flowCases: Scenario[] = [
       {
