@@ -47,6 +47,11 @@
 | M17.6.2 | Local alias capture check | M17.6.1 | 組み込み名methodの判定で、局所変数の別名経由の追跡漏れを確認 | 完了。18件を再現。receiverの出所(literal、parameter、state、組み込みmethodの結果)を証明できる場合だけ除外する方式に変更。examplesのcapture数は不変。詳細は[M17.6 record](m17.6-adversarial-differential-audit.ja.md) |
 | M17.7 | Ownership & call resolution qualification | M17.6.3 | 値の出所とcallee解決の判定規則を差分実行で監査し、同種の漏れの原因となる規則を修正 | 完了。19件(P1 5件、P2 11件、P3 3件。うち3件は今回の置き換えで入った回帰をreviewで発見)を再現し全件修正。callee rootの形による除外を廃止し、parameterのDeepをpropsと要素callbackとmodule内helperに限定。examplesのcapture数は不変、分割代入propsは401→1。CONDITIONAL GO。詳細は[M17.7 record](m17.7-ownership-call-resolution.ja.md) |
 | M17.7.1 | Synchronous execution boundary check | M17.7 | Promise executorとasync関数の同期部分の追跡を確認 | 完了。名前付きexecutor(helper経由を含む)と`some(async ...)`の漏れ3件を修正。await後のreadは依存にしないことを確認。capture数は不変。詳細は[M17.7.1 record](m17.7.1-sync-execution-boundary.ja.md) |
+| M18 | Feature & Improvement Exploration | M17.7.1 | 現API・既知制約・実アプリ利用・性能記録を見直し、v0.3.0候補と次の実装順を決める | 完了。baseline `4c15349`を固定。runtime製品コード変更なし。For/Index、JSX、transform候補を再評価し、managed diagnosticsを条件付きPoC候補に選定。詳細は[M18 exploration](m18-feature-exploration.ja.md) |
+| M18.1 | Consumer dogfooding | M18 | React Router/browser exampleで実利用課題とReact 19/Compiler/Fast Refresh/SSR/5 bundler matrixを整理 | 未着手。現APIで代替できない具体例を記録 |
+| M18.2 | Managed diagnostics PoC | M18.1 | structured diagnostic IDとopt-in strict policyの利用者便益・5 bundler一貫性を確認 | 未着手。需要とCI便益を確認できた場合のみpublic API化を提案 |
+| M18.3 | 必要な候補の実装・性能qualification | M18.2 | 根拠のある候補だけ実装し、正確性・bundle・runtime/transform性能を測る | 未着手。v0.3.0へ入れるかは候補別に判断 |
+| M18.4 | 統合reviewと最終scope判断 | M18.3 | 選定候補のfull qualificationとv0.3.0 scopeを記録 | 未着手。公開操作は別判断 |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -65,6 +70,6 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 ## 次の作業案
 
-M18は新機能開発ではなくrelease execution checklistとする。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記した。公開を明示的に開始するまでは、version/tag/publish/Release操作を行わない。公開前の確認が必要になった場合は、[M17 scope decision](m17-api-scope-decision.ja.md)に記録した固定scopeと、ユーザーに見える現行契約を基準にする。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
+旧M18 Release Execution Checklistは延期した。現在の作業は[M18 Feature & Improvement Exploration](m18-feature-exploration.ja.md)に従い、まず既存exampleでdogfoodingし、具体的需要が確認できた場合にmanaged diagnosticsをPoCする。公開準備、version/tag/publish/GitHub Releaseは今回の計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。
