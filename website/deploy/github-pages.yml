@@ -1,0 +1,60 @@
+# Template, not active: copy to .github/workflows/website.yml to deploy the
+# site to GitHub Pages (Settings → Pages → Source: GitHub Actions). Pin each
+# action to a commit SHA, as the repository's other workflows do, before
+# enabling it.
+#
+# Repository development mode: the site is built against the library source
+# of the same commit, packed into website/vendor. Once v0.3.0 is on npm and
+# website/package.json uses registry versions (see website/README.md), drop
+# the "Pack the library" step and install with --frozen-lockfile.
+name: Website
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/setup@v2
+        with:
+          cache: true
+      - name: Install the library workspace
+        run: pnpm install --frozen-lockfile
+      - name: Pack the library
+        working-directory: website
+        run: pnpm rfsg:pack
+      # The packed tarballs change whenever the library source does, so their
+      # integrity in website/pnpm-lock.yaml may be out of date here.
+      - name: Install the site
+        working-directory: website
+        run: pnpm install --no-frozen-lockfile
+      - name: Typecheck
+        working-directory: website
+        run: pnpm typecheck
+      - name: Build
+        working-directory: website
+        run: pnpm build
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: website/dist/public
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

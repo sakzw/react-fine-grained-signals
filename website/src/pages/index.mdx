@@ -1,0 +1,68 @@
+---
+description: Fine-grained signal rendering for React 19, built on alien-signals.
+---
+
+import { Demo } from '../components/Demo'
+import { Counter } from '../components/demos/Counter'
+
+# React Fine-Grained Signals
+
+An experimental fine-grained rendering layer for React 19, built on
+[alien-signals](https://www.npmjs.com/package/alien-signals). It provides small
+reactive primitives, React hooks, and an opt-in JSX runtime for a deliberately
+narrow set of direct DOM bindings.
+
+<Demo title="Counter" note="This page is statically generated. The counter hydrates in your browser and re-renders only itself when the signal changes.">
+  <Counter />
+</Demo>
+
+```tsx
+import { useSignal } from 'react-fine-grained-signals'
+
+export function Counter() {
+  const count = useSignal(0)
+  return <button onClick={() => count.value++}>Count: {count.value}</button>
+}
+```
+
+The component above has no tracking call of its own: the
+[managed transform](/managed-transform) sees the `.value` read during the
+build and subscribes the component to exactly the signals it reads.
+
+## What you get
+
+- **Signals** — `signal`, `computed` (read-only and writable), `effect`,
+  `batch`, `untracked`, and `deepSignal` for objects, arrays, and standard
+  collections. See [Core Signals](/core-signals).
+- **React hooks** — `useSignal`, `useComputed`, `useSignalEffect`,
+  `useDeepSignal`, and explicit leaf subscriptions. See [React Hooks](/react-hooks).
+- **A build plugin** that adds per-read tracking to components automatically,
+  for Vite, Rollup, Webpack, Rspack, and esbuild. See
+  [Managed Transform](/managed-transform).
+- **An opt-in JSX runtime** that binds signals straight to native DOM nodes and
+  form fields, without re-rendering the component. See
+  [JSX Direct Binding](/jsx-direct-binding).
+- **Control-flow components** — `Show`, `Switch`/`Match`, `For`, and
+  `Index` — that form their own reactive boundaries.
+
+React still owns the component tree and scheduling. The layers above narrow
+the work a signal change causes to the component, or the native DOM leaf, that
+actually read it.
+
+## Requirements
+
+- **React 19 or newer.** The JSX runtime uses callback-ref cleanup, which React
+  18 does not have.
+- Node.js 22 or newer for builds. The packages are ESM-only.
+
+:::info
+This site documents v0.3.0, which is not published to npm yet. Until it is,
+the site itself is built from the repository's source; see
+[Installation](/installation).
+:::
+
+## Status
+
+The library is experimental. The repository's
+[development records](https://github.com/sakzw/react-fine-grained-signals/blob/main/development/README.md) describe the design, the
+qualification work, and the known constraints in detail.

@@ -1,0 +1,10 @@
+# This file makes website/ its own pnpm workspace root, so installs here never
+# join the library's workspace in the parent directory.
+packages:
+  - .
+
+allowBuilds:
+  esbuild: true
+  # Neither postinstall is needed to build the site.
+  es5-ext: false
+  vue-demi: false

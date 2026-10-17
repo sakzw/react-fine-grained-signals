@@ -1,0 +1,66 @@
+# Installation
+
+```bash
+pnpm add react-fine-grained-signals
+```
+
+React 19 or newer is a peer dependency. The package is ESM-only and publishes
+its entry points and types through `exports`, so TypeScript needs
+`moduleResolution` set to `bundler`, `node16`, or `nodenext` to resolve
+`react-fine-grained-signals/utils` and the JSX runtime.
+
+:::warning
+v0.3.0 is not on npm yet: the registry currently serves v0.2.1. Upgrading from
+v0.2.1? Read the [v0.3 migration guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.3.md).
+:::
+
+## Entry points
+
+| Import | Contents |
+| --- | --- |
+| `react-fine-grained-signals` | Core primitives, React hooks, `isSignal` |
+| `react-fine-grained-signals/utils` | `Show`, `Switch`, `Match`, `For`, `Index` |
+| `react-fine-grained-signals/jsx-runtime` | The opt-in JSX runtime for direct DOM bindings |
+| `react-fine-grained-signals/runtime` | Low-level boundaries used by the build plugin (`useSignalCapture`, `useManagedSignals`) |
+
+## Optional: the build plugin
+
+The hooks work without any build configuration. To have components subscribe
+automatically, add the plugin:
+
+```bash
+pnpm add -D unplugin-react-fine-grained-signals
+```
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite'
+import signals from 'unplugin-react-fine-grained-signals/vite'
+
+export default defineConfig({
+  plugins: [signals({ mode: 'auto' })],
+})
+```
+
+The same package provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild`
+entry points. See [Managed Transform](/managed-transform).
+
+## Optional: the JSX runtime
+
+Opt one file in with a pragma on its first line:
+
+```tsx
+/** @jsxImportSource react-fine-grained-signals */
+```
+
+or the whole project through `tsconfig.json`:
+
+```json [tsconfig.json]
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react-fine-grained-signals"
+  }
+}
+```
+
+See [JSX Direct Binding](/jsx-direct-binding).

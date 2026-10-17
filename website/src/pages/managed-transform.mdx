@@ -1,0 +1,106 @@
+import { Demo } from '../components/Demo'
+import { Thermostat, UntrackedThermostat } from '../components/demos/ManagedTransformDemo'
+
+# Managed Transform
+
+`unplugin-react-fine-grained-signals` finds components and custom Hooks that
+read signals and makes them subscribe to exactly what they read — no
+`useSignalTracking()` calls to write or forget.
+
+```ts [vite.config.ts]
+import { defineConfig } from 'vite'
+import signals from 'unplugin-react-fine-grained-signals/vite'
+
+export default defineConfig({
+  plugins: [signals({ mode: 'auto' })],
+})
+```
+
+The package also provides `/rollup`, `/webpack`, `/rspack`, and `/esbuild`
+entry points. With React Compiler, list `signals()` before the plugin that runs
+the compiler.
+
+<Demo
+  title="Automatic tracking"
+  note="Both components read the same module-level signals. Only the first is transformed; the second opts out and keeps its first value."
+>
+  <Thermostat />
+  <UntrackedThermostat />
+</Demo>
+
+```tsx
+const temperature = signal(21)
+
+function describe() {
+  return temperature.value >= 25 ? 'warm' : 'mild'
+}
+
+export function Thermostat() {
+  // No useSignalTracking(): the build adds a capture Hook and wraps each read.
+  return (
+    <p>
+      {temperature.value}° — it feels {describe()}
+    </p>
+  )
+}
+```
+
+## How it works
+
+In the default `transform: "managed"`, a selected function gets one top-level
+`useSignalCapture()` Hook, and every read the build can prove is synchronous
+is wrapped in a short capture scope: `.value` reads, calls to helpers that read,
+inline callbacks such as `items.filter((item) => item.done.value)`, and calls
+into code the module cannot see. Your own Hooks stay at the top level, in their
+original order.
+
+## Options
+
+- **`mode`** — which functions opt in. `"auto"` (default) selects functions
+  with statically recognized `.value` reads; `"manual"` requires a
+  `useSignalTracking()` call or a `@signalTracking` comment; `"all"` selects
+  every eligible JSX component.
+- **`transform`** — `"managed"` (default) for per-read capture, or `"inject"`
+  to insert a bare `useSignalTracking()` call instead.
+- **`include` / `exclude`** — functions that filter module IDs.
+- **`reactCompiler`** — how the plugin cooperates with React Compiler
+  (default `"auto"`).
+
+A `@noSignalTracking` comment opts a single function out.
+
+## React Server Components
+
+The transform cannot tell a Server Component from a Client Component by
+itself. A module with `"use server"` is left alone; for everything else, keep
+Server Components out with `exclude`/`include`, a `@noSignalTracking`
+comment, or `mode: "manual"`.
+
+This site is an example: Vocs renders pages as Server Components, so its Vite
+config restricts the transform to the client-only demo components:
+
+```ts [vite.config.ts]
+signals({
+  mode: 'auto',
+  include: (id) => /\/src\/components\/.*\.tsx$/.test(id),
+})
+```
+
+## What it does not track
+
+The contract is deliberately narrower than a whole-function boundary:
+
+- Reads after the first `await`, in `.then()` callbacks, timers, and event
+  handlers run after render, so they are never render dependencies.
+- JSX render props and `children` callbacks have no invocation guarantee; the
+  plugin warns where it can see them.
+- Props and React state are trusted to be plain data. An object passed as a
+  prop that defines its own `map` reading signals is not tracked.
+- User code a builtin runs implicitly on an untracked value — a `toString` in a
+  template literal, a getter, an iterator — is not followed.
+
+For exact ownership of everything a block reads, call `useSignalTracking()`
+yourself; the plugin keeps a directly imported first-statement call.
+
+The full contract, including every supported pattern and diagnostic, is the
+[plugin README](https://github.com/sakzw/react-fine-grained-signals/blob/main/packages/unplugin-react-fine-grained-signals/README.md#managed-tracking-contract)
+and [Rendering optimization](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/rendering-optimization.md).

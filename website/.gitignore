@@ -1,0 +1,4 @@
+dist
+node_modules
+vendor
+src/pages.gen.ts

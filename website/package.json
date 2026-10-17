@@ -1,0 +1,32 @@
+{
+  "name": "react-fine-grained-signals-website",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@12.8.1",
+  "scripts": {
+    "rfsg:pack": "node scripts/pack-local-rfsg.mjs",
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "node scripts/serve-static.mjs",
+    "smoke": "node scripts/smoke.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "~19.3.0",
+    "react-dom": "~19.3.0",
+    "react-fine-grained-signals": "file:./vendor/react-fine-grained-signals.tgz",
+    "vocs": "2.10.3",
+    "waku": "1.0.0-rc.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6",
+    "playwright": "1.64.0",
+    "typescript": "^5.9.0",
+    "unplugin-react-fine-grained-signals": "file:./vendor/unplugin-react-fine-grained-signals.tgz",
+    "vite": "^8"
+  }
+}

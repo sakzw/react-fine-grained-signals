@@ -1,0 +1,116 @@
+import { Demo } from '../components/Demo'
+import { ComputedDemo } from '../components/demos/ComputedDemo'
+
+# Core Signals
+
+```ts
+import { batch, computed, effect, signal, untracked } from 'react-fine-grained-signals'
+
+const count = signal(0)
+const doubled = computed(() => count.value * 2)
+
+const dispose = effect(() => {
+  console.log(doubled.value)
+})
+
+batch(() => {
+  count.value = 1
+  count.value = 2
+})
+
+const current = untracked(() => count.value)
+dispose()
+```
+
+The primitives work anywhere — no React, build plugin, or JSX runtime is
+involved.
+
+## signal
+
+```ts
+signal<T>(initialValue: T): FormBindableSignal<T>
+```
+
+A writable reactive value.
+
+- `.value` reads and writes it; reading inside a tracked scope registers a dependency.
+- `.peek()` reads the current value without registering one.
+- Writes use `Object.is` equality, so assigning an equal value notifies nothing.
+
+## computed
+
+```ts
+computed<T>(getter: () => T): ReadonlySignal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): FormBindableSignal<T>
+```
+
+A lazily evaluated derived value. It re-evaluates on the next read after a
+dependency its getter read has changed.
+
+Pass `{ get, set }` for a writable computed. The getter stays the source of
+truth; assigning `.value` calls the setter, untracked and inside a batch.
+
+```ts
+const first = signal('John')
+const last = signal('Smith')
+const fullName = computed({
+  get: () => `${first.value} ${last.value}`,
+  set: (value) => {
+    const [nextFirst = '', ...rest] = value.split(' ')
+    first.value = nextFirst
+    last.value = rest.join(' ')
+  },
+})
+
+fullName.value = 'Ada Lovelace'
+```
+
+If the getter throws, the error is cached and rethrown from `.value` and
+`.peek()` on the next read, so a render-time read reaches an Error Boundary.
+
+<Demo title="Computed values">
+  <ComputedDemo />
+</Demo>
+
+## effect
+
+```ts
+effect(fn: () => void | (() => void)): () => void
+```
+
+Runs `fn` immediately and again whenever a signal it read changes. Returns a
+disposer. A function returned from `fn` is its cleanup.
+
+An error thrown by an effect or its cleanup is contained: it never cancels the
+write that triggered it or other queued effects. It is reported through
+`console.error` and, where available, `reportError()`.
+
+## batch
+
+```ts
+batch<T>(fn: () => T): T
+```
+
+Groups writes and defers effect notifications until the callback returns.
+
+## untracked
+
+```ts
+untracked<T>(fn: () => T): T
+```
+
+Runs the callback without collecting dependencies, also for signals from
+another installed copy of this package.
+
+## isSignal
+
+```ts
+isSignal(value: unknown): value is ReadonlySignal<unknown>
+```
+
+Reports whether a value came from `signal`, `computed`, or `deepSignal`,
+including signals from another copy of the package.
+
+For `deepSignal`, see [Deep Signal & Collections](/deep-signal). The complete
+reference, including error containment and cross-copy identity, is
+[Core primitives](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/core-primitives.md).

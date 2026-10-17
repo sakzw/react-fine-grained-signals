@@ -9,6 +9,7 @@
 ## ドキュメント
 
 ユーザー向けドキュメントの索引は[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
+動くサンプル付きのドキュメントサイト(英語)は、独立したVocsプロジェクトの[`website/`](website)からbuildします。
 v0.2.1からの移行については[v0.3移行ガイド](./docs/migration/v0.3.ja.md)を参照してください。
 v0.1.1からの移行については[v0.2移行ガイド](./docs/migration/v0.2.ja.md)を参照してください。
 

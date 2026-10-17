@@ -9,6 +9,7 @@ An experimental fine-grained rendering layer for React 19, built on [alien-signa
 ## Documentation
 
 See [`docs/README.md`](docs/README.md) for the user documentation index.
+The documentation site with live examples is built from [`website/`](website), an independent Vocs project.
 For upgrades from v0.2.1, see the [v0.3 migration guide](./docs/migration/v0.3.md).
 For earlier upgrades from v0.1.1, see the [v0.2 migration guide](./docs/migration/v0.2.md).
 
