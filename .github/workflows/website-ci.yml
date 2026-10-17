@@ -1,0 +1,78 @@
+name: Website CI
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - '.github/workflows/website-ci.yml'
+      - '.github/workflows/website-deploy.yml'
+      - 'website/**'
+      - 'src/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsdown.config.ts'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+  pull_request:
+    paths:
+      - '.github/workflows/website-ci.yml'
+      - '.github/workflows/website-deploy.yml'
+      - 'website/**'
+      - 'src/**'
+      - 'packages/**'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
+      - 'tsdown.config.ts'
+      - 'tsconfig*.json'
+      - 'vite.config.*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.64.0-noble
+      options: --user 1001
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          cache: true
+          require-lockfile: true
+
+      # Build each package as a consumer tarball; don't import parent sources.
+      - name: Pack local RFSG packages
+        working-directory: website
+        run: node scripts/pack-local-rfsg.mjs
+
+      # pnpm/setup v3 resolves the standalone package and lockfile from this
+      # directory. Install after packing because local tarball integrity may
+      # have changed; cache remains keyed by website/pnpm-lock.yaml.
+      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+        with:
+          working-directory: website
+          runtime: node@24.21.0
+          cache-dependency-path: website/pnpm-lock.yaml
+          cache: true
+          require-lockfile: true
+          install: false
+      - name: Install website dependencies
+        working-directory: website
+        run: pnpm install --no-frozen-lockfile
+      - name: Typecheck
+        working-directory: website
+        run: pnpm typecheck
+      - name: Build static site
+        working-directory: website
+        run: pnpm build
+      - name: Browser smoke
+        working-directory: website
+        run: pnpm smoke

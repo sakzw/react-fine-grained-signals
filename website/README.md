@@ -23,7 +23,7 @@ Run everything from this directory.
 | `pnpm dev` | Vite dev server at `http://localhost:5173/react-fine-grained-signals/` |
 | `pnpm build` | Static build into `dist/public` |
 | `pnpm preview` | Serve `dist/public` the way GitHub Pages will (`http://127.0.0.1:4173/react-fine-grained-signals/`) |
-| `pnpm smoke` | Build check in Chromium: every page, assets under the base path, every live demo, no console errors or hydration mismatches. Add `--url http://127.0.0.1:5173` to check a running dev server instead |
+| `pnpm smoke` | Build check in Chromium: every page, assets under the base path, `.nojekyll`, every live demo, no console errors or hydration mismatches. Add `--url http://127.0.0.1:5173` to check a running dev server instead |
 | `pnpm typecheck` | `tsc --noEmit` |
 
 `pnpm smoke` needs Playwright's Chromium (`pnpm exec playwright install chromium`),
@@ -95,14 +95,20 @@ deployment template drops its packing step (see below).
   `/** @jsxImportSource react-fine-grained-signals */`; everything else uses
   React's.
 
-## Deploying to GitHub Pages
+## GitHub Actions and GitHub Pages
 
-`deploy/github-pages.yml` is a workflow template (manual trigger) that packs
-the library, builds the site, and deploys `dist/public` with GitHub Pages
-actions. It is not active: copy it to `.github/workflows/`, pin the actions to
-commit SHAs, and select "GitHub Actions" as the Pages source in the repository
-settings. `public/.nojekyll` keeps Pages from dropping Waku's `_`-prefixed
-output if the site is ever published from a branch instead.
+`.github/workflows/website-ci.yml` independently packs the current library and
+transform plugin, installs this site's lockfile, typechecks, builds, and runs
+the existing Chromium smoke check. The pnpm setup action uses
+`working-directory: website` and `website/pnpm-lock.yaml` for the standalone
+cache key. This workflow never publishes.
+
+`.github/workflows/website-deploy.yml` is active but has only a
+`workflow_dispatch` trigger. It builds `dist/public`, uploads it as a GitHub
+Pages artifact (including `.nojekyll`), then deploys it through the
+`github-pages` environment. Before the first manual run, select "GitHub
+Actions" as the Pages source in repository settings. The deployment workflow
+has not been run as part of this change.
 
 ## Content
 
