@@ -1,0 +1,102 @@
+import { Demo } from '../components/Demo'
+import { Counter } from '../components/demos/Counter'
+
+# React Hooks
+
+```tsx
+import { useComputed, useSignal, useSignalEffect, useSignalTracking } from 'react-fine-grained-signals'
+
+function Counter({ step }: { step: number }) {
+  useSignalTracking()
+  const count = useSignal(0)
+  const scaled = useComputed(() => count.value * step, [step])
+
+  useSignalEffect(() => {
+    console.log('count:', count.value)
+  })
+
+  return <button onClick={() => (count.value += step)}>{scaled.value}</button>
+}
+```
+
+## useSignal
+
+```ts
+useSignal<T>(initialValue: T): FormBindableSignal<T>
+```
+
+Keeps one signal for the component lifetime. `initialValue` is used on the
+first render only. Reading `.value` during render needs a tracking boundary in
+that same component: `useSignalTracking()` or the
+[managed transform](/managed-transform).
+
+<Demo title="useSignal with the managed transform">
+  <Counter />
+</Demo>
+
+## useDeepSignal
+
+```ts
+useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
+```
+
+Keeps one [deep signal](/deep-signal). Pass a factory for an expensive initial
+value.
+
+## useComputed
+
+```ts
+useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
+useComputed<T>(options: { get: () => T; set: (value: T) => void }, dependencies?: DependencyList): FormBindableSignal<T>
+```
+
+A computed whose identity stays stable while its dependency array is unchanged.
+
+- **Without a dependency array**, the getter must read only signals; its first
+  closure is kept for the component's lifetime.
+- **With a dependency array**, list every non-signal value the getter captures:
+  `useComputed(() => count.value * step, [step])`.
+
+## useSignalEffect
+
+```ts
+useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyList): void
+```
+
+Starts an effect after commit and disposes it on unmount, Strict Mode replay
+included. The dependency rules match `useComputed`.
+
+## useSignalTracking
+
+```ts
+useSignalTracking(): void
+```
+
+Opens the render-tracking window. Call it once, unconditionally, as the first
+Hook in every component that reads `.value` while rendering — or let the build
+plugin handle it.
+
+The window is best-effort: it closes at the next `useSignalTracking()` call,
+when React starts committing, or in a microtask. Every reading component needs
+its own call; the window is not inherited from a parent.
+
+## useSignalValue and useDeepSignalValue
+
+```ts
+useSignalValue<T>(source: ReadonlySignal<T>): T
+useDeepSignalValue<T extends object, S>(source: DeepSignal<T>, selector: (value: T) => S, dependencies: DependencyList): S
+```
+
+Explicit single subscriptions, for when you want one named subscription instead
+of a component-wide window. `useDeepSignalValue` selects one primitive from deep
+state.
+
+## Control flow
+
+`react-fine-grained-signals/utils` provides `Show`, `Switch`/`Match`,
+`For`, and `Index`. Each one forms its own reactive boundary when given a
+signal, so an update re-renders the utility and not its parent. See the
+[For / Index example](/examples#for-and-index).
+
+The complete reference is [React hooks](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/hooks.md) and
+[JSX control-flow utilities](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/control-flow.md).

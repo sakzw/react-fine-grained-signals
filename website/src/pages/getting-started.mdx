@@ -1,0 +1,72 @@
+import { Demo } from '../components/Demo'
+import { ComputedDemo } from '../components/demos/ComputedDemo'
+
+# Getting Started
+
+## 1. Create state
+
+A signal holds a value. Reading `.value` inside a tracked scope subscribes to
+it; writing `.value` notifies the subscribers.
+
+```ts
+import { computed, signal } from 'react-fine-grained-signals'
+
+export const price = signal(12)
+export const quantity = signal(3)
+export const total = computed(() => price.value * quantity.value)
+```
+
+## 2. Read it in a component
+
+Without a build plugin, call `useSignalTracking()` first in every component
+that reads `.value` while rendering:
+
+```tsx
+import { useSignalTracking } from 'react-fine-grained-signals'
+import { quantity, total } from './cart'
+
+export function Cart() {
+  useSignalTracking()
+  return (
+    <button onClick={() => quantity.value++}>
+      {quantity.value} items, total {total.value}
+    </button>
+  )
+}
+```
+
+With the [managed transform](/managed-transform) in your build, drop the
+`useSignalTracking()` call: the plugin adds a top-level capture Hook and wraps
+each read it can prove is synchronous.
+
+## 3. Keep state in a component
+
+`useSignal` and `useComputed` keep one signal for the component's lifetime:
+
+```tsx
+import { useComputed, useSignal } from 'react-fine-grained-signals'
+
+export function Cart() {
+  const price = useSignal(12)
+  const quantity = useSignal(3)
+  const total = useComputed(() => price.value * quantity.value)
+
+  return (
+    <>
+      <button onClick={() => quantity.value++}>{quantity.value} items</button>
+      <p>Total: {total.value}</p>
+    </>
+  )
+}
+```
+
+<Demo title="Computed values">
+  <ComputedDemo />
+</Demo>
+
+## 4. Go finer
+
+- Bind signals straight to DOM nodes with the [JSX runtime](/jsx-direct-binding).
+- Track object and collection properties individually with
+  [deepSignal](/deep-signal).
+- Try every feature on the [Interactive Examples](/examples) page.

@@ -1,0 +1,77 @@
+import { Demo } from '../components/Demo'
+import { ComputedDemo } from '../components/demos/ComputedDemo'
+import { Counter } from '../components/demos/Counter'
+import { DeepSignalDemo } from '../components/demos/DeepSignalDemo'
+import { ForIndexDemo } from '../components/demos/ForIndexDemo'
+import { FormBindingDemo } from '../components/demos/FormBindingDemo'
+import { JsxBindingDemo } from '../components/demos/JsxBindingDemo'
+import { Thermostat, UntrackedThermostat } from '../components/demos/ManagedTransformDemo'
+
+# Interactive Examples
+
+Every example on this page is a React client component using this library.
+The page is generated statically and the examples hydrate in your browser. The
+source of each example is in
+[website/src/components/demos](https://github.com/sakzw/react-fine-grained-signals/blob/main/website/src/components/demos).
+
+## Counter
+
+`useSignal` with the managed transform: no tracking call is written by hand.
+
+<Demo title="Counter">
+  <Counter />
+</Demo>
+
+## Computed
+
+`useComputed` values derived from other signals, recomputed only when an input
+changes.
+
+<Demo title="Computed">
+  <ComputedDemo />
+</Demo>
+
+## Deep Signal
+
+Property-level tracking for nested objects, arrays, and a `Map`.
+
+<Demo title="Deep Signal">
+  <DeepSignalDemo />
+</Demo>
+
+## Form Binding
+
+`bindValue` and `bindChecked` on text, radio, checkbox-group, and single
+checkbox inputs. The summary is a signal child.
+
+<Demo title="Form Binding">
+  <FormBindingDemo />
+</Demo>
+
+## For and Index
+
+`For` keys rows by identity; `Index` keys them by position. Both are their own
+reactive boundary, so the component that owns the list does not re-render.
+
+<Demo title="For / Index">
+  <ForIndexDemo />
+</Demo>
+
+## JSX Direct Binding
+
+Signal children, a `title` prop, a `hidden` prop, and a signal-valued `style`
+entry, all written straight to the DOM.
+
+<Demo title="JSX Direct Binding">
+  <JsxBindingDemo />
+</Demo>
+
+## Managed Transform
+
+Module-level signals read directly and through a helper. The second line opts
+out of the transform with `@noSignalTracking`, so it keeps its first value.
+
+<Demo title="Managed Transform">
+  <Thermostat />
+  <UntrackedThermostat />
+</Demo>

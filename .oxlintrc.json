@@ -96,7 +96,8 @@
       }
     },
     {
-      // Example apps, benchmarks and the local `.sandbox` scratch app are all
+      // Example apps, the documentation site's live demos, benchmarks and the
+      // local `.sandbox` scratch app are all
       // consumers of the public signal API, so they necessarily exercise the
       // same patterns the rules above
       // exempt in the library itself: mutating deep-signal proxies in place
@@ -104,7 +105,7 @@
       // mutating classic immutable props/state), reading `ref.current`
       // during render through the render-tracking hook, and reading `.value`
       // as a bare statement to measure/exercise a tracked read.
-      "files": ["examples/**", "benchmarks/**", ".sandbox/**"],
+      "files": ["examples/**", "website/**", "benchmarks/**", ".sandbox/**"],
       "rules": {
         "no-unused-expressions": "off",
         "react/immutability": "off",

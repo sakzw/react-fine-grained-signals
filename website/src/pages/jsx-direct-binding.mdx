@@ -1,0 +1,77 @@
+import { Demo } from '../components/Demo'
+import { FormBindingDemo } from '../components/demos/FormBindingDemo'
+import { JsxBindingDemo } from '../components/demos/JsxBindingDemo'
+
+# JSX Direct Binding
+
+The package's JSX runtime lets a signal passed to a **native** element update
+that DOM node on its own, without re-rendering the component around it.
+
+```tsx
+/** @jsxImportSource react-fine-grained-signals */
+import { signal } from 'react-fine-grained-signals'
+
+const title = signal('Initial title')
+
+export function Heading() {
+  return <h1>{title}</h1>
+}
+```
+
+<Demo title="Signal children and props" note="The component never re-renders: the value its last render saw stays at 0 while the bound nodes update.">
+  <JsxBindingDemo />
+</Demo>
+
+## Setup
+
+Per file, with a pragma on the first line (every other file keeps React's
+runtime):
+
+```tsx
+/** @jsxImportSource react-fine-grained-signals */
+```
+
+or project-wide in `tsconfig.json` with
+`"jsxImportSource": "react-fine-grained-signals"`. Vite reads both. Builds that
+compile JSX with Babel name the runtime on `@babel/preset-react` instead.
+
+## What is bound
+
+- **Signal children** of native elements, including SVG text content.
+- **Props**: `title`, `id`, `className`, `hidden`, `disabled`, `data-*`, and
+  `aria-*`.
+- **`style`**, as a whole signal or with signal-valued entries
+  (`style={{ color: colorSignal }}`).
+- **Form fields** through `bindValue` and `bindChecked` (below).
+
+Signals passed to React **components** are not unwrapped, and elements whose
+children React handles specially (`<title>`, `<textarea>`, `<style>`) do not
+take signal children.
+
+## Form bindings
+
+`value` and `checked` keep React's controlled-input behavior. For direct
+synchronization, use the explicit binding props with a writable signal:
+
+```tsx
+<input bindValue={name} />
+<input type="checkbox" bindChecked={subscribed} />
+<input type="radio" name="plan" value="basic" bindValue={plan} />
+<input type="checkbox" name="features" value="search" bindValue={features} />
+<select bindValue={selected}>…</select>
+```
+
+<Demo title="Form binding">
+  <FormBindingDemo />
+</Demo>
+
+- Text inputs, `textarea`, single and `multiple` selects, radio groups, and
+  checkbox groups are supported.
+- Radios in one native group must share one signal.
+- A writable `computed({ get, set })` can be bound; its getter stays
+  authoritative and the DOM is corrected after React's handlers run.
+- Server rendering writes the initial value; hydration attaches to the
+  existing node.
+
+The complete allow-list and caveats are in
+[JSX signal children and host bindings](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/jsx-bindings.md).

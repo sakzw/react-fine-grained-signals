@@ -1,3 +1,0 @@
-.demo { display: grid; gap: .75rem; padding: 1rem; border: 1px solid var(--vocs-color_border); border-radius: .75rem; margin-block: 1rem; }
-.demo button, .demo input { font: inherit; padding: .45rem .7rem; }
-.demo label { display: flex; gap: .7rem; align-items: center; }
