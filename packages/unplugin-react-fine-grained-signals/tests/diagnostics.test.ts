@@ -294,6 +294,42 @@ export function Counter() { return <button>{count.value}</button>; }
     expect(run.error?.diagnosticId).toBe("RFGS007");
     expect(run.error?.code).toBe("RFGS");
   });
+
+  it.each([
+    ["without an incoming source map", undefined],
+    ["with an incoming source map", {
+      version: 3,
+      sources: ["/project/src/123.tsx"],
+      names: [],
+      mappings: "AAAA",
+    }],
+  ])("keeps promoted diagnostics as loader errors %s without duplicating other warnings", async (_label, map) => {
+    const source = `${warnOnly}${renderProp}`;
+    const plugin = rollupAdapter({ mode: "auto", diagnostics: { errorOn: ["RFGS003"] } });
+    const warnings: Warning[] = [];
+    const run = await new Promise<{ error: Warning | null }>((resolve) => {
+      const context = {
+        async: () => (error: Warning | null) => resolve({ error }),
+        query: { plugin },
+        resource: "/project/src/123.tsx",
+        emitWarning(warning: Warning) {
+          warnings.push(warning);
+        },
+      };
+      loader.call(context as never, source, map);
+    });
+
+    expect(run.error?.message).toContain("[react-fine-grained-signals] RFGS003: ");
+    expect(run.error?.message).toMatch(/> \d+ \|/);
+    expect(run.error?.code).toBe("RFGS");
+    expect(run.error?.diagnosticId).toBe("RFGS003");
+    expect(run.error?.loc).toEqual(expect.objectContaining({
+      file: "/project/src/123.tsx",
+      line: expect.any(Number),
+      column: expect.any(Number),
+    }));
+    expect(warnings.map((warning) => warning.diagnosticId)).toEqual(["RFGS007"]);
+  });
 });
 
 describe("real bundler builds", () => {

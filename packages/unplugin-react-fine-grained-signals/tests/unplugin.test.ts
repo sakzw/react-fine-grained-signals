@@ -601,6 +601,35 @@ describe("bundler adapters", () => {
     expect(run.content).toBe("export const a = 1;\n\n// seen");
   });
 
+  it("retries without an incoming map when the mapped transform fails for another reason", async () => {
+    const calls: string[] = [];
+    const query = {
+      plugin: {
+        transform(code: string) {
+          calls.push(code);
+          if (code.includes("sourceMappingURL=data:")) throw new Error("map handling failed");
+          return `${code}// fallback`;
+        },
+      },
+    };
+    const source = "export const answer = 42;\n";
+    const incomingMap = {
+      version: 3,
+      sources: ["/project/src/App.tsx"],
+      names: [],
+      mappings: "AAAA",
+    };
+
+    const run = await runLoader(query, "/project/src/App.tsx", source, incomingMap);
+
+    expect(run.error).toBeNull();
+    expect(run.content).toBe(`${source}// fallback`);
+    expect(run.map).toBe(incomingMap);
+    expect(calls).toHaveLength(2);
+    expect(calls[0]).toContain("sourceMappingURL=data:");
+    expect(calls[1]).toBe(source);
+  });
+
   it("warns once when unplugin's transform rule is not there to patch", () => {
     // The rewrite is shape-matched so a future unplugin can restructure its
     // transform rule without breaking the build -- but the source map fix then

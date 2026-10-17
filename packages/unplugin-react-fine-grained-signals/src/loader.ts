@@ -149,6 +149,10 @@ function withoutInlineSourceMap(code: string, comment: string | null): string {
   return comment === null ? code : code.replaceAll(comment, "");
 }
 
+function hasDiagnosticId(thrown: unknown): boolean {
+  return thrown !== null && typeof thrown === "object" && "diagnosticId" in thrown;
+}
+
 /**
  * The `this` a `transform` hook is called with. This plugin's own transform is
  * a pure `(code, id)` function that never touches it, so rather than rebuild
@@ -205,14 +209,18 @@ export default function reactFineGrainedSignalsLoader(
     }
   };
   // Carrying the incoming map in must not be able to fail a build on its own:
-  // if the run that carries it throws, the run without it is precisely what
-  // this loader did before, so that one's outcome -- its result or its error --
-  // is the one reported.
+  // if the run that carries it throws for a map-related reason, the run without
+  // it is precisely what this loader did before. A diagnostic promoted by
+  // `diagnostics.errorOn` is an intentional build error, though, and rerunning
+  // would emit any other warnings from that module a second time.
   const inlineMap = inlineSourceMapComment(map, source);
   const transformed =
     inlineMap === null
       ? runTransform(source)
-      : runTransform(source + inlineMap).catch(() => runTransform(source));
+      : runTransform(source + inlineMap).catch((thrown: unknown) => {
+          if (hasDiagnosticId(thrown)) throw thrown;
+          return runTransform(source);
+        });
 
   transformed.then((result) => {
     if (result === null || result === undefined) callback(null, source, map);

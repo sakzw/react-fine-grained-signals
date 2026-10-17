@@ -130,6 +130,37 @@ describe("Webpack adapter RSC integration", () => {
       await new Promise<void>((resolve) => compiler.close(() => resolve()));
     }
   }, 60_000);
+
+  it("keeps an errorOn diagnostic as a build error with an incoming source map", async () => {
+    const webpack = (await import("webpack")).default;
+    const compiler = webpack({
+      mode: "development",
+      context: fixtureDir,
+      entry: { server: serverEntry },
+      target: "node",
+      devtool: "source-map",
+      output: { path: outputDir, filename: "[name].js", clean: true },
+      optimization: { minimize: false },
+      externals: [/^(?:react|react-fine-grained-signals)(?:\/|$)/],
+      module: { rules: [{ test: /\.jsx$/, enforce: "post", use: [join(import.meta.dirname, "jsx-loader.cjs")] }] },
+      plugins: [useSourceLoader(webpackAdapter({
+        mode: "auto",
+        diagnostics: { errorOn: ["RFGS009"] },
+      }))],
+    });
+
+    try {
+      const stats = await new Promise<import("webpack").Stats>((resolve, reject) => {
+        compiler.run((error, result) => error ? reject(error) : result ? resolve(result) : reject(new Error("Webpack returned no stats")));
+      });
+      expect(stats.hasErrors()).toBe(true);
+      const failure = stats.compilation.errors.find((entry) => entry.message.includes("RFGS009"));
+      expect(failure?.message).toContain('top-level "use server" directive');
+      expect(failure?.message).toContain("> 4 | export function ServerAction()");
+    } finally {
+      await new Promise<void>((resolve) => compiler.close(() => resolve()));
+    }
+  }, 60_000);
 });
 
 describe("Rspack adapter RSC integration", () => {
@@ -166,6 +197,37 @@ describe("Rspack adapter RSC integration", () => {
           file: (warning as Error & { module?: { resource?: string } }).module?.resource,
         },
       );
+    } finally {
+      await new Promise<void>((resolve) => compiler.close(() => resolve()));
+    }
+  }, 60_000);
+
+  it("keeps an errorOn diagnostic as a build error with an incoming source map", async () => {
+    const rspack = (await import("@rspack/core")).rspack;
+    const compiler = rspack({
+      mode: "development",
+      context: fixtureDir,
+      entry: { server: serverEntry },
+      target: "node",
+      devtool: "source-map",
+      output: { path: outputDir, filename: "[name].js", clean: true },
+      optimization: { minimize: false },
+      externals: [/^(?:react|react-fine-grained-signals)(?:\/|$)/],
+      module: { rules: [{ test: /\.jsx$/, enforce: "post", use: [join(import.meta.dirname, "jsx-loader.cjs")] }] },
+      plugins: [useSourceLoader(rspackAdapter({
+        mode: "auto",
+        diagnostics: { errorOn: ["RFGS009"] },
+      }))],
+    });
+
+    try {
+      const stats = await new Promise<import("@rspack/core").Stats>((resolve, reject) => {
+        compiler.run((error, result) => error ? reject(error) : result ? resolve(result) : reject(new Error("Rspack returned no stats")));
+      });
+      expect(stats.hasErrors()).toBe(true);
+      const failure = stats.compilation.errors.find((entry) => entry.message.includes("RFGS009"));
+      expect(failure?.message).toContain('top-level "use server" directive');
+      expect(failure?.message).toContain("> 4 | export function ServerAction()");
     } finally {
       await new Promise<void>((resolve) => compiler.close(() => resolve()));
     }
