@@ -164,6 +164,38 @@ export default {
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり
   設定しても既存のdirect importの認識が外れることはありません。
 - `include` / `exclude`: source module IDを絞る関数です。
+- `diagnostics.errorOn`: build errorに昇格させる診断ID（例: `["RFGS001", "RFGS003"]`）の配列です。
+  それ以外の診断は従来どおりwarningのままです。transform出力は、どちらでも同じです。未知のIDは
+  plugin作成時に例外になります。詳細は[診断](#診断)を参照してください。
+
+## 診断
+
+各warningには安定したIDが付きます。IDはwarning本文の先頭（`[react-fine-grained-signals] RFGS003: ...`）と、
+bundlerへ渡すwarningの `diagnosticId` に入ります。共通の `code: "RFGS"` は変わりません。既存のwarningは
+このIDの接頭辞を除けば本文を保ち、Hook系のwarningも他と同じくcode frameを含むようになりました。
+
+| ID | カテゴリ |
+| --- | --- |
+| `RFGS001` | Hookが、signal readを含む式の中にあるか、readだけを行う呼び出しと同じ呼び出しを共有しています。 |
+| `RFGS002` | 呼び出された関数がHookを呼び、render内でsignalを読んでいます。 |
+| `RFGS003` | JSX render propや `children` callbackがsignalを読み、所有者を証明できません。 |
+| `RFGS004` | 関数の引数初期化子に、まだ `.value` の読み取りが残っています。 |
+| `RFGS005` | `useSignalTracking()` が、barrel/re-export moduleを経由してしか解決できません。 |
+| `RFGS006` | `@signalTracking` の付いた関数に、boundaryを付けるcomponent/hook identityがありません。 |
+| `RFGS007` | 無名の `export default` 関数で、module名からidentityを導けません。 |
+| `RFGS008` | componentが通常の関数として呼ばれ、かつ `<Component />` としても描画されています。 |
+| `RFGS009` | 先頭に `"use server"` directiveがあるmoduleのcomponentで、変換されません。 |
+
+選んだIDだけをbuildのerrorにする例:
+
+```ts
+signals({
+  diagnostics: { errorOn: ["RFGS001", "RFGS003"] },
+});
+```
+
+昇格した診断も、元のwarningと同じsource locationとcode frameを保持します。Rollup、Vite、webpack、rspackでは
+1つのmoduleで最初に昇格した診断でbuildが止まり、esbuildはすべてを報告します。
 
 ## managed tracking契約
 

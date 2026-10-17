@@ -7,14 +7,34 @@ import {
   type ReactFineGrainedSignalsTransform,
   type InternalTransformResult,
 } from "./internal/transform.js";
+import {
+  isDiagnosticId,
+  type DiagnosticId,
+} from "./internal/diagnostics.js";
 
 export type {
   ReactFineGrainedSignalsMode,
   ReactFineGrainedSignalsReactCompiler,
   ReactFineGrainedSignalsTransform,
 } from "./internal/transform.js";
+export type { DiagnosticId as ReactFineGrainedSignalsDiagnosticId } from "./internal/diagnostics.js";
+export { DIAGNOSTIC_IDS as REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS } from "./internal/diagnostics.js";
+
+/** Build-time diagnostic settings. Every diagnostic is a warning unless `errorOn` names its ID. */
+export interface ReactFineGrainedSignalsDiagnosticsOptions {
+  /**
+   * Diagnostic IDs (`RFGS001`-`RFGS009`) that fail the build instead of
+   * warning. Each one keeps its source location and code frame. The
+   * transform's output does not change: a promoted diagnostic only decides
+   * whether the build reports an error. Unknown IDs throw when the plugin is
+   * created, so a typo cannot silently leave a diagnostic as a warning.
+   */
+  errorOn?: readonly DiagnosticId[];
+}
 
 export interface ReactFineGrainedSignalsOptions {
+  /** Structured diagnostics: stable IDs, and which of them become build errors. */
+  diagnostics?: ReactFineGrainedSignalsDiagnosticsOptions;
   /**
    * `manual` preserves explicit useSignalTracking() opt-in. `auto` detects signal
    * reads in components and custom hooks; `all` also wraps JSX components that
@@ -155,17 +175,25 @@ function resolveTransformLoaderPath(): string | null {
   return transformLoaderPath;
 }
 
+/**
+ * A transform diagnostic as the bundler sees it. `code` stays the shared
+ * `"RFGS"` for compatibility with existing filters; `diagnosticId` is the
+ * stable category to match on.
+ */
 function toBundlerWarning(warning: Error, fallbackFile: string): {
   code: string;
   message: string;
+  diagnosticId?: DiagnosticId;
   loc?: { file: string; line: number; column: number };
 } {
-  const location = (warning as Error & {
+  const { loc: location, diagnosticId } = warning as Error & {
     loc?: { filename?: string; line?: number; column?: number };
-  }).loc;
+    diagnosticId?: DiagnosticId;
+  };
   return {
     code: "RFGS",
     message: warning.message,
+    ...(diagnosticId === undefined ? {} : { diagnosticId }),
     ...(location?.line !== undefined && location.column !== undefined
       ? {
           loc: {
@@ -269,28 +297,54 @@ function useOwnTransformLoader(compiler: unknown): void {
 
 export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOptions>(
   (options = {}) => {
+    // Checked here, once, so a misspelled ID fails at startup instead of
+    // quietly leaving that diagnostic as a warning.
+    const errorOn = options.diagnostics?.errorOn ?? [];
+    for (const diagnosticId of errorOn) {
+      if (!isDiagnosticId(diagnosticId)) {
+        throw new TypeError(
+          `[${pluginName}] diagnostics.errorOn names an unknown diagnostic ID: ${String(diagnosticId)}`,
+        );
+      }
+    }
     // esbuild hands a plugin its resolved build options through the `config`
     // hook, which is the only place a project's own `loader` map can be read.
     let configuredLoaders: Record<string, string> | undefined;
     const transform = function (
-      this: { warn?: (warning: never) => void } | undefined,
+      this: { warn?: (warning: never) => void; error?: (error: never) => void } | undefined,
       code: string,
       id: string,
     ): InternalTransformResult | null {
       const warn = this?.warn as ((warning: unknown) => void) | undefined;
-      return transformReactFineGrainedSignals(code, id, {
+      const error = this?.error as ((error: unknown) => void) | undefined;
+      // A promoted diagnostic is raised only after the transform returns: the
+      // transform's own Babel `try` rewraps anything thrown during the run as a
+      // parse failure, which would hide the diagnostic behind a misleading one.
+      const promoted: Error[] = [];
+      const result = transformReactFineGrainedSignals(code, id, {
         importSource: options.importSource ?? "react-fine-grained-signals",
         reactImportSource: options.reactImportSource ?? "react",
         mode: options.mode ?? "auto",
         transform: options.transform ?? "managed",
         reactCompiler: options.reactCompiler ?? "auto",
-        ...(warn === undefined
-          ? {}
-          : {
-              warn: (warning: Error) =>
-                warn.call(this, toBundlerWarning(warning, cleanModuleId(id))),
-            }),
+        warn: (warning: Error) => {
+          const { diagnosticId } = warning as Error & { diagnosticId?: DiagnosticId };
+          if (diagnosticId !== undefined && errorOn.includes(diagnosticId)) {
+            promoted.push(warning);
+            return;
+          }
+          if (warn === undefined) console.warn(warning.message);
+          else warn.call(this, toBundlerWarning(warning, cleanModuleId(id)));
+        },
       });
+      for (const diagnostic of promoted) {
+        // Outside a bundler context there is nothing to report to, so the
+        // diagnostic itself is the failure. esbuild's context collects errors
+        // and does not throw, so each promoted diagnostic is reported there.
+        if (error === undefined) throw diagnostic;
+        error.call(this, toBundlerWarning(diagnostic, cleanModuleId(id)));
+      }
+      return result;
     };
     return {
       name: pluginName,

@@ -164,6 +164,43 @@ export default {
   a direct import from `"react"` is always recognized, so setting this only
   widens detection and never turns off an existing direct import.
 - `include` / `exclude`: functions that filter source module IDs.
+- `diagnostics.errorOn`: diagnostic IDs (such as `["RFGS001", "RFGS003"]`) to
+  promote from warnings to build errors. Every other diagnostic stays a warning.
+  The transform output is the same either way. An unknown ID throws when the
+  plugin is created. See [Diagnostics](#diagnostics).
+
+## Diagnostics
+
+Each warning carries a stable ID, so you can tell categories apart and match
+them in tooling. The ID is the start of the warning text
+(`[react-fine-grained-signals] RFGS003: ...`) and is also set on the bundler
+warning as `diagnosticId`. The shared `code: "RFGS"` is unchanged. Existing
+warnings keep their text apart from that ID prefix, and the Hook warnings now
+include a code frame like the others.
+
+| ID | Category |
+| --- | --- |
+| `RFGS001` | A Hook sits in a signal read expression, or shares a call with reads only that call performs. |
+| `RFGS002` | A call runs a function that calls a Hook and reads signals inside the caller's render. |
+| `RFGS003` | A JSX render-prop or `children` callback reads a signal, and its owner cannot be proven. |
+| `RFGS004` | A `.value` read remains in a function parameter initializer. |
+| `RFGS005` | `useSignalTracking()` resolves only through a barrel/re-export module. |
+| `RFGS006` | A `@signalTracking` annotation has no component or hook identity to attach to. |
+| `RFGS007` | An anonymous `export default` function has no identity derivable from the module name. |
+| `RFGS008` | A component is both called as a plain function and rendered as `<Component />`. |
+| `RFGS009` | A component in a module with a top-level `"use server"` directive stays untransformed. |
+
+To fail the build on selected IDs only:
+
+```ts
+signals({
+  diagnostics: { errorOn: ["RFGS001", "RFGS003"] },
+});
+```
+
+A promoted diagnostic keeps its source location and code frame. Rollup, Vite,
+webpack and rspack stop at the first promoted diagnostic in each module, and
+esbuild reports all of them.
 
 ## Managed tracking contract
 

@@ -56,11 +56,12 @@ function toError(thrown: unknown): Error {
   if (thrown instanceof Error) return thrown;
   if (thrown !== null && typeof thrown === "object" && "message" in thrown) {
     // The patched webpack/rspack loader must bridge unplugin's structured
-    // `{ code, message, loc }` warning shape to `emitWarning(Error)` itself.
-    const source = thrown as { message: unknown; code?: unknown; loc?: unknown };
+    // `{ code, message, loc, diagnosticId }` warning shape to `emitWarning(Error)` itself.
+    const source = thrown as { message: unknown; code?: unknown; loc?: unknown; diagnosticId?: unknown };
     const error = new Error(String(source.message));
     if (source.code !== undefined) Object.assign(error, { code: source.code });
     if (source.loc !== undefined) Object.assign(error, { loc: source.loc });
+    if (source.diagnosticId !== undefined) Object.assign(error, { diagnosticId: source.diagnosticId });
     return error;
   }
   return new Error(String(thrown));

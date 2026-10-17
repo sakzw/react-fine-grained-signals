@@ -9,6 +9,7 @@ import {
   type Visitor,
 } from "@babel/core";
 import * as t from "@babel/types";
+import type { DiagnosticId } from "./diagnostics.js";
 
 export type ReactFineGrainedSignalsMode = "manual" | "auto" | "all";
 export type ReactFineGrainedSignalsTransform = "inject" | "managed";
@@ -1931,11 +1932,13 @@ function warnUncapturedParameterRead(
   functionPath: NodePath<t.Function>,
   options: InternalTransformOptions,
 ): void {
-  const warning = functionPath.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS004",
+    functionPath,
     "A .value read remains in a function parameter initializer, which runs before the top-level " +
       "capture Hook. Move the read into the function body so managed tracking can capture it safely.",
   );
-  reportWarning(options, warning, functionPath);
 }
 
 /** Is `path` the callback argument of `useEffect`/`useMemo`/one of their kin? */
@@ -2510,18 +2513,30 @@ function isUnverifiableBarrelSignalTracking(
  */
 const reportedWarnings = new WeakMap<t.Node, Set<string>>();
 
+/**
+ * Builds the diagnostic only once it is known to be reported. The message
+ * carries the stable ID, the code frame comes from `path`, and `diagnosticId`
+ * lets a bundler adapter match the warning against `diagnostics.errorOn`
+ * without parsing its text.
+ */
 function reportWarning(
   options: InternalTransformOptions,
-  warning: Error,
+  id: DiagnosticId,
   path: NodePath,
+  text: string,
 ): void {
+  const message = `[react-fine-grained-signals] ${id}: ${text}`;
   let reported = reportedWarnings.get(path.node);
   if (reported === undefined) reportedWarnings.set(path.node, reported = new Set());
-  if (reported.has(warning.message)) return;
-  reported.add(warning.message);
+  if (reported.has(message)) return;
+  reported.add(message);
+  const warning = Object.assign(path.buildCodeFrameError(message), { diagnosticId: id }) as Error & {
+    diagnosticId: DiagnosticId;
+    loc?: { filename?: string; line: number; column: number };
+  };
   const start = path.node.loc?.start;
   if (start !== undefined) {
-    (warning as Error & { loc?: { filename?: string; line: number; column: number } }).loc = {
+    warning.loc = {
       line: start.line,
       column: start.column,
     };
@@ -2537,24 +2552,28 @@ function warnUntrackedRenderPropRead(
   attribute: NodePath<t.JSXAttribute>,
   options: InternalTransformOptions,
 ): void {
-  const warning = attribute.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS003",
+    attribute,
     "This JSX callback prop reads a signal but its execution owner cannot be proven by a single-file transform. " +
       "The callback may run outside the current component's render tracking boundary. Move the read into a " +
       "tracked component or use an explicit signal-value hook in the component that renders the result.",
   );
-  reportWarning(options, warning, attribute);
 }
 
 function warnUntrackedChildrenCallbackRead(
   expression: NodePath<t.JSXExpressionContainer>,
   options: InternalTransformOptions,
 ): void {
-  const warning = expression.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS003",
+    expression,
     "This JSX children callback reads a signal but its execution owner cannot be proven by a single-file transform. " +
       "The callback may run outside the current component's render tracking boundary. Move the read into a " +
       "tracked component or use an explicit signal-value hook in the component that renders the result.",
   );
-  reportWarning(options, warning, expression);
 }
 
 type StaticConstObjectPattern = {
@@ -2665,14 +2684,16 @@ function warnUnverifiableBarrelSignalTracking(
   importSource: string,
   options: InternalTransformOptions,
 ): void {
-  const warning = path.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS005",
+    path,
     `This useSignalTracking() call cannot be verified as "${importSource}"'s own export: it resolves ` +
       "only through a barrel/re-export module, and a single-file transform cannot follow that " +
       "chain to confirm the target. The component stays on the bare, best-effort useSignalTracking() " +
       `boundary. Import useSignalTracking directly from "${importSource}" ` +
       "instead to get the verified boundary.",
   );
-  reportWarning(options, warning, path);
 }
 
 // An `@signalTracking` annotation is only actionable once the transform can name
@@ -2689,13 +2710,15 @@ function warnUnnamedSignalTrackingAnnotation(
   path: NodePath<t.Function>,
   options: InternalTransformOptions,
 ): void {
-  const warning = path.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS006",
+    path,
     "This @signalTracking annotation is ignored: the transform could not resolve a component " +
       "or hook identity for the annotated function, and the boundary is attached to that " +
       "identity. Give it a PascalCase (component) or useX (hook) name -- a binding, a named " +
       "function declaration, or an object property key -- to opt it in.",
   );
-  reportWarning(options, warning, path);
 }
 
 // The one anonymous `export default` shape `deriveModuleIdentityName` cannot
@@ -2703,13 +2726,15 @@ function warnUnnamedSignalTrackingAnnotation(
 // warning above exists: the author wrote a component in a position the
 // transform recognizes, and silence would read as "handled".
 function warnUnnamedDefaultExport(path: NodePath<t.Function>, options: InternalTransformOptions): void {
-  const warning = path.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS007",
+    path,
     "This anonymous default export is left untransformed: its component identity is derived " +
       "from the module's file name, and this module's name does not yield a PascalCase " +
       "identifier. Name the function (`export default function App() { ... }`), or assign it " +
       "to a PascalCase binding and export that binding, to opt it in.",
   );
-  reportWarning(options, warning, path);
 }
 
 // See the call site in `decideTransform`: the mixed call-and-mount shape that
@@ -2719,14 +2744,16 @@ function warnPlainCalledComponentAlsoMounted(
   name: string,
   options: InternalTransformOptions,
 ): void {
-  const warning = path.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS008",
+    path,
     `${name} is called as a plain function (${name}()) and also rendered as <${name} />. ` +
       "A plain call runs its body inside the caller's render, so it gets no tracking boundary " +
       "of its own (its signal reads are tracked by the calling component instead), and the " +
       `<${name} /> instance therefore only updates when its parent re-renders. Use one form ` +
       `consistently -- render it only as <${name} />, or only call it -- to remove the ambiguity.`,
   );
-  reportWarning(options, warning, path);
 }
 
 function hasModuleLevelUseServer(path: NodePath<t.Function>): boolean {
@@ -2740,12 +2767,14 @@ function warnServerDirectiveComponent(
   path: NodePath<t.Function>,
   options: InternalTransformOptions,
 ): void {
-  const warning = path.buildCodeFrameError(
+  reportWarning(
+    options,
+    "RFGS009",
+    path,
     'This component is left untransformed because its module has a top-level "use server" directive. ' +
       'A server-only module cannot receive the client tracking Hook. Move the component to a ' +
       '"use client" module if it needs automatic signal tracking.',
   );
-  reportWarning(options, warning, path);
 }
 
 function shouldAutomaticallyTransform(
@@ -4725,15 +4754,15 @@ const COERCING_COMPOUND_ASSIGNMENTS: ReadonlySet<string> = new Set([
 ]);
 
 const HOOK_IN_CAPTURED_CALL_WARNING =
-  "[react-fine-grained-signals] A Hook call shares this call with signal reads that only the call itself performs. " +
+  "A Hook call shares this call with signal reads that only the call itself performs. " +
   "The managed transform keeps Hooks out of capture closures, so those reads are not tracked here. " +
   "Call the Hook in its own statement and pass its result to the call.";
 const HOOK_CALLING_HELPER_WARNING =
-  "[react-fine-grained-signals] This call runs a function that both calls a Hook and reads signals inside the caller's render. " +
+  "This call runs a function that both calls a Hook and reads signals inside the caller's render. " +
   "The managed transform keeps Hooks out of capture closures, so those reads are not tracked here. " +
   "Render it as a component (<Title />) or make it a custom Hook (useTitle()) so it gets its own tracking.";
 const HOOK_IN_CAPTURED_READ_WARNING =
-  "[react-fine-grained-signals] A Hook call is nested inside this signal read expression. " +
+  "A Hook call is nested inside this signal read expression. " +
   "The managed transform keeps Hooks out of capture closures, so this read is not tracked. " +
   "Call the Hook in its own statement and read the signal from its result.";
 
@@ -4775,7 +4804,7 @@ function captureTrackedReadExpressions(
         inspectFunction(target, importSource, managedRuntimeSource, reactImportSource, undefined, true).readsValue;
       hookCallingReader.set(target.node, reads);
     }
-    if (reads) reportWarning(options, new Error(HOOK_CALLING_HELPER_WARNING), path);
+    if (reads) reportWarning(options, "RFGS002", path, HOOK_CALLING_HELPER_WARNING);
   };
   /**
    * Wraps a whole coercing operation (`a + b`, a template literal, ...) when
@@ -4840,7 +4869,7 @@ function captureTrackedReadExpressions(
       // Never move a Hook call into a capture closure. Reads in the arguments
       // are still captured one by one as the traversal continues; reads the
       // call performs internally cannot be, so say so.
-      if (readsInsideCall) reportWarning(options, new Error(HOOK_IN_CAPTURED_CALL_WARNING), path);
+      if (readsInsideCall) reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
       return;
     }
     wrap(path as NodePath<t.Expression>);
@@ -4949,7 +4978,7 @@ function captureTrackedReadExpressions(
       wrap(path as NodePath<t.Expression>);
       return;
     }
-    if (!wrapAfterHookBase(path)) reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), path);
+    if (!wrapAfterHookBase(path)) reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
   };
   const visitor: Visitor = {
     Function(path) {
@@ -5008,7 +5037,7 @@ function captureTrackedReadExpressions(
           // place, then iterate what is read from its result.
           const split = splitHookBase(right as NodePath<t.Expression>, path.scope);
           if (split === undefined) {
-            reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), right);
+            reportWarning(options, "RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
             return;
           }
           captured = t.callExpression(generatedCallback([split.result], iterate(split.read)), [split.hookCall]);
@@ -5083,7 +5112,7 @@ function captureTrackedReadExpressions(
         if (expressionCallsHook(right)) {
           const split = splitHookBase(right as NodePath<t.Expression>, path.scope);
           if (split === undefined) {
-            reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), right);
+            reportWarning(options, "RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
             return;
           }
           captured = t.callExpression(generatedCallback([split.result], forIn(split.read)), [split.hookCall]);
@@ -5108,7 +5137,7 @@ function captureTrackedReadExpressions(
         if ((!id.isObjectPattern() && !id.isArrayPattern()) || !init.node) return;
         if (!hasTrackedReadInExpression(init, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
         if (expressionCallsHook(init)) {
-          reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), init);
+          reportWarning(options, "RFGS001", init, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
         const declaration = path.parentPath;
@@ -5152,7 +5181,7 @@ function captureTrackedReadExpressions(
         if (destructuring && !hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
         if (isDeferredReadContext(path, functionPath)) return;
         if (expressionCallsHook(path)) {
-          reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), path);
+          reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
         wrap(path as NodePath<t.Expression>);
@@ -5165,7 +5194,7 @@ function captureTrackedReadExpressions(
         const argument = path.get("argument");
         if (!hasTrackedReadInExpression(argument, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
         if (expressionCallsHook(argument)) {
-          reportWarning(options, new Error(HOOK_IN_CAPTURED_READ_WARNING), argument);
+          reportWarning(options, "RFGS001", argument, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
         const copied = t.callExpression(
@@ -5238,7 +5267,7 @@ function captureTrackedReadExpressions(
         if (expressionCallsHook(path)) {
           // The tag keeps its `this` only when the whole tagged template is
           // captured, which a Hook in the template forbids.
-          reportWarning(options, new Error(HOOK_IN_CAPTURED_CALL_WARNING), path);
+          reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
           return;
         }
         wrap(path as NodePath<t.Expression>);
