@@ -44,6 +44,91 @@ function dispatchUserTextInput(node: HTMLInputElement | HTMLTextAreaElement, val
 }
 
 describe("Direct DOM binding", () => {
+  it("binds number inputs through the string value path without parsing or constraint normalization", async () => {
+    const amount = signal("1.5");
+    const parsed = computed(() => amount.value === "" ? "empty" : String(Number(amount.value)));
+    const events: string[] = [];
+    let ownerRenders = 0;
+
+    function Field() {
+      ownerRenders += 1;
+      return <form aria-label="number binding form">
+        <input
+          aria-label="number amount"
+          type="number"
+          min="0"
+          max="10"
+          step="0.5"
+          required
+          bindValue={amount}
+          onInput={(event) => events.push(`input:${event.currentTarget.value}:${amount.value}`)}
+          onChange={(event) => events.push(`change:${event.currentTarget.value}:${amount.value}`)}
+        />
+        <output aria-label="parsed amount">{parsed}</output>
+      </form>;
+    }
+
+    render(<Field />);
+    const input = screen.getByLabelText("number amount") as HTMLInputElement;
+    const form = screen.getByLabelText("number binding form") as HTMLFormElement;
+    expect(input.value).toBe("1.5");
+    expect(input.validity.valid).toBe(true);
+
+    await act(async () => {
+      dispatchUserTextInput(input, "2.25");
+      await waitForNextTask();
+    });
+    expect(amount.value).toBe("2.25");
+    expect(input.value).toBe("2.25");
+    expect(input.validity.stepMismatch).toBe(true);
+    expect(screen.getByLabelText("parsed amount").textContent).toBe("2.25");
+    expect(events).toEqual(["input:2.25:2.25", "change:2.25:2.25"]);
+    expect(ownerRenders).toBe(1);
+
+    act(() => { amount.value = "12"; });
+    expect(input.value).toBe("12");
+    expect(input.validity.rangeOverflow).toBe(true);
+    expect(amount.value).toBe("12");
+
+    act(() => { amount.value = ""; });
+    expect(input.value).toBe("");
+    expect(input.validity.valueMissing).toBe(true);
+    expect(screen.getByLabelText("parsed amount").textContent).toBe("empty");
+    expect(amount.value).toBe("");
+
+    await act(async () => { form.reset(); await Promise.resolve(); });
+    expect(input.value).toBe("");
+    expect(amount.value).toBe("");
+    expect(ownerRenders).toBe(1);
+  });
+
+  it("supports writable computed number bindings that reject or normalize strings", async () => {
+    const source = signal("12.5");
+    const amount = computed({
+      get: () => source.value,
+      set: (next: string) => {
+        if (next !== "") source.value = String(Number(next));
+      },
+    });
+    render(<input aria-label="computed number" type="number" step="any" bindValue={amount} />);
+    const input = screen.getByLabelText("computed number") as HTMLInputElement;
+
+    await act(async () => {
+      dispatchUserTextInput(input, "");
+      await waitForNextTask();
+    });
+    expect(source.value).toBe("12.5");
+    expect(amount.value).toBe("12.5");
+    expect(input.value).toBe("12.5");
+
+    await act(async () => {
+      dispatchUserTextInput(input, "12.50");
+      await waitForNextTask();
+    });
+    expect(source.value).toBe("12.5");
+    expect(input.value).toBe("12.5");
+  });
+
   it("keeps classic createElement bindings reactive while forwarding custom components untouched", () => {
     const color = signal("darkorange");
     const parentRenders = vi.fn();
@@ -539,6 +624,7 @@ describe("Direct DOM binding", () => {
     expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, defaultChecked: true })).toThrow(/bindChecked cannot be combined/);
     expect(() => createSignalAwareElement("select", { multiple: true, bindValue: text })).toThrow(/Invalid select bindValue/);
     expect(() => createSignalAwareElement("select", { bindValue: list })).toThrow(/Invalid select bindValue/);
+    expect(() => createSignalAwareElement("input", { type: "date", bindValue: text })).toThrow(/text-like or number input\/textarea\/select only/);
     expect(() => createSignalAwareElement("input", { type: "radio", value: "a", bindValue: text })).toThrow(/requires a non-empty name/);
     expect(() => createSignalAwareElement("input", { type: "radio", name: "choice", value: "a", bindValue: list })).toThrow(/Radio bindValue requires a string/);
     expect(() => createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: text })).toThrow(/array of strings/);
@@ -2265,7 +2351,7 @@ describe("M17.4 form binding review fixes", () => {
     try {
       render(<svg>{createSignalAwareElement("circle", { bindValue: undefined, r: 1 }) as ReactNode}</svg>);
       expect(errors).not.toHaveBeenCalled();
-      expect(() => createSignalAwareElement("circle", { bindValue: signal("x") })).toThrow(/text input\/textarea\/select only/);
+      expect(() => createSignalAwareElement("circle", { bindValue: signal("x") })).toThrow(/text-like or number input\/textarea\/select only/);
     } finally {
       errors.mockRestore();
     }

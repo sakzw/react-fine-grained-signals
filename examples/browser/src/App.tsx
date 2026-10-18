@@ -105,6 +105,38 @@ function WritableComputedFormBinding() {
   );
 }
 
+function NumberFormBinding() {
+  const amount = useSignal("1.5");
+  const parsed = useMemo(() => computed(() => amount.value === "" ? "empty" : String(Number(amount.value))), [amount]);
+  const ownerRenders = useRef(0);
+  ownerRenders.current += 1;
+
+  return (
+    <section aria-labelledby="number-form-heading">
+      <h2 id="number-form-heading">Number input string binding</h2>
+      <form id="number-form">
+        <input
+          id="number-bound-input"
+          aria-label="number-bound-input"
+          type="number"
+          min="0"
+          max="10"
+          step="0.5"
+          required
+          bindValue={amount}
+        />
+        <output id="number-bound-signal">{amount}</output>
+        <output id="number-bound-parsed">{parsed}</output>
+        <output id="number-bound-owner-renders">{ownerRenders.current}</output>
+        <button id="number-bound-write" type="button" onClick={() => { amount.value = "3.5"; }}>
+          Write number signal
+        </button>
+        <button id="number-bound-reset" type="reset">Reset number form</button>
+      </form>
+    </section>
+  );
+}
+
 function RebindingComputedFormBinding() {
   const source = useSignal("123");
   const replacement = useSignal("123x");
@@ -514,6 +546,7 @@ export function App({ state }: { state: DemoState }) {
       </section>
 
       <WritableComputedFormBinding />
+      <NumberFormBinding />
       <RebindingComputedFormBinding />
       <InputValueGroups />
       <IndependentRadioFormOwners />

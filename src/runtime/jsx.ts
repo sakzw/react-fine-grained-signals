@@ -1571,7 +1571,7 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
       }
       if (name === "bindValue") {
         const resolvedInputType = String(props.type ?? "text").toLowerCase();
-        const textInputTypes = new Set(["text", "search", "tel", "url", "password", "email"]);
+        const textInputTypes = new Set(["text", "search", "tel", "url", "password", "email", "number"]);
         const kind = resolveBindingKind(tagName, name, props);
         if (tagName === "select") {
           const multiple = props.multiple === true;
@@ -1587,7 +1587,7 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
           if (!isCheckboxGroupValue(initial)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
           if (typeof props.value !== "string") throw new TypeError("Checkbox group bindValue requires a string value option.");
         } else if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(resolvedInputType))) {
-          throw new TypeError("bindValue: text input/textarea/select only.");
+          throw new TypeError("bindValue: text-like or number input/textarea/select only.");
         }
       } else if (tagName !== "input" || String(props.type ?? "text").toLowerCase() !== "checkbox") {
         throw new TypeError("bindChecked: checkbox only.");
@@ -1636,7 +1636,7 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
     ? inputProps
     : { ...inputProps, style: styleProperties.snapshot };
   if (!isHtmlHost && (normalizedProps.bindValue !== undefined || normalizedProps.bindChecked !== undefined)) {
-    throw new TypeError(`${normalizedProps.bindValue !== undefined ? "bindValue: text input/textarea/select only." : "bindChecked: checkbox only."}`);
+    throw new TypeError(`${normalizedProps.bindValue !== undefined ? "bindValue: text-like or number input/textarea/select only." : "bindChecked: checkbox only."}`);
   }
   const bindings = isHtmlHost ? findHostBindings(normalizedProps, type) : [];
   // Binding props never reach the DOM, including ones left `undefined`.
@@ -1794,7 +1794,7 @@ type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "chil
 type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "checked" | "defaultChecked" | "bindValue" | "bindChecked" | "name"> & (
   Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked" | "name"> & { bindValue?: never; bindChecked?: never }
   | {
-    type?: "text" | "search" | "tel" | "url" | "password" | "email";
+    type?: "text" | "search" | "tel" | "url" | "password" | "email" | "number";
     name?: P["name"];
     value?: never;
     defaultValue?: never;

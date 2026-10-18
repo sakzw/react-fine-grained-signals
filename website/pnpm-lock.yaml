@@ -3078,7 +3078,7 @@ packages:
         optional: true
 
   react-fine-grained-signals@file:vendor/react-fine-grained-signals.tgz:
-    resolution: {integrity: sha512-8kf2w2MHvNM+kYzmhrPKY0XSamtKBob8mfDOrbIUckO2sUmLP+CNS0VQurpTGrSsM1wP+svUzPXwzSYHjoa6fw==, tarball: file:vendor/react-fine-grained-signals.tgz}
+    resolution: {integrity: sha512-sNu9tB6uhD6fGmHmZ0L29myXNghk4s/jUheSg/UEf07EjD9cL9I2SkxZGeh1Uj5B451jLljmsTQbRCAZgOHBFw==, tarball: file:vendor/react-fine-grained-signals.tgz}
     version: 0.3.0
     engines: {node: '>=22.0.0'}
     peerDependencies:

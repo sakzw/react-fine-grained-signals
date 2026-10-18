@@ -113,14 +113,27 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 
 ```tsx
 const name = signal("");
+const amount = signal("12.5");
 const enabled = signal(false);
 
 <input bindValue={name} />
+<input type="number" step="any" bindValue={amount} />
 <textarea bindValue={name} />
 <input type="checkbox" bindChecked={enabled} />
 ```
 
-`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）、`textarea`、`FormBindableSignal<string>`を使う単一選択select、`FormBindableSignal<string[]>`を使うmultiple selectに対応します。同じform ownerと`name`のradio inputは`FormBindableSignal<string>`を共有できます。各optionにはstringの`value`が必要です。同じform ownerと`name`のcheckbox inputは`FormBindableSignal<string[]>`を共有できます。各checkboxにはstringの`value`が必要です。`bindChecked`は独立したcheckbox 1つを同期する用途で、`FormBindableSignal<boolean>`が必要です。selectの配列bindingでは`multiple`を静的に`true`にしてください。型は動的booleanを拒否するため、動的な`multiple`にはcastが必要です。その場合は現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。
+`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）と`type="number"`（どちらも`FormBindableSignal<string>`）、`textarea`、`FormBindableSignal<string>`を使う単一選択select、`FormBindableSignal<string[]>`を使うmultiple selectに対応します。同じform ownerと`name`のradio inputは`FormBindableSignal<string>`を共有できます。各optionにはstringの`value`が必要です。同じform ownerと`name`のcheckbox inputは`FormBindableSignal<string[]>`を共有できます。各checkboxにはstringの`value`が必要です。`bindChecked`は独立したcheckbox 1つを同期する用途で、`FormBindableSignal<boolean>`が必要です。selectの配列bindingでは`multiple`を静的に`true`にしてください。型は動的booleanを拒否するため、動的な`multiple`にはcastが必要です。その場合は現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。
+
+`type="number"`の`bindValue`が保持するのはDOMの`.value`文字列です。空欄は`""`であり、RFSGは`valueAsNumber`への変換、`min`/`max`へのclamp、`step`への丸めを行いません。数値入力のsanitizeとconstraint validationはブラウザーに任せます。例えば`rangeUnderflow`、`rangeOverflow`、`stepMismatch`、`valueMissing`、場合によっては`badInput`が`input.validity`で確認できます。入力途中の不正・未完成文字列はブラウザーによりsanitizeされて`.value`が空になる場合があり、RFSGがDOMの`.value`で取得できない文字列まで保持する保証はありません。
+
+```tsx
+const amount = signal("");
+const parsedAmount = computed(() => amount.value === "" ? null : Number(amount.value));
+
+<input type="number" min="0" max="100" step="0.25" bindValue={amount} />
+```
+
+`Number("")`は`0`なので、変換前に空文字を判定してください。`-`や`1.`などの任意の入力途中文字列を保持する必要がある場合はtext inputを使い、別途validate/parseします。郵便番号など数値に見える識別子も、先頭のゼロや書式を保つためtext inputを使ってください。`stepUp()`/`stepDown()`をプログラムから呼ぶとnative controlの値は変わりますが、それ自体はsignalへ通知しません。プログラムから変更した値をbindingへ反映するには対応するinput eventを発生させてください。
 
 native radio groupは`Signal`のidentityではなくform ownerと`name`で排他制御されます。そのため、同じform ownerと`name`を持つbinding対象radioは必ず同じ書き込み可能Signalを共有してください。異なるSignalを結ぶと、ブラウザーは兄弟radioをsignal更新イベントなしに解除するため、DOMとsignalが食い違います。同じRFSG runtime copyが両方のbindingを登録している場合、RFSGは異なるsourceを拒否します。React標準の`checked`/`defaultChecked` radioや、別のRFSG runtime copyによるbindingは検出境界をまたぐため、同じnative groupに混在させないでください。form ownerまたは`name`が異なるradioは独立して使えます。同じnative groupを複数React rootに分ける場合も、同じSignalを共有してください。
 

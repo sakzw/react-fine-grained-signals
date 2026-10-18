@@ -22,6 +22,8 @@ test("serves deterministic React SSR markup", async ({ request }) => {
 
   expect(html).toContain('id="signal-child">0</output>');
   expect(html).toContain('id="bound-button" title="initial title"');
+  expect(html).toContain('id="number-bound-input"');
+  expect(html).toContain('value="1.5"');
   expect(html).toContain('data-status="idle"');
   expect(html).not.toContain("data-hydrated");
 });
@@ -79,6 +81,67 @@ test("keeps React input and change events when a writable computed rejects text"
   await expect(page.locator("#computed-form-source")).toHaveText("1234");
   await expect(page.locator("#computed-form-input-count")).toHaveText("2");
   await expect(page.locator("#computed-form-change-count")).toHaveText("2");
+  expect(errors).toEqual([]);
+});
+
+test("binds number input strings while leaving sanitization and constraints to the browser", async ({ page }) => {
+  const errors = await openHydrated(page);
+  const input = page.locator("#number-bound-input");
+  const signalValue = page.locator("#number-bound-signal");
+  const parsed = page.locator("#number-bound-parsed");
+  const validity = async () => input.evaluate((node: HTMLInputElement) => ({
+    badInput: node.validity.badInput,
+    rangeUnderflow: node.validity.rangeUnderflow,
+    rangeOverflow: node.validity.rangeOverflow,
+    stepMismatch: node.validity.stepMismatch,
+    valueMissing: node.validity.valueMissing,
+  }));
+
+  await expect(input).toHaveValue("1.5");
+  await expect(signalValue).toHaveText("1.5");
+  await expect(parsed).toHaveText("1.5");
+  await expect(page.locator("#number-bound-owner-renders")).toHaveText("1");
+
+  await input.fill("2.25");
+  await expect(input).toHaveValue("2.25");
+  await expect(signalValue).toHaveText("2.25");
+  await expect(parsed).toHaveText("2.25");
+  expect((await validity()).stepMismatch).toBe(true);
+
+  await input.fill("-1");
+  expect((await validity()).rangeUnderflow).toBe(true);
+  await expect(signalValue).toHaveText("-1");
+  await input.fill("11");
+  expect((await validity()).rangeOverflow).toBe(true);
+  await expect(signalValue).toHaveText("11");
+
+  await input.fill("");
+  expect((await validity()).valueMissing).toBe(true);
+  await expect(signalValue).toHaveText("");
+  await expect(parsed).toHaveText("empty");
+
+  await page.locator("#number-bound-write").click();
+  await expect(input).toHaveValue("3.5");
+  await expect(signalValue).toHaveText("3.5");
+  await input.fill("4.5");
+  await expect(signalValue).toHaveText("4.5");
+
+  // stepUp/stepDown mutate the native value but do not dispatch input by
+  // themselves. An input event brings an application-driven step change into
+  // the binding just like the user's native spinner interaction does.
+  await input.evaluate((node: HTMLInputElement) => node.stepUp());
+  await expect(input).toHaveValue("5");
+  await expect(signalValue).toHaveText("4.5");
+  await input.dispatchEvent("input");
+  await expect(signalValue).toHaveText("5");
+  await input.evaluate((node: HTMLInputElement) => node.stepDown());
+  await input.dispatchEvent("input");
+  await expect(signalValue).toHaveText("4.5");
+
+  await page.locator("#number-bound-reset").click();
+  await expect(input).toHaveValue("4.5");
+  await expect(signalValue).toHaveText("4.5");
+  await expect(page.locator("#number-bound-owner-renders")).toHaveText("1");
   expect(errors).toEqual([]);
 });
 

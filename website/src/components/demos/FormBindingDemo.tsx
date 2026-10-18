@@ -1,11 +1,16 @@
 /** @jsxImportSource react-fine-grained-signals */
 'use client'
 
+import { useRef } from 'react'
 import { useComputed, useSignal } from 'react-fine-grained-signals'
 import { field, muted, row } from './styles'
 
 export function FormBindingDemo() {
+  const ownerRenders = useRef(0)
+  ownerRenders.current += 1
   const name = useSignal('Ada')
+  const amount = useSignal('12.5')
+  const parsedAmount = useComputed(() => amount.value === '' ? 'empty' : String(Number(amount.value)))
   const plan = useSignal('basic')
   const region = useSignal('eu')
   const formats = useSignal<string[]>(['json'])
@@ -17,6 +22,7 @@ export function FormBindingDemo() {
 
   const applyPreset = () => {
     name.value = 'Grace'
+    amount.value = '42.5'
     plan.value = 'pro'
     region.value = 'us'
     formats.value = ['csv', 'json']
@@ -27,6 +33,11 @@ export function FormBindingDemo() {
   return (
     <form data-demo="form" style={{ display: 'grid', gap: '0.5rem' }} onSubmit={(event) => event.preventDefault()}>
       <label style={row}>Name <input name="name" style={field} bindValue={name} /></label>
+      <label style={row}>Amount (string signal, number input)
+        <input aria-label="Amount" type="number" min="0" max="100" step="0.25" required style={field} bindValue={amount} />
+      </label>
+      <output data-testid="numeric-summary">Amount text: {amount} · parsed: {parsedAmount}</output>
+      <output data-testid="form-owner-renders">Form owner renders: {ownerRenders.current}</output>
       <fieldset style={{ ...row, border: 0, margin: 0, padding: 0 }}>
         <legend style={muted}>Plan</legend>
         <label><input type="radio" name="plan" value="basic" bindValue={plan} /> Basic</label>

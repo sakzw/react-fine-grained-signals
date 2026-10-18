@@ -3,6 +3,8 @@
 import { computed, signal, useComputed, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
 
 const text = signal("value");
+const numberText = signal("12.5");
+const numberValue = signal(12.5);
 const enabled = signal(false);
 const selectedMany = signal<string[]>(["a"]);
 const enabledReadOnly = computed(() => enabled.value);
@@ -66,6 +68,10 @@ const partiallyStyled = <div style={{ color, width: 12 }} />;
 // explicit bindings require writable signals and the package JSX runtime.
 const controlledInput = <input value={text.value} checked={enabled.value} onChange={() => {}} />;
 const boundInput = <input bindValue={text} />;
+const boundNumberInput = <input type="number" step="any" bindValue={numberText} />;
+const controlledNumberInput = <input type="number" value={numberValue.value} onChange={() => {}} />;
+// @ts-expect-error Number binding preserves the DOM string and requires a string signal.
+const numberScalarBinding = <input type="number" bindValue={numberValue} />;
 // Widening a package signal to Signal<T> erases the direct-binding capability.
 // @ts-expect-error Keep FormBindableSignal<T> when a value will be used by bindValue.
 const widenedSignalBinding = <input bindValue={widenedSignal} />;
@@ -163,6 +169,9 @@ void [
   partiallyStyled,
   controlledInput,
   boundInput,
+  boundNumberInput,
+  controlledNumberInput,
+  numberScalarBinding,
   widenedSignalBinding,
   genericTextField,
   boundCheckbox,

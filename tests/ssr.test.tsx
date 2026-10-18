@@ -23,6 +23,7 @@ import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/util
 describe("SSR and hydration", () => {
   it("hydrates writable useComputed form values and radio/checkbox groups", async () => {
     const textSource = signal("server text");
+    const amountSource = signal("12.50");
     const choiceSource = signal("b");
     const selectedSource = signal<string[]>(["a", "c"]);
     function App() {
@@ -40,6 +41,7 @@ describe("SSR and hydration", () => {
       });
       return <form aria-label="hydrated group bindings">
         <input aria-label="hydrated computed hook" bindValue={text} />
+        <input type="number" step="any" aria-label="hydrated number binding" bindValue={amountSource} />
         <input type="radio" name="hydrated choice" value="a" aria-label="hydrated radio a" bindValue={choice} />
         <input type="radio" name="hydrated choice" value="b" aria-label="hydrated radio b" bindValue={choice} />
         <input type="checkbox" name="hydrated feature" value="a" aria-label="hydrated feature a" bindValue={selected} />
@@ -50,6 +52,7 @@ describe("SSR and hydration", () => {
 
     const html = renderToString(<App />);
     expect(html).toContain('value="server text"');
+    expect(html).toContain('value="12.50"');
     expect((html.match(/checked=""/g) ?? [])).toHaveLength(3);
     const container = document.createElement("div");
     container.innerHTML = html;
@@ -58,12 +61,14 @@ describe("SSR and hydration", () => {
     const root = hydrateRoot(container, <App />);
     await act(async () => { await Promise.resolve(); });
     const input = container.querySelector('[aria-label="hydrated computed hook"]') as HTMLInputElement;
+    const numberInput = container.querySelector('[aria-label="hydrated number binding"]') as HTMLInputElement;
     const radioA = container.querySelector('[aria-label="hydrated radio a"]') as HTMLInputElement;
     const radioB = container.querySelector('[aria-label="hydrated radio b"]') as HTMLInputElement;
     const checkboxA = container.querySelector('[aria-label="hydrated feature a"]') as HTMLInputElement;
     const checkboxB = container.querySelector('[aria-label="hydrated feature b"]') as HTMLInputElement;
     const checkboxC = container.querySelector('[aria-label="hydrated feature c"]') as HTMLInputElement;
     expect(input.value).toBe("server text");
+    expect(numberInput.value).toBe("12.50");
     expect([radioA.checked, radioB.checked]).toEqual([false, true]);
     expect([checkboxA.checked, checkboxB.checked, checkboxC.checked]).toEqual([true, false, true]);
     await act(async () => {
@@ -75,6 +80,9 @@ describe("SSR and hydration", () => {
     expect(textSource.value).toBe("client text");
     expect(choiceSource.value).toBe("a");
     expect(selectedSource.value).toEqual(["a", "c", "b"]);
+    expect(consoleError).not.toHaveBeenCalled();
+    await act(async () => { amountSource.value = "13.25"; });
+    expect(numberInput.value).toBe("13.25");
     expect(consoleError).not.toHaveBeenCalled();
     root.unmount();
     container.remove();
