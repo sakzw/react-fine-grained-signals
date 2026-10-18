@@ -52,19 +52,37 @@ export function Show<T>({ when, fallback = null, children }: ShowProps<T>): Reac
 }
 
 /** A branch declaration consumed by the nearest `Switch`. */
-export interface MatchProps<T> {
-  when: SignalInput<T>;
-  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
-}
+export type MatchProps<T, E extends T = T> =
+  | {
+      when: SignalInput<T>;
+      /** When provided, match this value using `Object.is`, including falsy values. */
+      equals: E;
+      children: ReactNode | ((value: E) => ReactNode);
+    }
+  | {
+      when: SignalInput<T>;
+      equals?: never;
+      children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+    };
 
 /**
  * Declares a `Switch` branch. `Match` only has meaning as a child of `Switch`.
  */
-export function Match<T>(_props: MatchProps<T>): null {
+export function Match<T, const E>(props: {
+  when: SignalInput<T>;
+  equals: E extends NoInfer<T> ? E : never;
+  children: ReactNode | ((value: Extract<T, E>) => ReactNode);
+}): null;
+export function Match<T>(props: {
+  when: SignalInput<T>;
+  equals?: never;
+  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+}): null;
+export function Match(_props: { when: unknown }): null {
   return null;
 }
 
-/** Chooses and renders the first truthy child `Match`. */
+/** Chooses and renders the first matching child `Match`. */
 export interface SwitchProps {
   fallback?: ReactNode;
   children?: ReactNode;
@@ -77,12 +95,14 @@ export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
   const store = useManagedSignals();
   try {
     for (const match of collectMatches(children)) {
-      const value = readSignalInput(match.props.when);
-      if (!value) continue;
+      const props = match.props as MatchProps<unknown, unknown>;
+      const value = readSignalInput(props.when);
+      const hasEquals = Object.prototype.hasOwnProperty.call(props, "equals");
+      if (hasEquals ? !Object.is(value, props.equals) : !value) continue;
 
-      const branch = match.props.children;
+      const branch = props.children;
       return typeof branch === "function"
-        ? branch(value as NonNullable<unknown>)
+        ? (branch as (matched: unknown) => ReactNode)(value)
         : branch;
     }
 
@@ -188,8 +208,8 @@ function readSignalInput<T>(value: SignalInput<T>): T {
   return isSignal(value) ? (value.value as T) : value;
 }
 
-function collectMatches(children: ReactNode): Array<ReactElement<MatchProps<unknown>>> {
-  const matches: Array<ReactElement<MatchProps<unknown>>> = [];
+function collectMatches(children: ReactNode): Array<ReactElement<MatchProps<unknown, unknown>>> {
+  const matches: Array<ReactElement<MatchProps<unknown, unknown>>> = [];
 
   Children.forEach(children, (child) => {
     if (!isValidElement(child)) return;
@@ -197,7 +217,7 @@ function collectMatches(children: ReactNode): Array<ReactElement<MatchProps<unkn
       const fragment = child as ReactElement<{ children?: ReactNode }>;
       matches.push(...collectMatches(fragment.props.children));
     } else if (child.type === Match) {
-      matches.push(child as ReactElement<MatchProps<unknown>>);
+      matches.push(child as ReactElement<MatchProps<unknown, unknown>>);
     }
   });
 

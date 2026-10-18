@@ -23,6 +23,7 @@ export const canaryState = {
   radio: signal("first"),
   selected: signal("one"),
   visible: signal(true),
+  view: signal<"list" | "details">("list"),
 };
 const canaryDouble = computed(() => canaryState.count.value * 2);
 const writableCanaryText = computed({
@@ -32,9 +33,14 @@ const writableCanaryText = computed({
   },
 });
 let unrelatedCommits = 0;
+let consumerCommits = 0;
 
 export function readUnrelatedCommitCount() {
   return unrelatedCommits;
+}
+
+export function readConsumerCommitCount() {
+  return consumerCommits;
 }
 
 export function resetConsumerCanary() {
@@ -49,6 +55,7 @@ export function resetConsumerCanary() {
   canaryState.radio.value = "first";
   canaryState.selected.value = "one";
   canaryState.visible.value = true;
+  canaryState.view.value = "list";
 }
 
 function synchronousCountHelper() {
@@ -72,6 +79,9 @@ function ConditionalCanary() {
 export function ConsumerCanary() {
   const [reactCount, setReactCount] = useState(0);
   const { user } = canaryState.profile.value;
+  useEffect(() => {
+    consumerCommits += 1;
+  });
   return (
     <main>
       <output data-testid="count">{canaryState.count}</output>
@@ -103,6 +113,13 @@ export function ConsumerCanary() {
       <button data-testid="toggle-conditional" onClick={() => {
         canaryState.visible.value = !canaryState.visible.value;
       }}>Toggle conditional</button>
+      <button data-testid="switch-details" onClick={() => {
+        canaryState.view.value = "details";
+      }}>Show details</button>
+      <Switch>
+        <Match when={canaryState.view} equals="list"><p data-testid="switch-view">list</p></Match>
+        <Match when={canaryState.view} equals="details"><p data-testid="switch-view">details</p></Match>
+      </Switch>
       {canaryState.visible.value ? <ConditionalCanary /> : null}
       <input data-testid="text" bindValue={writableCanaryText} />
       <input data-testid="checkbox" type="checkbox" value="admin" bindChecked={canaryState.checked} />

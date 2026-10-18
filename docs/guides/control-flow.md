@@ -39,23 +39,41 @@ interface SwitchProps {
   children?: ReactNode;
 }
 
-interface MatchProps<T> {
-  when: SignalInput<T>;
-  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
-}
+type MatchProps<T, E extends T = T> =
+  | {
+      when: SignalInput<T>;
+      equals: E;
+      children: ReactNode | ((value: E) => ReactNode);
+    }
+  | {
+      when: SignalInput<T>;
+      equals?: never;
+      children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+    };
 ```
 
-`Switch` renders the first `Match` whose `when` is truthy.
+`Switch` renders the first `Match` that matches. Without `equals`, `when` uses its
+legacy truthy test. With `equals`, `Switch` compares the `when` value using
+`Object.is`; this is value equality, not a predicate callback. Equal matching
+supports falsy values, including `0`, `false`, `""`, `null`, and `undefined`.
 
 ```tsx
 <Switch fallback={<p>Unknown view.</p>}>
   <Match when={showList}><p>User list</p></Match>
-  <Match when={false}><p>Never rendered</p></Match>
+  <Match when={view} equals="list">{(value) => <p>{value} view</p>}</Match>
+  <Match when={view} equals="details"><p>Details</p></Match>
+  <Match when={count} equals={0}><p>No items</p></Match>
 </Switch>
 ```
 
 - `Match` is meaningful only as a child of `Switch`; on its own it renders nothing.
 - Later branches are not evaluated once one matches.
+- Pass a signal itself (`when={view}`) to let `Switch` read and subscribe to it.
+  An expression such as `when={view.value === "list"}` is evaluated by the
+  parent while it creates the JSX, so the parent owns that read and may rerender.
+- `equals={undefined}` is an explicit `Object.is(value, undefined)` comparison;
+  omitting `equals` keeps the legacy truthy behavior. Function children in an
+  equals branch receive the matched value narrowed to the `equals` type.
 
 ## For
 

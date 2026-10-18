@@ -1,5 +1,5 @@
 import { signal } from "../src/index.js";
-import { For, Index } from "react-fine-grained-signals/utils";
+import { For, Index, Match, Switch } from "react-fine-grained-signals/utils";
 
 const users = signal([{ id: "ada", name: "Ada" }]);
 const tags = signal(new Set(["react"]));
@@ -29,7 +29,40 @@ const indexed = (
   </Index>
 );
 
+const mode = signal<"list" | "details" | undefined>("list");
+const matched = (
+  <Switch>
+    <Match when={mode} equals="list">
+      {(value) => {
+        const exact: "list" = value;
+        return <p>{exact}</p>;
+      }}
+    </Match>
+    <Match when={mode} equals={undefined}>
+      {(value) => {
+        const exact: undefined = value;
+        return <p>{String(exact)}</p>;
+      }}
+    </Match>
+    <Match when={mode}>
+      {(value) => {
+        const nonNull: "list" | "details" = value;
+        return <p>{nonNull}</p>;
+      }}
+    </Match>
+  </Switch>
+);
+
+const falsy = signal<false | 0 | "" | null | undefined>(false);
+const falsyMatch = <Match when={falsy} equals={false}>{(value) => {
+  const exact: false = value;
+  return <p>{String(exact)}</p>;
+}}</Match>;
+
+// @ts-expect-error equals must be assignable to the value type of when.
+const invalidEquals = <Match when={mode} equals={42}><p>invalid</p></Match>;
+
 // @ts-expect-error For requires an identity key; use Index for positional lists.
 const missingKey = <For each={users}>{(user) => <p>{user.name}</p>}</For>;
 
-void [keyedArray, keyedSet, keyedMap, indexed, missingKey];
+void [keyedArray, keyedSet, keyedMap, indexed, missingKey, matched, falsyMatch, invalidEquals];

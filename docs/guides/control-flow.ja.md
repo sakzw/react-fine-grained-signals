@@ -39,23 +39,39 @@ interface SwitchProps {
   children?: ReactNode;
 }
 
-interface MatchProps<T> {
-  when: SignalInput<T>;
-  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
-}
+type MatchProps<T, E extends T = T> =
+  | {
+      when: SignalInput<T>;
+      equals: E;
+      children: ReactNode | ((value: E) => ReactNode);
+    }
+  | {
+      when: SignalInput<T>;
+      equals?: never;
+      children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+    };
 ```
 
-`Switch` は、`when` がtruthyな最初の `Match` をレンダーします。
+`Switch` は最初にマッチした `Match` をレンダーします。`equals` を省略した場合、
+`when` は従来どおりtruthy判定です。`equals` を指定した場合は `Object.is` で値を比較します。
+predicate callbackではなく値比較です。`0`、`false`、`""`、`null`、`undefined`などのfalsy値も
+一致対象にできます。
 
 ```tsx
 <Switch fallback={<p>Unknown view.</p>}>
   <Match when={showList}><p>User list</p></Match>
-  <Match when={false}><p>Never rendered</p></Match>
+  <Match when={view} equals="list">{(value) => <p>{value} view</p>}</Match>
+  <Match when={view} equals="details"><p>Details</p></Match>
+  <Match when={count} equals={0}><p>No items</p></Match>
 </Switch>
 ```
 
 - `Match` に意味があるのは `Switch` の子として置いた場合だけです。単体では何もレンダーしません。
 - 一度マッチすると、それ以降の分岐は評価されません。
+- `when={view}` のようにsignal自体を渡すと、`Switch` が値を読み取って購読します。
+  `when={view.value === "list"}` はJSXを作る親が式を評価するため、親が購読して再レンダーする場合があります。
+- `equals={undefined}` は明示的な `Object.is(value, undefined)` 比較です。`equals` を省略した場合とは異なり、
+  `undefined` も一致できます。equals分岐のfunction childrenには、`equals` の型に絞られた一致値が渡ります。
 
 ## For
 

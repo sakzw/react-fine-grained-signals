@@ -14,6 +14,26 @@ so a change updates that boundary instead of the parent component.
 truthy value. `Switch` renders the first matching `Match`; `Match` has no
 meaning outside a `Switch`.
 
+Without `equals`, a `Match` keeps the legacy truthy test. With `equals`,
+`Switch` compares the `when` value using `Object.is` and selects the first equal
+branch. This is a value comparison, not a predicate API; it also works for
+`0`, `false`, `""`, `null`, and `undefined`.
+
+Pass the signal itself so that `Switch` owns the subscription:
+
+```tsx
+<Switch fallback={<p>Unknown view</p>}>
+  <Match when={view} equals="list">List</Match>
+  <Match when={view} equals="details">Details</Match>
+  <Match when={view} equals="empty">Empty</Match>
+</Switch>
+```
+
+An expression such as `when={view.value === 'list'}` runs in the parent while it
+creates the JSX, so the parent owns that signal read. `equals={undefined}` is an
+explicit comparison and differs from omitting `equals`. A function child in an
+equals branch receives a value typed to the matched `equals` type.
+
 <Demo title="Show / Switch / Match"><ControlFlowDemo /></Demo>
 
 ## For and Index

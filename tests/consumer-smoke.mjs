@@ -318,6 +318,9 @@ try {
     if (read("deep-name").textContent !== "Ada" || read("map-value").textContent !== "Ada") {
       throw new Error("Packed canary SSR/hydration lost deep destructuring or reactive collection values");
     }
+    if (read("switch-view").textContent !== "list") {
+      throw new Error("Packed Switch/Match equals branch did not hydrate consistently");
+    }
     const unrelatedRenders = canaryBundle.readUnrelatedCommitCount();
     await act(() => read("count-up").click());
     console.log("[consumer] shared signal update completed");
@@ -344,6 +347,14 @@ try {
       canaryBundle.readUnrelatedCommitCount() !== unrelatedRenders
     ) {
       throw new Error("Packed isolated signal update failed or committed the unrelated sibling");
+    }
+    const consumerCommits = canaryBundle.readConsumerCommitCount();
+    await act(() => read("switch-details").click());
+    if (
+      read("switch-view").textContent !== "details" ||
+      canaryBundle.readConsumerCommitCount() !== consumerCommits
+    ) {
+      throw new Error("Packed Switch/Match equals update failed or rerendered its React Compiler parent");
     }
     await act(() => read("replace-and-delete").click());
     if (read("deep-name").textContent !== "Lin" || read("map-value").textContent !== "" || read("set-has").textContent !== "false") {

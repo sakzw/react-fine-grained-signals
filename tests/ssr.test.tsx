@@ -16,7 +16,7 @@ import {
   useSignalTracking,
   type DeepSignal,
 } from "../src/index.js";
-import { For, Index, Show } from "react-fine-grained-signals/utils";
+import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -163,11 +163,14 @@ describe("SSR and hydration", () => {
 
   it("hydrates control-flow utilities and follows signal updates without warnings", async () => {
     const visible = signal(true);
+    const currentView = signal<"list" | "details">("list");
+    const parentRenders = vi.fn();
     const items = deepSignal([{ id: "ada", name: "Ada" }]);
     const slots = signal(["first"]);
     const labels = signal(new Map([["ada", "Ada"]]));
 
     function App() {
+      parentRenders();
       return (
         <section>
           <Show when={visible} fallback={<p data-testid="visibility">hidden</p>}>
@@ -186,6 +189,10 @@ describe("SSR and hydration", () => {
               {([id, label]) => <li>{`${id}:${label}`}</li>}
             </For>
           </ul>
+          <Switch fallback={<p data-testid="switch-view">unknown</p>}>
+            <Match when={currentView} equals="list"><p data-testid="switch-view">list</p></Match>
+            <Match when={currentView} equals="details"><p data-testid="switch-view">details</p></Match>
+          </Switch>
         </section>
       );
     }
@@ -193,6 +200,7 @@ describe("SSR and hydration", () => {
     const html = renderToString(<App />);
     expect(html).toContain("visible");
     expect(html).toContain("Ada");
+    expect(html).toContain('data-testid="switch-view">list');
 
     const container = document.createElement("div");
     container.innerHTML = html;
@@ -207,6 +215,7 @@ describe("SSR and hydration", () => {
     expect(container.querySelector("li")?.textContent).toBe("Ada");
     expect(container.querySelector("[data-testid=slots]")?.textContent).toBe("first");
     expect(container.querySelector("[data-testid=labels]")?.textContent).toBe("ada:Ada");
+    expect(container.querySelector("[data-testid=switch-view]")?.textContent).toBe("list");
     expect(consoleError).not.toHaveBeenCalled();
 
     await act(async () => {
@@ -214,10 +223,13 @@ describe("SSR and hydration", () => {
       items.value.push({ id: "bea", name: "Bea" });
       slots.value = ["second"];
       labels.value = new Map([["bea", "Bea"]]);
+      currentView.value = "details";
     });
     expect(container.querySelector("[data-testid=visibility]")?.textContent).toBe("hidden");
     expect([...container.querySelectorAll("li")].map((item) => item.textContent))
       .toEqual(["Ada", "Bea", "second", "bea:Bea"]);
+    expect(container.querySelector("[data-testid=switch-view]")?.textContent).toBe("details");
+    expect(parentRenders).toHaveBeenCalledTimes(2);
     expect(consoleError).not.toHaveBeenCalled();
 
     root.unmount();
