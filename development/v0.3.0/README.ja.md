@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M18.8 Numeric Form Bindingを実施中。`input[type="number"]`へstring Signalの`bindValue`を拡張し、ブラウザ標準のValidity/sanitizationを維持する。検証記録は[M18.8 record](m18.8-numeric-form-binding.ja.md)。
+- 状態: M18.8 Numeric Form Bindingを完了。`input[type="number"]`へstring Signalの`bindValue`を拡張し、ブラウザ標準のValidity/sanitizationを維持。Test、E2E、Website CI成功。検証記録は[M18.8 record](m18.8-numeric-form-binding.ja.md)。
 - 統合ブランチ: `main`
 - 最新実装マイルストーン: M18.8 Numeric Form Binding（数値inputへの文字列Signal binding）。詳細は[M18.8 record](m18.8-numeric-form-binding.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
@@ -55,7 +55,7 @@
 | M18.5 | Documentation & Consumer Dogfooding | M18.4 | 英語ガイドを補完し、既存APIを使う実操作デモをVocs static/React client環境で検証 | 完了。既存9ページを維持して4ガイドを追加。Form binding双方向、For/Index操作とrender数、Deep Signal局所更新、Managed/Hook shared state、control flowをstatic previewのChromiumで確認。typecheck/build/smoke成功。Runtime/API変更なし。詳細は[M18.5 record](m18.5-documentation-dogfooding.ja.md) |
 | M18.6 | Reactive Match DX Improvement | M18.5 | SwitchがSignal値を購読してObject.isによるMatch分岐を選び、親renderを避けるAPIを検討・実装 | 完了。Match equals、Falsy/undefined比較、型絞り込み、親renderなしを実装。Control Flow/SSR/Concurrent、React Compiler consumer、website Chromium、bundle sizeを確認。詳細は[M18.6 record](m18.6-reactive-match.ja.md) |
 | M18.7 | Deep Selector Hook DX | M18.6 | `useDeepSignalValue`のdependenciesを省略可能にし、Signal-only selectorを自然に記述しながらclosure・購読・Reactの正確性を維持 | 完了。省略時の初期closure保持、明示depsとのmode固定、型・SSR/Concurrent/StrictMode・Websiteを検証。詳細は[M18.7 record](m18.7-deep-selector-dx.ja.md) |
-| M18.8 | Numeric Form Binding | M18.7 | `input[type="number"]`を`bindValue`で利用可能にし、string Signal、ブラウザ数値入力semantics、SSR/hydrationとReactイベント順を維持 | 実装・focused検証済み。Firefox単独切り分け、Website build/smoke、push後CIを確認中。詳細は[M18.8 record](m18.8-numeric-form-binding.ja.md) |
+| M18.8 | Numeric Form Binding | M18.7 | `input[type="number"]`を`bindValue`で利用可能にし、string Signal、ブラウザ数値入力semantics、SSR/hydrationとReactイベント順を維持 | 完了。focused/runtime/SSR、Chromium/Firefox/WebKit、Website standalone install/build/smoke、bundle budgetを確認。GitHub Test/E2E/Website CI成功。詳細は[M18.8 record](m18.8-numeric-form-binding.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
