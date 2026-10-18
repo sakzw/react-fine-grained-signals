@@ -209,10 +209,20 @@ class RenderStore {
     let changedDuringRender = !render.promoteRenderAttempt(attempt);
     const desired = attempt.dependencies;
     if (this.#mode === "combined") {
-      const local = new Set([...desired.keys()].filter((dependency) => !isInteropProtocol(dependency)));
-      const same = local.size === this.#combinedDependencies.size
-        && [...local].every((dependency) => this.#combinedDependencies.has(dependency));
-      if (!same) {
+      let localCount = 0;
+      let changed = false;
+      for (const dependency of desired.keys()) {
+        if (!isInteropProtocol(dependency)) {
+          localCount += 1;
+          if (!this.#combinedDependencies.has(dependency)) changed = true;
+        }
+      }
+      if (localCount !== this.#combinedDependencies.size) changed = true;
+      if (changed) {
+        const local = new Set<object>();
+        for (const dependency of desired.keys()) {
+          if (!isInteropProtocol(dependency)) local.add(dependency);
+        }
         this.#subscriptions.get(this)?.();
         this.#subscriptions.delete(this);
         this.#combinedDependencies = local;

@@ -69,6 +69,33 @@ describe("React adapter contracts", () => {
     expect(screen.getByText("current source")).toBeTruthy();
   });
 
+  it("does not recreate a combined subscription for stable dependencies", () => {
+    const runtime = createRenderRuntime();
+    const source = runtime.signal(0);
+    const subscribe = vi.spyOn(runtime.renderAdapter, "subscribeReadables");
+    const { createReactAdapter } = createAlienDerivedReactAdapter(runtime, runtime.renderAdapter);
+    const adapter = createReactAdapter();
+    let rerenderParent!: () => void;
+
+    function Reader() {
+      const [tick, setTick] = useState(0);
+      rerenderParent = () => setTick((value) => value + 1);
+      adapter.useSignalTracking();
+      return <output>{source.value + tick}</output>;
+    }
+
+    render(<Reader />);
+    expect(subscribe).toHaveBeenCalledOnce();
+
+    act(() => rerenderParent());
+    expect(screen.getByText("1")).toBeTruthy();
+    expect(subscribe).toHaveBeenCalledOnce();
+
+    act(() => { source.value = 1; });
+    expect(screen.getByText("2")).toBeTruthy();
+    expect(subscribe).toHaveBeenCalledOnce();
+  });
+
   it("rejects unknown modes and always finishes managed callbacks", () => {
     const runtime = createRenderRuntime();
     const factory = createAlienDerivedReactAdapter(runtime, runtime.renderAdapter);
