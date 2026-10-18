@@ -73,7 +73,7 @@ const emptyStringMatch = <Match when={signal<string>("")} equals="">{(value) => 
 // A broad primitive type still narrows to the equals literal for callback children.
 const broadStringMatch = <Match when={signal<string>("list")} equals="list">{(value) => {
   const exact: "list" = value;
-  return <p>{value.toUpperCase()}</p>;
+  return <p>{exact.toUpperCase()}</p>;
 }}</Match>;
 const broadNumberMatch = <Match when={signal<number>(1)} equals={1}>{(value) => {
   return <p>{value}</p>;
@@ -91,7 +91,7 @@ const directEqualsProps: MatchProps<string, "list"> = {
   equals: "list",
   children: (value) => {
     const exact: "list" = value;
-    return <p>{value.toUpperCase()}</p>;
+    return <p>{exact.toUpperCase()}</p>;
   },
 };
 const directLegacyProps: MatchProps<string> = {
