@@ -132,6 +132,8 @@ const enabled = signal(false);
 
 For `type="number"`, `bindValue` stores the DOM `.value` as a string. An empty field is `""`; RFSG does not convert through `valueAsNumber`, clamp to `min`/`max`, or round to `step`. The browser owns number-input sanitization and constraint validation: for example, `rangeUnderflow`, `rangeOverflow`, `stepMismatch`, `valueMissing`, and sometimes `badInput` are exposed through `input.validity`. Invalid or incomplete keystrokes may be sanitized by the browser to an empty `.value`; the binding does not promise to preserve text the browser does not expose as `.value`.
 
+`type="range"` also uses `FormBindableSignal<string>` and the DOM `.value` string. RFSG does not parse `valueAsNumber` or add min/max/step correction; the browser applies its native range-control behavior when users interact with the control or when its value is assigned. Keep numeric parsing explicit when your application needs a number.
+
 ```tsx
 const amount = signal("");
 const parsedAmount = computed(() => amount.value === "" ? null : Number(amount.value));

@@ -57,6 +57,7 @@ synchronization, use the explicit binding props with a writable signal:
 const amountString = signal('')
 <input bindValue={name} />
 <input type="number" step="any" bindValue={amountString} />
+<input type="range" min="0" max="100" step="1" bindValue={levelString} />
 <input type="checkbox" bindChecked={subscribed} />
 <input type="radio" name="plan" value="basic" bindValue={plan} />
 <input type="checkbox" name="features" value="search" bindValue={features} />
@@ -67,10 +68,12 @@ const amountString = signal('')
   <FormBindingDemo />
 </Demo>
 
-- Text-like and number inputs, `textarea`, single and `multiple` selects, radio groups, and
+- Text-like, number, and range inputs, `textarea`, single and `multiple` selects, radio groups, and
   checkbox groups are supported.
 - `type="number"` uses a string signal. The empty value is `""`; browser
   sanitization and `min`/`max`/`step` validity remain native.
+- `type="range"` also uses a string signal. RFSG does not parse `valueAsNumber`
+  or implement min/max/step correction; the browser owns range-control semantics.
 - Radios in one native group must share one signal.
 - A writable `computed({ get, set })` can be bound; its getter stays
   authoritative and the DOM is corrected after React's handlers run.

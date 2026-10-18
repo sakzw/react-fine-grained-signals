@@ -44,6 +44,65 @@ function dispatchUserTextInput(node: HTMLInputElement | HTMLTextAreaElement, val
 }
 
 describe("Direct DOM binding", () => {
+  it("binds range inputs through the native string value path without parent renders", async () => {
+    const level = signal("50");
+    const events: string[] = [];
+    let ownerRenders = 0;
+
+    function Field({ source }: { source: typeof level }) {
+      ownerRenders += 1;
+      return <form aria-label="range binding form">
+        <input
+          aria-label="level"
+          type="range"
+          min="0"
+          max="100"
+          step="10"
+          bindValue={source}
+          onInput={(event) => events.push(`input:${event.currentTarget.value}:${level.value}`)}
+          onChange={(event) => events.push(`change:${event.currentTarget.value}:${level.value}`)}
+        />
+        <output aria-label="level output">{level}</output>
+        <output aria-label="range owner renders">{ownerRenders}</output>
+      </form>;
+    }
+
+    const view = render(<Field source={level} />);
+    const input = screen.getByLabelText("level") as HTMLInputElement;
+    const form = screen.getByLabelText("range binding form") as HTMLFormElement;
+    expect(input.value).toBe("50");
+    expect(input.type).toBe("range");
+
+    await act(async () => {
+      dispatchUserTextInput(input, "80");
+      await waitForNextTask();
+    });
+    expect(level.value).toBe("80");
+    expect(input.value).toBe("80");
+    expect(screen.getByLabelText("level output").textContent).toBe("80");
+    expect(events).toEqual(["input:80:80", "change:80:80"]);
+    expect(ownerRenders).toBe(1);
+
+    act(() => { level.value = "30"; });
+    expect(input.value).toBe("30");
+    expect(screen.getByLabelText("level output").textContent).toBe("30");
+    expect(ownerRenders).toBe(1);
+
+    await act(async () => { form.reset(); await Promise.resolve(); });
+    expect(level.value).toBe("30");
+    expect(input.value).toBe("30");
+    expect(ownerRenders).toBe(1);
+
+    const replacement = signal("60");
+    view.rerender(<Field source={replacement} />);
+    expect(input.value).toBe("60");
+    act(() => { level.value = "40"; });
+    expect(input.value).toBe("60");
+    act(() => { replacement.value = "90"; });
+    expect(input.value).toBe("90");
+    expect(ownerRenders).toBe(2);
+  });
+
   it("binds number inputs through the string value path without parsing or constraint normalization", async () => {
     const amount = signal("1.5");
     const parsed = computed(() => amount.value === "" ? "empty" : String(Number(amount.value)));
@@ -624,7 +683,7 @@ describe("Direct DOM binding", () => {
     expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, defaultChecked: true })).toThrow(/bindChecked cannot be combined/);
     expect(() => createSignalAwareElement("select", { multiple: true, bindValue: text })).toThrow(/Invalid select bindValue/);
     expect(() => createSignalAwareElement("select", { bindValue: list })).toThrow(/Invalid select bindValue/);
-    expect(() => createSignalAwareElement("input", { type: "date", bindValue: text })).toThrow(/text-like or number input\/textarea\/select only/);
+    expect(() => createSignalAwareElement("input", { type: "date", bindValue: text })).toThrow(/text-like, number, or range input\/textarea\/select only/);
     expect(() => createSignalAwareElement("input", { type: "radio", value: "a", bindValue: text })).toThrow(/requires a non-empty name/);
     expect(() => createSignalAwareElement("input", { type: "radio", name: "choice", value: "a", bindValue: list })).toThrow(/Radio bindValue requires a string/);
     expect(() => createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: text })).toThrow(/array of strings/);
@@ -2351,7 +2410,7 @@ describe("M17.4 form binding review fixes", () => {
     try {
       render(<svg>{createSignalAwareElement("circle", { bindValue: undefined, r: 1 }) as ReactNode}</svg>);
       expect(errors).not.toHaveBeenCalled();
-      expect(() => createSignalAwareElement("circle", { bindValue: signal("x") })).toThrow(/text-like or number input\/textarea\/select only/);
+      expect(() => createSignalAwareElement("circle", { bindValue: signal("x") })).toThrow(/text-like, number, or range input\/textarea\/select only/);
     } finally {
       errors.mockRestore();
     }

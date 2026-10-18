@@ -11,6 +11,7 @@ export function FormBindingDemo() {
   const name = useSignal('Ada')
   const amount = useSignal('12.5')
   const parsedAmount = useComputed(() => amount.value === '' ? 'empty' : String(Number(amount.value)))
+  const level = useSignal('50')
   const plan = useSignal('basic')
   const region = useSignal('eu')
   const formats = useSignal<string[]>(['json'])
@@ -23,6 +24,7 @@ export function FormBindingDemo() {
   const applyPreset = () => {
     name.value = 'Grace'
     amount.value = '42.5'
+    level.value = '75'
     plan.value = 'pro'
     region.value = 'us'
     formats.value = ['csv', 'json']
@@ -37,6 +39,10 @@ export function FormBindingDemo() {
         <input aria-label="Amount" type="number" min="0" max="100" step="0.25" required style={field} bindValue={amount} />
       </label>
       <output data-testid="numeric-summary">Amount text: {amount} · parsed: {parsedAmount}</output>
+      <label style={row}>Level (range input, string signal)
+        <input aria-label="Level" type="range" min="0" max="100" step="1" bindValue={level} />
+      </label>
+      <output data-testid="range-summary">Level text: {level}</output>
       <output data-testid="form-owner-renders">Form owner renders: {ownerRenders.current}</output>
       <fieldset style={{ ...row, border: 0, margin: 0, padding: 0 }}>
         <legend style={muted}>Plan</legend>

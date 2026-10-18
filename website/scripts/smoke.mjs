@@ -12,7 +12,7 @@
 // is already installed instead of `playwright install chromium`.
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
-import { chromium } from 'playwright'
+import { chromium, firefox, webkit } from 'playwright'
 
 const port = Number(process.env.PORT ?? 4319)
 const navigationTimeout = Number(process.env.SMOKE_NAVIGATION_TIMEOUT ?? 180_000)
@@ -46,7 +46,11 @@ const check = (condition, message) => {
   console.log(`${condition ? 'ok  ' : 'FAIL'} ${message}`)
 }
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH })
+const browserTypes = { chromium, firefox, webkit }
+const browserName = process.env.SMOKE_BROWSER ?? 'chromium'
+const browserType = browserTypes[browserName]
+if (browserType === undefined) throw new Error(`Unknown SMOKE_BROWSER: ${browserName}`)
+const browser = await browserType.launch({ executablePath: browserName === 'chromium' ? process.env.CHROMIUM_PATH : undefined })
 try {
   const context = await browser.newContext()
   const problems = []
@@ -138,6 +142,12 @@ try {
   await amount.fill('')
   check((await text(form.getByTestId('numeric-summary'))) === 'Amount text:  · parsed: empty', 'number input preserves the empty string')
   check(await amount.evaluate((node) => (node).validity.valueMissing), 'required empty number uses native validity')
+  const level = form.getByLabel('Level')
+  await level.fill('73')
+  check((await text(form.getByTestId('range-summary'))) === 'Level text: 73', 'range interaction writes the string signal')
+  await form.getByRole('button', { name: 'Apply Signal preset' }).click()
+  check((await level.inputValue()) === '75', 'programmatic signal write updates the range input')
+  check((await text(form.getByTestId('form-owner-renders'))) === 'Form owner renders: 1', 'range binding does not re-render the form owner')
   await form.getByLabel('Region').selectOption('apac')
   await form.getByLabel('Export formats').selectOption(['csv', 'xml'])
   check((await text(form.getByTestId('summary'))) === 'Grace · pro · apac · csv+xml · search, export · not subscribed', 'form DOM changes write text, checkbox, single-select, and multi-select signals')

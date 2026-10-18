@@ -126,6 +126,8 @@ const enabled = signal(false);
 
 `type="number"`の`bindValue`が保持するのはDOMの`.value`文字列です。空欄は`""`であり、RFSGは`valueAsNumber`への変換、`min`/`max`へのclamp、`step`への丸めを行いません。数値入力のsanitizeとconstraint validationはブラウザーに任せます。例えば`rangeUnderflow`、`rangeOverflow`、`stepMismatch`、`valueMissing`、場合によっては`badInput`が`input.validity`で確認できます。入力途中の不正・未完成文字列はブラウザーによりsanitizeされて`.value`が空になる場合があり、RFSGがDOMの`.value`で取得できない文字列まで保持する保証はありません。
 
+`type="range"`も`FormBindableSignal<string>`を使い、DOMの`.value`文字列を保持します。RFSGは`valueAsNumber`へparseせず、min/max/stepの補正も追加しません。ユーザー操作や値の代入に対するrange control固有の動作はブラウザーに任せます。アプリで数値が必要な場合は明示的にparseしてください。
+
 ```tsx
 const amount = signal("");
 const parsedAmount = computed(() => amount.value === "" ? null : Number(amount.value));
