@@ -1,0 +1,691 @@
+{
+  "node": "v24.21.0",
+  "react": "19.3.0",
+  "sizes": [
+    1000,
+    10000
+  ],
+  "warmups": 1,
+  "samples": 3,
+  "largeWarmups": 0,
+  "largeSamples": 3,
+  "gcExposed": true,
+  "results": [
+    {
+      "size": 1000,
+      "kind": "baseline-index",
+      "warmups": 1,
+      "samples": 3,
+      "mount": {
+        "medianMs": 354.0097000000005,
+        "p25Ms": 352.6871000000001,
+        "p75Ms": 380.6727000000001,
+        "callbackCalls": 1000,
+        "heapDeltaBytes": 6282040,
+        "retainedHeapDeltaBytes": 130336,
+        "samplesMs": [
+          407.33569999999963,
+          354.0097000000005,
+          351.3644999999997
+        ],
+        "callbackSamples": [
+          1000,
+          1000,
+          1000
+        ],
+        "heapDeltaSamplesBytes": [
+          6282040,
+          6298176,
+          6196416
+        ],
+        "retainedHeapSamplesBytes": [
+          130336,
+          223592,
+          79704
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 343.15530000000035,
+          "p25Ms": 331.42245000000094,
+          "p75Ms": 348.4537,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            343.15530000000035,
+            319.6896000000015,
+            353.7520999999997
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        },
+        "append": {
+          "medianMs": 440.21830000000045,
+          "p25Ms": 434.2942000000003,
+          "p75Ms": 464.53180000000066,
+          "medianCallbackCalls": 1001,
+          "medianRowRenders": 1001,
+          "samplesMs": [
+            440.21830000000045,
+            488.84530000000086,
+            428.3701000000001
+          ],
+          "callbackSamples": [
+            1001,
+            1001,
+            1001
+          ],
+          "rowRenderSamples": [
+            1001,
+            1001,
+            1001
+          ]
+        },
+        "prepend": {
+          "medianMs": 430.8266999999978,
+          "p25Ms": 384.01444999999876,
+          "p75Ms": 433.4764499999983,
+          "medianCallbackCalls": 1001,
+          "medianRowRenders": 1001,
+          "samplesMs": [
+            337.2021999999997,
+            436.1261999999988,
+            430.8266999999978
+          ],
+          "callbackSamples": [
+            1001,
+            1001,
+            1001
+          ],
+          "rowRenderSamples": [
+            1001,
+            1001,
+            1001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 327.3726000000024,
+          "p25Ms": 289.1494500000008,
+          "p75Ms": 355.2119500000008,
+          "medianCallbackCalls": 999,
+          "medianRowRenders": 999,
+          "samplesMs": [
+            383.0512999999992,
+            327.3726000000024,
+            250.92629999999917
+          ],
+          "callbackSamples": [
+            999,
+            999,
+            999
+          ],
+          "rowRenderSamples": [
+            999,
+            999,
+            999
+          ]
+        },
+        "move": {
+          "medianMs": 424.2592999999979,
+          "p25Ms": 364.7684999999983,
+          "p75Ms": 429.2126499999995,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            424.2592999999979,
+            434.1660000000011,
+            305.27769999999873
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 222.3094999999994,
+          "p25Ms": 191.8141999999989,
+          "p75Ms": 229.68059999999969,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            222.3094999999994,
+            161.3188999999984,
+            237.05169999999998
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        }
+      },
+      "unmountMs": 29.983500000002095
+    },
+    {
+      "size": 1000,
+      "kind": "index",
+      "warmups": 1,
+      "samples": 3,
+      "mount": {
+        "medianMs": 388.85949999999866,
+        "p25Ms": 374.1488499999996,
+        "p75Ms": 433.05459999999766,
+        "callbackCalls": 1000,
+        "heapDeltaBytes": 4867464,
+        "retainedHeapDeltaBytes": 42064,
+        "samplesMs": [
+          359.4382000000005,
+          388.85949999999866,
+          477.24969999999666
+        ],
+        "callbackSamples": [
+          1000,
+          1000,
+          1000
+        ],
+        "heapDeltaSamplesBytes": [
+          4827616,
+          4867464,
+          4887016
+        ],
+        "retainedHeapSamplesBytes": [
+          41008,
+          42064,
+          94984
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 455.26900000000023,
+          "p25Ms": 364.34130000000005,
+          "p75Ms": 616.9670000000006,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            273.41359999999986,
+            455.26900000000023,
+            778.6650000000009
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        },
+        "append": {
+          "medianMs": 307.23940000000584,
+          "p25Ms": 306.46815000000424,
+          "p75Ms": 338.13440000000264,
+          "medianCallbackCalls": 1001,
+          "medianRowRenders": 1001,
+          "samplesMs": [
+            369.02939999999944,
+            307.23940000000584,
+            305.69690000000264
+          ],
+          "callbackSamples": [
+            1001,
+            1001,
+            1001
+          ],
+          "rowRenderSamples": [
+            1001,
+            1001,
+            1001
+          ]
+        },
+        "prepend": {
+          "medianMs": 320.62220000000525,
+          "p25Ms": 307.3853000000054,
+          "p75Ms": 494.5897500000028,
+          "medianCallbackCalls": 1001,
+          "medianRowRenders": 1001,
+          "samplesMs": [
+            294.1484000000055,
+            668.5573000000004,
+            320.62220000000525
+          ],
+          "callbackSamples": [
+            1001,
+            1001,
+            1001
+          ],
+          "rowRenderSamples": [
+            1001,
+            1001,
+            1001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 316.3237000000008,
+          "p25Ms": 305.83390000000145,
+          "p75Ms": 370.2402000000002,
+          "medianCallbackCalls": 999,
+          "medianRowRenders": 999,
+          "samplesMs": [
+            295.3441000000021,
+            424.15669999999955,
+            316.3237000000008
+          ],
+          "callbackSamples": [
+            999,
+            999,
+            999
+          ],
+          "rowRenderSamples": [
+            999,
+            999,
+            999
+          ]
+        },
+        "move": {
+          "medianMs": 254.70650000000023,
+          "p25Ms": 254.08084999999846,
+          "p75Ms": 263.96659999999974,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            253.4551999999967,
+            273.22669999999925,
+            254.70650000000023
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 280.7317000000039,
+          "p25Ms": 245.79205000000002,
+          "p75Ms": 281.99385000000257,
+          "medianCallbackCalls": 1000,
+          "medianRowRenders": 1000,
+          "samplesMs": [
+            283.2560000000012,
+            280.7317000000039,
+            210.85239999999612
+          ],
+          "callbackSamples": [
+            1000,
+            1000,
+            1000
+          ],
+          "rowRenderSamples": [
+            1000,
+            1000,
+            1000
+          ]
+        }
+      },
+      "unmountMs": 21.37999999999738
+    },
+    {
+      "size": 10000,
+      "kind": "baseline-index",
+      "warmups": 0,
+      "samples": 3,
+      "mount": {
+        "medianMs": 1551.0385000000024,
+        "p25Ms": 1491.775950000003,
+        "p75Ms": 1665.8413,
+        "callbackCalls": 10000,
+        "heapDeltaBytes": 44575328,
+        "retainedHeapDeltaBytes": 161008,
+        "samplesMs": [
+          1780.6440999999977,
+          1551.0385000000024,
+          1432.5134000000035
+        ],
+        "callbackSamples": [
+          10000,
+          10000,
+          10000
+        ],
+        "heapDeltaSamplesBytes": [
+          42615664,
+          44575328,
+          44580328
+        ],
+        "retainedHeapSamplesBytes": [
+          22991528,
+          132448,
+          161008
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 1873.1440999999977,
+          "p25Ms": 1697.7917500000003,
+          "p75Ms": 1932.316899999998,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            1522.439400000003,
+            1873.1440999999977,
+            1991.4896999999983
+          ],
+          "callbackSamples": [
+            10000,
+            10000,
+            10000
+          ],
+          "rowRenderSamples": [
+            10000,
+            10000,
+            10000
+          ]
+        },
+        "append": {
+          "medianMs": 1504.705999999991,
+          "p25Ms": 1495.2703499999916,
+          "p75Ms": 1619.5358999999953,
+          "medianCallbackCalls": 10001,
+          "medianRowRenders": 10001,
+          "samplesMs": [
+            1504.705999999991,
+            1734.3657999999996,
+            1485.8346999999922
+          ],
+          "callbackSamples": [
+            10001,
+            10001,
+            10001
+          ],
+          "rowRenderSamples": [
+            10001,
+            10001,
+            10001
+          ]
+        },
+        "prepend": {
+          "medianMs": 1910.9753000000055,
+          "p25Ms": 1805.009299999998,
+          "p75Ms": 2067.9775500000032,
+          "medianCallbackCalls": 10001,
+          "medianRowRenders": 10001,
+          "samplesMs": [
+            2224.979800000001,
+            1699.0432999999903,
+            1910.9753000000055
+          ],
+          "callbackSamples": [
+            10001,
+            10001,
+            10001
+          ],
+          "rowRenderSamples": [
+            10001,
+            10001,
+            10001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 1660.0041000000056,
+          "p25Ms": 1565.4913000000015,
+          "p75Ms": 1765.9200000000055,
+          "medianCallbackCalls": 9999,
+          "medianRowRenders": 9999,
+          "samplesMs": [
+            1470.9784999999974,
+            1660.0041000000056,
+            1871.8359000000055
+          ],
+          "callbackSamples": [
+            9999,
+            9999,
+            9999
+          ],
+          "rowRenderSamples": [
+            9999,
+            9999,
+            9999
+          ]
+        },
+        "move": {
+          "medianMs": 2681.0585999999894,
+          "p25Ms": 2366.271649999995,
+          "p75Ms": 2892.6973999999973,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            2051.484700000001,
+            2681.0585999999894,
+            3104.336200000005
+          ],
+          "callbackSamples": [
+            10000,
+            10000,
+            10000
+          ],
+          "rowRenderSamples": [
+            10000,
+            10000,
+            10000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 1636.772800000006,
+          "p25Ms": 1381.2103500000012,
+          "p75Ms": 1796.474850000006,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            1956.1769000000058,
+            1636.772800000006,
+            1125.6478999999963
+          ],
+          "callbackSamples": [
+            10000,
+            10000,
+            10000
+          ],
+          "rowRenderSamples": [
+            10000,
+            10000,
+            10000
+          ]
+        }
+      },
+      "unmountMs": 289.02419999999984
+    },
+    {
+      "size": 10000,
+      "kind": "index",
+      "warmups": 0,
+      "samples": 3,
+      "mount": {
+        "medianMs": 1714.6345000000001,
+        "p25Ms": 1628.4679000000033,
+        "p75Ms": 1739.5260000000053,
+        "callbackCalls": 10000,
+        "heapDeltaBytes": 39186664,
+        "retainedHeapDeltaBytes": 119200,
+        "samplesMs": [
+          1764.4175000000105,
+          1714.6345000000001,
+          1542.3013000000064
+        ],
+        "callbackSamples": [
+          10000,
+          10000,
+          10000
+        ],
+        "heapDeltaSamplesBytes": [
+          37805224,
+          39255920,
+          39186664
+        ],
+        "retainedHeapSamplesBytes": [
+          -1396360,
+          211080,
+          119200
+        ]
+      },
+      "updates": {
+        "singleUpdate": {
+          "medianMs": 1475.0440000000235,
+          "p25Ms": 1375.7100000000064,
+          "p75Ms": 1549.669750000001,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            1276.3759999999893,
+            1475.0440000000235,
+            1624.2954999999783
+          ],
+          "callbackSamples": [
+            10000,
+            10000,
+            10000
+          ],
+          "rowRenderSamples": [
+            10000,
+            10000,
+            10000
+          ]
+        },
+        "append": {
+          "medianMs": 1748.5648999999976,
+          "p25Ms": 1649.6156499999925,
+          "p75Ms": 1973.577099999995,
+          "medianCallbackCalls": 10001,
+          "medianRowRenders": 10001,
+          "samplesMs": [
+            2198.5892999999924,
+            1748.5648999999976,
+            1550.6663999999873
+          ],
+          "callbackSamples": [
+            10001,
+            10001,
+            10001
+          ],
+          "rowRenderSamples": [
+            10001,
+            10001,
+            10001
+          ]
+        },
+        "prepend": {
+          "medianMs": 1824.9700000000012,
+          "p25Ms": 1821.3082999999897,
+          "p75Ms": 1900.891100000008,
+          "medianCallbackCalls": 10001,
+          "medianRowRenders": 10001,
+          "samplesMs": [
+            1817.6465999999782,
+            1976.8122000000149,
+            1824.9700000000012
+          ],
+          "callbackSamples": [
+            10001,
+            10001,
+            10001
+          ],
+          "rowRenderSamples": [
+            10001,
+            10001,
+            10001
+          ]
+        },
+        "middleDelete": {
+          "medianMs": 1657.2558999999892,
+          "p25Ms": 1401.6998000000021,
+          "p75Ms": 1758.2537999999913,
+          "medianCallbackCalls": 9999,
+          "medianRowRenders": 9999,
+          "samplesMs": [
+            1859.2516999999934,
+            1657.2558999999892,
+            1146.143700000015
+          ],
+          "callbackSamples": [
+            9999,
+            9999,
+            9999
+          ],
+          "rowRenderSamples": [
+            9999,
+            9999,
+            9999
+          ]
+        },
+        "move": {
+          "medianMs": 2214.4653000000108,
+          "p25Ms": 2121.7235500000097,
+          "p75Ms": 2349.0780499999964,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            2483.690799999982,
+            2214.4653000000108,
+            2028.9818000000087
+          ],
+          "callbackSamples": [
+            10000,
+            10000,
+            10000
+          ],
+          "rowRenderSamples": [
+            10000,
+            10000,
+            10000
+          ]
+        },
+        "replaceAll": {
+          "medianMs": 1754.0777999999991,
+          "p25Ms": 1725.9810500000021,
+          "p75Ms": 1826.008050000004,
+          "medianCallbackCalls": 10000,
+          "medianRowRenders": 10000,
+          "samplesMs": [
+            1754.0777999999991,
+            1897.938300000009,
+            1697.8843000000052
+          ],
+          "callbackSamples": [
+            10000,
+            10000,
+            10000
+          ],
+          "rowRenderSamples": [
+            10000,
+            10000,
+            10000
+          ]
+        }
+      },
+      "unmountMs": 225.9869999999937
+    }
+  ]
+}

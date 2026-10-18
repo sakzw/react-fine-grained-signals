@@ -47,6 +47,25 @@ function BaselineFor({ each, by, children }) {
   }
 }
 
+function DirectKeyFor({ each, fallback = null, by, children }) {
+  const store = useManagedSignals();
+  try {
+    const collection = read(each);
+    if (collection == null) return fallback;
+    const items = Array.isArray(collection) ? collection : Array.from(collection);
+    if (!items.length) return fallback;
+    return items.map((item, index) => {
+      const key = by(item, index);
+      const child = children(item, index);
+      return React.isValidElement(child)
+        ? React.cloneElement(child, { key })
+        : React.createElement(React.Fragment, { key }, child);
+    });
+  } finally {
+    store.finish();
+  }
+}
+
 function BaselineIndex({ each, children }) {
   const store = useManagedSignals();
   try {
@@ -55,6 +74,23 @@ function BaselineIndex({ each, children }) {
     const readAt = (index) => (read(each) ?? items)[index];
     return items.map((_item, index) =>
       React.createElement(React.Fragment, { key: index }, children(() => readAt(index), index)));
+  } finally {
+    store.finish();
+  }
+}
+
+function DirectKeyIndex({ each, fallback = null, children }) {
+  const store = useManagedSignals();
+  try {
+    const items = read(each);
+    if (items == null || items.length === 0) return fallback;
+    const readAt = (index) => (read(each) ?? items)[index];
+    return items.map((_item, index) => {
+      const child = children(() => readAt(index), index);
+      return React.isValidElement(child)
+        ? React.cloneElement(child, { key: index })
+        : React.createElement(React.Fragment, { key: index }, child);
+    });
   } finally {
     store.finish();
   }
@@ -108,8 +144,10 @@ function createHarness(kind, count) {
     if (kind === "for") return React.createElement(For, { each: rows, by, children: childrenFor });
     if (kind === "candidate-for") return React.createElement(CandidateFor, { each: rows, by, children: childrenFor });
     if (kind === "baseline-for") return React.createElement(BaselineFor, { each: rows, by, children: childrenFor });
+    if (kind === "direct-key-for") return React.createElement(DirectKeyFor, { each: rows, by, children: childrenFor });
     if (kind === "index") return React.createElement(Index, { each: rows, children: childrenIndex });
     if (kind === "baseline-index") return React.createElement(BaselineIndex, { each: rows, children: childrenIndex });
+    if (kind === "direct-key-index") return React.createElement(DirectKeyIndex, { each: rows, children: childrenIndex });
     useSignalTracking();
     return read(rows).map((item, index) => {
       stats.callback += 1;
@@ -176,10 +214,11 @@ for (const size of sizes) {
     const mountTimes = [];
     const mountCallbackCalls = [];
     const memoryDeltas = [];
+    const retainedHeapDeltas = [];
     for (let round = 0; round < sizeWarmups + sizeSamples; round += 1) {
       if (globalThis.gc) globalThis.gc();
       const beforeHeap = process.memoryUsage().heapUsed;
-      const harness = createHarness(kind, size);
+      let harness = createHarness(kind, size);
       const started = now();
       await harness.mount();
       const elapsed = now() - started;
@@ -189,10 +228,15 @@ for (const size of sizes) {
       const stats = harness.snapshotStats();
       await harness.unmount();
       harness.container.remove();
+      harness = null;
+      await new Promise((resolve) => setImmediate(resolve));
+      if (globalThis.gc) globalThis.gc();
+      const retainedDelta = process.memoryUsage().heapUsed - beforeHeap;
       if (round >= sizeWarmups) {
         mountTimes.push(elapsed);
         mountCallbackCalls.push(stats.callback);
         memoryDeltas.push(delta);
+        retainedHeapDeltas.push(retainedDelta);
       }
     }
 
@@ -244,9 +288,11 @@ for (const size of sizes) {
         p75Ms: percentile(mountTimes, 0.75),
         callbackCalls: median(mountCallbackCalls),
         heapDeltaBytes: median(memoryDeltas),
+        retainedHeapDeltaBytes: median(retainedHeapDeltas),
         samplesMs: mountTimes,
         callbackSamples: mountCallbackCalls,
         heapDeltaSamplesBytes: memoryDeltas,
+        retainedHeapSamplesBytes: retainedHeapDeltas,
       },
       updates,
       unmountMs,

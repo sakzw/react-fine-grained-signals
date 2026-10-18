@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
+import { rollup } from "rollup";
 import esbuildAdapter from "../src/esbuild.js";
 import loader from "../src/loader.js";
 import rollupAdapter from "../src/rollup.js";
@@ -184,6 +185,29 @@ export function List() { return <Grid renderItem={() => label.value} />; }
     expect(() => rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS003"] } })
       .call(rollupContext(warnings), source, "123.tsx")).toThrow(/RFGS003/);
     expect(warnings.map((warning) => warning.diagnosticId)).toEqual(["RFGS007"]);
+  });
+
+  it("promotes a diagnostic to a build error in a standalone Rollup build", async () => {
+    const directory = mkdtempSync(join(tmpdir(), "rfsg-rollup-diagnostic-"));
+    const input = join(directory, "123.tsx");
+    writeFileSync(input, warnOnly);
+
+    try {
+      await expect(rollup({
+        input,
+        plugins: [rollupAdapter({ mode: "auto", diagnostics: { errorOn: ["RFGS007"] } }) as never],
+        onwarn(warning) {
+          throw new Error(`Unexpected Rollup warning: ${warning.message}`);
+        },
+      })).rejects.toMatchObject({
+        code: "PLUGIN_ERROR",
+        pluginCode: "RFGS",
+        diagnosticId: "RFGS007",
+        loc: expect.objectContaining({ line: expect.any(Number), column: expect.any(Number) }),
+      });
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it("fails on the promoted diagnostic and keeps its message, code frame and location", () => {
