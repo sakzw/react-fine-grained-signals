@@ -1,7 +1,9 @@
 import { coreRuntime } from "../core/core-runtime.js";
+import { createAlienDerivedRenderAdapter } from "../core/render-runtime.mjs";
 import { createAlienDerivedReactAdapter } from "./react-adapter.mjs";
 
-const reactAdapter = createAlienDerivedReactAdapter(coreRuntime, coreRuntime.renderAdapter).createReactAdapter();
+const renderAdapter = coreRuntime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+const reactAdapter = createAlienDerivedReactAdapter(coreRuntime, renderAdapter).createReactAdapter();
 
 /** The render-scope handle consumed by the source transform runtime. */
 export interface ManagedSignalsStore {

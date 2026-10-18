@@ -1,6 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { executionContext, pushExecutionOwner } from "../src/core/execution-owner.js";
+import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
+
+function createRenderRuntime() {
+  const runtime = createReactiveRuntime();
+  runtime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+  return runtime;
+}
 
 afterEach(() => {
   executionContext.owner = undefined;
@@ -8,8 +15,24 @@ afterEach(() => {
 });
 
 describe("render adapter contracts", () => {
-  it("captures render snapshots and resolves supported dependency versions", () => {
+  it("initializes the render adapter only when requested and reuses it", () => {
     const runtime = createReactiveRuntime();
+    const source = runtime.signal(1);
+    expect(source.value).toBe(1);
+    expect(runtime.isSpeculative()).toBe(false);
+    expect(() => runtime.markSpeculativeDeepRead()).not.toThrow();
+
+    const factory = vi.fn(createAlienDerivedRenderAdapter);
+    const first = runtime.initializeRenderAdapter(factory);
+    const second = runtime.initializeRenderAdapter(factory);
+
+    expect(first).toBe(second);
+    expect(runtime.renderAdapter).toBe(first);
+    expect(factory).toHaveBeenCalledOnce();
+  });
+
+  it("captures render snapshots and resolves supported dependency versions", () => {
+    const runtime = createRenderRuntime();
     const source = runtime.signal(2);
     const doubled = runtime.computed(() => source.value * 2);
     const { value, dependencies } = runtime.renderAdapter.captureRenderSnapshot(doubled);
@@ -24,7 +47,7 @@ describe("render adapter contracts", () => {
   });
 
   it("tracks subscription notifications and speculative deep-read epochs", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const notify = vi.fn();
     const unsubscribe = runtime.renderAdapter.subscribeReadables([source], notify);
@@ -53,7 +76,7 @@ describe("render adapter contracts", () => {
   });
 
   it("keeps per-attempt dependencies isolated when render work resumes after a yield", async () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const left = runtime.signal("left");
     const right = runtime.signal("right");
     const leftAttempt = runtime.renderAdapter.createRenderAttempt();

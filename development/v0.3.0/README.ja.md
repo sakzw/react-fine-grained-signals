@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M18.8 Numeric Form Bindingを完了。`input[type="number"]`へstring Signalの`bindValue`を拡張し、ブラウザ標準のValidity/sanitizationを維持。Test、E2E、Website CI成功。検証記録は[M18.8 record](m18.8-numeric-form-binding.ja.md)。
+- 状態: M18.9 Runtime & Bundle Optimizationを完了。Render AdapterをReact接続時に遅延初期化し、signal-only/core consumerで約1.27 KB gzip、5,000 Runtimeの比較で約7.76 MBのretained heapを削減。全Runtime test、Consumer smoke、既存size budgetが成功。検証記録は[M18.9 record](m18.9-runtime-bundle-optimization.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M18.8 Numeric Form Binding（数値inputへの文字列Signal binding）。詳細は[M18.8 record](m18.8-numeric-form-binding.ja.md)。
+- 最新実装マイルストーン: M18.9 Runtime & Bundle Optimization（Core-only/Deep/JSX ConsumerのRender Adapter負荷削減）。詳細は[M18.9 record](m18.9-runtime-bundle-optimization.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -56,6 +56,7 @@
 | M18.6 | Reactive Match DX Improvement | M18.5 | SwitchがSignal値を購読してObject.isによるMatch分岐を選び、親renderを避けるAPIを検討・実装 | 完了。Match equals、Falsy/undefined比較、型絞り込み、親renderなしを実装。Control Flow/SSR/Concurrent、React Compiler consumer、website Chromium、bundle sizeを確認。詳細は[M18.6 record](m18.6-reactive-match.ja.md) |
 | M18.7 | Deep Selector Hook DX | M18.6 | `useDeepSignalValue`のdependenciesを省略可能にし、Signal-only selectorを自然に記述しながらclosure・購読・Reactの正確性を維持 | 完了。省略時の初期closure保持、明示depsとのmode固定、型・SSR/Concurrent/StrictMode・Websiteを検証。詳細は[M18.7 record](m18.7-deep-selector-dx.ja.md) |
 | M18.8 | Numeric Form Binding | M18.7 | `input[type="number"]`を`bindValue`で利用可能にし、string Signal、ブラウザ数値入力semantics、SSR/hydrationとReactイベント順を維持 | 完了。focused/runtime/SSR、Chromium/Firefox/WebKit、Website standalone install/build/smoke、bundle budgetを確認。GitHub Test/E2E/Website CI成功。詳細は[M18.8 record](m18.8-numeric-form-binding.ja.md) |
+| M18.9 | Runtime & Bundle Optimization | M18.8 | Core-only Consumerから不要なRender Adapter初期化を除き、同一Consumer bundle・heap・hot path測定で採否を決める | 完了。同期lazy initializationを採用。signal-only/core gzipを約1.27 KB、deepを約1.09 KB、jsx-runtimeを約1.26 KB削減。5,000 Runtimeのretained heapは中央値約7.76 MB減。React bundleは小幅増だが既存budget内。Full Runtime 915/915、packed Consumer/duplicate/mixed-version smoke、build/typecheck/lint成功。詳細は[M18.9 record](m18.9-runtime-bundle-optimization.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -74,6 +75,6 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 ## 次の作業案
 
-旧M18 Release Execution Checklistと旧M18公開準備計画は延期した。M18.1で独立Vocsサイトを構築・dogfoodし、M18.2でWebsite CIと手動Pages workflowを整え、M18.3でdiagnosticsとwebpack/Rspack source-map loaderのレビュー残課題を完了した。M18.4では`For`/`Index`の描画候補を比較したが、効果が再現できずruntime変更を採用しなかった。M18.5で実利用ガイドとデモを補完し、M18.6でMatch equalsによるSignal値分岐を実装、M18.7でdeep selector Hookの省略APIを改善し、M18.8で数値inputをstring Signalとしてbindingする対応を進めている。次はConsumer dogfoodingから次の新機能・API/DX・性能改善を選ぶ。M18.5はドキュメントとdogfoodingの完了であり、release freezeや最終scope判断ではない。npm publish、Git tag、GitHub Release、Pages deployはこの計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
+旧M18 Release Execution Checklistと旧M18公開準備計画は延期した。M18.1で独立Vocsサイトを構築・dogfoodし、M18.2でWebsite CIと手動Pages workflowを整え、M18.3でdiagnosticsとwebpack/Rspack source-map loaderのレビュー残課題を完了した。M18.4では`For`/`Index`の描画候補を比較したが、効果が再現できずruntime変更を採用しなかった。M18.5で実利用ガイドとデモを補完し、M18.6でMatch equalsによるSignal値分岐を実装、M18.7でdeep selector Hookの省略APIを改善、M18.8で数値inputをstring Signalとしてbindingし、M18.9でCore-only/Deep/JSX ConsumerのRender Adapter初期化と保持量を削減した。次はCore hot pathのノイズを避けたprofile、または新しいConsumer課題から次のAPI/DX・性能改善を選ぶ。M18.9はbundle/runtime改善の完了であり、release freezeや最終scope判断ではない。npm publish、Git tag、GitHub Release、Pages deployはこの計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。

@@ -4,6 +4,7 @@
 import { act, useState } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { createAlienDerivedReactAdapter } from "../src/react/react-adapter.mjs";
 
@@ -11,9 +12,15 @@ import { createAlienDerivedReactAdapter } from "../src/react/react-adapter.mjs";
 
 afterEach(() => cleanup());
 
+function createRenderRuntime() {
+  const runtime = createReactiveRuntime();
+  runtime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+  return runtime;
+}
+
 describe("React adapter contracts", () => {
   it("subscribes per readable and snapshots values through React hooks", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal("before");
     const { createReactAdapter } = createAlienDerivedReactAdapter(runtime, runtime.renderAdapter);
     const adapter = createReactAdapter({ mode: "per-readable" });
@@ -34,7 +41,7 @@ describe("React adapter contracts", () => {
   });
 
   it("replaces per-readable subscriptions when a managed render switches sources", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const first = runtime.signal("first");
     const second = runtime.signal("second");
     const { createReactAdapter } = createAlienDerivedReactAdapter(runtime, runtime.renderAdapter);
@@ -63,7 +70,7 @@ describe("React adapter contracts", () => {
   });
 
   it("rejects unknown modes and always finishes managed callbacks", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const factory = createAlienDerivedReactAdapter(runtime, runtime.renderAdapter);
     expect(() => factory.createReactAdapter({ mode: "other" as "combined" })).toThrow(
       "Unknown render subscription mode: other",

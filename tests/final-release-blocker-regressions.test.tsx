@@ -4,6 +4,7 @@
 import { Activity, act, useLayoutEffect } from "react";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
+import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { computed, effect, isSignal, signal, useSignalTracking } from "../src/index.js";
 import { useManagedSignals } from "../src/runtime.js";
@@ -18,6 +19,12 @@ afterEach(() => {
 
 type Runtime = ReturnType<typeof createReactiveRuntime>;
 
+function createRenderRuntime(): Runtime {
+  const runtime = createReactiveRuntime();
+  runtime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+  return runtime;
+}
+
 /** One render attempt that reads `read()` and then commits, as RenderStore does. */
 function renderAndCommit<T>(runtime: Runtime, read: () => T, scopePolicy: "managed" | "bare" = "managed"): T {
   const attempt = runtime.renderAdapter.createRenderAttempt();
@@ -30,7 +37,7 @@ function renderAndCommit<T>(runtime: Runtime, read: () => T, scopePolicy: "manag
 describe("a computed first read in a render after an unobserved source write", () => {
   for (const scopePolicy of ["managed", "bare"] as const) {
     it(`follows a write back to the source's previous value (${scopePolicy} scope)`, () => {
-      const runtime = createReactiveRuntime();
+      const runtime = createRenderRuntime();
       const darkMode = runtime.signal(false);
       darkMode.value = true;
       const theme = runtime.computed(() => (darkMode.value ? "dark" : "light"));
@@ -44,7 +51,7 @@ describe("a computed first read in a render after an unobserved source write", (
   }
 
   it("follows the write when the computed was created before the unobserved write", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal("A");
     const value = runtime.computed(() => source.value);
     source.value = "B";
@@ -55,7 +62,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("follows the write when the source had a subscriber that went away before the write", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal("A");
     const dispose = runtime.effect(() => { void source.value; });
     dispose();
@@ -68,7 +75,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("re-runs an effect that subscribes to the promoted computed", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal("A");
     source.value = "B";
     const value = runtime.computed(() => source.value);
@@ -82,7 +89,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("settles a source read through a nested computed chain", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     source.value = 2;
     const doubled = runtime.computed(() => source.value * 2);
@@ -95,7 +102,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("keeps the promoted value memoized while the source is unchanged", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     source.value = 2;
     let evaluations = 0;
@@ -108,7 +115,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("notifies a source's other subscribers through the settled write", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal("A");
     // A cold computed keeps a link to the source without watching it.
     const other = runtime.computed(() => `other:${source.value}`);
@@ -126,7 +133,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("does not promote over a computed dependency that a write left pending", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const inner = runtime.computed(() => source.value * 2);
     expect(inner.peek()).toBe(2);
@@ -162,7 +169,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("does not promote when the source changed between render and commit", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal("A");
     source.value = "B";
     const value = runtime.computed(() => source.value);
@@ -177,7 +184,7 @@ describe("a computed first read in a render after an unobserved source write", (
   });
 
   it("recovers from a cached error once the source is written back", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     source.value = 1;
     const value = runtime.computed(() => {

@@ -6,4 +6,5 @@ export {
   pushInteropRenderScope,
 } from "../../src/core/interop.js";
 export { createReactiveRuntime } from "../../src/core/reactive-runtime.js";
+export { createAlienDerivedRenderAdapter } from "../../src/core/render-runtime.mjs";
 export { executionContext } from "../../src/core/execution-owner.js";

@@ -55,6 +55,8 @@ try {
   {
     const runtimeA = interopA.createReactiveRuntime();
     const runtimeB = interopB.createReactiveRuntime();
+    runtimeA.initializeRenderAdapter(interopA.createAlienDerivedRenderAdapter);
+    runtimeB.initializeRenderAdapter(interopB.createAlienDerivedRenderAdapter);
     const context = interopA.executionContext;
     assert.equal(context, interopB.executionContext);
     const before = runtimeA.signal("before");

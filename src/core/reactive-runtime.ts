@@ -1,6 +1,5 @@
 import { createAlienDerivedRuntime } from "./alien-derived-runtime-core.mjs";
-import { createAlienDerivedRenderAdapter } from "./render-runtime.mjs";
-import type { AlienDerivedRenderAdapter, RuntimeNode } from "./alien-derived-types.js";
+import type { AlienDerivedGraphRuntime, AlienDerivedRenderAdapter, RuntimeNode } from "./alien-derived-types.js";
 
 export interface RuntimeReadonlySignal<T> {
   readonly value: T;
@@ -20,6 +19,7 @@ export interface ReactiveRuntime {
   };
   getNodeForReadable(readable: RuntimeReadonlySignal<unknown>): RuntimeNode | undefined;
   readonly renderAdapter: AlienDerivedRenderAdapter;
+  initializeRenderAdapter(factory: (graph: AlienDerivedGraphRuntime) => AlienDerivedRenderAdapter): AlienDerivedRenderAdapter;
   signal<T>(value: T): RuntimeSignal<T>;
   computed<T>(getter: () => T): RuntimeReadonlySignal<T>;
   computed<T>(getter: () => T, setter: (value: T) => void): RuntimeSignal<T>;
@@ -38,16 +38,24 @@ export interface ReactiveRuntime {
   markSpeculativeDeepRead(): void;
 }
 
-/** Builds one Alien-derived graph and its separate owner/render adapters. */
+/** Builds one Alien-derived graph; React installs its render adapter on demand. */
 export function createReactiveRuntime(): ReactiveRuntime {
   const graph = createAlienDerivedRuntime();
-  const render = createAlienDerivedRenderAdapter(graph);
+  let render: AlienDerivedRenderAdapter | undefined;
+  const initializeRenderAdapter = (factory: (graph: AlienDerivedGraphRuntime) => AlienDerivedRenderAdapter) => {
+    if (render === undefined) render = factory(graph);
+    return render;
+  };
 
   return {
     runtimeToken: graph.runtimeToken,
     graphOwner: graph.graphOwner,
     getNodeForReadable: graph.getNodeForReadable,
-    renderAdapter: render,
+    get renderAdapter() {
+      if (render === undefined) throw new Error("The React render adapter has not been initialized.");
+      return render;
+    },
+    initializeRenderAdapter,
     signal: graph.signal,
     computed: graph.computed as ReactiveRuntime["computed"],
     effect: graph.effect,
@@ -61,7 +69,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
     createDeepSignalVersion: graph.createDeepSignalVersion,
     markDeepSignalWatched: graph.markDeepSignalWatched,
     hasDeepSignalSubscribers: graph.hasDeepSignalSubscribers,
-    isSpeculative: render.isSpeculative,
-    markSpeculativeDeepRead: render.markSpeculativeDeepRead,
+    isSpeculative: () => render?.isSpeculative() ?? false,
+    markSpeculativeDeepRead: () => render?.markSpeculativeDeepRead(),
   };
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { executionContext } from "../src/core/execution-owner.js";
 import {
@@ -11,6 +12,12 @@ import {
   type RenderDependency,
   untrackedRender,
 } from "../src/core/render-tracking.js";
+
+function createRenderRuntime() {
+  const runtime = createReactiveRuntime();
+  runtime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+  return runtime;
+}
 
 function collect(read: () => void): RenderDependency[] {
   const dependencies: RenderDependency[] = [];
@@ -93,7 +100,7 @@ function renderVersionOf(readable: { readonly value: unknown }): number {
 
 describe("private reactive runtime", () => {
   it("does not allocate long-lived owner frames for synchronous graph scopes", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const derived = runtime.computed(() => source.value + 1);
     const framesBefore = executionContext.frames.length;
@@ -117,7 +124,7 @@ describe("private reactive runtime", () => {
   });
 
   it("implements writable source reads, peeks, and Object.is changes natively", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const seen: number[] = [];
     const dispose = runtime.effect(() => {
@@ -142,7 +149,7 @@ describe("private reactive runtime", () => {
   });
 
   it("evaluates computeds lazily, caches them, and composes derived nodes", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(2);
     let firstCalls = 0;
     let secondCalls = 0;
@@ -165,7 +172,7 @@ describe("private reactive runtime", () => {
   });
 
   it("switches computed and effect dependencies and unlinks the old branch", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const chooseLeft = runtime.signal(true);
     const left = runtime.signal("left");
     const right = runtime.signal("right");
@@ -185,7 +192,7 @@ describe("private reactive runtime", () => {
   });
 
   it("propagates a diamond graph once and supports nested computed reads", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const left = runtime.computed(() => source.value + 1);
     const right = runtime.computed(() => source.value * 2);
@@ -201,7 +208,7 @@ describe("private reactive runtime", () => {
   });
 
   it("runs effects synchronously, reruns on writes, and disposes idempotently", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const seen: number[] = [];
     const dispose = runtime.effect(() => {
@@ -217,7 +224,7 @@ describe("private reactive runtime", () => {
   });
 
   it("runs and disposes effect cleanups before the next body", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const order: string[] = [];
     const dispose = runtime.effect(() => {
@@ -232,7 +239,7 @@ describe("private reactive runtime", () => {
   });
 
   it("self-disposes without collecting later reads and runs returned cleanup once", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const laterRead = runtime.signal(0);
     const cleanupRead = runtime.signal(0);
@@ -263,7 +270,7 @@ describe("private reactive runtime", () => {
   });
 
   it("fully detaches old source and computed dependencies when self-disposing before rereads", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const a = runtime.signal(0);
     const upstream = runtime.signal(1);
     const b = runtime.computed(() => upstream.value * 2);
@@ -300,7 +307,7 @@ describe("private reactive runtime", () => {
   });
 
   it("fully detaches partially retracked dependencies when self-disposing", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const a = runtime.signal(0);
     const b = runtime.signal(0);
     const c = runtime.signal(0);
@@ -336,7 +343,7 @@ describe("private reactive runtime", () => {
   });
 
   it("contains a throwing cleanup returned by a self-disposing effect", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const seen: number[] = [];
@@ -363,7 +370,7 @@ describe("private reactive runtime", () => {
   });
 
   it("does not run a queued reaction after it is disposed", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const seen: number[] = [];
     let disposeQueued: (() => void) | undefined;
@@ -390,7 +397,7 @@ describe("private reactive runtime", () => {
   // disposed by that owner's next run or its disposal. v0.2 keeps that
   // contract rather than leaving one more live child behind per parent run.
   it("disposes a nested effect when its owner re-runs or is disposed", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const generation = runtime.signal(0);
     const child = runtime.signal(0);
     const events: string[] = [];
@@ -425,7 +432,7 @@ describe("private reactive runtime", () => {
   });
 
   it("unlinks a manually disposed nested effect from its owner", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const child = runtime.signal(0);
     let disposeInner: (() => void) | undefined;
@@ -455,7 +462,7 @@ describe("private reactive runtime", () => {
   });
 
   it("disposes an effect created inside a computed when the computed re-evaluates", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const input = runtime.signal(0);
     const child = runtime.signal(0);
     const live: number[] = [];
@@ -476,7 +483,7 @@ describe("private reactive runtime", () => {
   });
 
   it("composes nested effect lifetime through returned cleanup", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const generation = runtime.signal(0);
     const child = runtime.signal(0);
     const events: string[] = [];
@@ -507,7 +514,7 @@ describe("private reactive runtime", () => {
   });
 
   it("coalesces nested batches and restores depth after a thrown callback", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const left = runtime.signal(1);
     const right = runtime.signal(2);
     const total = runtime.computed(() => left.value + right.value);
@@ -534,7 +541,7 @@ describe("private reactive runtime", () => {
   });
 
   it("compares batched final source values with Object.is", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const seen: number[] = [];
     const dispose = runtime.effect(() => {
@@ -565,7 +572,7 @@ describe("private reactive runtime", () => {
     expect(Object.is(seen[2], 0)).toBe(true);
     dispose();
 
-    const nanRuntime = createReactiveRuntime();
+    const nanRuntime = createRenderRuntime();
     const nanSource = nanRuntime.signal(Number.NaN);
     const nanSeen: number[] = [];
     const disposeNan = nanRuntime.effect(() => {
@@ -582,7 +589,7 @@ describe("private reactive runtime", () => {
   });
 
   it("keeps nested computed reads coherent across an intermediate batch revert", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const first = runtime.computed(() => source.value);
     const second = runtime.computed(() => first.value * 10);
@@ -607,7 +614,7 @@ describe("private reactive runtime", () => {
   });
 
   it("handles writes from inside reactions without corrupting propagation", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const trigger = runtime.signal(0);
     const output = runtime.signal(0);
     const seen: number[] = [];
@@ -627,7 +634,7 @@ describe("private reactive runtime", () => {
   });
 
   it("supports untracked reads and restores tracking after errors", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const other = runtime.signal(2);
     const seen: number[] = [];
@@ -647,7 +654,7 @@ describe("private reactive runtime", () => {
   });
 
   it("caches computed errors, rethrows on reads, and recovers downstream", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const shouldThrow = runtime.signal(false);
     const source = runtime.signal(2);
     const derived = runtime.computed(() => {
@@ -672,7 +679,7 @@ describe("private reactive runtime", () => {
   });
 
   it("recovers from a computed self-cycle after a caught cycle error", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     let value: { readonly value: number };
     value = runtime.computed(() => {
@@ -692,7 +699,7 @@ describe("private reactive runtime", () => {
   });
 
   it("contains effect-body failures and continues healthy queued work", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const failing = runtime.effect(() => {
@@ -714,7 +721,7 @@ describe("private reactive runtime", () => {
   });
 
   it("contains cleanup failures before rerun and during disposal", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const values: number[] = [];
@@ -736,7 +743,7 @@ describe("private reactive runtime", () => {
   });
 
   it("ignores non-function effect return values instead of treating them as cleanup", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const values: number[] = [];
@@ -749,7 +756,7 @@ describe("private reactive runtime", () => {
   });
 
   it("exposes source and computed nodes to render collection with coherent versions", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
     const [sourceDependency] = collect(() => source.value);
@@ -780,7 +787,7 @@ describe("private reactive runtime", () => {
   });
 
   it("defers computed graph subscription until render commit and catches render-to-commit changes", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
     const [dependency] = collect(() => {
@@ -805,7 +812,7 @@ describe("private reactive runtime", () => {
   });
 
   it("observes computed snapshots before registering the render dependency", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const value = runtime.computed(() => source.value);
     let capturedVersion = -1;
@@ -823,7 +830,7 @@ describe("private reactive runtime", () => {
   });
 
   it("uses monotonic computed revisions for competing and reverted render attempts", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal("A");
     const value = runtime.computed(() => source.value);
     const [renderA] = collectWithVersions(() => {
@@ -856,7 +863,7 @@ describe("private reactive runtime", () => {
   });
 
   it("suppresses computed render revision changes when the result is Object.is-equal", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
     const [firstRender] = collectWithVersions(() => {
@@ -871,7 +878,7 @@ describe("private reactive runtime", () => {
   });
 
   it("advances computed observation revision for speculative error transitions", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const shouldThrow = runtime.signal(false);
     const source = runtime.signal(0);
     const error = new Error("rendered computed failure");
@@ -897,7 +904,7 @@ describe("private reactive runtime", () => {
   });
 
   it("does not subscribe abandoned speculative renders to the graph", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     let getterCalls = 0;
     const value = runtime.computed(() => {
@@ -918,7 +925,7 @@ describe("private reactive runtime", () => {
   });
 
   it("promotes a current speculative computed cache without reevaluation", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     let getterCalls = 0;
     const value = runtime.computed(() => {
@@ -943,8 +950,8 @@ describe("private reactive runtime", () => {
   });
 
   it("composes runtime instances through local external nodes", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const local = a.signal(1);
     const source = b.signal(2);
     const total = a.computed(() => local.value + source.value);
@@ -976,8 +983,8 @@ describe("private reactive runtime", () => {
   });
 
   it("tracks a foreign source directly in a local reaction", () => {
-    const local = createReactiveRuntime();
-    const foreignRuntime = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const foreignRuntime = createRenderRuntime();
     const foreign = foreignRuntime.signal("before");
     const seen: string[] = [];
     const dispose = local.effect(() => {
@@ -993,8 +1000,8 @@ describe("private reactive runtime", () => {
   });
 
   it("publishes a stable non-enumerable protocol with a unique token per runtime", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const sourceA = a.signal(1);
     const sourceB = b.signal(1);
     const protocolA = Reflect.get(sourceA, READABLE_INTEROP_V1) as ReadableInteropV1;
@@ -1008,7 +1015,7 @@ describe("private reactive runtime", () => {
   });
 
   it("materializes a stable interop protocol only when another runtime requests it", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(2);
     const sourceNode = runtime.getNodeForReadable(source)!;
     const derived = runtime.computed(() => source.value * 2);
@@ -1031,7 +1038,7 @@ describe("private reactive runtime", () => {
   });
 
   it("keeps local source and computed reads on the direct graph path", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(2);
     const derived = runtime.computed(() => source.value * 2);
     const seen: number[] = [];
@@ -1049,9 +1056,9 @@ describe("private reactive runtime", () => {
   });
 
   it("preserves foreign computed equality boundaries and transitive graph shape", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
-    const c = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
+    const c = createRenderRuntime();
     const source = c.signal(1);
     const parity = b.computed(() => source.value % 2);
     const doubledParity = a.computed(() => parity.value * 2);
@@ -1074,8 +1081,8 @@ describe("private reactive runtime", () => {
   });
 
   it("does not notify foreign subscribers for a reverted semantic batch", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const source = b.signal(0);
     const seen: number[] = [];
     const dispose = a.effect(() => {
@@ -1092,9 +1099,9 @@ describe("private reactive runtime", () => {
   });
 
   it("does not subscribe cold foreign-dependent computed chains and pulls fresh values", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
-    const c = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
+    const c = createRenderRuntime();
     const source = c.signal(1);
     const middle = b.computed(() => source.value + 1);
     const cold = a.computed(() => middle.value * 2);
@@ -1107,8 +1114,8 @@ describe("private reactive runtime", () => {
   });
 
   it("activates and releases foreign subscriptions with live computed demand", () => {
-    const local = createReactiveRuntime();
-    const foreignRuntime = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const foreignRuntime = createRenderRuntime();
     const foreign = foreignRuntime.signal(1);
     const doubled = local.computed(() => foreign.value * 2);
 
@@ -1134,8 +1141,8 @@ describe("private reactive runtime", () => {
   });
 
   it("releases stale foreign branches and reuses their inactive ExternalNode", () => {
-    const local = createReactiveRuntime();
-    const foreignRuntime = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const foreignRuntime = createRenderRuntime();
     const chooseLeft = local.signal(true);
     const left = foreignRuntime.signal("left");
     const right = foreignRuntime.signal("right");
@@ -1165,8 +1172,8 @@ describe("private reactive runtime", () => {
   });
 
   it("tracks foreign dependency state across local/foreign branch changes", () => {
-    const local = createReactiveRuntime();
-    const foreignRuntime = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const foreignRuntime = createRenderRuntime();
     const chooseForeign = local.signal(true);
     const localSource = local.signal(1);
     const foreignSource = foreignRuntime.signal(10);
@@ -1190,9 +1197,9 @@ describe("private reactive runtime", () => {
   });
 
   it("moves foreign liveness from runtime B to runtime C and releases both on disposal", () => {
-    const local = createReactiveRuntime();
-    const runtimeB = createReactiveRuntime();
-    const runtimeC = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const runtimeB = createRenderRuntime();
+    const runtimeC = createRenderRuntime();
     const chooseB = local.signal(true);
     const sourceB = runtimeB.signal("B");
     const sourceC = runtimeC.signal("C");
@@ -1227,7 +1234,7 @@ describe("private reactive runtime", () => {
   });
 
   it("turns a read-to-subscribe revision mismatch into a bounded local retry", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const runtimeToken = {};
     let subscribeCalls = 0;
     let unsubscribeCalls = 0;
@@ -1259,8 +1266,8 @@ describe("private reactive runtime", () => {
   });
 
   it("keeps foreign reads untracked under untracked but tracked under untrackedRender", () => {
-    const local = createReactiveRuntime();
-    const foreignRuntime = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const foreignRuntime = createRenderRuntime();
     const foreign = foreignRuntime.signal(0);
     const untrackedRuns = vi.fn();
     const untrackedDispose = local.effect(() => {
@@ -1282,7 +1289,7 @@ describe("private reactive runtime", () => {
   });
 
   it("keeps speculative computed reads graph-detached and reports their exact revision", () => {
-    const foreignRuntime = createReactiveRuntime();
+    const foreignRuntime = createRenderRuntime();
     const source = foreignRuntime.signal(1);
     const computed = foreignRuntime.computed(() => source.value * 2);
     const attempt = foreignRuntime.renderAdapter.createRenderAttempt();
@@ -1296,8 +1303,8 @@ describe("private reactive runtime", () => {
   });
 
   it("keeps foreign error notifications connected through recovery", () => {
-    const local = createReactiveRuntime();
-    const foreignRuntime = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const foreignRuntime = createRenderRuntime();
     const shouldThrow = foreignRuntime.signal(false);
     const revision = foreignRuntime.signal(0);
     const reusedError = new Error("foreign computed error");
@@ -1331,8 +1338,8 @@ describe("private reactive runtime", () => {
   });
 
   it("does not track foreign reads performed by effect cleanup", () => {
-    const local = createReactiveRuntime();
-    const foreignRuntime = createReactiveRuntime();
+    const local = createRenderRuntime();
+    const foreignRuntime = createRenderRuntime();
     const trigger = local.signal(0);
     const foreign = foreignRuntime.signal(0);
     const seen: number[] = [];
@@ -1349,8 +1356,8 @@ describe("private reactive runtime", () => {
   });
 
   it("bounds synchronous two-runtime and three-runtime feedback loops", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const aValue = a.signal(0);
     const bValue = b.signal(0);
     const aSeen: number[] = [];
@@ -1370,7 +1377,7 @@ describe("private reactive runtime", () => {
     disposeA();
     disposeB();
 
-    const c = createReactiveRuntime();
+    const c = createRenderRuntime();
     const threeA = a.signal(0);
     const threeB = b.signal(0);
     const threeC = c.signal(0);
@@ -1397,8 +1404,8 @@ describe("private reactive runtime", () => {
   });
 
   it("coalesces notifications at the writing runtime's batch boundary", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const local = a.signal(0);
     const foreign = b.signal(0);
     const seen: Array<[number, number]> = [];

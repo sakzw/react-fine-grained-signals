@@ -1,0 +1,10 @@
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 0, "adapterInitialized": false, "retainedHeapBytes": 66475760}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 0, "adapterInitialized": true, "retainedHeapBytes": 74141824}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 1, "adapterInitialized": true, "retainedHeapBytes": 74125952}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 1, "adapterInitialized": false, "retainedHeapBytes": 66360464}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 2, "adapterInitialized": false, "retainedHeapBytes": 66362608}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 2, "adapterInitialized": true, "retainedHeapBytes": 74127616}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 3, "adapterInitialized": true, "retainedHeapBytes": 74122424}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 3, "adapterInitialized": false, "retainedHeapBytes": 66360480}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 4, "adapterInitialized": false, "retainedHeapBytes": 66362424}
+{"kind": "retained-heap-sample", "date": "2026-10-18", "commit": "98cbbc246bd5663d5caab6c35d5dddeb83296657", "runtimeCount": 5000, "round": 4, "adapterInitialized": true, "retainedHeapBytes": 74121752}

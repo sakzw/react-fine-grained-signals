@@ -7,6 +7,7 @@ import { PassThrough } from "node:stream";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 import type { ReadableInteropV1 } from "../src/core/interop.js";
+import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { computed, effect, signal, useSignalTracking } from "../src/index.js";
 import { useManagedSignals } from "../src/runtime.js";
@@ -21,6 +22,12 @@ import { useManagedSignals } from "../src/runtime.js";
 afterEach(() => {
   cleanup();
 });
+
+function createRenderRuntime() {
+  const runtime = createReactiveRuntime();
+  runtime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+  return runtime;
+}
 
 type Runtime = ReturnType<typeof createReactiveRuntime>;
 type Attempt = ReturnType<Runtime["renderAdapter"]["createRenderAttempt"]>;
@@ -52,8 +59,8 @@ function commitNeedsRerender(runtime: Runtime, attempt: Attempt): boolean {
 describe("A1: promoting a speculative computed that read another copy", () => {
   for (const scopePolicy of ["managed", "bare"] as const) {
     it(`promotes over a foreign signal and follows it afterwards (${scopePolicy} scope)`, () => {
-      const app = createReactiveRuntime();
-      const library = createReactiveRuntime();
+      const app = createRenderRuntime();
+      const library = createRenderRuntime();
       const count = library.signal(1);
       const doubled = app.computed(() => count.value * 2);
 
@@ -72,8 +79,8 @@ describe("A1: promoting a speculative computed that read another copy", () => {
     });
 
     it(`promotes over a foreign computed and follows it afterwards (${scopePolicy} scope)`, () => {
-      const app = createReactiveRuntime();
-      const library = createReactiveRuntime();
+      const app = createRenderRuntime();
+      const library = createRenderRuntime();
       const count = library.signal(1);
       const tripled = library.computed(() => count.value * 3);
       const label = app.computed(() => `n=${tripled.value}`);
@@ -91,8 +98,8 @@ describe("A1: promoting a speculative computed that read another copy", () => {
   }
 
   it("does not promote when the foreign revision moved before commit", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const count = library.signal(1);
     const doubled = app.computed(() => count.value * 2);
 
@@ -104,7 +111,7 @@ describe("A1: promoting a speculative computed that read another copy", () => {
 
   for (const hook of ["useSignalTracking", "useManagedSignals"] as const) {
     it(`mounts and updates a ${hook}() component reading a local computed over a foreign signal`, () => {
-      const library = createReactiveRuntime();
+      const library = createRenderRuntime();
       const count = library.signal(1);
       const doubled = computed(() => count.value * 2);
 
@@ -132,7 +139,7 @@ describe("A1: promoting a speculative computed that read another copy", () => {
 
 describe("A2: render attempts that observed different values of one computed", () => {
   it("re-renders the earlier attempt when a later attempt promoted first", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const scaled = runtime.computed(() => source.value * 10);
 
@@ -147,7 +154,7 @@ describe("A2: render attempts that observed different values of one computed", (
   });
 
   it("re-renders the earlier attempt when it commits first", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const scaled = runtime.computed(() => source.value * 10);
 
@@ -160,7 +167,7 @@ describe("A2: render attempts that observed different values of one computed", (
   });
 
   it("re-renders the earlier attempt over a computed that was warm before both", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const scaled = runtime.computed(() => source.value * 10);
     expect(scaled.value).toBe(10);
@@ -176,7 +183,7 @@ describe("A2: render attempts that observed different values of one computed", (
   });
 
   it("keeps both attempts stable when they observed equal values", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const parity = runtime.computed(() => source.value % 2);
 
@@ -189,7 +196,7 @@ describe("A2: render attempts that observed different values of one computed", (
   });
 
   it("re-renders an attempt that saw a value once another promoted an error", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const checked = runtime.computed(() => {
       if (source.value > 1) throw new Error("too large");
@@ -206,7 +213,7 @@ describe("A2: render attempts that observed different values of one computed", (
   });
 
   it("is unaffected by an aborted attempt that never commits", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const scaled = runtime.computed(() => source.value * 10);
 
@@ -221,8 +228,8 @@ describe("A2: render attempts that observed different values of one computed", (
 
 describe("A3: cross-copy graphs expose only states a write produced", () => {
   it("runs one coherent effect per write through a mixed diamond", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const qty = library.signal(1);
     const subtotal = library.computed(() => qty.value * 10);
     const label = app.computed(() => `${qty.value} items`);
@@ -237,8 +244,8 @@ describe("A3: cross-copy graphs expose only states a write produced", () => {
   });
 
   it("recomputes a diamond whose sides live in different copies once per write", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = library.signal(1);
     const left = app.computed(() => source.value + 1);
     const right = library.computed(() => source.value * 2);
@@ -255,8 +262,8 @@ describe("A3: cross-copy graphs expose only states a write produced", () => {
   });
 
   it("follows a chain that crosses copies twice", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = app.signal(1);
     const middle = library.computed(() => source.value + 1);
     const outer = app.computed(() => `${source.value}/${middle.value}`);
@@ -271,8 +278,8 @@ describe("A3: cross-copy graphs expose only states a write produced", () => {
 
   for (const watched of [true, false]) {
     it(`reads its own write inside the other copy's batch (${watched ? "active" : "cold"} bridge)`, () => {
-      const app = createReactiveRuntime();
-      const library = createReactiveRuntime();
+      const app = createRenderRuntime();
+      const library = createRenderRuntime();
       const source = library.signal(0);
       const scaled = app.computed(() => source.value * 10);
       const stop = watched ? app.effect(() => { void scaled.value; }) : () => {};
@@ -292,8 +299,8 @@ describe("A3: cross-copy graphs expose only states a write produced", () => {
   }
 
   it("still notifies an effect on the bridge after a read learned the revision first", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = library.signal(0);
     const mirror = app.computed(() => source.value);
     const seen: number[] = [];
@@ -308,8 +315,8 @@ describe("A3: cross-copy graphs expose only states a write produced", () => {
   });
 
   it("does not re-evaluate a cold foreign-dependent computed on every read", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = library.signal(0);
     let evaluations = 0;
     const mirror = app.computed(() => { evaluations += 1; return source.value; });
@@ -325,8 +332,8 @@ describe("A3: cross-copy graphs expose only states a write produced", () => {
   });
 
   it("keeps two cold readers of one bridge current when only one re-reads", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = library.signal(0);
     const first = app.computed(() => source.value + 1);
     const second = app.computed(() => source.value + 2);
@@ -341,7 +348,7 @@ describe("A3: cross-copy graphs expose only states a write produced", () => {
 
 describe("A4: computed getters are called as () => T", () => {
   it("passes no arguments and no this on the graph path", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const calls: Array<{ self: unknown; count: number }> = [];
     const value = runtime.computed(function (this: unknown, ...args: unknown[]) {
@@ -362,7 +369,7 @@ describe("A4: computed getters are called as () => T", () => {
   });
 
   it("applies a default parameter on every recomputation", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     function total(offset = 100) { return source.value + offset; }
     const value = runtime.computed(total);
@@ -376,7 +383,7 @@ describe("A4: computed getters are called as () => T", () => {
   });
 
   it("passes no arguments and no this on a speculative render's first read", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(1);
     const calls: Array<{ self: unknown; count: number }> = [];
     function total(this: unknown, offset = 100) {
@@ -415,8 +422,8 @@ describe("A4: computed getters are called as () => T", () => {
 describe("A5: effects created under another copy's owner", () => {
   for (const direction of ["A owns B", "B owns A"] as const) {
     it(`are disposed when the owner re-runs or is disposed (${direction})`, () => {
-      const first = createReactiveRuntime();
-      const second = createReactiveRuntime();
+      const first = createRenderRuntime();
+      const second = createRenderRuntime();
       const [owner, child] = direction === "A owns B" ? [first, second] : [second, first];
       const route = owner.signal("a");
       const tick = child.signal(0);
@@ -446,8 +453,8 @@ describe("A5: effects created under another copy's owner", () => {
   }
 
   it("are disposed when an owning computed re-evaluates or loses its last subscriber", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = app.signal(0);
     const tick = library.signal(0);
     const log: string[] = [];
@@ -473,7 +480,7 @@ describe("A5: effects created under another copy's owner", () => {
   });
 
   it("disposes a same-copy child exactly once", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const route = runtime.signal(0);
     let cleanups = 0;
     const stop = runtime.effect(() => {
@@ -487,8 +494,8 @@ describe("A5: effects created under another copy's owner", () => {
   });
 
   it("leaves a foreign child the user disposed alone on the owner's next run", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const route = app.signal(0);
     let cleanups = 0;
     let disposeChild: (() => void) | undefined;
@@ -505,8 +512,8 @@ describe("A5: effects created under another copy's owner", () => {
   });
 
   it("does not own a detached effect", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const route = app.signal(0);
     const tick = library.signal(0);
     const log: number[] = [];
@@ -523,8 +530,8 @@ describe("A5: effects created under another copy's owner", () => {
   });
 
   it("does not own an effect created under untracked()", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const route = app.signal(0);
     const tick = library.signal(0);
     const log: number[] = [];
@@ -543,8 +550,8 @@ describe("A5: effects created under another copy's owner", () => {
 
 describe("A6: re-subscribing to a foreign readable", () => {
   it("runs a new effect on a reused foreign signal once", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = library.signal(0);
     let runs = 0;
     app.effect(() => { void source.value; runs += 1; })();
@@ -559,8 +566,8 @@ describe("A6: re-subscribing to a foreign readable", () => {
   });
 
   it("runs a new effect on a reused foreign computed once", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const source = library.signal(0);
     const doubled = library.computed(() => source.value * 2);
     const seen: number[] = [];
@@ -577,7 +584,7 @@ describe("A6: re-subscribing to a foreign readable", () => {
   });
 
   it("still retries a reused bridge whose subscription reports a newer revision", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     let revision = 0;
     let subscribedAt = 0;
     let notify: ((next: number) => void) | undefined;
@@ -612,7 +619,7 @@ describe("A6: re-subscribing to a foreign readable", () => {
 
 describe("follow-up: effects created by a speculatively evaluated getter", () => {
   it("disposes them when the attempt is aborted", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const tick = runtime.signal(0);
     let live = 0;
@@ -628,7 +635,7 @@ describe("follow-up: effects created by a speculatively evaluated getter", () =>
   });
 
   it("leaves exactly one owned child once the computed is committed", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const source = runtime.signal(0);
     const tick = runtime.signal(0);
     let live = 0;
@@ -653,8 +660,8 @@ describe("follow-up: effects created by a speculatively evaluated getter", () =>
   });
 
   it("disposes another copy's effect created by the speculative getter", () => {
-    const app = createReactiveRuntime();
-    const library = createReactiveRuntime();
+    const app = createRenderRuntime();
+    const library = createRenderRuntime();
     const tick = library.signal(0);
     let live = 0;
     const owner = app.computed(() => {
@@ -692,7 +699,7 @@ describe("follow-up: effects created by a speculatively evaluated getter", () =>
 
 /** A warm local computed whose foreign dependency moved before the server read. */
 function setup(foreignComputed: boolean) {
-  const library = createReactiveRuntime();
+  const library = createRenderRuntime();
   const source = library.signal(1);
   const tripled = library.computed(() => source.value * 3);
   const value = computed(() => (foreignComputed ? tripled.value : source.value) * 2);

@@ -1,0 +1,183 @@
+Pair 1 baseline then candidate
+signal-only    7.34 kB gzip    6.62 kB br   26.71 kB raw (budget 7.63 kB)
+             exact gzip: 7514 bytes
+             exact raw/brotli: 27356/6783 bytes
+             importing only signal, as the packaging note's sideEffects claim measures
+core           7.40 kB gzip    6.68 kB br   26.93 kB raw (budget 7.69 kB)
+             exact gzip: 7576 bytes
+             exact raw/brotli: 27580/6836 bytes
+             signal + computed + effect only
+core+hooks     9.69 kB gzip    8.73 kB br   35.14 kB raw (budget 10.00 kB)
+             exact gzip: 9923 bytes
+             exact raw/brotli: 35986/8938 bytes
+             core primitives plus the React hooks
+deep          15.28 kB gzip   13.63 kB br   61.78 kB raw (budget 15.38 kB)
+             exact gzip: 15649 bytes
+             exact raw/brotli: 63265/13953 bytes
+             deepSignal and its hooks
+index-full    23.91 kB gzip   21.10 kB br   92.83 kB raw (budget 24.13 kB)
+             exact gzip: 24479 bytes
+             exact raw/brotli: 95062/21603 bytes
+             every export of the main entry
+jsx-runtime   14.45 kB gzip   12.92 kB br   51.64 kB raw (budget 14.88 kB)
+             exact gzip: 14794 bytes
+             exact raw/brotli: 52879/13234 bytes
+             the custom JSX runtime a transformed app always loads
+utils          9.41 kB gzip    8.49 kB br   34.14 kB raw (budget 9.69 kB)
+             exact gzip: 9633 bytes
+             exact raw/brotli: 34957/8697 bytes
+             the control-flow components
+
+All size budgets satisfied.
+signal-only    6.09 kB gzip    5.50 kB br   21.45 kB raw (budget 7.63 kB)
+             exact gzip: 6240 bytes
+             exact raw/brotli: 21968/5635 bytes
+             importing only signal, as the packaging note's sideEffects claim measures
+core           6.15 kB gzip    5.55 kB br   21.67 kB raw (budget 7.69 kB)
+             exact gzip: 6294 bytes
+             exact raw/brotli: 22193/5679 bytes
+             signal + computed + effect only
+core+hooks     9.76 kB gzip    8.79 kB br   35.35 kB raw (budget 10.00 kB)
+             exact gzip: 9994 bytes
+             exact raw/brotli: 36195/8999 bytes
+             core primitives plus the React hooks
+deep          14.22 kB gzip   12.67 kB br   57.21 kB raw (budget 15.38 kB)
+             exact gzip: 14561 bytes
+             exact raw/brotli: 58580/12978 bytes
+             deepSignal and its hooks
+index-full    24.11 kB gzip   21.18 kB br   93.04 kB raw (budget 24.13 kB)
+             exact gzip: 24690 bytes
+             exact raw/brotli: 95277/21693 bytes
+             every export of the main entry
+jsx-runtime   13.22 kB gzip   11.81 kB br   46.36 kB raw (budget 14.88 kB)
+             exact gzip: 13537 bytes
+             exact raw/brotli: 47473/12098 bytes
+             the custom JSX runtime a transformed app always loads
+utils          9.47 kB gzip    8.57 kB br   34.34 kB raw (budget 9.69 kB)
+             exact gzip: 9694 bytes
+             exact raw/brotli: 35167/8772 bytes
+             the control-flow components
+
+All size budgets satisfied.
+Pair 2 candidate then baseline
+signal-only    6.09 kB gzip    5.50 kB br   21.45 kB raw (budget 7.63 kB)
+             exact gzip: 6240 bytes
+             exact raw/brotli: 21968/5634 bytes
+             importing only signal, as the packaging note's sideEffects claim measures
+core           6.15 kB gzip    5.55 kB br   21.67 kB raw (budget 7.69 kB)
+             exact gzip: 6294 bytes
+             exact raw/brotli: 22193/5682 bytes
+             signal + computed + effect only
+core+hooks     9.76 kB gzip    8.79 kB br   35.35 kB raw (budget 10.00 kB)
+             exact gzip: 9996 bytes
+             exact raw/brotli: 36195/9002 bytes
+             core primitives plus the React hooks
+deep          14.22 kB gzip   12.68 kB br   57.21 kB raw (budget 15.38 kB)
+             exact gzip: 14562 bytes
+             exact raw/brotli: 58580/12981 bytes
+             deepSignal and its hooks
+index-full    24.11 kB gzip   21.18 kB br   93.04 kB raw (budget 24.13 kB)
+             exact gzip: 24692 bytes
+             exact raw/brotli: 95277/21691 bytes
+             every export of the main entry
+jsx-runtime   13.22 kB gzip   11.81 kB br   46.36 kB raw (budget 14.88 kB)
+             exact gzip: 13537 bytes
+             exact raw/brotli: 47473/12098 bytes
+             the custom JSX runtime a transformed app always loads
+utils          9.47 kB gzip    8.56 kB br   34.34 kB raw (budget 9.69 kB)
+             exact gzip: 9693 bytes
+             exact raw/brotli: 35167/8763 bytes
+             the control-flow components
+
+All size budgets satisfied.
+signal-only    7.34 kB gzip    6.63 kB br   26.71 kB raw (budget 7.63 kB)
+             exact gzip: 7513 bytes
+             exact raw/brotli: 27356/6785 bytes
+             importing only signal, as the packaging note's sideEffects claim measures
+core           7.40 kB gzip    6.69 kB br   26.93 kB raw (budget 7.69 kB)
+             exact gzip: 7576 bytes
+             exact raw/brotli: 27580/6847 bytes
+             signal + computed + effect only
+core+hooks     9.69 kB gzip    8.73 kB br   35.14 kB raw (budget 10.00 kB)
+             exact gzip: 9923 bytes
+             exact raw/brotli: 35986/8937 bytes
+             core primitives plus the React hooks
+deep          15.28 kB gzip   13.62 kB br   61.78 kB raw (budget 15.38 kB)
+             exact gzip: 15649 bytes
+             exact raw/brotli: 63265/13946 bytes
+             deepSignal and its hooks
+index-full    23.91 kB gzip   21.08 kB br   92.83 kB raw (budget 24.13 kB)
+             exact gzip: 24479 bytes
+             exact raw/brotli: 95062/21585 bytes
+             every export of the main entry
+jsx-runtime   14.45 kB gzip   12.92 kB br   51.64 kB raw (budget 14.88 kB)
+             exact gzip: 14794 bytes
+             exact raw/brotli: 52879/13234 bytes
+             the custom JSX runtime a transformed app always loads
+utils          9.41 kB gzip    8.49 kB br   34.14 kB raw (budget 9.69 kB)
+             exact gzip: 9633 bytes
+             exact raw/brotli: 34957/8697 bytes
+             the control-flow components
+
+All size budgets satisfied.
+Pair 3 baseline then candidate
+signal-only    7.34 kB gzip    6.62 kB br   26.71 kB raw (budget 7.63 kB)
+             exact gzip: 7515 bytes
+             exact raw/brotli: 27356/6782 bytes
+             importing only signal, as the packaging note's sideEffects claim measures
+core           7.40 kB gzip    6.68 kB br   26.93 kB raw (budget 7.69 kB)
+             exact gzip: 7577 bytes
+             exact raw/brotli: 27580/6837 bytes
+             signal + computed + effect only
+core+hooks     9.69 kB gzip    8.73 kB br   35.14 kB raw (budget 10.00 kB)
+             exact gzip: 9924 bytes
+             exact raw/brotli: 35986/8938 bytes
+             core primitives plus the React hooks
+deep          15.28 kB gzip   13.61 kB br   61.78 kB raw (budget 15.38 kB)
+             exact gzip: 15650 bytes
+             exact raw/brotli: 63265/13940 bytes
+             deepSignal and its hooks
+index-full    23.91 kB gzip   21.10 kB br   92.83 kB raw (budget 24.13 kB)
+             exact gzip: 24480 bytes
+             exact raw/brotli: 95062/21606 bytes
+             every export of the main entry
+jsx-runtime   14.45 kB gzip   12.92 kB br   51.64 kB raw (budget 14.88 kB)
+             exact gzip: 14794 bytes
+             exact raw/brotli: 52879/13234 bytes
+             the custom JSX runtime a transformed app always loads
+utils          9.41 kB gzip    8.49 kB br   34.14 kB raw (budget 9.69 kB)
+             exact gzip: 9634 bytes
+             exact raw/brotli: 34957/8696 bytes
+             the control-flow components
+
+All size budgets satisfied.
+signal-only    6.09 kB gzip    5.50 kB br   21.45 kB raw (budget 7.63 kB)
+             exact gzip: 6240 bytes
+             exact raw/brotli: 21968/5634 bytes
+             importing only signal, as the packaging note's sideEffects claim measures
+core           6.15 kB gzip    5.55 kB br   21.67 kB raw (budget 7.69 kB)
+             exact gzip: 6295 bytes
+             exact raw/brotli: 22193/5681 bytes
+             signal + computed + effect only
+core+hooks     9.76 kB gzip    8.80 kB br   35.35 kB raw (budget 10.00 kB)
+             exact gzip: 9996 bytes
+             exact raw/brotli: 36195/9008 bytes
+             core primitives plus the React hooks
+deep          14.22 kB gzip   12.67 kB br   57.21 kB raw (budget 15.38 kB)
+             exact gzip: 14562 bytes
+             exact raw/brotli: 58580/12979 bytes
+             deepSignal and its hooks
+index-full    24.11 kB gzip   21.18 kB br   93.04 kB raw (budget 24.13 kB)
+             exact gzip: 24693 bytes
+             exact raw/brotli: 95277/21688 bytes
+             every export of the main entry
+jsx-runtime   13.22 kB gzip   11.81 kB br   46.36 kB raw (budget 14.88 kB)
+             exact gzip: 13537 bytes
+             exact raw/brotli: 47473/12098 bytes
+             the custom JSX runtime a transformed app always loads
+utils          9.46 kB gzip    8.56 kB br   34.34 kB raw (budget 9.69 kB)
+             exact gzip: 9692 bytes
+             exact raw/brotli: 35167/8761 bytes
+             the control-flow components
+
+All size budgets satisfied.

@@ -1,16 +1,23 @@
 import { describe, expect, it, vi } from "vitest";
+import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { deepSignal, effect } from "../src/index.js";
 
-// Regression coverage for the v0.2.0 release review. Two `createReactiveRuntime()`
+function createRenderRuntime() {
+  const runtime = createReactiveRuntime();
+  runtime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+  return runtime;
+}
+
+// Regression coverage for the v0.2.0 release review. Two `createRenderRuntime()`
 // graphs stand in for two installed copies of the package: they share the
 // global execution owner and talk through ReadableInterop V1, exactly as
 // duplicated copies do (see tests/cross-copy-smoke.mjs for the packaged form).
 
 describe("cross-copy computed refresh and activation", () => {
   it("subscribes to a foreign dependency first read during an effect's dirty check (C1)", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const flag = a.signal(false);
     const foreign = b.signal(0);
     const over = a.computed(() => (flag.value ? foreign.value > 100 : false));
@@ -31,8 +38,8 @@ describe("cross-copy computed refresh and activation", () => {
   });
 
   it("works in the other direction too (C1)", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const flag = b.signal(false);
     const foreign = a.signal(0);
     const over = b.computed(() => (flag.value ? foreign.value > 100 : false));
@@ -47,8 +54,8 @@ describe("cross-copy computed refresh and activation", () => {
   });
 
   it("refreshes a foreign-dependent computed whose only subscriber is an unwatched computed (C2)", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const foreign = b.signal(1);
     const scaled = a.computed(() => foreign.value * 10);
     const plusOne = a.computed(() => scaled.value + 1);
@@ -64,8 +71,8 @@ describe("cross-copy computed refresh and activation", () => {
   });
 
   it("stops polling once an effect activates the bridge, and polls again after it goes", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const foreign = b.signal(1);
     const scaled = a.computed(() => foreign.value * 10);
     const seen: number[] = [];
@@ -82,8 +89,8 @@ describe("cross-copy computed refresh and activation", () => {
 
 describe("cross-copy untracked (C3)", () => {
   it("does not track a read under another copy's untracked()", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const appSignal = b.signal(0);
     let runs = 0;
     const stop = b.effect(() => {
@@ -96,8 +103,8 @@ describe("cross-copy untracked (C3)", () => {
   });
 
   it("does not track in the reverse direction", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const appSignal = a.signal(0);
     let runs = 0;
     const stop = a.effect(() => {
@@ -110,8 +117,8 @@ describe("cross-copy untracked (C3)", () => {
   });
 
   it("does not track a computed read under another copy's untracked()", () => {
-    const a = createReactiveRuntime();
-    const b = createReactiveRuntime();
+    const a = createRenderRuntime();
+    const b = createRenderRuntime();
     const source = b.signal(1);
     const doubled = b.computed(() => source.value * 2);
     let runs = 0;
@@ -129,7 +136,7 @@ describe("cross-copy untracked (C3)", () => {
   });
 
   it("does not track deep-signal reads under another copy's untracked()", () => {
-    const other = createReactiveRuntime();
+    const other = createRenderRuntime();
     const state = deepSignal({ count: 0, items: [1] });
     let runs = 0;
     const stop = effect(() => {
@@ -146,7 +153,7 @@ describe("cross-copy untracked (C3)", () => {
   });
 
   it("keeps ordinary local untracked() working", () => {
-    const a = createReactiveRuntime();
+    const a = createRenderRuntime();
     const source = a.signal(0);
     const tracked = a.signal(0);
     let runs = 0;
@@ -165,7 +172,7 @@ describe("cross-copy untracked (C3)", () => {
 
 describe("effect lifecycle", () => {
   it("does not stay subscribed to reads made after disposing itself mid-run", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const ready = runtime.signal(false);
     const other = runtime.signal(0);
     let runs = 0;
@@ -187,7 +194,7 @@ describe("effect lifecycle", () => {
   });
 
   it("reports an indirect computed cycle instead of returning a stale value", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const input = runtime.signal(1);
     // eslint-disable-next-line prefer-const
     let second: { readonly value: number } | undefined;
@@ -198,7 +205,7 @@ describe("effect lifecycle", () => {
   });
 
   it("keeps library-internal subscriptions alive when they are created inside a user effect", () => {
-    const runtime = createReactiveRuntime();
+    const runtime = createRenderRuntime();
     const outer = runtime.signal(0);
     const watched = runtime.signal(0);
     const notify = vi.fn();
