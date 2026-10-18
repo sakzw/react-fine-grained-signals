@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M18.6.1 Match equals Type Narrowing Fixを完了。`Signal<string>`と文字列literalのcallback型を修正し、falsy/Union/undefinedと公開`MatchProps<T,E>`を検証。packed consumer・React focused tests・root/website typecheckとbuildが成功。詳細は[M18.6 record](m18.6-reactive-match.ja.md)。M18.6ではMatch equalsでSignal値の分岐、親render回避、Object.is比較を実装・検証済み。
+- 状態: M18.7 Deep Selector Hook DXを完了。`useDeepSignalValue`のdependencies省略、初期selector closure保持、依存モード・長さ検証とドキュメントを追加。検証結果は[M18.7 record](m18.7-deep-selector-dx.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M18.6.1 Match equals Type Narrowing Fix（公開callback型、MatchProps契約、Consumer型チェック）。M18.6 Reactive Match DX Improvement（購読境界・Object.is比較・React/SSR/Concurrent検証）を補完。詳細は[M18.6 record](m18.6-reactive-match.ja.md)。
+- 最新実装マイルストーン: M18.7 Deep Selector Hook DX（dependencies省略、closure意味論、依存モード検証）。詳細は[M18.7 record](m18.7-deep-selector-dx.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -54,6 +54,7 @@
 | M18.4 | List Rendering Improvement | M18.3 | `For`/`Index`の親map・key identity・row trackingを調査し、候補を実装前後の測定とReact契約で評価 | 完了。`Index`直接key付与は初回PoCで改善したが、製品build再測定でmount/single updateに一貫した改善を再現できず不採用。`For`も複数operationの後退から不採用。製品runtime/API変更なし。Rollup diagnostics smokeを補完し、React control-flow/SSR/Concurrent、typecheck/build/size pass。詳細は[M18.4 list rendering](m18.4-list-rendering.ja.md) |
 | M18.5 | Documentation & Consumer Dogfooding | M18.4 | 英語ガイドを補完し、既存APIを使う実操作デモをVocs static/React client環境で検証 | 完了。既存9ページを維持して4ガイドを追加。Form binding双方向、For/Index操作とrender数、Deep Signal局所更新、Managed/Hook shared state、control flowをstatic previewのChromiumで確認。typecheck/build/smoke成功。Runtime/API変更なし。詳細は[M18.5 record](m18.5-documentation-dogfooding.ja.md) |
 | M18.6 | Reactive Match DX Improvement | M18.5 | SwitchがSignal値を購読してObject.isによるMatch分岐を選び、親renderを避けるAPIを検討・実装 | 完了。Match equals、Falsy/undefined比較、型絞り込み、親renderなしを実装。Control Flow/SSR/Concurrent、React Compiler consumer、website Chromium、bundle sizeを確認。詳細は[M18.6 record](m18.6-reactive-match.ja.md) |
+| M18.7 | Deep Selector Hook DX | M18.6 | `useDeepSignalValue`のdependenciesを省略可能にし、Signal-only selectorを自然に記述しながらclosure・購読・Reactの正確性を維持 | 完了。省略時の初期closure保持、明示depsとのmode固定、型・SSR/Concurrent/StrictMode・Websiteを検証。詳細は[M18.7 record](m18.7-deep-selector-dx.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -72,6 +73,6 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 ## 次の作業案
 
-旧M18 Release Execution Checklistと旧M18公開準備計画は延期した。M18.1で独立Vocsサイトを構築・dogfoodし、M18.2でWebsite CIと手動Pages workflowを整え、M18.3でdiagnosticsとwebpack/Rspack source-map loaderのレビュー残課題を完了した。M18.4では`For`/`Index`の描画候補を比較したが、効果が再現できずruntime変更を採用しなかった。M18.5で実利用ガイドとデモを補完し、M18.6でMatch equalsによるSignal値分岐を実装・検証した。次はConsumer dogfoodingから次の新機能・API/DX・性能改善を選ぶ。M18.5はドキュメントとdogfoodingの完了であり、release freezeや最終scope判断ではない。npm publish、Git tag、GitHub Release、Pages deployはこの計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
+旧M18 Release Execution Checklistと旧M18公開準備計画は延期した。M18.1で独立Vocsサイトを構築・dogfoodし、M18.2でWebsite CIと手動Pages workflowを整え、M18.3でdiagnosticsとwebpack/Rspack source-map loaderのレビュー残課題を完了した。M18.4では`For`/`Index`の描画候補を比較したが、効果が再現できずruntime変更を採用しなかった。M18.5で実利用ガイドとデモを補完し、M18.6でMatch equalsによるSignal値分岐を実装、M18.7でdeep selector Hookの省略APIを改善した。次はConsumer dogfoodingから次の新機能・API/DX・性能改善を選ぶ。M18.5はドキュメントとdogfoodingの完了であり、release freezeや最終scope判断ではない。npm publish、Git tag、GitHub Release、Pages deployはこの計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。

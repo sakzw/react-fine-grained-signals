@@ -137,17 +137,24 @@ Subscribes to a single signal and returns its current value. This is the low-lev
 useDeepSignalValue<T extends object, S extends SignalSnapshot>(
   source: DeepSignal<T>,
   selector: (value: T) => S,
-  dependencies: DependencyList,
+  dependencies?: DependencyList,
 ): S
 ```
 
 Subscribes to one primitive derived from a deep signal.
 
 ```tsx
-const name = useDeepSignalValue(state, (value) => value.user.name, []);
+const name = useDeepSignalValue(state, (value) => value.user.name);
+const label = useDeepSignalValue(
+  state,
+  (value) => `${prefix}: ${value.user.name}`,
+  [prefix],
+);
 ```
 
-- `dependencies` is required, must keep a constant length and order, and must list every non-signal value the selector captures. A length change between renders throws.
+- Omitting `dependencies` retains the initial selector closure. Use this when the selector reads only signal state; props, React state, and other captured values are not automatically tracked.
+- Pass `[]` to choose an explicit empty dependency array, or list every captured non-signal value (for example `[prefix]`) so the selector updates with it. Omitted and explicit modes cannot be switched at the same call site during the component's lifetime.
+- An explicit dependency array must keep a constant length and order. A length change between renders throws.
 - The selector must return a primitive snapshot. Object, Proxy, and function results are rejected at runtime with a `TypeError` because mutable results do not provide stable snapshot identity.
 
 See also: [core primitives](./core-primitives.md), [rendering optimization](./rendering-optimization.md).

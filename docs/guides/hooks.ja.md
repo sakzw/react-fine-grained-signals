@@ -135,17 +135,24 @@ useSignalValue<T>(source: ReadonlySignal<T>): T // deepSignalはコンパイル�
 useDeepSignalValue<T extends object, S extends SignalSnapshot>(
   source: DeepSignal<T>,
   selector: (value: T) => S,
-  dependencies: DependencyList,
+  dependencies?: DependencyList,
 ): S
 ```
 
 deep signalから導出したプリミティブ1つを購読します。
 
 ```tsx
-const name = useDeepSignalValue(state, (value) => value.user.name, []);
+const name = useDeepSignalValue(state, (value) => value.user.name);
+const label = useDeepSignalValue(
+  state,
+  (value) => `${prefix}: ${value.user.name}`,
+  [prefix],
+);
 ```
 
-- `dependencies` は必須で、長さと順序を一定に保ち、selectorが捕捉するsignal以外の値をすべて列挙してください。レンダー間で長さが変わると例外を投げます。
+- `dependencies` を省略すると、最初のselector closureを保持します。signalの状態だけを読むselectorに使ってください。props、React state、その他の捕捉値を自動追跡することはありません。
+- `[]` は明示的な空依存配列です。`[prefix]` のようにsignal以外の捕捉値をすべて列挙すると、その値の変更時にselectorが更新されます。同じ呼び出し箇所で省略モードと明示モードを途中で切り替えることはできません。
+- 明示的な依存配列は長さと順序を一定に保ってください。レンダー間で長さが変わると例外を投げます。
 - selectorはプリミティブなsnapshotを返す必要があります。object、Proxy、functionを返すと、runtimeで `TypeError` になります。mutableな値は安定したsnapshot identityを保証できないためです。
 
 関連: [コアプリミティブ](./core-primitives.ja.md)、[描画最適化](./rendering-optimization.ja.md)。

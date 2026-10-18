@@ -23,6 +23,7 @@ const EMPTY_DEPENDENCIES: DependencyList = [];
 
 /** Which of `useComputed`'s two mutually exclusive modes a call site uses. */
 type ComputedMode = "without a dependency array" | "with a dependency array";
+type DeepSignalValueMode = ComputedMode;
 type ComputedCapability = "read-only" | "writable";
 
 /** An immutable value that React can safely compare as an external-store snapshot. */
@@ -165,16 +166,16 @@ export function useDeepSignal<T extends object>(
 /**
  * Selects a property-level primitive snapshot from a deep signal.
  *
- * Every non-signal value captured by `selector` must be listed in
- * `dependencies`. Object and proxy results are intentionally rejected because
- * mutable snapshots cannot satisfy `useSyncExternalStore` identity semantics.
+ * When `dependencies` is omitted, the initial selector closure is retained and
+ * it must only depend on the deep signal. When provided, every non-signal
+ * value captured by `selector` must be listed. Object and proxy results are
+ * intentionally rejected because mutable snapshots cannot satisfy
+ * `useSyncExternalStore` identity semantics.
  *
- * `dependencies` must keep a fixed length across this component's lifetime,
- * matching `useMemo`'s own rule (its length feeds a `useMemo` deps array
- * below via `[source, ...dependencies]`). A length change is caught and
- * thrown as a clear error rather than left to degrade into React's silent
- * "changed size between renders" dev warning, mirroring `useComputed`'s
- * dependency-mode-switch guard.
+ * Choose either omitted or explicit dependencies for this call site for its
+ * lifetime. An explicit dependency array must keep a fixed length, matching
+ * `useMemo`'s rules. Mode and length changes are caught and thrown as clear
+ * errors rather than left to degrade into React's silent warning.
  */
 export function useDeepSignalValue<
   T extends object,
@@ -182,8 +183,21 @@ export function useDeepSignalValue<
 >(
   source: DeepSignal<T>,
   selector: (value: T) => S,
-  dependencies: DependencyList,
+  dependencies?: DependencyList,
 ): S {
+  const initialModeRef = useRef<DeepSignalValueMode | undefined>(undefined);
+  const mode: DeepSignalValueMode = dependencies === undefined
+    ? "without a dependency array"
+    : "with a dependency array";
+  initialModeRef.current ??= mode;
+  if (initialModeRef.current !== mode) {
+    const error = new Error(
+      `useDeepSignalValue: the dependency-array mode changed between renders (from ${initialModeRef.current} to ${mode}) for this call site. Keep either omitting dependencies or passing an array consistently.`,
+    );
+    error.name = "UseDeepSignalValueModeChangeError";
+    throw error;
+  }
+
   // A variable-length `dependencies` would otherwise only surface as React's
   // dev-mode "changed size between renders" warning on the `useMemo` call
   // below, while silently recreating the store (and losing selector/error
@@ -191,8 +205,13 @@ export function useDeepSignalValue<
   // guard below: a violation is a loud, actionable error instead of a
   // silently degraded memo.
   const initialDependencyLengthRef = useRef<number | undefined>(undefined);
-  initialDependencyLengthRef.current ??= dependencies.length;
-  if (dependencies.length !== initialDependencyLengthRef.current) {
+  if (dependencies !== undefined) {
+    initialDependencyLengthRef.current ??= dependencies.length;
+  }
+  if (
+    dependencies !== undefined &&
+    dependencies.length !== initialDependencyLengthRef.current
+  ) {
     const error = new Error(
       `useDeepSignalValue: the \`dependencies\` array length changed between renders (from ${initialDependencyLengthRef.current} to ${dependencies.length}) for this call site. Keep \`dependencies\` a fixed length across the component's lifetime, matching useMemo's rules.`,
     );
@@ -202,7 +221,7 @@ export function useDeepSignalValue<
 
   const store = useMemo(
     () => createDeepSelectorStore(source, selector),
-    [source, ...dependencies],
+    dependencies === undefined ? [source] : [source, ...dependencies],
   );
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }

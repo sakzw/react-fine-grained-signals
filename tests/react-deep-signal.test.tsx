@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { Component, StrictMode, act } from "react";
+import { Component, StrictMode, Suspense, act } from "react";
 import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -488,7 +488,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
 
     function Name({ state }: { state: typeof first }) {
       return <output aria-label="state prop name">{
-        useDeepSignalValue(state, (value) => value.user.name, [])
+        useDeepSignalValue(state, (value) => value.user.name)
       }</output>;
     }
 
@@ -598,7 +598,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       const name = useDeepSignalValue(state, (value) => {
         selectorCalls();
         return value.user.name;
-      }, []);
+      });
       renders();
       return <output aria-label="memoized selector">{`${parentVersion}:${name}`}</output>;
     }
@@ -673,6 +673,86 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       /`dependencies` array length changed between renders/,
     );
     errorSpy.mockRestore();
+  });
+
+  it("rejects switching between omitted and explicit dependency modes", () => {
+    const state = deepSignal({ count: 1 });
+
+    function Selected({ withDependencies }: { withDependencies: boolean }) {
+      const dependencies = withDependencies ? [] : undefined;
+      const value = useDeepSignalValue(state, (current) => current.count, dependencies);
+      return <output aria-label="dependency mode guard">{value}</output>;
+    }
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<Selected withDependencies={false} />);
+    expect(() => view.rerender(<Selected withDependencies />)).toThrow(
+      /dependency-array mode changed between renders/,
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("rejects switching from explicit to omitted dependencies", () => {
+    const state = deepSignal({ count: 1 });
+
+    function Selected({ withDependencies }: { withDependencies: boolean }) {
+      const dependencies = withDependencies ? [] : undefined;
+      const value = useDeepSignalValue(state, (current) => current.count, dependencies);
+      return <output aria-label="reverse dependency mode guard">{value}</output>;
+    }
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<Selected withDependencies />);
+    expect(() => view.rerender(<Selected withDependencies={false} />)).toThrow(
+      /dependency-array mode changed between renders/,
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("keeps committed selector stores intact when a source-changing render suspends", async () => {
+    const first = deepSignal({ user: { name: "Ada" } });
+    const second = deepSignal({ user: { name: "Grace" } });
+    let release!: () => void;
+    let isPending = true;
+    const pending = new Promise<void>((resolve) => {
+      release = () => { isPending = false; resolve(); };
+    });
+    const renders = vi.fn();
+
+    function Selected({ source, suspend }: { source: typeof first; suspend: boolean }) {
+      const name = useDeepSignalValue(source, (value) => value.user.name);
+      if (suspend && isPending) throw pending;
+      renders(name);
+      return <output aria-label="suspended selector">{name}</output>;
+    }
+
+    const view = render(
+      <Suspense fallback={<output aria-label="selector fallback">loading</output>}>
+        <Selected source={first} suspend={false} />
+      </Suspense>,
+    );
+    expect(screen.getByLabelText("suspended selector").textContent).toBe("Ada");
+
+    view.rerender(
+      <Suspense fallback={<output aria-label="selector fallback">loading</output>}>
+        <Selected source={second} suspend />
+      </Suspense>,
+    );
+    expect(screen.getByLabelText("selector fallback").textContent).toBe("loading");
+    release();
+    await act(async () => { await pending; });
+    view.rerender(
+      <Suspense fallback={<output aria-label="selector fallback">loading</output>}>
+        <Selected source={second} suspend={false} />
+      </Suspense>,
+    );
+
+    expect(screen.getByLabelText("suspended selector").textContent).toBe("Grace");
+    const rendersAfterReveal = renders.mock.calls.length;
+    act(() => { first.value.user.name = "ignored"; });
+    expect(renders).toHaveBeenCalledTimes(rendersAfterReveal);
+    act(() => { second.value.user.name = "Lin"; });
+    expect(screen.getByLabelText("suspended selector").textContent).toBe("Lin");
   });
 
   it("cleans a selected deep subscription during StrictMode unmount", () => {

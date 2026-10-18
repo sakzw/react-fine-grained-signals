@@ -598,7 +598,7 @@ describe("SSR and hydration", () => {
 
     function App() {
       const state = useDeepSignal(() => ({ user: { name: "Ada" } }));
-      const name = useDeepSignalValue(state, (value) => value.user.name, []);
+      const name = useDeepSignalValue(state, (value) => value.user.name);
       clientState = state;
       return <span data-testid="deep-value">{name}</span>;
     }

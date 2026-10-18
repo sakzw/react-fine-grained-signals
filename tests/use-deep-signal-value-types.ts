@@ -14,6 +14,7 @@ function TypeContract({ prefix }: { prefix: string }) {
     tasks: [{ id: 1, done: false }],
   });
   const name: string = useDeepSignalValue(state, (value) => value.user.name, []);
+  const signalOnlyName: string = useDeepSignalValue(state, (value) => value.user.name);
   const firstTaskDone: boolean | undefined = useDeepSignalValue(
     state,
     (value) => value.tasks[0]?.done,
@@ -35,8 +36,10 @@ function TypeContract({ prefix }: { prefix: string }) {
   useDeepSignalValue(state, (value) => value.missing, []);
   // @ts-expect-error Object selectors are rejected because mutable snapshots lack stable identity.
   useDeepSignalValue(state, (value) => value.user, []);
+  // @ts-expect-error Object snapshots remain rejected when dependencies are omitted.
+  useDeepSignalValue(state, (value) => value.user);
 
-  void [name, firstTaskDone, optionalLabel, label, badName];
+  void [name, signalOnlyName, firstTaskDone, optionalLabel, label, badName];
 }
 
 void TypeContract;

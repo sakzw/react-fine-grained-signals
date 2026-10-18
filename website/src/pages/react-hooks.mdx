@@ -84,12 +84,25 @@ its own call; the window is not inherited from a parent.
 
 ```ts
 useSignalValue<T>(source: ReadonlySignal<T>): T
-useDeepSignalValue<T extends object, S>(source: DeepSignal<T>, selector: (value: T) => S, dependencies: DependencyList): S
+useDeepSignalValue<T extends object, S>(source: DeepSignal<T>, selector: (value: T) => S, dependencies?: DependencyList): S
 ```
 
 Explicit single subscriptions, for when you want one named subscription instead
 of a component-wide window. `useDeepSignalValue` selects one primitive from deep
-state.
+state. Omitting dependencies retains the initial selector closure and is for
+selectors that read only signal state; it does not track props automatically.
+Use `[]` for an explicit empty dependency array, or pass every captured
+non-signal value such as `[prefix]`. Keep the chosen mode and explicit array
+length stable for the lifetime of the component.
+
+```tsx
+const name = useDeepSignalValue(state, (value) => value.user.name);
+const label = useDeepSignalValue(
+  state,
+  (value) => `${prefix}: ${value.user.name}`,
+  [prefix],
+);
+```
 
 ## Control flow
 
