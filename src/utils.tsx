@@ -24,6 +24,8 @@ import { useManagedSignals } from "./react/use-signals.js";
 /** A plain value or a value created by `signal`, `computed`, or `deepSignal`. */
 export type SignalInput<T> = T | ReadonlySignal<T>;
 
+type MatchValue<T, E> = [Extract<T, E>] extends [never] ? E : Extract<T, E>;
+
 /** Renders its children only while `when` is truthy. */
 export interface ShowProps<T> {
   when: SignalInput<T>;
@@ -51,18 +53,22 @@ export function Show<T>({ when, fallback = null, children }: ShowProps<T>): Reac
   }
 }
 
-/** A branch declaration consumed by the nearest `Switch`. */
-export type MatchProps<T, E extends T = T> =
-  | {
-      when: SignalInput<T>;
-      /** When provided, match this value using `Object.is`, including falsy values. */
-      equals: E;
-      children: ReactNode | ((value: E) => ReactNode);
-    }
-  | {
+/**
+ * A branch declaration consumed by the nearest `Switch`.
+ * Omit E for legacy truthy matching; provide E to describe the equals value
+ * and the corresponding callback value.
+ */
+export type MatchProps<T, E extends T = never> = [E] extends [never]
+  ? {
       when: SignalInput<T>;
       equals?: never;
       children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+    }
+  : {
+      when: SignalInput<T>;
+      /** When provided, match this value using `Object.is`, including falsy values. */
+      equals: E;
+      children: ReactNode | ((value: MatchValue<T, E>) => ReactNode);
     };
 
 /**
@@ -70,9 +76,9 @@ export type MatchProps<T, E extends T = T> =
  */
 export function Match<T, const E>(props: {
   when: SignalInput<T>;
-  equals: E extends NoInfer<T> ? E : never;
-  children: ReactNode | ((value: Extract<T, E>) => ReactNode);
-}): null;
+  equals: E;
+  children: ReactNode | ((value: MatchValue<T, E>) => ReactNode);
+} & (E extends NoInfer<T> ? unknown : never)): null;
 export function Match<T>(props: {
   when: SignalInput<T>;
   equals?: never;
