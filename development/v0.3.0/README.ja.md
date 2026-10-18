@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M18.9 Runtime & Bundle Optimizationを完了。Render AdapterをReact接続時に遅延初期化し、signal-only/core consumerで約1.27 KB gzip、5,000 Runtimeの比較で約7.76 MBのretained heapを削減。全Runtime test、Consumer smoke、既存size budgetが成功。検証記録は[M18.9 record](m18.9-runtime-bundle-optimization.ja.md)。
+- 状態: M18.10 Core Hot Path Optimizationを完了。CPU profileでcomputed生成とinterop/brand初期化経路を確認し、Render revision遅延PoCは50,000 node当たり約0.39 MBのheap削減を示したが、Core速度向上を立証できず、全Consumer bundleが増加してindex-full size budgetも超えたため不採用。製品コード変更なし。詳細は[M18.10 record](m18.10-core-hot-path-optimization.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M18.9 Runtime & Bundle Optimization（Core-only/Deep/JSX ConsumerのRender Adapter負荷削減）。詳細は[M18.9 record](m18.9-runtime-bundle-optimization.ja.md)。
+- 最新実装マイルストーン: M18.10 Core Hot Path Optimization（profileと比較を行ったが製品変更は不採用）。詳細は[M18.10 record](m18.10-core-hot-path-optimization.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -57,6 +57,7 @@
 | M18.7 | Deep Selector Hook DX | M18.6 | `useDeepSignalValue`のdependenciesを省略可能にし、Signal-only selectorを自然に記述しながらclosure・購読・Reactの正確性を維持 | 完了。省略時の初期closure保持、明示depsとのmode固定、型・SSR/Concurrent/StrictMode・Websiteを検証。詳細は[M18.7 record](m18.7-deep-selector-dx.ja.md) |
 | M18.8 | Numeric Form Binding | M18.7 | `input[type="number"]`を`bindValue`で利用可能にし、string Signal、ブラウザ数値入力semantics、SSR/hydrationとReactイベント順を維持 | 完了。focused/runtime/SSR、Chromium/Firefox/WebKit、Website standalone install/build/smoke、bundle budgetを確認。GitHub Test/E2E/Website CI成功。詳細は[M18.8 record](m18.8-numeric-form-binding.ja.md) |
 | M18.9 | Runtime & Bundle Optimization | M18.8 | Core-only Consumerから不要なRender Adapter初期化を除き、同一Consumer bundle・heap・hot path測定で採否を決める | 完了。同期lazy initializationを採用。signal-only/core gzipを約1.27 KB、deepを約1.09 KB、jsx-runtimeを約1.26 KB削減。5,000 Runtimeのretained heapは中央値約7.76 MB減。React bundleは小幅増だが既存budget内。Full Runtime 915/915、packed Consumer/duplicate/mixed-version smoke、build/typecheck/lint成功。commit `6c2309e`の[GitHub Test](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39138957225)、[Browser E2E](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39138957097)、[Website CI](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39138957066)も成功。詳細は[M18.9 record](m18.9-runtime-bundle-optimization.ja.md) |
+| M18.10 | Core Hot Path Optimization | M18.9 | Core CPU/allocation/retained heap profileで実証可能な改善を選び、React/interop/size契約を保つ | 完了。computed生成でinterop/brand初期化がprofile上の上位。Core-only nodeのRender revision遅延PoCは50,000 retained Signalで約398 KB、未評価computedで約393 KB減ったが、CPU比の中央値は安定せず、同じcheckoutで比較したgzip bundleは全scenarioで5〜20 B増加しindex-fullが24,720 Bで上限24,704 Bを超えたため不採用。製品コード変更なし。focused runtime 54/54とtypecheck pass。raw結果は[Core paired samples](m18.10-core-paired.jsonl)、[retained heap](m18.10-retained-heap.jsonl)。詳細は[M18.10 record](m18.10-core-hot-path-optimization.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -75,6 +76,6 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 ## 次の作業案
 
-旧M18 Release Execution Checklistと旧M18公開準備計画は延期した。M18.1で独立Vocsサイトを構築・dogfoodし、M18.2でWebsite CIと手動Pages workflowを整え、M18.3でdiagnosticsとwebpack/Rspack source-map loaderのレビュー残課題を完了した。M18.4では`For`/`Index`の描画候補を比較したが、効果が再現できずruntime変更を採用しなかった。M18.5で実利用ガイドとデモを補完し、M18.6でMatch equalsによるSignal値分岐を実装、M18.7でdeep selector Hookの省略APIを改善、M18.8で数値inputをstring Signalとしてbindingし、M18.9でCore-only/Deep/JSX ConsumerのRender Adapter初期化と保持量を削減した。次はCore hot pathのノイズを避けたprofile、または新しいConsumer課題から次のAPI/DX・性能改善を選ぶ。M18.9はbundle/runtime改善の完了であり、release freezeや最終scope判断ではない。npm publish、Git tag、GitHub Release、Pages deployはこの計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
+旧M18 Release Execution Checklistと旧M18公開準備計画は延期した。M18.1で独立Vocsサイトを構築・dogfoodし、M18.2でWebsite CIと手動Pages workflowを整え、M18.3でdiagnosticsとwebpack/Rspack source-map loaderのレビュー残課題を完了した。M18.4では`For`/`Index`の描画候補を比較したが、効果が再現できずruntime変更を採用しなかった。M18.5で実利用ガイドとデモを補完し、M18.6でMatch equalsによるSignal値分岐を実装、M18.7でdeep selector Hookの省略APIを改善、M18.8で数値inputをstring Signalとしてbindingし、M18.9でCore-only/Deep/JSX ConsumerのRender Adapter初期化と保持量を削減した。M18.10ではCore hot pathをprofileし、測定できたheap差がbundle制約を満たさずCPU改善も再現しなかったため製品変更を採用しなかった。次は具体的なConsumer workloadまたはReact/Managed Transformのボトルネックを起点に改善候補を選ぶ。M18.9/M18.10はbundle/runtime調査の完了であり、release freezeや最終scope判断ではない。npm publish、Git tag、GitHub Release、Pages deployはこの計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。
