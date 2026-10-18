@@ -1,0 +1,40 @@
+import { Demo } from '../components/Demo'
+import { ControlFlowDemo } from '../components/demos/ControlFlowDemo'
+
+# Control Flow and Lists
+
+The `react-fine-grained-signals/utils` entry point exports `Show`, `Switch`,
+`Match`, `For`, and `Index`. Each utility owns the signal reads in its input,
+so a change updates that boundary instead of the parent component.
+
+## Show, Switch, and Match
+
+`Show` renders its children for a truthy value and otherwise renders
+`fallback` (which defaults to `null`). A function child receives the narrowed
+truthy value. `Switch` renders the first matching `Match`; `Match` has no
+meaning outside a `Switch`.
+
+<Demo title="Show / Switch / Match"><ControlFlowDemo /></Demo>
+
+## For and Index
+
+`For` is for items with stable identity. Supply a pure, stable `by` key; React
+uses it to preserve row component state when items move. On a collection
+change, the `For` boundary maps the collection and invokes the child callback
+for each item. Keys help React reconcile the result, but do not skip those
+callback invocations.
+
+`Index` is for position identity. Its callback receives an accessor for the
+current value at that position. Use it when a row represents a slot and the
+value in that slot may change.
+
+For fine-grained nested edits, let each row component subscribe to the deep
+properties it renders (using the managed transform or
+`useSignalTracking()`). Then a property write can update that row without
+re-rendering the list owner. Replacing the entire array is different: the list
+boundary runs again and React reconciles the rows.
+
+See [Interactive Examples](/examples#for-and-index) for add, delete, reorder,
+immutable replacement, and a nested Deep Signal update.
+
+Full API contract: [control-flow guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/control-flow.md).

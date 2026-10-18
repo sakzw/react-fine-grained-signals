@@ -112,6 +112,12 @@ has not been run as part of this change.
 
 ## Content
 
-The pages in `src/pages` are English adaptations of the guides in the
-repository's [`docs/`](../docs), which remain the complete, bilingual
-reference; each page links to its full guide.
+The pages in `src/pages` are concise, English, site-specific guides and
+interactive tutorials. The bilingual Markdown files in the repository's
+[`docs/guides/`](../docs/guides) and [`docs/migration/`](../docs/migration)
+remain the canonical, complete API and migration references. Site pages link
+to the relevant canonical source; they do not import files from the parent
+repository, so the website can be moved and built on its own. When API
+semantics change, update the canonical Markdown first and then refresh the
+site summary/example and its link. This keeps duplication intentional and
+small rather than maintaining two complete copies of each guide.

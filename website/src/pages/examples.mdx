@@ -1,9 +1,11 @@
 import { Demo } from '../components/Demo'
 import { ComputedDemo } from '../components/demos/ComputedDemo'
+import { ControlFlowDemo } from '../components/demos/ControlFlowDemo'
 import { Counter } from '../components/demos/Counter'
 import { DeepSignalDemo } from '../components/demos/DeepSignalDemo'
 import { ForIndexDemo } from '../components/demos/ForIndexDemo'
 import { FormBindingDemo } from '../components/demos/FormBindingDemo'
+import { SharedStateDemo } from '../components/demos/SharedStateDemo'
 import { JsxBindingDemo } from '../components/demos/JsxBindingDemo'
 import { Thermostat, UntrackedThermostat } from '../components/demos/ManagedTransformDemo'
 
@@ -41,8 +43,9 @@ Property-level tracking for nested objects, arrays, and a `Map`.
 
 ## Form Binding
 
-`bindValue` and `bindChecked` on text, radio, checkbox-group, and single
-checkbox inputs. The summary is a signal child.
+`bindValue` and `bindChecked` on text, radio, single and multiple select,
+checkbox-group, and single checkbox inputs. Change a control or apply the
+programmatic Signal preset and watch the DOM stay in sync.
 
 <Demo title="Form Binding">
   <FormBindingDemo />
@@ -50,12 +53,28 @@ checkbox inputs. The summary is a signal child.
 
 ## For and Index
 
-`For` keys rows by identity; `Index` keys them by position. Both are their own
-reactive boundary, so the component that owns the list does not re-render.
+`For` keys rows by identity; `Index` keys them by position. Add, remove, reorder,
+replace the collection immutably, or update a nested Deep Signal property.
+Render counters show the difference between collection reconciliation and a
+row-local update.
 
 <Demo title="For / Index">
   <ForIndexDemo />
 </Demo>
+
+## Control Flow
+
+Toggle `Show` and choose the active `Switch` / `Match` branch.
+
+<Demo title="Control Flow"><ControlFlowDemo /></Demo>
+
+## Shared State
+
+Independent components read one module-level client signal, one through
+Managed Transform and one through `useSignalValue`. Updating it does not
+re-render their common demo owner.
+
+<Demo title="Shared State"><SharedStateDemo /></Demo>
 
 ## JSX Direct Binding
 

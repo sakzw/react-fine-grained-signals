@@ -1,0 +1,30 @@
+import { Demo } from '../components/Demo'
+import { SharedStateDemo } from '../components/demos/SharedStateDemo'
+
+# Shared and Global State
+
+A signal can live outside a component and be imported by multiple components.
+The components subscribe independently: one may use Managed Transform and
+another `useSignalValue`, and both receive writes without a common state-owning
+component re-rendering.
+
+<Demo title="One signal, independent readers" note="The two readers update independently. The demo owner stays at its initial render count.">
+  <SharedStateDemo />
+</Demo>
+
+```tsx
+// client-store.ts
+export const selectedTab = signal('overview')
+
+// Any client component can subscribe:
+function TabLabel() { return <span>{selectedTab.value}</span> } // managed transform
+function TabCount() { return <span>{useSignalValue(selectedTab)}</span> } // Hook
+```
+
+Use module-level signals for shared client state. A module singleton on a
+server is shared across requests and can leak user data; it can also produce
+different server and browser initial values. For request-specific SSR state,
+create a store per request and pass it through React context, then hydrate with
+the same initial snapshot.
+
+Full guidance: [global state guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/global-state.md).

@@ -1,0 +1,26 @@
+# Rendering Optimization
+
+Start by placing signal reads at the smallest component or binding that needs
+them. RFSG offers three complementary boundaries:
+
+- **JSX direct binding** writes supported signal-valued children and DOM
+  properties directly; the owning React component need not render again.
+- **Managed Transform** subscribes a component or Hook to synchronous signal
+  reads it makes while rendering. Reads in event handlers and after `await`
+  are not render dependencies.
+- **Hooks** such as `useSignalValue` or `useSignalTracking` give explicit
+  subscriptions when you want the boundary visible in source.
+
+`For` and `Index` own collection reads, keeping the list owner stable. They
+still produce React children on collection changes. Stable keys preserve row
+identity, but do not avoid callback execution or React reconciliation. For
+nested `deepSignal` state, put a tracking boundary inside each row and read the
+properties there; a write to one nested property can then update only that row.
+Replacing the collection immutably is a collection update and invokes the list
+callback for each item.
+
+Measure the operation your application performs and keep React semantics
+intact. Avoid adding memoization around signal reads without checking that
+subscriptions remain active.
+
+See the [rendering optimization guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/rendering-optimization.md) and the [For / Index demo](/examples#for-and-index).

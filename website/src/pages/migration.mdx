@@ -1,0 +1,27 @@
+# Migrate from v0.2.x to v0.3.0
+
+The v0.3.0 line changes deep collection behavior, JSX form bindings, and the
+Managed Transform's tracking boundary. Review the complete guide before
+upgrading, then run your typecheck and browser tests against the application.
+
+## Check these changes first
+
+- Deep Signal collections now expose reactive Map/Set and nested collection
+  behavior; review code that relied on earlier readonly collection views.
+- Signal-valued JSX form props use explicit `bindValue` and `bindChecked`
+  bindings. Update legacy `value` / `checked` signal props and verify both DOM
+  events and programmatic signal writes.
+- Managed tracking captures synchronous reads at read sites, rather than
+  tracking every read made by the whole function. Audit helpers, callbacks,
+  aliases, and reads after asynchronous boundaries. Add explicit tracking when
+  automatic analysis cannot establish the desired boundary.
+- Hook and writable-computed TypeScript signatures have evolved. Let the
+  compiler identify affected call sites rather than applying broad casts.
+
+```tsx
+<input bindValue={name} />
+<input type="checkbox" bindChecked={enabled} />
+```
+
+This page is a checklist, not a substitute for the complete versioned
+migration notes: [v0.3 migration guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.3.md).

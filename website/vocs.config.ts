@@ -39,6 +39,10 @@ export default defineConfig({
         { text: 'Managed Transform', link: '/managed-transform' },
         { text: 'JSX Direct Binding', link: '/jsx-direct-binding' },
         { text: 'Deep Signal & Collections', link: '/deep-signal' },
+        { text: 'Control Flow & Lists', link: '/control-flow' },
+        { text: 'Shared State', link: '/global-state' },
+        { text: 'Rendering Optimization', link: '/rendering-optimization' },
+        { text: 'Migration from v0.2.x', link: '/migration' },
       ],
     },
     {

@@ -23,6 +23,7 @@ const origin = external ?? `http://127.0.0.1:${port}`
 const pages = [
   '/', '/installation', '/getting-started', '/core-signals', '/react-hooks',
   '/managed-transform', '/jsx-direct-binding', '/deep-signal', '/examples',
+  '/control-flow', '/global-state', '/rendering-optimization', '/migration',
 ]
 
 const server = external === undefined
@@ -125,16 +126,50 @@ try {
   const form = demo('form')
   await form.getByRole('textbox').fill('Grace')
   await form.getByLabel('Pro').check()
-  await form.getByLabel('Export').check()
+  await form.getByRole('checkbox', { name: 'Export' }).check()
   await form.getByLabel('Subscribe to updates').uncheck()
-  check((await text(form.getByTestId('summary'))) === 'Grace · pro · search, export · not subscribed', 'form bindings write their signals')
+  await form.getByLabel('Region').selectOption('apac')
+  await form.getByLabel('Export formats').selectOption(['csv', 'xml'])
+  check((await text(form.getByTestId('summary'))) === 'Grace · pro · apac · csv+xml · search, export · not subscribed', 'form DOM changes write text, checkbox, single-select, and multi-select signals')
+  await form.getByRole('button', { name: 'Apply Signal preset' }).click()
+  check((await text(form.getByTestId('summary'))) === 'Grace · pro · us · csv+json · search, export · not subscribed', 'programmatic signal writes update bound form controls')
+  check(await form.getByLabel('Region').inputValue() === 'us', 'single select reflects a programmatic signal write')
+  check((await form.getByLabel('Export formats').evaluate((node) => [...node.selectedOptions].map((option) => option.value).join(','))) === 'csv,json', 'multiple select reflects a programmatic signal write')
 
   // For / Index.
-  await demo('for-index').getByRole('button', { name: 'Add' }).click()
-  await demo('for-index').getByRole('button', { name: 'Rotate' }).click()
-  check((await text(demo('for-index').getByTestId('for').locator('li').first())) === 'Grace #2', 'For re-orders keyed rows')
-  check((await text(demo('for-index').getByTestId('index').locator('li').first())) === '0: Grace', 'Index re-reads positions')
-  check((await demo('for-index').getByTestId('for').locator('li').count()) === 4, 'For renders the added row')
+  const lists = demo('for-index')
+  check((await text(lists.getByTestId('list-owner-renders'))) === 'List owner renders: 1', 'list owner starts at one render')
+  await lists.getByRole('button', { name: 'Add' }).click()
+  check((await lists.getByTestId('for').locator('li').count()) === 4, 'For renders the appended row')
+  await lists.getByRole('button', { name: 'Rotate' }).click()
+  check((await text(lists.getByTestId('for').locator('li').first())).startsWith('Grace #2'), 'For re-orders keyed rows')
+  check((await text(lists.getByTestId('index').locator('li').first())).startsWith('0: Grace'), 'Index re-reads positions')
+  await lists.getByRole('button', { name: 'Remove first' }).click()
+  check((await lists.getByTestId('for').locator('li').count()) === 3, 'For removes a row')
+  const deepFirst = lists.getByTestId('deep-row-3')
+  const deepBefore = Number((await text(deepFirst)).match(/row renders: (\d+)/)?.[1])
+  const deepOtherBefore = Number((await text(lists.getByTestId('deep-row-4'))).match(/row renders: (\d+)/)?.[1])
+  await lists.getByRole('button', { name: 'Deep edit first score' }).click()
+  check((await text(deepFirst)).includes('score 31'), 'nested deepSignal write updates the selected row')
+  check(Number((await text(deepFirst)).match(/row renders: (\d+)/)?.[1]) === deepBefore + 1, 'nested deepSignal write re-renders that row once')
+  check(Number((await text(lists.getByTestId('deep-row-4'))).match(/row renders: (\d+)/)?.[1]) === deepOtherBefore, 'nested deepSignal write leaves other rows stable')
+  check((await text(lists.getByTestId('list-owner-renders'))) === 'List owner renders: 1', 'collection operations do not re-render the list owner')
+  const keyedBefore = Number((await text(lists.getByTestId('for').locator('li').first())).match(/row renders: (\d+)/)?.[1])
+  await lists.getByRole('button', { name: 'Immutable replacement +1' }).click()
+  check((await text(lists.getByTestId('for').locator('li').first())).includes('row renders: ' + (keyedBefore + 1)), 'immutable replacement re-runs For callback output and row renders')
+
+  // Utilities and shared state.
+  const flow = demo('control-flow')
+  check((await text(flow.getByTestId('show-state'))) === 'Please sign in.', 'Show starts with its fallback')
+  await flow.getByRole('button', { name: 'Toggle signed-in' }).click()
+  await flow.getByRole('button', { name: 'Details' }).click()
+  check((await text(flow.getByTestId('show-state'))) === 'Signed in: true', 'Show updates its selected branch')
+  check((await text(flow.getByTestId('switch-state'))) === 'User details', 'Switch selects its first matching Match')
+  const shared = demo('shared-state')
+  await shared.getByRole('button', { name: '+' }).click()
+  check((await text(shared.getByTestId('managed-reader'))).startsWith('Managed reader: 1'), 'managed reader subscribes to shared state')
+  check((await text(shared.getByTestId('hook-reader'))).startsWith('Hook reader: 1'), 'Hook reader subscribes to shared state')
+  check((await text(shared.getByTestId('shared-owner-renders'))) === 'Demo owner renders: 1', 'shared state updates do not re-render the common owner')
 
   // JSX direct binding: DOM updates without re-rendering the component.
   const jsx = demo('jsx')

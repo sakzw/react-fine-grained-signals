@@ -104,3 +104,44 @@ yourself; the plugin keeps a directly imported first-statement call.
 The full contract, including every supported pattern and diagnostic, is the
 [plugin README](https://github.com/sakzw/react-fine-grained-signals/blob/main/packages/unplugin-react-fine-grained-signals/README.md#managed-tracking-contract)
 and [Rendering optimization](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/rendering-optimization.md).
+
+## Diagnostics
+
+The plugin emits structured warnings with a stable `diagnosticId`, source
+location, and code frame. Select IDs that should fail your build with
+`diagnostics.errorOn`; other diagnostics remain warnings, and the transform
+output is unchanged. An unknown ID is a plugin configuration error.
+
+| ID | What it reports |
+| --- | --- |
+| `RFGS001` | A Hook appears inside a signal-read expression or a call whose only reads occur there. |
+| `RFGS002` | A call runs a Hook-calling function while its caller reads signals. |
+| `RFGS003` | A JSX render-prop or `children` callback reads a signal, but ownership cannot be proven. |
+| `RFGS004` | A `.value` read remains in a function parameter initializer. |
+| `RFGS005` | `useSignalTracking()` is resolved only through a barrel/re-export. |
+| `RFGS006` | `@signalTracking` has no component or Hook identity to attach to. |
+| `RFGS007` | An anonymous default export has no identity derivable from the module name. |
+| `RFGS008` | A component is both called as a plain function and rendered as JSX. |
+| `RFGS009` | A component in a top-level `"use server"` module is left untransformed. |
+
+```ts
+signals({ diagnostics: { errorOn: ['RFGS001', 'RFGS003'] } })
+```
+
+The full explanations are in the [diagnostics reference](https://github.com/sakzw/react-fine-grained-signals/blob/main/packages/unplugin-react-fine-grained-signals/README.md#diagnostics).
+
+## React Compiler and Fast Refresh
+
+With React Compiler enabled, register `signals()` before the compiler plugin
+so the signal reads are recognized first. The default `reactCompiler: 'auto'`
+adds `"use no memo"` to transformed functions to prevent compiler memoization
+from caching JSX that must respond to a signal. Use `reactCompiler: 'off'` only
+when the compiler is absent or the affected components have been audited.
+Prefer Managed Transform to `transform: 'inject'` with Compiler; injection is
+a best-effort ambient boundary and compiler memoization can make it stale.
+
+Fast Refresh has been exercised with the Vite 8/Oxc path for JSX edits and
+Hook addition, removal, and reordering. Keep authored Hooks at top level and
+in stable order, as required by React. See the plugin's
+[Compiler guidance](https://github.com/sakzw/react-fine-grained-signals/blob/main/packages/unplugin-react-fine-grained-signals/README.md#with-react-compiler)
+and [Fast Refresh qualification](https://github.com/sakzw/react-fine-grained-signals/blob/main/packages/unplugin-react-fine-grained-signals/README.md#fast-refresh).
