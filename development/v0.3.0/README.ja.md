@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M18.14 Native Range Interaction & Contract Hardeningを完了。Chromium/Firefox/WebKitの実操作と境界条件、React DOM binding 83 testsを確認し、Runtime変更なしでmigration guideとWebsite smokeを整備した。詳細は[M18.14 record](m18.14-native-range-interaction.ja.md)。React Adapter性能調査はM18.12でいったん終了しており、実Consumerで具体的なボトルネックが示された場合に再開する。
+- 状態: M18.15 JSX Runtime Tree-Shaking Auditを完了。production Vite consumer 5種を比較し、Signal childrenだけでもform binding実装がbundleに残ることを確認した。runtime variantの追加を正当化するサイズ削減の根拠は不足し、製品変更なし。詳細は[M18.15 record](m18.15-jsx-runtime-treeshaking.ja.md)。React Adapter性能調査はM18.12でいったん終了しており、このtree-shaking監査は別のbundle構造調査として扱う。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M18.14 Native Range Interaction & Contract Hardening。3 browser enginesでnative操作を確認し、range補正はbrowser semantics、type切替では既存のuncontrolled binding契約を維持。詳細は[M18.14 record](m18.14-native-range-interaction.ja.md)。
+- 最新実装マイルストーン: M18.15 JSX Runtime Tree-Shaking Audit。5種類のproduction Vite Consumerを比較し、binding未使用時にもform dispatcherが残ること、全form fixtureとの差分がsignal-child fixture比gzip 88 Bであることを記録した。改善案は測定効果と維持コストから不採用。詳細は[M18.15 record](m18.15-jsx-runtime-treeshaking.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -62,6 +62,7 @@
 | M18.12 | React Snapshot & Subscription Cost Analysis | M18.11 | Snapshot capture/compareとsubscriptionの実Consumer頻度・性能・allocationを調査し、改善の採否を決める | 完了。production Chromiumの200 `useSignalValue` consumerでinitial 400 snapshots/200 subscriptions、単一leaf更新3 snapshots/1 render/1 DOM mutation、親rerender 200 snapshots/200 renders/0 DOM mutationを測定。warm 25 samplesの中央値はそれぞれ約1.1 ms/4.5 ms。200 subscriptionをunmountで全破棄。profileでsnapshotが独立した支配要因とは確認できず、candidateを採らずsize/React semanticsを維持。詳細は[M18.12 record](m18.12-react-snapshot-analysis.ja.md) |
 | M18.13 | Range Input Binding & Migration Documentation | M18.12 | `input[type="range"]`を既存のstring `bindValue`経路に追加し、v0.3移行ガイドのnumber記述を現行仕様へ直す | 完了。`FormBindableSignal<string>`とnative range semanticsを維持し、Chromium/Firefox/WebKit、SSR/hydration、イベント順、Consumer package、bundle budgetを確認。詳細は[M18.13 record](m18.13-range-input-binding.ja.md) |
 | M18.14 | Native Range Interaction & Contract Hardening | M18.13 | 実ブラウザーでrangeのマウス・キーボード操作と境界条件を調べ、移行文書の対応一覧を現行契約へ揃える | 完了。Chromium/Firefox/WebKit smoke成功、focused React DOM binding 83/83 pass。Runtime変更なし。詳細は[M18.14 record](m18.14-native-range-interaction.ja.md) |
+| M18.15 | JSX Runtime Tree-Shaking Audit | M18.14 | production Consumer bundleでJSX runtimeとform bindingコードのtree shaking範囲を測り、構成変更の採否を判断する | 完了。React標準、RFSG plain JSX、Signal children、attribute binding、全form bindingの5 fixtureをraw/gzip/brotliで測定。Signal childrenだけでもform dispatcherが残るが、別entry/transformの追加を正当化する削減効果は未立証のため製品変更なし。詳細は[M18.15 record](m18.15-jsx-runtime-treeshaking.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
@@ -82,6 +83,6 @@ M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md
 
 旧M18 Release Execution Checklistと旧M18公開準備計画は延期した。M18.1で独立Vocsサイトを構築・dogfoodし、M18.2でWebsite CIと手動Pages workflowを整え、M18.3でdiagnosticsとwebpack/Rspack source-map loaderのレビュー残課題を完了した。M18.4では`For`/`Index`の描画候補を比較したが、効果が再現できずruntime変更を採用しなかった。M18.5で実利用ガイドとデモを補完し、M18.6でMatch equalsによるSignal値分岐を実装、M18.7でdeep selector Hookの省略APIを改善、M18.8で数値inputをstring Signalとしてbindingし、M18.9でCore-only/Deep/JSX ConsumerのRender Adapter初期化と保持量を削減した。M18.10ではCore hot pathをprofileし、bundle制約とCPU測定のため製品変更を採用しなかった。M18.11では実Consumer workloadでstable subscription commitのtemporary allocationを削減した。M18.12ではproduction Chromium上の`useSignalValue` snapshot頻度とsubscription lifecycleを調べた。snapshot内のallocation自体は存在するが、profileでは実Consumerを支配するコストや効果が明確な最適化案を示せず、製品変更を採用しなかった。従ってReact Adapter性能の継続調査はいったん終了し、次回は実アプリのprofileで新たなボトルネックが観測された場合にだけ再開する。M18.9〜M18.12はruntime調査の完了であり、release freezeや最終scope判断ではない。npm publish、Git tag、GitHub Release、Pages deployはこの計画に含めない。M17.1で未記載とされたbreaking changeはM17.2でmigration guideへ追記済み。M0〜M16.1の調査項目は履歴であり、現在の未完了作業一覧ではない。
 
-M18.13ではnumber対応の誤記を修正し、range inputをstring `bindValue`として追加した。次はこのConsumer dogfoodingで見つかる具体的な課題を基に、v0.3.0向けの機能・DX改善を続ける。release freezeは開始しない。
+M18.13ではnumber対応の誤記を修正し、range inputをstring `bindValue`として追加した。M18.14ではnative range操作と境界条件を確認し、M18.15ではJSX runtime consumer bundleのtree-shaking範囲を測定した。次は利用者価値のあるv0.3.0向け機能・DX改善を続ける。release freezeは開始しない。
 
 詳細は [M0 architecture review](m0-architecture-review.ja.md)、[M2 collection contract](m2-collection-contract.ja.md) を参照。

@@ -1,0 +1,87 @@
+[
+  {
+    "name": "react-jsx",
+    "raw": 560,
+    "gzip": 368,
+    "brotli": 314,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "select binding": false,
+      "text input validation": false,
+      "checkbox group": false,
+      "checked binding": false,
+      "form reset": false,
+      "radio group": false
+    }
+  },
+  {
+    "name": "rfsg-jsx-no-binding",
+    "raw": 39189,
+    "gzip": 13337,
+    "brotli": 12112,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "select binding": true,
+      "text input validation": true,
+      "checkbox group": true,
+      "checked binding": true,
+      "form reset": true,
+      "radio group": true
+    }
+  },
+  {
+    "name": "signal-children-only",
+    "raw": 39252,
+    "gzip": 13362,
+    "brotli": 12179,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "select binding": true,
+      "text input validation": true,
+      "checkbox group": true,
+      "checked binding": true,
+      "form reset": true,
+      "radio group": true
+    }
+  },
+  {
+    "name": "signal-child-and-attribute",
+    "raw": 39278,
+    "gzip": 13380,
+    "brotli": 12169,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "select binding": true,
+      "text input validation": true,
+      "checkbox group": true,
+      "checked binding": true,
+      "form reset": true,
+      "radio group": true
+    }
+  },
+  {
+    "name": "all-form-bindings",
+    "raw": 39677,
+    "gzip": 13450,
+    "brotli": 12223,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "select binding": true,
+      "text input validation": true,
+      "checkbox group": true,
+      "checked binding": true,
+      "form reset": true,
+      "radio group": true
+    }
+  }
+]
