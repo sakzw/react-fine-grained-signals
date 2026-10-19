@@ -58,6 +58,9 @@ A computed whose identity stays stable while its dependency array is unchanged.
   `useComputed(() => count.value * step, [step])`.
 - Keep the omitted/explicit mode and explicit array length and order fixed. A
   mode or length change throws before a stale memoized computed can be reused.
+- Keep getter-only versus writable capability fixed at the same Hook call site.
+  Switching between those overloads throws; changing dependency values at the
+  same positions is supported.
 
 ## useSignalEffect
 

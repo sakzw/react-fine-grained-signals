@@ -17,6 +17,13 @@ upgrading, then run your typecheck and browser tests against the application.
   automatic analysis cannot establish the desired boundary.
 - Hook and writable-computed TypeScript signatures have evolved. Let the
   compiler identify affected call sites rather than applying broad casts.
+- Lite JSX is a new optional choice for Signal children; migration does not
+  require adopting it. Lite omits Full's direct attribute, style, and form
+  bindings.
+- `useComputed` and `useDeepSignalValue` retain the initial closure when
+  dependencies are omitted; list captured props/state explicitly and keep
+  dependency mode and array length stable. `useSignalEffect` treats omitted
+  dependencies and `[]` as equivalent.
 
 ```tsx
 <input bindValue={name} />

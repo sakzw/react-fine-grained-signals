@@ -72,7 +72,7 @@ export function Heading() {
 }
 ```
 
-対象になるのは、Reactが子要素をDOMノードとして描画する通常の子要素の位置です。`<title>`、`<textarea>`、`<style>` など、Reactが子要素を要素ごとの特別な方法で扱うhost要素は対象外です。そこに置いたsignalの子要素は、Reactがテキストを期待する位置でReact要素になるため、Reactが警告を出す、要素が空になる、または `[object Object]` が描画される、のいずれかになります(SSRでも同様です)。これらの要素では、追跡されたコンポーネント内で値を読む(`<title>{title.value}</title>`)か、テキスト入力欄であれば `bindValue` を使ってください。`<option>{signal}</option>` は通常の子要素と同じように動作します。
+対象になるのは、Reactが子要素をDOMノードとして描画する通常の子要素の位置です。`<title>`、`<textarea>`、`<style>` など、Reactが子要素を要素ごとの特別な方法で扱うhost要素は対象外です。そこに置いたsignalの子要素は、Reactがテキストを期待する位置でReact要素になるため、Reactが警告を出す、要素が空になる、または `[object Object]` が描画される、のいずれかになります(SSRでも同様です)。これらの要素では、追跡されたコンポーネント内で値を読む(`<title>{title.value}</title>`)か、テキスト入力欄であれば `bindValue` を使ってください。`<option value={id}>{signalLabel}</option>` のSignal label自体は更新できますが、選択値には固定の`value`を明示してください。`<option>{signalLabel}</option>`ではReactが複雑な子要素から暗黙のvalueを推定できず、hydration時の選択状態も正しく表現できません。Signal labelだけをoption valueの代わりにしないでください。
 
 ## bindingできるhost props
 

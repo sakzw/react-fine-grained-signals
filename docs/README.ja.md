@@ -7,6 +7,10 @@
 - [v0.3への移行](migration/v0.3.ja.md)
 - [v0.2への移行](migration/v0.2.ja.md) — v0.1.1からのAPIとdependencyの変更点。
 
+## Release notes
+
+- [v0.3.0 release notes（未公開ドラフト）](releases/v0.3.0.md)
+
 ## ガイド
 
 - [コアプリミティブ](guides/core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`、`isSignal`。

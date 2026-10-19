@@ -3,9 +3,10 @@ import { Thermostat, UntrackedThermostat } from '../components/demos/ManagedTran
 
 # Managed Transform
 
-`unplugin-react-fine-grained-signals` finds components and custom Hooks that
-read signals and makes them subscribe to exactly what they read — no
-`useSignalTracking()` calls to write or forget.
+`unplugin-react-fine-grained-signals` selects components and custom Hooks from
+statically recognized reads or explicit opt-ins, then tracks synchronous reads
+within the documented transform contract. For the default managed transform,
+no `useSignalTracking()` calls are needed for reads the plugin can prove.
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite'
@@ -48,10 +49,14 @@ export function Thermostat() {
 ## How it works
 
 In the default `transform: "managed"`, a selected function gets one top-level
-`useSignalCapture()` Hook, and every read the build can prove is synchronous
-is wrapped in a short capture scope: `.value` reads, calls to helpers that read,
-inline callbacks such as `items.filter((item) => item.done.value)`, and calls
-into code the module cannot see. Your own Hooks stay at the top level, in their
+`useSignalCapture()` Hook, and statically proven synchronous reads are wrapped
+in short capture scopes. This includes supported `.value` reads, inline
+callbacks such as `items.filter((item) => item.done.value)`, and synchronous
+call sites that may enter code the module cannot see. The plugin does not
+inspect imported helper bodies to select their callers: a caller whose only
+read is hidden inside an imported helper is not selected by `mode: "auto"`.
+An imported helper call can be captured at its call site only when the caller
+already has a managed boundary. Your own Hooks stay at the top level, in their
 original order.
 
 ## Options
@@ -98,8 +103,12 @@ The contract is deliberately narrower than a whole-function boundary:
 - User code a builtin runs implicitly on an untracked value — a `toString` in a
   template literal, a getter, an iterator — is not followed.
 
-For exact ownership of everything a block reads, call `useSignalTracking()`
-yourself; the plugin keeps a directly imported first-statement call.
+`useSignalTracking()` is a best-effort ambient boundary, both when written by
+hand and when inserted by `transform: "inject"`; it is not an exact lexical
+scope. For explicit lexical ownership of synchronous reads, use
+`useManagedSignals()` from `react-fine-grained-signals/runtime` inside
+`try` / `finally`. A directly imported first-statement `useSignalTracking()`
+call is preserved by the plugin when ambient collection is needed.
 
 The full contract, including every supported pattern and diagnostic, is the
 [plugin README](https://github.com/sakzw/react-fine-grained-signals/blob/main/packages/unplugin-react-fine-grained-signals/README.md#managed-tracking-contract)

@@ -3078,7 +3078,7 @@ packages:
         optional: true
 
   react-fine-grained-signals@file:vendor/react-fine-grained-signals.tgz:
-    resolution: {integrity: sha512-fmDG61UgnFzndcvmH/nOTD3kWPeztUzOCa2DW5YuO8ZJe+IiQR++l56m5WPC66qH97svWIjBq7fTTajIWhSqTg==, tarball: file:vendor/react-fine-grained-signals.tgz}
+    resolution: {integrity: sha512-+cJiSSsj6sMsKVYVPM39HlLcF/+6Dy9IwhjJ+/3Rlo+Uexvku7UIAVnJqHl5RpM0GsKwkb8HNTExB29ZrDJrIw==, tarball: file:vendor/react-fine-grained-signals.tgz}
     version: 0.3.0
     engines: {node: '>=22.0.0'}
     peerDependencies:
@@ -3509,7 +3509,7 @@ packages:
         optional: true
 
   unplugin-react-fine-grained-signals@file:vendor/unplugin-react-fine-grained-signals.tgz:
-    resolution: {integrity: sha512-agE9KWC59wqskgAhf3gJrPv48PBop3ZCYaHGJcRrQyoCcjfc43io+ffQwE2TZ/DkTTXFCmunKdnIXNduG6sUqg==, tarball: file:vendor/unplugin-react-fine-grained-signals.tgz}
+    resolution: {integrity: sha512-hR07x9LllvwIAhqxhpmYwZmxC80nejRS6fZogjoPBAkp1okSzbzWppuMQLOYd8Ro7whMAZSJzAaarjZ5BOWdLA==, tarball: file:vendor/unplugin-react-fine-grained-signals.tgz}
     version: 0.3.0
     engines: {node: ^22.18.0 || >=24.11.0}
     peerDependencies:

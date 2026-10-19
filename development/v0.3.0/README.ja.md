@@ -2,9 +2,10 @@
 
 ## 現在の状態
 
-- 状態: M18.22でCore node構築時の一時`fields` objectとspreadを除き、Signal / computedを50,000個保持するheapを一貫して約8 B/object削減した。CPU短縮は確認できず、既存bundle budgetを維持。詳細は[M18.22 record](m18.22-core-construction-optimization.ja.md)。
+- 状態: M19のドキュメント更新とrelease readiness判定を完了。公開済みnpm版は2026-10-19確認時点でruntime/pluginともに0.2.1、repositoryの0.3.0は未公開。判定は**READY WITH KNOWN LIMITATIONS**。公開やfreezeは行っていない。詳細は[M19 record](m19-release-readiness-and-docs.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M18.22 Core Signal Construction & Allocation Optimization。node生成時の一時`fields` objectを除去し、50,000個保持時に約8 B/objectのheap減を3 process pairで確認。CPU改善は確認できず。全runtime / consumer / browser / Compiler / type / size検証成功。詳細は[M18.22 record](m18.22-core-construction-optimization.ja.md)。
+- 最新実装マイルストーン: M18.22 Core Signal Construction & Allocation Optimization。node生成時の一時`fields` objectを除去し、50,000個保持時に約8 B/objectのheap減を3 process pairで確認。CPU改善は確認できず。M19では製品コードを変更せず、ドキュメントと公開前readinessを再確認。詳細は[M18.22 record](m18.22-core-construction-optimization.ja.md) / [M19 record](m19-release-readiness-and-docs.ja.md)。
+- 公開状態: repository packageは`0.3.0`、npmのruntime/pluginは両方`0.2.1`（2026-10-19確認）。M19で公開操作・version変更・tag・Pages deploy・release freezeは行わない。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -70,6 +71,7 @@
 | M18.20 | React Hook Dependency Contract Hardening | M18.19 | `useComputed` / `useSignalEffect`の依存配列変更時にstale closure・cleanup不整合が起きないことを再現し、契約を明示する | 完了。現行HEADで長さ変更時のstale computed / effect closureを再現。`useComputed`はmode・capability・長さを`useMemo`より前に検証し、`useSignalEffect`は明示配列の長さ変更を拒否。省略と`[]`の同等性、正常な同長更新、StrictMode/SSR/Suspense/Compilerを確認。React 19/JSDOMの500-row計測はCPU差が測定幅内、Effect Hook用refでretained heap中央値+68,784 B。`index-full`はgzip 24,698 Bでbudget 24,704 B内。詳細は[M18.20 record](m18.20-react-hook-dependency-contract.ja.md) |
 | M18.21 | React Hooks Fast Refresh & Lifecycle Qualification | M18.20 | 実Vite Fast RefreshとReact lifecycleでHook closure、cleanup、subscription、保持量を確認する | 完了。Vite 8.3.4 / React 19.3.0の実ブラウザーHMRでgetter/setter更新、state保持、effect再接続とunmount cleanupを確認。Suspense中はcommit済みeffectを維持し、依存契約エラー後のboundary再生成でもcleanup/reconnect。500 rowsの追加保持heap中央値+81,848 B、unmount後の差+7,400 Bで分布が重なり、render回数は同数。React Hook/SSR 53件、Compiler 30件、typecheck/build/全size budget成功。製品コード変更なし。React Hook依存配列調査は一区切りとし、次はCoreまたはReact統合で具体的な利用者価値が確認できる改善を優先。詳細は[M18.21 record](m18.21-react-hook-lifecycle-qualification.ja.md) |
 | M18.22 | Core Signal Construction & Allocation Optimization | M18.21 | Signal/computed node生成時のCPU・allocation・保持heapを測り、正確性とConsumer効果を維持できる場合だけ生成処理を軽量化 | 完了。`makeNode`から一時`fields` object/spreadを除去。50,000 Signal / getter-only / writable computedの保持heapを3 process pairで約8 B/object削減。CPU改善とV8 sampled allocation差は確認できず。Core 942 tests、packed consumer、74 browser tests、Compiler 30 tests、typecheck/build/size成功。budget変更なし。詳細は[M18.22 record](m18.22-core-construction-optimization.ja.md) |
+| M19 | v0.3.0 Release Readiness & Documentation Refresh | M18.22 | 現行契約に合わせてREADME、guides、migration、Vocs、release notesを更新し、既存qualification evidenceから公開可否を判定 | 完了。docs / examples / public exports / package tarball / websiteを確認。website independent tarball install、typecheck/build/Chromium smoke、root build/typecheck/size/packed-consumerが成功。runtime 942件成功、transform 728件成功・esbuild 3件は5秒test timeout。開始HEAD CI (Test/E2E/Website)は全成功。判定**READY WITH KNOWN LIMITATIONS**。公開操作・version変更・tag・Pages deploy・release freezeなし。詳細は[M19 record](m19-release-readiness-and-docs.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 

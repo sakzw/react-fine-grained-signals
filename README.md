@@ -12,22 +12,31 @@ See [`docs/README.md`](docs/README.md) for the user documentation index.
 The documentation site with live examples is built from [`website/`](website), an independent Vocs project.
 For upgrades from v0.2.1, see the [v0.3 migration guide](./docs/migration/v0.3.md).
 For earlier upgrades from v0.1.1, see the [v0.2 migration guide](./docs/migration/v0.2.md).
+The [v0.3.0 release notes](./docs/releases/v0.3.0.md) are an unreleased draft.
 
 ## Installation
 
 ```sh
-pnpm add react-fine-grained-signals
+pnpm add react-fine-grained-signals@0.2.1
 ```
+
+The repository contains the unreleased v0.3.0 line. As checked on October 19,
+2026, npm publishes v0.2.1 for both this package and its build plugin; the
+command above installs v0.2.1, not the v0.3.0 APIs described in this checkout.
+Wait for the v0.3.0 release before using those APIs from npm. See the
+[v0.3 migration guide](./docs/migration/v0.3.md) for the upgrade contract.
 
 React (19 or newer) is a peer dependency, and Node.js 22 or newer is required.
 The package is ESM-only and publishes its entry points and types through
 `exports`, so TypeScript needs `moduleResolution` set to `bundler`, `node16`, or
 `nodenext` to resolve `react-fine-grained-signals/utils` and the JSX runtime.
+The optional build plugin requires Node.js `^22.18.0 || >=24.11.0` because it
+runs on Babel 8.
 
 ## Setup
 
-The primitives and hooks work as soon as the package is installed — no build
-or compiler configuration is involved:
+Core primitives and React Hooks do not require the custom JSX runtime or the
+build plugin. For manually tracked reads, call `useSignalTracking()` first:
 
 ```tsx
 import { useSignal, useSignalTracking } from "react-fine-grained-signals";
@@ -78,6 +87,27 @@ unwrapped. See [JSX signal children and host bindings](./docs/guides/jsx-binding
 for the full allow-list, and for toolchains that transform JSX through Babel,
 which do not read `tsconfig.json`.
 
+For projects that need reactive Signal children but no direct host bindings,
+opt in to the Lite JSX Runtime instead:
+
+```tsx
+/** @jsxImportSource react-fine-grained-signals/lite */
+```
+
+or set `jsxImportSource` to `react-fine-grained-signals/lite`. Lite supports
+ordinary React JSX plus Signal children; it does not support Signal-valued
+attributes, style bindings, `bindValue`, or `bindChecked`. React's JSX is used
+when no custom `jsxImportSource` is configured; setting it to
+`react-fine-grained-signals` opts into Full Runtime. Lite can
+reduce a bundle only when Full is absent from the same eagerly loaded chunk;
+there is no fixed byte saving. See the comparison below and the [JSX guide](./docs/guides/jsx-bindings.md).
+
+| JSX choice | Use it for |
+| --- | --- |
+| React standard JSX | Ordinary React components and Hooks; no Signal-child normalization or direct DOM binding |
+| RFSG Lite JSX | Signal children in native host elements; no direct attribute, style, or form binding |
+| RFSG Full JSX | Signal children plus the documented host attribute, style, and explicit form bindings |
+
 ### Build plugin — automatic managed tracking
 
 Adds a top-level capture Hook and per-read tracking to eligible functions during
@@ -85,8 +115,12 @@ the build. For the best-effort `useSignalTracking()` boundary, select
 `transform: "inject"`. The plugin is a separate package:
 
 ```sh
-pnpm add -D unplugin-react-fine-grained-signals
+pnpm add -D unplugin-react-fine-grained-signals@0.2.1
 ```
+
+The current npm plugin release is also v0.2.1 and must be paired with the
+published v0.2.1 runtime. When v0.3.0 is published, install matching `0.3.x`
+versions of both packages.
 
 It then needs a bundler entry point — `/vite`, `/rollup`, `/webpack`,
 `/rspack`, or `/esbuild` — added to the build configuration:

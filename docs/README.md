@@ -7,6 +7,10 @@
 - [Migration to v0.3](migration/v0.3.md)
 - [Migration to v0.2](migration/v0.2.md) — API and dependency changes from v0.1.1.
 
+## Release notes
+
+- [v0.3.0 release notes (unreleased draft)](releases/v0.3.0.md)
+
 ## Guides
 
 - [Core primitives](guides/core-primitives.md) — `signal`, `computed`, `effect`, `batch`, `untracked`, `deepSignal`, and `isSignal`.

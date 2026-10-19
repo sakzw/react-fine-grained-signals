@@ -60,7 +60,10 @@ bundler.
 
 Signals passed to React **components** are not unwrapped, and elements whose
 children React handles specially (`<title>`, `<textarea>`, `<style>`) do not
-take signal children.
+take signal children. A Signal option label can update, but give each
+`<option>` a stable explicit `value`; React cannot infer the option value from
+a complex Signal child, and server rendering cannot represent its selected
+state from that child alone.
 
 ## Form bindings
 
