@@ -1,8 +1,8 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { StrictMode, act } from "react";
-import { cleanup, render } from "@testing-library/react";
+import { Component, StrictMode, Suspense, act, startTransition, useState, type ComponentType, type ReactNode } from "react";
+import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signal, useSignalEffect } from "../src/index.js";
 
@@ -12,6 +12,14 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
 });
+
+function SuspenseTransitionApp({ Observer }: { Observer: ComponentType<{ label: string }> }) {
+  const [label, setLabel] = useState("committed");
+  return <>
+    <button onClick={() => startTransition(() => setLabel("pending"))}>suspend update</button>
+    <Suspense fallback={<span>loading</span>}><Observer label={label} /></Suspense>
+  </>;
+}
 
 describe("useSignalEffect", () => {
   it("runs useSignalEffect on changes and disposes it on unmount", () => {
@@ -98,6 +106,44 @@ describe("useSignalEffect", () => {
     expect(setups).toHaveBeenLastCalledWith("second");
   });
 
+  it("keeps the committed effect active while a dependency update is suspended", async () => {
+    const source = signal(0);
+    const setups: string[] = [];
+    const cleanups: string[] = [];
+    let allowPending = false;
+    let resolvePending!: () => void;
+    const pending = new Promise<void>((resolve) => { resolvePending = resolve; });
+
+    function Observer({ label }: { label: string }) {
+      useSignalEffect(() => {
+        source.value;
+        setups.push(label);
+        return () => cleanups.push(label);
+      }, [label]);
+      if (label === "pending" && !allowPending) throw pending;
+      return <output>{label}</output>;
+    }
+
+    render(<SuspenseTransitionApp Observer={Observer} />);
+    expect(setups).toEqual(["committed"]);
+    await act(async () => {
+      screen.getByText("suspend update").click();
+      await Promise.resolve();
+    });
+    expect(cleanups).toEqual([]);
+    expect(screen.getByText("committed")).toBeTruthy();
+
+    act(() => { source.value = 1; });
+    expect(setups).toEqual(["committed", "committed"]);
+    expect(cleanups).toEqual(["committed"]);
+
+    allowPending = true;
+    await act(async () => { resolvePending(); await Promise.resolve(); });
+    expect(screen.getByText("pending")).toBeTruthy();
+    expect(setups).toEqual(["committed", "committed", "pending"]);
+    expect(cleanups).toEqual(["committed", "committed"]);
+  });
+
   it.each([
     { label: "grows", before: [1], after: [1, 2] },
     { label: "shrinks", before: [1, 2], after: [1] },
@@ -123,6 +169,51 @@ describe("useSignalEffect", () => {
     expect(() => view.rerender(<Observer label="after" dependencies={after} />)).toThrow(
       /dependencies length changed/,
     );
+    errorSpy.mockRestore();
+  });
+
+  it("cleans up after a dependency-contract error and reconnects after boundary recovery", () => {
+    const source = signal(0);
+    const setups: string[] = [];
+    const cleanups: string[] = [];
+
+    class ErrorBoundary extends Component<{ children: ReactNode }, { error: boolean }> {
+      state = { error: false };
+
+      static getDerivedStateFromError() {
+        return { error: true };
+      }
+
+      render() {
+        return this.state.error
+          ? <button onClick={() => this.setState({ error: false })}>retry</button>
+          : this.props.children;
+      }
+    }
+
+    function Observer({ label, dependencies }: { label: string; dependencies: number[] }) {
+      useSignalEffect(() => {
+        source.value;
+        setups.push(label);
+        return () => cleanups.push(label);
+      }, dependencies);
+      return <output>{label}</output>;
+    }
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<ErrorBoundary><Observer label="initial" dependencies={[1]} /></ErrorBoundary>);
+    expect(setups).toEqual(["initial"]);
+    view.rerender(<ErrorBoundary><Observer label="invalid" dependencies={[1, 2]} /></ErrorBoundary>);
+    expect(screen.getByText("retry")).toBeTruthy();
+    expect(cleanups).toEqual(["initial"]);
+
+    view.rerender(<ErrorBoundary key="recovered"><Observer label="recovered" dependencies={[3]} /></ErrorBoundary>);
+    expect(screen.getByText("recovered")).toBeTruthy();
+    expect(setups).toEqual(["initial", "recovered"]);
+    act(() => { source.value = 1; });
+    expect(setups).toEqual(["initial", "recovered", "recovered"]);
+    view.unmount();
+    expect(cleanups).toEqual(["initial", "recovered", "recovered"]);
     errorSpy.mockRestore();
   });
 

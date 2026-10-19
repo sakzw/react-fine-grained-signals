@@ -54,9 +54,17 @@ function useSignalEffectBefore(callback, dependencies) {
 }
 
 const source = signal(1);
-const counters = { baselineSetups: 0, baselineCleanups: 0, candidateSetups: 0, candidateCleanups: 0 };
+const counters = {
+  baselineRenders: 0,
+  baselineSetups: 0,
+  baselineCleanups: 0,
+  candidateRenders: 0,
+  candidateSetups: 0,
+  candidateCleanups: 0,
+};
 
 function BaselineRow({ version }) {
+  counters.baselineRenders += 1;
   const value = useComputedBefore(() => source.value + version, [version]);
   useSignalEffectBefore(() => {
     void source.value;
@@ -67,6 +75,7 @@ function BaselineRow({ version }) {
 }
 
 function CandidateRow({ version }) {
+  counters.candidateRenders += 1;
   const value = useComputed(() => source.value + version, [version]);
   useSignalEffect(() => {
     void source.value;
@@ -114,16 +123,18 @@ function run(label) {
   flushSync(() => root.unmount());
   container.remove();
   globalThis.gc();
-  return { mountMs, updateMsPerCommit: updateMs / updateCount, retainedBytes };
+  const postUnmountBytes = process.memoryUsage().heapUsed - heapBefore;
+  return { mountMs, updateMsPerCommit: updateMs / updateCount, retainedBytes, postUnmountBytes };
 }
 
 const results = {
-  baseline: { mount: [], update: [], retained: [] },
-  candidate: { mount: [], update: [], retained: [] },
+  baseline: { mount: [], update: [], retained: [], postUnmount: [] },
+  candidate: { mount: [], update: [], retained: [], postUnmount: [] },
 };
 for (let round = 0; round < warmups + samples; round += 1) {
   const order = round % 2 === 0 ? ["baseline", "candidate"] : ["candidate", "baseline"];
   for (const label of order) {
+    counters[`${label}Renders`] = 0;
     counters[`${label}Setups`] = 0;
     counters[`${label}Cleanups`] = 0;
     const measured = run(label);
@@ -131,8 +142,12 @@ for (let round = 0; round < warmups + samples; round += 1) {
       results[label].mount.push(measured.mountMs);
       results[label].update.push(measured.updateMsPerCommit);
       results[label].retained.push(measured.retainedBytes);
+      results[label].postUnmount.push(measured.postUnmountBytes);
     }
     const expected = rowCount * (updateCount + 1);
+    if (counters[`${label}Renders`] !== expected) {
+      throw new Error(`${label}: component render count differs from ${expected}`);
+    }
     if (counters[`${label}Setups`] !== expected || counters[`${label}Cleanups`] !== expected) {
       throw new Error(`${label}: effect/cleanup counts differ from ${expected}`);
     }
@@ -150,10 +165,14 @@ console.log(JSON.stringify({
     mount: stats(results.baseline.mount, "Ms"),
     updateMsPerCommit: stats(results.baseline.update, "Ms"),
     retainedBytes: stats(results.baseline.retained, "Bytes"),
+    postUnmountBytes: stats(results.baseline.postUnmount, "Bytes"),
+    rowRenderCountPerSample: rowCount * (updateCount + 1),
   },
   candidate: {
     mount: stats(results.candidate.mount, "Ms"),
     updateMsPerCommit: stats(results.candidate.update, "Ms"),
     retainedBytes: stats(results.candidate.retained, "Bytes"),
+    postUnmountBytes: stats(results.candidate.postUnmount, "Bytes"),
+    rowRenderCountPerSample: rowCount * (updateCount + 1),
   },
 }, null, 2));
