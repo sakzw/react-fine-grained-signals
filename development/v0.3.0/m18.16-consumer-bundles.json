@@ -1,0 +1,122 @@
+[
+  {
+    "name": "react-jsx-static",
+    "raw": 220653,
+    "gzip": 68632,
+    "brotli": 59076,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": false,
+      "textBinding": false,
+      "checkboxGroup": false,
+      "signalChild": true
+    }
+  },
+  {
+    "name": "core-only",
+    "raw": 16774,
+    "gzip": 5626,
+    "brotli": 5143,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": false,
+      "textBinding": false,
+      "checkboxGroup": false,
+      "signalChild": false
+    }
+  },
+  {
+    "name": "full-child",
+    "raw": 258440,
+    "gzip": 81261,
+    "brotli": 70275,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": true,
+      "textBinding": true,
+      "checkboxGroup": true,
+      "signalChild": true
+    }
+  },
+  {
+    "name": "formless-child",
+    "raw": 248159,
+    "gzip": 78143,
+    "brotli": 67662,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": false,
+      "textBinding": false,
+      "checkboxGroup": false,
+      "signalChild": true
+    }
+  },
+  {
+    "name": "children-only-child",
+    "raw": 239802,
+    "gzip": 74992,
+    "brotli": 64878,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": false,
+      "textBinding": false,
+      "checkboxGroup": false,
+      "signalChild": true
+    }
+  },
+  {
+    "name": "react-jsx-hook-child",
+    "raw": 239185,
+    "gzip": 74747,
+    "brotli": 64661,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": false,
+      "textBinding": false,
+      "checkboxGroup": false,
+      "signalChild": true
+    }
+  },
+  {
+    "name": "full-attribute",
+    "raw": 258500,
+    "gzip": 81286,
+    "brotli": 70406,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": true,
+      "textBinding": true,
+      "checkboxGroup": true,
+      "signalChild": true
+    }
+  },
+  {
+    "name": "formless-attribute",
+    "raw": 248219,
+    "gzip": 78154,
+    "brotli": 67598,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBinding": false,
+      "textBinding": false,
+      "checkboxGroup": false,
+      "signalChild": true
+    }
+  }
+]
