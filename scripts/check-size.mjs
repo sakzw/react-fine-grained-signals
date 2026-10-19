@@ -69,6 +69,20 @@ export default everything;`,
 export default runtime;`,
   },
   {
+    name: "full-jsx-child",
+    description: "Full JSX runtime with a Signal child, representative of a consumer entry",
+    source: `import { signal } from "DIST/index.js";
+import { jsx } from "DIST/jsx-runtime.js";
+export default jsx("output", { children: signal("value") });`,
+  },
+  {
+    name: "lite-jsx-child",
+    description: "Lite JSX runtime with a Signal child and no direct bindings",
+    source: `import { signal } from "DIST/index.js";
+import { jsx } from "DIST/lite/jsx-runtime.js";
+export default jsx("output", { children: signal("value") });`,
+  },
+  {
     name: "utils",
     description: "the control-flow components",
     source: `import { Show, Switch, Match, For, Index } from "DIST/utils.js";
@@ -80,12 +94,23 @@ export default [Show, Switch, Match, For, Index];`,
 // reliable probe for whether a module made it into the bundle.
 const DEEP_SIGNAL_MARKER = "deepSignal() only accepts plain objects, arrays, or same-realm standard collections";
 const REACT_STORE_MARKER = "useSyncExternalStore";
+const SIGNAL_CHILD_RUNTIME_MARKER = "rfgs-signal:";
+const FORM_BINDING_MARKERS = [
+  "bindValue and bindChecked cannot be combined on one input.",
+  "bindChecked: checkbox only.",
+  "Radio bindValue controls in the same native group must share one signal.",
+  "Checkbox group bindValue requires an array of strings.",
+  "Invalid select bindValue.",
+];
+const FULL_ATTRIBUTE_BINDING_MARKERS = ["className", "style-properties", "signal props."];
+const LITE_BINDING_DIAGNOSTIC_MARKER = "The lite JSX runtime supports Signal children only; form bindings require the default JSX runtime.";
 
 /** Code that must be absent from a bundle, proving the shake actually worked. */
 const absenceChecks = {
-  "signal-only": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER],
-  core: [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER],
+  "signal-only": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
+  core: [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
   "core+hooks": [DEEP_SIGNAL_MARKER],
+  "lite-jsx-child": [...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS],
 };
 
 // Positive controls. Without these an absence check would keep passing after a
@@ -94,6 +119,8 @@ const presenceChecks = {
   deep: [DEEP_SIGNAL_MARKER],
   "index-full": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER],
   "core+hooks": [REACT_STORE_MARKER],
+  "full-jsx-child": [SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS],
+  "lite-jsx-child": [SIGNAL_CHILD_RUNTIME_MARKER, LITE_BINDING_DIAGNOSTIC_MARKER],
 };
 
 const external = [
@@ -182,7 +209,11 @@ const budgetFailures = [];
 try {
   for (const scenario of scenarios) {
     const measured = await measure(scenario, outputRoot);
-    results[scenario.name] = { gzip: measured.gzip, brotli: measured.brotli };
+    results[scenario.name] = {
+      raw: measured.raw,
+      gzip: measured.gzip,
+      brotli: measured.brotli,
+    };
 
     for (const forbidden of absenceChecks[scenario.name] ?? []) {
       if (measured.text.includes(forbidden)) {
@@ -214,9 +245,13 @@ try {
     }
 
     console.log(
-      `${scenario.name.padEnd(12)} ${formatBytes(measured.gzip).padStart(9)} gzip  ${formatBytes(measured.brotli).padStart(9)} br  ${formatBytes(measured.raw).padStart(9)} raw${status}`,
+      `${scenario.name.padEnd(18)} ${formatBytes(measured.gzip).padStart(9)} gzip  ${formatBytes(measured.brotli).padStart(9)} br  ${formatBytes(measured.raw).padStart(9)} raw${status}`,
     );
-    if (showExact) console.log(`${"".padEnd(12)} exact gzip: ${measured.gzip} bytes`);
+    if (showExact) {
+      console.log(
+        `${"".padEnd(18)} exact bytes: raw ${measured.raw}, gzip ${measured.gzip}, brotli ${measured.brotli}`,
+      );
+    }
     console.log(`${"".padEnd(12)} ${scenario.description}`);
   }
 

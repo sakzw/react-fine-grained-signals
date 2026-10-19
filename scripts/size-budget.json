@@ -17,6 +17,9 @@
   "jsx-runtime": {
     "gzip": 15232
   },
+  "lite-jsx-child": {
+    "gzip": 7552
+  },
   "utils": {
     "gzip": 9920
   }
