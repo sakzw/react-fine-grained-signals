@@ -55,11 +55,11 @@ Website production buildにはVocs playground等の1MB超chunk warningが出る�
 
 ### GitHub Actions
 
-開始HEAD `83ae387`に対する既存のGitHub Actions Test `39249334200`、E2E `39249334447`、Website CI `39249334279`はすべて成功。M19はドキュメントのみの更新だが、commit後のworkflowも追跡し、最終記録へ追記する。
+開始HEAD `83ae387`に対する既存のGitHub Actions Test `39249334200`、E2E `39249334447`、Website CI `39249334279`はすべて成功。M19 commit `089c616bbb36cf9c34128e23009f085fb9527957`に対して起動したTest `39254803756`、E2E `39254803769`、Website CI `39254803785`もすべてsuccess。
 
 ### Test timeoutの扱い
 
-ローカルのtransform testでesbuildの3つの実build testが各5秒上限を超過した。残る728 transform testsは成功した。開始HEADと同一製品コードのGitHub Test / E2Eは成功し、websiteのVite/Vocs buildとConsumer smokeも成功している。製品コード変更はないため、ローカルtimeoutを再現性のある機能失敗とは判定せず、環境上の検証差として開示する。commit後のTest workflowが失敗した場合は判定を更新する。
+ローカルのtransform testでesbuildの3つの実build testが各5秒上限を超過した。残る728 transform testsは成功した。開始HEADと同一製品コードのGitHub Test / E2Eに加えて、M19 commitのTest / E2E / Website CIも成功し、websiteのVite/Vocs buildとConsumer smokeも成功している。製品コード変更はないため、ローカルtimeoutを再現性のある機能失敗とは判定せず、環境上の検証差として開示する。
 
 ## Release blockers
 
@@ -76,7 +76,7 @@ Website production buildにはVocs playground等の1MB超chunk warningが出る�
 - 0.1.xと0.3.x間のSignal reactivityは非対応。cross-copy batchも複数package copyをまたぐ単一atomic batchではない。
 - React 19以外をサポート対象としない。transform pluginはruntimeより高いNode.js最小versionを要求する。
 - Websiteのproduction outputには大きなPlayground/code-language chunkが含まれる。M18.2のpage-specific transfer調査を超える新たな最適化調査は今回実施していない。
-- `pnpm test`のローカルtransform内esbuild 3件はホスト上5秒timeout。最新CI再確認が必要。
+- `pnpm test`のローカルtransform内esbuild 3件はホスト上5秒timeout。開始HEADおよびM19 commitのCIは成功。
 
 これらは既知の利用・環境条件として公開ドキュメントに明記されており、今回の判定ではrelease blockerとしない。
 
