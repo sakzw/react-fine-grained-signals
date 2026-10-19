@@ -1995,8 +1995,44 @@ function isTrackedValueRead(
     return false;
   }
   if (isNonSignalValueReceiver(memberPath) && !hasTrackedValuePrefix(memberPath)) return false;
-  if (isWriteTarget(path)) return false;
+  if (isWriteTarget(path)) return isReadModifyingTrackedTarget(memberPath, functionPath);
   return !isDeferredReadContext(path, functionPath);
+}
+
+/**
+ * An update reads its old target value, and deleting a nested proxy property
+ * reads the proxy base even though both expressions are syntactically write
+ * targets. The codegen captures the complete operation so accessors, computed
+ * keys, Proxy traps, and the operator's result keep their native evaluation.
+ */
+function isReadModifyingTrackedTarget(
+  member: NodePath<t.MemberExpression | t.OptionalMemberExpression>,
+  functionPath: NodePath<t.Function>,
+): boolean {
+  if (isDeferredReadContext(member, functionPath)) return false;
+  let target: NodePath = member;
+  while (target.parentPath !== null) {
+    const parent: NodePath = target.parentPath;
+    if (
+      (parent.isMemberExpression() || parent.isOptionalMemberExpression()) &&
+      parent.get("object").node === target.node
+    ) {
+      target = parent;
+      continue;
+    }
+    if (
+      (parent.isTSAsExpression() || parent.isTSTypeAssertion() || parent.isTSNonNullExpression()) &&
+      parent.get("expression").node === target.node
+    ) {
+      target = parent;
+      continue;
+    }
+    break;
+  }
+  const operation = target.parentPath;
+  if (operation?.isUpdateExpression() && operation.get("argument").node === target.node) return true;
+  return operation?.isUnaryExpression({ operator: "delete" }) &&
+    operation.get("argument").node === target.node && target.node !== member.node;
 }
 
 /**
@@ -2576,6 +2612,138 @@ function warnUntrackedChildrenCallbackRead(
   );
 }
 
+type SignalControlFlowName = "For" | "Index" | "Match" | "Show" | "Switch";
+type SignalControlFlowImport = { kind: "namespace" } | { kind: "component"; name: SignalControlFlowName };
+
+const signalControlFlowNames = new Set<SignalControlFlowName>(["For", "Index", "Match", "Show", "Switch"]);
+
+/**
+ * Resolve an RFSG control-flow export from a value binding, rather than from
+ * the JSX spelling. This deliberately follows only immutable local aliases and
+ * statically named namespace members; a same-named local component or dynamic
+ * member must keep the ordinary callback warning.
+ */
+function resolveSignalControlFlowImport(
+  origin: NodePath,
+  name: string,
+  importSource: string,
+  seen = new Set<object>(),
+): SignalControlFlowImport | undefined {
+  const binding = origin.scope.getBinding(name);
+  if (binding === undefined || seen.has(binding) || binding.constantViolations.length > 0) return undefined;
+  seen.add(binding);
+  const bindingPath = binding.path;
+  if (bindingPath.isImportNamespaceSpecifier()) {
+    const declaration = bindingPath.parentPath;
+    return declaration.isImportDeclaration() && declaration.node.importKind !== "type" &&
+        declaration.node.source.value === `${importSource}/utils`
+      ? { kind: "namespace" }
+      : undefined;
+  }
+  if (bindingPath.isImportSpecifier()) {
+    const declaration = bindingPath.parentPath;
+    if (
+      !declaration.isImportDeclaration() || declaration.node.importKind === "type" ||
+      bindingPath.node.importKind === "type" || declaration.node.source.value !== `${importSource}/utils`
+    ) return undefined;
+    const imported = bindingPath.node.imported;
+    if (!t.isIdentifier(imported) || !signalControlFlowNames.has(imported.name as SignalControlFlowName)) return undefined;
+    return { kind: "component", name: imported.name as SignalControlFlowName };
+  }
+  if (!bindingPath.isVariableDeclarator() || !binding.constant) return undefined;
+  const init = bindingPath.get("init");
+  if (!init.isExpression()) return undefined;
+  const value = unwrapTransparentPath(init);
+  const id = bindingPath.get("id");
+  if (value.isIdentifier()) {
+    const resolved = resolveSignalControlFlowImport(value, value.node.name, importSource, seen);
+    if (!id.isObjectPattern()) return resolved;
+    if (resolved?.kind !== "namespace") return undefined;
+    // `const { Show: If } = utils` is a value alias too. Resolve only a simple
+    // static property binding from the verified RFSG utils namespace.
+    for (const propertyPath of id.get("properties")) {
+      if (!propertyPath.isObjectProperty() || propertyPath.node.computed) continue;
+      const propertyValue = propertyPath.get("value");
+      if (!propertyValue.isIdentifier() || propertyValue.node.name !== name) continue;
+      const key = propertyPath.get("key");
+      const property = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : undefined;
+      return property !== undefined && signalControlFlowNames.has(property as SignalControlFlowName)
+        ? { kind: "component", name: property as SignalControlFlowName }
+        : undefined;
+    }
+    return undefined;
+  }
+  if (value.isMemberExpression() && !value.node.computed && value.get("property").isIdentifier()) {
+    const base = value.get("object");
+    if (!base.isIdentifier()) return undefined;
+    const namespace = resolveSignalControlFlowImport(base, base.node.name, importSource, seen);
+    const propertyPath = value.get("property");
+    if (!propertyPath.isIdentifier()) return undefined;
+    const property = propertyPath.node.name;
+    return namespace?.kind === "namespace" && signalControlFlowNames.has(property as SignalControlFlowName)
+      ? { kind: "component", name: property as SignalControlFlowName }
+      : undefined;
+  }
+  return undefined;
+}
+
+function signalControlFlowTagName(
+  tag: NodePath<t.JSXIdentifier | t.JSXMemberExpression>,
+  importSource: string,
+): SignalControlFlowName | undefined {
+  if (tag.isJSXIdentifier()) {
+    const resolved = resolveSignalControlFlowImport(tag, tag.node.name, importSource);
+    return resolved?.kind === "component" ? resolved.name : undefined;
+  }
+  const parts: string[] = [];
+  let current: NodePath = tag;
+  while (current.isJSXMemberExpression()) {
+    const property = current.get("property");
+    if (!property.isJSXIdentifier()) return undefined;
+    parts.unshift(property.node.name);
+    current = current.get("object");
+  }
+  if (!current.isJSXIdentifier()) return undefined;
+  const resolved = resolveSignalControlFlowImport(current, current.node.name, importSource);
+  if (resolved?.kind !== "namespace") return undefined;
+  if (parts.length !== 1 || !signalControlFlowNames.has(parts[0] as SignalControlFlowName)) return undefined;
+  return parts[0] as SignalControlFlowName;
+}
+
+function isOwnedBySignalControlFlow(
+  callbackSite: NodePath,
+  propName: string | undefined,
+  importSource: string,
+): boolean {
+  let element: NodePath<t.JSXElement> | undefined;
+  if (callbackSite.parentPath?.isJSXElement()) {
+    element = callbackSite.parentPath;
+  } else if (callbackSite.isJSXAttribute() || callbackSite.parentPath?.isJSXAttribute()) {
+    const attribute = callbackSite.isJSXAttribute() ? callbackSite : callbackSite.parentPath!;
+    const opening = attribute.parentPath;
+    if (opening?.isJSXOpeningElement() && opening.parentPath?.isJSXElement()) element = opening.parentPath;
+  }
+  if (element === undefined) return false;
+  const opening = element.get("openingElement");
+  const namePath = opening.get("name");
+  if (!namePath.isJSXIdentifier() && !namePath.isJSXMemberExpression()) return false;
+  const owner = signalControlFlowTagName(namePath, importSource);
+  if (owner === undefined) return false;
+  if (propName !== undefined) {
+    if (propName === "children") return owner === "Show" || owner === "For" || owner === "Index" || owner === "Match";
+    return owner === "For" && propName === "by";
+  }
+  if (owner === "Show" || owner === "For" || owner === "Index") return true;
+  if (owner !== "Match") return false;
+  // Match is declarative; its branch callback is invoked by its nearest
+  // enclosing RFSG Switch, not by Match itself.
+  const parent = element.parentPath;
+  if (parent === null || !parent.isJSXElement()) return false;
+  const parentName = parent.get("openingElement.name");
+  return (parentName.isJSXIdentifier() || parentName.isJSXMemberExpression()) &&
+    signalControlFlowTagName(parentName, importSource) === "Switch";
+}
+
 type StaticConstObjectPattern = {
   properties: Array<
     | { key: t.Identifier; id: t.Identifier }
@@ -2634,7 +2802,7 @@ function inspectKnownRenderPropReads(
       } else if (callback.isIdentifier()) {
         target = resolveReferencedFunction(expression, callback.node.name);
       }
-      if (target === undefined) return;
+      if (target === undefined || isOwnedBySignalControlFlow(expression, undefined, options.importSource)) return;
       const reads = inspectFunction(
         target,
         options.importSource,
@@ -2651,6 +2819,8 @@ function inspectKnownRenderPropReads(
       const value = attribute.get("value");
       if (!value.isJSXExpressionContainer()) return;
       const expression = value.get("expression");
+      const propName = name.node.name;
+      if (isOwnedBySignalControlFlow(attribute, propName, options.importSource)) return;
       let target: NodePath<t.Function> | undefined;
       if (expression.isArrowFunctionExpression() || expression.isFunctionExpression()) {
         target = expression;
@@ -3096,6 +3266,29 @@ function parameterReadsTrackedValue(
  *   the parameter binding.
  */
 function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): boolean {
+  const movedNames = new Set(moved.flatMap((param) => Object.keys(t.getBindingIdentifiers(param.node))));
+  const params = path.get("params");
+  const firstMovedIndex = params.findIndex((param) => moved.some((candidate) => candidate.node === param.node));
+  // A default in an earlier, unmoved parameter can create a closure over a
+  // later parameter (`function C(read = () => value, value = count.value)`).
+  // Once `value` is rebound as a body `let`, that closure still closes over the
+  // parameter environment; replacing the parameter would silently make it see
+  // an outer/global `value` instead. Direct forward references have the same
+  // parameter-environment/TDZ distinction. Decline only this relocation.
+  for (const param of params.slice(0, firstMovedIndex)) {
+    let conflict = false;
+    param.traverse({
+      ReferencedIdentifier(reference) {
+        if (!movedNames.has(reference.node.name)) return;
+        const parameterBinding = path.scope.getOwnBinding(reference.node.name);
+        if (parameterBinding !== undefined && reference.scope.getBinding(reference.node.name) === parameterBinding) {
+          conflict = true;
+          reference.stop();
+        }
+      },
+    });
+    if (conflict) return true;
+  }
   for (const param of moved) {
     for (const name of Object.keys(t.getBindingIdentifiers(param.node))) {
       const binding = path.scope.getOwnBinding(name);
@@ -5187,6 +5380,18 @@ function captureTrackedReadExpressions(
         wrap(path as NodePath<t.Expression>);
       },
     },
+    UpdateExpression: {
+      enter(path) {
+        // `count.value++` and `state.value.count++` read the old value before
+        // writing. Capturing the whole operator preserves prefix/postfix return
+        // values, getter/setter order, and any proxy/key evaluation.
+        if (
+          hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
+          !isDeferredReadContext(path, functionPath) &&
+          !expressionCallsHook(path)
+        ) wrap(path as NodePath<t.Expression>);
+      },
+    },
     JSXSpreadAttribute: {
       enter(path) {
         // `<p {...state.value.props} />` copies the props inside the JSX
@@ -5228,7 +5433,17 @@ function captureTrackedReadExpressions(
     },
     UnaryExpression: {
       enter(path) {
-        if (path.node.operator === "+" || path.node.operator === "-" || path.node.operator === "~") {
+        if (path.node.operator === "delete") {
+          // Deleting a nested property still evaluates the signal-backed base
+          // and can invoke reactive Proxy traps. Preserve the delete boolean by
+          // capturing the complete operation, while a direct `delete s.value`
+          // remains an ordinary property deletion with no getter read.
+          if (
+            hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
+            !isDeferredReadContext(path, functionPath) &&
+            !expressionCallsHook(path)
+          ) wrap(path as NodePath<t.Expression>);
+        } else if (path.node.operator === "+" || path.node.operator === "-" || path.node.operator === "~") {
           wrapCoercion(path as NodePath<t.Expression>, [path.get("argument")]);
         }
       },

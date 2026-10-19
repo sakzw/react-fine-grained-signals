@@ -80,6 +80,11 @@ interface PropertyMetadata {
   iteration?: DeepSignalSource<number>;
   arrayMethods: Map<PropertyKey, { method: (...args: unknown[]) => unknown; wrapper: (...args: unknown[]) => unknown }>;
   prunable?: Set<PropertyKey> | undefined;
+  prunableRevision?: number | undefined;
+  prunableSweepIterator?: Iterator<PropertyKey> | undefined;
+  prunableSweepRevision?: number | undefined;
+  prunableSweepDeferred?: boolean | undefined;
+  prunableSweepSettled?: boolean | undefined;
   proxy: object;
 }
 
@@ -169,9 +174,14 @@ const notify = (versions: Map<PropertyKey, VersionSignal>, key: PropertyKey): vo
   if (version !== undefined) version.value += 1;
 };
 
+const queuePrunable = (metadata: PropertyMetadata, key: PropertyKey): void => {
+  (metadata.prunable ??= new Set()).add(key);
+  metadata.prunableRevision = (metadata.prunableRevision ?? 0) + 1;
+};
+
 const markPrunable = (metadata: PropertyMetadata, key: PropertyKey): void => {
   if (!metadata.properties.has(key) && !metadata.existence.has(key)) return;
-  (metadata.prunable ??= new Set()).add(key);
+  queuePrunable(metadata, key);
 };
 
 const notifyIteration = (metadata: PropertyMetadata): void => {
@@ -195,6 +205,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   const proxyToRaw = new WeakMap<object, object>();
   const rawToMetadata = new WeakMap<object, PropertyMetadata>();
   const reactiveCollections = new WeakMap<object, CollectionMetadata>();
+  const scheduledPropertySweeps = new WeakSet<PropertyMetadata>();
   const scheduledCollectionSweeps = new WeakSet<CollectionMetadata>();
   // A carrier that contains one of our proxies has to be copied before it can be
   // stored. Remember that copy so assigning the same carrier again preserves the
@@ -731,32 +742,76 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     // what keeps `sweepPrunedKeys` from dropping it out from under a subscriber.
     adapter.markWatched(version);
     version.value;
+    // Missing properties have no mutation that will naturally enqueue them
+    // for cleanup. Keep them on the same bounded pruning path as removed
+    // properties, then inspect them after this render/effect turn has settled.
+    if (!Object.prototype.hasOwnProperty.call(target, key)) {
+      queuePrunable(metadata, key);
+      schedulePropertySweep(metadata, target);
+    }
   };
 
   /**
-   * Queues `key`'s version signals for removal once nothing depends on them.
-   * Only called for a key that has just been removed *and* notified, which is
-   * what makes the eventual removal safe: the notification forces every
-   * subscriber to re-run, so one that still cares re-reads the key (re-arming
-   * `markWatched`) and one that does not has already been unlinked.
-   */
-  /**
-   * Drops the version signals of removed keys once they have no subscribers
-   * left, so a virtualized or repeatedly-spliced list stops accumulating one
-   * entry per key that ever existed.
+   * Drops version signals for absent keys once they have no subscribers left,
+   * so dynamic lookups and repeatedly-spliced lists do not retain every key
+   * they have ever read.
    *
    * Runs only at batch depth 0, where the write that queued these keys has
    * already flushed its effects; before that, `hasSubscribers()` would still
-   * report the pre-flush picture. A key that is still subscribed (typically a
-   * React store whose re-render has not committed yet) stays queued and is
-   * reconsidered on the next sweep rather than being dropped early.
+   * report the pre-flush picture. Settled sweeps check graph links and
+   * invalidate a render attempt that read but has not committed yet.
    */
-  const sweepPrunedKeys = (metadata: PropertyMetadata, target: object): void => {
+  const hasLinkedSubscribers = (version: VersionSignal): boolean =>
+    (adapter.hasLinkedSubscribers ?? adapter.hasSubscribers)(version);
+  const retirePropertyVersion = (version: VersionSignal | undefined): void => {
+    if (version !== undefined) adapter.untracked(() => { version.value = version.peek() + 1; });
+  };
+
+  const sweepPrunedKeys = (metadata: PropertyMetadata, target: object, settled = false): void => {
     const prunable = metadata.prunable;
     if (prunable === undefined || prunable.size === 0) return;
     if (adapter.getBatchDepth() !== 0) return;
 
-    for (const key of prunable) {
+    let iterator = metadata.prunableSweepIterator;
+    if (iterator === undefined) {
+      iterator = prunable.values();
+      metadata.prunableSweepIterator = iterator;
+      metadata.prunableSweepRevision = metadata.prunableRevision ?? 0;
+      metadata.prunableSweepSettled = settled;
+      metadata.prunableSweepDeferred = false;
+    }
+    const settledPass = metadata.prunableSweepSettled === true;
+    const release = (version: VersionSignal | undefined): boolean => {
+      if (version === undefined) return true;
+      if (settledPass) {
+        if (hasLinkedSubscribers(version)) return false;
+        // A concurrent render may have read the old source without committing
+        // a graph link yet. Advancing it makes that attempt retry at commit.
+        retirePropertyVersion(version);
+        return true;
+      }
+      if (!adapter.hasSubscribers(version)) return true;
+      if (adapter.hasLinkedSubscribers !== undefined && !hasLinkedSubscribers(version)) {
+        metadata.prunableSweepDeferred = true;
+      }
+      return false;
+    };
+    let processed = 0;
+    while (processed < 128) {
+      const next = iterator.next();
+      if (next.done) {
+        metadata.prunableSweepIterator = undefined;
+        const revised = metadata.prunableSweepRevision !== (metadata.prunableRevision ?? 0);
+        const deferred = metadata.prunableSweepDeferred === true && !settledPass;
+        if (prunable.size === 0) metadata.prunable = undefined;
+        metadata.prunableSweepRevision = undefined;
+        metadata.prunableSweepDeferred = undefined;
+        metadata.prunableSweepSettled = undefined;
+        if ((revised || deferred) && prunable.size > 0) schedulePropertySweep(metadata, target);
+        return;
+      }
+      const key = next.value;
+      processed += 1;
       // The key came back (an index was written again, a property re-added):
       // its version signals are live metadata again, not garbage.
       if (Object.prototype.hasOwnProperty.call(target, key)) {
@@ -765,8 +820,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       }
       const property = metadata.properties.get(key);
       const existence = metadata.existence.get(key);
-      if ((property !== undefined && adapter.hasSubscribers(property)) ||
-          (existence !== undefined && adapter.hasSubscribers(existence))) {
+      if (!release(property) || !release(existence)) {
         continue;
       }
       metadata.properties.delete(key);
@@ -779,7 +833,27 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       prunable.delete(key);
     }
 
-    if (prunable.size === 0) metadata.prunable = undefined;
+    if (prunable.size === 0) {
+      metadata.prunable = undefined;
+      metadata.prunableSweepIterator = undefined;
+      metadata.prunableSweepRevision = undefined;
+      metadata.prunableSweepDeferred = undefined;
+      metadata.prunableSweepSettled = undefined;
+      return;
+    }
+    // A long-lived object can see arbitrarily many dynamic missing keys.
+    // Yield between chunks just as collection-key pruning does.
+    schedulePropertySweep(metadata, target);
+  };
+
+  const schedulePropertySweep = (metadata: PropertyMetadata, target: object): void => {
+    if (scheduledPropertySweeps.has(metadata)) return;
+    scheduledPropertySweeps.add(metadata);
+    if (metadata.prunableSweepIterator !== undefined) metadata.prunableSweepSettled = true;
+    setTimeout(() => {
+      scheduledPropertySweeps.delete(metadata);
+      sweepPrunedKeys(metadata, target, true);
+    }, 0);
   };
 
   const trackIterationOf = (metadata: PropertyMetadata): void => {
@@ -809,6 +883,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       if ((candidates & bit) === 0) {
         metadata.prunable.set(key, candidates | bit);
         metadata.prunableRevision += 1;
+        // Lookup-only keys are never followed by a write to this collection,
+        // so mutation-triggered sweeping alone cannot reclaim them.
+        scheduleCollectionSweep(metadata, true);
       }
     }
     return version;
@@ -871,8 +948,6 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   // re-renders onto a fresh version. The synchronous sweep that follows a
   // mutation drops only versions nothing has read since their last write, so
   // an unrelated write never invalidates a render that is still in progress.
-  const hasLinkedSubscribers = (version: VersionSignal): boolean =>
-    (adapter.hasLinkedSubscribers ?? adapter.hasSubscribers)(version);
   const retireCollectionVersion = (version: VersionSignal | undefined): void => {
     if (version !== undefined) adapter.untracked(() => { version.value = version.peek() + 1; });
   };
@@ -1503,6 +1578,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         const currentValue = Reflect.get(target, key, target);
         const existsNow = Reflect.has(target, key);
         const ownedNow = Object.prototype.hasOwnProperty.call(target, key);
+        if (ownedNow && !owned && metadata.prunable?.has(key)) {
+          // If a chunked sweep already passed this candidate, make it revisit
+          // the now-live property before the queue is considered settled.
+          metadata.prunableRevision = (metadata.prunableRevision ?? 0) + 1;
+        }
 
         adapter.batch(() => {
           if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {

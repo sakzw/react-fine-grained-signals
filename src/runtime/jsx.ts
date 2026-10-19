@@ -128,6 +128,12 @@ const NON_HTML_HOST_ELEMENTS: ReadonlySet<string> = /* @__PURE__ */ (() => {
 type HostProps = Record<string, unknown>;
 type StylePropertyBinding = { readonly entries: readonly (readonly [string, unknown])[] };
 type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
+
+function assertSupportedSignalHostProp(name: string, value: unknown, tagName: string): void {
+  if (name !== "children" && !tagName.includes("-") && isSignal(value)) {
+    throw new TypeError(`The full JSX runtime does not support Signal-valued ${name} props on <${tagName}>; use a supported Signal binding or pass ${name}.value.`);
+  }
+}
 // `snapshot` is the value React itself was handed for the prop at render (see
 // `transformHostProps`); a binding hands the node back to it on detach.
 type Binding = readonly [name: string, source: BindingSource, kind: BindingKind, snapshot: unknown, config?: readonly unknown[]];
@@ -1449,17 +1455,26 @@ function createBindingRef(bindings: readonly Binding[], userRef: SupportedRef): 
 
 type BindingRefEntry = {
   readonly bindings: readonly Binding[];
-  readonly userRef: SupportedRef;
   readonly ref: (node: Element | null) => RefCleanup;
 };
 
+type BindingRefCacheNode = {
+  readonly children: WeakMap<object, BindingRefCacheNode>;
+  readonly entries: BindingRefEntry[];
+};
+
+function createBindingRefCacheNode(): BindingRefCacheNode {
+  return { children: new WeakMap(), entries: [] };
+}
+
 // Recently created binding refs, so re-rendering an element with the same
-// signals and the same user ref hands React the same callback and React does
-// not detach and re-attach it at all. Keyed weakly by the user ref when there
-// is one (so the cache lives exactly as long as that ref) and otherwise by the
-// first bound signal, with a small bound per key so an element whose bindings
-// keep changing cannot grow it.
-const bindingRefs = new WeakMap<object, BindingRefEntry[]>();
+// signal identities and user ref hands React the same callback. A weak trie
+// keys every bound source (including every style-property source), so rows
+// that share a user ref and their first binding do not evict each other. Each
+// leaf remains bounded for changing snapshots/configurations, and weak keys do
+// not keep otherwise-unused signal sets alive.
+const NO_USER_REF = {};
+const bindingRefs = new WeakMap<object, BindingRefCacheNode>();
 const BINDING_REF_CACHE_LIMIT = 8;
 
 // Also compares snapshots, so a ref is only ever attached for the exact values
@@ -1469,27 +1484,39 @@ function haveSameBindings(a: readonly Binding[], b: readonly Binding[]): boolean
     && a.every((binding, index) => isSameBinding(binding, b[index]) && hasSameSnapshot(binding, b[index]!));
 }
 
+function descendBindingRefCache(node: BindingRefCacheNode, source: object): BindingRefCacheNode {
+  let child = node.children.get(source);
+  if (child === undefined) {
+    child = createBindingRefCacheNode();
+    node.children.set(source, child);
+  }
+  return child;
+}
+
 function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (node: Element | null) => RefCleanup {
-  // A user ref is an object or function, never one of the bound signals, so
-  // the two kinds of key cannot collide in one map.
-  const firstSource = bindings[0]![1];
-  const styleSignal = isStylePropertyBinding(firstSource)
-    ? firstSource.entries.find(([, value]) => isSignal(value))?.[1]
-    : undefined;
-  const cacheKey: object = userRef ?? styleSignal ?? firstSource;
-  const cache = bindingRefs;
-  let entries = cache.get(cacheKey);
-  if (entries !== undefined) {
-    for (const entry of entries) {
-      if (entry.userRef === userRef && haveSameBindings(entry.bindings, bindings)) return entry.ref;
+  const userRefKey: object = userRef ?? NO_USER_REF;
+  let node = bindingRefs.get(userRefKey);
+  if (node === undefined) {
+    node = createBindingRefCacheNode();
+    bindingRefs.set(userRefKey, node);
+  }
+  for (const binding of bindings) {
+    const source = binding[1];
+    if (isStylePropertyBinding(source)) {
+      for (const [, value] of source.entries) {
+        if (isSignal(value)) node = descendBindingRefCache(node, value);
+      }
+    } else {
+      node = descendBindingRefCache(node, source);
     }
-  } else {
-    entries = [];
-    cache.set(cacheKey, entries);
+  }
+  const entries = node.entries;
+  for (const entry of entries) {
+    if (haveSameBindings(entry.bindings, bindings)) return entry.ref;
   }
   const ref = createBindingRef(bindings, userRef);
   if (entries.length >= BINDING_REF_CACHE_LIMIT) entries.shift();
-  entries.push({ bindings, userRef, ref });
+  entries.push({ bindings, ref });
   return ref;
 }
 
@@ -1570,7 +1597,12 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
     if (isReactiveHostProp(name, value)) {
       const kind = resolveBindingKind(tagName, name, props);
       bindings.push([name, value, kind, readInitialValue(value, kind)]);
+      continue;
     }
+    // Custom elements own their property contract, so leave Signal objects
+    // intact there. On ordinary HTML hosts, an unrecognized Signal would be
+    // handed to React/DOM rather than subscribed to and must be explicit.
+    assertSupportedSignalHostProp(name, value, tagName);
   }
   return bindings;
 }
@@ -1598,6 +1630,12 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
     : { ...inputProps, style: styleProperties.snapshot };
   if (!isHtmlHost && (normalizedProps.bindValue !== undefined || normalizedProps.bindChecked !== undefined)) {
     throw new TypeError(`${normalizedProps.bindValue !== undefined ? "bindValue: text-like, number, or range input/textarea/select only." : "bindChecked: checkbox only."}`);
+  }
+  const isCustomElement = type.includes("-") && !NON_HTML_HOST_ELEMENTS.has(type);
+  if (!isHtmlHost && !isCustomElement) {
+    for (const [name, value] of Object.entries(normalizedProps)) {
+      assertSupportedSignalHostProp(name, value, type);
+    }
   }
   const bindings = isHtmlHost ? findHostBindings(normalizedProps, type) : [];
   // Binding props never reach the DOM, including ones left `undefined`.
@@ -1724,7 +1762,10 @@ export function createSignalAwareElement(
   }
   const normalizedChildren = children.map((child) => normalizeChild(child)) as React.ReactNode[];
   if (typeof type !== "string") {
-    return createElement(type, config, ...normalizedChildren);
+    const normalizedConfig = children.length === 0
+      ? transformFragmentProps(config) as Record<string, unknown> | null | undefined
+      : config;
+    return createElement(type, normalizedConfig, ...normalizedChildren);
   }
   const { props, bindings } = transformHostProps(type, config ?? {});
   return createElement(type, withBindingRef(props, bindings), ...normalizedChildren);

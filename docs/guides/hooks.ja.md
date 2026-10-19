@@ -51,6 +51,7 @@ useComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyLis
 依存配列(指定した場合)が変わらない間は同じidentityを保つcomputed signalを作ります。getterを渡すと読み取り専用、`{ get, set }`を渡すと書き込み可能です。書き込み可能なoverloadは`FormBindableSignal<T>`を返し、型が合う`bindValue`または`bindChecked`に渡せます。getterのみの呼び出しは引き続き`ReadonlySignal<T>`です。コンポーネントの生存期間中は依存関係のmodeと読み取り専用／書き込み可能のcapabilityを固定してください。
 
 - **依存配列を省略する場合**、getterはsignalだけを読む必要があります。最初のクロージャがコンポーネントの生存期間中保持されるため、props、React state、その他のsignalではない値を捕捉しないでください。
+- Fast RefreshはこのHookのstateを保持します。componentを保持したままgetterやwritable setterを編集すると、computedは編集前のクロージャをremountまで使い続けることがあります。開発中に編集したgetterを反映する必要がある場合はcomponentへ`// @refresh reset`を付けてください。そのcomponentのReact stateはリセットされます。本番実行には影響しません。
 - **依存配列を渡す場合**、getterが捕捉するsignal以外の値をすべて列挙します: `useComputed(() => count.value * step, [step])`。
 - modeは固定し、依存配列を渡す場合は長さと順序も固定してください。mode切り替えと長さ変更は、`useMemo`が古いcomputedを再利用したり、不正な状態で新しいcomputedを作ったりする前に明確な例外になります。React標準のwarningだけに任せると、古いgetterが残ることがあります。
 

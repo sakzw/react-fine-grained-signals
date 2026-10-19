@@ -83,7 +83,8 @@ configuration of its own.
 
 The runtime covers native elements only, and a deliberately narrow set of
 props. Signals passed to a React component's props or children are not
-unwrapped. See [JSX signal children and host bindings](./docs/guides/jsx-bindings.md)
+unwrapped. Unsupported Signal-valued host props throw a diagnostic instead of
+being passed through as an object. See [JSX signal children and host bindings](./docs/guides/jsx-bindings.md)
 for the full allow-list, and for toolchains that transform JSX through Babel,
 which do not read `tsconfig.json`.
 

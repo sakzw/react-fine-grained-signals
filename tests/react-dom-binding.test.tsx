@@ -2044,6 +2044,45 @@ describe("Direct DOM binding", () => {
 // identity churn was legitimately covering (a changed source, a changed key)
 // so the fix cannot buy stability by dropping a real teardown.
 describe("Direct DOM binding: ref identity stability", () => {
+  it.each([9, 16, 32])("keeps callback refs stable across %i bound siblings", async (count) => {
+    const bases = Array.from({ length: count }, (_, index) => signal(String(index)));
+    const evaluations = Array.from({ length: count }, () => 0);
+    const sources = bases.map((base, index) => computed(() => {
+      evaluations[index] = (evaluations[index] ?? 0) + 1;
+      return base.value;
+    }));
+    const shared = signal("shared");
+    const bump = signal(0);
+    const calls: (Element | null)[] = [];
+    const userRef = (node: Element | null) => { calls.push(node); };
+
+    function Rows() {
+      useSignalTracking();
+      void bump.value;
+      return <>{sources.map((source, index) => <div key={index} title={shared} data-row={source} ref={userRef} />)}</>;
+    }
+
+    const view = render(<Rows />);
+    const nodes = [...view.container.querySelectorAll("[data-row]")];
+    expect(calls).toEqual(nodes);
+
+    act(() => { bump.value += 1; });
+    act(() => { bump.value += 1; });
+    expect(calls).toEqual(nodes);
+
+    const beforeSignalUpdate = [...evaluations];
+    act(() => { bases.forEach((base, index) => { base.value = `updated-${index}`; }); });
+    expect(nodes.map((node) => node.getAttribute("data-row"))).toEqual(bases.map((_, index) => `updated-${index}`));
+    expect(evaluations).toEqual(beforeSignalUpdate.map((count) => count + 1));
+
+    const beforeUnmount = [...evaluations];
+    view.unmount();
+    expect(calls).toEqual([...nodes, ...Array.from({ length: count }, () => null)]);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    bases.forEach((base, index) => { base.value = `after-${index}`; });
+    expect(evaluations).toEqual(beforeUnmount);
+  });
+
   it("does not resubscribe a direct prop binding when its owner re-renders for an unrelated reason", () => {
     const state = signal("initial-state");
     const bump = signal(0);

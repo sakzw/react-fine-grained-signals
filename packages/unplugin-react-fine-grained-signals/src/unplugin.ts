@@ -36,12 +36,19 @@ export interface ReactFineGrainedSignalsOptions {
   /** Structured diagnostics: stable IDs, and which of them become build errors. */
   diagnostics?: ReactFineGrainedSignalsDiagnosticsOptions;
   /**
-   * `manual` preserves explicit useSignalTracking() opt-in. `auto` detects signal
-   * reads in components and custom hooks; `all` also wraps JSX components that
-   * do not statically expose a .value read.
+   * `manual` selects only explicit opt-ins (`@signalTracking` or a recognized
+   * first-statement useSignalTracking() call). `auto` also selects named JSX
+   * components and custom Hooks with statically recognized `.value` reads;
+   * `all` selects every eligible named JSX component.
    */
   mode?: ReactFineGrainedSignalsMode;
-  /** `managed` (default) adds an exact try/finally boundary; `inject` adds bare useSignalTracking() for best-effort opt-in. */
+  /**
+   * `managed` (default) adds a top-level useSignalCapture() Hook and wraps
+   * statically proven synchronous reads in per-read capture scopes. An authored
+   * first-statement useSignalTracking() call is preserved as an ambient boundary
+   * in either mode. `inject` inserts a bare useSignalTracking() Hook for other
+   * selected functions as a best-effort ambient boundary.
+   */
   transform?: ReactFineGrainedSignalsTransform;
   /**
    * `auto` (default) marks every transformed function with `"use no memo"`, so

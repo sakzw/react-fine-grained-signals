@@ -2614,13 +2614,18 @@ describe("component-named functions called as plain functions", () => {
 
 describe("signal reads in parameter defaults", () => {
   it("moves a destructured parameter with a tracked default behind the managed boundary", () => {
-    const output = compile(`
+    const source = `
       const count = { value: 1 };
       export function C({ v = count.value }) { return <p>{v}</p>; }
-    `, "auto");
+    `;
+    const output = compile(source, "auto", "managed");
+    const injected = compile(source, "auto", "inject");
 
     expect(output).toMatch(
       /function C\(_param\) \{\s+"use no memo";\s+const _signals = _useSignalCapture\(\);\s+let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;\s+return <p>\{v\}<\/p>;/,
+    );
+    expect(injected).toMatch(
+      /function C\(_param\) \{\s+"use no memo";\s+_useSignalTracking\(\);\s+let \{\s+v = count\.value\s+\} = _param;/,
     );
   });
 
@@ -2658,14 +2663,20 @@ describe("signal reads in parameter defaults", () => {
   });
 
   it("moves every later parameter too, so defaults keep their evaluation order", () => {
-    const output = compile(`
+    const source = `
       const count = { value: 1 };
       export function C(label, n = count.value, m = n, ...rest) { return <p>{label}{m}{rest}</p>; }
-    `, "auto");
+    `;
+    const output = compile(source, "auto", "managed");
+    const injected = compile(source, "auto", "inject");
 
     expect(output).toContain("function C(label, _param?, _param2?, ..._param3)");
     expect(output).toMatch(
       /let n = _param === undefined \? _signals\.capture\(\(\) => count\.value\) : _param;\s+let m = _param2 === undefined \? n : _param2;\s+let rest = _param3;/,
+    );
+    expect(injected).toContain("function C(label, _param?, _param2?, ..._param3)");
+    expect(injected).toMatch(
+      /let n = _param === undefined \? count\.value : _param;\s+let m = _param2 === undefined \? n : _param2;\s+let rest = _param3;/,
     );
   });
 
@@ -2697,15 +2708,79 @@ describe("signal reads in parameter defaults", () => {
     // In the parameter list `count` is the module binding; moved into the body
     // it would hit the body's own `const count` (and its dead zone). A `var`
     // re-declaring a moved parameter would collide with the emitted `let`.
-    const output = compile(`
+    const source = `
       const count = { value: 1 };
       export function C({ v = count.value }) { const count = 2; return <p>{v}{count}</p>; }
       export function D(v = count.value) { var v; return <p>{v}</p>; }
-    `, "auto");
+    `;
+    const output = compile(source, "auto", "managed");
+    const injected = compile(source, "auto", "inject");
 
     expect(output).toMatch(/function C\(\{\s+v = count\.value\s+\}\)/);
     expect(output).toMatch(/function D\(v = count\.value\)/);
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
+    expect(injected).toMatch(/function C\(\{\s+v = count\.value\s+\}\)/);
+    expect(injected).toMatch(/function D\(v = count\.value\)/);
+  });
+
+  it("declines relocation when an earlier default closure captures a later moved parameter", () => {
+    const warnings: Error[] = [];
+    const source = `
+      const count = { value: 1 };
+      const x = "outer";
+      export function C(p, get = () => x, v = count.value, x = 1) { return <p>{get()}{v}</p>; }
+    `;
+    const managedResult = transformReactFineGrainedSignals(source, "UnsafeParameterRelocation.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+    const managed = managedResult?.code ?? source;
+    const injected = compile(source, "auto", "inject");
+
+    // The closure is created in the parameter environment and must keep
+    // observing the parameter binding. The unsafe moved read remains explicit
+    // and reports the existing unsupported-boundary diagnostic instead.
+    expect(managed).toMatch(/function C\(p, get = \(\) => x, v = count\.value, x = 1\)/);
+    expect(injected).toMatch(/function C\(p, get = \(\) => x, v = count\.value, x = 1\)/);
+    expect(managed).not.toContain("let x =");
+    expect(injected).not.toContain("let x =");
+    expect(warnings.filter((warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS004")).toHaveLength(1);
+
+    const temporalDeadZone = compile(`
+      const count = { value: 1 };
+      export function C(first = second, second = count.value) { return <p>{first}</p>; }
+    `, "auto", "managed");
+    expect(temporalDeadZone).toMatch(/function C\(first = second, second = count\.value\)/);
+  });
+});
+
+describe("capturing tracked update and delete operations", () => {
+  it("captures the complete tracked update expression and preserves postfix result shape", () => {
+    const output = compile(`
+      const count = { value: 1 };
+      export function Counter() { const previous = count.value++; return <p>{previous}</p>; }
+    `, "auto", "managed");
+
+    expect(output).toMatch(/const previous = _signals\.capture\(\(\) => count\.value\+\+\)/);
+  });
+
+  it("captures nested delete but does not treat direct deletion of the value property as a read", () => {
+    const nested = compile(`
+      const state = { value: { profile: { name: "Ada" } } };
+      export function Remove() { const removed = delete state.value.profile.name; return <p>{removed}</p>; }
+    `, "auto", "managed");
+    const direct = compile(`
+      const state = { value: { profile: { name: "Ada" } } };
+      export function Remove() { const removed = delete state.value; return <p>{removed}</p>; }
+    `, "auto", "managed");
+
+    expect(nested).toMatch(/const removed = _signals\.capture\(\(\) => delete state\.value\.profile\.name\)/);
+    expect(direct).not.toContain("_useSignalCapture");
+    expect(direct).toMatch(/delete state\.value/);
   });
 });
 
@@ -3374,6 +3449,80 @@ export function App() {
       line: 5,
       column: 15,
     });
+  });
+
+  it("does not warn for callbacks owned by imported RFSG control-flow components", () => {
+    const warnings: Error[] = [];
+    const source = `
+import { For as Each, Index, Match as Case, Show as When, Switch as Choose } from "react-fine-grained-signals/utils";
+import * as Controls from "react-fine-grained-signals/utils";
+const items = { value: [] };
+const count = { value: 1 };
+const render = () => count.value;
+export function App() {
+  const AliasedWhen = When;
+  const ControlsAlias = Controls;
+  return <>
+    <output>{count.value}</output>
+    <AliasedWhen when={items}>{render}</AliasedWhen>
+    <Each each={items}>{(item) => count.value + item}</Each>
+    <Index each={items}>{(item) => count.value + item}</Index>
+    <Choose><Case when={items}>{() => count.value}</Case></Choose>
+    <ControlsAlias.Show when={items}>{() => count.value}</ControlsAlias.Show>
+    <Each each={items} by={(item) => count.value + item} />
+  </>;
+}
+`;
+    const result = transformReactFineGrainedSignals(source, "ControlFlowCallbacks.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(result).not.toBeNull();
+    const controlFlowWarnings = warnings.filter(
+      (warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS003",
+    );
+    expect(controlFlowWarnings).toEqual([]);
+  });
+
+  it("only suppresses control-flow callback warnings for the configured RFSG utils import", () => {
+    const transformWith = (source: string, importSource: string) => {
+      const warnings: Error[] = [];
+      transformReactFineGrainedSignals(source, "ControlFlowImportIdentity.tsx", {
+        importSource,
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "auto",
+        reactImportSource: "react",
+        warn: (warning) => warnings.push(warning),
+      });
+      return warnings.filter(
+        (warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS003",
+      );
+    };
+    const customPackage = `
+import { Show } from "@app/signals/utils";
+const count = { value: 1 };
+export function App() { return <Show when={count}>{() => count.value}</Show>; }
+`;
+    const unrelatedPackage = `
+import { Show } from "some-ui/utils";
+const count = { value: 1 };
+export function App() { return <Show when={count}>{() => count.value}</Show>; }
+`;
+    const localShadow = `
+const count = { value: 1 };
+function Show(props) { return props.children; }
+export function App() { return <Show when={count}>{() => count.value}</Show>; }
+`;
+
+    expect(transformWith(customPackage, "@app/signals")).toHaveLength(0);
+    expect(transformWith(unrelatedPackage, "@app/signals")).toHaveLength(1);
+    expect(transformWith(localShadow, "react-fine-grained-signals")).toHaveLength(1);
   });
 
   it("does not report signal writes in a JSX action callback as render reads", () => {

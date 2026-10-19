@@ -134,8 +134,14 @@ export default {
 ## Options
 
 - `mode`:
-  - `"manual"`: only an explicit first-statement imported `useSignalTracking()` call
-    or a `@signalTracking` comment on a named component/custom hook opts it in.
+  - `"manual"`: only explicit opt-ins select a function: a `@signalTracking`
+    comment on a supported named component/custom Hook, or a recognized
+    first-statement `useSignalTracking()` call. A directly imported call from
+    `importSource` remains an ambient Hook in both transform modes; managed
+    preserves it for deep-proxy reads that per-read capture cannot observe. An
+    annotation instead uses the selected transform. A call found through a
+    barrel can select the function, but stays ambient because the transform
+    cannot verify the re-export.
   - `"auto"` (default): additionally transforms named JSX components and
     named `useX` custom hooks that read `.value`.
   - `"all"`: additionally transforms every eligible named JSX component.
@@ -491,15 +497,18 @@ skipped, so signal writes stop re-rendering it. Three workarounds:
 ## `useSignalTracking()` opt-in and rewriting
 
 `@signalTracking` and `@noSignalTracking` apply only to their owning function; they do
-not affect nested functions. The plugin never adds a second `useSignalTracking()`
-call: a direct, namespace, or barrel-imported call it finds is treated as the
-function's existing opt-in. A call that is not the function's first statement,
-and any barrel-imported call, is left alone in both transform modes. A
-first-statement call imported directly or as a namespace from `importSource` is
-left in place under `"inject"`, but under `"managed"` (the default) it is
-absorbed into the generated capture: the statement is removed and replaced by
-the top-level capture Hook, and statically proven reads are wrapped at their
-execution sites.
+not affect nested functions. The annotation opts a supported function into the
+selected transform: `"managed"` adds a top-level capture Hook and wraps statically
+proven synchronous reads, while `"inject"` inserts a bare ambient
+`useSignalTracking()` call. An authored `useSignalTracking()` call is also an
+opt-in, and the plugin never adds a duplicate Hook. A call that is not the
+function's first statement is left untouched. A first-statement call imported
+directly or as a namespace from `importSource` remains an ambient Hook in both
+modes. In particular, managed preserves it so deep-proxy reads such as
+`task.done` continue to be tracked; per-read capture only handles statically
+proven `.value` expressions. A barrel-imported call can select the function,
+but stays as an ordinary ambient Hook with a warning because the transform
+cannot verify that re-export; it is not rewritten in either mode.
 
 A first-statement `useSignalTracking()` call inside an `async` or generator function
 fails the build under the default `"managed"` transform, with

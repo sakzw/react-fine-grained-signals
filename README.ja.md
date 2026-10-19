@@ -69,7 +69,7 @@ function Counter() {
 
 Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じです。
 
-このランタイムが対象とするのはネイティブ要素と、意図的に絞ったpropsだけです。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。許可リスト全体と、JSXをBabelで変換するツールチェーン（`tsconfig.json` を読みません）については[JSXのsignal子要素とhost binding](./docs/guides/jsx-bindings.ja.md)を参照してください。
+このランタイムが対象とするのはネイティブ要素と、意図的に絞ったpropsだけです。未対応のSignal-valued host propはobjectとして渡さず診断をthrowします。Reactコンポーネントのpropsや子要素に渡したsignalはアンラップされません。許可リスト全体と、JSXをBabelで変換するツールチェーン（`tsconfig.json` を読みません）については[JSXのsignal子要素とhost binding](./docs/guides/jsx-bindings.ja.md)を参照してください。
 
 DOMの直接bindingは不要で、reactiveなSignal子要素だけが必要な場合はLite JSX Runtimeを明示的に選びます。
 

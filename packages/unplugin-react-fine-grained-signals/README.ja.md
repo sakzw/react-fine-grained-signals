@@ -134,6 +134,10 @@ export default {
 - `mode`
   - `"manual"`: 先頭文にあるimport済みの `useSignalTracking()`、または
     `@signalTracking` を付けた名前付きcomponent/custom hookだけを変換します。
+    `importSource` からdirect importしたHook呼び出しはどちらのmodeでもambientのまま
+    残ります。managedはper-read captureが扱えないdeep-proxy readも追跡できるよう、
+    明示Hookを維持します。注釈によるopt-inは選択した変換方式を使います。barrel経由の
+    呼び出しも関数を選択できますが、re-exportを検証できないためambientのまま残ります。
   - `"auto"`（既定）: さらに `.value` を読む名前付きJSX componentと
     名前付き `useX` custom hookを変換します。
   - `"all"`: さらに変換可能な名前付きJSX componentを選びます。認識対象の
@@ -468,14 +472,18 @@ re-exportの連鎖をたどらないためです。認識できなかった場�
 
 ## `useSignalTracking()` のopt-inと書き換え
 
-`@signalTracking` と `@noSignalTracking` は、その関数だけに適用されます。pluginが
-二重の `useSignalTracking()` 呼び出しを挿入することはありません。既存のdirect
-import、namespace import、barrel import経由の呼び出しは、その関数のopt-inと
-みなします。先頭文でない呼び出しと、barrel import経由の呼び出しは、いずれの
-変換モードでもそのまま残ります。`importSource` からdirect importまたは
-namespace importした先頭文の呼び出しは、`"inject"` ではそのまま残りますが、
-`"managed"`（既定）ではその文は削除され、top-level capture Hookへ置き換わります。
-静的に証明できるreadは実行箇所で個別にcaptureされます。
+`@signalTracking` と `@noSignalTracking` は、その関数だけに適用されます。
+`@signalTracking` は選択された変換方式へのopt-inです。`"managed"`（既定）では
+top-level capture Hookを追加し、静的に証明できる同期readを個別にcaptureします。
+`"inject"` ではbareなambient `useSignalTracking()` を挿入します。
+
+手書きの `useSignalTracking()` 呼び出しもopt-inで、pluginは二重にHookを追加しません。
+関数の先頭文でない呼び出しはそのまま残ります。`importSource` からdirectまたは
+namespace importした先頭文の呼び出しは、どちらのmodeでもambient Hookとして残ります。
+特にmanagedでは、per-read captureが扱えない `task.done` のようなdeep-proxy readも
+追跡できるよう、明示Hookを維持します。barrel import経由の呼び出しも関数を選択できますが、
+re-exportを検証できないためwarningを出し、どちらのmodeでも通常のambient Hookとして
+残します。
 
 先頭文での `useSignalTracking()` 呼び出しが `async` 関数やgenerator関数の中にあると、
 既定の `"managed"` 変換ではbuildが失敗し、

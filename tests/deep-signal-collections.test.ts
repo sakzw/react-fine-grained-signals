@@ -359,6 +359,68 @@ describe("deepSignal reactive collections", () => {
     expect(live).toEqual([true, false]);
   });
 
+  it("reclaims read-only primitive-key lookups without collection writes and keeps current subscriptions live", async () => {
+    const map = deepSignal(new Map<string, number>());
+    const set = deepSignal(new Set<string>());
+    const query = signal("lookup-0");
+    const seen: Array<[number | undefined, boolean, boolean]> = [];
+    const dispose = effect(() => {
+      const key = query.value;
+      seen.push([map.value.get(key), map.value.has(key), set.value.has(key)]);
+    });
+    disposers.push(dispose);
+
+    for (let index = 1; index < 300; index += 1) query.value = `lookup-${index}`;
+    // No Map/Set mutation is needed to trigger reclamation. Multiple task turns
+    // drain the bounded 128-key sweep while the final key remains subscribed.
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const currentKey = `lookup-${seen.length - 1}`;
+    expect(seen.at(-1)).toEqual([undefined, false, false]);
+    expect(inspectCollectionMetadata(map.value)!.values).toEqual([currentKey]);
+    expect(inspectCollectionMetadata(map.value)!.existence).toEqual([currentKey]);
+    expect(inspectCollectionMetadata(set.value)!.members).toEqual([currentKey]);
+
+    map.value.set(currentKey, 17);
+    set.value.add(currentKey);
+    expect(seen.at(-1)).toEqual([17, true, true]);
+    map.value.delete(currentKey);
+    set.value.delete(currentKey);
+    expect(seen.at(-1)).toEqual([undefined, false, false]);
+
+    query.value = "cleanup-trigger";
+    dispose();
+    disposers.splice(disposers.indexOf(dispose), 1);
+    for (let turn = 0; turn < 3; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(inspectCollectionMetadata(map.value)!.values).toEqual([]);
+    expect(inspectCollectionMetadata(map.value)!.existence).toEqual([]);
+    expect(inspectCollectionMetadata(set.value)!.members).toEqual([]);
+
+  });
+
+  it.fails("reclaims the final read-only collection key after its subscriber disposes without further activity", async () => {
+    const map = deepSignal(new Map<string, number>());
+    const set = deepSignal(new Set<string>());
+    const dispose = effect(() => {
+      map.value.get("final-key");
+      map.value.has("final-key");
+      set.value.has("final-key");
+    });
+
+    // Let all queued sweeps settle while the dependency is still linked.
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(inspectCollectionMetadata(map.value)!.values).toEqual(["final-key"]);
+    expect(inspectCollectionMetadata(map.value)!.existence).toEqual(["final-key"]);
+    expect(inspectCollectionMetadata(set.value)!.members).toEqual(["final-key"]);
+
+    // No later read or collection mutation is allowed to schedule cleanup.
+    dispose();
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(inspectCollectionMetadata(map.value)!.values).toEqual([]);
+    expect(inspectCollectionMetadata(map.value)!.existence).toEqual([]);
+    expect(inspectCollectionMetadata(set.value)!.members).toEqual([]);
+  });
+
   it("keeps a pending render attempt valid across an unrelated write and releases its key in a later task", async () => {
     const map = deepSignal(new Map<string, number>());
     const render = coreRuntime.renderAdapter;

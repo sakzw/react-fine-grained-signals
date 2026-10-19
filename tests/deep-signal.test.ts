@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { batch, deepSignal, effect, isSignal } from "../src/index.js";
+import { batch, deepSignal, effect, isSignal, signal } from "../src/index.js";
 import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
+import { coreRuntime } from "../src/core/core-runtime.js";
 
 /** Reads the internal per-key metadata a deep proxy is retaining. */
 function metadataOf(value: object) {
@@ -746,6 +747,75 @@ describe("deepSignal", () => {
     // Still wired up: restoring the index notifies the same subscriber.
     state.value.list[2] = "c2";
     expect(seen).toEqual(["c", undefined, "c2"]);
+  });
+
+  it("reclaims read-only missing-property metadata after dependency switches and preserves add/delete/re-add tracking", async () => {
+    const state = deepSignal<Record<string, number>>({});
+    const selected = signal("missing-0");
+    const seen: Array<[boolean, boolean, number | undefined]> = [];
+    const dispose = effect(() => {
+      const key = selected.value;
+      seen.push([key in state.value, Object.hasOwn(state.value, key), state.value[key]]);
+    });
+    disposers.push(dispose);
+
+    for (let index = 1; index < 300; index += 1) selected.value = `missing-${index}`;
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const currentKey = `missing-${seen.length - 1}`;
+    expect(seen.at(-1)).toEqual([false, false, undefined]);
+    expect(metadataOf(state.value).properties).toEqual([currentKey]);
+    expect(metadataOf(state.value).existence).toEqual([currentKey]);
+
+    state.value[currentKey] = 1;
+    expect(seen.at(-1)).toEqual([true, true, 1]);
+    state.value[currentKey] = 2;
+    expect(seen.at(-1)).toEqual([true, true, 2]);
+    delete state.value[currentKey];
+    expect(seen.at(-1)).toEqual([false, false, undefined]);
+    state.value[currentKey] = 3;
+    expect(seen.at(-1)).toEqual([true, true, 3]);
+
+    delete state.value[currentKey];
+    selected.value = "cleanup-trigger";
+    dispose();
+    disposers.splice(disposers.indexOf(dispose), 1);
+    for (let turn = 0; turn < 3; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(metadataOf(state.value).properties).toEqual([]);
+    expect(metadataOf(state.value).existence).toEqual([]);
+  });
+
+  it.fails("reclaims the final missing-property key after its subscriber disposes without further activity", async () => {
+    const state = deepSignal<Record<string, number>>({});
+    const dispose = effect(() => {
+      void ("final-key" in state.value);
+      void Object.hasOwn(state.value, "final-key");
+      void state.value["final-key"];
+    });
+
+    // Drain the scheduled sweep while all three dependencies remain linked.
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(metadataOf(state.value).properties).toEqual(["final-key"]);
+    expect(metadataOf(state.value).existence).toEqual(["final-key"]);
+
+    // Unlinking does not itself notify the deep-signal metadata owner.
+    dispose();
+    for (let turn = 0; turn < 5; turn += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(metadataOf(state.value).properties).toEqual([]);
+    expect(metadataOf(state.value).existence).toEqual([]);
+  });
+
+  it("invalidates an uncommitted render before reclaiming missing-property metadata", async () => {
+    const state = deepSignal<Record<string, number>>({});
+    const render = coreRuntime.renderAdapter;
+    const attempt = render.createRenderAttempt();
+    render.withRenderScope(attempt, () => { void state.value.pending; });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(metadataOf(state.value).properties).toEqual([]);
+    expect(render.settleRenderAttempt(attempt)).toBe(false);
   });
 
   it("reports a frozen collection-valued property with the library's own error", () => {

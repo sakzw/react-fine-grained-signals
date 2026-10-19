@@ -1,8 +1,9 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { act, createRef, startTransition, useEffect, useLayoutEffect, useState } from "react";
+import { act, createElement as reactCreateElement, createRef, Fragment, startTransition, useEffect, useLayoutEffect, useState } from "react";
 import { flushSync } from "react-dom";
+import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +16,8 @@ import {
   useSignalEffect,
   useSignalTracking,
 } from "../src/index.js";
+import { jsx } from "../src/jsx-runtime.js";
+import { createElement as createLiteElement } from "../src/lite.js";
 
 // Regression coverage for the v0.2.0 release review's React and JSX findings.
 
@@ -74,6 +77,108 @@ describe("classic createElement fallback (B1)", () => {
       text.value = "bye";
     });
     expect(document.getElementById("direct")!.textContent).toBe("bye");
+  });
+
+  it("normalizes config children for Fragment, including nested arrays, while preserving key", () => {
+    const first = signal("first");
+    const second = signal("second");
+    // Exercise React's classic-runtime `config.children` contract directly.
+    // eslint-disable-next-line react/no-children-prop
+    const element = createElement(Fragment, { key: "classic-fragment", children: [first, [" / ", second]] });
+    expect(element.key).toBe("classic-fragment");
+
+    const view = render(element);
+    expect(view.container.textContent).toBe("first / second");
+    act(() => {
+      first.value = "updated";
+      second.value = "again";
+    });
+    expect(view.container.textContent).toBe("updated / again");
+  });
+
+  it("normalizes config children for a classic host and keeps its other props", () => {
+    const child = signal("configured child");
+    // eslint-disable-next-line react/no-children-prop
+    const view = render(createElement("p", { id: "configured-child", title: "kept", children: [child, " text"] }));
+    const paragraph = view.container.querySelector("#configured-child")!;
+    expect(paragraph.textContent).toBe("configured child text");
+    expect(paragraph.getAttribute("title")).toBe("kept");
+    act(() => { child.value = "updated child"; });
+    expect(paragraph.textContent).toBe("updated child text");
+  });
+
+  it("normalizes variadic Fragment children and gives them precedence over config children", () => {
+    const fromConfig = signal("config");
+    const fromArgument = signal("argument");
+    // eslint-disable-next-line react/no-children-prop
+    const element = createElement(Fragment, { key: "variadic", children: fromConfig }, fromArgument);
+    expect(element.key).toBe("variadic");
+    const view = render(element);
+    expect(view.container.textContent).toBe("argument");
+    act(() => {
+      fromArgument.value = "updated argument";
+      fromConfig.value = "ignored config";
+    });
+    expect(view.container.textContent).toBe("updated argument");
+  });
+
+  it("matches React Fragment structure and Lite's config-child normalization", () => {
+    const native = reactCreateElement(Fragment, { key: "native", children: ["plain", [" / ", "nested"]] });
+    expect(native.key).toBe("native");
+    const nativeView = render(native);
+    expect(nativeView.container.textContent).toBe("plain / nested");
+
+    const liteSource = signal("lite");
+    const lite = createLiteElement(Fragment, { key: "lite", children: [liteSource, " child"] });
+    expect(lite.key).toBe("lite");
+    const liteView = render(lite);
+    expect(liteView.container.textContent).toBe("lite child");
+    act(() => { liteSource.value = "updated lite"; });
+    expect(liteView.container.textContent).toBe("updated lite child");
+  });
+
+  it("server-renders and hydrates Signal children configured on a classic Fragment", async () => {
+    const source = signal("server fragment");
+    // eslint-disable-next-line react/no-children-prop
+    const makeElement = () => createElement(Fragment, { children: source });
+    const html = renderToString(makeElement());
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    const root = hydrateRoot(container, makeElement());
+    await act(async () => { await Promise.resolve(); });
+    expect(container.textContent).toBe("server fragment");
+    act(() => { source.value = "hydrated update"; });
+    expect(container.textContent).toBe("hydrated update");
+    expect(errors).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+  });
+
+  it("leaves Signal props on ordinary components untouched in the classic fallback", () => {
+    const value = signal("component prop");
+    function Consumer({ value: received }: { value: unknown }) {
+      return <output>{String(received === value)}</output>;
+    }
+    const view = render(createElement(Consumer, { value }));
+    expect(view.container.textContent).toBe("true");
+  });
+
+  it("diagnoses unsupported Signal-valued HTML props while retaining supported, custom, and SSR cases", () => {
+    const href = signal("/signal-url");
+    expect(() => createElement("a", { href })).toThrow(/does not support Signal-valued href props on <a>/);
+    expect(() => jsx("a", { href })).toThrow(/does not support Signal-valued href props on <a>/);
+    expect(() => createElement("svg", { title: signal("svg title") })).toThrow(/does not support Signal-valued title props on <svg>/);
+    expect(() => createElement("div", {
+      title: signal("title"),
+      "aria-label": signal("aria"),
+      "data-state": signal("data"),
+      style: { opacity: signal(0.5) },
+    })).not.toThrow();
+    expect(() => createElement("x-widget" as never, { href })).not.toThrow();
+
+    const html = renderToString(createElement("a", { href: "/server", title: signal("server title") }));
+    expect(html).toContain('href="/server"');
+    expect(html).toContain('title="server title"');
   });
 });
 
