@@ -1,0 +1,188 @@
+{
+  "node": "v24.21.0",
+  "platform": "win32 x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "iterations": 10000,
+  "warmups": 3,
+  "samples": 9,
+  "gcExposed": true,
+  "results": [
+    {
+      "case": "signal/create-discard",
+      "iterations": 30000,
+      "medianMs": 111.0324,
+      "p25Ms": 89.0994,
+      "p75Ms": 122.3019,
+      "samplesMs": [
+        122.3019,
+        90.2627,
+        85.9709,
+        137.5952,
+        111.0324,
+        132.2604,
+        119.241,
+        83.6046,
+        89.0994
+      ]
+    },
+    {
+      "case": "signal/create-retain",
+      "iterations": 10000,
+      "medianMs": 34.0855,
+      "p25Ms": 30.2564,
+      "p75Ms": 36.4053,
+      "samplesMs": [
+        34.0855,
+        32.1216,
+        29.3681,
+        30.2564,
+        36.4053,
+        39.7761,
+        29.2422,
+        34.2348,
+        39.966
+      ]
+    },
+    {
+      "case": "computed/readonly-create-discard",
+      "iterations": 10000,
+      "medianMs": 58.086,
+      "p25Ms": 45.7118,
+      "p75Ms": 65.2015,
+      "samplesMs": [
+        27.6574,
+        31.8685,
+        45.7118,
+        58.086,
+        65.2015,
+        61.0082,
+        54.8405,
+        66.9194,
+        69.0334
+      ]
+    },
+    {
+      "case": "computed/writable-create-discard",
+      "iterations": 10000,
+      "medianMs": 42.5367,
+      "p25Ms": 40.4174,
+      "p75Ms": 51.6834,
+      "samplesMs": [
+        45.0515,
+        36.0832,
+        34.258,
+        42.5367,
+        40.4174,
+        52.7086,
+        58.2176,
+        41.0699,
+        51.6834
+      ]
+    },
+    {
+      "case": "computed/first-evaluation",
+      "iterations": 10000,
+      "medianMs": 53.2674,
+      "p25Ms": 48.5495,
+      "p75Ms": 54.6562,
+      "samplesMs": [
+        53.2674,
+        53.9132,
+        54.6562,
+        49.8039,
+        71.797,
+        46.8637,
+        38.441,
+        57.8651,
+        48.5495
+      ]
+    },
+    {
+      "case": "computed/cached-read",
+      "iterations": 100000,
+      "medianMs": 14.8021,
+      "p25Ms": 12.2799,
+      "p75Ms": 16.2276,
+      "samplesMs": [
+        20.0555,
+        14.8021,
+        9.9313,
+        16.1624,
+        16.2276,
+        12.7346,
+        22.5621,
+        12.2799,
+        6.3688
+      ]
+    },
+    {
+      "case": "computed/dependency-update-read",
+      "iterations": 10000,
+      "medianMs": 6.0712,
+      "p25Ms": 5.6585,
+      "p75Ms": 7.4188,
+      "samplesMs": [
+        8.0884,
+        5.7066,
+        5.6149,
+        7.9997,
+        6.8647,
+        5.5788,
+        7.4188,
+        6.0712,
+        5.6585
+      ]
+    },
+    {
+      "case": "effect-graph/create-discard",
+      "iterations": 5000,
+      "medianMs": 63.9219,
+      "p25Ms": 59.7637,
+      "p75Ms": 68.2386,
+      "samplesMs": [
+        76.6797,
+        68.2386,
+        59.7637,
+        63.4964,
+        63.9219,
+        58.1621,
+        53.0017,
+        67.5427,
+        69.0552
+      ]
+    },
+    {
+      "case": "cross-copy/acquire-subscribe-dispose",
+      "iterations": 2500,
+      "medianMs": 37.8215,
+      "p25Ms": 34.7593,
+      "p75Ms": 41.532,
+      "samplesMs": [
+        46.2124,
+        35.3479,
+        38.2578,
+        29.3993,
+        26.792,
+        34.7593,
+        49.5627,
+        37.8215,
+        41.532
+      ]
+    }
+  ],
+  "retainedHeap": {
+    "objectsPerCase": 10000,
+    "signal": {
+      "retainedBytes": 1788184,
+      "afterReleaseBytes": 9608
+    },
+    "readonlyComputed": {
+      "retainedBytes": 2844856,
+      "afterReleaseBytes": -115848
+    },
+    "writableComputed": {
+      "retainedBytes": 3608424,
+      "afterReleaseBytes": 7568
+    }
+  }
+}

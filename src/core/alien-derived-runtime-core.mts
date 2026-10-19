@@ -102,8 +102,8 @@ function unlinkNode(linkage: Link, subscriber: RuntimeNode): Link | undefined {
   return alienUnlink(linkage, subscriber as unknown as ReactiveNode);
 }
 
-function makeNode(kind: RuntimeNode["kind"], flags: number, fields: Partial<RuntimeNode> = {}): RuntimeNode {
-  return { kind, flags: flags as ReactiveFlags, deps: undefined, depsTail: undefined, subs: undefined, subsTail: undefined, renderRevision: 0, ...fields } as RuntimeNode;
+function makeNode(kind: RuntimeNode["kind"], flags: number): RuntimeNode {
+  return { kind, flags: flags as ReactiveFlags, deps: undefined, depsTail: undefined, subs: undefined, subsTail: undefined, renderRevision: 0 } as RuntimeNode;
 }
 
 // Set once this copy has read another copy's readable; until then no effect
@@ -112,9 +112,9 @@ let hasForeignNodes = false;
 
 const foreignAdapter = createForeignReadableAdapter({
   runtimeToken,
-  makeNode: (kind, flags, fields) => {
+  makeNode: (kind, flags) => {
     hasForeignNodes = true;
-    return makeNode(kind, flags, fields);
+    return makeNode(kind, flags);
   },
   mutableFlag: Mutable,
   dirtyFlag: Dirty,
@@ -593,7 +593,9 @@ function detachedEffect(fn: () => unknown): () => void {
 }
 
 function effect(fn: () => unknown, detached?: boolean): () => void {
-  const node = makeNode("effect", Watching | RecursedCheck, { fn, cleanup: undefined });
+  const node = makeNode("effect", Watching | RecursedCheck);
+  node.fn = fn;
+  node.cleanup = undefined;
   const dispose = () => disposeEffect(node as RuntimeEffect);
   const previous = activeSub;
   // As in Alien 3.2.1 (and v0.1.x, which used it), an effect created while
@@ -648,7 +650,11 @@ function effect(fn: () => unknown, detached?: boolean): () => void {
 // the dependency list and disposes it on cleanup, so only the disposer crosses
 // the copy boundary. With no running subscriber, a speculative getter's
 // effects are collected for `evaluateSpeculatively` to dispose.
-function adopt(disposeChild: () => void, child = makeNode("effect", Watching, { cleanup: disposeChild })): void {
+function adopt(disposeChild: () => void, child?: RuntimeNode): void {
+  if (child === undefined) {
+    child = makeNode("effect", Watching);
+    child.cleanup = disposeChild;
+  }
   if (activeSub !== undefined) {
     linkNode(child, activeSub, 0);
     activeSub.flags |= HasChildEffect;
@@ -802,7 +808,9 @@ class DeepSignalRuntimeSource<T = unknown> {
   peek(): T { return this.#node.pendingValue as T; }
 }
 function createBrandedSignal<T>(makeReadable: new (node: RuntimeSource) => RuntimeWritable<T>, initialValue: T): RuntimeWritable<T> {
-  const node = makeNode("source", Mutable, { currentValue: initialValue, pendingValue: initialValue });
+  const node = makeNode("source", Mutable);
+  node.currentValue = initialValue;
+  node.pendingValue = initialValue;
   return new makeReadable(node as RuntimeSource);
 }
 const signalClassBrandHelper = <T,>(initialValue: T): RuntimeWritable<T> => createBrandedSignal(HelperBrandSignal<T>, initialValue);
@@ -853,7 +861,12 @@ class WritableHelperBrandComputed<T = unknown> extends HelperBrandComputed<T> {
   }
 }
 function createBrandedComputed<T>(getter: () => T, setter?: (value: T) => void): RuntimeReadable<T> {
-  const node = makeNode("computed", None, { getter, value: undefined, error: undefined, hasError: false, initialized: false });
+  const node = makeNode("computed", None);
+  node.getter = getter;
+  node.value = undefined;
+  node.error = undefined;
+  node.hasError = false;
+  node.initialized = false;
   return setter === undefined
     ? new HelperBrandComputed<T>(node as RuntimeComputed)
     : new WritableHelperBrandComputed<T>(node as RuntimeComputed, setter);
@@ -867,13 +880,17 @@ function hasBrandAndPeek(value: unknown): value is { peek(): unknown } & object 
 }
 const isSignalBrandHelper = hasBrandAndPeek;
 function createDeepSignal<T>(initialValue: T): RuntimeWritable<T> {
-  const node = makeNode("source", Mutable, { currentValue: initialValue, pendingValue: initialValue });
+  const node = makeNode("source", Mutable);
+  node.currentValue = initialValue;
+  node.pendingValue = initialValue;
   const readable = new DeepSignalRuntimeSource<T>(node as RuntimeSource);
   deepSignalNodes.add(node);
   return readable;
 }
 function createDeepSignalVersion<T>(initialValue: T): RuntimeWritable<T> {
-  const node = makeNode("source", Mutable, { currentValue: initialValue, pendingValue: initialValue });
+  const node = makeNode("source", Mutable);
+  node.currentValue = initialValue;
+  node.pendingValue = initialValue;
   const readable = new DeepSignalRuntimeSource<T>(node as RuntimeSource);
   deepSignalNodes.add(node);
   return readable;

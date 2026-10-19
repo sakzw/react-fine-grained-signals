@@ -129,12 +129,11 @@ export function createForeignReadableAdapter({
   function ensureForeignNode(protocol: ReadableProtocolV1, observedRevision: number): RuntimeNode {
     let node = foreignNodes.get(protocol);
     if (node === undefined) {
-      node = makeNode("external", mutableFlag, {
-        protocol,
-        revision: observedRevision,
-        pendingRevision: observedRevision,
-        unsubscribe: undefined,
-      });
+      node = makeNode("external", mutableFlag);
+      node.protocol = protocol;
+      node.revision = observedRevision;
+      node.pendingRevision = observedRevision;
+      node.unsubscribe = undefined;
       foreignNodes.set(protocol, node);
     }
     // Before linking, so the reader itself is not invalidated by what it read.

@@ -1,0 +1,69 @@
+{
+  "node": "v24.21.0",
+  "platform": "win32 x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "iterations": 50000,
+  "warmups": 3,
+  "samples": 9,
+  "heapOnly": true,
+  "gcExposed": true,
+  "results": [],
+  "retainedHeap": {
+    "objectsPerCase": 50000,
+    "repeats": 5,
+    "signal": {
+      "retainedMedianBytes": 8803912,
+      "retainedSamplesBytes": [
+        10926976,
+        8803216,
+        8810560,
+        8803880,
+        8803912
+      ],
+      "afterReleaseMedianBytes": 3992,
+      "afterReleaseSamplesBytes": [
+        2126640,
+        -4224,
+        10016,
+        3992,
+        3408
+      ]
+    },
+    "readonlyComputed": {
+      "retainedMedianBytes": 14803096,
+      "retainedSamplesBytes": [
+        14818056,
+        14803856,
+        14800960,
+        14801248,
+        14803096
+      ],
+      "afterReleaseMedianBytes": 2376,
+      "afterReleaseSamplesBytes": [
+        17504,
+        3136,
+        240,
+        528,
+        2376
+      ]
+    },
+    "writableComputed": {
+      "retainedMedianBytes": 18013168,
+      "retainedSamplesBytes": [
+        18010560,
+        18018720,
+        18013168,
+        18020072,
+        17991040
+      ],
+      "afterReleaseMedianBytes": 12256,
+      "afterReleaseSamplesBytes": [
+        9848,
+        17808,
+        12256,
+        19744,
+        -9920
+      ]
+    }
+  }
+}

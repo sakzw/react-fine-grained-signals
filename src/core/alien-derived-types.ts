@@ -150,7 +150,7 @@ export interface AlienDerivedGraphRuntime {
 
 export interface ForeignReadableAdapterOptions {
   readonly runtimeToken: object;
-  readonly makeNode: (kind: RuntimeNodeKind, flags: number, fields?: Partial<RuntimeNode>) => RuntimeNode;
+  readonly makeNode: (kind: RuntimeNodeKind, flags: number) => RuntimeNode;
   readonly mutableFlag: number;
   readonly dirtyFlag: number;
   readonly getActiveSubscriber: () => RuntimeNode | undefined;

@@ -1,0 +1,32 @@
+{
+  "node": "v24.21.0",
+  "platform": "win32 x64",
+  "cpu": "AMD Ryzen 7 PRO 6850U with Radeon Graphics     ",
+  "iterations": 10000,
+  "warmups": 2,
+  "samples": 7,
+  "heapOnly": false,
+  "gcExposed": true,
+  "results": [
+    {
+      "case": "consumer/computed-fanout-update-unsubscribe",
+      "iterations": 500,
+      "medianMs": 86.7737,
+      "p25Ms": 63.769,
+      "p75Ms": 109.2643,
+      "samplesMs": [
+        85.193,
+        63.769,
+        109.2643,
+        246.163,
+        59.6204,
+        157.1362,
+        86.7737
+      ]
+    }
+  ],
+  "retainedHeap": {
+    "objectsPerCase": 10000,
+    "repeats": 5
+  }
+}

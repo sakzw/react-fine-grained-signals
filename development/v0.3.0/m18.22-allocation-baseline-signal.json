@@ -1,0 +1,126 @@
+{
+  "sampledAllocationBytes": 4230832,
+  "sampleCount": 1084,
+  "topFrames": [
+    {
+      "frame": "set @ native",
+      "bytes": 2101224
+    },
+    {
+      "frame": "(IDLE) @ native",
+      "bytes": 420848
+    },
+    {
+      "frame": "decode @ node:internal/encoding",
+      "bytes": 356080
+    },
+    {
+      "frame": "compileForInternalLoader @ node:internal/bootstrap/realm",
+      "bytes": 315000
+    },
+    {
+      "frame": "createContext @ node:vm",
+      "bytes": 156800
+    },
+    {
+      "frame": "exec @ native",
+      "bytes": 95608
+    },
+    {
+      "frame": "compileSourceTextModule @ node:internal/modules/esm/utils",
+      "bytes": 80640
+    },
+    {
+      "frame": "readFileSync @ node:fs",
+      "bytes": 49184
+    },
+    {
+      "frame": "internalBinding @ node:internal/bootstrap/realm",
+      "bytes": 47752
+    },
+    {
+      "frame": "wrapSafe @ node:internal/modules/cjs/loader",
+      "bytes": 42936
+    },
+    {
+      "frame": "getESMFacade @ node:internal/bootstrap/realm",
+      "bytes": 19912
+    },
+    {
+      "frame": "createReactiveRuntime @ file:///C:/Users/catro/Documents/Git/Github/react-alien-signals/dist/plain-result-iterators-D_KVwEm5.js",
+      "bytes": 19760
+    },
+    {
+      "frame": "getCLIOptionsFromBinding @ node:internal/options",
+      "bytes": 19680
+    },
+    {
+      "frame": "(anonymous) @ node:internal/readline/interface",
+      "bytes": 18392
+    },
+    {
+      "frame": "createAlienDerivedRuntime @ file:///C:/Users/catro/Documents/Git/Github/react-alien-signals/dist/plain-result-iterators-D_KVwEm5.js",
+      "bytes": 18032
+    },
+    {
+      "frame": "(anonymous) @ C:\\Users\\catro\\Documents\\Git\\Github\\react-alien-signals\\node_modules\\.pnpm\\react@19.3.0\\node_modules\\react\\cjs\\react.development.js",
+      "bytes": 17376
+    },
+    {
+      "frame": "(anonymous) @ node:internal/fs/promises",
+      "bytes": 13592
+    },
+    {
+      "frame": "createAlienDerivedRuntime @ file:///C:/Users/catro/Documents/Git/Github/react-alien-signals/dist/plain-result-iterators-D_KVwEm5.js?m18-22-copy=2",
+      "bytes": 12232
+    },
+    {
+      "frame": "createReactiveRuntime @ file:///C:/Users/catro/Documents/Git/Github/react-alien-signals/dist/plain-result-iterators-D_KVwEm5.js?m18-22-copy=2",
+      "bytes": 11448
+    },
+    {
+      "frame": "(anonymous) @ node:net",
+      "bytes": 11400
+    },
+    {
+      "frame": "(anonymous) @ node:internal/streams/writable",
+      "bytes": 10544
+    },
+    {
+      "frame": "(anonymous) @ node:internal/perf/observe",
+      "bytes": 10512
+    },
+    {
+      "frame": "createWritableStdioStream @ node:internal/bootstrap/switches/is_main_thread",
+      "bytes": 10072
+    },
+    {
+      "frame": "markTransferMode @ node:internal/worker/js_transferable",
+      "bytes": 9752
+    },
+    {
+      "frame": "Socket @ node:net",
+      "bytes": 9704
+    },
+    {
+      "frame": "#asyncInstantiate @ node:internal/modules/esm/module_job",
+      "bytes": 9504
+    },
+    {
+      "frame": "(anonymous) @ node:internal/streams/fast-utf8-stream",
+      "bytes": 9432
+    },
+    {
+      "frame": "debuglog @ node:internal/util/debuglog",
+      "bytes": 9264
+    },
+    {
+      "frame": "defaultResolve @ node:internal/modules/esm/resolve",
+      "bytes": 8784
+    },
+    {
+      "frame": "syncLink @ node:internal/modules/esm/module_job",
+      "bytes": 8712
+    }
+  ]
+}

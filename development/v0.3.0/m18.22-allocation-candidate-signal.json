@@ -1,0 +1,126 @@
+{
+  "sampledAllocationBytes": 4232800,
+  "sampleCount": 1076,
+  "topFrames": [
+    {
+      "frame": "set @ native",
+      "bytes": 2105768
+    },
+    {
+      "frame": "(IDLE) @ native",
+      "bytes": 430792
+    },
+    {
+      "frame": "decode @ node:internal/encoding",
+      "bytes": 354896
+    },
+    {
+      "frame": "compileForInternalLoader @ node:internal/bootstrap/realm",
+      "bytes": 312360
+    },
+    {
+      "frame": "createContext @ node:vm",
+      "bytes": 157792
+    },
+    {
+      "frame": "exec @ native",
+      "bytes": 94248
+    },
+    {
+      "frame": "compileSourceTextModule @ node:internal/modules/esm/utils",
+      "bytes": 76456
+    },
+    {
+      "frame": "readFileSync @ node:fs",
+      "bytes": 50264
+    },
+    {
+      "frame": "internalBinding @ node:internal/bootstrap/realm",
+      "bytes": 45752
+    },
+    {
+      "frame": "wrapSafe @ node:internal/modules/cjs/loader",
+      "bytes": 42296
+    },
+    {
+      "frame": "createReactiveRuntime @ file:///C:/Users/catro/.codex/visualizations/2026/10/17/01a1479c-c6a0-7651-b737-b37ca0abf85e/m18.22-candidate/dist/plain-result-iterators-DuS_p43v.js",
+      "bytes": 25888
+    },
+    {
+      "frame": "getCLIOptionsFromBinding @ node:internal/options",
+      "bytes": 23920
+    },
+    {
+      "frame": "(anonymous) @ C:\\Users\\catro\\.codex\\visualizations\\2026\\10\\17\\01a1479c-c6a0-7651-b737-b37ca0abf85e\\m18.22-candidate\\node_modules\\.pnpm\\react@19.3.0\\node_modules\\react\\cjs\\react.development.js",
+      "bytes": 19440
+    },
+    {
+      "frame": "createReactiveRuntime @ file:///C:/Users/catro/.codex/visualizations/2026/10/17/01a1479c-c6a0-7651-b737-b37ca0abf85e/m18.22-candidate/dist/plain-result-iterators-DuS_p43v.js?m18-22-copy=2",
+      "bytes": 17064
+    },
+    {
+      "frame": "(anonymous) @ node:internal/readline/interface",
+      "bytes": 15832
+    },
+    {
+      "frame": "createAlienDerivedRuntime @ file:///C:/Users/catro/.codex/visualizations/2026/10/17/01a1479c-c6a0-7651-b737-b37ca0abf85e/m18.22-candidate/dist/plain-result-iterators-DuS_p43v.js",
+      "bytes": 14664
+    },
+    {
+      "frame": "#asyncInstantiate @ node:internal/modules/esm/module_job",
+      "bytes": 14616
+    },
+    {
+      "frame": "createAlienDerivedRuntime @ file:///C:/Users/catro/.codex/visualizations/2026/10/17/01a1479c-c6a0-7651-b737-b37ca0abf85e/m18.22-candidate/dist/plain-result-iterators-DuS_p43v.js?m18-22-copy=2",
+      "bytes": 14488
+    },
+    {
+      "frame": "(anonymous) @ node:internal/fs/promises",
+      "bytes": 13216
+    },
+    {
+      "frame": "(anonymous) @ node:os",
+      "bytes": 12224
+    },
+    {
+      "frame": "createWritableStdioStream @ node:internal/bootstrap/switches/is_main_thread",
+      "bytes": 10176
+    },
+    {
+      "frame": "Socket @ node:net",
+      "bytes": 9608
+    },
+    {
+      "frame": "(anonymous) @ file:///C:/Users/catro/Documents/Git/Github/react-alien-signals/development/v0.3.0/m18.22-core-construction-bench.mjs",
+      "bytes": 9384
+    },
+    {
+      "frame": "getESMFacade @ node:internal/bootstrap/realm",
+      "bytes": 9376
+    },
+    {
+      "frame": "(anonymous) @ node:internal/fs/streams",
+      "bytes": 9056
+    },
+    {
+      "frame": "(anonymous) @ file:///C:/Users/catro/.codex/visualizations/2026/10/17/01a1479c-c6a0-7651-b737-b37ca0abf85e/m18.22-candidate/dist/use-signals-CU41dB9A.js",
+      "bytes": 8552
+    },
+    {
+      "frame": "(anonymous) @ node:net",
+      "bytes": 8352
+    },
+    {
+      "frame": "Duplex @ node:internal/streams/duplex",
+      "bytes": 7648
+    },
+    {
+      "frame": "(anonymous) @ node:internal/streams/writable",
+      "bytes": 7312
+    },
+    {
+      "frame": "(anonymous) @ node:internal/modules/esm/loader",
+      "bytes": 7104
+    }
+  ]
+}
