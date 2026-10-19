@@ -56,20 +56,24 @@ entry points. See [Managed Transform](/managed-transform).
 
 ## Optional: the JSX runtime
 
-Opt one file in with a pragma on its first line:
+Choose the runtime per file with a pragma at the top of that file:
+
+Full supports Signal children and the documented direct host bindings:
 
 ```tsx
 /** @jsxImportSource react-fine-grained-signals */
 ```
 
-Choose `react-fine-grained-signals/lite` instead when Signal children are the
-only direct binding needed. Lite does not support Signal-valued host
-attributes, style bindings, `bindValue`, or `bindChecked`. Full and Lite are
-both explicit opt-ins; React JSX remains in use when `jsxImportSource` is not
-set. See [JSX Direct Binding](/jsx-direct-binding) for support and bundle
-trade-offs.
+Use `react-fine-grained-signals/lite` instead when Signal children are the only
+direct binding needed. Lite does not support Signal-valued host attributes,
+style bindings, `bindValue`, or `bindChecked`. Both runtimes are explicit
+opt-ins; React JSX remains in use when `jsxImportSource` is not set.
 
-or the whole project through `tsconfig.json`:
+```tsx
+/** @jsxImportSource react-fine-grained-signals/lite */
+```
+
+To select Full for the whole project, set `jsxImportSource` in `tsconfig.json`:
 
 ```json [tsconfig.json]
 {
@@ -79,5 +83,8 @@ or the whole project through `tsconfig.json`:
   }
 }
 ```
+
+Set `jsxImportSource` to `react-fine-grained-signals/lite` for a project-wide
+Lite runtime instead.
 
 See [JSX Direct Binding](/jsx-direct-binding).

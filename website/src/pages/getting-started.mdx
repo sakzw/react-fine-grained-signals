@@ -44,9 +44,10 @@ each read it can prove is synchronous.
 `useSignal` and `useComputed` keep one signal for the component's lifetime:
 
 ```tsx
-import { useComputed, useSignal } from 'react-fine-grained-signals'
+import { useComputed, useSignal, useSignalTracking } from 'react-fine-grained-signals'
 
 export function Cart() {
+  useSignalTracking()
   const price = useSignal(12)
   const quantity = useSignal(3)
   const total = useComputed(() => price.value * quantity.value)

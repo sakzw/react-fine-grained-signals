@@ -90,3 +90,9 @@ Website production buildにはVocs playground等の1MB超chunk warningが出る�
 4. Pages workflowは今回実行せず、公開判断後に別途明示操作する。
 
 これらは公開手順であって、今回のcommitでは実行していない。
+
+## 最終ドキュメント修正
+
+M19判定後のレビュー指摘に対応した。Getting Startedのcomponent-local state例に`useSignalTracking()`を最初のHookとして追加し、pluginなしでコピーしてもSignal readを追跡できる形にした。Installationではfile pragmaとproject-wide `tsconfig.json`設定を分けて並べ直した。Release notesは`v0.2.1` tag (`58f01b9314a1b09b88b162c57912ff736201e790`) のREADMEとtag以降の変更履歴を照合し、React 19 / runtime Node 22要件、ESM-only、既存Full JSX Signal children/host binding、`For` / `Index`をv0.3新機能として列挙しないよう修正。v0.3の追加・拡張契約を維持した。
+
+Website `pnpm typecheck`、`pnpm build`、`pnpm smoke`成功。smokeはGetting Started / Installationのrouteとbase path、全既存デモ操作、console error/warningなしを確認。製品Runtime、公開API、version、READY WITH KNOWN LIMITATIONS判定は変更していない。
