@@ -17,6 +17,7 @@ try {
         index: join(repositoryRoot, "src/index.ts"),
         runtime: join(repositoryRoot, "src/runtime.ts"),
         "jsx-runtime": join(repositoryRoot, "src/jsx-runtime.ts"),
+        "lite-jsx-runtime": join(repositoryRoot, "src/lite-jsx-runtime.ts"),
         "interop-test": join(repositoryRoot, "tests/fixtures/cross-copy-interop-entry.ts"),
       },
       outDir,
@@ -39,11 +40,13 @@ try {
       api: await import(pathToFileURL(join(outDir, "index.js")).href),
       runtime: await import(pathToFileURL(join(outDir, "runtime.js")).href),
       jsx: await import(pathToFileURL(join(outDir, "jsx-runtime.js")).href),
+      liteJsx: await import(pathToFileURL(join(outDir, "lite-jsx-runtime.js")).href),
       interop: await import(pathToFileURL(join(outDir, "interop-test.js")).href),
     });
   }
   const [copyA, copyB, copyC] = copies.map((copy) => copy.api);
   const [jsxA] = copies.map((copy) => copy.jsx);
+  const [liteJsxA] = copies.map((copy) => copy.liteJsx);
   const [interopA, interopB, interopC] = copies.map((copy) => copy.interop);
   assert.notEqual(copyA.signal, copyB.signal, "the package runtime modules must be distinct");
   assert.equal(copyA.isSignal(copyA.signal(1)), true, "a package recognizes its local signal");
@@ -327,6 +330,50 @@ try {
       source.value = "after";
     });
     assert.equal(screen.getByLabelText("cross-copy value").textContent, "after");
+
+    const foreignLiteChild = copyB.signal("lite before");
+    let liteParentRenders = 0;
+    function LiteReader() {
+      liteParentRenders += 1;
+      return React.createElement(
+        "section",
+        null,
+        liteJsxA.jsx("output", { "aria-label": "cross-copy lite child", children: foreignLiteChild }),
+        jsxA.jsx("output", { "aria-label": "cross-copy full child", children: foreignLiteChild }),
+      );
+    }
+    const liteView = render(React.createElement(React.StrictMode, null, React.createElement(LiteReader)));
+    assert.equal(screen.getByLabelText("cross-copy lite child").textContent, "lite before");
+    assert.equal(screen.getByLabelText("cross-copy full child").textContent, "lite before");
+    const committedLiteParentRenders = liteParentRenders;
+    await act(async () => { foreignLiteChild.value = "lite after"; });
+    assert.equal(screen.getByLabelText("cross-copy lite child").textContent, "lite after");
+    assert.equal(screen.getByLabelText("cross-copy full child").textContent, "lite after");
+    assert.equal(liteParentRenders, committedLiteParentRenders, "foreign Signal children update both leaves without rerendering their parent");
+    liteView.unmount();
+    await act(async () => { foreignLiteChild.value = "after unmount"; });
+    const remountedLiteView = render(React.createElement(React.StrictMode, null, React.createElement(LiteReader)));
+    assert.equal(screen.getByLabelText("cross-copy lite child").textContent, "after unmount");
+    await act(async () => { foreignLiteChild.value = "remounted"; });
+    assert.equal(screen.getByLabelText("cross-copy lite child").textContent, "remounted");
+    remountedLiteView.unmount();
+
+    const { renderToString } = await import("react-dom/server");
+    const { hydrateRoot } = await import("react-dom/client");
+    const hydrationContainer = document.createElement("div");
+    hydrationContainer.innerHTML = renderToString(liteJsxA.jsx("output", { children: foreignLiteChild }));
+    document.body.append(hydrationContainer);
+    const hydrationErrors = [];
+    const previousConsoleError = console.error;
+    console.error = (...args) => hydrationErrors.push(args.join(" "));
+    const hydrationRoot = hydrateRoot(hydrationContainer, liteJsxA.jsx("output", { children: foreignLiteChild }));
+    await act(async () => {});
+    await act(async () => { foreignLiteChild.value = "hydrated"; });
+    assert.equal(hydrationContainer.textContent, "hydrated");
+    assert.equal(hydrationErrors.length, 0, `Lite cross-copy hydration emitted errors: ${hydrationErrors.join("; ")}`);
+    await act(async () => hydrationRoot.unmount());
+    console.error = previousConsoleError;
+    hydrationContainer.remove();
 
     const computedInput = copyB.signal("computed before");
     const foreignComputedLeaf = copyB.computed(() => computedInput.value.toUpperCase());

@@ -36,6 +36,8 @@
 
 `bindValue`、`bindChecked`、Signal値のhost propsが必要な場合は、既定の `react-fine-grained-signals` を使ってください。LiteはこれらをTypeScriptで拒否し、JavaScriptやspread経由で渡された場合もruntimeで診断します。選択はproject単位またはfile単位のopt-inで、既定runtimeとその動作は変わりません。
 
+Liteの転送量削減は、同じ初回読み込みchunkにFull Runtimeが含まれない場合に限られます。M18.17の小さなproduction Consumerでは、LiteはFullよりgzip 6,029 bytes小さく、React JSX + `useSignalValue`より477 bytes大きい結果でした。M18.18の大きめなVite Consumerでは、FullとLiteを同期importするとFull単独より543 gzip bytes増えました。Fullを遅延importした場合は初回chunkからFull実装を外せ、操作後にgzip 7,055 bytesのchunkを読み込みました。これらは測定fixture固有の値で、パッケージ全体に共通する保証値ではありません。
+
 Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じで、[`tests/fixtures/consumer-vite`](../../tests/fixtures/consumer-vite)はこれに依存しています。
 
 一方Babelは `tsconfig.json` を読みません。JSXの変換をBabelに任せるbuild（webpackの `babel-loader` が代表例です）では、preset側でランタイムを指定してください。

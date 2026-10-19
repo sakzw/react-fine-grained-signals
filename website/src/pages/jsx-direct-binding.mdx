@@ -42,6 +42,13 @@ bindings. TypeScript rejects those binding props, and runtime checks report
 unsupported Signal-valued host props passed from JavaScript or spreads. Use the
 default package source when direct bindings are needed.
 
+Lite saves bytes only if Full is absent from the same eagerly loaded chunk. In
+the M18.17 Consumer, Lite was 6,029 gzip bytes smaller than Full and 477 bytes
+larger than React JSX plus `useSignalValue`. The M18.18 Vite Consumer added 543
+gzip bytes when Full and Lite were synchronously combined; lazy Full kept its
+7,055-byte gzip chunk out of the initial request. Results vary with the app and
+bundler.
+
 ## What is bound
 
 - **Signal children** of native elements, including SVG text content.
