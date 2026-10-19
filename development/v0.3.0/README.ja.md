@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M18.12 React Snapshot & Subscription Cost Analysisを完了。200 `useSignalValue` consumerのproduction Chromium計測で、単一leaf更新はsnapshot 3回・1 render・1 DOM mutation、親rerenderはsnapshot 200回・200 render・DOM mutationなし。subscriptionは200件作成し、unmountで200件破棄。captureごとの一時allocationは確認したが、profileからAdapter内の支配的コストや測定可能な改善案を特定できず、製品コード変更なし。React Adapter性能調査はいったん終了し、実Consumerで新しい具体的なボトルネックが示された場合に再開する。詳細は[M18.12 record](m18.12-react-snapshot-analysis.ja.md)。
+- 状態: M18.14 Native Range Interaction & Contract Hardeningを完了。Chromium/Firefox/WebKitの実操作と境界条件、React DOM binding 83 testsを確認し、Runtime変更なしでmigration guideとWebsite smokeを整備した。詳細は[M18.14 record](m18.14-native-range-interaction.ja.md)。React Adapter性能調査はM18.12でいったん終了しており、実Consumerで具体的なボトルネックが示された場合に再開する。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M18.12 React Snapshot & Subscription Cost Analysis（production Chromiumでsnapshot経路を計測したが、支配的コストを特定できず製品変更は不採用）。詳細は[M18.12 record](m18.12-react-snapshot-analysis.ja.md)。
+- 最新実装マイルストーン: M18.14 Native Range Interaction & Contract Hardening。3 browser enginesでnative操作を確認し、range補正はbrowser semantics、type切替では既存のuncontrolled binding契約を維持。詳細は[M18.14 record](m18.14-native-range-interaction.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -61,6 +61,7 @@
 | M18.11 | React Subscription & Commit Optimization | M18.10 | Consumer workloadでReact subscription/commit allocationを調べ、render意味論と既存size budgetを維持 | 完了。combined modeのstable dependency commitでは既存Setとのmembership比較を先に行い、一時key/filter/compare配列とSetを作らない。wall-clock改善はChromiumで一貫せず、明確な速度保証はしない。正確性・subscriptionは維持し、index-fullはgzip 24,678–24,679 Bで24,704 B以内。Full Runtime 916/916、packed Consumer、SSR/hydration、cross-copy、Chromium/Firefox/WebKit E2E 74/74 pass。詳細は[M18.11 record](m18.11-react-subscription-optimization.ja.md) |
 | M18.12 | React Snapshot & Subscription Cost Analysis | M18.11 | Snapshot capture/compareとsubscriptionの実Consumer頻度・性能・allocationを調査し、改善の採否を決める | 完了。production Chromiumの200 `useSignalValue` consumerでinitial 400 snapshots/200 subscriptions、単一leaf更新3 snapshots/1 render/1 DOM mutation、親rerender 200 snapshots/200 renders/0 DOM mutationを測定。warm 25 samplesの中央値はそれぞれ約1.1 ms/4.5 ms。200 subscriptionをunmountで全破棄。profileでsnapshotが独立した支配要因とは確認できず、candidateを採らずsize/React semanticsを維持。詳細は[M18.12 record](m18.12-react-snapshot-analysis.ja.md) |
 | M18.13 | Range Input Binding & Migration Documentation | M18.12 | `input[type="range"]`を既存のstring `bindValue`経路に追加し、v0.3移行ガイドのnumber記述を現行仕様へ直す | 完了。`FormBindableSignal<string>`とnative range semanticsを維持し、Chromium/Firefox/WebKit、SSR/hydration、イベント順、Consumer package、bundle budgetを確認。詳細は[M18.13 record](m18.13-range-input-binding.ja.md) |
+| M18.14 | Native Range Interaction & Contract Hardening | M18.13 | 実ブラウザーでrangeのマウス・キーボード操作と境界条件を調べ、移行文書の対応一覧を現行契約へ揃える | 完了。Chromium/Firefox/WebKit smoke成功、focused React DOM binding 83/83 pass。Runtime変更なし。詳細は[M18.14 record](m18.14-native-range-interaction.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 

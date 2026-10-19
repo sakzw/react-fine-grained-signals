@@ -8,8 +8,8 @@
 //   pnpm build && pnpm smoke
 //   pnpm smoke --url http://127.0.0.1:5173   # against a running `pnpm dev`
 //
-// Uses Playwright's Chromium. Set CHROMIUM_PATH to use a browser binary that
-// is already installed instead of `playwright install chromium`.
+// Uses Chromium by default. Set SMOKE_BROWSER=firefox or webkit to run the same
+// checks in those engines; CHROMIUM_PATH can select an installed Chromium.
 import { spawn } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
 import { chromium, firefox, webkit } from 'playwright'
@@ -60,9 +60,12 @@ try {
     }
   })
   context.on('weberror', (error) => problems.push(`uncaught: ${error.error().message}`))
-  // A navigation cancels requests still in flight (net::ERR_ABORTED); that is not a failure.
+  // Navigation aborts have different error names across engines; these are not failed loads.
   context.on('requestfailed', (request) => {
-    if (!request.failure()?.errorText.includes('ERR_ABORTED')) problems.push(`request failed: ${request.url()}`)
+    const failure = request.failure()?.errorText ?? 'unknown browser request failure'
+    if (!/ERR_ABORTED|NS_BINDING_ABORTED|ERR_CANCELED|ERR_CANCELLED/i.test(failure)) {
+      problems.push(`request failed (${failure}): ${request.url()}`)
+    }
   })
   context.on('response', (response) => {
     if (response.status() >= 400) problems.push(`HTTP ${response.status()}: ${response.url()}`)
@@ -145,9 +148,51 @@ try {
   const level = form.getByLabel('Level')
   await level.fill('73')
   check((await text(form.getByTestId('range-summary'))) === 'Level text: 73', 'range interaction writes the string signal')
+  const nativeRangeEvents = await level.evaluate((node) => {
+    const events = []
+    for (const type of ['input', 'change']) node.addEventListener(type, () => events.push(type), true)
+    window.__m18_14RangeEvents = events
+    return true
+  })
+  check(nativeRangeEvents, 'native range event observers are installed')
+  const rangeBox = await level.boundingBox()
+  if (rangeBox === null) throw new Error('The range input has no bounding box.')
+  await page.mouse.click(rangeBox.x + rangeBox.width * 0.9, rangeBox.y + rangeBox.height / 2)
+  const mouseValue = Number(await level.inputValue())
+  check(mouseValue > 73 && mouseValue <= 100, `real mouse track interaction moves the range slider (value ${mouseValue})`)
+  check((await text(form.getByTestId('range-summary'))) === `Level text: ${mouseValue}`, 'mouse interaction updates Signal and rendered output')
+  await level.focus()
+  await level.press('End')
+  check((await level.inputValue()) === '100', 'End moves the range to native max')
+  await level.press('Home')
+  check((await level.inputValue()) === '0', 'Home moves the range to native min')
+  await level.press('ArrowRight')
+  check((await level.inputValue()) === '1', 'ArrowRight follows native step')
+  check((await text(form.getByTestId('range-summary'))) === 'Level text: 1', 'keyboard input updates Signal and rendered output')
+  check((await text(form.getByTestId('range-event-summary'))).includes('React input:1:1'), 'React onInput observes the already-updated Signal')
+  const nativeEventOrder = await page.evaluate(() => window.__m18_14RangeEvents)
+  check(nativeEventOrder.includes('input') && nativeEventOrder.includes('change') && nativeEventOrder.indexOf('input') < nativeEventOrder.indexOf('change'), 'native input precedes native change on committed slider interaction')
+  check((await text(form.getByTestId('form-owner-renders'))) === 'Form owner renders: 1', 'mouse and keyboard range updates do not re-render the owner')
   await form.getByRole('button', { name: 'Apply Signal preset' }).click()
   check((await level.inputValue()) === '75', 'programmatic signal write updates the range input')
   check((await text(form.getByTestId('form-owner-renders'))) === 'Form owner renders: 1', 'range binding does not re-render the form owner')
+  await form.getByText('Range edge cases').click()
+  await form.getByRole('button', { name: 'Set signal above max' }).click()
+  check((await text(form.getByTestId('range-summary'))) === 'Level text: 120' && (await level.inputValue()) === '100', 'out-of-range Signal stays unchanged while the browser clamps the DOM value')
+  await form.getByRole('button', { name: 'Change min/max/step' }).click()
+  await form.getByRole('button', { name: 'Set signal above max' }).click()
+  check((await level.inputValue()) === '80', 'updated React max is applied through native range semantics')
+  await form.getByRole('button', { name: 'Set signal off step' }).click()
+  check((await text(form.getByTestId('range-summary'))) === 'Level text: 73' && (await level.inputValue()) === '75', 'step-mismatched Signal stays unchanged while the browser snaps the DOM value')
+  await form.getByRole('button', { name: 'Switch range/text type' }).click()
+  const switchedTextType = await level.getAttribute('type')
+  const switchedTextValue = await level.inputValue()
+  check(switchedTextType === 'text' && switchedTextValue === '75', `switching type preserves the browser's current value until the Signal changes (type ${switchedTextType}, DOM ${switchedTextValue}, Signal ${await text(form.getByTestId('range-summary'))})`)
+  await form.getByRole('button', { name: 'Switch range/text type' }).click()
+  check(await level.getAttribute('type') === 'range' && (await level.inputValue()) === '75', 'switching back lets the browser normalize the range value')
+  await form.getByRole('button', { name: 'Set external signal' }).click()
+  check((await level.inputValue()) === '55' && (await text(form.getByTestId('range-summary'))) === 'Level text: 55', 'external Signal update synchronizes the slider and output')
+  const formOwnerBeforeProgrammatic = await text(form.getByTestId('form-owner-renders'))
   await form.getByLabel('Region').selectOption('apac')
   await form.getByLabel('Export formats').selectOption(['csv', 'xml'])
   check((await text(form.getByTestId('summary'))) === 'Grace · pro · apac · csv+xml · search, export · not subscribed', 'form DOM changes write text, checkbox, single-select, and multi-select signals')
@@ -155,7 +200,7 @@ try {
   check((await text(form.getByTestId('summary'))) === 'Grace · pro · us · csv+json · search, export · not subscribed', 'programmatic signal writes update bound form controls')
   check((await amount.inputValue()) === '42.5', 'programmatic numeric signal write updates the number input')
   check((await text(form.getByTestId('numeric-summary'))) === 'Amount text: 42.5 · parsed: 42.5', 'derived numeric display follows programmatic signal writes')
-  check((await text(form.getByTestId('form-owner-renders'))) === 'Form owner renders: 1', 'number binding does not re-render the form owner')
+  check((await text(form.getByTestId('form-owner-renders'))) === formOwnerBeforeProgrammatic, 'number binding does not re-render the form owner')
   check(await form.getByLabel('Region').inputValue() === 'us', 'single select reflects a programmatic signal write')
   check((await form.getByLabel('Export formats').evaluate((node) => [...node.selectedOptions].map((option) => option.value).join(','))) === 'csv,json', 'multiple select reflects a programmatic signal write')
 

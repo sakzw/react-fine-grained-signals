@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 'use client'
 
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { useComputed, useSignal } from 'react-fine-grained-signals'
 import { field, muted, row } from './styles'
 
@@ -12,6 +12,10 @@ export function FormBindingDemo() {
   const amount = useSignal('12.5')
   const parsedAmount = useComputed(() => amount.value === '' ? 'empty' : String(Number(amount.value)))
   const level = useSignal('50')
+  const rangeEvents = useSignal<string[]>([])
+  const rangeEventSummary = useComputed(() => rangeEvents.value.join(' → '))
+  const [rangeConstraints, setRangeConstraints] = useState({ min: '0', max: '100', step: '1' })
+  const [rangeType, setRangeType] = useState<'range' | 'text'>('range')
   const plan = useSignal('basic')
   const region = useSignal('eu')
   const formats = useSignal<string[]>(['json'])
@@ -40,9 +44,27 @@ export function FormBindingDemo() {
       </label>
       <output data-testid="numeric-summary">Amount text: {amount} · parsed: {parsedAmount}</output>
       <label style={row}>Level (range input, string signal)
-        <input aria-label="Level" type="range" min="0" max="100" step="1" bindValue={level} />
+        <input
+          aria-label="Level"
+          type={rangeType}
+          min={rangeConstraints.min}
+          max={rangeConstraints.max}
+          step={rangeConstraints.step}
+          bindValue={level}
+          onInput={(event) => { rangeEvents.value = [...rangeEvents.value, `React input:${event.currentTarget.value}:${level.value}`] }}
+          onChange={(event) => { rangeEvents.value = [...rangeEvents.value, `React change:${event.currentTarget.value}:${level.value}`] }}
+        />
       </label>
       <output data-testid="range-summary">Level text: {level}</output>
+      <output data-testid="range-event-summary">{rangeEventSummary}</output>
+      <details>
+        <summary>Range edge cases</summary>
+        <button type="button" onClick={() => { level.value = '120' }}>Set signal above max</button>
+        <button type="button" onClick={() => { level.value = '73' }}>Set signal off step</button>
+        <button type="button" onClick={() => { level.value = '55' }}>Set external signal</button>
+        <button type="button" onClick={() => setRangeConstraints({ min: '10', max: '80', step: '5' })}>Change min/max/step</button>
+        <button type="button" onClick={() => setRangeType((type) => type === 'range' ? 'text' : 'range')}>Switch range/text type</button>
+      </details>
       <output data-testid="form-owner-renders">Form owner renders: {ownerRenders.current}</output>
       <fieldset style={{ ...row, border: 0, margin: 0, padding: 0 }}>
         <legend style={muted}>Plan</legend>
