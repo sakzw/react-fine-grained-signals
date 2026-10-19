@@ -26,6 +26,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
 import * as libraryJsxRuntime from "../../../src/jsx-runtime.js";
+import * as libraryLiteJsxRuntime from "../../../src/lite-jsx-runtime.js";
 import * as libraryRuntime from "../../../src/runtime.js";
 import {
   transformReactFineGrainedSignals,
@@ -47,6 +48,7 @@ const moduleRegistry: Record<string, unknown> = {
   "react-fine-grained-signals": library,
   "react-fine-grained-signals/runtime": libraryRuntime,
   "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
+  "react-fine-grained-signals/lite/jsx-runtime": libraryLiteJsxRuntime,
 };
 
 // Rewrites the compiled ES module into something `new Function` can run, so a
@@ -373,6 +375,24 @@ export function Counter() {
 const TRY_WITHOUT_CATCH = "(BuildHIR::lowerStatement) Handle TryStatement without a catch clause";
 
 describe("React Compiler compiled output", () => {
+  it("keeps Lite Signal children reactive under React Compiler", async () => {
+    const source = `
+import { signal } from "react-fine-grained-signals";
+export const count = signal(0);
+export function Counter() {
+  return <output>{count}</output>;
+}
+`;
+    const module = await loadModule(source, {
+      signalsTransform: false,
+      jsxImportSource: "react-fine-grained-signals/lite",
+    });
+    const container = mount(module.Counter);
+    expect(container.textContent).toBe("0");
+    write(module, 1);
+    expect(container.textContent).toBe("1");
+  });
+
   it("tracks repeated writes when an author opts a managed component into memoization", async () => {
     const source = `
 import { signal } from "react-fine-grained-signals";

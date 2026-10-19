@@ -23,6 +23,19 @@ Project-wide, in `tsconfig.json`:
 }
 ```
 
+For apps that need **Signal children only**, the package also provides an explicit Lite runtime. It keeps normal React JSX behavior and makes Signal children reactive, while omitting direct host-attribute and form bindings:
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react-fine-grained-signals/lite"
+  }
+}
+```
+
+Use the default `react-fine-grained-signals` source when you need `bindValue`, `bindChecked`, or Signal-valued host props. Lite rejects those props in TypeScript and reports them at runtime when passed through JavaScript or a spread. The choice is explicit per project or file; the default runtime and its behavior are unchanged.
+
 Vite reads both of those from `tsconfig.json` — with its default transform and with `@vitejs/plugin-react` alike — so `vite.config.ts` needs no JSX configuration of its own, which is what [`tests/fixtures/consumer-vite`](../../tests/fixtures/consumer-vite) relies on.
 
 Babel never reads `tsconfig.json`. A build that hands JSX to Babel — `babel-loader` under webpack being the usual case — names the runtime on the preset instead:

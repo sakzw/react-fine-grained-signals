@@ -23,6 +23,19 @@
 }
 ```
 
+**Signalの子要素だけ**を使うアプリ向けに、明示的なLite runtimeも提供します。通常のReact JSXとSignal子要素の局所更新をサポートし、host属性とformの直接binding実装は含みません。
+
+```json
+{
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "jsxImportSource": "react-fine-grained-signals/lite"
+  }
+}
+```
+
+`bindValue`、`bindChecked`、Signal値のhost propsが必要な場合は、既定の `react-fine-grained-signals` を使ってください。LiteはこれらをTypeScriptで拒否し、JavaScriptやspread経由で渡された場合もruntimeで診断します。選択はproject単位またはfile単位のopt-inで、既定runtimeとその動作は変わりません。
+
 Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じで、[`tests/fixtures/consumer-vite`](../../tests/fixtures/consumer-vite)はこれに依存しています。
 
 一方Babelは `tsconfig.json` を読みません。JSXの変換をBabelに任せるbuild（webpackの `babel-loader` が代表例です）では、preset側でランタイムを指定してください。

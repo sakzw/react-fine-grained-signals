@@ -4,7 +4,7 @@ import { subscribeReadableV1 } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
 import type { FormBindableSignal, ReadonlySignal, Signal } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
-import { useSignalValue } from "../react/hooks.js";
+import { normalizeChild, SignalValue, type SignalChild } from "./jsx-children.js";
 import { createElement, Fragment } from "react";
 import type * as React from "react";
 
@@ -125,9 +125,6 @@ const NON_HTML_HOST_ELEMENTS: ReadonlySet<string> = /* @__PURE__ */ (() => {
   return tags;
 })();
 
-// A deep signal is excluded from every position here: a child or host prop
-// observes root replacement only, so nested mutations would never show.
-type SignalChild = React.ReactNode | (ReadonlySignal<SignalChild> & NotDeepSignal) | readonly SignalChild[];
 type HostProps = Record<string, unknown>;
 type StylePropertyBinding = { readonly entries: readonly (readonly [string, unknown])[] };
 type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
@@ -136,43 +133,7 @@ type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
 type Binding = readonly [name: string, source: BindingSource, kind: BindingKind, snapshot: unknown, config?: readonly unknown[]];
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
-/**
- * A leaf that lets React own reconciliation while its signal dependency stays
- * local to the leaf.  A signal resolving to another signal/array is normalized
- * again so nested reactive children also work.
- */
-export function SignalValue({ source }: { source: ReadonlySignal<SignalChild> }): React.ReactNode {
-  return normalizeChild(useSignalValue(source));
-}
-
-function normalizeChild(value: unknown): React.ReactNode {
-  if (isSignal(value)) {
-    return createElement(SignalValue, { source: value as ReadonlySignal<SignalChild> });
-  }
-
-  if (Array.isArray(value)) {
-    return value.map(normalizeArrayItem);
-  }
-
-  return value as React.ReactNode;
-}
-
-/**
- * A signal inside an array child has no way to carry a key of its own, so the
- * leaf it becomes is keyed by position. That is the identity such an array
- * already has (a literal `[a, b]` never reorders), and it keeps React's
- * missing-key warning for genuinely dynamic element lists intact. The prefix
- * keeps these keys out of the way of keys on the array's other elements.
- */
-function normalizeArrayItem(value: unknown, index: number): React.ReactNode {
-  if (isSignal(value)) {
-    return createElement(SignalValue, {
-      source: value as ReadonlySignal<SignalChild>,
-      key: `rfgs-signal:${index}`,
-    });
-  }
-  return normalizeChild(value);
-}
+export { SignalValue };
 
 function isReactiveHostProp(name: string, value: unknown): value is ReadonlySignal<unknown> {
   if (!isSignal(value)) return false;

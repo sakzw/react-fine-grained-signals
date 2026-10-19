@@ -35,6 +35,13 @@ or project-wide in `tsconfig.json` with
 `"jsxImportSource": "react-fine-grained-signals"`. Vite reads both. Builds that
 compile JSX with Babel name the runtime on `@babel/preset-react` instead.
 
+For an explicit Signal-children-only runtime, use
+`"jsxImportSource": "react-fine-grained-signals/lite"`. Lite keeps ordinary
+React JSX and fine-grained Signal children, but omits direct attribute and form
+bindings. TypeScript rejects those binding props, and runtime checks report
+unsupported Signal-valued host props passed from JavaScript or spreads. Use the
+default package source when direct bindings are needed.
+
 ## What is bound
 
 - **Signal children** of native elements, including SVG text content.

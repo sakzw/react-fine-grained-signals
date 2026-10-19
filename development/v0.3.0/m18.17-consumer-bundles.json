@@ -1,0 +1,66 @@
+[
+  {
+    "name": "full-runtime",
+    "raw": 258411,
+    "gzip": 81240,
+    "brotli": 70412,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBindingValidation": true,
+      "textBindingValidation": true,
+      "checkboxGroupValidation": true,
+      "unsupportedBindingDiagnostic": false,
+      "unsupportedAttributeDiagnostic": false
+    }
+  },
+  {
+    "name": "lite-runtime",
+    "raw": 240537,
+    "gzip": 75211,
+    "brotli": 65103,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBindingValidation": false,
+      "textBindingValidation": false,
+      "checkboxGroupValidation": false,
+      "unsupportedBindingDiagnostic": true,
+      "unsupportedAttributeDiagnostic": true
+    }
+  },
+  {
+    "name": "react-jsx-hooks",
+    "raw": 239156,
+    "gzip": 74734,
+    "brotli": 64636,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBindingValidation": false,
+      "textBindingValidation": false,
+      "checkboxGroupValidation": false,
+      "unsupportedBindingDiagnostic": false,
+      "unsupportedAttributeDiagnostic": false
+    }
+  },
+  {
+    "name": "lite-packed-consumer",
+    "raw": 240537,
+    "gzip": 75211,
+    "brotli": 65103,
+    "files": [
+      "app.js"
+    ],
+    "markers": {
+      "selectBindingValidation": false,
+      "textBindingValidation": false,
+      "checkboxGroupValidation": false,
+      "unsupportedBindingDiagnostic": true,
+      "unsupportedAttributeDiagnostic": true
+    }
+  }
+]
