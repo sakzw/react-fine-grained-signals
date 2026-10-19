@@ -98,6 +98,58 @@ describe("useSignalEffect", () => {
     expect(setups).toHaveBeenLastCalledWith("second");
   });
 
+  it.each([
+    { label: "grows", before: [1], after: [1, 2] },
+    { label: "shrinks", before: [1, 2], after: [1] },
+    { label: "grows from empty", before: [], after: [1] },
+    { label: "shrinks to empty", before: [1], after: [] },
+  ])("rejects a useSignalEffect dependency length change ($label)", ({ before, after }) => {
+    const source = signal(0);
+    const setups: string[] = [];
+    const cleanups: string[] = [];
+
+    function Observer({ label, dependencies }: { label: string; dependencies: number[] }) {
+      useSignalEffect(() => {
+        source.value;
+        setups.push(label);
+        return () => cleanups.push(label);
+      }, dependencies);
+      return <span>{label}</span>;
+    }
+
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<Observer label="before" dependencies={before} />);
+    expect(setups).toEqual(["before"]);
+    expect(() => view.rerender(<Observer label="after" dependencies={after} />)).toThrow(
+      /dependencies length changed/,
+    );
+    errorSpy.mockRestore();
+  });
+
+  it("treats omitted dependencies and an explicit empty array identically", () => {
+    const source = signal(0);
+    const setups: string[] = [];
+    const cleanups: string[] = [];
+
+    function Observer({ label, explicit }: { label: string; explicit: boolean }) {
+      useSignalEffect(() => {
+        source.value;
+        setups.push(label);
+        return () => cleanups.push(label);
+      }, explicit ? [] : undefined);
+      return <span>{label}</span>;
+    }
+
+    const view = render(<Observer label="initial" explicit={false} />);
+    view.rerender(<Observer label="updated" explicit />);
+    expect(setups).toEqual(["initial"]);
+    expect(cleanups).toEqual([]);
+    act(() => { source.value = 1; });
+    expect(setups).toEqual(["initial", "initial"]);
+    view.unmount();
+    expect(cleanups).toEqual(["initial", "initial"]);
+  });
+
   it("cleans every StrictMode signal effect subscription", () => {
     const source = signal(0);
     const setups = vi.fn();

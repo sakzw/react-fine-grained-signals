@@ -238,7 +238,9 @@ export function useDeepSignalValue<
  * computed when they change, rather than replacing the getter of an existing
  * computed during render. An abandoned render therefore cannot change the
  * closure used by the previously committed computed. Choose one mode for a
- * component's lifetime.
+ * component's lifetime and keep an explicit dependency array's length fixed.
+ * Invalid mode or length changes throw before `useMemo` can create or reuse a
+ * computed for the invalid call.
  */
 export function useComputed<T>(
   getValue: () => T,
@@ -254,6 +256,53 @@ export function useComputed<T>(
 ): ReadonlySignal<T> | FormBindableSignal<T> {
   const capability: ComputedCapability =
     typeof source === "function" ? "read-only" : "writable";
+  const mode: ComputedMode =
+    dependencies === undefined ? "without a dependency array" : "with a dependency array";
+  // -1 represents the omitted mode; an explicit array is represented by its
+  // length. One primitive ref tracks both contracts without another allocation.
+  const dependencyToken = dependencies === undefined ? -1 : dependencies.length;
+  const initialDependencyTokenRef = useRef(dependencyToken);
+  const initialCapabilityRef = useRef(capability);
+  const signalOnlyComputedRef = useRef<ReadonlySignal<T> | FormBindableSignal<T> | undefined>(undefined);
+  const initialDependencyToken = initialDependencyTokenRef.current;
+
+  // Both directions of a mode switch are silently destructive, so neither is
+  // allowed to reach the caller as a mystery. Going deps -> no-deps used to
+  // hand back `undefined` typed as `ReadonlySignal<T>`, so the crash surfaced
+  // at the call site as "Cannot read properties of undefined (reading
+  // 'value')" with nothing pointing back here. Going no-deps -> deps quietly
+  // built a *second* computed with a new identity mid-lifetime, invalidating
+  // every subscription already made to the first.
+  if ((initialDependencyToken < 0) !== (dependencyToken < 0)) {
+    const initialMode: ComputedMode = initialDependencyToken < 0
+      ? "without a dependency array"
+      : "with a dependency array";
+    const error = new Error(
+      `useComputed: dependency-array mode changed from ${initialMode} to ${mode}; keep it consistent.`,
+    );
+    error.name = "UseComputedModeChangeError";
+    throw error;
+  }
+
+  if (initialCapabilityRef.current !== capability) {
+    const error = new Error(
+      `useComputed: capability changed from ${initialCapabilityRef.current} to ${capability}; keep the getter form consistent.`,
+    );
+    error.name = "UseComputedCapabilityChangeError";
+    throw error;
+  }
+
+  if (
+    dependencyToken >= 0 &&
+    dependencyToken !== initialDependencyToken
+  ) {
+    const error = new Error(
+      `useComputed: dependencies length changed from ${initialDependencyToken} to ${dependencyToken}; keep it fixed.`,
+    );
+    error.name = "UseComputedDependencyLengthChangeError";
+    throw error;
+  }
+
   const dependencyComputed = useMemo(
     () =>
       dependencies === undefined
@@ -263,37 +312,6 @@ export function useComputed<T>(
           : computed(source),
     dependencies ?? EMPTY_DEPENDENCIES,
   );
-
-  const initialModeRef = useRef<ComputedMode | undefined>(undefined);
-  const initialCapabilityRef = useRef<ComputedCapability | undefined>(undefined);
-  const signalOnlyComputedRef = useRef<ReadonlySignal<T> | FormBindableSignal<T> | undefined>(undefined);
-
-  // Both directions of a mode switch are silently destructive, so neither is
-  // allowed to reach the caller as a mystery. Going deps -> no-deps used to
-  // hand back `undefined` typed as `ReadonlySignal<T>`, so the crash surfaced
-  // at the call site as "Cannot read properties of undefined (reading
-  // 'value')" with nothing pointing back here. Going no-deps -> deps quietly
-  // built a *second* computed with a new identity mid-lifetime, invalidating
-  // every subscription already made to the first.
-  const mode: ComputedMode =
-    dependencies === undefined ? "without a dependency array" : "with a dependency array";
-  initialModeRef.current ??= mode;
-  if (initialModeRef.current !== mode) {
-    const error = new Error(
-      `useComputed: the dependency-array mode changed between renders (from ${initialModeRef.current} to ${mode}) for this call site. Keep passing deps consistently, matching useMemo's rules.`,
-    );
-    error.name = "UseComputedModeChangeError";
-    throw error;
-  }
-
-  initialCapabilityRef.current ??= capability;
-  if (initialCapabilityRef.current !== capability) {
-    const error = new Error(
-      `useComputed: the computed capability changed between renders (from ${initialCapabilityRef.current} to ${capability}) for this call site. Keep using either a getter or a writable { get, set } object for the component's lifetime.`,
-    );
-    error.name = "UseComputedCapabilityChangeError";
-    throw error;
-  }
 
   // Defined exactly when `dependencies` is, per the memo above; checking the
   // result rather than the argument is what removes the old `!` assertion.
@@ -314,16 +332,27 @@ export function useComputed<T>(
  *
  * When `dependencies` is omitted, the callback must only capture signals. Its
  * initial closure is retained for the component lifetime, so unrelated React
- * renders do not restart the effect.
+ * renders do not restart the effect. Omitted dependencies and `[]` are
+ * equivalent here, unlike `useEffect` itself; non-empty dependency arrays must
+ * keep a fixed length so React cannot retain a stale callback after warning.
  *
  * When the callback captures props, state, or any other non-signal value, list
  * all of those values in `dependencies`. The effect is then reconnected after
- * those dependencies change. Choose one mode for a component's lifetime.
+ * those dependencies change.
  */
 export function useSignalEffect(
   callback: () => void | (() => void),
   dependencies?: DependencyList,
 ): void {
+  const initialDependencyLengthRef = useRef(dependencies?.length ?? 0);
+  const dependencyLength = dependencies?.length ?? 0;
+  if (dependencyLength !== initialDependencyLengthRef.current) {
+    const error = new Error(
+      `useSignalEffect: dependencies length changed from ${initialDependencyLengthRef.current} to ${dependencyLength}; keep it fixed.`,
+    );
+    error.name = "UseSignalEffectDependencyLengthChangeError";
+    throw error;
+  }
   useReactEffect(() => detachedEffect(callback), dependencies ?? EMPTY_DEPENDENCIES);
 }
 

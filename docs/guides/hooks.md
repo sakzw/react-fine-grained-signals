@@ -52,6 +52,7 @@ Creates a computed signal whose identity stays stable while its dependency array
 
 - **Without a dependency array**, the getter must read only signals. Its initial closure is retained for the component lifetime, so it must not capture props, React state, or other non-signal values.
 - **With a dependency array**, list every non-signal value the getter captures: `useComputed(() => count.value * step, [step])`.
+- Keep the chosen mode and, when provided, the dependency array's length and order fixed. Switching omitted and explicit modes or changing its length throws before `useMemo` creates a replacement computed; React's warning-only length check can otherwise preserve the old computed closure.
 
 The `{ get, set }` overload follows the same dependency rules. When dependencies change, the render creates a separate computed with the new getter and setter, so the returned signal's identity changes; the previous signal keeps its own callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
 
@@ -63,8 +64,9 @@ useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyLi
 
 Starts an effect after commit and disposes it on unmount, including Strict Mode replay.
 
-- Without a dependency array, the callback must read only signals; its initial closure is retained for the component lifetime.
-- When it captures props, state, or another non-signal value, list those values: `useSignalEffect(() => { /* reads signals and props */ }, [prop])`.
+- Omitting dependencies and passing `[]` are equivalent for this hook: both retain the initial callback and do not reconnect on ordinary React renders. This differs from calling React's `useEffect` directly without dependencies, which runs after every commit. The two forms can be switched during the component lifetime.
+- When the callback captures props, state, or another non-signal value, list those values: `useSignalEffect(() => { /* reads signals and props */ }, [prop])`. Changes at the same dependency positions clean up the previous effect and connect the new callback.
+- Keep the dependency array's length and order fixed. A length change, including switching between an empty and non-empty list, throws before React can warn and retain a stale callback.
 - A function returned from the callback is its cleanup, run before the next execution and on disposal.
 
 ## useSignalTracking

@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: M18.19 Lite JSX Runtimeのbundle/tree-shaking regression guardを追加。Lite Signal-child Consumerのgzip budgetは7,552 B、Full binding markerの不在とpositive controlを検査する。詳細は[M18.19 record](m18.19-bundle-regression-guard.ja.md)。
+- 状態: M18.20で`useComputed`と`useSignalEffect`の依存配列長変更を再現・拒否し、古いclosureの継続使用を防止。`index-full`はgzip 24,698 Bで既存24,704 B budget内。詳細は[M18.20 record](m18.20-react-hook-dependency-contract.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M18.19 Lite JSX Runtime regression guard。既存size checkへFull/Lite Signal-child Consumerを追加し、raw/gzip/Brotliを出力。CoreとLiteでFull binding / attribute markerが消え、Fullではフォーム群・style/direct attribute markerとLite拒否診断がpositive controlとして検出される。Core/Full既存budgetは維持。詳細は[M18.19 record](m18.19-bundle-regression-guard.ja.md)。
+- 最新実装マイルストーン: M18.20 React Hook dependency contract hardening。`useComputed`は依存modeと明示配列長をmemoより前に検証し、`useSignalEffect`は省略と`[]`を同じ意味に保ったまま明示配列長を検証する。React/SSR/Compiler・typecheck・website typecheck・sizeを確認。詳細は[M18.20 record](m18.20-react-hook-dependency-contract.ja.md)。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
@@ -67,6 +67,7 @@
 | M18.17 | Minimal JSX Runtime Qualification | M18.16 | 実際のpackage entryからSignal children専用Lite Runtimeを検証し、Full互換性とConsumer転送サイズを比較して製品化の価値を判断する | 完了。`/lite`、`/lite/jsx-runtime`、`/lite/jsx-dev-runtime`を追加し、default Full runtimeを維持。Full→Liteは同一Vite Consumerでgzip 6,029 B減（81,240→75,211 B）、Brotli 5,309 B減。tarball Consumerも同サイズで、Chromium上のSignal更新・typecheckが成功。focused Runtime/SSR/Suspense/StrictMode/共存132 tests、React Compiler 30 tests、runtime typecheck/build/sizeを確認。既存index-full gzip budget 24,704 Bは維持。Liteは明示opt-inとして採用候補に統合し、Fast Refresh実機qualificationは未実施の残課題として記録。詳細は[M18.17 record](m18.17-minimal-jsx-runtime.ja.md) |
 | M18.18 | Lite JSX Runtime Hardening & Consumer Qualification | M18.17 | Fast Refresh、bundlers、cross-copy互換性、実Consumer chunkサイズ、Runtime JSX生成コストを検証する | 完了。Vite Fast RefreshでLite/Fullの編集後表示・state保持・Signal更新を確認。Vite、Webpack、Rspackの実Consumer buildと更新を確認し、複製package Signal・Full共存・StrictMode・SSR/hydrationをsmoke。4種Vite fixtureでLite-only gzip 137,095 B、Full-only 143,145 B、Full+Lite 143,688 B、Lite+lazy Fullの初期chunk 137,977 Bと遅延Full 7,055 B。Webpack/RspackのLite Consumerも更新確認。JSX生成測定ではLiteとFullに明瞭な差はなく、診断コストを含む修正は不要と判断。詳細は[M18.18 record](m18.18-lite-runtime-qualification.ja.md) |
 | M18.19 | Bundle & Tree-Shaking Regression Guard | M18.18 | Core-only / Full JSX / Lite JSX Consumerのサイズとtree shakingを既存size checkで継続検査する | 完了。Core-only、signal-only、Full JSX child、Lite JSX childを追加し、全scenarioのraw/gzip/Brotliを表示。CoreではJSX marker不在、LiteではFull form/direct attribute/style marker不在を検査し、Full markerとLite固有拒否診断をpositive controlにした。Lite Consumer exact size 25,001 raw / 7,148 gzip / 6,435 Brotli（再実行で圧縮値に1 B差）。既存の5% headroomを64 B単位に丸めたgzip budget 7,552 Bを設定。Core/Fullのbudgetは維持。詳細は[M18.19 record](m18.19-bundle-regression-guard.ja.md) |
+| M18.20 | React Hook Dependency Contract Hardening | M18.19 | `useComputed` / `useSignalEffect`の依存配列変更時にstale closure・cleanup不整合が起きないことを再現し、契約を明示する | 完了。現行HEADで長さ変更時のstale computed / effect closureを再現。`useComputed`はmode・capability・長さを`useMemo`より前に検証し、`useSignalEffect`は明示配列の長さ変更を拒否。省略と`[]`の同等性、正常な同長更新、StrictMode/SSR/Suspense/Compilerを確認。React 19/JSDOMの500-row計測はCPU差が測定幅内、Effect Hook用refでretained heap中央値+68,784 B。`index-full`はgzip 24,698 Bでbudget 24,704 B内。詳細は[M18.20 record](m18.20-react-hook-dependency-contract.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 

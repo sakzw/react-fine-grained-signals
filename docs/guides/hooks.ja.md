@@ -52,6 +52,7 @@ useComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyLis
 
 - **依存配列を省略する場合**、getterはsignalだけを読む必要があります。最初のクロージャがコンポーネントの生存期間中保持されるため、props、React state、その他のsignalではない値を捕捉しないでください。
 - **依存配列を渡す場合**、getterが捕捉するsignal以外の値をすべて列挙します: `useComputed(() => count.value * step, [step])`。
+- modeは固定し、依存配列を渡す場合は長さと順序も固定してください。mode切り替えと長さ変更は、`useMemo`が古いcomputedを再利用したり、不正な状態で新しいcomputedを作ったりする前に明確な例外になります。React標準のwarningだけに任せると、古いgetterが残ることがあります。
 
 `{ get, set }`も同じ依存関係ルールに従います。依存値が変わると、そのrenderで新しいgetterとsetterを持つ別のcomputedを作るため、返るsignalのidentityが変わります。以前のsignalは元のcallbackを保持します。form bindingではgetterが表示値の正本です。setterが入力を拒否または正規化した場合、Reactがユーザーイベントを処理した後にgetterの値へDOMを戻します。
 
@@ -63,8 +64,9 @@ useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyLi
 
 コミット後にeffectを開始し、アンマウント時（Strict Modeのリプレイ時を含む）に解除します。
 
-- 依存配列を省略する場合、callbackはsignalだけを読む必要があり、最初のクロージャがコンポーネントの生存期間中保持されます。
-- props、state、その他のsignalではない値を捕捉する場合は、それらを列挙してください: `useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])`。
+- このHookでは依存配列の省略と`[]`は同じ意味です。どちらも初期callbackを保持し、通常のReact renderでは再接続しません。依存配列なしだと毎commit後に実行するReactの`useEffect`とは異なります。この2つの形式は途中で切り替えられます。
+- props、state、その他のsignalではない値を捕捉する場合は、それらを列挙してください: `useSignalEffect(() => { /* signalとpropsを読む */ }, [prop])`。同じ位置の依存値が変わると、以前のeffectをcleanupして新しいcallbackで接続し直します。
+- 依存配列の長さと順序を固定してください。空配列と非空配列の切り替えを含む長さ変更は、Reactがwarningを出して古いcallbackを保持する前に例外になります。
 - callbackが返した関数はcleanupとして扱われ、次回の実行前と解除時に実行されます。
 
 ## useSignalTracking

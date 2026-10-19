@@ -56,6 +56,8 @@ A computed whose identity stays stable while its dependency array is unchanged.
   closure is kept for the component's lifetime.
 - **With a dependency array**, list every non-signal value the getter captures:
   `useComputed(() => count.value * step, [step])`.
+- Keep the omitted/explicit mode and explicit array length and order fixed. A
+  mode or length change throws before a stale memoized computed can be reused.
 
 ## useSignalEffect
 
@@ -64,7 +66,13 @@ useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyLi
 ```
 
 Starts an effect after commit and disposes it on unmount, Strict Mode replay
-included. The dependency rules match `useComputed`.
+included. For this hook, omitted dependencies and `[]` are equivalent: both
+retain the initial callback and can be switched between. This differs from
+React `useEffect` without a dependency list, which runs after every commit.
+List captured props/state in a dependency array; changing values at the same
+positions cleans up and reconnects the effect. Keep its length and order fixed:
+a length change, including empty/non-empty, throws instead of retaining a stale
+callback after React's warning.
 
 ## useSignalTracking
 
