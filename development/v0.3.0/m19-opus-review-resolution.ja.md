@@ -45,7 +45,9 @@
 - size check: `index-full` gzip 25,102 B / budget 24,704 B（+398 B）。`jsx-runtime`は13,668 Bでそのscenario budget内、その他の既存scenarioもbudget内。サイズ予算は緩和していない。
 - `git diff --check`: 成功。
 
-全検証はローカルで完了。GitHub Actions結果はpush後に確認し追記する。サイズ超過を解消できない限りrelease readinessはNOT READY。
+GitHub Actions: commit `483bb1eb7f2dab84c77c833ffaa28a36c176be56`に対するTest `39285481132`、Website CI `39285481135`、E2E `39285481144`を確認。push後4分時点で3件とも`queued`、job開始前であり、結果は未確認。repositoryに他のin-progress runはなく、これらのworkflowだけがqueueに残っていた。各runは次回確認時に追跡できる。
+
+ローカル検証は完了。サイズ超過を解消できない限りrelease readinessはNOT READY。
 
 ## 次に必要な作業
 
