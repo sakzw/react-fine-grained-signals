@@ -183,6 +183,26 @@ function settleRenderAttempt(attempt: RenderAttempt): boolean {
   return stable;
 }
 
+/**
+ * Whether everything the attempt rendered from is still what it read, without
+ * changing the attempt. A computed's revision only moves when it re-evaluates,
+ * so one a later write left dirty would look unchanged by revision alone: its
+ * speculative entry is checked through its sources instead, and a computed the
+ * render read clean must still be clean. A computed that re-evaluated to an
+ * equal value reads as changed here; `settleRenderAttempt` decides that case
+ * at commit, so this can only ask for an extra render, never hide a change.
+ */
+function isRenderAttemptCurrent(attempt: RenderAttempt): boolean {
+  for (const [dependency, revision] of attempt.dependencies) {
+    if (getRenderVersion(dependency) !== revision) return false;
+    const node = core.getNodeForReadable(dependency);
+    if (node?.kind !== "computed") continue;
+    const entry = attempt.computedCache.get(node);
+    if (entry === undefined ? !core.isComputedClean(node) : !isEntryCurrent(entry)) return false;
+  }
+  return true;
+}
+
 function getRenderVersion(readable: object): number {
   if (isReadableProtocol(readable) || core.getNodeForReadable(readable) !== undefined || Reflect.get(readable, READABLE_INTEROP_V1) !== undefined) {
     return core.getDependencyRevision(readable);
@@ -225,7 +245,7 @@ function captureRenderSnapshot(readable: RuntimeReadable): { value: unknown; dep
 function getExecutionOwner() { return executionContext.owner; }
   return {
     createRenderAttempt, createRenderOwner, pushRenderScope, withRenderScope,
-    promoteRenderAttempt, settleRenderAttempt, getRenderVersion, hasActiveRenderOwner, isSpeculative,
+    promoteRenderAttempt, settleRenderAttempt, isRenderAttemptCurrent, getRenderVersion, hasActiveRenderOwner, isSpeculative,
     markSpeculativeDeepRead, subscribeReadables, captureRenderSnapshot,
     getExecutionOwner,
   };

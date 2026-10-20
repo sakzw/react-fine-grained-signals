@@ -93,6 +93,7 @@ export interface AlienDerivedRenderAdapter {
   withRenderScope<T>(attempt: RenderAttempt, callback: () => T, scopePolicy?: "managed" | "bare", suspendParent?: boolean): T;
   promoteRenderAttempt(attempt: RenderAttempt): boolean;
   settleRenderAttempt(attempt: RenderAttempt): boolean;
+  isRenderAttemptCurrent(attempt: RenderAttempt): boolean;
   getRenderVersion(readable: object): number;
   hasActiveRenderOwner(): boolean;
   isSpeculative(): boolean;

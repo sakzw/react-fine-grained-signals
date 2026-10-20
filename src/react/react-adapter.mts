@@ -176,14 +176,31 @@ class RenderStore {
   // hidden gets no second passive cleanup.
   #lifecycle = 0;
 
+  // The attempt this component's latest render began. React checks a
+  // non-blocking render's snapshots once the whole render is done, and a
+  // component renders at most once per render pass that commits (a Strict
+  // Mode or `use()` replay redoes it before moving on), so this is the attempt
+  // being checked. After commit, `#version` reports every change on its own.
+  #attempt: RenderAttempt | undefined;
+
   constructor(mode: SubscriptionMode) { this.#mode = mode; }
-  getSnapshot = () => this.#version;
+  /**
+   * A component that has not committed yet has no subscriptions, so
+   * `#version` alone cannot move when a signal it read is written while a
+   * concurrent render yields. Reporting the stale attempt to React's
+   * render-end consistency check makes React re-render the tree synchronously
+   * instead of committing it torn. The function stays the same across
+   * renders, so an update render costs React no extra store bookkeeping.
+   */
+  getSnapshot = (): number =>
+    this.#attempt === undefined || render.isRenderAttemptCurrent(this.#attempt) ? this.#version : ~this.#version;
   subscribe = (listener: () => void) => {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   };
   begin(scopePolicy: ScopePolicy, ambient = true): RenderAttempt {
     const attempt = render.createRenderAttempt();
+    this.#attempt = attempt;
     if (ambient) {
       attempt.restoreScope = render.pushRenderScope(
         attempt,
@@ -285,8 +302,8 @@ function createReactAdapter(
   }
   function useTrackingStore(scopePolicy: ScopePolicy, ambient = true): { store: RenderStore; attempt: RenderAttempt } {
     const store = useMemo(() => new RenderStore(mode), []);
-    useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     const attempt = store.begin(scopePolicy, ambient);
+    useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
     // A bare scope deliberately stays open after this component returns, so
     // descendants rendered without their own scope are still attributed to it.
     // Rendering is over once React starts committing, though, and every

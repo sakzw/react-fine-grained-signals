@@ -107,6 +107,9 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   };
 
   let result = evaluate();
+  // The store is built in render right before its first `getSnapshot`, so
+  // that call can reuse the result just evaluated.
+  let fresh = true;
 
   const hasChanged = (next: SelectorResult<S>): boolean => {
     if (result.kind !== next.kind) return true;
@@ -117,16 +120,36 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
         : false;
   };
 
+  let subscribers = 0;
+  const subscribeEffect = createEffectBackedStoreSubscription(() => {
+    const next = evaluate();
+    if (!hasChanged(next)) return false;
+    result = next;
+    return true;
+  });
+
   return {
     // Notify only when the primitive result or error identity changes; this
     // is the same Object.is rule used by useSyncExternalStore snapshots.
-    subscribe: createEffectBackedStoreSubscription(() => {
-      const next = evaluate();
-      if (!hasChanged(next)) return false;
-      result = next;
-      return true;
-    }),
+    subscribe(notify: () => void): () => void {
+      subscribers += 1;
+      const unsubscribe = subscribeEffect(notify);
+      return () => {
+        subscribers -= 1;
+        unsubscribe();
+      };
+    },
+    // The cache is kept current only while subscribed. Before the first
+    // commit (or while an Activity boundary has disconnected the store), a
+    // write would leave it stale, and React's render-end consistency check
+    // of a concurrent render would commit that stale value next to fresh
+    // ones. Re-evaluate then; Object.is keeps an unchanged primitive stable.
     getSnapshot(): S {
+      if (fresh) fresh = false;
+      else if (subscribers === 0) {
+        const next = evaluate();
+        if (hasChanged(next)) result = next;
+      }
       if (result.kind === "error") throw result.error;
       return result.value;
     },

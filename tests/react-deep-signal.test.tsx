@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 // @vitest-environment jsdom
 
-import { Component, StrictMode, Suspense, act } from "react";
+import { Activity, Component, StrictMode, Suspense, act, useLayoutEffect } from "react";
 import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -604,25 +604,55 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     }
 
     const view = render(<Selected parentVersion={1} />);
-    // Current store construction and effect establishment each read once.
+    // Store construction and effect establishment each read once. React's
+    // development build also calls `getSnapshot` a second time on mount to
+    // check that it is cached; before subscribing, that call re-evaluates so
+    // a concurrent render's consistency check cannot see a stale cache.
     // These counts are benchmark evidence, not a public API guarantee.
-    expect(selectorCalls).toHaveBeenCalledTimes(2);
+    expect(selectorCalls).toHaveBeenCalledTimes(3);
 
     view.rerender(<Selected parentVersion={2} />);
     expect(screen.getByLabelText("memoized selector").textContent).toBe("2:Ada");
-    expect(selectorCalls).toHaveBeenCalledTimes(2);
+    expect(selectorCalls).toHaveBeenCalledTimes(3);
 
     act(() => { state.value.user.age = 37; });
-    expect(selectorCalls).toHaveBeenCalledTimes(2);
+    expect(selectorCalls).toHaveBeenCalledTimes(3);
     expect(renders).toHaveBeenCalledTimes(2);
 
     act(() => { state.value.user.name = "Grace"; });
     expect(screen.getByLabelText("memoized selector").textContent).toBe("2:Grace");
-    expect(selectorCalls).toHaveBeenCalledTimes(3);
+    expect(selectorCalls).toHaveBeenCalledTimes(4);
 
     view.unmount();
     act(() => { state.value.user.name = "Lin"; });
-    expect(selectorCalls).toHaveBeenCalledTimes(3);
+    expect(selectorCalls).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not commit a stale selection when an Activity boundary is revealed", async () => {
+    const state = deepSignal({ n: 0 });
+    const commits: number[] = [];
+    function Selected() {
+      const n = useDeepSignalValue(state, (value) => value.n, []);
+      useLayoutEffect(() => { commits.push(n); });
+      return <output aria-label="activity selection">{n}</output>;
+    }
+    function App({ mode, tick }: { mode: "visible" | "hidden"; tick: number }) {
+      return <Activity mode={mode}><Selected /><span>{tick}</span></Activity>;
+    }
+
+    const view = render(<App mode="visible" tick={0} />);
+    view.rerender(<App mode="hidden" tick={0} />);
+    await act(async () => { await Promise.resolve(); });
+    // The hidden store is disconnected, so this write leaves its cache behind.
+    act(() => { state.value.n = 5; });
+    // A hidden prerender, then the reveal.
+    view.rerender(<App mode="hidden" tick={1} />);
+    commits.length = 0;
+    view.rerender(<App mode="visible" tick={1} />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(commits).toEqual([5]);
+    expect(screen.getByLabelText("activity selection").textContent).toBe("5");
   });
 
   it("keeps subscribing after selector dependencies change", () => {
