@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: M19.2で承認済みの`index-full` gzip予算26,624 Bを維持（他scenario不変）。M19.3で独立レビューのT1/C1/P1/T3/J5/T2/J1を修正し、ローカルLint・typecheck・coverage・build・size・Consumer・browser・Website検証と、最終コードcommitのGitHub Test/E2E/Website CIが成功。M19.4でR1（Concurrent中の一時的なmixed commit）を各commitの記録で再現し、`useSignalTracking`系と`useDeepSignalValue`をReactのrender終了時consistency checkへ参加させて修正した。v0.3.0はnpm未公開。publish、version/tag/Release、Pages deploy、release freezeは行っていない。詳細は[M19.3 independent review closure](m19.3-independent-review-findings-closure.ja.md)と[M19.4 R1 record](m19.4-r1-concurrent-commit-consistency.ja.md)。
+- 状態: M19.2で承認済みの`index-full` gzip予算26,624 Bを維持（他scenario不変）。M19.3で独立レビューのT1/C1/P1/T3/J5/T2/J1を修正し、ローカルLint・typecheck・coverage・build・size・Consumer・browser・Website検証と、最終コードcommitのGitHub Test/E2E/Website CIが成功。M19.4でR1（Concurrent中の一時的なmixed commit）を各commitの記録で再現し、`useSignalTracking`系と`useDeepSignalValue`をReactのrender終了時consistency checkへ参加させて修正した。v0.3.0はnpm未公開。publish、version/tag/Release、Pages deploy、release freezeは行っていない。修正commitのGitHub Test/E2E/Website CIも成功し、公開判定は既知の制約付きで**GO**。詳細は[M19.3 independent review closure](m19.3-independent-review-findings-closure.ja.md)と[M19.4 R1 record](m19.4-r1-concurrent-commit-consistency.ja.md)。
 - 統合ブランチ: `main`
 - 最新実装マイルストーン: M19.2 Opus Findings Final Closure。LOW-5の同一Signal multi-option ref churnとLOW-8/9の最終unsubscribe後metadata回収を修正。Transform branch coverageは90.34%、Fast Refreshの新getter/setter適用を実ブラウザーで確認。`index-full`はgzip 25,343 B / 26,624 B予算。最終HEADのTest/E2E/Website CI成功により**READY WITH KNOWN LIMITATIONS**。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
 - 公開状態: repository packageは`0.3.0`、npmのruntime/pluginは両方`0.2.1`（2026-10-19確認）。M19で公開操作・version変更・tag・Pages deploy・release freezeは行わない。
@@ -75,7 +75,7 @@
 | M19.1 | Opus Review Findings Resolution | M19 | MEDIUM-1とLOW-1〜LOW-10を再現し、具体的な不具合を修正、残る制約とreadinessを再評価 | 完了（当時の判断）。LOW-10の結論とLOW-8/9の未解決状態はM19.2で再評価済み。詳細は[M19.1 record](m19-opus-review-resolution.ja.md) |
 | M19.2 | Opus Findings Final Closure | M19.1 | LOW-5 multi-option ref cache、Transform coverage、final-unsubscribe metadata cleanup、Fast Refresh closure候補、既存size gateを閉じる | 完了。ユーザー承認で`index-full` gzip予算を26,624 Bへ更新し、Test/E2E/Website CIおよびConsumer smokeを確認して当時**READY WITH KNOWN LIMITATIONS**。後続の独立レビューfindingはM19.3で扱う。詳細は[M19.2 record](m19-opus-findings-final-closure.ja.md) |
 | M19.3 | Independent Review Findings Closure | M19.2 | 確認済みのT1/C1/P1/T3/J5/T2/J1を修正し、R1の影響を限定的に確認する | ローカル指定検証と最終コードcommitのGitHub Test/E2E/Website CIは成功。主要findingは修正済み。R1はReact mock Schedulerでsettled DOM一致を確認したが、途中の混在commitは未検証。公開判定は**CONDITIONAL GO**（R1はM19.4で解消）。詳細は[M19.3 record](m19.3-independent-review-findings-closure.ja.md) |
-| M19.4 | R1 Concurrent Commit Consistency | M19.3 | R1の途中commitを観測して再現し、根本原因を修正する | 修正前は`[["A0","B1","C1","D1"],["A1"]]`、修正後は`[["A1","B1","C1","D1"]]`の1 commit。`useSignalValue`とupdate pathは不変。詳細は[M19.4 record](m19.4-r1-concurrent-commit-consistency.ja.md) |
+| M19.4 | R1 Concurrent Commit Consistency | M19.3 | R1の途中commitを観測して再現し、根本原因を修正する | 修正前は`[["A0","B1","C1","D1"],["A1"]]`、修正後は`[["A1","B1","C1","D1"]]`の1 commit。`useSignalValue`とupdate pathは不変。GitHub Test/E2E/Website CI成功、公開判定は**GO**。詳細は[M19.4 record](m19.4-r1-concurrent-commit-consistency.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 
