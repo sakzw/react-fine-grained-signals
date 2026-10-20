@@ -1609,7 +1609,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           metadata.prunableRevision = (metadata.prunableRevision ?? 0) + 1;
         }
 
-        adapter.batch(() => {
+        adapter.batch(() => adapter.untracked(() => {
           if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
             notify(metadata.properties, key);
           }
@@ -1629,7 +1629,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
               notifyIteration(metadata);
             }
           }
-        });
+        }));
         sweepPrunedKeys(metadata, target);
 
         return true;
@@ -1640,14 +1640,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         const succeeded = Reflect.deleteProperty(target, key);
         if (!succeeded || !owned) return succeeded;
 
-        adapter.batch(() => {
+        adapter.batch(() => adapter.untracked(() => {
           notify(metadata.properties, key);
           // An own key was removed, which own-key existence checks observe even
           // when `in` still finds the key on the prototype.
           notify(metadata.existence, key);
           notifyIteration(metadata);
           markPrunable(metadata, key);
-        });
+        }));
         sweepPrunedKeys(metadata, target);
         return true;
       },

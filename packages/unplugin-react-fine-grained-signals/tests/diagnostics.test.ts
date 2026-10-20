@@ -169,6 +169,24 @@ describe("diagnostics.errorOn", () => {
 export function List() { return <Grid renderItem={() => label.value} />; }
 `;
 
+  it("does not report RFGS001 for a signal read passed to useState", () => {
+    const source = `import { useState } from "react";
+import { signal } from "react-fine-grained-signals";
+const s = signal(0);
+export function App() {
+  const [n, setN] = useState(s.value);
+  return <p>{n}</p>;
+}
+`;
+    const warnings: Warning[] = [];
+    const transform = rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS001"] } });
+    const result = transform.call(rollupContext(warnings), source, "App.tsx");
+    expect(result?.code).toContain("capture(() => s.value)");
+    expect(warnings.filter((warning) => warning.diagnosticId === "RFGS001")).toEqual([]);
+    expect(() => rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS001"] } })
+      .call(rollupContext([]), FIXTURES.RFGS001.code, FIXTURES.RFGS001.id)).toThrow(/RFGS001/);
+  });
+
   it("keeps every diagnostic a warning when errorOn is not set", () => {
     const warnings: Warning[] = [];
     const result = rollupTransform({ mode: "auto" }).call(rollupContext(warnings), warnOnly, "123.tsx");

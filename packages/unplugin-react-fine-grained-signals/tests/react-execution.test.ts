@@ -425,6 +425,48 @@ export function App() {
     expect(container.textContent).toBe("Grace");
   });
 
+  it("captures calls through closures over tracked Deep Signal aliases", async () => {
+    const source = `
+import { deepSignal, signal } from "react-fine-grained-signals";
+export const count = signal(0);
+export const obj = deepSignal({ items: [{ t: "x" }] });
+function plain() { return "p"; }
+function itemText(values) { return values[0].t; }
+export function App() {
+  const items = obj.value.items;
+  const plainItems = [{ t: "p" }];
+  const get = () => items[0].t;
+  const constant = plain();
+  return <p>{count.value}{recursive(2)}{itemText(items)}{itemText(plainItems)}{constant}</p>;
+  function read() { return get(); }
+  function readAgain() { return read(); }
+  function recursive(n) { return n > 0 ? recursive(n - 1) : readAgain(); }
+}
+`;
+    const transformed = transformReactFineGrainedSignals(source, "AliasClosure.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+    })?.code ?? "";
+    expect(transformed).toContain("capture(() => recursive(2))");
+    expect(transformed).not.toContain("capture(() => plain())");
+    expect(transformed).not.toContain("capture(() => itemText(plainItems))");
+    for (const codegen of ["managed", "inject"] as const) {
+      const module = await loadModule(source, { mode: "auto", codegen });
+      const count = module.count as Signal<number>;
+      const obj = module.obj as { value: { items: Array<{ t: string }> } };
+      const container = mount(module.App as FunctionComponent);
+      expect(container.textContent).toBe("0xxpp");
+
+      act(() => { obj.value.items[0]!.t = "y"; });
+      expect(container.textContent).toBe("0yypp");
+      act(() => { count.value = 1; });
+      expect(container.textContent).toBe("1yypp");
+    }
+  });
+
   it("keeps a suspended attempt separate from the fallback and its later retry", async () => {
     const module = await loadModule(`
 import { signal } from "react-fine-grained-signals";
@@ -3409,6 +3451,16 @@ export function App() {
       lines.push(`  a${n} = st.value.x;`, `  return <p>{a0.y}</p>;`, `}`);
       return lines.join("\n");
     };
+    const capturedHelperChain = (n: number): string => {
+      const lines = [
+        `import { deepSignal } from "react-fine-grained-signals";`,
+        `const state = deepSignal({ items: [{ t: "x" }] });`,
+      ];
+      for (let i = 0; i < n; i += 1) lines.push(`function h${i}() { return h${i + 1}(); }`);
+      lines.push(`function h${n}() { return items[0].t; }`);
+      lines.push(`export function Comp() { const items = state.value.items; return <p>{h0()}</p>; }`);
+      return lines.join("\n");
+    };
     it("decides provenance through wide helper and literal fan-out in bounded time", () => {
       const head = `import { signal } from "react-fine-grained-signals";\nconst s = signal(1);\n`;
       // Each level calls (or holds) the previous one 10 times: 10^7 paths, one answer per node.
@@ -3425,6 +3477,13 @@ export function App() {
       const large = fastest(helperChain(600));
       expect(large).toBeLessThan(5000);
       // Linear growth would be 12x; allow generous headroom, quadratic is 144x.
+      expect(large / Math.max(small, 1)).toBeLessThan(48);
+    });
+    it("follows a 500-stage helper chain that closes over a tracked alias in bounded time", () => {
+      run(capturedHelperChain(20));
+      const small = fastest(capturedHelperChain(50));
+      const large = fastest(capturedHelperChain(500));
+      expect(large).toBeLessThan(5000);
       expect(large / Math.max(small, 1)).toBeLessThan(48);
     });
     it("handles a long reverse-ordered alias chain in near-linear time", () => {

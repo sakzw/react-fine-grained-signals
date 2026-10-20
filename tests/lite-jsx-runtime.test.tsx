@@ -9,6 +9,9 @@ import { signal } from "../src/index.js";
 import { createElement as liteCreateElement } from "../src/lite.js";
 import { jsx as liteJsx } from "../src/lite-jsx-runtime.js";
 import { jsxDEV as liteJsxDEV } from "../src/lite-jsx-dev-runtime.js";
+import { createElement as packageLiteCreateElement } from "react-fine-grained-signals/lite";
+import { jsx as packageLiteJsx } from "react-fine-grained-signals/lite/jsx-runtime";
+import { jsxDEV as packageLiteJsxDEV } from "react-fine-grained-signals/lite/jsx-dev-runtime";
 import { jsx as fullJsx } from "../src/jsx-runtime.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -36,6 +39,12 @@ afterEach(() => {
 });
 
 describe("lite JSX runtime", () => {
+  it("resolves each public Lite entry to source in the test environment", () => {
+    expect(packageLiteCreateElement).toBe(liteCreateElement);
+    expect(packageLiteJsx).toBe(liteJsx);
+    expect(packageLiteJsxDEV).toBe(liteJsxDEV);
+  });
+
   it("updates Signal children without rerendering their parent under StrictMode", () => {
     const count = signal(0);
     let parentRenders = 0;

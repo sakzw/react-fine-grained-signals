@@ -33,6 +33,18 @@ export default defineConfig({
         replacement: source("./src/jsx-dev-runtime.ts"),
       },
       {
+        find: /^react-fine-grained-signals\/lite\/jsx-runtime$/,
+        replacement: source("./src/lite-jsx-runtime.ts"),
+      },
+      {
+        find: /^react-fine-grained-signals\/lite\/jsx-dev-runtime$/,
+        replacement: source("./src/lite-jsx-dev-runtime.ts"),
+      },
+      {
+        find: /^react-fine-grained-signals\/lite$/,
+        replacement: source("./src/lite.ts"),
+      },
+      {
         find: /^react-fine-grained-signals$/,
         replacement: source("./src/index.ts"),
       },

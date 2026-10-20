@@ -1840,72 +1840,72 @@ type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "chil
 } & AddSignalChildren<{}>;
 
 type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "checked" | "defaultChecked" | "bindValue" | "bindChecked" | "name"> & (
-  Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked" | "name"> & { bindValue?: never; bindChecked?: never }
+  Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked" | "name"> & { bindValue?: never | undefined; bindChecked?: never | undefined }
   | {
     type?: "text" | "search" | "tel" | "url" | "password" | "email" | "number" | "range";
     name?: P["name"];
-    value?: never;
-    defaultValue?: never;
-    checked?: never;
-    defaultChecked?: never;
-    bindValue?: FormBindableSignal<string> & NotDeepSignal;
-    bindChecked?: never;
+    value?: never | undefined;
+    defaultValue?: never | undefined;
+    checked?: never | undefined;
+    defaultChecked?: never | undefined;
+    bindValue?: (FormBindableSignal<string> & NotDeepSignal) | undefined;
+    bindChecked?: never | undefined;
   }
   | {
     type: "checkbox";
     name?: P["name"];
     value?: P["value"];
     defaultValue?: P["defaultValue"];
-    checked?: never;
-    defaultChecked?: never;
-    bindValue?: never;
-    bindChecked?: FormBindableSignal<boolean> & NotDeepSignal;
+    checked?: never | undefined;
+    defaultChecked?: never | undefined;
+    bindValue?: never | undefined;
+    bindChecked?: (FormBindableSignal<boolean> & NotDeepSignal) | undefined;
   }
   | {
     type: "radio";
     name: string;
     value: string;
-    defaultValue?: never;
-    checked?: never;
-    defaultChecked?: never;
+    defaultValue?: never | undefined;
+    checked?: never | undefined;
+    defaultChecked?: never | undefined;
     bindValue: FormBindableChoiceSignal<string> & NotDeepSignal;
-    bindChecked?: never;
+    bindChecked?: never | undefined;
   }
   | {
     type: "checkbox";
     name?: P["name"];
     value: string;
-    defaultValue?: never;
-    checked?: never;
-    defaultChecked?: never;
+    defaultValue?: never | undefined;
+    checked?: never | undefined;
+    defaultChecked?: never | undefined;
     bindValue: FormBindableChoiceSignal<string[]> & NotDeepSignal;
-    bindChecked?: never;
+    bindChecked?: never | undefined;
   }
 );
 
 type BoundTextareaProps<P extends React.JSX.IntrinsicElements["textarea"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "bindValue"> & (
-  Pick<P, "value" | "defaultValue"> & { bindValue?: never }
-  | { value?: never; defaultValue?: never; bindValue?: FormBindableSignal<string> & NotDeepSignal }
+  Pick<P, "value" | "defaultValue"> & { bindValue?: never | undefined }
+  | { value?: never | undefined; defaultValue?: never | undefined; bindValue?: (FormBindableSignal<string> & NotDeepSignal) | undefined }
 );
 
 type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "multiple" | "bindValue"> & (
   {
-    multiple?: boolean;
+    multiple?: boolean | undefined;
     value?: React.JSX.IntrinsicElements["select"]["value"];
     defaultValue?: React.JSX.IntrinsicElements["select"]["defaultValue"];
-    bindValue?: never;
+    bindValue?: never | undefined;
   }
   | {
-    multiple?: false;
-    value?: never;
-    defaultValue?: never;
-    bindValue?: FormBindableChoiceSignal<string> & NotDeepSignal;
+    multiple?: false | undefined;
+    value?: never | undefined;
+    defaultValue?: never | undefined;
+    bindValue?: (FormBindableChoiceSignal<string> & NotDeepSignal) | undefined;
   }
   | {
     multiple: true;
-    value?: never;
-    defaultValue?: never;
-    bindValue?: FormBindableChoiceSignal<string[]> & NotDeepSignal;
+    value?: never | undefined;
+    defaultValue?: never | undefined;
+    bindValue?: (FormBindableChoiceSignal<string[]> & NotDeepSignal) | undefined;
   }
 );
 

@@ -1,6 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals */
 
 import { computed, signal, useComputed, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
+import type React from "react";
 
 const text = signal("value");
 const numberText = signal("12.5");
@@ -138,6 +139,19 @@ const controlledSelect = (
   </select>
 );
 
+// React's standard wrapper patterns remain assignable with exact optional props.
+function InputWrapper(props: React.ComponentPropsWithoutRef<"input">) {
+  return <input {...props} />;
+}
+function TextareaWrapper(props: React.ComponentPropsWithoutRef<"textarea">) {
+  return <textarea {...props} />;
+}
+function SelectWrapper(props: React.ComponentPropsWithoutRef<"select">) {
+  return <select {...props} />;
+}
+const optionalBoundName: FormBindableSignal<string> | undefined = enabled.value ? text : undefined;
+const conditionalBinding = <input bindValue={optionalBoundName} />;
+
 // Signal children work for every native host, including non-HTML hosts.
 const svgChild = <svg>{text}</svg>;
 
@@ -206,6 +220,10 @@ void [
   readonlyComputedInput,
   nullishTitleAndId,
   controlledSelect,
+  InputWrapper,
+  TextareaWrapper,
+  SelectWrapper,
+  conditionalBinding,
   svgChild,
   unsupportedHtmlBinding,
   unsupportedSvgBinding,

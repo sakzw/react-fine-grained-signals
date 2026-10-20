@@ -58,6 +58,109 @@ describe("deepSignal", () => {
     expect(ageRuns).toBe(2);
   });
 
+  it("does not track deep-signal property notifications as reads of the writer", () => {
+    const state = deepSignal({ a: 1, b: 0 });
+    let writerRuns = 0;
+    disposers.push(effect(() => {
+      state.value.b;
+    }));
+    disposers.push(effect(() => {
+      writerRuns += 1;
+      state.value.b = state.value.a * 2;
+    }));
+
+    expect(state.value.b).toBe(2);
+    expect(writerRuns).toBe(1);
+
+    state.value.b = 100;
+    expect(state.value.b).toBe(100);
+    expect(writerRuns).toBe(1);
+
+    // Explicit reads on the RHS remain tracked and continue to update the
+    // destination when their source changes.
+    state.value.a = 3;
+    expect(state.value.b).toBe(6);
+    expect(writerRuns).toBe(2);
+  });
+
+  it("keeps deep writes untracked across delete, iteration, array length, and nested effects", () => {
+    const state = deepSignal<{
+      trigger: number;
+      target: number;
+      nested: number;
+      removable?: boolean;
+      list: number[];
+    }>({
+      trigger: 0,
+      target: 0,
+      nested: 0,
+      removable: true,
+      list: [0, 1, 2],
+    });
+    let writerRuns = 0;
+    const seenKeys: string[][] = [];
+    const seenLengths: number[] = [];
+    disposers.push(effect(() => {
+      writerRuns += 1;
+      const trigger = state.value.trigger;
+      state.value.target = trigger;
+      if (trigger > 0) delete state.value.removable;
+      state.value.list.length = trigger;
+    }));
+    // Separate subscribers prove notification delivery still happens after
+    // the writer's untracked mutation scope has ended.
+    disposers.push(effect(() => {
+      seenKeys.push(Object.keys(state.value));
+    }));
+    disposers.push(effect(() => {
+      seenLengths.push(state.value.list.length);
+    }));
+    disposers.push(effect(() => {
+      if (state.value.target === 1) state.value.nested = 10;
+    }));
+
+    state.value.trigger = 1;
+    expect(writerRuns).toBe(2);
+    expect(state.value.target).toBe(1);
+    expect(state.value.nested).toBe(10);
+    expect(state.value.removable).toBeUndefined();
+    expect(state.value.list.length).toBe(1);
+    expect(seenKeys.at(-1)).not.toContain("removable");
+    expect(seenLengths.at(-1)).toBe(1);
+
+    // These writes touch only values the writer assigned or deleted. They
+    // must not make the writer depend on its own set/delete/iteration/length
+    // notifications.
+    state.value.target = 99;
+    state.value.removable = true;
+    state.value.list.length = 2;
+    expect(writerRuns).toBe(2);
+    expect(state.value.target).toBe(99);
+    expect(state.value.removable).toBe(true);
+    expect(state.value.list.length).toBe(2);
+  });
+
+  it("restores tracking after a failed deep write inside an effect", () => {
+    const state = deepSignal({ trigger: 0, value: 0 });
+    const invalid = Object.preventExtensions({ nested: 1 });
+    let runs = 0;
+    disposers.push(effect(() => {
+      runs += 1;
+      const trigger = state.value.trigger;
+      try {
+        (state.value as { invalid?: object }).invalid = invalid;
+      } catch {
+        // Validation rejects the write before mutation notifications run.
+      }
+      state.value.value = trigger;
+    }));
+
+    expect(runs).toBe(1);
+    state.value.trigger = 1;
+    expect(runs).toBe(2);
+    expect(state.value.value).toBe(1);
+  });
+
   it("reconnects nested readers after their parent is replaced", () => {
     const state = deepSignal({ user: { name: "Ada" } });
     const values: string[] = [];

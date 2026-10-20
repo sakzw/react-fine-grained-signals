@@ -4406,6 +4406,7 @@ function templateTagMayRead(path: NodePath<t.TaggedTemplateExpression>, context:
 function namedArgumentMayRead(
   call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>,
   context: ReadContext,
+  trackedAliases: Set<object> = noAliases,
 ): boolean {
   if (callNameIsHook(call.node.callee)) return false;
   return (call.get("arguments") as NodePath[]).some((argument) => {
@@ -4413,7 +4414,7 @@ function namedArgumentMayRead(
     if (!value.isIdentifier()) return false;
     const target = resolveReferencedFunction(value, value.node.name);
     return target !== undefined && functionTargetMayReadTrackedValue(
-      target, context.importSource, context.managedRuntimeSource, context.reactImportSource, true,
+      target, context.importSource, context.managedRuntimeSource, context.reactImportSource, true, trackedAliases,
     );
   });
 }
@@ -4426,6 +4427,7 @@ function importIsForeign(specifier: NodePath, context: ReadContext): boolean {
 }
 
 const targetMayReadTrackedValue = new WeakMap<t.Node, boolean>();
+const targetAliasReadCache = new WeakMap<Set<object>, { size: number; byFunction: WeakMap<t.Node, boolean> }>();
 
 /** Cached `targetFunctionMayReadTrackedValue` for a resolved function. */
 function functionTargetMayReadTrackedValue(
@@ -4437,9 +4439,91 @@ function functionTargetMayReadTrackedValue(
   // starts it, so a function a call runs counts its body. Its result is a
   // Promise, though, never the value read, so it is not an alias source.
   allowAsync = false,
+  trackedAliases: Set<object> = noAliases,
 ): boolean {
   if ((target.node.async && !allowAsync) || target.node.generator) return false;
+  if (targetAliasGraphMayRead(target, trackedAliases, importSource, managedRuntimeSource, reactImportSource)) return true;
   return cachedTargetMayRead(target, importSource, managedRuntimeSource, reactImportSource);
+}
+
+/**
+ * A helper can read through a Deep Signal proxy captured by its caller even
+ * though the helper contains no `.value` read itself. Check that case against
+ * the caller's alias set, following only synchronous helper edges. Results are
+ * scoped to that alias set and invalidated as its data-flow pass grows it.
+ */
+function targetAliasGraphMayRead(
+  target: NodePath<t.Function>,
+  trackedAliases: Set<object>,
+  importSource: string,
+  managedRuntimeSource: string,
+  reactImportSource: string,
+): boolean {
+  if (trackedAliases.size === 0) return false;
+  let entry = targetAliasReadCache.get(trackedAliases);
+  if (entry === undefined || entry.size !== trackedAliases.size) {
+    entry = { size: trackedAliases.size, byFunction: new WeakMap() };
+    targetAliasReadCache.set(trackedAliases, entry);
+  }
+  const cached = entry.byFunction.get(target.node);
+  if (cached !== undefined) return cached;
+
+  const pending: NodePath<t.Function>[] = [target];
+  const seen = new Set<t.Node>();
+  let result = false;
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    if (seen.has(current.node)) continue;
+    seen.add(current.node);
+    // A Hook in any reachable helper must never be moved into a generated
+    // capture closure. Preserve the conservative behavior for Hook callers.
+    if (functionCallsHook(current)) break;
+    let readsAlias = false;
+    (current.get("body") as NodePath).traverse({
+      Function(nested) { nested.skip(); },
+      Identifier(path) {
+        if (!path.isReferencedIdentifier() || isDeferredReadContext(path, current)) return;
+        const binding = path.scope.getBinding(path.node.name);
+        if (binding !== undefined && trackedAliases.has(binding)) {
+          readsAlias = true;
+          path.stop();
+        }
+      },
+    });
+    if (readsAlias) {
+      result = true;
+      break;
+    }
+    for (const edge of synchronousScan(current, importSource, managedRuntimeSource, reactImportSource).edges) {
+      pending.push(edge.target);
+    }
+  }
+  entry.byFunction.set(target.node, result);
+  return result;
+}
+
+function resolvedCallMayReadTrackedValue(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>,
+  context: ReadContext,
+  trackedAliases: Set<object>,
+): boolean {
+  if (callNameIsHook(call.node.callee)) return false;
+  const callee = unwrapTransparent(call.node.callee);
+  const target = t.isIdentifier(callee)
+    ? resolveReferencedFunction(call, callee.name)
+    : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+      ? resolveKeyedFunction(call, callee)
+      : undefined;
+  // This is the call-site-specific addition to the existing generic helper
+  // analysis. The caller still runs its normal fallback when this returns
+  // false; do not recursively re-run that context-free analysis here.
+  return target !== undefined && targetAliasGraphMayRead(
+    target,
+    trackedAliases,
+    context.importSource,
+    context.managedRuntimeSource,
+    context.reactImportSource,
+  );
 }
 
 /**
@@ -4577,6 +4661,7 @@ function collectTrackedReadAliases(
     binding !== undefined && (binding.kind === "const" || binding.kind === "let" || binding.kind === "var") &&
     binding.scope.getFunctionParent()?.path.node === functionPath.node;
   const resolvedCallReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): boolean => {
+    if (resolvedCallMayReadTrackedValue(call, context, trackedAliases)) return true;
     if (callNameIsHook(call.node.callee)) return false;
     const callee = unwrapTransparent(call.node.callee);
     const target = t.isIdentifier(callee)
@@ -4838,6 +4923,10 @@ function bodyReadsTrackedValue(
   if (hasTrackedReadInExpression(body, owner, trackedAliases)) return true;
   const callReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression | t.NewExpression>): boolean => {
     if (callNameIsHook(call.node.callee)) return false;
+    // Resolve local helper closure reads with the current alias context before
+    // the context-free external-call fallback recursively analyzes the helper
+    // graph. This also keeps long helper chains iterative.
+    if (resolvedCallMayReadTrackedValue(call, context, trackedAliases)) return true;
     if (call.isNewExpression() && constructorMayRead(call)) return true;
     if (
       !call.isNewExpression() &&
@@ -4851,7 +4940,7 @@ function bodyReadsTrackedValue(
     ) return true;
     return [call.get("callee") as NodePath, ...(call.get("arguments") as NodePath[])]
       .some((argument) => inlineCallbackReadsTrackedValue(argument, trackedAliases, context)) ||
-      namedArgumentMayRead(call, context);
+      namedArgumentMayRead(call, context, trackedAliases);
   };
   // `traverse` does not visit its root, which is the call in an expression body.
   if ((body.isCallExpression() || body.isOptionalCallExpression() || body.isNewExpression()) && callReads(body)) {
@@ -5045,10 +5134,11 @@ function captureTrackedReadExpressions(
       ((callee.isMemberExpression() || callee.isOptionalMemberExpression()) &&
         hasTrackedReadInExpression(callee, functionPath, trackedAliases)) ||
       (callee.isIdentifier() && path.scope.getBinding(callee.node.name)?.kind === "param") ||
+      resolvedCallMayReadTrackedValue(path, context, trackedAliases) ||
       externalCallMayReadTrackedValue(path, functionPath, importSource, managedRuntimeSource, reactImportSource) ||
       [callee as NodePath, ...(path.get("arguments") as NodePath[])]
         .some((part) => inlineCallbackReadsTrackedValue(part.isSpreadElement() ? part.get("argument") as NodePath : part, trackedAliases, context)) ||
-      namedArgumentMayRead(path, context);
+      namedArgumentMayRead(path, context, trackedAliases);
     // A callee the module cannot see into (a method of an imported object, a
     // function held in a variable) is captured as a precaution. Unlike the
     // reads above this is not proof, so a Hook sharing the call is left alone
@@ -5189,7 +5279,7 @@ function captureTrackedReadExpressions(
         if (
           (hasTrackedReadInExpression(callee, functionPath, trackedAliases) ||
             callReadsTrackedValue(path, functionPath, trackedAliases, context) ||
-            namedArgumentMayRead(path, context) ||
+            namedArgumentMayRead(path, context, trackedAliases) ||
             constructorMayRead(path)) &&
           !expressionCallsHook(path) &&
           !isDeferredReadContext(path, functionPath)
@@ -5330,6 +5420,16 @@ function captureTrackedReadExpressions(
         if ((!id.isObjectPattern() && !id.isArrayPattern()) || !init.node) return;
         if (!hasTrackedReadInExpression(init, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
         if (expressionCallsHook(init)) {
+          const hookCall = unwrapTransparentPath(init);
+          if (
+            (hookCall.isCallExpression() || hookCall.isOptionalCallExpression()) &&
+            callNameIsHook(hookCall.node.callee)
+          ) {
+            // The Hook itself and its destructuring stay in place. Reads in
+            // its arguments are visited and captured individually below, so
+            // this common `useState(signal.value)` form does not lose tracking.
+            return;
+          }
           reportWarning(options, "RFGS001", init, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
