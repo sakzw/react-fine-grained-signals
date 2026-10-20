@@ -6,7 +6,9 @@
 
 LOW-5、LOW-8/9を再現条件どおり修正し、Lint、Transform branch coverage、実Vite Fast Refreshの取りこぼしを閉じた。既存のMEDIUM-1、LOW-1〜4、LOW-6/7の修正も維持した。
 
-release readinessは**NOT READY**のまま。開始HEADの`index-full` gzipは25,102 Bで予算24,704 Bを398 B超えていた。今回の最終実装は25,343 Bとなり、開始HEADから241 B増、予算から639 B超過した。サイズ予算は変更していない。コードの修正を戻して既知不具合を再導入することは採用せず、サイズgateを未解決として残す。
+Opusレビュー11件は修正・確認を完了した。開始HEADの`index-full` gzipは25,102 Bで、当時の予算24,704 Bを398 B超えていた。最終実装は25,343 Bとなり、開始HEADから241 B増、旧予算から639 B超過した。ユーザー承認に基づき、既知の正確性修正を維持するため`index-full` gzip予算だけを26,624 Bへ更新した。この値は25,343 Bへ既存方針の5% headroomを加え、64 B単位で切り上げたもの。その他scenarioの予算は変更していない。
+
+ローカル最終検証はすべて成功した。release readinessの確定は、変更をpushした最終commitに対するGitHub Actions Test、E2E、Website CIの結果確認後に行う。v0.3.0はnpm未公開であり、version・公開操作・tag・GitHub Release・Pages deploy・release freezeは行っていない。
 
 npm publish、version変更、tag、GitHub Release、Pages deploy、release freezeは行っていない。
 
@@ -21,7 +23,7 @@ npm publish、version変更、tag、GitHub Release、Pages deploy、release free
 | LOW-8: collection key metadata | **FIXED** | 最終subscriberの解除時に内部`unwatched`通知から既存のbounded settled sweepを予約する。後続read/writeを待たない。 |
 | LOW-9: missing object key metadata | **FIXED** | LOW-8と同じ内部通知契約をproperty version sourceへ接続し、最後のunsubscribe後にbounded sweepを予約する。 |
 | LOW-10: omitted-deps `useComputed` Fast Refresh | **FIXED** | signal-only computedを`useRef`から既存の`useMemo`へ統一。通常の再renderではidentityを保ち、Fast Refreshでmemoが破棄された際は編集後のgetter/setterを使う。 |
-| Bundle size | **UNRESOLVED / RELEASE BLOCKER** | `index-full` gzipが予算を639 B超過。予算の引き上げや機能削除は行っていない。 |
+| Bundle size | **RESOLVED** | ユーザー承認により`index-full` gzip予算を26,624 Bへ更新。測定値25,343 Bに既存方針の5% headroomを確保。その他scenario予算は不変。 |
 
 ### LOW-5の再現と結果
 
@@ -43,7 +45,7 @@ Vite 8.3.4、React 19.3.0、Chromium、StrictModeで`development/v0.3.0/m19-opus
 
 | Scenario | 現在のraw | gzip | Brotli | 結果 |
 |---|---:|---:|---:|---|
-| `index-full` | 98,948 B | 25,343 B | 22,385 B | 予算24,704 Bを639 B超過 |
+| `index-full` | 98,948 B | 25,343 B | 22,386 B | 予算26,624 B以内 |
 | `jsx-runtime` | 48,885 B | 13,850 B | 12,405 B | 予算内 |
 | `lite-jsx-child` | 25,219 B | 7,161 B | 6,458 B | 予算7,552 B以内 |
 
@@ -61,7 +63,7 @@ Vite 8.3.4、React 19.3.0、Chromium、StrictModeで`development/v0.3.0/m19-opus
 - Website独立typecheck: 成功。
 - Website静的build: 成功。33ページを生成し、basePath補正を適用。
 - Website Chromium smoke: 全route、basePath、404、フォーム/Range、list/control-flow/shared state、Managed Transform、consoleを確認して成功。
-- `node scripts/check-size.mjs --exact`: `index-full` 25,343 B gzip。唯一の失敗は既存budget 24,704 B超過。
+- `node scripts/check-size.mjs --exact`: `index-full` 25,343 B gzip / 26,624 B。全scenarioのbudgetとstructural guard成功。
 - `git diff --check`: 成功。
 
 ## GitHub Actions
@@ -74,8 +76,8 @@ Vite 8.3.4、React 19.3.0、Chromium、StrictModeで`development/v0.3.0/m19-opus
 
 したがってCIでも残るblockerは`index-full` gzip budgetのみ。E2EとWebsite CIに回帰はない。
 
-## 次に必要な作業
+## Final bundle gate decision
 
-1. 現在必要な修正を維持したまま、`index-full`から少なくとも639 B gzipを削減できる候補をprofileする。`useComputed` Fast Refresh、Deep Signal最終unsubscribe cleanup、radio/checkbox option安定性を外す案は採らない。
-2. その後、Test、E2E、Website CIの最終commit結果でreadinessを再評価する。
-3. size gateを満たすまではv0.3.0を**NOT READY**として扱う。
+2026-10-20、ユーザーは`index-full`予算26,624 Bを承認した。25,343 Bからの5% headroomを既存の64 B単位切り上げ規則へ適用した値であり、他のscenario予算は変更していない。639 B超過を解消するための探索では、正確性修正を保ったまま有意に削減できる自然な簡素化は確認できなかった。承認後のローカル最終検証でLint、TypeScript、Coverage、Build、全size scenario、packed Consumer、mixed-version、Browser E2E、Websiteの型検査/build/smokeが成功した。GitHub Actionsの最終commit結果とreadiness確定はpush後に記録する。
+
+公開準備の既存チェックリストは、npmの公開状態・runtime/plugin整合確認、tarballからのclean consumer検証、明示承認後のversion/tag/npm publish/GitHub Release、公開後install smoke、Pages workflowの別途明示実行を列挙しており、未公開状態と整合している。現在npm未公開。実際の公開操作は行っていない。
