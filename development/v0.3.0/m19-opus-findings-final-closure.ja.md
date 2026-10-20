@@ -66,7 +66,13 @@ Vite 8.3.4、React 19.3.0、Chromium、StrictModeで`development/v0.3.0/m19-opus
 
 ## GitHub Actions
 
-最終実装commitをpush後、Test、E2E、Website CIの各workflow結果を確認して追記する。未完了のrunは成功扱いにしない。
+最終実装commit `680c73c5ff1485a6e78c61775c90e705a40b7957`のrun:
+
+- [E2E #39351699522](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39351699522): **success**。
+- [Website CI #39351699523](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39351699523): **success**。
+- [Test #39351699560](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39351699560): **failure**。Lint、typecheck、coverage、buildは成功し、`scripts/check-size.mjs`が`index-full`の予算超過で失敗した。workflowはこの後のConsumer/mixed-version smokeへ進まなかった。Consumer smokeは同じsourceを使ってローカルで成功済み。
+
+したがってCIでも残るblockerは`index-full` gzip budgetのみ。E2EとWebsite CIに回帰はない。
 
 ## 次に必要な作業
 
