@@ -59,7 +59,7 @@ Vite 8.3.4、React 19.3.0、Chromium、StrictModeで`development/v0.3.0/m19-opus
 - focused React/Deep Signal/JSX tests: 5 files / 202 tests pass。LOW-5の9/16/32 group回帰、LOW-8/9の最終unsubscribe回収、Hooksを含む。
 - `pnpm build`: runtime build、plugin build-smoke成功。
 - `pnpm test:consumer`: packed runtime/plugin install、consumer typecheck/build、SSR/hydration、Signal/form更新、Core-only build、duplicate-package cross-copy smoke成功。
-- `pnpm test:browser`: 74/74 passed。Chromium、Firefox、WebKit、production build、React Routerを含む。
+- `pnpm test:browser`: Chromium/Firefox/WebKit等を含む全74ケースを実行。初回は70件成功、4件がbrowser startup/hydration timeoutとなったため、該当3テストをFirefox/WebKitで低並列再実行し、6ケースすべて成功。GitHub E2Eも最終HEADで成功。
 - Website独立typecheck: 成功。
 - Website静的build: 成功。33ページを生成し、basePath補正を適用。
 - Website Chromium smoke: 全route、basePath、404、フォーム/Range、list/control-flow/shared state、Managed Transform、consoleを確認して成功。
@@ -68,16 +68,16 @@ Vite 8.3.4、React 19.3.0、Chromium、StrictModeで`development/v0.3.0/m19-opus
 
 ## GitHub Actions
 
-最終実装commit `680c73c5ff1485a6e78c61775c90e705a40b7957`のrun:
+サイズ予算承認commit `de709cc4e407d4eb343a269c3d6975633b6ece50`のrun:
 
-- [E2E #39351699522](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39351699522): **success**。
-- [Website CI #39351699523](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39351699523): **success**。
-- [Test #39351699560](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39351699560): **failure**。Lint、typecheck、coverage、buildは成功し、`scripts/check-size.mjs`が`index-full`の予算超過で失敗した。workflowはこの後のConsumer/mixed-version smokeへ進まなかった。Consumer smokeは同じsourceを使ってローカルで成功済み。
+- [Test #39360855504](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39360855504): **success**。Lint、typecheck、test、build、sizeに加えConsumerとmixed-version smokeも実行・成功。
+- [E2E #39360855677](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39360855677): **success**。
+- [Website CI #39361029509](https://github.com/sakzw/react-fine-grained-signals/actions/runs/39361029509): **success**。website path filter対象外のため、workflow_dispatchで実行。
 
-したがってCIでも残るblockerは`index-full` gzip budgetのみ。E2EとWebsite CIに回帰はない。
+三つのworkflowはいずれもサイズ予算承認commitで成功。Test内でConsumer/mixed-version smokeも成功した。
 
 ## Final bundle gate decision
 
-2026-10-20、ユーザーは`index-full`予算26,624 Bを承認した。25,343 Bからの5% headroomを既存の64 B単位切り上げ規則へ適用した値であり、他のscenario予算は変更していない。639 B超過を解消するための探索では、正確性修正を保ったまま有意に削減できる自然な簡素化は確認できなかった。承認後のローカル最終検証でLint、TypeScript、Coverage、Build、全size scenario、packed Consumer、mixed-version、Browser E2E、Websiteの型検査/build/smokeが成功した。GitHub Actionsの最終commit結果とreadiness確定はpush後に記録する。
+2026-10-20、ユーザーは`index-full`予算26,624 Bを承認した。25,343 Bからの5% headroomを既存の64 B単位切り上げ規則へ適用した値であり、他のscenario予算は変更していない。639 B超過を解消するための探索では、正確性修正を保ったまま有意に削減できる自然な簡素化は確認できなかった。ローカル最終検証に加え、`de709cc`のGitHub Test、E2E、Website CIがすべて成功し、Test内のConsumer/mixed-version smokeも成功した。公開判定は**READY WITH KNOWN LIMITATIONS**。v0.3.0はnpm未公開であり、実際の公開操作は行っていない。
 
 公開準備の既存チェックリストは、npmの公開状態・runtime/plugin整合確認、tarballからのclean consumer検証、明示承認後のversion/tag/npm publish/GitHub Release、公開後install smoke、Pages workflowの別途明示実行を列挙しており、未公開状態と整合している。現在npm未公開。実際の公開操作は行っていない。

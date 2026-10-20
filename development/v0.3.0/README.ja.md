@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: Opusレビュー11件は対応済み。`index-full` gzip実測25,343 Bを受け、ユーザー承認により予算を26,624 Bへ更新（既存の5% headroom、64 B単位切り上げ方針）。他scenarioの予算は不変。ローカル最終検証は成功。最終commitのGitHub Actions結果を確認後に公開判定を確定する。v0.3.0はnpm未公開。publish、version/tag/Release、Pages deploy、release freezeは行っていない。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
+- 状態: Opusレビュー11件は対応済み。`index-full` gzip実測25,343 Bを受け、ユーザー承認により予算を26,624 Bへ更新（既存の5% headroom、64 B単位切り上げ方針）。他scenarioの予算は不変。ローカル最終検証と最終HEADのTest/E2E/Website CIが成功し、公開判定は**READY WITH KNOWN LIMITATIONS**。v0.3.0はnpm未公開。publish、version/tag/Release、Pages deploy、release freezeは行っていない。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M19.2 Opus Findings Final Closure。LOW-5の同一Signal multi-option ref churnとLOW-8/9の最終unsubscribe後metadata回収を修正。Transform branch coverageは90.34%、Fast Refreshの新getter/setter適用を実ブラウザーで確認。`index-full`はgzip 25,343 B / 26,624 B予算。ローカル最終検証成功、最終commitのCI確認待ち。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
+- 最新実装マイルストーン: M19.2 Opus Findings Final Closure。LOW-5の同一Signal multi-option ref churnとLOW-8/9の最終unsubscribe後metadata回収を修正。Transform branch coverageは90.34%、Fast Refreshの新getter/setter適用を実ブラウザーで確認。`index-full`はgzip 25,343 B / 26,624 B予算。最終HEADのTest/E2E/Website CI成功により**READY WITH KNOWN LIMITATIONS**。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
 - 公開状態: repository packageは`0.3.0`、npmのruntime/pluginは両方`0.2.1`（2026-10-19確認）。M19で公開操作・version変更・tag・Pages deploy・release freezeは行わない。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
