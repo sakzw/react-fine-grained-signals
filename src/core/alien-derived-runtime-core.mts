@@ -79,6 +79,7 @@ const system = createReactiveSystem({
   },
   unwatched(rawNode: ReactiveNode) {
     const node = rawNode as RuntimeNode;
+    deepSignalUnwatched.get(node)?.();
     if (node.kind === "external") {
       node.unsubscribe?.();
       node.unsubscribe = undefined;
@@ -131,6 +132,10 @@ const foreignAdapter = createForeignReadableAdapter({
 const renderDependencies = new WeakMap<object, RuntimeNode>();
 const deepSignalNodes = new WeakSet<RuntimeNode>();
 const deepWatchedNodes = new WeakSet<RuntimeNode>();
+// Do not add a callback slot to every graph node: only Deep Signal versions
+// that have pruning work register here, and the weak key lets reclaimed
+// version/metadata cycles collect together.
+const deepSignalUnwatched = new WeakMap<RuntimeNode, () => void>();
 
 function getRenderDependency(readable: { value: unknown }, node: RuntimeNode) {
   if (!renderDependencies.has(readable)) {
@@ -895,6 +900,10 @@ function createDeepSignalVersion<T>(initialValue: T): RuntimeWritable<T> {
   deepSignalNodes.add(node);
   return readable;
 }
+function onDeepSignalUnwatched(readable: object, callback: () => void): void {
+  const node = foreignAdapter.getNodeForReadable(readable);
+  if (node !== undefined) deepSignalUnwatched.set(node, callback);
+}
 function markDeepSignalWatched(readable: object): void {
     const node = foreignAdapter.getNodeForReadable(readable);
     if (node !== undefined) deepWatchedNodes.add(node);
@@ -925,7 +934,8 @@ function subscribeReadables(readables: readonly RuntimeReadable[], notify: () =>
     promoteComputed, evaluateSpeculatively, adopt, hasSubscribers, hasActiveSubscriber, getBatchDepth,
     signal: signalClassBrandHelper, computed: computedClassBrandHelper,
     effect, detachedEffect, batch, untracked, SIGNAL_BRAND, isSignal: isSignalBrandHelper,
-    createDeepSignal, createDeepSignalVersion, markDeepSignalWatched, hasDeepSignalSubscribers,
+    createDeepSignal, createDeepSignalVersion, onDeepSignalUnwatched,
+    markDeepSignalWatched, hasDeepSignalSubscribers,
     getRenderVersion, subscribeReadables,
   };
 }

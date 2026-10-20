@@ -1439,7 +1439,12 @@ class NodeBinder {
 
 const nodeBinders = new WeakMap<Element, NodeBinder>();
 
-function createBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (node: Element | null) => RefCleanup {
+function createBindingRef(
+  bindings: readonly Binding[],
+  userRef: SupportedRef,
+  onAttach: () => void,
+  onDetach: () => void,
+): (node: Element | null) => RefCleanup {
   return (node) => {
     // React 19 detaches through the returned cleanup; a `null` call only comes
     // from a host that ignores cleanups, where the next attach reconciles.
@@ -1449,13 +1454,22 @@ function createBindingRef(bindings: readonly Binding[], userRef: SupportedRef): 
       binder = new NodeBinder(node);
       nodeBinders.set(node, binder);
     }
-    return binder.attach(bindings, userRef);
+    const cleanup = binder.attach(bindings, userRef);
+    onAttach();
+    return () => {
+      try {
+        cleanup?.();
+      } finally {
+        onDetach();
+      }
+    };
   };
 }
 
 type BindingRefEntry = {
   readonly bindings: readonly Binding[];
-  readonly ref: (node: Element | null) => RefCleanup;
+  ref: (node: Element | null) => RefCleanup;
+  attachedNodes: number;
 };
 
 type BindingRefCacheNode = {
@@ -1469,13 +1483,13 @@ function createBindingRefCacheNode(): BindingRefCacheNode {
 
 // Recently created binding refs, so re-rendering an element with the same
 // signal identities and user ref hands React the same callback. A weak trie
-// keys every bound source (including every style-property source), so rows
-// that share a user ref and their first binding do not evict each other. Each
-// leaf remains bounded for changing snapshots/configurations, and weak keys do
-// not keep otherwise-unused signal sets alive.
+// keys every bound source (including every style-property source). Mounted
+// callbacks stay cached only while at least one host node uses them; a small
+// bounded tail covers uncommitted/new render candidates. This lets a large
+// radio group share its source without retaining refs after unmount.
 const NO_USER_REF = {};
 const bindingRefs = new WeakMap<object, BindingRefCacheNode>();
-const BINDING_REF_CACHE_LIMIT = 8;
+const BINDING_REF_PENDING_LIMIT = 8;
 
 // Also compares snapshots, so a ref is only ever attached for the exact values
 // React was handed: the detach in `NodeBinder` restores to those.
@@ -1491,6 +1505,23 @@ function descendBindingRefCache(node: BindingRefCacheNode, source: object): Bind
     node.children.set(source, child);
   }
   return child;
+}
+
+function removeBindingRefEntry(node: BindingRefCacheNode, entry: BindingRefEntry): void {
+  const index = node.entries.indexOf(entry);
+  if (index !== -1) node.entries.splice(index, 1);
+}
+
+function retainPendingBindingRef(node: BindingRefCacheNode, entry: BindingRefEntry): void {
+  let pending = 0;
+  for (const cached of node.entries) if (cached.attachedNodes === 0) pending += 1;
+  while (pending >= BINDING_REF_PENDING_LIMIT) {
+    const oldest = node.entries.find((cached) => cached.attachedNodes === 0);
+    if (oldest === undefined) break;
+    removeBindingRefEntry(node, oldest);
+    pending -= 1;
+  }
+  node.entries.push(entry);
 }
 
 function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (node: Element | null) => RefCleanup {
@@ -1514,10 +1545,25 @@ function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (no
   for (const entry of entries) {
     if (haveSameBindings(entry.bindings, bindings)) return entry.ref;
   }
-  const ref = createBindingRef(bindings, userRef);
-  if (entries.length >= BINDING_REF_CACHE_LIMIT) entries.shift();
-  entries.push({ bindings, ref });
-  return ref;
+  let entry!: BindingRefEntry;
+  entry = {
+    bindings,
+    attachedNodes: 0,
+    ref: createBindingRef(
+    bindings,
+    userRef,
+    () => {
+      if (entry.attachedNodes === 0 && !entries.includes(entry)) entries.push(entry);
+      entry.attachedNodes += 1;
+    },
+    () => {
+      entry.attachedNodes -= 1;
+      if (entry.attachedNodes === 0) removeBindingRefEntry(node, entry);
+    },
+    ),
+  };
+  retainPendingBindingRef(node, entry);
+  return entry.ref;
 }
 
 type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) => React.ReactElement;

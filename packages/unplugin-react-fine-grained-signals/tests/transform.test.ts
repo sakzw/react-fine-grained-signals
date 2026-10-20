@@ -2756,6 +2756,17 @@ describe("signal reads in parameter defaults", () => {
     `, "auto", "managed");
     expect(temporalDeadZone).toMatch(/function C\(first = second, second = count\.value\)/);
   });
+
+  it("declines relocation when a body var redeclares a parameter", () => {
+    const source = `
+      const count = { value: 1 };
+      export function C(value = count.value) { var value; return <p>{value}</p>; }
+    `;
+    const output = compile(source, "auto", "managed");
+    expect(output).toMatch(/function C\(value = count\.value\)/);
+    expect(output).not.toContain("let value =");
+    expect(output).not.toContain("let value;");
+  });
 });
 
 describe("capturing tracked update and delete operations", () => {
@@ -3523,6 +3534,45 @@ export function App() { return <Show when={count}>{() => count.value}</Show>; }
     expect(transformWith(customPackage, "@app/signals")).toHaveLength(0);
     expect(transformWith(unrelatedPackage, "@app/signals")).toHaveLength(1);
     expect(transformWith(localShadow, "react-fine-grained-signals")).toHaveLength(1);
+  });
+
+  it("resolves static RFSG namespace aliases and destructuring but keeps non-Switch Match callbacks visible", () => {
+    const warnings: Error[] = [];
+    const source = `
+import * as controls from "react-fine-grained-signals/utils";
+import { signal } from "react-fine-grained-signals";
+const ShowAlias = controls.Show;
+const { For: Each } = controls;
+const { ["Show"]: ComputedShow } = controls;
+const items = signal([1]);
+const count = signal(1);
+export function App() {
+  return <>
+    <ShowAlias when={items}>{() => count.value}</ShowAlias>
+    <Each each={items}>{(item) => count.value + item}</Each>
+    <controls.Switch><controls.Match when={items}>{() => count.value}</controls.Match></controls.Switch>
+    <controls.Match when={items}>{() => count.value}</controls.Match>
+    <ComputedShow when={items}>{() => count.value}</ComputedShow>
+  </>;
+}
+`;
+    transformReactFineGrainedSignals(source, "ControlFlowAliases.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "auto",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    const controlFlowWarnings = warnings.filter(
+      (warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS003",
+    );
+    expect(controlFlowWarnings).toHaveLength(2);
+    expect(controlFlowWarnings.map((warning) => warning.message)).toEqual([
+      expect.stringContaining("JSX children callback"),
+      expect.stringContaining("JSX children callback"),
+    ]);
   });
 
   it("does not report signal writes in a JSX action callback as render reads", () => {

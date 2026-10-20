@@ -108,20 +108,21 @@ try {
     metrics: { ...window.hmrMetrics },
   }));
   if (afterInitialWrite.computed !== "30") throw new Error(`initial writable setter did not update source: ${JSON.stringify({ ...afterInitialWrite, errors })}`);
-  const beforeHmr = await page.evaluate(() => ({ ...window.hmrMetrics }));
   await writeFile(join(root, "src", "App.tsx"), source(3));
-  await page.waitForFunction(() => document.querySelector('[data-testid="computed"]')?.textContent === "30");
-  if (await page.getByTestId("writable").textContent() !== "30") throw new Error("no-deps writable getter unexpectedly changed after HMR");
+  await page.waitForFunction(() => document.querySelector('[data-testid="computed"]')?.textContent === "45");
+  if (await page.getByTestId("writable").textContent() !== "45") throw new Error("no-deps writable getter did not update after HMR");
   if (await page.getByTestId("local").textContent() !== "1") throw new Error("same-shape HMR failed to preserve component state");
   await page.waitForFunction(() => window.hmrMetrics.effectActive === 1);
+  const computedAfterHmr = await page.getByTestId("computed").textContent();
+  const localStateAfterHmr = await page.getByTestId("local").textContent();
 
   await page.locator("#writable-set-60").click();
   await page.waitForFunction(() => document.querySelector('[data-testid="writable"]')?.textContent === "60");
-  if (await page.getByTestId("computed").textContent() !== "60") throw new Error("no-deps writable getter did not keep its initial closure");
-  if (await page.evaluate(() => window.hmrMetrics.sourceAfterSetter) !== 30) throw new Error("no-deps writable setter did not keep its initial closure");
+  if (await page.getByTestId("computed").textContent() !== "60") throw new Error("no-deps writable getter stopped using the refreshed closure");
+  if (await page.evaluate(() => window.hmrMetrics.sourceAfterSetter) !== 20) throw new Error("no-deps writable setter did not update after HMR");
   const setupsBeforeSignal = await page.evaluate(() => window.hmrMetrics.effectSetups);
   await page.locator("#signal-increment").click();
-  await page.waitForFunction(() => document.querySelector('[data-testid="computed"]')?.textContent === "62");
+  await page.waitForFunction(() => document.querySelector('[data-testid="computed"]')?.textContent === "63");
   await page.waitForFunction((setups) => window.hmrMetrics.effectSetups === setups + 1, setupsBeforeSignal);
   if (await page.evaluate(() => window.hmrMetrics.effectActive) !== 1) throw new Error("Signal update duplicated the effect subscription");
 
@@ -140,9 +141,9 @@ try {
     status: "passed",
     vite: (await import("vite")).version,
     react: await page.evaluate(() => window.hmrMetrics.reactVersion),
-    localStateAfterHmr: await page.getByTestId("local").textContent(),
-    computedAfterHmr: await page.getByTestId("computed").textContent(),
-    omittedDependenciesRetainedInitialClosure: true,
+    localStateAfterHmr,
+    computedAfterHmr,
+    omittedDependenciesUpdatedOnFastRefresh: true,
     effectMetrics: await page.evaluate(() => ({ ...window.hmrMetrics })),
     consoleErrors: errors,
   }, null, 2));

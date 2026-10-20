@@ -229,8 +229,9 @@ export function useDeepSignalValue<
 /**
  * Creates a computed signal with a stable identity.
  *
- * When `dependencies` is omitted, the getter must only read signals. Its initial
- * closure is retained for the component lifetime, so props, state, and other
+ * When `dependencies` is omitted, the getter must only read signals. Its closure
+ * stays stable across ordinary renders; Fast Refresh may recreate the memoized
+ * computed so edited getters and setters take effect. Props, state, and other
  * non-signal values must not be captured in that mode.
  *
  * When the getter captures props, state, or any other non-signal value, list all
@@ -263,7 +264,6 @@ export function useComputed<T>(
   const dependencyToken = dependencies === undefined ? -1 : dependencies.length;
   const initialDependencyTokenRef = useRef(dependencyToken);
   const initialCapabilityRef = useRef(capability);
-  const signalOnlyComputedRef = useRef<ReadonlySignal<T> | FormBindableSignal<T> | undefined>(undefined);
   const initialDependencyToken = initialDependencyTokenRef.current;
 
   // Both directions of a mode switch are silently destructive, so neither is
@@ -303,27 +303,11 @@ export function useComputed<T>(
     throw error;
   }
 
-  const dependencyComputed = useMemo(
-    () =>
-      dependencies === undefined
-        ? undefined
-        : typeof source === "function"
-          ? computed(source)
-          : computed(source),
+  const memoizedComputed = useMemo(
+    () => typeof source === "function" ? computed(source) : computed(source),
     dependencies ?? EMPTY_DEPENDENCIES,
   );
-
-  // Defined exactly when `dependencies` is, per the memo above; checking the
-  // result rather than the argument is what removes the old `!` assertion.
-  if (dependencyComputed !== undefined) return dependencyComputed;
-
-  if (signalOnlyComputedRef.current === undefined) {
-    signalOnlyComputedRef.current = typeof source === "function"
-      ? computed(source)
-      : computed(source);
-  }
-
-  return signalOnlyComputedRef.current;
+  return memoizedComputed;
 }
 
 /**

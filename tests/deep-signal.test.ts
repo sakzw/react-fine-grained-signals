@@ -785,7 +785,7 @@ describe("deepSignal", () => {
     expect(metadataOf(state.value).existence).toEqual([]);
   });
 
-  it.fails("reclaims the final missing-property key after its subscriber disposes without further activity", async () => {
+  it("reclaims the final missing-property key after its subscriber disposes without further activity", async () => {
     const state = deepSignal<Record<string, number>>({});
     const dispose = effect(() => {
       void ("final-key" in state.value);

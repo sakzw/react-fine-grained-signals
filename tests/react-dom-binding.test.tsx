@@ -2323,6 +2323,101 @@ describe("Direct DOM binding: ref identity stability", () => {
     // document — a live subscription would still be writing into it.
     expect(firstNode.value).toBe("first");
   });
+
+  it.each([9, 16, 32])("keeps same-source radio/checkbox option refs stable for %i siblings", async (count) => {
+    for (const kind of ["radio", "checkbox"] as const) {
+      for (const useCommonRef of [false, true]) {
+        const values = Array.from({ length: count }, (_, index) => `option-${index}`);
+        const radioSelection = signal(values[0]!);
+        const checkboxSelection = signal<string[]>([values[0]!]);
+        const refEvents: (Element | null)[] = [];
+        const commonRef = (node: Element | null) => { refEvents.push(node); };
+        const addClick = vi.spyOn(HTMLInputElement.prototype, "addEventListener");
+        const removeClick = vi.spyOn(HTMLInputElement.prototype, "removeEventListener");
+        const createOptions = () => kind === "radio"
+          ? values.map((value) => createSignalAwareElement("input", {
+            type: "radio",
+            name: "same-options",
+            value,
+            bindValue: radioSelection,
+            ...(useCommonRef ? { ref: commonRef } : {}),
+          }))
+          : values.map((value) => createSignalAwareElement("input", {
+            type: "checkbox",
+            name: "same-options",
+            value,
+            bindValue: checkboxSelection,
+            ...(useCommonRef ? { ref: commonRef } : {}),
+          }));
+        function Group() {
+          const [revision, setRevision] = useState(0);
+          return <form aria-label={`${kind} group ${count} ${useCommonRef}`}>
+            <button type="button" aria-label="rerender option group" onClick={() => setRevision((value) => value + 1)}>{revision}</button>
+            {values.map((value) => kind === "radio"
+              ? <input
+                key={value}
+                type="radio"
+                name="same-options"
+                value={value}
+                aria-label={value}
+                bindValue={radioSelection}
+                ref={useCommonRef ? commonRef : undefined}
+              />
+              : <input
+                key={value}
+                type="checkbox"
+                name="same-options"
+                value={value}
+                aria-label={value}
+                bindValue={checkboxSelection}
+                ref={useCommonRef ? commonRef : undefined}
+              />)}
+          </form>;
+        }
+
+        const view = render(<Group />);
+        const firstRefs = createOptions().map((element) => (element.props as { ref?: unknown }).ref);
+        const secondRefs = createOptions().map((element) => (element.props as { ref?: unknown }).ref);
+        expect(secondRefs).toEqual(firstRefs);
+        const inputs = values.map((value) => screen.getByLabelText(value) as HTMLInputElement);
+        expect(inputs.every((input) => input.checked === (kind === "radio" ? radioSelection.value === input.value : checkboxSelection.value.includes(input.value)))).toBe(true);
+        const mountedRefEvents = [...refEvents];
+        const initialClickAdds = addClick.mock.calls.filter((call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement).length;
+        addClick.mockClear();
+        removeClick.mockClear();
+
+        fireEvent.click(screen.getByLabelText("rerender option group"));
+
+        expect(refEvents).toEqual(mountedRefEvents);
+        expect(addClick.mock.calls.filter((call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
+        expect(removeClick.mock.calls.filter((call, index) => call[0] === "click" && removeClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
+        if (kind === "radio") {
+          fireEvent.click(inputs[count - 1]!);
+        } else {
+          fireEvent.click(inputs[count - 1]!);
+        }
+        expect(kind === "radio" ? radioSelection.value : checkboxSelection.value)
+          .toEqual(kind === "radio" ? values[count - 1] : [values[0], values[count - 1]]);
+        expect(inputs[count - 1]!.checked).toBe(true);
+        fireEvent.click(screen.getByLabelText("rerender option group"));
+        expect(refEvents).toEqual(mountedRefEvents);
+        expect(addClick.mock.calls.filter((call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
+        expect(removeClick.mock.calls.filter((call, index) => call[0] === "click" && removeClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
+        const form = screen.getByLabelText(`${kind} group ${count} ${useCommonRef}`) as HTMLFormElement;
+        await act(async () => { form.reset(); await waitForNextTask(); });
+        expect(kind === "radio" ? radioSelection.value : checkboxSelection.value).toEqual(kind === "radio" ? values[count - 1] : [values[0], values[count - 1]]);
+        expect(inputs[count - 1]!.checked).toBe(true);
+
+        view.unmount();
+        await act(async () => { await waitForNextTask(); });
+        expect(coreRuntime.hasSubscribers(kind === "radio" ? radioSelection : checkboxSelection)).toBe(false);
+        expect(refEvents.filter((node) => node === null)).toHaveLength(useCommonRef ? count : 0);
+        expect(initialClickAdds).toBe(count);
+        addClick.mockRestore();
+        removeClick.mockRestore();
+      }
+    }
+  });
 });
 
 describe("M17.4 form binding review fixes", () => {

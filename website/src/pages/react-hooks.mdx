@@ -52,12 +52,12 @@ useComputed<T>(options: { get: () => T; set: (value: T) => void }, dependencies?
 
 A computed whose identity stays stable while its dependency array is unchanged.
 
-- **Without a dependency array**, the getter must read only signals; its first
-  closure is kept for the component's lifetime.
-- Fast Refresh preserves this Hook's state, so an edited getter/setter can keep
-  the pre-edit closure until this component remounts. Add `// @refresh reset`
-  during development to recreate it; that also resets this component's React
-  state. Production behavior is unchanged.
+- **Without a dependency array**, the getter must read only signals; its computed
+  identity stays stable across ordinary renders.
+- Fast Refresh may recreate this memoized computed after an edit, applying the
+  edited getter/setter while preserving React component state. This is
+  development behavior; production identity remains stable across ordinary
+  renders.
 - **With a dependency array**, list every non-signal value the getter captures:
   `useComputed(() => count.value * step, [step])`.
 - Keep the omitted/explicit mode and explicit array length and order fixed. A

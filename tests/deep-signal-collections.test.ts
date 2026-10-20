@@ -398,7 +398,7 @@ describe("deepSignal reactive collections", () => {
 
   });
 
-  it.fails("reclaims the final read-only collection key after its subscriber disposes without further activity", async () => {
+  it("reclaims the final read-only collection key after its subscriber disposes without further activity", async () => {
     const map = deepSignal(new Map<string, number>());
     const set = deepSignal(new Set<string>());
     const dispose = effect(() => {

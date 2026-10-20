@@ -2,9 +2,9 @@
 
 ## 現在の状態
 
-- 状態: Opus review対応でMEDIUM-1とLOW-1〜LOW-10を再現・修正。MEDIUM-1、LOW-1〜7は修正済み、LOW-10はFast Refreshの仕様制約として文書化、LOW-8/9の最終unsubscribe後metadata回収は安全な通知経路がなく未解決。加えて`index-full` gzipが既存予算を超過したため、公開可否を**NOT READY**へ更新。npm runtime/pluginは2026-10-19確認時点で0.2.1、repositoryの0.3.0は未公開。freeze・公開操作は行っていない。詳細は[Opus review resolution](m19-opus-review-resolution.ja.md)。
+- 状態: Opus findingsのLOW-5・LOW-8/9を修正し、LOW-10の実Vite Fast Refresh候補も採用。Transform branch coverageは90.34%。ただし`index-full` gzip 25,343 Bで24,704 B予算を639 B超過するため公開可否は**NOT READY**。npm runtime/pluginは2026-10-19確認時点で0.2.1、repositoryの0.3.0は未公開。version・公開操作・tag・Pages deploy・freezeは行っていない。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
 - 統合ブランチ: `main`
-- 最新実装マイルストーン: M19 Opus Review Findings Resolution。Transform誤検知・危険なparameter relocation・更新式/delete追跡、JSX ref/Fragment/unsupported host props、Deep Signalのbounded metadata pruningを修正・検証。LOW-8/9最終unsubscribe回収とbundle予算超過は未解決。詳細は[Opus review resolution](m19-opus-review-resolution.ja.md)。
+- 最新実装マイルストーン: M19.2 Opus Findings Final Closure。LOW-5の同一Signal multi-option ref churnとLOW-8/9の最終unsubscribe後metadata回収を修正。Transform branch coverageは90.34%、Fast Refreshの新getter/setter適用を実ブラウザーで確認。`index-full` gzipは24,704 B予算を639 B超過しており、公開判定は**NOT READY**。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
 - 公開状態: repository packageは`0.3.0`、npmのruntime/pluginは両方`0.2.1`（2026-10-19確認）。M19で公開操作・version変更・tag・Pages deploy・release freezeは行わない。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
@@ -72,7 +72,8 @@
 | M18.21 | React Hooks Fast Refresh & Lifecycle Qualification | M18.20 | 実Vite Fast RefreshとReact lifecycleでHook closure、cleanup、subscription、保持量を確認する | 完了。Vite 8.3.4 / React 19.3.0の実ブラウザーHMRでgetter/setter更新、state保持、effect再接続とunmount cleanupを確認。Suspense中はcommit済みeffectを維持し、依存契約エラー後のboundary再生成でもcleanup/reconnect。500 rowsの追加保持heap中央値+81,848 B、unmount後の差+7,400 Bで分布が重なり、render回数は同数。React Hook/SSR 53件、Compiler 30件、typecheck/build/全size budget成功。製品コード変更なし。React Hook依存配列調査は一区切りとし、次はCoreまたはReact統合で具体的な利用者価値が確認できる改善を優先。詳細は[M18.21 record](m18.21-react-hook-lifecycle-qualification.ja.md) |
 | M18.22 | Core Signal Construction & Allocation Optimization | M18.21 | Signal/computed node生成時のCPU・allocation・保持heapを測り、正確性とConsumer効果を維持できる場合だけ生成処理を軽量化 | 完了。`makeNode`から一時`fields` object/spreadを除去。50,000 Signal / getter-only / writable computedの保持heapを3 process pairで約8 B/object削減。CPU改善とV8 sampled allocation差は確認できず。Core 942 tests、packed consumer、74 browser tests、Compiler 30 tests、typecheck/build/size成功。budget変更なし。詳細は[M18.22 record](m18.22-core-construction-optimization.ja.md) |
 | M19 | v0.3.0 Release Readiness & Documentation Refresh | M18.22 | 現行契約に合わせてREADME、guides、migration、Vocs、release notesを更新し、既存qualification evidenceから公開可否を判定 | 完了。当時は**READY WITH KNOWN LIMITATIONS**。後続Opus reviewで新しい実装不具合とcleanup/size gateの未解決が判明したため、この判定は更新済み。詳細は[M19 record](m19-release-readiness-and-docs.ja.md)と[M19.1 record](m19-opus-review-resolution.ja.md) |
-| M19.1 | Opus Review Findings Resolution | M19 | MEDIUM-1とLOW-1〜LOW-10を再現し、具体的な不具合を修正、残る制約とreadinessを再評価 | 完了。MEDIUM-1、LOW-1〜7を修正。LOW-10を実Vite Fast Refreshで再現し、初期closure保持のReact refresh契約として文書化。LOW-8/9はbounded pruningを追加したが、最後のunsubscribe後の回収通知がなく未解決。`index-full` gzip 25,102 Bで既存budget 24,704 Bを398 B超過。readinessは**NOT READY**へ変更。budget緩和・公開・version変更・tag・release・Pages deploy・freezeなし。詳細は[M19.1 record](m19-opus-review-resolution.ja.md) |
+| M19.1 | Opus Review Findings Resolution | M19 | MEDIUM-1とLOW-1〜LOW-10を再現し、具体的な不具合を修正、残る制約とreadinessを再評価 | 完了（当時の判断）。LOW-10の結論とLOW-8/9の未解決状態はM19.2で再評価済み。詳細は[M19.1 record](m19-opus-review-resolution.ja.md) |
+| M19.2 | Opus Findings Final Closure | M19.1 | LOW-5 multi-option ref cache、Transform coverage、final-unsubscribe metadata cleanup、Fast Refresh closure候補、既存size gateを閉じる | 実装修正とcoverageは完了。`index-full` gzip 25,343 Bで予算24,704 Bを639 B超過したままのため**NOT READY**。budgetは変更していない。詳細は[M19.2 record](m19-opus-findings-final-closure.ja.md) |
 
 M3の調査開始記録は[React tracking audit](./m3-react-tracking-audit.ja.md)、M4の現行Compiler契約とqualificationは[Compiler audit](./m4-compiler-qualification-audit.ja.md)、M7の比較設備と条件は[performance plan](./m7-performance-qualification-plan.ja.md)を参照。
 

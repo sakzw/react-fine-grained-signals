@@ -56,6 +56,8 @@ export interface DeepSignalRuntimeAdapter {
   createSignal<T>(initial: T): DeepSignalSource<T>;
   /** Creates an internal property/existence/iteration version source. */
   createVersionSignal<T>(initial: T): DeepSignalSource<T>;
+  /** Called after the last linked graph subscriber detaches from a version source. */
+  onUnwatched?(source: DeepSignalSource<unknown>, callback: () => void): void;
   markWatched(source: DeepSignalSource<unknown>): void;
   hasSubscribers(source: DeepSignalSource<unknown>): boolean;
   /** Graph links only, ignoring the watched flag; defaults to `hasSubscribers`. */
@@ -85,6 +87,7 @@ interface PropertyMetadata {
   prunableSweepRevision?: number | undefined;
   prunableSweepDeferred?: boolean | undefined;
   prunableSweepSettled?: boolean | undefined;
+  onUnwatched?: (() => void) | undefined;
   proxy: object;
 }
 
@@ -109,6 +112,7 @@ interface CollectionMetadata {
   prunableSweepSettled?: boolean | undefined;
   /** An unsettled pass of the current iteration kept read-only candidates for a settled one. */
   prunableSweepDeferred?: boolean | undefined;
+  onUnwatched?: (() => void) | undefined;
   methods: Map<PropertyKey, Function>;
   proxy: object;
 }
@@ -706,6 +710,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   };
 
   const getVersion = (
+    metadata: PropertyMetadata,
+    target: object,
     versions: Map<PropertyKey, VersionSignal>,
     key: PropertyKey,
   ): VersionSignal => {
@@ -713,6 +719,10 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     if (version === undefined) {
       version = adapter.createVersionSignal<number>(0);
       versions.set(key, version);
+      metadata.onUnwatched ??= () => {
+        if (metadata.prunable?.size) schedulePropertySweep(metadata, target);
+      };
+      adapter.onUnwatched?.(version, metadata.onUnwatched);
     }
     return version;
   };
@@ -737,7 +747,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       return;
     }
     if (isArrayIndex(key)) indices.add(Number(key));
-    const version = getVersion(versions, key);
+    const version = getVersion(metadata, target, versions, key);
     // Records that something reactive depends on this key right now, which is
     // what keeps `sweepPrunedKeys` from dropping it out from under a subscriber.
     adapter.markWatched(version);
@@ -874,6 +884,12 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       version = adapter.createVersionSignal(0);
       if (weakKey) weakVersions.set(key as object, version);
       else metadata[kind].set(key, version);
+      if (!weakKey) {
+        metadata.onUnwatched ??= () => {
+          if (metadata.prunable.size) scheduleCollectionSweep(metadata, true);
+        };
+        adapter.onUnwatched?.(version, metadata.onUnwatched);
+      }
     }
     // Primitive keys cannot be weakly keyed. Record exactly which categories
     // have a version so mutation cleanup need not probe three maps per key.
@@ -1004,9 +1020,18 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       const [key, candidates] = Reflect.get(next, "value") as [unknown, number];
       processed += 1;
       let remaining = candidates;
-      if ((candidates & 1) !== 0 && release(metadata.values.get(key))) { metadata.values.delete(key); remaining &= ~1; }
-      if ((candidates & 2) !== 0 && release(metadata.existence.get(key))) { metadata.existence.delete(key); remaining &= ~2; }
-      if ((candidates & 4) !== 0 && release(metadata.members.get(key))) { metadata.members.delete(key); remaining &= ~4; }
+      if ((candidates & 1) !== 0) {
+        const version = metadata.values.get(key);
+        if (release(version)) { metadata.values.delete(key); remaining &= ~1; }
+      }
+      if ((candidates & 2) !== 0) {
+        const version = metadata.existence.get(key);
+        if (release(version)) { metadata.existence.delete(key); remaining &= ~2; }
+      }
+      if ((candidates & 4) !== 0) {
+        const version = metadata.members.get(key);
+        if (release(version)) { metadata.members.delete(key); remaining &= ~4; }
+      }
       if (remaining === 0) metadata.prunable.delete(key);
       else if (remaining !== candidates) metadata.prunable.set(key, remaining);
     }
