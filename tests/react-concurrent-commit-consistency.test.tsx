@@ -514,6 +514,42 @@ describe("other render boundaries with a signal written while React yields", () 
     expect(harness.commits).toEqual([["A2", "B2", "C2", "D2"]]);
   });
 
+  for (const read of ["cold", "warm"] as const) {
+    it(`a computed that re-evaluates to an equal value costs one extra render, not a commit (${read})`, async () => {
+      const count = signal(0);
+      const parity = computed(() => count.value % 2);
+      if (read === "warm") parity.value;
+      const harness = createHarness();
+      function Tracked({ id }: { id: string }) {
+        useSignalTracking();
+        return harness.useCommitRecord(id, parity.value);
+      }
+      harness.armWrite(() => { count.value = 2; });
+      harness.mount(() => IDS.map((id) => <Tracked key={id} id={id} />));
+      await settle(() => harness.commits.length > 0);
+      // The write changed a source but not what any component rendered. Telling
+      // that apart would mean re-evaluating the computed inside React's
+      // render-end check, so the check redoes the render once instead.
+      expect(harness.renders).toEqual(["A0", "B0", "C0", "D0", "A0", "B0", "C0", "D0"]);
+      expect(harness.commits).toEqual([["A0", "B0", "C0", "D0"]]);
+    });
+  }
+
+  it("a computed that re-evaluates to a different value still redoes the render", async () => {
+    const count = signal(0);
+    const parity = computed(() => count.value % 2);
+    const harness = createHarness();
+    function Tracked({ id }: { id: string }) {
+      useSignalTracking();
+      return harness.useCommitRecord(id, parity.value);
+    }
+    harness.armWrite(() => { count.value = 1; });
+    harness.mount(() => IDS.map((id) => <Tracked key={id} id={id} />));
+    await settle(() => harness.screens.at(-1) === "1111");
+    expectConsistentCommits(harness, "1111");
+    expect(harness.commits).toEqual(CORRECTED_COMMITS);
+  });
+
   it("a value written and restored during the yield costs one extra render, not a commit", async () => {
     const count = signal(0);
     const harness = createHarness();
