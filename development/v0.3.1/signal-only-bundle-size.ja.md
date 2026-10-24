@@ -62,6 +62,20 @@
 
 M14の「interop protocol lazy materialization」でprotocol生成自体は遅延済み。残る固定費は、Runtime closureの構造に由来する。
 
+## deep用クラスの切り出し（上限の測定）
+
+`DeepSignalRuntimeSource`はgetterが`HelperBrandSignal`と同一で、違いはsetterだけ（`inlineDeepSignalWrite`か`inlineWrite`か）。deepを使わないbundleから外す、またはgetterを共通化する案の上限を測るため、クラスを丸ごと取り除いて`HelperBrandSignal(node, false)`で代用した状態（動作は壊れる、サイズ測定専用）をビルドした。
+
+| scenario | 現行 gzip | クラス除去 gzip | 差 |
+|---|---|---|---|
+| signal-only | 6,239 B | 6,203 B | −36 B |
+| core | 6,297 B | 6,257 B | −40 B |
+| core+hooks | 10,092 B | 10,053 B | −39 B |
+| deep | 14,944 B | 14,896 B | −48 B |
+| index-full | 25,477 B | 25,428 B | −49 B |
+
+rawでは約575 B減るが、重複していたコードはgzipでほぼ相殺されるため、上限でもgzip 40 B前後。切り出しにはclosure変数（`activeRenderAttempt`、`renderAdapter`など可変の`let`）への橋渡しが要り、その分も増えるため、実際の効果はこれ以下になる。getterを共通関数にする案はread hot pathに呼び出しを足すため、M18.10の測定結果を踏まえて避ける。見送り。
+
 ## 次に調べるなら
 
 - cross-copyを使わない利用者向けの、明示opt-inのslim entry（別package exportまたはbuild-time flag）の契約とメンテナンスコスト。
