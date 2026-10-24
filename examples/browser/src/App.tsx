@@ -1,10 +1,17 @@
 /** @jsxImportSource react-fine-grained-signals */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   computed,
+  deepSignal,
   isSignal,
+  signal,
+  useDeepSignalValue,
   useSignal,
+  useSignalTracking,
+  useSignalValue,
+  type DeepSignal,
+  type Signal,
   type ReadonlySignal,
 } from "react-fine-grained-signals";
 import type { DemoState } from "./state.js";
@@ -154,6 +161,117 @@ function IndependentRadioFormOwners() {
   );
 }
 
+type ConcurrentKind = "tracking" | "deep" | "value";
+
+interface ConcurrentModel {
+  count: Signal<number>;
+  state: { n: number };
+  commits: string[][];
+  screens: string[];
+  renders: string[];
+  pending: string[];
+  armed: boolean;
+  container: HTMLElement | null;
+}
+
+/** Spins past React's 5 ms frame so the work loop yields after this component. */
+function spin(ms: number): void {
+  const end = performance.now() + ms;
+  while (performance.now() < end) { /* busy wait */ }
+}
+
+/**
+ * Records what each row rendered and every commit it took part in. The first
+ * row writes the signal while React yields after it, so the rows rendered
+ * later read the new value: a genuine mid-render external update.
+ */
+function useCommitRecord(model: ConcurrentModel, kind: ConcurrentKind, id: string, value: number): ReactNode {
+  model.renders.push(`${id}${value}`);
+  if (id === "A") {
+    if (model.armed) {
+      model.armed = false;
+      queueMicrotask(() => {
+        if (kind === "deep") model.state.n = 1;
+        else model.count.value = 1;
+      });
+    }
+    spin(8);
+  }
+  useLayoutEffect(() => {
+    // Layout effects of one commit run together; a microtask closes the group
+    // so a follow-up commit is recorded separately.
+    if (model.pending.length === 0) {
+      queueMicrotask(() => {
+        model.commits.push([...model.pending]);
+        model.screens.push(model.container?.textContent ?? "");
+        model.pending.length = 0;
+      });
+    }
+    model.pending.push(`${id}${value}`);
+  });
+  return <i>{value}</i>;
+}
+
+/** @noSignalTracking */
+function TrackedRow({ id, model }: { id: string; model: ConcurrentModel }) {
+  useSignalTracking();
+  return useCommitRecord(model, "tracking", id, model.count.value);
+}
+
+function DeepRow({ id, model, deep }: { id: string; model: ConcurrentModel; deep: DeepSignal<{ n: number }> }) {
+  const n = useDeepSignalValue(deep, (state) => state.n);
+  return useCommitRecord(model, "deep", id, n);
+}
+
+function ValueRow({ id, model }: { id: string; model: ConcurrentModel }) {
+  const value = useSignalValue(model.count);
+  return useCommitRecord(model, "value", id, value);
+}
+
+/** A transition mount that yields while a signal is written must not commit a mixed snapshot. */
+function ConcurrentCommit({ kind }: { kind: ConcurrentKind }) {
+  const [shown, setShown] = useState(false);
+  const { model, deep } = useMemo(() => {
+    const deep = deepSignal({ n: 0 });
+    const model: ConcurrentModel = {
+      count: signal(0),
+      get state() { return deep.value; },
+      commits: [],
+      screens: [],
+      renders: [],
+      pending: [],
+      armed: false,
+      container: null,
+    };
+    return { model, deep };
+  }, []);
+  return (
+    <section aria-labelledby={`concurrent-${kind}-heading`}>
+      <h2 id={`concurrent-${kind}-heading`}>Concurrent commit: {kind}</h2>
+      <div id={`concurrent-${kind}-rows`} ref={(node) => { model.container = node; }}>
+        {shown
+          ? ["A", "B", "C", "D"].map((id) => {
+              if (kind === "tracking") return <TrackedRow key={id} id={id} model={model} />;
+              if (kind === "deep") return <DeepRow key={id} id={id} model={model} deep={deep} />;
+              return <ValueRow key={id} id={id} model={model} />;
+            })
+          : null}
+      </div>
+      <button
+        id={`mount-concurrent-${kind}`}
+        onClick={() => {
+          const records = ((globalThis as { rfgsConcurrent?: Record<string, ConcurrentModel> }).rfgsConcurrent ??= {});
+          records[kind] = model;
+          model.armed = true;
+          startTransition(() => setShown(true));
+        }}
+      >
+        Mount {kind} rows
+      </button>
+    </section>
+  );
+}
+
 export function App({ state }: { state: DemoState }) {
   const renders = useRef(0);
   renders.current += 1;
@@ -296,6 +414,10 @@ export function App({ state }: { state: DemoState }) {
           <button id="bound-reset-button" type="reset">Reset</button>
         </form>
       </section>
+
+      <ConcurrentCommit kind="tracking" />
+      <ConcurrentCommit kind="deep" />
+      <ConcurrentCommit kind="value" />
     </main>
   );
 }

@@ -306,3 +306,43 @@ test("keeps real-browser IME composition text intact across an external signal w
   await expect(input).toHaveValue("external update");
   expect(errors).toEqual([]);
 });
+
+interface ConcurrentRecord {
+  commits: string[][];
+  screens: string[];
+  renders: string[];
+}
+
+// A transition mount yields after row A while a signal is written, so the rows
+// rendered later read the new value. React must redo the render before it
+// commits, so no commit shows A0 beside B1. The jsdom suite pins the same with
+// React's real scheduler; this pins it against each engine's task scheduling.
+for (const kind of ["tracking", "deep", "value"] as const) {
+  test(`${kind}: a signal written while a transition mount yields commits no mixed snapshot`, async ({ page }) => {
+    const errors = await openHydrated(page);
+    const read = () =>
+      page.evaluate(
+        (name) => {
+          const model = (globalThis as { rfgsConcurrent?: Record<string, ConcurrentRecord> }).rfgsConcurrent?.[name];
+          return model && { commits: model.commits, screens: model.screens, renders: model.renders };
+        },
+        kind,
+      );
+
+    await page.locator(`#mount-concurrent-${kind}`).click();
+    await expect.poll(async () => (await read())?.screens.at(-1)).toBe("1111");
+    // A mixed first commit would be followed by a repair commit shortly after.
+    await page.waitForTimeout(100);
+
+    const record = (await read()) as ConcurrentRecord;
+    // The write landed mid-render, so a pass is not vacuous.
+    expect(record.renders[0]).toBe("A0");
+    expect(record.renders).toContain("B1");
+    for (const commit of record.commits) {
+      const values = new Set(commit.map((entry) => entry.slice(1)));
+      expect(values.size, `mixed commit ${JSON.stringify(record.commits)}`).toBe(1);
+    }
+    expect(record.commits).toEqual([["A1", "B1", "C1", "D1"]]);
+    expect(errors).toEqual([]);
+  });
+}
