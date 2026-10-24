@@ -5941,6 +5941,19 @@ export function transformReactFineGrainedSignals(
     // somewhere in the bundler. `cause` keeps the original error and its code
     // frame intact for anything that prints it.
     const detail = error instanceof Error ? error.message : String(error);
+    // A stack overflow is not a parse failure: the module parsed, and the
+    // analysis recursed deeper than the JavaScript stack allows (in practice a
+    // chain of several hundred same-module helpers that call each other).
+    // Saying "could not parse" would send the author looking for a syntax error.
+    if (error instanceof RangeError && /call stack/i.test(detail)) {
+      throw new Error(
+        `unplugin-react-fine-grained-signals could not analyze ${cleanId}: ` +
+          `its function calls nest deeper than the JavaScript call stack allows (${detail}). ` +
+          "This usually means a chain of several hundred same-module helper functions that " +
+          "call each other; split the chain up or move part of it to another module.",
+        { cause: error },
+      );
+    }
     throw new Error(
       `unplugin-react-fine-grained-signals could not parse ${cleanId} ` +
         `(Babel parser plugins: ${parserPlugins.join(", ") || "none"}): ${detail}`,

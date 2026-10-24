@@ -2419,6 +2419,39 @@ describe("parse failures", () => {
     expect(message).toContain("Unexpected token");
     expect((thrown as Error).cause).toBeInstanceOf(Error);
   });
+
+  it("reports a stack overflow from a very long helper chain as an analysis limit, not a parse error", () => {
+    // The module parses fine; the provenance analysis follows one helper per
+    // stack frame, so a chain this long exhausts the JavaScript stack.
+    const lines = [
+      'import { deepSignal } from "react-fine-grained-signals";',
+      'const state = deepSignal({ items: [{ t: "x" }] });',
+    ];
+    const stages = 5000;
+    for (let i = 0; i < stages; i += 1) lines.push(`function h${i}() { return h${i + 1}(); }`);
+    lines.push(`function h${stages}() { return items[0].t; }`);
+    lines.push("export function Comp() { const items = state.value.items; return <p>{h0()}</p>; }");
+
+    let thrown: unknown;
+    try {
+      transformReactFineGrainedSignals(lines.join("\n"), "/project/src/Comp.jsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto" as const,
+        transform: "managed" as const,
+        reactCompiler: "auto" as const,
+        reactImportSource: "react",
+      });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(Error);
+    const message = (thrown as Error).message;
+    expect(message).toMatch(/^unplugin-react-fine-grained-signals could not analyze \/project\/src\/Comp\.jsx:/);
+    expect(message).toContain("chain of several hundred same-module helper functions");
+    expect(message).not.toContain("could not parse");
+    expect((thrown as Error).cause).toBeInstanceOf(RangeError);
+  });
 });
 
 /** Does the generated `function <name>(...)` open with a managed boundary? */
