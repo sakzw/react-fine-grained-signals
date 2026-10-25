@@ -18,6 +18,9 @@ Engineering records for contributors and maintainers. These documents may descri
 - [M0 architecture and contract review (日本語)](v0.3.0/m0-architecture-review.ja.md)
 - [M1 reactive core review (日本語)](v0.3.0/m1-core-review.ja.md)
 - [M2 collection reactivity contract (日本語)](v0.3.0/m2-collection-contract.ja.md)
+- [M19.5 Computed equality and the extra synchronous re-render (日本語)](v0.3.0/m19.5-computed-equality-rerender.ja.md)
+- [M19.5 `signal`-only bundle size (日本語)](v0.3.0/m19.5-signal-only-bundle-size.ja.md)
+- [M19.5 Transform stack depth (日本語)](v0.3.0/m19.5-transform-stack-depth.ja.md)
 
 ## Architecture and migration reviews
 
