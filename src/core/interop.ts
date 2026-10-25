@@ -99,41 +99,6 @@ export function attachReadableInterop(
   });
 }
 
-export function withInteropGraphCollector<T>(
-  collector: InteropGraphCollectorV1,
-  callback: () => T,
-): T {
-  const context = getSharedInteropContext();
-  const previous = context.graphCollector;
-  context.graphCollector = collector;
-  try {
-    return callback();
-  } finally {
-    context.graphCollector = previous;
-  }
-}
-
-export function withoutInteropGraphCollector<T>(callback: () => T): T {
-  const context = getSharedInteropContext();
-  const previous = context.graphCollector;
-  context.graphCollector = undefined;
-  try {
-    return callback();
-  } finally {
-    context.graphCollector = previous;
-  }
-}
-
-export function publishInteropGraphRead(
-  protocol: ReadableInteropV1,
-  observedRevision: number,
-): void {
-  const collector = getSharedInteropContext().graphCollector;
-  if (collector !== undefined && collector.runtimeToken !== protocol.runtimeToken) {
-    collector.add(protocol, observedRevision);
-  }
-}
-
 export function withInteropRenderCollector<T>(
   collector: InteropRenderCollectorV1 | undefined,
   callback: () => T,
@@ -148,58 +113,8 @@ export function withInteropRenderCollector<T>(
   }
 }
 
-/** Push a render boundary and restore only a still-active parent boundary. */
-export function pushInteropRenderScope(
-  scope: InteropRenderScopeV1,
-  collector: InteropRenderCollectorV1,
-): () => void {
-  const context = getSharedInteropContext();
-  const previousScope = context.renderScope;
-  const previousCollector = context.renderCollector;
-  context.renderScope = scope;
-  context.renderCollector = collector;
-  let active = true;
-  return () => {
-    if (!active) return;
-    active = false;
-    if (context.renderScope !== scope) return;
-    const restoreScope = previousScope?.isActive() ? previousScope : undefined;
-    context.renderScope = restoreScope;
-    context.renderCollector = restoreScope === undefined ? undefined : previousCollector;
-  };
-}
-
 export function withoutInteropRenderCollector<T>(callback: () => T): T {
   return withInteropRenderCollector(undefined, callback);
-}
-
-export function publishInteropRenderRead(
-  protocol: ReadableInteropV1,
-  observedRevision: number,
-): void {
-  getSharedInteropContext().renderCollector?.add(protocol, observedRevision);
-}
-
-export function withInteropSpeculativeMode<T>(callback: () => T): T {
-  const context = getSharedInteropContext();
-  context.speculativeDepth += 1;
-  try {
-    return callback();
-  } finally {
-    context.speculativeDepth -= 1;
-  }
-}
-
-/** Run durable graph work without inheriting an outer speculative callback. */
-export function withoutInteropSpeculativeMode<T>(callback: () => T): T {
-  const context = getSharedInteropContext();
-  const previousDepth = context.speculativeDepth;
-  context.speculativeDepth = 0;
-  try {
-    return callback();
-  } finally {
-    context.speculativeDepth = previousDepth;
-  }
 }
 
 export function isInteropSpeculative(): boolean {

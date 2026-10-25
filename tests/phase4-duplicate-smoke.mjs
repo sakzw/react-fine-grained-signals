@@ -43,17 +43,6 @@ try {
   assert.equal(copyB.getSharedInteropContext(), copyC.getSharedInteropContext());
   assert.equal(copyA.READABLE_INTEROP_V1, copyB.READABLE_INTEROP_V1);
 
-  copyA.withInteropSpeculativeMode(() => {
-    copyB.withInteropSpeculativeMode(() => {
-      assert.equal(copyC.getSharedInteropContext().speculativeDepth, 2);
-      copyC.withoutInteropSpeculativeMode(() => {
-        assert.equal(copyA.getSharedInteropContext().speculativeDepth, 0);
-      });
-      assert.equal(copyB.getSharedInteropContext().speculativeDepth, 2);
-    });
-  });
-  assert.equal(copyC.getSharedInteropContext().speculativeDepth, 0);
-
   const runtimeA = copyA.createReactiveRuntime();
   const runtimeB = copyB.createReactiveRuntime();
   const runtimeC = copyC.createReactiveRuntime();

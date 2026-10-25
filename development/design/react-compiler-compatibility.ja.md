@@ -64,15 +64,20 @@ export function Counter() {
 
 ここで失敗しているのは `useSignalTracking()` ではありません。毎回のrenderで呼ばれています。凍結されているのは読み取りだけでなくJSXそのものなので、runtime側で修復する余地はありません。collectorが購読を保持し続けたとしても、再renderはcacheされたelementを返すだけです。
 
-### `transform: "managed"`: compilerに無視されるが、それは偶然
+### `transform: "managed"`: directiveでcompilerにskipさせる
 
-こちらは仮説どおりではなく、managedの出力はそのまま残ります。`try` / `finally` scopeはcompilerのIRへlowerできず、compileはerrorとして記録されたうえで中断されます。
+managedの出力はかつて、compilerがlowerできない `try` / `finally` scopeでした。現在は `useSignalCapture()` の呼び出しと、追跡する読み取りごとのclosureであり、bail-outの原因になる `try` はありません。`reactCompiler: "auto"` では、transformがopt-out directiveを出力します。
 
+```jsx
+export function Counter() {
+  "use no memo";
+
+  const _signals = _useSignalCapture();
+  return <output>{_signals.capture(() => count.value)}</output>;
+}
 ```
-CompileError: (BuildHIR::lowerStatement) Handle TryStatement without a catch clause
-```
 
-出力されるcodeはtransformの出力とbyte単位で同一で、runtime testも正しく更新されます。ただしこれは未対応構文によるbail-outであって互換性の保証ではありません。compilerが `catch` なしの `try` を拒否し続けることに依存しており、`panicThreshold: "all_errors"` では同じeventがfunctionのskipではなくbuildの失敗になります。これは直接計測しました。`reactCompiler: "off"` の出力では `transformSync` がthrowし、`reactCompiler: "auto"` の出力ではthrowせず、errorは記録されるだけでbuildは続行します。したがってopt-out directiveはmanagedモードでも出力します。全errorでpanicするbuildをこの形が通過できるのは、このdirectiveのおかげだけです。
+`babel-plugin-react-compiler` 1.0.0（2026-10-25）で計測した結果、compilerは `CompileSkip` を記録し、functionを変更せずに出力します。`panicThreshold: "all_errors"` でもthrowしません。`reactCompiler: "off"` ではdirectiveを出力せず、compilerは `CompileSuccess` を記録します。その場合も、capture closureが読み取りを最新に保ちます（`packages/unplugin-react-fine-grained-signals/tests/react-compiler.test.ts` の "keeps managed capture fresh when Compiler integration is disabled"）。つまり、managedの出力がmemo cacheに入らないのは偶然ではなく、directiveによる意図的な結果です。
 
 ### 手動ランタイムインポート境界はmanagedの出力と同じ挙動になる
 
@@ -145,7 +150,7 @@ export function Counter() {
 }
 ```
 
-compilerは該当functionに `CompileSkip` を記録し、codeを変更せずに出力します。runtime testはすべての書き込みで更新されます。同じdirectiveはmanagedの出力にも付き、`CompileError` によるbailを意図的なskipに変えます。transformが触るcustom hookにも付きます。hookのbodyもcomponentのbodyと同じ条件でmemoizeされるためです。
+compilerは該当functionに `CompileSkip` を記録し、codeを変更せずに出力します。runtime testはすべての書き込みで更新されます。同じdirectiveはmanagedの出力にも付き、compilerに意図的にskipさせます。transformが触るcustom hookにも付きます。hookのbodyもcomponentのbodyと同じ条件でmemoizeされるためです。
 
 transformの既存の契約から導かれる詳細は次のとおりです。
 
@@ -158,7 +163,7 @@ transformの既存の契約から導かれる詳細は次のとおりです。
 
 ## 推奨する `transform` のdefaultは変わるか
 
-React Compilerを理由とするなら、変わりません。managedの出力がcompilerを生き延びるのは、compilerが `catch` なしの `try` をlowerできないという実装上の詳細のためであり、それは `panicThreshold: "all_errors"` ではbuildを壊すerrorにもなります。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignalTracking()` 境界の設計検討docs](./use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。なお別件として、`unplugin-react-fine-grained-signals` は現在 `transform: "managed"` を既定にしています。これはこの境界の厳密さを理由とする変更であり、根拠はそちらのdocsにあります。このdocsの計測結果が根拠になっているわけではありません。
+React Compilerを理由とするなら、変わりません。managedの出力にはもう `try` / `finally` scopeがなく、memo cacheに入らないのはdirectiveだけのおかげです。directiveを両モードで出力する以上、`"inject"` と `"managed"` はcompilerに対して等しく安全です。したがって両者の選択は[`useSignalTracking()` 境界の設計検討docs](./use-signals-boundary-design.ja.md)にある境界の厳密さの議論に依存し、このdocsが根拠になることはありません。なお別件として、`unplugin-react-fine-grained-signals` は現在 `transform: "managed"` を既定にしています。これはこの境界の厳密さを理由とする変更であり、根拠はそちらのdocsにあります。このdocsの計測結果が根拠になっているわけではありません。
 
 ## 未解決の論点
 

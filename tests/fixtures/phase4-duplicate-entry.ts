@@ -4,6 +4,4 @@ export { createReactiveRuntime } from "../../src/core/reactive-runtime.js";
 export {
   getSharedInteropContext,
   READABLE_INTEROP_V1,
-  withInteropSpeculativeMode,
-  withoutInteropSpeculativeMode,
 } from "../../src/core/interop.js";

@@ -1,20 +1,11 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import {
   attachReadableInterop,
   getReadableInterop,
   getSharedInteropContext,
   isInteropSpeculative,
   markInteropSpeculativeDeepRead,
-  publishInteropGraphRead,
-  publishInteropRenderRead,
-  pushInteropRenderScope,
   READABLE_INTEROP_V1,
-  withInteropGraphCollector,
-  withInteropRenderCollector,
-  withInteropSpeculativeMode,
-  withoutInteropGraphCollector,
-  withoutInteropRenderCollector,
-  withoutInteropSpeculativeMode,
   type ReadableInteropV1,
 } from "../src/core/interop.js";
 
@@ -77,88 +68,11 @@ describe("shared readable interop context", () => {
     expect(() => attachReadableInterop(readable, protocol())).toThrow(TypeError);
   });
 
-  it("restores nested graph collectors and publishes only foreign graph reads", () => {
-    const localToken = {};
-    const foreign = protocol({});
-    const sameRuntime = protocol(localToken);
-    const outer = { runtimeToken: localToken, add: vi.fn() };
-    const inner = { runtimeToken: {}, add: vi.fn() };
-
-    expect(withInteropGraphCollector(outer, () => {
-      publishInteropGraphRead(foreign, 4);
-      publishInteropGraphRead(sameRuntime, 5);
-      return withoutInteropGraphCollector(() => {
-        publishInteropGraphRead(foreign, 6);
-        return "done";
-      });
-    })).toBe("done");
-    expect(outer.add).toHaveBeenCalledExactlyOnceWith(foreign, 4);
-    expect(getSharedInteropContext().graphCollector).toBeUndefined();
-
-    withInteropGraphCollector(outer, () => {
-      withInteropGraphCollector(inner, () => publishInteropGraphRead(foreign, 7));
-      publishInteropGraphRead(foreign, 8);
-      expect(() => withoutInteropGraphCollector(() => { throw new Error("graph"); })).toThrow("graph");
-      publishInteropGraphRead(foreign, 9);
-    });
-    expect(inner.add).toHaveBeenCalledExactlyOnceWith(foreign, 7);
-    expect(outer.add.mock.calls.map((call) => call[1])).toEqual([4, 8, 9]);
-  });
-
-  it("restores render collectors and only restores active parent scopes", () => {
-    const foreign = protocol();
-    const first = { add: vi.fn() };
-    const second = { add: vi.fn() };
-    withInteropRenderCollector(first, () => {
-      publishInteropRenderRead(foreign, 2);
-      withInteropRenderCollector(second, () => publishInteropRenderRead(foreign, 3));
-      publishInteropRenderRead(foreign, 4);
-      withoutInteropRenderCollector(() => publishInteropRenderRead(foreign, 5));
-      publishInteropRenderRead(foreign, 6);
-    });
-    expect(first.add.mock.calls.map((call) => call[1])).toEqual([2, 4, 6]);
-    expect(second.add).toHaveBeenCalledExactlyOnceWith(foreign, 3);
-
-    const parent = { token: {}, managed: true, isActive: () => true, finish() {} };
-    const child = { token: {}, managed: false, isActive: () => true, finish() {} };
-    const restoreParent = pushInteropRenderScope(parent, first);
-    const restoreChild = pushInteropRenderScope(child, second);
-    restoreChild();
-    restoreChild();
-    expect(context.renderScope).toBe(parent);
-    expect(context.renderCollector).toBe(first);
-    restoreParent();
-    expect(context.renderScope).toBeUndefined();
-    expect(context.renderCollector).toBeUndefined();
-
-    const inactive = { ...parent, isActive: () => false };
-    const restoreInactive = pushInteropRenderScope(inactive, first);
-    const restoreNested = pushInteropRenderScope(child, second);
-    restoreNested();
-    expect(context.renderScope).toBeUndefined();
-    expect(context.renderCollector).toBeUndefined();
-    restoreInactive();
-  });
-
-  it("nests speculative mode, restores it after errors, and advances deep-read epochs", () => {
+  it("advances deep-read epochs", () => {
     expect(isInteropSpeculative()).toBe(false);
     const initialEpoch = context.speculativeDeepReadEpoch;
     markInteropSpeculativeDeepRead();
     expect(context.speculativeDeepReadEpoch).toBe(initialEpoch + 1);
-
-    expect(withInteropSpeculativeMode(() => {
-      expect(isInteropSpeculative()).toBe(true);
-      return withoutInteropSpeculativeMode(() => {
-        expect(isInteropSpeculative()).toBe(false);
-        withInteropSpeculativeMode(() => expect(isInteropSpeculative()).toBe(true));
-        expect(isInteropSpeculative()).toBe(false);
-      });
-    })).toBeUndefined();
-    expect(isInteropSpeculative()).toBe(false);
-    expect(() => withInteropSpeculativeMode(() => {
-      throw new Error("speculative");
-    })).toThrow("speculative");
-    expect(context.speculativeDepth).toBe(0);
   });
 
 });

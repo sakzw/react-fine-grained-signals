@@ -64,15 +64,20 @@ export function Counter() {
 
 `useSignalTracking()` is not what fails here — it is called on every render. Nothing at runtime can repair this, because the frozen artifact is the JSX itself, not only the read: even if the collector kept its subscriptions, the re-render would still return the cached element.
 
-### `transform: "managed"`: skipped by the compiler, but only by accident
+### `transform: "managed"`: the compiler skips it by directive
 
-Not confirmed — the managed output is left alone. Its `try` / `finally` scope cannot be lowered to the compiler's IR, and the compile is abandoned with a logged error:
+The managed output used to be a `try` / `finally` scope that the compiler could not lower. It is now a `useSignalCapture()` call plus a closure around each tracked read, so there is no `try` to bail on. With `reactCompiler: "auto"` the transform emits the opt-out directive:
 
+```jsx
+export function Counter() {
+  "use no memo";
+
+  const _signals = _useSignalCapture();
+  return <output>{_signals.capture(() => count.value)}</output>;
+}
 ```
-CompileError: (BuildHIR::lowerStatement) Handle TryStatement without a catch clause
-```
 
-The emitted code is byte-for-byte the transform's own output, and the runtime test updates correctly. This is a bail-out on unsupported syntax, not a compatibility guarantee: it depends on the compiler continuing to reject `try` without `catch`, and with `panicThreshold: "all_errors"` the same event fails the build instead of skipping the function — measured directly: `transformSync` throws on `reactCompiler: "off"` output and does not throw on `reactCompiler: "auto"` output, where the error is logged and the build proceeds. The opt-out directive is therefore emitted in managed mode too, and it is the only thing that carries this shape through a panic-on-all-errors build.
+Measured with `babel-plugin-react-compiler` 1.0.0 (2026-10-25): the compiler logs `CompileSkip`, emits the function unchanged, and does not throw under `panicThreshold: "all_errors"`. With `reactCompiler: "off"` the directive is omitted and the compiler logs `CompileSuccess`; the capture closure keeps the read fresh there (see "keeps managed capture fresh when Compiler integration is disabled" in `packages/unplugin-react-fine-grained-signals/tests/react-compiler.test.ts`). The directive is therefore what keeps managed output out of the memo cache by intent, not by accident.
 
 ### The manual runtime-import boundary behaves like managed output
 
@@ -145,7 +150,7 @@ export function Counter() {
 }
 ```
 
-The compiler now logs `CompileSkip` for that function and emits it unchanged; the runtime test updates on every write. The same directive is added to managed output, which turns the `CompileError` bail into an intentional skip, and to custom hooks the transform touches — a hook body is memoized on the same terms as a component body.
+The compiler now logs `CompileSkip` for that function and emits it unchanged; the runtime test updates on every write. The same directive is added to managed output, which makes the compiler skip it intentionally, and to custom hooks the transform touches — a hook body is memoized on the same terms as a component body.
 
 Details that follow from the transform's existing contract:
 
@@ -158,7 +163,7 @@ The cost is real: a component that opts out of memoization is a component the co
 
 ## Does this change the recommended `transform` default?
 
-No — not on React Compiler grounds. Managed output survives the compiler only because the compiler cannot lower `try` without `catch`, which is an implementation detail that also produces a build-breaking error under `panicThreshold: "all_errors"`. With the directive emitted in both modes, `"inject"` and `"managed"` are equally compiler-safe, so the choice between them rests entirely on the boundary-exactness argument in [the `useSignalTracking()` boundary design note](./use-signals-boundary-design.md), not on this document. Separately, `unplugin-react-fine-grained-signals` now defaults to `transform: "managed"` for that boundary-exactness reason — a change made on the grounds in that note, not on any finding in this document.
+No — not on React Compiler grounds. Managed output no longer contains a `try` / `finally` scope, so the directive alone keeps it out of the memo cache. With the directive emitted in both modes, `"inject"` and `"managed"` are equally compiler-safe, so the choice between them rests entirely on the boundary-exactness argument in [the `useSignalTracking()` boundary design note](./use-signals-boundary-design.md), not on this document. Separately, `unplugin-react-fine-grained-signals` now defaults to `transform: "managed"` for that boundary-exactness reason — a change made on the grounds in that note, not on any finding in this document.
 
 ## Open questions
 

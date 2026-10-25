@@ -27,8 +27,6 @@ export interface InternalTransformOptions {
    * regardless of this value.
    */
   reactImportSource: string;
-  /** Internal experiment: collect each synchronous tracked read in its own attempt scope. */
-  experimentalCapture?: boolean;
   /** Receives non-fatal diagnostics; omitted for direct calls, which use console.warn. */
   warn?: (warning: Error) => void;
 }
@@ -3074,8 +3072,6 @@ function decideTransform(
     options.importSource,
     managedRuntimeSource,
     reactImportSource,
-    undefined,
-    options.experimentalCapture === true,
   );
   inspectKnownRenderPropReads(path, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);

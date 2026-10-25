@@ -17,6 +17,3 @@
 export const SIGNAL_BRAND: unique symbol = Symbol.for("react-fine-grained-signals.signal.v2");
 export const SIGNAL_BRAND_VERSION = 1;
 export const SIGNAL_BRAND_MIN_VERSION = 1;
-
-/** The v0.1.x key, kept only to report an incompatible signal clearly. */
-export const LEGACY_SIGNAL_BRAND_V1 = Symbol.for("react-fine-grained-signals.signal");
