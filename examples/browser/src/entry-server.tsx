@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 
 import { App } from "./App.js";
 import { createDemoState } from "./state.js";

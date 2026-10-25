@@ -23,7 +23,7 @@ export default defineConfig({
     // renderToString call.
     //
     // ActivityRow.tsx is excluded: it opts into the manual
-    // react-fine-grained-signals/runtime boundary directly (see that file) instead
+    // react-fine-grained-signals/internal boundary directly (see that file) instead
     // of the plugin-managed one, so the plugin must not also wrap it.
     signals({
       mode: "auto",
@@ -40,16 +40,20 @@ export default defineConfig({
         replacement: source("src/utils.tsx"),
       },
       {
-        find: /^react-fine-grained-signals\/runtime$/,
-        replacement: source("src/runtime.ts"),
+        find: /^react-fine-grained-signals\/internal$/,
+        replacement: source("src/internal.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-runtime$/,
-        replacement: source("src/jsx-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx$/,
+        replacement: source("src/jsx.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-dev-runtime$/,
-        replacement: source("src/jsx-dev-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx\/jsx-runtime$/,
+        replacement: source("src/jsx/jsx-runtime.ts"),
+      },
+      {
+        find: /^react-fine-grained-signals\/jsx\/jsx-dev-runtime$/,
+        replacement: source("src/jsx/jsx-dev-runtime.ts"),
       },
       {
         find: /^react-fine-grained-signals$/,

@@ -9,7 +9,7 @@
 ファイル単位では、先頭行にpragmaを書きます。他のファイルはReactのJSXランタイムのままになるため、アプリの一部だけで直接バインディングを使いたい場合はこちらが適しています。
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 ```
 
 プロジェクト全体で有効にする場合は `tsconfig.json` に設定します。
@@ -18,7 +18,7 @@
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react-fine-grained-signals"
+    "jsxImportSource": "react-fine-grained-signals/jsx"
   }
 }
 ```
@@ -29,7 +29,7 @@
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react-fine-grained-signals/lite"
+    "jsxImportSource": "react-fine-grained-signals/jsx/lite"
   }
 }
 ```
@@ -54,7 +54,7 @@ export default {
 };
 ```
 
-どちらの場合も2つのentry pointが使われます。productionビルドでは `jsx-runtime`、開発時には `jsx-dev-runtime` で、本パッケージは両方を提供しています。自動runtimeでは表現できない唯一の形 — prop spreadの後に `key` を書く `<div {...props} key="k" />` — では、TypeScript、Babel、Oxcはpackage rootから `createElement` をimportする形にフォールバックします。本パッケージは、同じsignal bindingを持つ `createElement` もrootから提供しています。
+どちらの場合も2つのentry pointが使われます。productionビルドでは `jsx/jsx-runtime`、開発時には `jsx/jsx-dev-runtime` で、本パッケージは両方を提供しています（Liteのruntimeにも `jsx/lite/` の下に同じ組があります）。自動runtimeでは表現できない唯一の形 — prop spreadの後に `key` を書く `<div {...props} key="k" />` — では、TypeScript、Babel、Oxcは `jsxImportSource` のmodule自身から `createElement` をimportする形にフォールバックします。それは `react-fine-grained-signals/jsx`（またはLiteの `react-fine-grained-signals/jsx/lite`）で、同じsignal bindingを持つ `createElement` を提供しています。package rootは `createElement` をexportしなくなりました。
 
 どちらの形式でも選択されるruntimeは同じで、pragmaは適用範囲を絞るだけです。[`examples/react-router`](../../examples/react-router)は `tsconfig.json` に `jsx` だけを設定して `jsxImportSource` は置かず、2つのコンポーネントをpragmaで有効化しています。
 
@@ -186,7 +186,7 @@ text controlとselectでは同じ値の書き込みを省略します。focused 
 
 SSRではsignalの初期値を対応するdefault valueとして出力します。serverとclientの初期値を一致させてください。hydration時に既存host nodeへbindingをattachしますが、hydration前に行われた編集はsignalの初期値で上書きされる場合があります。
 
-これらのpropsはRFSG JSX runtime（`jsxImportSource: "react-fine-grained-signals"`）でのみ認識され、DOMへ渡す前に取り除かれます。`value`または`checked`へsignalを渡すとmigration errorになります。direct bindingには`bindValue`/`bindChecked`を使い、React controlled semanticsには`signal.value`を渡してください。
+これらのpropsはRFSG JSX runtime（`jsxImportSource: "react-fine-grained-signals/jsx"`）でのみ認識され、DOMへ渡す前に取り除かれます。`value`または`checked`へsignalを渡すとmigration errorになります。direct bindingには`bindValue`/`bindChecked`を使い、React controlled semanticsには`signal.value`を渡してください。
 
 
 ## 制約

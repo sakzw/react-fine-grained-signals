@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
 import { act, createElement as reactCreateElement, createRef, Fragment, startTransition, useEffect, useLayoutEffect, useState } from "react";
@@ -9,15 +9,15 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   computed,
-  createElement,
   deepSignal,
   effect,
   signal,
   useSignalEffect,
   useSignalTracking,
 } from "../src/index.js";
-import { jsx } from "../src/jsx-runtime.js";
-import { createElement as createLiteElement } from "../src/lite.js";
+import { jsx } from "../src/jsx/jsx-runtime.js";
+import { createElement } from "../src/jsx.js";
+import { createElement as createLiteElement } from "../src/jsx/lite.js";
 
 // Regression coverage for the v0.2.0 release review's React and JSX findings.
 

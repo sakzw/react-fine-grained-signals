@@ -1,7 +1,7 @@
 /* oxlint-disable react/no-children-prop -- the JSX runtime benchmark must pass the compiled `children` config directly. */
 const React = await import("react");
 const { jsx: reactJsx, jsxs: reactJsxs } = await import("react/jsx-runtime");
-const { jsx: signalJsx, jsxs: signalJsxs } = await import("../dist/jsx-runtime.js");
+const { jsx: signalJsx, jsxs: signalJsxs } = await import("../dist/jsx/jsx-runtime.js");
 const { signal } = await import("../dist/index.js");
 
 const iterations = Number(process.env.M10_JSX_ITERATIONS ?? 5_000);

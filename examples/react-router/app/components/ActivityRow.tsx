@@ -1,11 +1,11 @@
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 import type { ActivityEntry } from "../lib/task-store.js";
 
 /**
  * Same reasoning as TaskRow for *why* it needs its own subscription: plain
  * property access, no `.value` token. Unlike TaskRow, this file is excluded
  * from the build plugin's transform (see vite.config.ts) and reaches for the
- * manual react-fine-grained-signals/runtime boundary directly instead -- the
+ * manual react-fine-grained-signals/internal boundary directly instead -- the
  * documented exact-boundary alternative for a component you want correct
  * independent of build-tool configuration. useManagedSignals() returns a scope
  * handle that must be closed with f() in a finally, not the plugin-provided

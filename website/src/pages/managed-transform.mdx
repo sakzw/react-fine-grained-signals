@@ -106,7 +106,7 @@ The contract is deliberately narrower than a whole-function boundary:
 `useSignalTracking()` is a best-effort ambient boundary, both when written by
 hand and when inserted by `transform: "inject"`; it is not an exact lexical
 scope. For explicit lexical ownership of synchronous reads, use
-`useManagedSignals()` from `react-fine-grained-signals/runtime` inside
+`useManagedSignals()` from `react-fine-grained-signals/internal` inside
 `try` / `finally`. A directly imported first-statement `useSignalTracking()`
 call is preserved by the plugin when ambient collection is needed.
 

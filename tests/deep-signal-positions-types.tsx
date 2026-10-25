@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 
 // Compile-time contract (v0.2): positions that only observe a signal's root
 // value reject a `deepSignal`, because nested mutations would never update

@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
 import { StrictMode, act, useLayoutEffect, useState, type ReactNode } from "react";

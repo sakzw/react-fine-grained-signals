@@ -36,7 +36,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
  * presentational only, and (unlike LogSettingsForm) no explicit useSignalTracking()
  * call nearby to make a reader wonder which mechanism is actually doing the
  * work. The plugin's default `mode: "auto"` picks this up on its own, which
- * is also what exercises react-fine-grained-signals/runtime's managed boundary
+ * is also what exercises react-fine-grained-signals/internal's managed boundary
  * under `transform: "managed"`.
  */
 function RemainingBadge({ remaining }: { remaining: { value: number } }) {

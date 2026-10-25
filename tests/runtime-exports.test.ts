@@ -1,4 +1,4 @@
-import * as runtime from "../src/runtime.js";
+import * as runtime from "../src/internal.js";
 import * as root from "../src/index.js";
 import { describe, expect, it } from "vitest";
 

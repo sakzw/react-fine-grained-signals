@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 
 import { hydrateRoot } from "react-dom/client";
 import { App } from "./App.js";

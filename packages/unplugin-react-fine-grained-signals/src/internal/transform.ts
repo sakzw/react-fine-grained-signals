@@ -2804,7 +2804,7 @@ function inspectKnownRenderPropReads(
       const reads = inspectFunction(
         target,
         options.importSource,
-        `${options.importSource}/runtime`,
+        `${options.importSource}/internal`,
         reactImportSource,
         new Set([functionPath.node]),
         true,
@@ -2834,7 +2834,7 @@ function inspectKnownRenderPropReads(
       const reads = inspectFunction(
         target,
         options.importSource,
-        `${options.importSource}/runtime`,
+        `${options.importSource}/internal`,
         reactImportSource,
         new Set([functionPath.node]),
         true,
@@ -3066,7 +3066,7 @@ function decideTransform(
   if (isUnverifiableBarrelSignalTracking(path, statements, options.importSource, explicit)) {
     warnUnverifiableBarrelSignalTracking(path, options.importSource, options);
   }
-  const managedRuntimeSource = `${options.importSource}/runtime`;
+  const managedRuntimeSource = `${options.importSource}/internal`;
   const inspection = inspectFunction(
     path,
     options.importSource,
@@ -5698,7 +5698,7 @@ function applyManaged(
   body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
   const readContext: ReadContext = {
     importSource: options.importSource,
-    managedRuntimeSource: `${options.importSource}/runtime`,
+    managedRuntimeSource: `${options.importSource}/internal`,
     reactImportSource: options.reactImportSource,
   };
   let trackedAliases = collectTrackedReadAliases(path, readContext);
@@ -5710,7 +5710,7 @@ function applyManaged(
     path,
     store,
     options.importSource,
-    `${options.importSource}/runtime`,
+    `${options.importSource}/internal`,
     options.reactImportSource,
     trackedAliases,
     options,
@@ -5764,7 +5764,7 @@ const jsxPragmaComment = /@jsx(?:ImportSource|Runtime|Frag)?(?![\w$])/;
  * In a file with no import of its own, `addRuntimeImport` has to put the
  * runtime import first, and Babel keeps the author's leading comments attached
  * to the statement they were written above -- so a first-line
- * `/** @jsxImportSource react-fine-grained-signals *\/` ends up printed after
+ * `/** @jsxImportSource react-fine-grained-signals/jsx *\/` ends up printed after
  * that import. Oxc (and so Vite) only honors a JSX pragma that comes before the
  * first statement, so the pragma was silently ignored: the file compiled against
  * `react/jsx-runtime`, and a signal child then reached React as an object and
@@ -5806,7 +5806,7 @@ function keepJsxPragmasFirst(programPath: NodePath<t.Program>, state: PluginStat
 
 const babelTransform = declare<PluginState, InternalTransformOptions>((api, options) => {
   api.assertVersion(8);
-  const managedRuntimeSource = `${options.importSource}/runtime`;
+  const managedRuntimeSource = `${options.importSource}/internal`;
   const reactImportSource = options.reactImportSource;
 
   const plugin: PluginObject<PluginState> = {

@@ -117,7 +117,7 @@ type MathMlElement = (typeof MATHML_ELEMENTS)[number];
 type NonHtmlHostElement = SvgElement | MathMlElement;
 // Built without array spread: a bundler has to assume spreading may run an
 // iterator with side effects, which kept this module's tag lists in every
-// bundle that imports the package root (it re-exports `createElement` from
+// bundle that imports the `/jsx` entry (it re-exports `createElement` from
 // here) even when nothing from this module is used.
 const NON_HTML_HOST_ELEMENTS: ReadonlySet<string> = /* @__PURE__ */ (() => {
   const tags = new Set<string>(SVG_ELEMENTS);
@@ -1794,7 +1794,7 @@ export function createJsxWrapper(factory: CreateElement): CreateElement {
 /**
  * The classic-runtime `createElement` that the automatic runtime falls back to
  * for `<div {...props} key="k" />` — TypeScript, Babel and Oxc all import it
- * from the package root of `jsxImportSource`. It applies the same host-prop
+ * from the `jsxImportSource` module (the `/jsx` entry). It applies the same host-prop
  * bindings and child normalization as `jsx`, and leaves `key` (and `ref`) in
  * the config for React's own `createElement` to extract.
  */
@@ -1919,7 +1919,7 @@ type SignalIntrinsicElement<Tag extends keyof React.JSX.IntrinsicElements> = Tag
         ? AddSignalChildren<React.JSX.IntrinsicElements[Tag]>
         : AddHtmlSignalProps<React.JSX.IntrinsicElements[Tag]>;
 
-/** Types exposed by `jsxImportSource: "react-fine-grained-signals"`. */
+/** Types exposed by `jsxImportSource: "react-fine-grained-signals/jsx"`. */
 export namespace JSX {
   export type ElementType = React.JSX.ElementType;
   export interface Element extends React.JSX.Element {}

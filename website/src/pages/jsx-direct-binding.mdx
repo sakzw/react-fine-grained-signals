@@ -8,7 +8,7 @@ The package's JSX runtime lets a signal passed to a **native** element update
 that DOM node on its own, without re-rendering the component around it.
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 import { signal } from 'react-fine-grained-signals'
 
 const title = signal('Initial title')
@@ -28,15 +28,15 @@ Per file, with a pragma on the first line (every other file keeps React's
 runtime):
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 ```
 
 or project-wide in `tsconfig.json` with
-`"jsxImportSource": "react-fine-grained-signals"`. Vite reads both. Builds that
+`"jsxImportSource": "react-fine-grained-signals/jsx"`. Vite reads both. Builds that
 compile JSX with Babel name the runtime on `@babel/preset-react` instead.
 
 For an explicit Signal-children-only runtime, use
-`"jsxImportSource": "react-fine-grained-signals/lite"`. Lite keeps ordinary
+`"jsxImportSource": "react-fine-grained-signals/jsx/lite"`. Lite keeps ordinary
 React JSX and fine-grained Signal children, but omits direct attribute and form
 bindings. TypeScript rejects those binding props, and runtime checks report
 unsupported Signal-valued host props passed from JavaScript or spreads. Use the

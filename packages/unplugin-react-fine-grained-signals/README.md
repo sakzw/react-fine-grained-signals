@@ -166,7 +166,7 @@ export default {
     [the compatibility note](../../development/design/react-compiler-compatibility.md).
 - `importSource`: overrides `react-fine-grained-signals` for a compatible wrapper.
   The wrapper must re-export the runtime's root `useSignalTracking` and its
-  `/runtime` entry's `useSignalCapture`, which the generated code imports.
+  `/internal` entry's `useSignalCapture`, which the generated code imports. `/internal` is for generated code only and is outside semver.
 - `reactImportSource`: an additional module specifier whose `memo` and
   `forwardRef` exports count as React's own when the plugin decides whether a
   wrapped function is a component. Recognition is additive, not a replacement:

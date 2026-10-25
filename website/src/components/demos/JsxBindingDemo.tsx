@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 'use client'
 
 import { useComputed, useSignal } from 'react-fine-grained-signals'

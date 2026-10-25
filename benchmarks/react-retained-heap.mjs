@@ -12,7 +12,7 @@ const React = await import("react");
 const { act, useMemo } = React;
 const { createRoot } = await import("react-dom/client");
 const { signal } = await import("../dist/index.js");
-const { useManagedSignals, useSignalCapture } = await import("../dist/runtime.js");
+const { useManagedSignals, useSignalCapture } = await import("../dist/internal.js");
 
 const rows = Number.parseInt(process.env.BENCH_ROWS ?? "100", 10);
 const cycles = Number.parseInt(process.env.BENCH_CYCLES ?? "10", 10);

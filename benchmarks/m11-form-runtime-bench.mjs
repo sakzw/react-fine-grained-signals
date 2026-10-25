@@ -29,7 +29,7 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
-const { jsx: signalJsx, jsxs: signalJsxs } = await import("../dist/jsx-runtime.js");
+const { jsx: signalJsx, jsxs: signalJsxs } = await import("../dist/jsx/jsx-runtime.js");
 const { signal } = await import("../dist/index.js");
 
 const warmups = Number(process.env.M11_FORM_WARMUPS ?? 2);

@@ -53,7 +53,7 @@ function Counter() {
 ファイル単位で有効にするには、先頭行にpragmaを書きます。他のファイルはReactのJSXランタイムのままになるため、アプリの一部だけで直接バインディングを使いたい場合はこちらを選んでください。[`examples/react-router`](examples/react-router)がこの構成です。
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 ```
 
 プロジェクト全体で有効にする場合は `tsconfig.json` に設定します。
@@ -62,7 +62,7 @@ function Counter() {
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react-fine-grained-signals"
+    "jsxImportSource": "react-fine-grained-signals/jsx"
   }
 }
 ```
@@ -74,10 +74,10 @@ Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側�
 DOMの直接bindingは不要で、reactiveなSignal子要素だけが必要な場合はLite JSX Runtimeを明示的に選びます。
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals/lite */
+/** @jsxImportSource react-fine-grained-signals/jsx/lite */
 ```
 
-または`jsxImportSource`に`react-fine-grained-signals/lite`を指定します。Liteは通常のReact JSXとSignal子要素に対応しますが、Signal-valued attribute、style binding、`bindValue`、`bindChecked`には対応しません。JSX設定がなければReact標準runtimeが使われ、`react-fine-grained-signals`を指定するとFull Runtimeがopt-inされます。Fullが同じ初期読み込みchunkに含まれる場合、Liteを選んでも固定サイズの削減は保証されません。詳細は[JSXガイド](./docs/guides/jsx-bindings.ja.md)を参照してください。
+または`jsxImportSource`に`react-fine-grained-signals/jsx/lite`を指定します。Liteは通常のReact JSXとSignal子要素に対応しますが、Signal-valued attribute、style binding、`bindValue`、`bindChecked`には対応しません。JSX設定がなければReact標準runtimeが使われ、`react-fine-grained-signals`を指定するとFull Runtimeがopt-inされます。Fullが同じ初期読み込みchunkに含まれる場合、Liteを選んでも固定サイズの削減は保証されません。詳細は[JSXガイド](./docs/guides/jsx-bindings.ja.md)を参照してください。
 
 | JSXの選択肢 | 用途 |
 | --- | --- |

@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
 import {
@@ -21,7 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { coreRuntime } from "../src/core/core-runtime.js";
 import { computed, signal, useSignalTracking, type Signal } from "../src/index.js";
-import { useManagedSignals } from "../src/runtime.js";
+import { useManagedSignals } from "../src/internal.js";
 
 // Regression coverage for the independent B' React / JSX re-audit of aca0d30.
 

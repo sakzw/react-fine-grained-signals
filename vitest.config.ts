@@ -11,38 +11,42 @@ export default defineConfig({
   oxc: {
     jsx: {
       runtime: "automatic",
-      importSource: "react-fine-grained-signals",
+      importSource: "react-fine-grained-signals/jsx",
     },
   },
   resolve: {
     alias: [
       {
-        find: /^react-fine-grained-signals\/runtime$/,
-        replacement: source("./src/runtime.ts"),
+        find: /^react-fine-grained-signals\/internal$/,
+        replacement: source("./src/internal.ts"),
       },
       {
         find: /^react-fine-grained-signals\/utils$/,
         replacement: source("./src/utils.tsx"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-runtime$/,
-        replacement: source("./src/jsx-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx$/,
+        replacement: source("./src/jsx.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-dev-runtime$/,
-        replacement: source("./src/jsx-dev-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx\/jsx-runtime$/,
+        replacement: source("./src/jsx/jsx-runtime.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/lite\/jsx-runtime$/,
-        replacement: source("./src/lite-jsx-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx\/jsx-dev-runtime$/,
+        replacement: source("./src/jsx/jsx-dev-runtime.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/lite\/jsx-dev-runtime$/,
-        replacement: source("./src/lite-jsx-dev-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx\/lite\/jsx-runtime$/,
+        replacement: source("./src/jsx/lite/jsx-runtime.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/lite$/,
-        replacement: source("./src/lite.ts"),
+        find: /^react-fine-grained-signals\/jsx\/lite\/jsx-dev-runtime$/,
+        replacement: source("./src/jsx/lite/jsx-dev-runtime.ts"),
+      },
+      {
+        find: /^react-fine-grained-signals\/jsx\/lite$/,
+        replacement: source("./src/jsx/lite.ts"),
       },
       {
         find: /^react-fine-grained-signals$/,

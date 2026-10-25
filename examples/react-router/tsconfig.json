@@ -14,9 +14,10 @@
     "paths": {
       "react-fine-grained-signals": ["../../src/index.ts"],
       "react-fine-grained-signals/utils": ["../../src/utils.tsx"],
-      "react-fine-grained-signals/runtime": ["../../src/runtime.ts"],
-      "react-fine-grained-signals/jsx-runtime": ["../../src/jsx-runtime.ts"],
-      "react-fine-grained-signals/jsx-dev-runtime": ["../../src/jsx-dev-runtime.ts"]
+      "react-fine-grained-signals/internal": ["../../src/internal.ts"],
+      "react-fine-grained-signals/jsx": ["../../src/jsx.ts"],
+      "react-fine-grained-signals/jsx/jsx-runtime": ["../../src/jsx/jsx-runtime.ts"],
+      "react-fine-grained-signals/jsx/jsx-dev-runtime": ["../../src/jsx/jsx-dev-runtime.ts"]
     },
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,

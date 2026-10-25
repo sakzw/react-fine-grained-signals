@@ -96,10 +96,10 @@ build pluginの `transform: "managed"`（既定）は、静的に証明できる
 
 ### pluginを使わずに厳密な境界を作る
 
-`react-fine-grained-signals/runtime` は `useManagedSignals` をexportしています。scope handleを返すため、`try` / `finally` で自分で閉じます。build時のtransformなしにlexical boundaryを作れます。
+`react-fine-grained-signals/internal` は `useManagedSignals` をexportしています。scope handleを返すため、`try` / `finally` で自分で閉じます。build時のtransformなしにlexical boundaryを作れます。
 
 ```tsx
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 function Row() {
   const store = useManagedSignals();

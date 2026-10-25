@@ -37,7 +37,7 @@ import { build, transformWithOxc, type Plugin, type PluginOption } from "vite";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
-import * as libraryRuntime from "../../../src/runtime.js";
+import * as libraryRuntime from "../../../src/internal.js";
 import rollupAdapter from "../src/rollup.js";
 import viteAdapter from "../src/vite.js";
 
@@ -124,7 +124,7 @@ const moduleRegistry: Record<string, unknown> = {
   "react/jsx-dev-runtime": reactJsxDevRuntime,
   "react/compiler-runtime": reactCompilerRuntime,
   "react-fine-grained-signals": library,
-  "react-fine-grained-signals/runtime": libraryRuntime,
+  "react-fine-grained-signals/internal": libraryRuntime,
 };
 
 // Turns the built ES module into something `new Function` can run: named

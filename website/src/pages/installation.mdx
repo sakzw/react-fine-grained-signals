@@ -20,12 +20,13 @@ This site documents the v0.3 line. Upgrading from v0.2.1? Read the
 | --- | --- |
 | `react-fine-grained-signals` | Core primitives, React hooks, `isSignal` |
 | `react-fine-grained-signals/utils` | `Show`, `Switch`, `Match`, `For`, `Index` |
-| `react-fine-grained-signals/jsx-runtime` | The opt-in JSX runtime for direct DOM bindings |
-| `react-fine-grained-signals/lite` | Classic JSX fallback for the Lite runtime |
-| `react-fine-grained-signals/lite/jsx-runtime` | The opt-in Lite runtime for Signal children only |
-| `react-fine-grained-signals/lite/jsx-dev-runtime` | Development JSX entry for Lite |
-| `react-fine-grained-signals/jsx-dev-runtime` | Development JSX entry for Full |
-| `react-fine-grained-signals/runtime` | Low-level boundaries used by the build plugin (`useSignalCapture`, `useManagedSignals`) |
+| `react-fine-grained-signals/jsx` | Full JSX: classic `createElement` and `Fragment` fallback |
+| `react-fine-grained-signals/jsx/jsx-runtime` | The Full JSX runtime for direct DOM bindings |
+| `react-fine-grained-signals/jsx/jsx-dev-runtime` | Development JSX entry for Full |
+| `react-fine-grained-signals/jsx/lite` | Lite JSX: classic `createElement` and `Fragment` fallback |
+| `react-fine-grained-signals/jsx/lite/jsx-runtime` | The Lite runtime for Signal children only |
+| `react-fine-grained-signals/jsx/lite/jsx-dev-runtime` | Development JSX entry for Lite |
+| `react-fine-grained-signals/internal` | Used by the build plugin's generated code. Not public API and outside semver |
 
 ## Optional: the build plugin
 
@@ -58,16 +59,16 @@ Choose the runtime per file with a pragma at the top of that file:
 Full supports Signal children and the documented direct host bindings:
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 ```
 
-Use `react-fine-grained-signals/lite` instead when Signal children are the only
+Use `react-fine-grained-signals/jsx/lite` instead when Signal children are the only
 direct binding needed. Lite does not support Signal-valued host attributes,
 style bindings, `bindValue`, or `bindChecked`. Both runtimes are explicit
 opt-ins; React JSX remains in use when `jsxImportSource` is not set.
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals/lite */
+/** @jsxImportSource react-fine-grained-signals/jsx/lite */
 ```
 
 To select Full for the whole project, set `jsxImportSource` in `tsconfig.json`:
@@ -76,12 +77,12 @@ To select Full for the whole project, set `jsxImportSource` in `tsconfig.json`:
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react-fine-grained-signals"
+    "jsxImportSource": "react-fine-grained-signals/jsx"
   }
 }
 ```
 
-Set `jsxImportSource` to `react-fine-grained-signals/lite` for a project-wide
+Set `jsxImportSource` to `react-fine-grained-signals/jsx/lite` for a project-wide
 Lite runtime instead.
 
 See [JSX Direct Binding](/jsx-direct-binding).

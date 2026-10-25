@@ -1,15 +1,15 @@
 import { Fragment, jsx as reactJsx, jsxs as reactJsxs } from "react/jsx-runtime";
-import { createLiteJsxWrapper } from "./runtime/lite-jsx.js";
-import type { SignalChild } from "./runtime/jsx-children.js";
+import { createLiteJsxWrapper } from "../../runtime/lite-jsx.js";
+import type { SignalChild } from "../../runtime/jsx-children.js";
 import type * as React from "react";
 
 export { Fragment };
 export type { SignalChild };
 
-/** JSX factory for `jsxImportSource: "react-fine-grained-signals/lite"`. */
+/** JSX factory for `jsxImportSource: "react-fine-grained-signals/jsx/lite"`. */
 export const jsx = createLiteJsxWrapper(reactJsx);
 
-/** Static-children JSX factory for `jsxImportSource: "react-fine-grained-signals/lite"`. */
+/** Static-children JSX factory for `jsxImportSource: "react-fine-grained-signals/jsx/lite"`. */
 export const jsxs = createLiteJsxWrapper(reactJsxs);
 
 type AddSignalChildren<P> = Omit<P, "children"> & { children?: SignalChild };

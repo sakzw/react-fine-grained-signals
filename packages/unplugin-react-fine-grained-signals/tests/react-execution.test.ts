@@ -21,8 +21,8 @@ import { transformWithOxc } from "vite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
-import * as libraryJsxRuntime from "../../../src/jsx-runtime.js";
-import * as libraryRuntime from "../../../src/runtime.js";
+import * as libraryJsxRuntime from "../../../src/jsx/jsx-runtime.js";
+import * as libraryRuntime from "../../../src/internal.js";
 import * as libraryUtils from "../../../src/utils.js";
 import {
   transformReactFineGrainedSignals,
@@ -40,8 +40,8 @@ const moduleRegistry: Record<string, unknown> = {
   react: { Suspense, useCallback, useState },
   "react/jsx-runtime": reactJsxRuntime,
   "react-fine-grained-signals": library,
-  "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
-  "react-fine-grained-signals/runtime": libraryRuntime,
+  "react-fine-grained-signals/jsx/jsx-runtime": libraryJsxRuntime,
+  "react-fine-grained-signals/internal": libraryRuntime,
   "react-fine-grained-signals/utils": libraryUtils,
 };
 
@@ -679,7 +679,7 @@ export function App() {
   // whose hooks then belong to App and run only while `show` is true.
   const previousOutput = `
 import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 export const count = signal(0);
 export const show = signal(false);
@@ -746,7 +746,7 @@ export function Label({ v = count.value }) {
   it("control: a default evaluated before the boundary opens is never tracked", async () => {
     const module = await loadModule(`
 import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 export const count = signal(0);
 
@@ -912,7 +912,7 @@ interface BadgeProps {
 describe("an import-free file opted into the JSX runtime by a first-line pragma", () => {
   // Signals arrive through props, so the file has no import for the transform
   // to put its own after.
-  const source = `/** @jsxImportSource react-fine-grained-signals */
+  const source = `/** @jsxImportSource react-fine-grained-signals/jsx */
 export function Badge({ count, label }) {
   return <p title={label}>{count.value > 9 ? "many" : "few"}: {label}</p>;
 }
@@ -997,7 +997,7 @@ export function Panel() {
   // recognized: a boundary that runs once per matching item inside Feed.
   const previousOutput = `
 import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 export const suffix = signal("!");
 export const nodes = signal([
@@ -1093,7 +1093,7 @@ describe("managed destructured signal reads", () => {
       }
     `, {
       modules: {
-        "react-fine-grained-signals/runtime": {
+        "react-fine-grained-signals/internal": {
           useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
         },
       },
@@ -1123,7 +1123,7 @@ describe("managed destructured signal reads", () => {
       }
     `, {
       modules: {
-        "react-fine-grained-signals/runtime": {
+        "react-fine-grained-signals/internal": {
           useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
         },
       },
@@ -1162,7 +1162,7 @@ describe("managed destructured signal reads", () => {
       }
     `, {
       modules: {
-        "react-fine-grained-signals/runtime": {
+        "react-fine-grained-signals/internal": {
           useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
         },
       },
@@ -1495,7 +1495,7 @@ export function Conditional() {
   // What the transform emitted for `plain.Leaf` before `this` was followed.
   const previousOutput = `
 import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 export const suffix = signal("!");
 export const count = signal(1);
@@ -1734,7 +1734,7 @@ export function Guard() {
   // What the transform emitted for `ns.Home` before optional static links were matched.
   const previousOutput = `
 import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 export const suffix = signal("!");
 export const show = signal(false);

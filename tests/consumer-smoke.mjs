@@ -181,8 +181,13 @@ try {
   // actual package export maps and the minimum usable shape of every adapter.
   const entryContractPath = join(consumerRoot, "entry-contract.mjs");
   await writeFile(entryContractPath, `
-    import { Fragment, jsxDEV } from "react-fine-grained-signals/jsx-dev-runtime";
-    import { createElement } from "react-fine-grained-signals";
+    import { Fragment, jsxDEV } from "react-fine-grained-signals/jsx/jsx-dev-runtime";
+    import { createElement, Fragment as classicFragment } from "react-fine-grained-signals/jsx";
+    import { createElement as liteCreateElement } from "react-fine-grained-signals/jsx/lite";
+    import { jsx as liteJsx } from "react-fine-grained-signals/jsx/lite/jsx-runtime";
+    import { jsx } from "react-fine-grained-signals/jsx/jsx-runtime";
+    import { useSignalCapture } from "react-fine-grained-signals/internal";
+    import * as root from "react-fine-grained-signals";
     import generic, { pluginName, reactFineGrainedSignals } from "unplugin-react-fine-grained-signals";
     import vite from "unplugin-react-fine-grained-signals/vite";
     import rollup from "unplugin-react-fine-grained-signals/rollup";
@@ -193,8 +198,24 @@ try {
     if (typeof jsxDEV !== "function" || Fragment === undefined) {
       throw new Error("The packed jsx-dev-runtime must export jsxDEV and Fragment");
     }
-    if (typeof createElement !== "function") {
-      throw new Error("The packed root must export the classic createElement fallback");
+    if (typeof createElement !== "function" || typeof liteCreateElement !== "function" || classicFragment === undefined) {
+      throw new Error("The packed /jsx and /jsx/lite entries must export the classic createElement fallback");
+    }
+    if (typeof jsx !== "function" || typeof liteJsx !== "function" || typeof useSignalCapture !== "function") {
+      throw new Error("The packed JSX runtimes and /internal must export their public functions");
+    }
+    if ("createElement" in root) {
+      throw new Error("The packed root must no longer export createElement");
+    }
+    // The pre-0.4 entries are removed without aliases, so they must fail to resolve.
+    for (const removed of ["lite", "lite/jsx-runtime", "lite/jsx-dev-runtime", "jsx-runtime", "jsx-dev-runtime", "runtime"]) {
+      try {
+        await import("react-fine-grained-signals/" + removed);
+      } catch (error) {
+        if (error?.code === "ERR_PACKAGE_PATH_NOT_EXPORTED") continue;
+        throw error;
+      }
+      throw new Error("The removed entry react-fine-grained-signals/" + removed + " must not resolve");
     }
     if (generic !== reactFineGrainedSignals || pluginName !== "unplugin-react-fine-grained-signals") {
       throw new Error("The generic unplugin entry must expose its named public plugin");
@@ -245,13 +266,13 @@ try {
   for (const entry of [
     "react-fine-grained-signals",
     "react-fine-grained-signals/utils",
-    "react-fine-grained-signals/runtime",
+    "react-fine-grained-signals/internal",
   ]) {
     if (!output.includes(entry)) throw new Error(`Consumer output did not retain ${entry}`);
   }
-  // `<p {...props} key="spread" />` compiles to the root's classic factory.
-  if (!/import\s*\{[^}]*\bcreateElement\b[^}]*\}\s*from\s*["']react-fine-grained-signals["']/.test(output)) {
-    throw new Error("Consumer output must import createElement from the package root for a key after a spread");
+  // `<p {...props} key="spread" />` compiles to the `/jsx` entry's classic factory.
+  if (!/import\s*\{[^}]*\bcreateElement\b[^}]*\}\s*from\s*["']react-fine-grained-signals\/jsx["']/.test(output)) {
+    throw new Error("Consumer output must import createElement from react-fine-grained-signals/jsx for a key after a spread");
   }
   // Managed codegen keeps user Hooks at function top level and captures proven
   // reads individually. The consumer canary adds several interacting managed

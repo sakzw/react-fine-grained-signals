@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
 // A transition render yields between components. A signal written during such
@@ -21,7 +21,7 @@ import {
   useSignalTracking,
   useSignalValue,
 } from "../src/index.js";
-import { useManagedSignals, useSignalCapture } from "../src/runtime.js";
+import { useManagedSignals, useSignalCapture } from "../src/internal.js";
 
 type ActGlobal = typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean | undefined };
 let previousActEnvironment: boolean | undefined;

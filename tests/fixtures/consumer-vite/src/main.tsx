@@ -1,6 +1,6 @@
 import { computed, deepSignal, signal } from "react-fine-grained-signals";
 import { memo, useEffect, useState } from "react";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 const count = signal(0);

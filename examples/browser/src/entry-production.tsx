@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 
 // Client-only mount used by the production (`vite build` + `vite preview`)
 // path — see examples/browser/vite.config.ts. Unlike entry-client.tsx this

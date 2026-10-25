@@ -60,7 +60,7 @@ an app needs the direct bindings — it is how
 [`examples/react-router`](examples/react-router) is set up:
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 ```
 
 Or opt the whole project in through `tsconfig.json`:
@@ -69,7 +69,7 @@ Or opt the whole project in through `tsconfig.json`:
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react-fine-grained-signals"
+    "jsxImportSource": "react-fine-grained-signals/jsx"
   }
 }
 ```
@@ -89,10 +89,10 @@ For projects that need reactive Signal children but no direct host bindings,
 opt in to the Lite JSX Runtime instead:
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals/lite */
+/** @jsxImportSource react-fine-grained-signals/jsx/lite */
 ```
 
-or set `jsxImportSource` to `react-fine-grained-signals/lite`. Lite supports
+or set `jsxImportSource` to `react-fine-grained-signals/jsx/lite`. Lite supports
 ordinary React JSX plus Signal children; it does not support Signal-valued
 attributes, style bindings, `bindValue`, or `bindChecked`. React's JSX is used
 when no custom `jsxImportSource` is configured; setting it to

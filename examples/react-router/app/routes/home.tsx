@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 import { useOutletContext } from "react-router";
 import { useComputed, useSignal, useSignalEffect } from "react-fine-grained-signals";
 import { For, Show, Switch, Match } from "react-fine-grained-signals/utils";

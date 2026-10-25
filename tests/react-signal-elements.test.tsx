@@ -1,11 +1,11 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
 import { StrictMode, createRef, act } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { Fragment, jsx, jsxs } from "../src/jsx-runtime.js";
-import { jsxDEV } from "../src/jsx-dev-runtime.js";
+import { Fragment, jsx, jsxs } from "../src/jsx/jsx-runtime.js";
+import { jsxDEV } from "../src/jsx/jsx-dev-runtime.js";
 import { signal } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

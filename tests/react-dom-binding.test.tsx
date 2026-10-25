@@ -1,12 +1,13 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
 import { Activity, StrictMode, Suspense, act, useState } from "react";
 import type { ChangeEvent, InputEvent as ReactInputEvent, ReactNode } from "react";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { jsx } from "../src/jsx-runtime.js";
-import { computed, createElement as createSignalAwareElement, effect, signal, useSignal, useSignalTracking } from "../src/index.js";
+import { jsx } from "../src/jsx/jsx-runtime.js";
+import { createElement as createSignalAwareElement } from "../src/jsx.js";
+import { computed, effect, signal, useSignal, useSignalTracking } from "../src/index.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;

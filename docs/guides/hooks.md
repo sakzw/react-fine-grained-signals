@@ -98,10 +98,10 @@ Use the build plugin's `transform: "managed"` (its default) for statically prove
 
 ### Exact boundary without the plugin
 
-`react-fine-grained-signals/runtime` exports `useManagedSignals`, which returns a scope handle that you close yourself with a `try` / `finally`. This manual form provides a lexical boundary without a build transform.
+`react-fine-grained-signals/internal` exports `useManagedSignals`, which returns a scope handle that you close yourself with a `try` / `finally`. This manual form provides a lexical boundary without a build transform.
 
 ```tsx
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 function Row() {
   const store = useManagedSignals();

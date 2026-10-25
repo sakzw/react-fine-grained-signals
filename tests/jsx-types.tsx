@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 
 import { computed, signal, useComputed, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
 import type React from "react";

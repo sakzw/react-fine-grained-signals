@@ -5,7 +5,7 @@ import signals from "unplugin-react-fine-grained-signals/vite";
 export default defineConfig({
   plugins: [
     signals({ mode: "auto", transform: "managed" }),
-    react({ compiler: true, jsxImportSource: "react-fine-grained-signals" }),
+    react({ compiler: true, jsxImportSource: "react-fine-grained-signals/jsx" }),
   ],
   build: {
     lib: {

@@ -92,7 +92,7 @@ deployment template drops its packing step (see below).
   `include` is limited to that directory so it never adds its client-only Hook
   to a server component.
 - Two demos opt into the library's JSX runtime per file with
-  `/** @jsxImportSource react-fine-grained-signals */`; everything else uses
+  `/** @jsxImportSource react-fine-grained-signals/jsx */`; everything else uses
   React's.
 
 ## GitHub Actions and GitHub Pages

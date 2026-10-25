@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
 import { StrictMode, Suspense, act, memo, useLayoutEffect } from "react";
@@ -6,7 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { computed, deepSignal, signal, useComputed, useSignalTracking } from "../src/index.js";
-import { useManagedSignals, useSignalCapture } from "../src/runtime.js";
+import { useManagedSignals, useSignalCapture } from "../src/internal.js";
 import { hasActiveRenderCollector } from "../src/core/render-tracking.js";
 import { executionContext } from "../src/core/execution-owner.js";
 import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";

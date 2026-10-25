@@ -1,4 +1,4 @@
-import { Fragment, jsxDEV } from "react-fine-grained-signals/jsx-dev-runtime";
+import { Fragment, jsxDEV } from "react-fine-grained-signals/jsx/jsx-dev-runtime";
 import generic, { pluginName, reactFineGrainedSignals } from "unplugin-react-fine-grained-signals";
 import vite from "unplugin-react-fine-grained-signals/vite";
 import rollup from "unplugin-react-fine-grained-signals/rollup";

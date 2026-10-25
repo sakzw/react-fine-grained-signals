@@ -11,7 +11,7 @@ const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
 const { isSignal, signal, useSignalTracking } = await import("../dist/index.js");
-const { useManagedSignals } = await import("../dist/runtime.js");
+const { useManagedSignals } = await import("../dist/internal.js");
 const { For, Index } = await import("../dist/utils.js");
 
 const sizes = (process.env.M10_LIST_SIZES ?? "100,1000,10000").split(",").map(Number);

@@ -24,23 +24,27 @@ export default defineConfig({
   oxc: false,
   esbuild: {
     jsx: "automatic",
-    jsxImportSource: "react-fine-grained-signals",
+    jsxImportSource: "react-fine-grained-signals/jsx",
   },
   plugins: [signals({ mode: "auto" })],
   resolve: {
     dedupe: ["react", "react-dom"],
     alias: [
       {
-        find: /^react-fine-grained-signals\/runtime$/,
-        replacement: here("../../src/runtime.ts"),
+        find: /^react-fine-grained-signals\/internal$/,
+        replacement: here("../../src/internal.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-runtime$/,
-        replacement: here("../../src/jsx-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx$/,
+        replacement: here("../../src/jsx.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-dev-runtime$/,
-        replacement: here("../../src/jsx-dev-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx\/jsx-runtime$/,
+        replacement: here("../../src/jsx/jsx-runtime.ts"),
+      },
+      {
+        find: /^react-fine-grained-signals\/jsx\/jsx-dev-runtime$/,
+        replacement: here("../../src/jsx/jsx-dev-runtime.ts"),
       },
       {
         find: /^react-fine-grained-signals$/,

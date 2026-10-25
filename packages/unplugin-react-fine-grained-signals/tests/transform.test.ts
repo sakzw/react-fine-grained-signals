@@ -124,7 +124,7 @@ describe("managed render transform", () => {
     `, "auto", "inject");
 
     expect(output).toContain('from "react-fine-grained-signals"');
-    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
+    expect(output).not.toContain('from "react-fine-grained-signals/internal"');
     expect(output).toContain("const Counter = () => {");
     expect(output).toContain("_useSignalTracking();");
     expect(output).not.toContain("try {");
@@ -210,7 +210,7 @@ describe("managed render transform", () => {
     expect(component.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(component).toContain("_signals.capture(() =>");
     expect(helper).not.toContain("finally");
-    expect(helper).not.toContain("react-fine-grained-signals/runtime");
+    expect(helper).not.toContain("react-fine-grained-signals/internal");
   });
 
   it("recognizes memo imported from a configured react re-export module", () => {
@@ -236,7 +236,7 @@ describe("managed render transform", () => {
     // Documented limitation: the default only matches a direct "react" import,
     // because a single-file transform cannot follow the re-export chain.
     expect(compile(namedSource, "auto")).not.toContain("finally");
-    expect(compile(namedSource, "auto")).not.toContain("react-fine-grained-signals/runtime");
+    expect(compile(namedSource, "auto")).not.toContain("react-fine-grained-signals/internal");
     expect(compile(namespaceSource, "auto")).not.toContain("finally");
   });
 
@@ -299,7 +299,7 @@ describe("managed render transform", () => {
 
     for (const output of [localHelper, otherPackage, memberExpressionHelper]) {
       expect(output).not.toContain("finally");
-      expect(output).not.toContain("react-fine-grained-signals/runtime");
+      expect(output).not.toContain("react-fine-grained-signals/internal");
     }
   });
 
@@ -324,7 +324,7 @@ describe("managed render transform", () => {
     `, "auto");
 
     expect(output).not.toContain("finally");
-    expect(output).not.toContain("react-fine-grained-signals/runtime");
+    expect(output).not.toContain("react-fine-grained-signals/internal");
   });
 
   it.each(["auto", "all"] as const)(
@@ -395,7 +395,7 @@ describe("managed render transform", () => {
       export function Value() { return count.value; }
     `, "auto");
 
-    expect(output).not.toContain("react-fine-grained-signals/runtime");
+    expect(output).not.toContain("react-fine-grained-signals/internal");
     expect(output).not.toContain("finally");
   });
 
@@ -483,7 +483,7 @@ describe("managed render transform", () => {
     ])("leaves a component whose only .value read is %s untransformed", (_label, source) => {
       const output = compile(source, "auto");
 
-      expect(output).not.toContain("react-fine-grained-signals/runtime");
+      expect(output).not.toContain("react-fine-grained-signals/internal");
       expect(output).not.toContain("finally");
       expect(output).not.toContain("use no memo");
     });
@@ -1244,9 +1244,9 @@ describe("managed render transform", () => {
       export function* GeneratorPage() { yield <p>value</p>; }
     `, "all");
 
-    expect(auto).not.toContain("react-fine-grained-signals/runtime");
+    expect(auto).not.toContain("react-fine-grained-signals/internal");
     expect(auto).not.toContain("finally");
-    expect(all).not.toContain("react-fine-grained-signals/runtime");
+    expect(all).not.toContain("react-fine-grained-signals/internal");
     expect(all).not.toContain("finally");
   });
 
@@ -1269,7 +1269,7 @@ describe("managed render transform", () => {
       export function App() { const prefix = "v"; useSignalTracking(); return <p>{prefix}{count.value}</p>; }
     `, "auto");
 
-    expect(output).not.toContain("react-fine-grained-signals/runtime");
+    expect(output).not.toContain("react-fine-grained-signals/internal");
     expect(output).toContain("useSignalTracking();");
   });
 
@@ -1561,12 +1561,12 @@ describe("managed render transform", () => {
 
   it("does not reuse a type-only managed import or a shadowed runtime alias", () => {
     const typeOnly = compile(`
-      import type { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
+      import type { useManagedSignals as managed } from "react-fine-grained-signals/internal";
       /** @signalTracking */
       export function App() { return <main />; }
     `);
     const shadowed = compile(`
-      import { useManagedSignals as managed } from "react-fine-grained-signals/runtime";
+      import { useManagedSignals as managed } from "react-fine-grained-signals/internal";
       /** @signalTracking */
       export function App(managed) { return <main />; }
     `);
@@ -3069,13 +3069,13 @@ export function Badge({ count, label }) {
   return <p title={label}>{count.value > 9 ? "many" : "few"}: {label}</p>;
 }
 `;
-  const rfgsRuntime = "react-fine-grained-signals/jsx-runtime";
+  const rfgsRuntime = "react-fine-grained-signals/jsx/jsx-runtime";
 
   for (const transform of ["managed", "inject"] as const) {
     describe(`${transform} transform`, () => {
       it("keeps a block pragma ahead of the generated import in an import-free .jsx file", async () => {
         const { output, runtime } = await lowerJsx(
-          `/** @jsxImportSource react-fine-grained-signals */\n${badge}`,
+          `/** @jsxImportSource react-fine-grained-signals/jsx */\n${badge}`,
           "Badge.jsx",
           transform,
         );
@@ -3085,7 +3085,7 @@ export function Badge({ count, label }) {
 
       it("keeps a line pragma ahead of the generated import", async () => {
         const { runtime } = await lowerJsx(
-          `// @jsxImportSource react-fine-grained-signals\n${badge}`,
+          `// @jsxImportSource react-fine-grained-signals/jsx\n${badge}`,
           "Badge.jsx",
           transform,
         );
@@ -3093,14 +3093,14 @@ export function Badge({ count, label }) {
       });
 
       it("keeps the pragma in an import-free .tsx file, and in development builds", async () => {
-        const source = `/** @jsxImportSource react-fine-grained-signals */
+        const source = `/** @jsxImportSource react-fine-grained-signals/jsx */
 export function Badge({ count }: { count: { value: number } }) {
   return <p>{count.value}</p>;
 }
 `;
         expect((await lowerJsx(source, "Badge.tsx", transform)).runtime).toBe(rfgsRuntime);
         expect((await lowerJsx(source, "Badge.tsx", transform, true)).runtime).toBe(
-          "react-fine-grained-signals/jsx-dev-runtime",
+          "react-fine-grained-signals/jsx/jsx-dev-runtime",
         );
       });
 
@@ -3111,7 +3111,7 @@ export function Badge({ count }: { count: { value: number } }) {
 
       it("keeps a pragma after a directive prologue, and the directive first", async () => {
         const { output, runtime } = await lowerJsx(
-          `"use client";\n/** @jsxImportSource react-fine-grained-signals */\n${badge}`,
+          `"use client";\n/** @jsxImportSource react-fine-grained-signals/jsx */\n${badge}`,
           "Badge.jsx",
           transform,
         );
@@ -3123,7 +3123,7 @@ export function Badge({ count }: { count: { value: number } }) {
         const { output, runtime } = await lowerJsx(
           `#!/usr/bin/env node
 // Copyright header
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 /** Renders the badge. */
 ${badge}`,
           "Badge.jsx",
@@ -3139,7 +3139,7 @@ ${badge}`,
 
       it("leaves a file whose imports already precede the generated one unchanged in order", async () => {
         const withImport = await lowerJsx(
-          `/** @jsxImportSource react-fine-grained-signals */
+          `/** @jsxImportSource react-fine-grained-signals/jsx */
 import { signal } from "react-fine-grained-signals";
 export const count = signal(0);
 export function Badge() { return <p>{count.value}</p>; }
@@ -3153,7 +3153,7 @@ export function Badge() { return <p>{count.value}</p>; }
         expect(withImport.runtime).toBe(rfgsRuntime);
 
         const typeOnly = await lowerJsx(
-          `/** @jsxImportSource react-fine-grained-signals */
+          `/** @jsxImportSource react-fine-grained-signals/jsx */
 import type { Signal } from "react-fine-grained-signals";
 export function Badge({ count }: { count: Signal<number> }) { return <p>{count.value}</p>; }
 `,
@@ -3174,7 +3174,7 @@ export function Badge({ count }: { count: Signal<number> }) { return <p>{count.v
     // The pragma and annotation move together, but only once every function
     // under that statement has read the annotation.
     const output = compile(`/** @signalTracking */
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 export const ns = {
   Home() { return <p>home</p>; },
   Away() { return <p>away</p>; },

@@ -9,7 +9,7 @@ The runtime is opt-in, and opting in is a matter of pointing the automatic JSX t
 Per file, with a pragma on the first line. Every other file keeps React's JSX runtime, which makes this the right form when only part of an app needs the direct bindings:
 
 ```tsx
-/** @jsxImportSource react-fine-grained-signals */
+/** @jsxImportSource react-fine-grained-signals/jsx */
 ```
 
 Project-wide, in `tsconfig.json`:
@@ -18,7 +18,7 @@ Project-wide, in `tsconfig.json`:
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react-fine-grained-signals"
+    "jsxImportSource": "react-fine-grained-signals/jsx"
   }
 }
 ```
@@ -29,7 +29,7 @@ For apps that need **Signal children only**, the package also provides an explic
 {
   "compilerOptions": {
     "jsx": "react-jsx",
-    "jsxImportSource": "react-fine-grained-signals/lite"
+    "jsxImportSource": "react-fine-grained-signals/jsx/lite"
   }
 }
 ```
@@ -54,7 +54,7 @@ export default {
 };
 ```
 
-Either way both entry points are used: `jsx-runtime` in production builds and `jsx-dev-runtime` in development, and this package ships both. For the one shape the automatic runtime cannot express — a `key` written after a prop spread, `<div {...props} key="k" />` — TypeScript, Babel, and Oxc fall back to importing `createElement` from the package root, which this package also exports with the same signal bindings.
+Either way both entry points are used: `jsx/jsx-runtime` in production builds and `jsx/jsx-dev-runtime` in development, and this package ships both (the Lite runtime has the same pair under `jsx/lite/`). For the one shape the automatic runtime cannot express — a `key` written after a prop spread, `<div {...props} key="k" />` — TypeScript, Babel, and Oxc fall back to importing `createElement` from the `jsxImportSource` module itself, which is `react-fine-grained-signals/jsx` (or `react-fine-grained-signals/jsx/lite`) and exports it with the same signal bindings. The package root no longer exports `createElement`.
 
 The two forms select the same runtime; the pragma only narrows where it applies. [`examples/react-router`](../../examples/react-router) sets `jsx` but not `jsxImportSource` in its `tsconfig.json`, and opts two of its components in by pragma.
 
@@ -190,7 +190,7 @@ For text controls and selects, equal-value writes are skipped. When an external 
 
 On the server, the initial signal value is rendered as the corresponding default value. Server and client initial values must match. Hydration attaches the binding to the existing host node; an edit made before hydration may be replaced by the initial signal value.
 
-These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "react-fine-grained-signals"`) and are removed before props reach the DOM. A signal passed as `value` or `checked` is rejected with a migration error: use `bindValue`/`bindChecked` for direct binding, or pass `signal.value` to keep React-controlled semantics.
+These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "react-fine-grained-signals/jsx"`) and are removed before props reach the DOM. A signal passed as `value` or `checked` is rejected with a migration error: use `bindValue`/`bindChecked` for direct binding, or pass `signal.value` to keep React-controlled semantics.
 
 
 ## Constraints

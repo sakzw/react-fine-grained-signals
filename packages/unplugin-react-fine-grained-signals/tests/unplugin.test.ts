@@ -68,7 +68,7 @@ describe("unplugin-react-fine-grained-signals", () => {
     const output = transformSource(counterSource, {});
 
     expect(output).toContain('_useSignalCapture()');
-    expect(output).toContain('from "react-fine-grained-signals/runtime"');
+    expect(output).toContain('from "react-fine-grained-signals/internal"');
   });
 
   it("only includes application JavaScript and TypeScript modules", () => {
@@ -198,8 +198,8 @@ describe("unplugin-react-fine-grained-signals", () => {
   it("uses top-level per-read capture in managed mode by default", () => {
     const output = transformCounter({ mode: "auto" });
 
-    expect(output).toContain('from "react-fine-grained-signals/runtime"');
-    expect(output).toContain('import { useSignalCapture as _useSignalCapture } from "react-fine-grained-signals/runtime"');
+    expect(output).toContain('from "react-fine-grained-signals/internal"');
+    expect(output).toContain('import { useSignalCapture as _useSignalCapture } from "react-fine-grained-signals/internal"');
     expect(output).toContain("const _signals = _useSignalCapture();");
     expect(output).not.toContain("try {");
     expect(output).toContain("_signals.capture(() => count.value)");
@@ -209,7 +209,7 @@ describe("unplugin-react-fine-grained-signals", () => {
     const output = transformCounter({ mode: "auto", transform: "inject" });
 
     expect(output).toContain('from "react-fine-grained-signals"');
-    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
+    expect(output).not.toContain('from "react-fine-grained-signals/internal"');
     expect(output).toContain("_useSignalTracking();");
     expect(output).not.toContain("try {");
   });
@@ -219,7 +219,7 @@ describe("unplugin-react-fine-grained-signals", () => {
 
     // Explicit tracking also captures runtime-only reads (including deep
     // proxy properties), which cannot be rewritten as `.value` expressions.
-    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
+    expect(output).not.toContain('from "react-fine-grained-signals/internal"');
     expect(output).not.toContain("useSignalCapture");
     expect(output).not.toContain("try {");
     expect(output).toMatch(/^\s*useSignalTracking\(\);$/m);
@@ -228,7 +228,7 @@ describe("unplugin-react-fine-grained-signals", () => {
 
   it("leaves a hand-written useManagedSignals boundary untouched", () => {
     const source = [
-      'import { useManagedSignals } from "react-fine-grained-signals/runtime";',
+      'import { useManagedSignals } from "react-fine-grained-signals/internal";',
       "const count = { value: 1 };",
       "export function App() {",
       "  const store = useManagedSignals();",
@@ -246,7 +246,7 @@ describe("unplugin-react-fine-grained-signals", () => {
   it("keeps an explicit useSignalTracking call in place under the injection transform", () => {
     const output = transformSource(explicitSource, { mode: "auto", transform: "inject" });
 
-    expect(output).not.toContain('from "react-fine-grained-signals/runtime"');
+    expect(output).not.toContain('from "react-fine-grained-signals/internal"');
     expect(output).not.toContain("try {");
     expect(output).toMatch(/^\s*useSignalTracking\(\);$/m);
   });
@@ -269,9 +269,9 @@ describe("unplugin-react-fine-grained-signals", () => {
     });
 
     expect(asyncOutput).toContain("async function App()");
-    expect(asyncOutput).not.toContain('from "react-fine-grained-signals/runtime"');
+    expect(asyncOutput).not.toContain('from "react-fine-grained-signals/internal"');
     expect(generatorOutput).toContain("function* App()");
-    expect(generatorOutput).not.toContain('from "react-fine-grained-signals/runtime"');
+    expect(generatorOutput).not.toContain('from "react-fine-grained-signals/internal"');
   });
 });
 
@@ -958,7 +958,7 @@ describe.skipIf(esbuildEntry === undefined)("esbuild adapter build", () => {
   it("builds JSX in a .js file the transform does rewrite", async () => {
     const output = await build("counter.js", componentSource, { mode: "auto" });
 
-    expect(output).toContain("react-fine-grained-signals/runtime");
+    expect(output).toContain("react-fine-grained-signals/internal");
     expect(output).toContain("_signals.capture(() => count.value)");
   });
 
@@ -969,6 +969,6 @@ describe.skipIf(esbuildEntry === undefined)("esbuild adapter build", () => {
       { mode: "auto" },
     );
 
-    expect(output).toContain("react-fine-grained-signals/runtime");
+    expect(output).toContain("react-fine-grained-signals/internal");
   });
 });

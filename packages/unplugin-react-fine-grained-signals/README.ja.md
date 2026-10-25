@@ -164,7 +164,7 @@ export default {
     に照らして確認済みの場合だけ選んでください。
 - `importSource`: `react-fine-grained-signals` 互換wrapperへの置き換えです。
   wrapperは、生成されたコードがimportするruntimeのrootの `useSignalTracking` と、
-  `/runtime` entryの `useSignalCapture` をre-exportしている必要があります。
+  `/internal` entryの `useSignalCapture` をre-exportしている必要があります。`/internal` は生成コード専用で、semverの対象外です。
 - `reactImportSource`: wrapされた関数をcomponentと判定する際に、`memo` /
   `forwardRef` をReact由来とみなすmodule specifierを追加します。置き換えでは
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり

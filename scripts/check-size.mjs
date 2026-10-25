@@ -65,21 +65,21 @@ export default everything;`,
   {
     name: "jsx-runtime",
     description: "the custom JSX runtime a transformed app always loads",
-    source: `import * as runtime from "DIST/jsx-runtime.js";
+    source: `import * as runtime from "DIST/jsx/jsx-runtime.js";
 export default runtime;`,
   },
   {
     name: "full-jsx-child",
     description: "Full JSX runtime with a Signal child, representative of a consumer entry",
     source: `import { signal } from "DIST/index.js";
-import { jsx } from "DIST/jsx-runtime.js";
+import { jsx } from "DIST/jsx/jsx-runtime.js";
 export default jsx("output", { children: signal("value") });`,
   },
   {
     name: "lite-jsx-child",
     description: "Lite JSX runtime with a Signal child and no direct bindings",
     source: `import { signal } from "DIST/index.js";
-import { jsx } from "DIST/lite/jsx-runtime.js";
+import { jsx } from "DIST/jsx/lite/jsx-runtime.js";
 export default jsx("output", { children: signal("value") });`,
   },
   {

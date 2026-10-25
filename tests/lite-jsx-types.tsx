@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals/lite */
+/** @jsxImportSource react-fine-grained-signals/jsx/lite */
 
 import { signal } from "../src/index.js";
 

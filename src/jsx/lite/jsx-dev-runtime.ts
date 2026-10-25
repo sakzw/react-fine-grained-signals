@@ -1,10 +1,10 @@
 import { Fragment, jsxDEV as reactJsxDEV } from "react/jsx-dev-runtime";
-import { createLiteJsxWrapper } from "./runtime/lite-jsx.js";
+import { createLiteJsxWrapper } from "../../runtime/lite-jsx.js";
 
 export { Fragment };
-export type { JSX } from "./lite-jsx-runtime.js";
+export type { JSX } from "./jsx-runtime.js";
 
-/** Development JSX factory for `jsxImportSource: "react-fine-grained-signals/lite"`. */
+/** Development JSX factory for `jsxImportSource: "react-fine-grained-signals/jsx/lite"`. */
 export function jsxDEV(
   type: Parameters<typeof reactJsxDEV>[0],
   props: Parameters<typeof reactJsxDEV>[1],

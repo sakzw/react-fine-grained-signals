@@ -55,23 +55,27 @@ const vite = await createViteServer({
   oxc: false,
   esbuild: {
     jsx: "automatic",
-    jsxImportSource: "react-fine-grained-signals",
+    jsxImportSource: "react-fine-grained-signals/jsx",
   },
   plugins: [reactSsrBridge, signals({ mode: "auto" })],
   resolve: {
     dedupe: ["react", "react-dom"],
     alias: [
       {
-        find: /^react-fine-grained-signals\/runtime$/,
-        replacement: source("src/runtime.ts"),
+        find: /^react-fine-grained-signals\/internal$/,
+        replacement: source("src/internal.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-runtime$/,
-        replacement: source("src/jsx-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx$/,
+        replacement: source("src/jsx.ts"),
       },
       {
-        find: /^react-fine-grained-signals\/jsx-dev-runtime$/,
-        replacement: source("src/jsx-dev-runtime.ts"),
+        find: /^react-fine-grained-signals\/jsx\/jsx-runtime$/,
+        replacement: source("src/jsx/jsx-runtime.ts"),
+      },
+      {
+        find: /^react-fine-grained-signals\/jsx\/jsx-dev-runtime$/,
+        replacement: source("src/jsx/jsx-dev-runtime.ts"),
       },
       {
         find: /^react-fine-grained-signals$/,

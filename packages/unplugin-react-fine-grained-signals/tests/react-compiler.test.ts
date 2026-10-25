@@ -25,9 +25,9 @@ import { transformWithOxc } from "vite";
 import { afterEach, describe, expect, it } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
-import * as libraryJsxRuntime from "../../../src/jsx-runtime.js";
-import * as libraryLiteJsxRuntime from "../../../src/lite-jsx-runtime.js";
-import * as libraryRuntime from "../../../src/runtime.js";
+import * as libraryJsxRuntime from "../../../src/jsx/jsx-runtime.js";
+import * as libraryLiteJsxRuntime from "../../../src/jsx/lite/jsx-runtime.js";
+import * as libraryRuntime from "../../../src/internal.js";
 import {
   transformReactFineGrainedSignals,
   type ReactFineGrainedSignalsMode,
@@ -46,9 +46,9 @@ const moduleRegistry: Record<string, unknown> = {
   "react/jsx-runtime": reactJsxRuntime,
   "react/compiler-runtime": reactCompilerRuntime,
   "react-fine-grained-signals": library,
-  "react-fine-grained-signals/runtime": libraryRuntime,
-  "react-fine-grained-signals/jsx-runtime": libraryJsxRuntime,
-  "react-fine-grained-signals/lite/jsx-runtime": libraryLiteJsxRuntime,
+  "react-fine-grained-signals/internal": libraryRuntime,
+  "react-fine-grained-signals/jsx/jsx-runtime": libraryJsxRuntime,
+  "react-fine-grained-signals/jsx/lite/jsx-runtime": libraryLiteJsxRuntime,
 };
 
 // Rewrites the compiled ES module into something `new Function` can run, so a
@@ -339,7 +339,7 @@ export function Counter() {
 // under measurement.
 const handWrittenRuntimeCounter = `
 import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 export const count = signal(0);
 
@@ -356,7 +356,7 @@ export function Counter() {
 // The control: the same hand-authored shape with the directive written by hand.
 const handWrittenRuntimeCounterWithDirective = `
 import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
+import { useManagedSignals } from "react-fine-grained-signals/internal";
 
 export const count = signal(0);
 
@@ -385,7 +385,7 @@ export function Counter() {
 `;
     const module = await loadModule(source, {
       signalsTransform: false,
-      jsxImportSource: "react-fine-grained-signals/lite",
+      jsxImportSource: "react-fine-grained-signals/jsx/lite",
     });
     const container = mount(module.Counter);
     expect(container.textContent).toBe("0");
@@ -521,7 +521,7 @@ export function Counter() {
   });
 
   it("leaves a hand-written runtime-import component uncompiled, directive or not", () => {
-    // The manual `react-fine-grained-signals/runtime` boundary is the transform's own
+    // The manual `react-fine-grained-signals/internal` boundary is the transform's own
     // managed shape, hand-authored. The compiler cannot lower `try` without
     // `catch` whoever wrote it, so it bails on the syntax alone -- the same
     // `CompileError` the transform-generated managed output produces, and the
@@ -827,7 +827,7 @@ export function Counter() {
 
   it("updates a direct JSX signal binding compiled by the compiler", async () => {
     const module = await loadModule(directBindingCounter, {
-      jsxImportSource: "react-fine-grained-signals",
+      jsxImportSource: "react-fine-grained-signals/jsx",
     });
     const container = mount(module.Counter);
 

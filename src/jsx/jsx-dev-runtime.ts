@@ -1,10 +1,10 @@
 import { Fragment, jsxDEV as reactJsxDEV } from "react/jsx-dev-runtime";
-import { createJsxWrapper } from "./runtime/jsx.js";
+import { createJsxWrapper } from "../runtime/jsx.js";
 
 export { Fragment };
-export type { JSX } from "./runtime/jsx.js";
+export type { JSX } from "../runtime/jsx.js";
 
-/** Development JSX factory for `jsxImportSource: "react-fine-grained-signals"`. */
+/** Development JSX factory for `jsxImportSource: "react-fine-grained-signals/jsx"`. */
 export function jsxDEV(
   type: Parameters<typeof reactJsxDEV>[0],
   props: Parameters<typeof reactJsxDEV>[1],

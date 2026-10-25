@@ -1,4 +1,4 @@
-/** @jsxImportSource react-fine-grained-signals/lite */
+/** @jsxImportSource react-fine-grained-signals/jsx/lite */
 // @vitest-environment jsdom
 
 import { act, StrictMode, Suspense, createElement, type ReactNode } from "react";
@@ -6,13 +6,13 @@ import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signal } from "../src/index.js";
-import { createElement as liteCreateElement } from "../src/lite.js";
-import { jsx as liteJsx } from "../src/lite-jsx-runtime.js";
-import { jsxDEV as liteJsxDEV } from "../src/lite-jsx-dev-runtime.js";
-import { createElement as packageLiteCreateElement } from "react-fine-grained-signals/lite";
-import { jsx as packageLiteJsx } from "react-fine-grained-signals/lite/jsx-runtime";
-import { jsxDEV as packageLiteJsxDEV } from "react-fine-grained-signals/lite/jsx-dev-runtime";
-import { jsx as fullJsx } from "../src/jsx-runtime.js";
+import { createElement as liteCreateElement } from "../src/jsx/lite.js";
+import { jsx as liteJsx } from "../src/jsx/lite/jsx-runtime.js";
+import { jsxDEV as liteJsxDEV } from "../src/jsx/lite/jsx-dev-runtime.js";
+import { createElement as packageLiteCreateElement } from "react-fine-grained-signals/jsx/lite";
+import { jsx as packageLiteJsx } from "react-fine-grained-signals/jsx/lite/jsx-runtime";
+import { jsxDEV as packageLiteJsxDEV } from "react-fine-grained-signals/jsx/lite/jsx-dev-runtime";
+import { jsx as fullJsx } from "../src/jsx/jsx-runtime.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 

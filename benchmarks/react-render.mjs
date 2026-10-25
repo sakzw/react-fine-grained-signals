@@ -28,7 +28,7 @@ const { signal, computed, useSignalTracking } = await import("../dist/index.js")
 // 57f824e) never calls the bare `useSignalTracking()` above -- it rewrites call
 // sites to this runtime entry point's managed boundary instead. Imported
 // the production runtime entry point's managed boundary.
-const { useManagedSignals, useSignalCapture } = await import("../dist/runtime.js");
+const { useManagedSignals, useSignalCapture } = await import("../dist/internal.js");
 const managedImpl = process.env.BENCH_MANAGED_IMPL ?? "capture";
 if (managedImpl !== "capture" && managedImpl !== "try-finally") {
   throw new Error(`Unknown BENCH_MANAGED_IMPL: ${managedImpl}`);
@@ -39,7 +39,7 @@ if (managedImpl !== "capture" && managedImpl !== "try-finally") {
 // components and host elements alike. Every case above builds elements with
 // `React.createElement` directly and so never touches this module at all;
 // the cases below (`jsx-component`, `jsx-host-element`) close that gap.
-const { jsx: signalsJsx, jsxs: signalsJsxs } = await import("../dist/jsx-runtime.js");
+const { jsx: signalsJsx, jsxs: signalsJsxs } = await import("../dist/jsx/jsx-runtime.js");
 
 const rows = Number.parseInt(process.argv[2] ?? process.env.BENCH_ROWS ?? "500", 10);
 const updates = Number.parseInt(process.argv[3] ?? process.env.BENCH_UPDATES ?? "300", 10);
