@@ -45,17 +45,22 @@ Keeps one deep signal, with property-level tracking, for the component lifetime.
 
 ```ts
 useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
-useComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
 ```
 
-Creates a computed signal whose identity stays stable while its dependency array (if any) is unchanged. Pass a getter for a read-only computed, or `{ get, set }` for a writable computed. The writable overload returns `FormBindableSignal<T>` and can be passed to a matching `bindValue` or `bindChecked`; getter-only calls remain `ReadonlySignal<T>`. A component must keep to one of the two dependency modes and keep the call site's read-only or writable capability fixed for its lifetime.
+Creates a read-only computed signal whose identity stays stable while its dependency array (if any) is unchanged. For a writable computed, use [`useWritableComputed`](#usewritablecomputed).
 
-- **Without a dependency array**, the getter must read only signals. Its computed identity stays stable across ordinary renders, so it must not capture props, React state, or other non-signal values.
-- Fast Refresh may recreate this memoized computed after an edit, so updated getters and writable setters take effect while React component state is preserved. This is development behavior; production identity remains stable across ordinary renders.
-- **With a dependency array**, list every non-signal value the getter captures: `useComputed(() => count.value * step, [step])`.
-- Keep the chosen mode and, when provided, the dependency array's length and order fixed. Switching omitted and explicit modes or changing its length throws before `useMemo` creates a replacement computed; React's warning-only length check can otherwise preserve the old computed closure.
+- **Omitting `dependencies` is the same as passing `[]`.** The getter must read only signals. Its computed identity stays stable across ordinary renders, so it must not capture props, React state, or other non-signal values.
+- Fast Refresh may recreate this memoized computed after an edit, so updated getters take effect while React component state is preserved. This is development behavior; production identity remains stable across ordinary renders.
+- **To capture a non-signal value**, list it: `useComputed(() => count.value * step, [step])`.
+- Keep the array's length and order fixed. A length change, including switching between omitted (or `[]`) and a non-empty list, throws before `useMemo` creates a replacement computed; React's warning-only length check can otherwise preserve the old computed closure.
 
-The `{ get, set }` overload follows the same dependency rules. When dependencies change, the render creates a separate computed with the new getter and setter, so the returned signal's identity changes; the previous signal keeps its own callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
+## useWritableComputed
+
+```ts
+useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
+```
+
+Creates a writable computed signal from `{ get, set }`. It returns `FormBindableSignal<T>`, so it can be passed to a matching `bindValue` or `bindChecked`. The dependency rules are those of `useComputed`: omitting `dependencies` is the same as `[]`, and `get` and `set` must list any non-signal value they capture. When dependencies change, the render creates a separate computed with the new getter and setter, so the returned signal's identity changes; the previous signal keeps its own callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
 
 ## useSignalEffect
 
@@ -141,9 +146,9 @@ const label = useDeepSignalValue(
 );
 ```
 
-- Omitting `dependencies` retains the initial selector closure. Use this when the selector reads only signal state; props, React state, and other captured values are not automatically tracked.
-- Pass `[]` to choose an explicit empty dependency array, or list every captured non-signal value (for example `[prefix]`) so the selector updates with it. Omitted and explicit modes cannot be switched at the same call site during the component's lifetime.
-- An explicit dependency array must keep a constant length and order. A length change between renders throws.
+- Omitting `dependencies` is the same as passing `[]`: the initial selector closure is retained. Use this when the selector reads only signal state; props, React state, and other captured values are not automatically tracked.
+- To capture a non-signal value, list every captured value (for example `[prefix]`) so the selector updates with it.
+- The dependency array must keep a constant length and order. A length change between renders, including switching between omitted (or `[]`) and a non-empty list, throws.
 - The selector must return a primitive snapshot. Object, Proxy, and function results are rejected at runtime with a `TypeError` because mutable results do not provide stable snapshot identity.
 
 See also: [core primitives](./core-primitives.md), [rendering optimization](./rendering-optimization.md).

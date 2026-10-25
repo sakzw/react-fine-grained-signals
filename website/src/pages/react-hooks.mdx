@@ -47,24 +47,31 @@ value.
 
 ```ts
 useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
-useComputed<T>(options: { get: () => T; set: (value: T) => void }, dependencies?: DependencyList): FormBindableSignal<T>
 ```
 
-A computed whose identity stays stable while its dependency array is unchanged.
+A read-only computed whose identity stays stable while its dependency array is
+unchanged.
 
-- **Without a dependency array**, the getter must read only signals; its computed
-  identity stays stable across ordinary renders.
+- **Omitting the dependency array is the same as `[]`**: the getter must read
+  only signals; its computed identity stays stable across ordinary renders.
 - Fast Refresh may recreate this memoized computed after an edit, applying the
-  edited getter/setter while preserving React component state. This is
-  development behavior; production identity remains stable across ordinary
-  renders.
-- **With a dependency array**, list every non-signal value the getter captures:
+  edited getter while preserving React component state. This is development
+  behavior; production identity remains stable across ordinary renders.
+- **To capture a non-signal value**, list it:
   `useComputed(() => count.value * step, [step])`.
-- Keep the omitted/explicit mode and explicit array length and order fixed. A
-  mode or length change throws before a stale memoized computed can be reused.
-- Keep getter-only versus writable capability fixed at the same Hook call site.
-  Switching between those overloads throws; changing dependency values at the
-  same positions is supported.
+- Keep the array length and order fixed. A length change, including switching
+  between omitted (or `[]`) and a non-empty list, throws before a stale memoized
+  computed can be reused.
+
+## useWritableComputed
+
+```ts
+useWritableComputed<T>(options: { get: () => T; set: (value: T) => void }, dependencies?: DependencyList): FormBindableSignal<T>
+```
+
+A writable computed built from `{ get, set }`, following the same dependency
+rules as `useComputed`. It can be passed to a matching `bindValue` or
+`bindChecked`.
 
 ## useSignalEffect
 

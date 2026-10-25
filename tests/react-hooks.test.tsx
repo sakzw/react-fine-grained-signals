@@ -9,7 +9,7 @@ import {
   batch,
   computed,
   signal,
-  useComputed,
+  useComputed, useWritableComputed,
   useSignalValue,
   useSignalTracking,
 } from "../src/index.js";
@@ -352,7 +352,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
       return <output aria-label="length guarded computed">{useSignalValue(product)}</output>;
     }
     function WritableProduct({ b, dependencies }: { b: number; dependencies: number[] }) {
-      const product = useComputed({
+      const product = useWritableComputed({
         get: () => source.value * 2 + b,
         set: (next: number) => { source.value = (next - b) / 2; },
       }, dependencies);
@@ -378,7 +378,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
 
     function Writable({ label }: { label: string }) {
       renders();
-      writable = useComputed({
+      writable = useWritableComputed({
         get: () => source.value * 2,
         set: (next) => { source.value = next / 2; },
       });
@@ -401,7 +401,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     let writable: FormBindableSignal<number> | undefined;
 
     function Product({ factor }: { factor: number }) {
-      writable = useComputed({
+      writable = useWritableComputed({
         get: () => source.value * factor,
         set: (next) => { source.value = next / factor; },
       }, [factor]);
@@ -430,7 +430,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     let committed: FormBindableSignal<number> | undefined;
 
     function Product({ factor }: { factor: number }) {
-      const product = useComputed({
+      const product = useWritableComputed({
         get: () => source.value * factor,
         set: (next) => { source.value = next / factor; },
       }, [factor]);
@@ -480,7 +480,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
 
     let total: FormBindableSignal<number> | undefined;
     function Capture() {
-      total = useComputed({
+      total = useWritableComputed({
         get: () => left.value + right.value,
         set: (next) => batch(() => {
           left.value = next / 2;
@@ -500,34 +500,26 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(screen.getByLabelText("writable total").textContent).toBe("10");
   });
 
-  it("reports a useComputed dependency-mode switch instead of crashing obscurely", () => {
+  it("reports a useComputed dependency length change instead of crashing obscurely", () => {
     const source = signal(2);
 
-    function Switcher({ withDependencies }: { withDependencies: boolean }) {
-      const value = useComputed(
-        () => source.value * 2,
-        withDependencies ? [source] : undefined,
-      );
+    function Switcher({ dependencies }: { dependencies: readonly unknown[] | undefined }) {
+      const value = useComputed(() => source.value * 2, dependencies as unknown[] | undefined);
       return <output aria-label="switcher">{useSignalValue(value)}</output>;
     }
 
-    // Starting without deps and then passing them used to quietly build a
-    // second computed with a fresh identity mid-lifetime; the reverse handed
-    // back `undefined` typed as `ReadonlySignal<T>`, so the failure surfaced
-    // at the call site as "Cannot read properties of undefined".
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const view = render(<Switcher withDependencies={false} />);
+    const view = render(<Switcher dependencies={undefined} />);
     expect(screen.getByLabelText("switcher").textContent).toBe("4");
-    expect(() => view.rerender(<Switcher withDependencies />)).toThrow(
-      /dependency-array mode changed/,
+    expect(() => view.rerender(<Switcher dependencies={[source]} />)).toThrow(
+      /dependencies length changed from 0 to 1/,
     );
     errorSpy.mockRestore();
 
-    // ...and the same error in the other direction.
     const reverseErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const reverse = render(<Switcher withDependencies />);
-    expect(() => reverse.rerender(<Switcher withDependencies={false} />)).toThrow(
-      /dependency-array mode changed/,
+    const reverse = render(<Switcher dependencies={[source]} />);
+    expect(() => reverse.rerender(<Switcher dependencies={undefined} />)).toThrow(
+      /dependencies length changed from 1 to 0/,
     );
     reverseErrorSpy.mockRestore();
   });
@@ -535,31 +527,51 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
   it.each([
     { label: "omitted to empty", before: undefined, after: [] },
     { label: "empty to omitted", before: [], after: undefined },
-  ])("keeps useComputed's omitted and explicit-empty modes distinct ($label)", ({ before, after }) => {
+  ])("treats omitted and empty dependencies of useComputed as the same ($label)", ({ before, after }) => {
     const source = signal(2);
+    const identities: unknown[] = [];
     function Reader({ dependencies }: { dependencies: number[] | undefined }) {
       const value = useComputed(() => source.value, dependencies);
+      identities.push(value);
       return <output aria-label="computed mode">{useSignalValue(value)}</output>;
     }
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const view = render(<Reader dependencies={before} />);
-    expect(() => view.rerender(<Reader dependencies={after} />)).toThrow(
-      /dependency-array mode changed/,
+    view.rerender(<Reader dependencies={after} />);
+    expect(screen.getByLabelText("computed mode").textContent).toBe("2");
+    expect(new Set(identities).size).toBe(1);
+  });
+
+  it("treats omitted and empty dependencies of useWritableComputed as the same", () => {
+    const source = signal(2);
+    const identities: unknown[] = [];
+    function Reader({ dependencies }: { dependencies: number[] | undefined }) {
+      const value = useWritableComputed(
+        { get: () => source.value, set: (next: number) => { source.value = next; } },
+        dependencies,
+      );
+      identities.push(value);
+      return <output aria-label="writable mode">{useSignalValue(value)}</output>;
+    }
+    const view = render(<Reader dependencies={undefined} />);
+    view.rerender(<Reader dependencies={[]} />);
+    expect(new Set(identities).size).toBe(1);
+  });
+
+  it("reports a useWritableComputed dependency length change", () => {
+    const source = signal(2);
+    function Reader({ dependencies }: { dependencies: number[] }) {
+      const value = useWritableComputed(
+        { get: () => source.value, set: (next: number) => { source.value = next; } },
+        dependencies,
+      );
+      return <output>{useSignalValue(value)}</output>;
+    }
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const view = render(<Reader dependencies={[1]} />);
+    expect(() => view.rerender(<Reader dependencies={[1, 2]} />)).toThrow(
+      /useWritableComputed: dependencies length changed from 1 to 2/,
     );
     errorSpy.mockRestore();
   });
 
-  it("reports a read-only/writable useComputed capability switch", () => {
-    const source = signal(2);
-    function Switcher({ writable }: { writable: boolean }) {
-      const value = writable
-        ? useComputed({ get: () => source.value, set: (next: number) => { source.value = next; } })
-        : useComputed(() => source.value);
-      return <output>{useSignalValue(value)}</output>;
-    }
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const view = render(<Switcher writable={false} />);
-    expect(() => view.rerender(<Switcher writable />)).toThrow(/capability changed/);
-    errorSpy.mockRestore();
-  });
 });

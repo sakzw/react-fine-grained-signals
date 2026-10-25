@@ -1,6 +1,6 @@
 /** @jsxImportSource react-fine-grained-signals/jsx */
 
-import { computed, signal, useComputed, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
+import { computed, signal, useComputed, useWritableComputed, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
 import type React from "react";
 
 const text = signal("value");
@@ -40,7 +40,7 @@ function HookCreatedBinding() {
 }
 
 function HookWritableComputedBinding() {
-  const hookComputed = useComputed({
+  const hookComputed = useWritableComputed({
     get: () => text.value,
     set: (value: string) => { text.value = value; },
   });

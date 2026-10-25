@@ -10,9 +10,9 @@ import {
   signal,
   computed,
   deepSignal,
-  useComputed,
   useDeepSignal,
   useDeepSignalValue,
+  useWritableComputed,
   useSignalTracking,
   type DeepSignal,
 } from "../src/index.js";
@@ -28,15 +28,15 @@ describe("SSR and hydration", () => {
     const choiceSource = signal("b");
     const selectedSource = signal<string[]>(["a", "c"]);
     function App() {
-      const text = useComputed({
+      const text = useWritableComputed({
         get: () => textSource.value,
         set: (next: string) => { textSource.value = next; },
       }, []);
-      const choice = useComputed({
+      const choice = useWritableComputed({
         get: () => choiceSource.value,
         set: (next: string) => { choiceSource.value = next; },
       });
-      const selected = useComputed({
+      const selected = useWritableComputed({
         get: () => selectedSource.value,
         set: (next: string[]) => { selectedSource.value = next; },
       });

@@ -20,5 +20,6 @@ export {
   useSignalEffect,
   useSignalTracking,
   useSignalValue,
+  useWritableComputed,
   type SignalSnapshot,
 } from "./react/hooks.js";

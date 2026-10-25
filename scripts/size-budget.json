@@ -6,13 +6,13 @@
     "gzip": 5056
   },
   "core+hooks": {
-    "gzip": 9024
+    "gzip": 8832
   },
   "deep": {
-    "gzip": 13952
+    "gzip": 13824
   },
   "index-full": {
-    "gzip": 17600
+    "gzip": 17408
   },
   "jsx-runtime": {
     "gzip": 13056

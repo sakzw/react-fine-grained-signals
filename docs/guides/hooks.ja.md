@@ -45,17 +45,22 @@ property単位で追跡するdeep signalを、コンポーネントの生存期�
 
 ```ts
 useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T>
-useComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
 ```
 
-依存配列(指定した場合)が変わらない間は同じidentityを保つcomputed signalを作ります。getterを渡すと読み取り専用、`{ get, set }`を渡すと書き込み可能です。書き込み可能なoverloadは`FormBindableSignal<T>`を返し、型が合う`bindValue`または`bindChecked`に渡せます。getterのみの呼び出しは引き続き`ReadonlySignal<T>`です。コンポーネントの生存期間中は依存関係のmodeと読み取り専用／書き込み可能のcapabilityを固定してください。
+依存配列(指定した場合)が変わらない間は同じidentityを保つ、読み取り専用のcomputed signalを作ります。書き込み可能なcomputedには[`useWritableComputed`](#usewritablecomputed)を使います。
 
-- **依存配列を省略する場合**、getterはsignalだけを読む必要があります。通常の再レンダーではcomputed identityが安定するため、props、React state、その他のsignalではない値を捕捉しないでください。
-- Fast Refreshは編集後にこのmemoized computedを再生成することがあり、React component stateを保ったまま新しいgetterやwritable setterを反映します。これは開発時の挙動で、本番では通常の再レンダー間でidentityが安定します。
-- **依存配列を渡す場合**、getterが捕捉するsignal以外の値をすべて列挙します: `useComputed(() => count.value * step, [step])`。
-- modeは固定し、依存配列を渡す場合は長さと順序も固定してください。mode切り替えと長さ変更は、`useMemo`が古いcomputedを再利用したり、不正な状態で新しいcomputedを作ったりする前に明確な例外になります。React標準のwarningだけに任せると、古いgetterが残ることがあります。
+- **依存配列を省略することは`[]`を渡すことと同じです。** getterはsignalだけを読む必要があります。通常の再レンダーではcomputed identityが安定するため、props、React state、その他のsignalではない値を捕捉しないでください。
+- Fast Refreshは編集後にこのmemoized computedを再生成することがあり、React component stateを保ったまま新しいgetterを反映します。これは開発時の挙動で、本番では通常の再レンダー間でidentityが安定します。
+- **signalではない値を捕捉する場合**は列挙します: `useComputed(() => count.value * step, [step])`。
+- 依存配列の長さと順序は固定してください。省略(または`[]`)と空でない配列との切り替えを含め、長さが変わると、`useMemo`が置き換えのcomputedを作る前に例外になります。React標準のwarningだけに任せると、古いgetterが残ることがあります。
 
-`{ get, set }`も同じ依存関係ルールに従います。依存値が変わると、そのrenderで新しいgetterとsetterを持つ別のcomputedを作るため、返るsignalのidentityが変わります。以前のsignalは元のcallbackを保持します。form bindingではgetterが表示値の正本です。setterが入力を拒否または正規化した場合、Reactがユーザーイベントを処理した後にgetterの値へDOMを戻します。
+## useWritableComputed
+
+```ts
+useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
+```
+
+`{ get, set }`から書き込み可能なcomputed signalを作ります。`FormBindableSignal<T>`を返すため、型が合う`bindValue`または`bindChecked`に渡せます。依存関係のルールは`useComputed`と同じで、依存配列の省略は`[]`と同じ、`get`と`set`が捕捉するsignal以外の値は列挙します。依存値が変わると、そのrenderで新しいgetterとsetterを持つ別のcomputedを作るため、返るsignalのidentityが変わります。以前のsignalは元のcallbackを保持します。form bindingではgetterが表示値の正本です。setterが入力を拒否または正規化した場合、Reactがユーザーイベントを処理した後にgetterの値へDOMを戻します。
 
 ## useSignalEffect
 
@@ -139,9 +144,9 @@ const label = useDeepSignalValue(
 );
 ```
 
-- `dependencies` を省略すると、最初のselector closureを保持します。signalの状態だけを読むselectorに使ってください。props、React state、その他の捕捉値を自動追跡することはありません。
-- `[]` は明示的な空依存配列です。`[prefix]` のようにsignal以外の捕捉値をすべて列挙すると、その値の変更時にselectorが更新されます。同じ呼び出し箇所で省略モードと明示モードを途中で切り替えることはできません。
-- 明示的な依存配列は長さと順序を一定に保ってください。レンダー間で長さが変わると例外を投げます。
+- `dependencies` を省略することは `[]` を渡すことと同じで、最初のselector closureを保持します。signalの状態だけを読むselectorに使ってください。props、React state、その他の捕捉値は自動では追跡されません。
+- signal以外の捕捉値を使う場合は、`[prefix]` のようにすべて列挙すると、その値の変更時にselectorが更新されます。
+- 依存配列は長さと順序を一定に保ってください。省略（または `[]`）と空でない配列との切り替えを含め、レンダー間で長さが変わると例外を投げます。
 - selectorはプリミティブなsnapshotを返す必要があります。object、Proxy、functionを返すと、runtimeで `TypeError` になります。mutableな値は安定したsnapshot identityを保証できないためです。
 
 関連: [コアプリミティブ](./core-primitives.ja.md)、[描画最適化](./rendering-optimization.ja.md)。

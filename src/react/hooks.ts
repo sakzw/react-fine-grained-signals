@@ -21,10 +21,25 @@ export { useSignalTracking } from "./use-signals.js";
 
 const EMPTY_DEPENDENCIES: DependencyList = [];
 
-/** Which of `useComputed`'s two mutually exclusive modes a call site uses. */
-type ComputedMode = "without a dependency array" | "with a dependency array";
-type DeepSignalValueMode = ComputedMode;
-type ComputedCapability = "read-only" | "writable";
+/**
+ * Throws when a dependency array changes length between renders of one call
+ * site. Omitting the array counts as an empty one.
+ */
+function useFixedDependencyLength(
+  hook: string,
+  errorName: string,
+  dependencies: DependencyList | undefined,
+): void {
+  const length = dependencies?.length ?? 0;
+  const initialLengthRef = useRef(length);
+  if (length !== initialLengthRef.current) {
+    const error = new Error(
+      `${hook}: dependencies length changed from ${initialLengthRef.current} to ${length}; keep it fixed.`,
+    );
+    error.name = errorName;
+    throw error;
+  }
+}
 
 /** An immutable value that React can safely compare as an external-store snapshot. */
 export type SignalSnapshot =
@@ -190,15 +205,14 @@ export function useDeepSignal<T extends object>(
  * Selects a property-level primitive snapshot from a deep signal.
  *
  * When `dependencies` is omitted, the initial selector closure is retained and
- * it must only depend on the deep signal. When provided, every non-signal
+ * it must only depend on the deep signal. When non-empty, every non-signal
  * value captured by `selector` must be listed. Object and proxy results are
  * intentionally rejected because mutable snapshots cannot satisfy
  * `useSyncExternalStore` identity semantics.
  *
- * Choose either omitted or explicit dependencies for this call site for its
- * lifetime. An explicit dependency array must keep a fixed length, matching
- * `useMemo`'s rules. Mode and length changes are caught and thrown as clear
- * errors rather than left to degrade into React's silent warning.
+ * Omitting `dependencies` is the same as passing `[]`. The array must keep a
+ * fixed length, matching `useMemo`'s rules; a length change is thrown as a
+ * clear error rather than left to degrade into React's silent warning.
  */
 export function useDeepSignalValue<
   T extends object,
@@ -208,35 +222,17 @@ export function useDeepSignalValue<
   selector: (value: T) => S,
   dependencies?: DependencyList,
 ): S {
-  const initialModeRef = useRef<DeepSignalValueMode | undefined>(undefined);
-  const mode: DeepSignalValueMode = dependencies === undefined
-    ? "without a dependency array"
-    : "with a dependency array";
-  initialModeRef.current ??= mode;
-  if (initialModeRef.current !== mode) {
-    const error = new Error(
-      `useDeepSignalValue: the dependency-array mode changed between renders (from ${initialModeRef.current} to ${mode}) for this call site. Keep either omitting dependencies or passing an array consistently.`,
-    );
-    error.name = "UseDeepSignalValueModeChangeError";
-    throw error;
-  }
-
   // A variable-length `dependencies` would otherwise only surface as React's
   // dev-mode "changed size between renders" warning on the `useMemo` call
   // below, while silently recreating the store (and losing selector/error
-  // history) on every subsequent render. Mirrors `useComputed`'s mode-switch
-  // guard below: a violation is a loud, actionable error instead of a
-  // silently degraded memo.
-  const initialDependencyLengthRef = useRef<number | undefined>(undefined);
-  if (dependencies !== undefined) {
-    initialDependencyLengthRef.current ??= dependencies.length;
-  }
-  if (
-    dependencies !== undefined &&
-    dependencies.length !== initialDependencyLengthRef.current
-  ) {
+  // history) on every subsequent render. Omitting the array is the same as
+  // `[]`, so a violation is a loud, actionable error instead of a silently
+  // degraded memo.
+  const dependencyLength = dependencies?.length ?? 0;
+  const initialDependencyLengthRef = useRef(dependencyLength);
+  if (dependencyLength !== initialDependencyLengthRef.current) {
     const error = new Error(
-      `useDeepSignalValue: the \`dependencies\` array length changed between renders (from ${initialDependencyLengthRef.current} to ${dependencies.length}) for this call site. Keep \`dependencies\` a fixed length across the component's lifetime, matching useMemo's rules.`,
+      `useDeepSignalValue: the \`dependencies\` array length changed between renders (from ${initialDependencyLengthRef.current} to ${dependencyLength}) for this call site. Keep \`dependencies\` a fixed length across the component's lifetime, matching useMemo's rules.`,
     );
     error.name = "UseDeepSignalValueDependencyLengthChangeError";
     throw error;
@@ -244,93 +240,47 @@ export function useDeepSignalValue<
 
   const store = useMemo(
     () => createDeepSelectorStore(source, selector),
-    dependencies === undefined ? [source] : [source, ...dependencies],
+    [source, ...(dependencies ?? EMPTY_DEPENDENCIES)],
   );
   return useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
 }
 
 /**
- * Creates a computed signal with a stable identity.
+ * Creates a read-only computed signal with a stable identity.
  *
- * When `dependencies` is omitted, the getter must only read signals. Its closure
- * stays stable across ordinary renders; Fast Refresh may recreate the memoized
- * computed so edited getters and setters take effect. Props, state, and other
- * non-signal values must not be captured in that mode.
+ * When `dependencies` is omitted (the same as `[]`), the getter must only read
+ * signals. Its closure stays stable across ordinary renders; Fast Refresh may
+ * recreate the memoized computed so edited getters take effect. Props, state,
+ * and other non-signal values must not be captured in that mode.
  *
  * When the getter captures props, state, or any other non-signal value, list all
  * of those values in `dependencies`. React memoization then creates a separate
  * computed when they change, rather than replacing the getter of an existing
  * computed during render. An abandoned render therefore cannot change the
- * closure used by the previously committed computed. Choose one mode for a
- * component's lifetime and keep an explicit dependency array's length fixed.
- * Invalid mode or length changes throw before `useMemo` can create or reuse a
+ * closure used by the previously committed computed. Keep the array's length
+ * fixed; a length change throws before `useMemo` can create or reuse a
  * computed for the invalid call.
  */
 export function useComputed<T>(
   getValue: () => T,
   dependencies?: DependencyList,
-): ReadonlySignal<T>;
-export function useComputed<T>(
+): ReadonlySignal<T> {
+  useFixedDependencyLength("useComputed", "UseComputedDependencyLengthChangeError", dependencies);
+  return useMemo(() => computed(getValue), dependencies ?? EMPTY_DEPENDENCIES);
+}
+
+/**
+ * Creates a writable computed signal with a stable identity. The dependency
+ * rules are those of {@link useComputed}: omitting `dependencies` is the same
+ * as `[]`, and both `get` and `set` must list any non-signal value they
+ * capture.
+ */
+export function useWritableComputed<T>(
   options: WritableComputedOptions<T>,
   dependencies?: DependencyList,
-): FormBindableSignal<T>;
-export function useComputed<T>(
-  source: (() => T) | WritableComputedOptions<T>,
-  dependencies?: DependencyList,
-): ReadonlySignal<T> | FormBindableSignal<T> {
-  const capability: ComputedCapability =
-    typeof source === "function" ? "read-only" : "writable";
-  const mode: ComputedMode =
-    dependencies === undefined ? "without a dependency array" : "with a dependency array";
-  // -1 represents the omitted mode; an explicit array is represented by its
-  // length. One primitive ref tracks both contracts without another allocation.
-  const dependencyToken = dependencies === undefined ? -1 : dependencies.length;
-  const initialDependencyTokenRef = useRef(dependencyToken);
-  const initialCapabilityRef = useRef(capability);
-  const initialDependencyToken = initialDependencyTokenRef.current;
-
-  // Both directions of a mode switch are silently destructive, so neither is
-  // allowed to reach the caller as a mystery. Going deps -> no-deps used to
-  // hand back `undefined` typed as `ReadonlySignal<T>`, so the crash surfaced
-  // at the call site as "Cannot read properties of undefined (reading
-  // 'value')" with nothing pointing back here. Going no-deps -> deps quietly
-  // built a *second* computed with a new identity mid-lifetime, invalidating
-  // every subscription already made to the first.
-  if ((initialDependencyToken < 0) !== (dependencyToken < 0)) {
-    const initialMode: ComputedMode = initialDependencyToken < 0
-      ? "without a dependency array"
-      : "with a dependency array";
-    const error = new Error(
-      `useComputed: dependency-array mode changed from ${initialMode} to ${mode}; keep it consistent.`,
-    );
-    error.name = "UseComputedModeChangeError";
-    throw error;
-  }
-
-  if (initialCapabilityRef.current !== capability) {
-    const error = new Error(
-      `useComputed: capability changed from ${initialCapabilityRef.current} to ${capability}; keep the getter form consistent.`,
-    );
-    error.name = "UseComputedCapabilityChangeError";
-    throw error;
-  }
-
-  if (
-    dependencyToken >= 0 &&
-    dependencyToken !== initialDependencyToken
-  ) {
-    const error = new Error(
-      `useComputed: dependencies length changed from ${initialDependencyToken} to ${dependencyToken}; keep it fixed.`,
-    );
-    error.name = "UseComputedDependencyLengthChangeError";
-    throw error;
-  }
-
-  const memoizedComputed = useMemo(
-    () => typeof source === "function" ? computed(source) : computed(source),
-    dependencies ?? EMPTY_DEPENDENCIES,
-  );
-  return memoizedComputed;
+): FormBindableSignal<T> {
+  useFixedDependencyLength("useWritableComputed", "UseWritableComputedDependencyLengthChangeError", dependencies);
+  return useMemo(() => computed(options), dependencies ?? EMPTY_DEPENDENCIES);
 }
 
 /**

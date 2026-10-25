@@ -692,38 +692,20 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     errorSpy.mockRestore();
   });
 
-  it("rejects switching between omitted and explicit dependency modes", () => {
+  it.each([
+    { label: "omitted to empty", before: undefined, after: [] },
+    { label: "empty to omitted", before: [], after: undefined },
+  ])("treats omitted and empty dependencies as the same ($label)", ({ before, after }) => {
     const state = deepSignal({ count: 1 });
 
-    function Selected({ withDependencies }: { withDependencies: boolean }) {
-      const dependencies = withDependencies ? [] : undefined;
+    function Selected({ dependencies }: { dependencies: number[] | undefined }) {
       const value = useDeepSignalValue(state, (current) => current.count, dependencies);
       return <output aria-label="dependency mode guard">{value}</output>;
     }
 
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const view = render(<Selected withDependencies={false} />);
-    expect(() => view.rerender(<Selected withDependencies />)).toThrow(
-      /dependency-array mode changed between renders/,
-    );
-    errorSpy.mockRestore();
-  });
-
-  it("rejects switching from explicit to omitted dependencies", () => {
-    const state = deepSignal({ count: 1 });
-
-    function Selected({ withDependencies }: { withDependencies: boolean }) {
-      const dependencies = withDependencies ? [] : undefined;
-      const value = useDeepSignalValue(state, (current) => current.count, dependencies);
-      return <output aria-label="reverse dependency mode guard">{value}</output>;
-    }
-
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const view = render(<Selected withDependencies />);
-    expect(() => view.rerender(<Selected withDependencies={false} />)).toThrow(
-      /dependency-array mode changed between renders/,
-    );
-    errorSpy.mockRestore();
+    const view = render(<Selected dependencies={before} />);
+    view.rerender(<Selected dependencies={after} />);
+    expect(screen.getByLabelText("dependency mode guard").textContent).toBe("1");
   });
 
   it("keeps committed selector stores intact when a source-changing render suspends", async () => {
