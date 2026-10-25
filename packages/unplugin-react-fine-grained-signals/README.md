@@ -13,14 +13,12 @@ supported bundlers.
 ## Installation
 
 ```sh
-pnpm add react-fine-grained-signals@0.2.1
-pnpm add -D unplugin-react-fine-grained-signals@0.2.1
+pnpm add react-fine-grained-signals
+pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-These are the currently published npm versions (checked October 19, 2026). The
-repository's matching v0.3.0 runtime and plugin are not published yet; do not
-use v0.2.1 with the v0.3.0 instructions below. After v0.3.0 is published,
-install matching `0.3.x` versions of both packages.
+Install matching `0.3.x` versions of both packages; do not mix v0.2.x with the
+instructions below.
 
 `react-fine-grained-signals` is a peer dependency. Node.js `^22.18.0 || >=24.11.0`
 is required — the range Babel 8, which the transform runs on, declares.

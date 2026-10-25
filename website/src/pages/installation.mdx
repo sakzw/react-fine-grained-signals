@@ -1,7 +1,7 @@
 # Installation
 
 ```bash
-pnpm add react-fine-grained-signals@0.2.1
+pnpm add react-fine-grained-signals
 ```
 
 React 19 or newer is a peer dependency. The package is ESM-only and publishes
@@ -9,11 +9,8 @@ its entry points and types through `exports`, so TypeScript needs
 `moduleResolution` set to `bundler`, `node16`, or `nodenext` to resolve
 `react-fine-grained-signals/utils` and the JSX runtime.
 
-:::warning
-This site documents the repository's unreleased v0.3.0 source. As checked on
-October 19, 2026, npm publishes v0.2.1 for both the runtime and build plugin.
-The command above installs v0.2.1, not the APIs shown on this site. Wait for the
-v0.3.0 release before using these APIs from npm. Upgrading from v0.2.1? Read the
+:::info
+This site documents the v0.3 line. Upgrading from v0.2.1? Read the
 [v0.3 migration guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.3.md).
 :::
 
@@ -36,11 +33,10 @@ The hooks work without any build configuration. To have components subscribe
 automatically, add the plugin:
 
 ```bash
-pnpm add -D unplugin-react-fine-grained-signals@0.2.1
+pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-The currently published v0.2.1 plugin is for the v0.2.1 runtime. Use matching
-`0.3.x` versions only after both v0.3.0 packages are published.
+Use matching `0.3.x` versions of the plugin and the runtime.
 
 ```ts [vite.config.ts]
 import { defineConfig } from 'vite'

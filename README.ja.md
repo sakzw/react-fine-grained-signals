@@ -12,15 +12,15 @@
 動くサンプル付きのドキュメントサイト(英語)は、独立したVocsプロジェクトの[`website/`](website)からbuildします。
 v0.2.1からの移行については[v0.3移行ガイド](./docs/migration/v0.3.ja.md)を参照してください。
 v0.1.1からの移行については[v0.2移行ガイド](./docs/migration/v0.2.ja.md)を参照してください。
-[v0.3.0 release notes](./docs/releases/v0.3.0.md)は未公開のドラフトです。
+変更内容は[v0.3.0 release notes](./docs/releases/v0.3.0.md)を参照してください。
 
 ## インストール
 
 ```sh
-pnpm add react-fine-grained-signals@0.2.1
+pnpm add react-fine-grained-signals
 ```
 
-このrepositoryには未公開のv0.3.0系が含まれています。2026-10-19時点でnpmに公開されているのは、本packageとbuild pluginのどちらもv0.2.1です。上のコマンドはv0.2.1をinstallし、このcheckoutに記載されたv0.3.0のAPIは含みません。npmからv0.3.0を使う場合は公開後に更新してください。移行内容は[v0.3移行ガイド](./docs/migration/v0.3.ja.md)を参照してください。
+v0.3系がinstallされます。v0.2.1からupgradeする場合の移行内容は[v0.3移行ガイド](./docs/migration/v0.3.ja.md)を参照してください。
 
 React(19以降)はpeer dependencyで、Node.js 22以降が必要です。packageはESMのみで、
 entry pointと型を `exports` で公開しているため、`react-fine-grained-signals/utils`
@@ -90,10 +90,10 @@ DOMの直接bindingは不要で、reactiveなSignal子要素だけが必要な�
 対象関数へtop-level capture Hookとper-read trackingをbuild時に追加します。best-effortな `useSignalTracking()` boundaryが必要な場合は `transform: "inject"` を選んでください。pluginは別packageなので個別にinstallします。
 
 ```sh
-pnpm add -D unplugin-react-fine-grained-signals@0.2.1
+pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-現在npmで公開されているpluginもv0.2.1で、公開済みruntime v0.2.1と組み合わせます。v0.3.0公開後は両packageの同じ`0.3.x` release lineをinstallしてください。
+runtimeとpluginは、同じ`0.3.x` release lineをinstallしてください。
 
 そのうえで、bundlerに応じたentry point（`/vite`、`/rollup`、`/webpack`、`/rspack`、`/esbuild`）をbuild設定に追加します。
 

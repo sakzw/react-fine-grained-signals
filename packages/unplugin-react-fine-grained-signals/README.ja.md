@@ -12,11 +12,11 @@ integrationです。
 ## インストール
 
 ```sh
-pnpm add react-fine-grained-signals@0.2.1
-pnpm add -D unplugin-react-fine-grained-signals@0.2.1
+pnpm add react-fine-grained-signals
+pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-これは2026-10-19時点のnpm公開versionです。repository内のv0.3.0 runtimeとpluginはまだ公開されていません。v0.2.1を以下のv0.3.0向け設定と組み合わせないでください。v0.3.0公開後は、両packageの同じ`0.3.x` release lineをinstallしてください。
+両packageの同じ`0.3.x` release lineをinstallしてください。v0.2.xを以下のv0.3.0向け設定と組み合わせないでください。
 
 `react-fine-grained-signals` はpeer dependencyです。Node.jsは
 `^22.18.0 || >=24.11.0` が必要です。変換が依存するBabel 8が宣言している範囲です。

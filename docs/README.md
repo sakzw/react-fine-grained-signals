@@ -9,7 +9,7 @@
 
 ## Release notes
 
-- [v0.3.0 release notes (unreleased draft)](releases/v0.3.0.md)
+- [v0.3.0 release notes](releases/v0.3.0.md)
 
 ## Guides
 
