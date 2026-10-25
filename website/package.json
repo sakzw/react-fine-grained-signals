@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm@12.8.1",
+  "packageManager": "pnpm@12.15.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/fix-base-path-links.mjs",
@@ -12,20 +12,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "react": "~19.3.0",
-    "react-dom": "~19.3.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
     "react-fine-grained-signals": "file:./vendor/react-fine-grained-signals.tgz",
     "vocs": "2.10.3",
-    "waku": "1.0.0-rc.3"
+    "waku": "1.0.0-rc.4"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
-    "@vitejs/plugin-react": "^6",
-    "playwright": "1.64.0",
-    "typescript": "^5.9.0",
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.2",
+    "playwright": "1.64.1",
+    "typescript": "7.1.0-beta",
     "unplugin-react-fine-grained-signals": "file:./vendor/unplugin-react-fine-grained-signals.tgz",
-    "vite": "^8"
+    "vite": "8.3.5"
   }
 }
