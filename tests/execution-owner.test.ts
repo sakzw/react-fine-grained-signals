@@ -21,14 +21,12 @@ const graphOwner: GraphExecutionOwnerV2 = {
   version: 2,
   kind: "graph",
   runtimeToken: {},
-  add() {},
 };
 
 const renderOwner: RenderExecutionOwnerV2 = {
   version: 2,
   kind: "render",
   runtimeToken: {},
-  add() {},
 };
 
 describe("execution owner scopes", () => {

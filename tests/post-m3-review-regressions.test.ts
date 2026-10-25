@@ -1,6 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
-import type { ReadableInteropV1 } from "../src/core/interop.js";
 import { batch, deepSignal, effect, signal } from "../src/index.js";
 
 // Regression coverage for the post-M3 v0.2.0 release review.
@@ -119,32 +117,6 @@ describe("effect creation with a self-invalidating first run", () => {
     stopDouble();
   });
 
-  it("still retries when a foreign subscription reports a newer revision during the first run", () => {
-    const runtime = createReactiveRuntime();
-    const local = runtime.signal(0);
-    let notify: ((revision: number) => void) | undefined;
-    const protocol: ReadableInteropV1 = {
-      version: 1,
-      runtimeToken: {},
-      getRevision: () => 1,
-      subscribe(listener) {
-        notify = listener;
-        return { unsubscribe: () => {}, revision: 1 };
-      },
-    };
-    let runs = 0;
-    const dispose = runtime.effect(() => {
-      runs += 1;
-      // A self-write and a stale foreign dependency in the same first run:
-      // the foreign staleness must not be dropped with the self-write.
-      if (local.value === 0) local.value = 1;
-      if (runs === 1) runtime.graphOwner.add(protocol, 0);
-    });
-
-    expect(runs).toBe(2);
-    expect(notify).toBeDefined();
-    dispose();
-  });
 });
 
 describe("deepSignal array identity lookups", () => {

@@ -161,13 +161,17 @@ isSignal(value: unknown): value is ReadonlySignal<unknown>
 
 Reports whether a value came from `signal`, `computed`, or `deepSignal`. The custom JSX runtime and the control-flow components route on it, so a false negative degrades a reactive binding into a plain prop instead of raising an error.
 
-### Cross-instance identification
+### Only one copy of the package
 
-Identification therefore has to work across package instances. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal.v2")` whose value is the protocol version, currently `1`, and `isSignal` accepts any value carrying a supported version that also exposes `peek()`. A duplicate copy of the package — pnpm hoisting differences, a monorepo consumer, an ESM/CJS split — or a signal that crossed a realm boundary is still recognized. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
+Install a single copy of `react-fine-grained-signals`. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal.v2")`, and each copy keeps its own graph, so a signal can only be read by the copy that created it. If a second copy is loaded (pnpm hoisting differences, a monorepo consumer, an ESM/CJS split), mixing them is an error rather than a silently stale value: a read that crosses copies from inside an `effect`, a `computed`, or a tracked component throws `Multiple copies of react-fine-grained-signals are loaded`, and `isSignal` throws for a signal the other copy created. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
 
-The key names the v0.2 generation. v0.1.x used `react-fine-grained-signals.signal`, and its signals cannot take part in v0.2 tracking (nor v0.2 signals in v0.1.x tracking), so the two generations deliberately do not recognize each other's signals: mixing them fails loudly in JSX instead of rendering a value that never updates. Keep a single major line of this package per page; see [the migration guide](../migration/v0.2.md#mixing-v01x-and-v02).
+Fix the duplication in the install: run your package manager's dedupe (pnpm's `dedupe-peer-dependents`, `npm dedupe`), or make the bundler resolve one copy (Vite and Rollup's `resolve.dedupe: ["react-fine-grained-signals"]`, webpack's `resolve.alias`).
 
-Identity and reactivity use separate contracts. RFSG's `SIGNAL_BRAND` lets `isSignal()` recognize a public signal shape; the private `ReadableInteropV1` protocol carries reactive reads between RFSG package copies in the same global environment. Each copy owns its own runtime on `alien-signals/system`, so copies do not need one shared alien-signals module. Cross-copy batch calls are not one atomic transaction; see [the packaging note](../../development/design/packaging.md).
+Detection has a limit. A plain read of another copy's signal made outside any `effect`, `computed`, or tracked component has nothing on the stack to mark it, so it returns that signal's current value without an error. It will not update anything, which is the same as reading any value outside reactive code.
+
+The brand key names the v0.2 generation. v0.1.x used `react-fine-grained-signals.signal` and does not recognize v0.2 signals (nor the reverse), so keep a single major line of this package per page.
+
+Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
 
 Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
 

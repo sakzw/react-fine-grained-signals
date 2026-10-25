@@ -6,7 +6,7 @@
 
 ## `alien-signals` is a runtime dependency
 
-RFSG owns one private reactive runtime per package copy, built on `alien-signals/system`. `alien-signals` is therefore a runtime dependency and consumers do not need to install it separately. Independent RFSG copies interoperate through RFSG's private same-global readable protocol; they do not need to resolve one shared alien-signals module. React remains a peer dependency. Cross-runtime batches are local to each copy and are not one atomic transaction. `pnpm test:consumer` checks the manifest and `pnpm test:phase4-duplicate` exercises separate alien-signals systems.
+RFSG owns one private reactive runtime per package copy, built on `alien-signals/system`. `alien-signals` is therefore a runtime dependency and consumers do not need to install it separately. Copies do not interoperate: install a single copy of RFSG (dedupe it with pnpm's `dedupe-peer-dependents` or the bundler's `resolve.dedupe`). The copies share only the execution owner and runtime token on `globalThis`, which exist so that a mix is detected: a read that crosses copies from inside an effect, a computed, or a tracked component throws `Multiple copies of react-fine-grained-signals are loaded`, and `isSignal` throws for a signal another copy created. A plain read made outside any owner cannot be detected. React remains a peer dependency. `pnpm test:consumer` checks the manifest, and `tests/multiple-copies.test.ts` bundles two copies and checks the error.
 
 ## `"sideEffects": false`
 

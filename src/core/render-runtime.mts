@@ -2,8 +2,6 @@
 import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
 import type { RenderExecutionOwnerV2 } from "./execution-owner.js";
 import { activeRenderCollector, setActiveRenderCollector } from "./render-tracking.js";
-import { isReadableProtocol } from "./foreign-readable-v1.mjs";
-import { READABLE_INTEROP_V1 } from "./interop-context.mjs";
 import type { RenderCollector } from "./render-tracking.js";
 import type { AlienDerivedGraphRuntime, RenderAttempt, RenderReadableDependency, RuntimeComputed, RuntimeNode, RuntimeReadable, RuntimeSource, SpeculativeComputedEntry } from "./alien-derived-types.js";
 
@@ -79,12 +77,12 @@ function readComputed(readable: object, node: RuntimeComputed, attempt: RenderAt
 // Sources bump their revision on every value-changing write. A computed's
 // revision only moves when it re-evaluates, so it also has to be clean (a
 // write upstream marks even an unwatched computed dirty or pending, since
-// computeds stay linked to their sources). Foreign protocols report their own.
+// computeds stay linked to their sources).
 function isEntryCurrent(entry: SpeculativeComputedEntry): boolean {
   for (const [dependency, revision] of entry.dependencies) {
     const node = core.getNodeForReadable(dependency);
     if (node === undefined) {
-      if (core.getDependencyRevision(dependency) !== revision) return false;
+      if (getRenderVersion(dependency) !== revision) return false;
     } else if (node.renderRevision !== revision || (node.kind === "computed" && !core.isComputedClean(node))) {
       return false;
     }
@@ -112,7 +110,6 @@ function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bar
     kind: "render" as const,
     scopePolicy,
     runtimeToken: core.runtimeToken,
-    add(protocol, revision) { addDependency(attempt, protocol, revision); },
     isSpeculative() { return activeSpeculativeComputed !== undefined; },
     markSpeculativeDeepRead() { attempt.markSpeculativeDeepRead(); },
     own: core.adopt,
@@ -204,9 +201,7 @@ function isRenderAttemptCurrent(attempt: RenderAttempt): boolean {
 }
 
 function getRenderVersion(readable: object): number {
-  if (isReadableProtocol(readable) || core.getNodeForReadable(readable) !== undefined || Reflect.get(readable, READABLE_INTEROP_V1) !== undefined) {
-    return core.getDependencyRevision(readable);
-  }
+  if (core.getNodeForReadable(readable) !== undefined) return core.getReadableRevision(readable);
   const getVersion = Reflect.get(readable, "getRenderVersion");
   if (typeof getVersion === "function") return getVersion.call(readable) as number;
   throw new TypeError("Unknown render dependency");

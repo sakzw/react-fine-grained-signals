@@ -8,4 +8,4 @@ playwright-report/
 test-results/
 .sandbox/
 playground/
-.cross-copy-effects-*/
+.multiple-copies-*/

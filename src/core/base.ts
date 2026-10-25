@@ -1,4 +1,5 @@
 import { coreRuntime } from "./core-runtime.js";
+import { multipleCopiesError } from "./execution-owner.js";
 import { SIGNAL_BRAND, SIGNAL_BRAND_MIN_VERSION, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
 
 /** A readable reactive value. */
@@ -35,9 +36,8 @@ export type FormBindableChoiceSignal<T> = Signal<T> & { readonly [formBindableSi
 
 const signalInstances = new WeakSet<object>();
 
-// The brand carries a protocol version instead of `true` so a future instance
-// can tell which contract a foreign signal claims. See signal-brand.ts for why
-// v0.2 uses a different key from v0.1.x rather than a larger version number.
+// The brand carries a version instead of `true`. A branded value this copy did
+// not create comes from another copy of the package. See signal-brand.ts.
 
 /** Marks an internal signal implementation for the public identity guard. */
 export function registerSignal<T extends object>(value: T): T {
@@ -59,18 +59,20 @@ export function registerSignal<T extends object>(value: T): T {
   return value;
 }
 
-/** Returns whether a value came from this package's signal APIs, any copy. */
+/**
+ * Returns whether a value came from this package's signal APIs. A signal from
+ * another loaded copy of the package cannot be read here, so it throws.
+ */
 export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
   if (typeof value !== "object" || value === null) return false;
-  // The WeakSet is both the cheaper lookup and the authority for values created
-  // by this instance; the brand is the fallback for every other instance.
   if (signalInstances.has(value)) return true;
   const brand = (value as { [SIGNAL_BRAND]?: unknown })[SIGNAL_BRAND];
   if (typeof brand !== "number" || brand < SIGNAL_BRAND_MIN_VERSION) return false;
-  // A foreign brand is a claim, not a proof. Checking the cheap half of the
-  // contract turns a malformed brand into `false` instead of a crash inside a
-  // render, and costs nothing on the local-instance path above.
-  return typeof (value as ReadonlySignal<unknown>).peek === "function";
+  if (coreRuntime.getNodeForReadable(value as { value: unknown; peek(): unknown }) !== undefined) return true;
+  // The brand is an own property of every signal this package creates, so one
+  // that is not registered here was created by another loaded copy.
+  if (Object.prototype.hasOwnProperty.call(value, SIGNAL_BRAND)) throw multipleCopiesError();
+  return false;
 }
 
 /** Creates a writable reactive value. */

@@ -15,7 +15,7 @@ import type {
 } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
 import { untrackedRender } from "../core/render-tracking.js";
-import { subscribeReadableV1 } from "../core/readable-subscription.js";
+import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import type { DependencyList } from "react";
 export { useSignalTracking } from "./use-signals.js";
 
@@ -51,7 +51,7 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
 /**
  * Shared `useSyncExternalStore` wiring for effect-backed subscriptions only:
  * the dynamic deep-selector store and structural-readable compatibility
- * fallback. Package readables with ReadableInterop V1 use a direct watcher.
+ * fallback. This package's own readables use a direct watcher.
  * On `subscribe`, starts an `effect()` that reruns `onEvaluate` on relevant
  * writes and notifies React when it reports a change.
  *
@@ -365,11 +365,10 @@ export function useSignalEffect(
 
 /**
  * Reads a signal and subscribes the component to subsequent changes through
- * ReadableInterop V1 when available.
+ * a direct watcher when it is one of this package's readables.
  *
  * `useSyncExternalStore` owns the initial consistency check after subscribing.
- * For V1 readables, its watcher tracks revisions without an EffectNode. A
- * read that throws (a computed whose cached error `.value` rethrows) remains
+ * A read that throws (a computed whose cached error `.value` rethrows) remains
  * for the render-time `getSnapshot` to surface to an Error Boundary; only the
  * structural-readable fallback needs an effect to contain background errors.
  *
@@ -379,9 +378,9 @@ export function useSignalEffect(
  */
 export function useSignalValue<T>(source: ReadonlySignal<T> & NotDeepSignal): T {
   const subscribe = useCallback((notify: () => void) => {
-    const unsubscribe = subscribeReadableV1(source, notify);
+    const unsubscribe = subscribeLocalReadable(source, notify);
     if (unsubscribe !== undefined) return unsubscribe;
-    // Preserve the legacy bridge for structural readables without V1.
+    // Structural readables from elsewhere need the effect bridge.
     return createEffectBackedStoreSubscription(() => {
       source.value;
       return true;

@@ -108,9 +108,10 @@ another installed copy of this package.
 isSignal(value: unknown): value is ReadonlySignal<unknown>
 ```
 
-Reports whether a value came from `signal`, `computed`, or `deepSignal`,
-including signals from another copy of the package.
+Reports whether a value came from `signal`, `computed`, or `deepSignal`.
+Install a single copy of the package: a signal created by a second loaded copy
+throws.
 
 For `deepSignal`, see [Deep Signal & Collections](/deep-signal). The complete
-reference, including error containment and cross-copy identity, is
+reference, including error containment and what happens when two copies are loaded, is
 [Core primitives](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/guides/core-primitives.md).

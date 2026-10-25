@@ -618,15 +618,13 @@ describe("deepSignal", () => {
     const box = new Box(1);
     const map = new Map([["value", 1]]);
     const nestedSignal = deepSignal({ value: 1 });
-    const foreignSignal = brandForeign({ value: 1, peek: () => 1 });
-    const state = deepSignal({ box, map, nestedSignal, foreignSignal });
+    const state = deepSignal({ box, map, nestedSignal });
 
     expect(state.value.box).toBe(box);
     expect(state.value.map).not.toBe(map);
     expect(new Map(state.value.map)).toEqual(map);
     expect(state.peek().map).toBe(map);
     expect(state.value.nestedSignal).toBe(nestedSignal);
-    expect(state.value.foreignSignal).toBe(foreignSignal);
   });
 
   it("does not let deep state answer the signal identity probe", () => {
@@ -674,9 +672,10 @@ describe("deepSignal", () => {
     // The brand is now a non-configurable own value of the proxy target, so the
     // proxy has to report it rather than hide it and trip an invariant.
     expect((userProxy as unknown as Record<symbol, unknown>)[SIGNAL_BRAND]).toBe(1);
-    expect(isSignal(userProxy)).toBe(true);
-    // And the raw object now reads as a foreign signal, so it stays opaque.
-    expect(state.value.user).toBe(raw);
+    // And the raw object now carries a brand this copy did not create, which
+    // is what a signal from another loaded copy looks like.
+    expect(() => isSignal(userProxy)).toThrow(/Multiple copies/);
+    expect(() => state.value.user).toThrow(/Multiple copies/);
   });
 
   it("does not collect nested dependencies through peek", () => {

@@ -20,7 +20,6 @@ import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { coreRuntime } from "../src/core/core-runtime.js";
-import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { computed, signal, useSignalTracking, type Signal } from "../src/index.js";
 import { useManagedSignals } from "../src/runtime.js";
 
@@ -184,6 +183,8 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     const { container } = mount(<App />, true);
     const box = container.firstChild as HTMLElement;
     await settle();
+    // The initial mount subscribed once; re-attaching must not subscribe again.
+    subscribe.mockClear();
 
     act(() => { style.value = { color: "red", width: 10 }; });
     writer.arm({ color: "green" });
@@ -197,8 +198,7 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     expect(refB.current).toBe(box);
     expect(box.style.cssText).toBe("color: blue;");
     expect(container.firstChild).toBe(box);
-    // A V1 readable binding subscribes without the effect bridge, and a kept
-    // binding never resubscribes.
+    // A kept binding never resubscribes.
     expect(subscribe).not.toHaveBeenCalled();
     expect(coreRuntime.hasSubscribers(style)).toBe(true);
   });
@@ -497,44 +497,6 @@ describe("B'2: a tracked component deleted inside a hidden Activity releases its
         expect(container.querySelector("#reader")?.textContent).toBe("9");
       });
 
-      it(`${scope}: a foreign-copy computed is released on hidden deletion and fresh on reveal (strict=${strict})`, async () => {
-        const foreign = createReactiveRuntime();
-        const source = foreign.signal(0);
-        let evaluations = 0;
-        const value = foreign.computed(() => {
-          evaluations += 1;
-          return source.value * 10;
-        });
-        const { App, controls } = createActivityApp(createReader(scope, () => value.value, false));
-        const { container } = mount(<App />, strict);
-        await settle();
-        expect(container.querySelector("#reader")?.textContent).toBe("0");
-        expect(foreign.hasSubscribers(value)).toBe(true);
-
-        // Hidden, then revealed with a fresh value.
-        hide(container, controls, "transition");
-        await settle();
-        expect(foreign.hasSubscribers(value)).toBe(false);
-        act(() => { source.value = 1; });
-        act(() => controls.setMode("visible"));
-        await settle();
-        expect(container.querySelector("#reader")?.textContent).toBe("10");
-        expect(foreign.hasSubscribers(value)).toBe(true);
-        act(() => { source.value = 2; });
-        await settle();
-        expect(container.querySelector("#reader")?.textContent).toBe("20");
-
-        // Hidden again, then deleted while hidden.
-        hide(container, controls, "default");
-        await settle();
-        act(() => controls.setShown(false));
-        await settle();
-        expect(foreign.hasSubscribers(value)).toBe(false);
-        const before = evaluations;
-        act(() => { source.value = 3; });
-        await settle();
-        expect(evaluations).toBe(before);
-      });
     }
 
     it(`${scope}: a visible re-render after a Strict Mode effect replay keeps the subscription`, async () => {

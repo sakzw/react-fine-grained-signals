@@ -86,7 +86,7 @@ export function useTaskStore(): TaskStore {
 
 **Hot module replacement。** `store.ts` が差し替わると初期値のまま新しいsignalが作られるため、保存のたびに状態がリセットされます。さらに悪いことに、差し替えられなかったコンポーネント側のmoduleは古いsignalへの束縛を保持し続け、書き込みが見えなくなります。リセットを受け入れるか、差し替えをまたいでストアを保持する `import.meta.hot.accept` ハンドラを書いてください。
 
-**ストアを別パッケージに置く場合。** RFSGの各package copyは独立したruntimeを持ち、privateなsame-global protocolを通じてリアクティブなreadを連携できるため、consumerと同じ `alien-signals` moduleを解決する必要はありません。copyをまたぐbatchは各runtime内でのみ動作し、atomicにはなりません。`SIGNAL_BRAND` によるidentity判定とreactive interopは別のcontractです。[パッケージングの検討docs](../../development/design/packaging.ja.md)と[コアプリミティブ](./core-primitives.ja.md#issignal)を参照してください。
+**ストアを別パッケージに置く場合。** `react-fine-grained-signals` に依存するストアpackageは、consumerと同じcopyに解決される必要があります。各copyは独自のグラフを持つため、2つ目のcopyはエラーになります。`effect`、`computed`、追跡されるコンポーネントの内側でそのsignalを読むと `Multiple copies of react-fine-grained-signals are loaded` をthrowします。ストアpackageではこのライブラリをpeer dependencyとして宣言し、dedupeしてください（pnpmの `dedupe-peer-dependents`、ViteとRollupの `resolve.dedupe`）。詳しくは[コアプリミティブ](./core-primitives.ja.md#packageのcopyは1つだけにする)を参照してください。
 
 **テスト。** Vitestがまっさらなmodule registryを与えるのはテスト*ファイル*ごとであってテストごとではないため、module scopeのsignalは同一ファイル内の次の `it()` へ値を持ち越します。`beforeEach` でリセットするか、各テストの内側で状態を作ってください。
 

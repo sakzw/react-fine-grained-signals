@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { batch, computed, effect, isSignal, signal, untracked } from "../src/index.js";
-import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import {
   setActiveRenderCollector,
   type RenderDependency,
@@ -168,23 +167,6 @@ describe("core signal primitives", () => {
     expect(() => { broken.value = 3; }).toThrow("setter failed");
   });
 
-  it("keeps writable computed values observable across independent runtime copies", () => {
-    const sourceRuntime = createReactiveRuntime();
-    const observerRuntime = createReactiveRuntime();
-    const source = sourceRuntime.signal(2);
-    const doubled = sourceRuntime.computed(
-      () => source.value * 2,
-      (value) => { source.value = value / 2; },
-    );
-    const values: number[] = [];
-    const dispose = observerRuntime.effect(() => { values.push(doubled.value); });
-
-    expect(values).toEqual([4]);
-    doubled.value = 10;
-    expect(source.value).toBe(5);
-    expect(values).toEqual([4, 10]);
-    dispose();
-  });
 
   it("coalesces notifications made inside batch", () => {
     const left = signal(1);
@@ -304,11 +286,13 @@ describe("core signal primitives", () => {
     expect(isSignal(new Proxy({ value: 1, peek: () => 1 }, {}))).toBe(false);
   });
 
-  it("identifies a signal branded by a second package instance", () => {
-    expect(isSignal(brandForeign({ value: 1, peek: () => 1 }))).toBe(true);
-    // A later protocol version only widens the `{ value, peek() }` contract,
-    // so an older instance keeps trusting it.
-    expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, 2))).toBe(true);
+  it("throws for a signal branded by a second package instance", () => {
+    // A brand this copy did not create comes from another loaded copy, which
+    // cannot take part in this copy's graph.
+    expect(() => isSignal(brandForeign({ value: 1, peek: () => 1 }))).toThrow(/Multiple copies/);
+    expect(() => isSignal(brandForeign({ value: 1, peek: () => 1 }, 2))).toThrow(/Multiple copies/);
+    // An inherited brand is not an own brand, so it is not a claim of identity.
+    expect(isSignal(Object.create(brandForeign({ value: 1, peek: () => 1 })) as object)).toBe(false);
   });
 
   it("does not recognize a v0.1.x-generation signal brand", () => {
@@ -324,13 +308,10 @@ describe("core signal primitives", () => {
     expect(Symbol.for("react-fine-grained-signals.signal") in computed(() => 0)).toBe(false);
   });
 
-  it("rejects a brand that claims no supported protocol version", () => {
+  it("rejects a brand that claims no supported version", () => {
     expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, true))).toBe(false);
     expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, "1"))).toBe(false);
     expect(isSignal(brandForeign({ value: 1, peek: () => 1 }, 0))).toBe(false);
-    // A brand is a claim: without the contract behind it the value is rejected
-    // here instead of crashing later inside a render.
-    expect(isSignal(brandForeign({ value: 1 }))).toBe(false);
   });
 
   it("keeps the brand off every enumerable surface", () => {
@@ -946,19 +927,5 @@ describe("computed error propagation", () => {
     expect(errorSpy).toHaveBeenCalledTimes(1);
     const reported = errorSpy.mock.calls[0]?.[1] as { cause: unknown } | undefined;
     expect(reported?.cause).toBeInstanceOf(Error);
-  });
-});
-
-describe("readable interop protocol accessor", () => {
-  const READABLE_INTEROP_V1 = Symbol.for("react-fine-grained-signals.readable-interop.v1");
-
-  it("resolves the signal through an inheriting receiver and ignores unrelated receivers", () => {
-    const source = signal(1);
-    const own = Reflect.get(source, READABLE_INTEROP_V1) as { getRevision(): number } | undefined;
-    expect(typeof own?.getRevision).toBe("function");
-    expect(Reflect.get(Object.create(source) as object, READABLE_INTEROP_V1)).toBe(own);
-    const getter = Object.getOwnPropertyDescriptor(source, READABLE_INTEROP_V1)?.get;
-    expect(getter?.call({})).toBeUndefined();
-    expect(Reflect.get(new Proxy({}, { get: (_target, key, receiver) => Reflect.get(source, key, receiver) }), READABLE_INTEROP_V1)).toBeUndefined();
   });
 });

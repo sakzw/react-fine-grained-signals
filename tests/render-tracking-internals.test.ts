@@ -5,11 +5,8 @@ import {
   withSynchronousExecutionOwner,
   type GraphExecutionOwnerV2,
 } from "../src/core/execution-owner.js";
-import { attachReadableInterop, type ReadableInteropV1 } from "../src/core/interop.js";
 import {
   activeRenderCollector,
-  getForeignReadableRenderDependency,
-  getForeignRenderDependency,
   hasActiveRenderCollector,
   notifyListener,
   RenderSubscription,
@@ -25,17 +22,6 @@ afterEach(() => {
   executionContext.frames.length = 0;
   vi.restoreAllMocks();
 });
-
-function foreignProtocol(): ReadableInteropV1 {
-  return {
-    version: 1,
-    runtimeToken: {},
-    getRevision: () => 9,
-    subscribe(listener) {
-      return { revision: 9, unsubscribe: () => listener(9) };
-    },
-  };
-}
 
 describe("render tracking internals", () => {
   it("tracks dependencies with current or explicit versions only under an active collector", () => {
@@ -78,7 +64,6 @@ describe("render tracking internals", () => {
         version: 2,
         kind: "graph",
         runtimeToken: {},
-        add() {},
       };
       withSynchronousExecutionOwner(graphOwner, () => {
         expect(untrackedRender(() => {
@@ -91,23 +76,6 @@ describe("render tracking internals", () => {
     }
     expect(add).not.toHaveBeenCalled();
     expect(executionContext.owner).toBeUndefined();
-  });
-
-  it("adapts foreign readable protocols once and resolves invalid candidates to undefined", () => {
-    const foreign = { value: 1 };
-    expect(getForeignReadableRenderDependency(foreign)).toBeUndefined();
-    const protocol = foreignProtocol();
-    attachReadableInterop(foreign, protocol);
-    const dependency = getForeignReadableRenderDependency(foreign);
-    expect(dependency).toBeDefined();
-    expect(getForeignReadableRenderDependency(foreign)).toBe(dependency);
-    expect(getForeignRenderDependency(protocol)).toBe(dependency);
-    expect(dependency?.getRenderVersion()).toBe(9);
-    const listener = vi.fn();
-    const unsubscribe = dependency?.subscribeRender(listener);
-    expect(listener).not.toHaveBeenCalled();
-    unsubscribe?.();
-    expect(listener).toHaveBeenCalledExactlyOnceWith();
   });
 
   it("versions subscriptions, notifies a stable listener snapshot, and releases hooks", () => {

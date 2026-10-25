@@ -3,19 +3,16 @@ import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs"
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { executionContext } from "../src/core/execution-owner.js";
 import {
-  getReadableInterop,
-  READABLE_INTEROP_V1,
-  type ReadableInteropV1,
-} from "../src/core/interop.js";
-import {
   setActiveRenderCollector,
   type RenderDependency,
-  untrackedRender,
 } from "../src/core/render-tracking.js";
+
+const renderRuntimes: ReturnType<typeof createReactiveRuntime>[] = [];
 
 function createRenderRuntime() {
   const runtime = createReactiveRuntime();
   runtime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+  renderRuntimes.push(runtime);
   return runtime;
 }
 
@@ -58,7 +55,6 @@ interface GraphNodeInspection {
   live?: boolean;
   subscription?: { unsubscribe(): void } | undefined;
   unsubscribe?: (() => void) | undefined;
-  protocol?: ReadableInteropV1;
   deps?: GraphLinkInspection;
   subs?: GraphLinkInspection;
 }
@@ -93,9 +89,11 @@ function graphNodeFrom(runtime: ReturnType<typeof createReactiveRuntime>, readab
 }
 
 function renderVersionOf(readable: { readonly value: unknown }): number {
-  const protocol = getReadableInterop(readable as object);
-  if (protocol === undefined) throw new Error("Readable does not expose ReadableInterop V1");
-  return protocol.getRevision();
+  for (const runtime of renderRuntimes) {
+    const node = runtime.getNodeForReadable(readable as { readonly value: unknown; peek(): unknown });
+    if (node !== undefined) return node.renderRevision;
+  }
+  throw new Error("Readable was not created by a test runtime");
 }
 
 describe("private reactive runtime", () => {
@@ -949,94 +947,6 @@ describe("private reactive runtime", () => {
     expect(graphNodeFrom(runtime, value).deps).toBeUndefined();
   });
 
-  it("composes runtime instances through local external nodes", () => {
-    const a = createRenderRuntime();
-    const b = createRenderRuntime();
-    const local = a.signal(1);
-    const source = b.signal(2);
-    const total = a.computed(() => local.value + source.value);
-    const seen: number[] = [];
-    const dispose = a.effect(() => {
-      seen.push(total.value);
-    });
-
-    expect(seen).toEqual([3]);
-    const totalNode = graphNodeOf(total);
-    const dependencyKinds: string[] = [];
-    let link = totalNode.deps;
-    let external: GraphNodeInspection | undefined;
-    while (link !== undefined) {
-      dependencyKinds.push(link.dep.kind ?? "unknown");
-      if (link.dep.kind === "external") external = link.dep;
-      link = link.nextDep;
-    }
-    expect(dependencyKinds).toContain("source");
-    expect(dependencyKinds).toContain("external");
-    expect(external).toBeDefined();
-    expect(external).not.toBe(graphNodeOf(source));
-
-    source.value = 2;
-    expect(seen).toEqual([3]);
-    source.value = 4;
-    expect(seen).toEqual([3, 5]);
-    dispose();
-  });
-
-  it("tracks a foreign source directly in a local reaction", () => {
-    const local = createRenderRuntime();
-    const foreignRuntime = createRenderRuntime();
-    const foreign = foreignRuntime.signal("before");
-    const seen: string[] = [];
-    const dispose = local.effect(() => {
-      seen.push(foreign.value);
-    });
-
-    expect(seen).toEqual(["before"]);
-    foreign.value = "after";
-    expect(seen).toEqual(["before", "after"]);
-    dispose();
-    foreign.value = "disposed";
-    expect(seen).toEqual(["before", "after"]);
-  });
-
-  it("publishes a stable non-enumerable protocol with a unique token per runtime", () => {
-    const a = createRenderRuntime();
-    const b = createRenderRuntime();
-    const sourceA = a.signal(1);
-    const sourceB = b.signal(1);
-    const protocolA = Reflect.get(sourceA, READABLE_INTEROP_V1) as ReadableInteropV1;
-    const protocolB = Reflect.get(sourceB, READABLE_INTEROP_V1) as ReadableInteropV1;
-
-    expect(protocolA).toBe(Reflect.get(sourceA, READABLE_INTEROP_V1));
-    expect(protocolA.version).toBe(1);
-    expect(protocolA.runtimeToken).not.toBe(protocolB.runtimeToken);
-    expect(Object.keys(sourceA)).not.toContain(String(READABLE_INTEROP_V1));
-    expect(Object.getOwnPropertyDescriptor(sourceA, READABLE_INTEROP_V1)?.enumerable).toBe(false);
-  });
-
-  it("materializes a stable interop protocol only when another runtime requests it", () => {
-    const runtime = createRenderRuntime();
-    const source = runtime.signal(2);
-    const sourceNode = runtime.getNodeForReadable(source)!;
-    const derived = runtime.computed(() => source.value * 2);
-    const derivedNode = runtime.getNodeForReadable(derived)!;
-
-    expect(sourceNode.readableProtocol).toBeUndefined();
-    expect(derivedNode.readableProtocol).toBeUndefined();
-    expect(derived.value).toBe(4);
-    expect(sourceNode.readableProtocol).toBeUndefined();
-    expect(derivedNode.readableProtocol).toBeUndefined();
-
-    const descriptor = Object.getOwnPropertyDescriptor(derived, READABLE_INTEROP_V1);
-    expect(descriptor?.get).toBeTypeOf("function");
-    expect(descriptor?.enumerable).toBe(false);
-    const protocol = getReadableInterop(derived) as ReadableInteropV1;
-    expect(protocol.version).toBe(1);
-    expect(derivedNode.readableProtocol).toBe(protocol);
-    expect(Reflect.get(derived, READABLE_INTEROP_V1)).toBe(protocol);
-    expect(getReadableInterop(derived)).toBe(protocol);
-  });
-
   it("keeps local source and computed reads on the direct graph path", () => {
     const runtime = createRenderRuntime();
     const source = runtime.signal(2);
@@ -1052,306 +962,6 @@ describe("private reactive runtime", () => {
     expect(graphNodeOf(derived).subs?.sub.kind).toBe("effect");
     source.value = 3;
     expect(seen).toEqual([4, 6]);
-    dispose();
-  });
-
-  it("preserves foreign computed equality boundaries and transitive graph shape", () => {
-    const a = createRenderRuntime();
-    const b = createRenderRuntime();
-    const c = createRenderRuntime();
-    const source = c.signal(1);
-    const parity = b.computed(() => source.value % 2);
-    const doubledParity = a.computed(() => parity.value * 2);
-    const seen: number[] = [];
-    const dispose = a.effect(() => {
-      seen.push(doubledParity.value);
-    });
-
-    source.value = 3;
-    expect(seen).toEqual([2]);
-    source.value = 2;
-    expect(seen).toEqual([2, 0]);
-
-    const aNode = graphNodeOf(doubledParity);
-    expect(aNode.deps?.dep.kind).toBe("external");
-    const bNode = graphNodeOf(parity);
-    expect(bNode.deps?.dep.kind).toBe("external");
-    expect(graphNodeOf(source).subs?.sub).not.toBe(aNode.deps?.dep);
-    dispose();
-  });
-
-  it("does not notify foreign subscribers for a reverted semantic batch", () => {
-    const a = createRenderRuntime();
-    const b = createRenderRuntime();
-    const source = b.signal(0);
-    const seen: number[] = [];
-    const dispose = a.effect(() => {
-      seen.push(source.value);
-    });
-
-    b.batch(() => {
-      source.value = 1;
-      source.value = 0;
-    });
-    expect(renderVersionOf(source)).toBe(2);
-    expect(seen).toEqual([0]);
-    dispose();
-  });
-
-  it("does not subscribe cold foreign-dependent computed chains and pulls fresh values", () => {
-    const a = createRenderRuntime();
-    const b = createRenderRuntime();
-    const c = createRenderRuntime();
-    const source = c.signal(1);
-    const middle = b.computed(() => source.value + 1);
-    const cold = a.computed(() => middle.value * 2);
-
-    expect(cold.value).toBe(4);
-    expect(graphNodeFrom(c, source).subs).toBeUndefined();
-    source.value = 3;
-    expect(cold.value).toBe(8);
-    expect(graphNodeFrom(c, source).subs).toBeUndefined();
-  });
-
-  it("activates and releases foreign subscriptions with live computed demand", () => {
-    const local = createRenderRuntime();
-    const foreignRuntime = createRenderRuntime();
-    const foreign = foreignRuntime.signal(1);
-    const doubled = local.computed(() => foreign.value * 2);
-
-    expect(doubled.value).toBe(2);
-    const external = graphNodeOf(doubled).deps?.dep;
-    expect(external?.kind).toBe("external");
-    expect(external?.unsubscribe).toBeUndefined();
-    expect(graphNodeOf(foreign).subs).toBeUndefined();
-
-    const seen: number[] = [];
-    const dispose = local.effect(() => {
-      seen.push(doubled.value);
-    });
-    expect(seen).toEqual([2]);
-    expect(external?.unsubscribe).toBeDefined();
-    expect(graphNodeOf(foreign).subs).toBeDefined();
-
-    foreign.value = 2;
-    expect(seen).toEqual([2, 4]);
-    dispose();
-    expect(external?.unsubscribe).toBeUndefined();
-    expect(graphNodeOf(foreign).subs).toBeUndefined();
-  });
-
-  it("releases stale foreign branches and reuses their inactive ExternalNode", () => {
-    const local = createRenderRuntime();
-    const foreignRuntime = createRenderRuntime();
-    const chooseLeft = local.signal(true);
-    const left = foreignRuntime.signal("left");
-    const right = foreignRuntime.signal("right");
-    const selected = local.computed(() => chooseLeft.value ? left.value : right.value);
-    const seen: string[] = [];
-    const dispose = local.effect(() => {
-      seen.push(selected.value);
-    });
-
-    const initialExternal = graphNodeOf(selected).deps?.nextDep?.dep;
-    expect(initialExternal?.kind).toBe("external");
-    expect(initialExternal?.unsubscribe).toBeDefined();
-
-    chooseLeft.value = false;
-    const rightExternal = graphNodeOf(selected).deps?.nextDep?.dep;
-    expect(rightExternal?.kind).toBe("external");
-    expect(initialExternal?.unsubscribe).toBeUndefined();
-    expect(rightExternal?.unsubscribe).toBeDefined();
-    left.value = "left ignored";
-    right.value = "right updated";
-    expect(seen).toEqual(["left", "right", "right updated"]);
-
-    chooseLeft.value = true;
-    expect(graphNodeOf(selected).deps?.nextDep?.dep).toBe(initialExternal);
-    expect(initialExternal?.unsubscribe).toBeDefined();
-    dispose();
-  });
-
-  it("tracks foreign dependency state across local/foreign branch changes", () => {
-    const local = createRenderRuntime();
-    const foreignRuntime = createRenderRuntime();
-    const chooseForeign = local.signal(true);
-    const localSource = local.signal(1);
-    const foreignSource = foreignRuntime.signal(10);
-    const inner = local.computed(() => chooseForeign.value ? foreignSource.value : localSource.value);
-    const outer = local.computed(() => inner.value + 1);
-
-    expect(outer.value).toBe(11);
-    expect(graphNodeOf(inner).foreignDependent).toBe(true);
-    expect(graphNodeOf(outer).foreignDependent).toBe(true);
-    chooseForeign.value = false;
-    expect(outer.value).toBe(2);
-    expect(graphNodeOf(inner).foreignDependent).toBe(false);
-    expect(graphNodeOf(outer).foreignDependent).toBe(false);
-
-    chooseForeign.value = true;
-    expect(outer.value).toBe(11);
-    expect(graphNodeOf(inner).foreignDependent).toBe(true);
-    expect(graphNodeOf(outer).foreignDependent).toBe(true);
-    foreignSource.value = 20;
-    expect(outer.value).toBe(21);
-  });
-
-  it("moves foreign liveness from runtime B to runtime C and releases both on disposal", () => {
-    const local = createRenderRuntime();
-    const runtimeB = createRenderRuntime();
-    const runtimeC = createRenderRuntime();
-    const chooseB = local.signal(true);
-    const sourceB = runtimeB.signal("B");
-    const sourceC = runtimeC.signal("C");
-    const selected = local.computed(() => chooseB.value ? sourceB.value : sourceC.value);
-    const seen: string[] = [];
-    const dispose = local.effect(() => { seen.push(selected.value); });
-
-    const externalNodes = () => {
-      const nodes: GraphNodeInspection[] = [];
-      let link = graphNodeOf(selected).deps;
-      while (link !== undefined) {
-        if (link.dep.kind === "external") nodes.push(link.dep);
-        link = link.nextDep;
-      }
-      return nodes;
-    };
-    const [externalB] = externalNodes();
-    expect(externalB?.unsubscribe).toBeDefined();
-
-    chooseB.value = false;
-    const [externalC] = externalNodes();
-    expect(externalB?.unsubscribe).toBeUndefined();
-    expect(externalC?.unsubscribe).toBeDefined();
-    sourceB.value = "B stale";
-    sourceC.value = "C updated";
-    expect(seen).toEqual(["B", "C", "C updated"]);
-
-    dispose();
-    expect(externalC?.unsubscribe).toBeUndefined();
-    expect(graphNodeOf(sourceB).subs).toBeUndefined();
-    expect(graphNodeOf(sourceC).subs).toBeUndefined();
-  });
-
-  it("turns a read-to-subscribe revision mismatch into a bounded local retry", () => {
-    const runtime = createRenderRuntime();
-    const runtimeToken = {};
-    let subscribeCalls = 0;
-    let unsubscribeCalls = 0;
-    let notify: ((revision: number) => void) | undefined;
-    const protocol: ReadableInteropV1 = {
-      version: 1,
-      runtimeToken,
-      getRevision: () => 1,
-      subscribe(listener) {
-        subscribeCalls += 1;
-        notify = listener;
-        return {
-          unsubscribe: () => { unsubscribeCalls += 1; },
-          revision: 1,
-        };
-      },
-    };
-    const observed: number[] = [];
-    const dispose = runtime.effect(() => {
-      observed.push(0);
-      if (observed.length === 1) runtime.graphOwner.add(protocol, 0);
-    });
-
-    expect(subscribeCalls).toBe(1);
-    expect(observed).toHaveLength(2);
-    expect(notify).toBeDefined();
-    dispose();
-    expect(unsubscribeCalls).toBe(1);
-  });
-
-  it("keeps foreign reads untracked under untracked but tracked under untrackedRender", () => {
-    const local = createRenderRuntime();
-    const foreignRuntime = createRenderRuntime();
-    const foreign = foreignRuntime.signal(0);
-    const untrackedRuns = vi.fn();
-    const untrackedDispose = local.effect(() => {
-      local.untracked(() => foreign.value);
-      untrackedRuns();
-    });
-    foreign.value = 1;
-    expect(untrackedRuns).toHaveBeenCalledTimes(1);
-    untrackedDispose();
-
-    const renderUntrackedRuns = vi.fn();
-    const renderUntrackedDispose = local.effect(() => {
-      untrackedRender(() => foreign.value);
-      renderUntrackedRuns();
-    });
-    foreign.value = 2;
-    expect(renderUntrackedRuns).toHaveBeenCalledTimes(2);
-    renderUntrackedDispose();
-  });
-
-  it("keeps speculative computed reads graph-detached and reports their exact revision", () => {
-    const foreignRuntime = createRenderRuntime();
-    const source = foreignRuntime.signal(1);
-    const computed = foreignRuntime.computed(() => source.value * 2);
-    const attempt = foreignRuntime.renderAdapter.createRenderAttempt();
-    foreignRuntime.renderAdapter.withRenderScope(attempt, () => {
-      expect(computed.value).toBe(2);
-    });
-
-    expect(attempt.dependencies.get(computed)).toBe(graphNodeFrom(foreignRuntime, computed).renderRevision);
-    expect(graphNodeFrom(foreignRuntime, source).subs).toBeUndefined();
-    expect(graphNodeFrom(foreignRuntime, computed).deps).toBeUndefined();
-  });
-
-  it("keeps foreign error notifications connected through recovery", () => {
-    const local = createRenderRuntime();
-    const foreignRuntime = createRenderRuntime();
-    const shouldThrow = foreignRuntime.signal(false);
-    const revision = foreignRuntime.signal(0);
-    const reusedError = new Error("foreign computed error");
-    const foreign = foreignRuntime.computed(() => {
-      revision.value;
-      if (shouldThrow.value) throw reusedError;
-      return revision.value;
-    });
-    const localComputed = local.computed(() => foreign.value + 1);
-    const reported = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const seen: string[] = [];
-    const dispose = local.effect(() => {
-      try {
-        seen.push(`value:${localComputed.value}`);
-      } catch (error) {
-        seen.push(`error:${error === reusedError}`);
-      }
-    });
-
-    shouldThrow.value = true;
-    expect(seen).toEqual(["value:1", "error:true"]);
-    expect(reported).not.toHaveBeenCalled();
-    const errorRevision = renderVersionOf(localComputed);
-    revision.value = 1;
-    expect(renderVersionOf(localComputed)).toBeGreaterThan(errorRevision);
-    expect(seen).toEqual(["value:1", "error:true", "error:true"]);
-    shouldThrow.value = false;
-    expect(seen).toEqual(["value:1", "error:true", "error:true", "value:2"]);
-    expect(localComputed.value).toBe(2);
-    dispose();
-  });
-
-  it("does not track foreign reads performed by effect cleanup", () => {
-    const local = createRenderRuntime();
-    const foreignRuntime = createRenderRuntime();
-    const trigger = local.signal(0);
-    const foreign = foreignRuntime.signal(0);
-    const seen: number[] = [];
-    const dispose = local.effect(() => {
-      seen.push(trigger.value);
-      return () => { foreign.value; };
-    });
-
-    trigger.value = 1;
-    expect(seen).toEqual([0, 1]);
-    foreign.value = 1;
-    expect(seen).toEqual([0, 1]);
     dispose();
   });
 
@@ -1403,23 +1013,4 @@ describe("private reactive runtime", () => {
     stopC();
   });
 
-  it("coalesces notifications at the writing runtime's batch boundary", () => {
-    const a = createRenderRuntime();
-    const b = createRenderRuntime();
-    const local = a.signal(0);
-    const foreign = b.signal(0);
-    const seen: Array<[number, number]> = [];
-    const dispose = a.effect(() => {
-      seen.push([local.value, foreign.value]);
-    });
-
-    b.batch(() => {
-      foreign.value = 1;
-      local.value = 1;
-    });
-    // The foreign runtime publishes after its own batch, so the local bridge
-    // observes the final value once; batch schedulers are still per-runtime.
-    expect(seen).toEqual([[0, 0], [1, 1]]);
-    dispose();
-  });
 });

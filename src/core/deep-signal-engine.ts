@@ -1,10 +1,4 @@
-import {
-  attachReadableInterop,
-  getReadableInterop,
-  getSharedInteropContext,
-  isInteropSpeculative,
-  markInteropSpeculativeDeepRead,
-} from "./interop.js";
+import { delegateSubscription } from "./readable-subscription.js";
 import { hasActiveRenderCollector } from "./render-tracking.js";
 import { plainResultIteratorNext } from "./plain-result-iterators.js";
 import { SIGNAL_BRAND } from "./signal-brand.js";
@@ -215,8 +209,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   // stored. Remember that copy so assigning the same carrier again preserves the
   // same identity and aliases, just like assigning an ordinary raw object does.
   const normalizedProxyCarriers = new WeakMap<object, object>();
-  const isSpeculative = adapter.isSpeculative ?? isInteropSpeculative;
-  const markSpeculativeDeepRead = adapter.markSpeculativeDeepRead ?? markInteropSpeculativeDeepRead;
+  const isSpeculative = adapter.isSpeculative ?? (() => false);
+  const markSpeculativeDeepRead = adapter.markSpeculativeDeepRead ?? (() => {});
 
   function shouldTrackDeepRead(): boolean {
     if (isSpeculative()) {
@@ -225,11 +219,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       markSpeculativeDeepRead();
       return false;
     }
-    const shared = getSharedInteropContext();
-    return adapter.hasActiveSubscriber() ||
-      hasActiveRenderCollector() ||
-      shared.graphCollector !== undefined ||
-      shared.renderCollector !== undefined;
+    return adapter.hasActiveSubscriber() || hasActiveRenderCollector();
   }
 
   /**
@@ -1717,8 +1707,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
 
     constructor(source: DeepSignalSource<T>) {
       this.#source = source;
-      const protocol = getReadableInterop(this.#source);
-      if (protocol !== undefined) attachReadableInterop(this, protocol);
+      delegateSubscription(this, this.#source);
     }
 
     get value(): T {

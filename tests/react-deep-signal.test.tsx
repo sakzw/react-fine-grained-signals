@@ -16,7 +16,6 @@ import {
   useSignalValue,
   useSignalTracking,
 } from "../src/index.js";
-import { getSharedInteropContext } from "../src/core/interop.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -36,7 +35,6 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       seen.push([value, state.value.user.name]);
       return () => { cleanups.push(state.value.user.name); };
     });
-    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
     let shouldTrigger = true;
     const evaluate = vi.fn(() => {
       if (shouldTrigger) {
@@ -55,13 +53,11 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     render(<Reader />);
     expect(seen).toEqual([[0, "Ada"], [1, "Ada"]]);
     expect(cleanups).toEqual(["Ada"]);
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
     const mountedRenders = renders.mock.calls.length;
     act(() => { state.value.user.name = "Grace"; });
     expect(seen).toEqual([[0, "Ada"], [1, "Ada"], [1, "Grace"]]);
     expect(cleanups).toEqual(["Ada", "Grace"]);
     expect(renders).toHaveBeenCalledTimes(mountedRenders);
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
   it("isolates an initial effect created by a speculative getter", async () => {
@@ -85,18 +81,15 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       return <output aria-label="initial-effect-deep">{outer.value}</output>;
     }
 
-    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
     const view = render(<Reader />);
     expect(seen).toEqual(["Ada", "Ada"]);
     expect(cleanupRuns).toBe(1);
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
     const renderCount = renders.mock.calls.length;
 
     act(() => { state.value.user.name = "Grace"; });
     expect(seen).toEqual(["Ada", "Ada", "Grace"]);
     expect(renders).toHaveBeenCalledTimes(renderCount);
     expect(cleanupRuns).toBe(2);
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
 
     view.unmount();
     await Promise.resolve();
@@ -139,10 +132,8 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       renders();
       return <output aria-label="production-nested-peek">{outer.value}</output>;
     }
-    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
     render(<Reader />);
     expect(screen.getByLabelText("production-nested-peek").textContent).toBe("Ada!");
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
     const renderCount = renders.mock.calls.length;
     const outerCount = evaluateOuter.mock.calls.length;
     act(() => { state.value.user.name = "Grace"; });
@@ -150,7 +141,6 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(evaluateOuter).toHaveBeenCalledTimes(outerCount);
     expect(nested.peek()).toBe("Grace");
     expect(evaluateNested).toHaveBeenCalledTimes(2);
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
   it("keeps production nested computed deep reads behind a tracked computed boundary", () => {
@@ -165,16 +155,13 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       renders();
       return <output aria-label="production-nested-value">{outer.value}</output>;
     }
-    const epoch = getSharedInteropContext().speculativeDeepReadEpoch;
     render(<Reader />);
     expect(screen.getByLabelText("production-nested-value").textContent).toBe("Ada!");
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
     act(() => { state.value.user.name = "Grace"; });
     expect(screen.getByLabelText("production-nested-value").textContent).toBe("Grace!");
     expect(evaluateNested).toHaveBeenCalledTimes(2);
     expect(evaluateOuter).toHaveBeenCalledTimes(2);
     expect(renders).toHaveBeenCalledTimes(2);
-    expect(getSharedInteropContext().speculativeDeepReadEpoch).toBe(epoch);
   });
 
   it("does not add a selected deep leaf to an ancestor useSignalTracking scope", () => {

@@ -1,6 +1,6 @@
 import { isSignal, untracked } from "../core/index.js";
 import { detachedEffect, type FormBindableChoiceSignal } from "../core/base.js";
-import { subscribeReadableV1 } from "../core/readable-subscription.js";
+import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
 import type { FormBindableSignal, ReadonlySignal, Signal } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
@@ -191,7 +191,7 @@ type FailureEpisode = { hasReported: boolean };
  * src/core/alien-derived-runtime-core.mts) —
  * if `source` is such a computed and it starts failing after the binding is
  * already mounted, an unguarded read here could throw from the subscription's
- * update callback while processing the write. The direct V1 watcher contains
+ * update callback while processing the write. The direct watcher contains
  * computed dirty-check errors, but this binding read is a separate operation;
  * catching it here also keeps the structural-readable effect fallback local.
  *
@@ -278,8 +278,8 @@ function resyncRejectedFormWrite(
 
 /**
  * The common case built on `applyBoundSignal`: subscribe to a readable and
- * re-run `apply` whenever it changes. V1 readables use a direct protocol
- * subscription; structural readables retain the effect bridge. Centralizes
+ * re-run `apply` whenever it changes. This package's own readables use a
+ * direct subscription; structural readables retain the effect bridge. Centralizes
  * the pattern that used to be hand-rolled at each binding site — declare an
  * `episode`, then `effect(() => { const read = readBoundSignal(...); if
  * (!read.ok) return; <apply the value> })` — so the read-and-skip contract
@@ -301,7 +301,7 @@ function createBindingSubscription<T>(
 ): BindingSubscription {
   const update = () => applyBoundSignal(() => source.value, apply, episode);
   const refresh = () => untracked(update);
-  const unsubscribe = subscribeReadableV1(source, update);
+  const unsubscribe = subscribeLocalReadable(source, update);
   if (unsubscribe !== undefined) {
     // Subscribe before the initial read/apply so setup cannot miss an update.
     untracked(() => notifyListener(update));

@@ -6,7 +6,7 @@
 
 ## `alien-signals` はruntime dependency
 
-RFSGは `alien-signals/system` を使ったリアクティブランタイムをpackage copyごとに1つ所有します。そのため `alien-signals` はruntime dependencyであり、consumerが個別にinstallする必要はありません。独立したRFSGのcopy同士はRFSGのprivateなsame-global readable protocolを通じて連携し、共有されたalien-signals moduleを必要としません。Reactは引き続きpeer dependencyです。copyをまたぐbatchは各copy内でのみ動作し、1つのatomic transactionにはなりません。`pnpm test:consumer` がmanifestを検証し、`pnpm test:phase4-duplicate` が独立したalien-signals system同士の動作を検証します。
+RFSGは `alien-signals/system` を使ったリアクティブランタイムをpackage copyごとに1つ所有します。そのため `alien-signals` はruntime dependencyであり、consumerが個別にinstallする必要はありません。copy同士は連携しないため、RFSGは1つのcopyだけをinstallしてください（pnpmの `dedupe-peer-dependents` やbundlerの `resolve.dedupe` で重複を解消します）。copy間で共有するのは `globalThis` 上の実行ownerとruntime tokenだけで、これは混在を検出するためにあります。effect、computed、追跡されるコンポーネントの内側でcopyをまたいで読むと `Multiple copies of react-fine-grained-signals are loaded` をthrowし、`isSignal` も他方のcopyが作ったsignalに対してthrowします。ownerのない単純なreadは検出できません。Reactは引き続きpeer dependencyです。`pnpm test:consumer` がmanifestを検証し、`tests/multiple-copies.test.ts` が2つのcopyをbundleしてエラーを検証します。
 
 ## `"sideEffects": false`
 

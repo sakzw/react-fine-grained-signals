@@ -5,10 +5,8 @@
  */
 import { createReactiveSystem } from "alien-signals/system";
 import type { Link, ReactiveFlags, ReactiveNode } from "alien-signals/system";
-import { UNTRACKED_OWNER, executionContext, isGraphExecutionOwner, isRenderExecutionOwner, withSynchronousExecutionOwner } from "./execution-owner.js";
-import { createForeignReadableAdapter, isReadableProtocol } from "./foreign-readable-v1.mjs";
-import { READABLE_INTEROP_V1 } from "./interop-context.mjs";
-import type { ExecutionContextOwnerV2, ExecutionOwnerV2, ReadableProtocolV1 } from "./execution-owner.js";
+import { UNTRACKED_OWNER, executionContext, isGraphExecutionOwner, isRenderExecutionOwner, multipleCopiesError, withSynchronousExecutionOwner } from "./execution-owner.js";
+import type { ExecutionContextOwnerV2, ExecutionOwnerV2, GraphExecutionOwnerV2 } from "./execution-owner.js";
 import { activeRenderCollector, trackRenderDependency } from "./render-tracking.js";
 import { SIGNAL_BRAND, SIGNAL_BRAND_MIN_VERSION, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
 import type { AlienDerivedGraphRuntime, RenderAdapterForCore, RenderAttempt, RuntimeNode, RuntimeSource, RuntimeComputed, RuntimeEffect, RuntimeReadable, RuntimeWritable, SpeculativeComputedEntry } from "./alien-derived-types.js";
@@ -44,13 +42,6 @@ const queue: Array<RuntimeNode | undefined> = [];
 const system = createReactiveSystem({
   update(rawNode: ReactiveNode) {
     const node = rawNode as RuntimeNode;
-    if (node.kind === "external") {
-      // Commit only what was propagated; see `advance` in foreign-readable-v1.
-      const changed = node.revision !== node.pendingRevision;
-      node.revision = node.pendingRevision;
-      node.flags = Mutable;
-      return changed;
-    }
     if (node.kind === "computed") return updateComputed(node as RuntimeComputed);
     if (node.kind === "source") return updateSource(node);
     node.flags = Mutable;
@@ -80,10 +71,7 @@ const system = createReactiveSystem({
   unwatched(rawNode: ReactiveNode) {
     const node = rawNode as RuntimeNode;
     deepSignalUnwatched.get(node)?.();
-    if (node.kind === "external") {
-      node.unsubscribe?.();
-      node.unsubscribe = undefined;
-    } else if (node.kind === "computed") {
+    if (node.kind === "computed") {
       if (node.depsTail !== undefined) {
         node.flags = Mutable | Dirty;
         disposeDeps(node);
@@ -107,28 +95,16 @@ function makeNode(kind: RuntimeNode["kind"], flags: number): RuntimeNode {
   return { kind, flags: flags as ReactiveFlags, deps: undefined, depsTail: undefined, subs: undefined, subsTail: undefined, renderRevision: 0 } as RuntimeNode;
 }
 
-// Set once this copy has read another copy's readable; until then no effect
-// can depend on a bridge, so `runEffect` skips the foreign revision walk.
-let hasForeignNodes = false;
-
-const foreignAdapter = createForeignReadableAdapter({
-  runtimeToken,
-  makeNode: (kind, flags) => {
-    hasForeignNodes = true;
-    return makeNode(kind, flags);
-  },
-  mutableFlag: Mutable,
-  dirtyFlag: Dirty,
-  getActiveSubscriber: () => activeSub,
-  link: (node: RuntimeNode, subscriber: RuntimeNode) => linkNode(node, subscriber, cycle),
-  propagate,
-  shallowPropagate,
-  flush: () => flush(),
-  isRunning: () => !!runDepth,
-  isBatching: () => !!batchDepth,
-  effect: (callback: () => unknown) => detachedEffect(callback),
-  own: adopt,
-});
+// Every readable this copy creates, keyed by the public object. Reads and
+// subscriptions resolve their graph node here.
+const readableNodes = new WeakMap<object, RuntimeNode>();
+function registerReadable(readable: object, node: RuntimeNode): void { readableNodes.set(readable, node); }
+function getNodeForReadable(readable: object): RuntimeNode | undefined { return readableNodes.get(readable); }
+function getReadableRevision(readable: object): number {
+  const node = readableNodes.get(readable);
+  if (node === undefined) throw new TypeError("Unknown candidate readable");
+  return node.renderRevision;
+}
 const renderDependencies = new WeakMap<object, RuntimeNode>();
 const deepSignalNodes = new WeakSet<RuntimeNode>();
 const deepWatchedNodes = new WeakSet<RuntimeNode>();
@@ -139,13 +115,13 @@ const deepSignalUnwatched = new WeakMap<RuntimeNode, () => void>();
 
 function getRenderDependency(readable: { value: unknown }, node: RuntimeNode) {
   if (!renderDependencies.has(readable)) {
-    node.getRenderVersion = () => foreignAdapter.observeRevision(node);
+    node.getRenderVersion = () => node.renderRevision;
     node.subscribeRender = (listener: () => void) => {
       let initial = true;
-      let version = foreignAdapter.observeRevision(node);
+      let version = node.renderRevision;
       return detachedEffect(() => {
         try { readable.value; } catch { /* Keep erroring boundaries subscribed. */ }
-        const nextVersion = foreignAdapter.observeRevision(node);
+        const nextVersion = node.renderRevision;
         if (initial) initial = false;
         else if (nextVersion !== version) listener();
         version = nextVersion;
@@ -174,17 +150,13 @@ function readSourceUntracked(source: RuntimeNode): unknown {
   return source.currentValue;
 }
 
-// Another copy's graph or render owner is reading. That copy records the read
-// through `publishForeignReadable`; this copy's `activeSub` may still be an
-// outer frame (B effect -> A computed -> B signal) that never read the value,
-// so such a read must not link to it.
+// Another copy's graph or render owner is reading. Copies of this package do
+// not interoperate, so a getter that finds one throws instead of reading.
 function isForeignOwner(owner: ExecutionContextOwnerV2 | undefined): owner is ExecutionOwnerV2 {
   return (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken;
 }
 
-const attachProtocol = foreignAdapter.attachProtocol;
-const ensureForeignNode = foreignAdapter.ensureForeignNode;
-const graphOwner = foreignAdapter.graphOwner;
+const graphOwner: GraphExecutionOwnerV2 = { version: 2, kind: "graph", runtimeToken };
 // User callbacks (computed getters, effect bodies) are called as `() => T`:
 // no arguments and no `this`, as in v0.1.1.
 function withGraphOwner<T>(callback: () => T): T {
@@ -223,19 +195,8 @@ function pushRenderAttempt(attempt: RenderAttempt | undefined): () => void {
 }
 
 function getActiveRenderAttempt() { return activeRenderAttempt; }
-const getNodeForReadable = foreignAdapter.getNodeForReadable;
-const getReadableRevision = foreignAdapter.getReadableRevision;
 function isComputedClean(node: RuntimeNode): boolean {
-  // A foreign revision this copy has not been told about yet still dirties it.
-  if (node.foreignDependent) refreshForeignDependencies(node as RuntimeComputed, new Set());
   return node.initialized === true && !(node.flags & (Dirty | Pending));
-}
-
-// A speculative dependency is keyed either by a readable (this copy's, or one
-// carrying another copy's protocol) or, for a read another copy published to
-// the render owner, by that copy's protocol object itself.
-function getDependencyRevision(dependency: object): number {
-  return isReadableProtocol(dependency) ? dependency.getRevision() : getReadableRevision(dependency);
 }
 
 function promoteComputed(readable: object, node: RuntimeNode, entry: SpeculativeComputedEntry): boolean {
@@ -244,36 +205,19 @@ function promoteComputed(readable: object, node: RuntimeNode, entry: Speculative
   // value with the node's rather than trusting the revision it recorded.
   if (node.initialized) return true;
   const computed = node as RuntimeComputed;
-  const hadForeignDependencies = computed.foreignDependent;
-  // Another copy's protocol, with the revision the render read it at, or a
-  // local node (whose revision slot is unused).
-  const dependencies: Array<RuntimeNode | ReadableProtocolV1> = [];
-  const revisions: number[] = [];
+  const dependencies: RuntimeNode[] = [];
   for (const [dependency, revision] of entry.dependencies) {
-    let protocol: unknown = dependency;
-    if (!isReadableProtocol(dependency)) {
-      if (getReadableRevision(dependency) !== revision) return false;
-      const dependencyNode = foreignAdapter.getNodeForReadable(dependency);
-      if (dependencyNode !== undefined) {
-        // Link a dependency only in the state the speculative read observed. A
-        // computed's revision moves only when it re-evaluates, so one a later
-        // write left Dirty or Pending fails here, as it does on cache reuse.
-        if (dependencyNode.kind === "computed" && !isComputedClean(dependencyNode)) return false;
-        // The render read a source's pending value without settling it. Settle it
-        // before linking, as Alien's own signal read does, or a later write back
-        // to the stale committed value compares equal and never reaches us.
-        if (dependencyNode.kind === "source") readSourceUntracked(dependencyNode);
-        dependencies.push(dependencyNode);
-        revisions.push(revision);
-        continue;
-      }
-      protocol = Reflect.get(dependency, READABLE_INTEROP_V1);
-      if (!isReadableProtocol(protocol)) return false;
-    } else if (dependency.getRevision() !== revision) {
-      return false;
-    }
-    dependencies.push(protocol as ReadableProtocolV1);
-    revisions.push(revision);
+    if (getReadableRevision(dependency) !== revision) return false;
+    const dependencyNode = readableNodes.get(dependency)!;
+    // Link a dependency only in the state the speculative read observed. A
+    // computed's revision moves only when it re-evaluates, so one a later
+    // write left Dirty or Pending fails here, as it does on cache reuse.
+    if (dependencyNode.kind === "computed" && !isComputedClean(dependencyNode)) return false;
+    // The render read a source's pending value without settling it. Settle it
+    // before linking, as Alien's own signal read does, or a later write back
+    // to the stale committed value compares equal and never reaches us.
+    if (dependencyNode.kind === "source") readSourceUntracked(dependencyNode);
+    dependencies.push(dependencyNode);
   }
   disposeDeps(computed);
   computed.depsTail = undefined;
@@ -281,14 +225,8 @@ function promoteComputed(readable: object, node: RuntimeNode, entry: Speculative
   activeSub = computed;
   cycle += 1;
   try {
-    for (let index = 0; index < dependencies.length; index += 1) {
-      const dependency = dependencies[index]!;
-      if ((dependency as RuntimeNode).kind === undefined) ensureForeignNode(dependency as ReadableProtocolV1, revisions[index]!);
-      else linkNode(dependency as RuntimeNode, computed, cycle);
-    }
+    for (const dependency of dependencies) linkNode(dependency, computed, cycle);
   } finally { activeSub = previousSub; }
-  recomputeForeignDependencies(computed);
-  if (hadForeignDependencies !== computed.foreignDependent) updateForeignDependencyAncestors(computed);
   computed.value = entry.value;
   computed.error = entry.error;
   computed.hasError = entry.hasError;
@@ -301,7 +239,7 @@ function promoteComputed(readable: object, node: RuntimeNode, entry: Speculative
 }
 
 function hasSubscribers(readable: object): boolean {
-  return foreignAdapter.getNodeForReadable(readable)?.subs !== undefined;
+  return readableNodes.get(readable)?.subs !== undefined;
 }
 function hasActiveSubscriber(): boolean { return activeSub !== undefined; }
 function getBatchDepth(): number { return batchDepth; }
@@ -313,13 +251,6 @@ function updateSource(source: RuntimeNode): boolean {
 }
 
 function readComputed(computed: RuntimeComputed, track = true): unknown {
-  // Bridge pushes cannot be relied on at read time: an inactive bridge gets
-  // none, and an active one hears of a write only when the other copy's flush
-  // reaches it, which can be after this copy has re-run on another of that
-  // write's consequences (or after the other copy's batch). Poll them here.
-  if (computed.foreignDependent) {
-    refreshForeignDependencies(computed, new Set());
-  }
   // RecursedCheck is only set on a computed while its own getter is on the
   // stack, so any read of it here -- direct or through other computeds -- is
   // a cycle that would otherwise silently return a stale intermediate value.
@@ -332,39 +263,9 @@ function readComputed(computed: RuntimeComputed, track = true): unknown {
   } else if (!flags) {
     updateComputed(computed);
   }
-  if (track && activeSub !== undefined) {
-    linkNode(computed, activeSub, cycle);
-    if (activeSub.kind === "computed" && computed.foreignDependent) activeSub.foreignDependent = true;
-    if (activeSub.kind === "effect" && computed.foreignDependent) activateForeignDependencies(computed, new Set());
-  }
+  if (track && activeSub !== undefined) linkNode(computed, activeSub, cycle);
   if (computed.hasError) throw computed.error;
   return computed.value;
-}
-
-// A newer revision invalidates the bridge's subscribers through the graph
-// itself (see `observeForeignRevision`), so this computed and everything
-// between it and the bridge re-check, and the bridge's other subscribers do
-// too instead of later comparing against an already-advanced revision.
-function refreshForeignDependencies(node: RuntimeComputed, visited: Set<RuntimeNode>): void {
-  if (visited.has(node)) return;
-  visited.add(node);
-  for (let dependency = node.deps; dependency !== undefined; dependency = dependency.nextDep) {
-    const dep = dependency.dep as RuntimeNode;
-    if (dep.kind === "external") foreignAdapter.observeForeignRevision(dep, dep.protocol!.getRevision());
-    else if (dep.kind === "computed" && dep.foreignDependent) refreshForeignDependencies(dep as RuntimeComputed, visited);
-  }
-}
-
-function activateForeignDependencies(node: RuntimeComputed, visited: Set<RuntimeNode>): void {
-  if (visited.has(node)) return;
-  visited.add(node);
-  let dependency = node.deps;
-  while (dependency !== undefined) {
-    const dep = dependency.dep as RuntimeNode;
-    if (dep.kind === "external") foreignAdapter.activateForeignNode(dep);
-    else if (dep.kind === "computed") activateForeignDependencies(dep as RuntimeComputed, visited);
-    dependency = dependency.nextDep;
-  }
 }
 
 function updateComputed(computed: RuntimeComputed): boolean {
@@ -375,9 +276,7 @@ function updateComputed(computed: RuntimeComputed): boolean {
   activeSub = computed;
   let changed = !computed.initialized;
   const hadError = computed.hasError;
-  const hadForeignDependencies = computed.foreignDependent;
   const previousValue = computed.value;
-  computed.foreignDependent = false;
   try {
     cycle += 1;
     try {
@@ -397,27 +296,7 @@ function updateComputed(computed: RuntimeComputed): boolean {
     activeSub = previous;
     computed.flags &= ~RecursedCheck;
     purgeDeps(computed);
-    recomputeForeignDependencies(computed);
-    if (hadForeignDependencies !== computed.foreignDependent) updateForeignDependencyAncestors(computed);
-    // A recomputation reached through an effect's dirty check (rather than a
-    // direct read by that effect) can link a new foreign bridge whose value
-    // does not change this computed's result yet, so the effect never re-reads
-    // it and never activates it. Activate here whenever an effect watches us.
-    if (computed.foreignDependent && computed.subs !== undefined && isWatchedByEffect(computed, new Set())) {
-      activateForeignDependencies(computed, new Set());
-    }
   }
-}
-
-// A computed's subscribers are effects and other computeds only.
-function isWatchedByEffect(node: RuntimeNode, visited: Set<RuntimeNode>): boolean {
-  if (visited.has(node)) return false;
-  visited.add(node);
-  for (let link = node.subs; link !== undefined; link = link.nextSub) {
-    const subscriber = link.sub as RuntimeNode;
-    if (subscriber.kind === "effect" ? subscriber.flags !== None : isWatchedByEffect(subscriber, visited)) return true;
-  }
-  return false;
 }
 
 // Alien 3.2.1's child-effect disposal: an effect created while `sub` ran is
@@ -432,51 +311,7 @@ function disposeChildEffects(sub: RuntimeNode): void {
   }
 }
 
-function recomputeForeignDependencies(computed: RuntimeComputed): void {
-  let dependency = computed.deps;
-  let foreignDependent = false;
-  while (dependency !== undefined) {
-    const dep = dependency.dep as RuntimeNode;
-    if (dep.kind === "external" || (dep.kind === "computed" && (dep as RuntimeComputed).foreignDependent)) {
-      foreignDependent = true;
-      break;
-    }
-    dependency = dependency.nextDep;
-  }
-  computed.foreignDependent = foreignDependent;
-}
-
-function updateForeignDependencyAncestors(computed: RuntimeComputed): void {
-  let link = computed.subs;
-  while (link !== undefined) {
-    const subscriber = link.sub as RuntimeNode;
-    if (subscriber.kind === "computed") {
-      const computedSubscriber = subscriber as RuntimeComputed;
-      const wasForeignDependent = computedSubscriber.foreignDependent;
-      recomputeForeignDependencies(computedSubscriber);
-      if (wasForeignDependent !== computedSubscriber.foreignDependent) updateForeignDependencyAncestors(computedSubscriber);
-    }
-    link = link.nextSub;
-  }
-}
-
-// Like `readComputed`, an effect must not trust bridge pushes either: another
-// copy's write may reach this graph only through a read made while the effect's
-// dependencies are being checked. A bridge advanced by such a read marks
-// subscribers Dirty that `checkDirty` has already walked past, which leaves a
-// computed Dirty but its effect clean and never notified again. Learn every
-// reachable revision first, so the check sees them all.
-function refreshForeignEffectDependencies(effect: RuntimeNode): void {
-  let visited: Set<RuntimeNode> | undefined;
-  for (let dependency = effect.deps; dependency !== undefined; dependency = dependency.nextDep) {
-    const dep = dependency.dep as RuntimeNode;
-    if (dep.kind === "external") foreignAdapter.observeForeignRevision(dep, dep.protocol!.getRevision());
-    else if (dep.kind === "computed" && dep.foreignDependent) refreshForeignDependencies(dep as RuntimeComputed, visited ??= new Set());
-  }
-}
-
 function runEffect(effect: RuntimeEffect): void {
-  if (hasForeignNodes && effect.flags & Pending && effect.deps !== undefined) refreshForeignEffectDependencies(effect);
   const flags = effect.flags;
   if (flags & Dirty || (flags & Pending && effect.deps !== undefined && checkDirty(effect.deps, effect as unknown as ReactiveNode))) {
     if (flags & HasChildEffect) disposeChildEffects(effect);
@@ -590,8 +425,7 @@ function disposeEffect(effect: RuntimeEffect): void {
   }
 }
 
-// Library-internal subscriptions (render stores, direct DOM bindings, the
-// cross-copy protocol) must never become owned by whichever user effect is
+// Library-internal subscriptions (render stores, direct DOM bindings) must never become owned by whichever user effect is
 // running when React or another copy happens to create them synchronously.
 function detachedEffect(fn: () => unknown): () => void {
   return effect(fn, true);
@@ -606,13 +440,8 @@ function effect(fn: () => unknown, detached?: boolean): () => void {
   // As in Alien 3.2.1 (and v0.1.x, which used it), an effect created while
   // another effect or computed runs (the only kinds that become `activeSub`)
   // is owned by it: the owner's next run or its disposal disposes the child.
-  // That owner may belong to another copy, which this copy reaches only
-  // through the shared owner; a speculative getter has no owner (see `adopt`).
-  if (!detached) {
-    const owner = executionContext.owner;
-    if (previous === undefined && speculativeChildren === undefined && (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken) owner.own?.(dispose);
-    else adopt(dispose, node);
-  }
+  // A speculative getter has no owner (see `adopt`).
+  if (!detached) adopt(dispose, node);
   try {
     activeSub = node;
     runDepth += 1;
@@ -633,28 +462,17 @@ function effect(fn: () => unknown, detached?: boolean): () => void {
     reportFailure(error);
   }
   if (!runDepth && !batchDepth) {
-    // Only the stale-read bit (128, RFSG-only; set by the foreign adapter's
-    // subscription handshake, cleared by the next run's `flags` assignment)
-    // re-runs a new effect. A write its first run made to its own dependencies
-    // -- directly, or through effects it flushed -- leaves Recursed/Pending
-    // instead and, as in Alien 3.2.1 and v0.1.1, does not. The bit is a literal
-    // rather than a named constant to keep the signal-only bundle in budget.
-    if (node.flags & 128) runEffect(node as RuntimeEffect);
-    // Library-internal subscriptions (a bridge for another copy's subscribe
-    // call may be created while one of that copy's computeds is evaluating up
-    // the stack) leave the queue to the flush that is already due: running it
-    // here would run effects that read that computed and see a false cycle.
+    // Library-internal subscriptions leave the queue to the flush that is
+    // already due.
     if (queuedLength && !detached) flush();
   }
   return dispose;
 }
 
 // Makes an effect a child of the running effect or computed, whose next run or
-// disposal unlinks it and so disposes it. Also the shared owners' `own`, for an
-// effect another copy created: a childless stand-in effect takes its place in
-// the dependency list and disposes it on cleanup, so only the disposer crosses
-// the copy boundary. With no running subscriber, a speculative getter's
-// effects are collected for `evaluateSpeculatively` to dispose.
+// disposal unlinks it and so disposes it. With no running subscriber, a
+// speculative getter's effects are collected for `evaluateSpeculatively` to
+// dispose. A render owner hands this to speculative getters as `own`.
 function adopt(disposeChild: () => void, child?: RuntimeNode): void {
   if (child === undefined) {
     child = makeNode("effect", Watching);
@@ -714,7 +532,7 @@ function untracked<T>(fn: () => T): T {
 }
 
 // Public API/brand candidates. Each public object is the readable class
-// instance itself; no outer wrapper, interop protocol, or per-instance methods.
+// instance itself; no outer wrapper or per-instance methods.
 const brandDescriptor = () => ({ value: SIGNAL_BRAND_VERSION, enumerable: false, writable: false, configurable: false });
 function registerHelperBrand(value: object): void {
   Object.defineProperty(value, SIGNAL_BRAND, brandDescriptor());
@@ -741,7 +559,7 @@ function inlineDeepSignalWrite(node: RuntimeSource, value: unknown): void {
 
 class HelperBrandSignal<T = unknown> {
   #node: RuntimeSource;
-  constructor(node: RuntimeSource, branded = true) { this.#node = node; if (branded) registerHelperBrand(this); attachProtocol(this, node); }
+  constructor(node: RuntimeSource, branded = true) { this.#node = node; if (branded) registerHelperBrand(this); registerReadable(this, node); }
   get value(): T {
     const node = this.#node;
     const currentOwner = executionContext.owner;
@@ -760,15 +578,10 @@ class HelperBrandSignal<T = unknown> {
     if (currentOwner === graphOwner) return readSource(node) as T;
     const attempt = activeRenderAttempt;
     if (attempt !== undefined && isRenderExecutionOwner(currentOwner) && currentOwner.runtimeToken === runtimeToken && renderAdapter !== undefined) {
-      foreignAdapter.observeRevision(node);
       return renderAdapter.readSource(this, node, attempt) as T;
     }
     if (currentOwner === UNTRACKED_OWNER) return readSourceUntracked(node) as T;
-    if (isForeignOwner(currentOwner)) {
-      const value = readSourceUntracked(node);
-      foreignAdapter.publishForeignReadable(this, node, currentOwner);
-      return value as T;
-    }
+    if (isForeignOwner(currentOwner)) throw multipleCopiesError();
     return readSource(node) as T;
   }
   set value(value: T) { inlineWrite(this.#node, value); }
@@ -781,7 +594,7 @@ class HelperBrandSignal<T = unknown> {
  * pay that bookkeeping cost. */
 class DeepSignalRuntimeSource<T = unknown> {
   #node: RuntimeSource;
-  constructor(node: RuntimeSource) { this.#node = node; attachProtocol(this, node); }
+  constructor(node: RuntimeSource) { this.#node = node; registerReadable(this, node); }
   get value(): T {
     const node = this.#node;
     const currentOwner = executionContext.owner;
@@ -798,15 +611,10 @@ class DeepSignalRuntimeSource<T = unknown> {
     if (currentOwner === graphOwner) return readSource(node) as T;
     const attempt = activeRenderAttempt;
     if (attempt !== undefined && isRenderExecutionOwner(currentOwner) && currentOwner.runtimeToken === runtimeToken && renderAdapter !== undefined) {
-      foreignAdapter.observeRevision(node);
       return renderAdapter.readSource(this, node, attempt) as T;
     }
     if (currentOwner === UNTRACKED_OWNER) return readSourceUntracked(node) as T;
-    if (isForeignOwner(currentOwner)) {
-      const value = readSourceUntracked(node);
-      foreignAdapter.publishForeignReadable(this, node, currentOwner);
-      return value as T;
-    }
+    if (isForeignOwner(currentOwner)) throw multipleCopiesError();
     return readSource(node) as T;
   }
   set value(value: T) { inlineDeepSignalWrite(this.#node, value); }
@@ -825,7 +633,7 @@ class HelperBrandComputed<T = unknown> {
   constructor(node: RuntimeComputed, branded = true) {
     this.#node = node;
     if (branded) registerHelperBrand(this);
-    attachProtocol(this, node);
+    registerReadable(this, node);
   }
   get value(): T {
     const node = this.#node;
@@ -834,20 +642,15 @@ class HelperBrandComputed<T = unknown> {
     if (currentOwner === graphOwner) return readComputed(node) as T;
     const attempt = activeRenderAttempt;
     if (attempt !== undefined && isRenderExecutionOwner(currentOwner) && currentOwner.runtimeToken === runtimeToken && renderAdapter !== undefined) {
-      foreignAdapter.observeRevision(node);
       return renderAdapter.readComputed(this, node, attempt) as T;
     }
     const owner = currentOwner;
-    // A foreign owner records this read itself (from `finally`, so an erroring
-    // computed stays observable); it must not link to this copy's `activeSub`.
-    const foreign = owner !== undefined && isForeignOwner(owner);
+    if (owner !== undefined && isForeignOwner(owner)) throw multipleCopiesError();
     try {
-      return readComputed(node, owner !== UNTRACKED_OWNER && !foreign) as T;
+      return readComputed(node, owner !== UNTRACKED_OWNER) as T;
     } finally {
-      if (owner === undefined) {
-        if (activeRenderCollector !== undefined) trackRenderDependency(getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency);
-      } else if (foreign) {
-        foreignAdapter.publishForeignReadable(this, node, owner);
+      if (owner === undefined && activeRenderCollector !== undefined) {
+        trackRenderDependency(getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency);
       }
     }
   }
@@ -901,21 +704,21 @@ function createDeepSignalVersion<T>(initialValue: T): RuntimeWritable<T> {
   return readable;
 }
 function onDeepSignalUnwatched(readable: object, callback: () => void): void {
-  const node = foreignAdapter.getNodeForReadable(readable);
+  const node = readableNodes.get(readable);
   if (node !== undefined) deepSignalUnwatched.set(node, callback);
 }
 function markDeepSignalWatched(readable: object): void {
-    const node = foreignAdapter.getNodeForReadable(readable);
+    const node = readableNodes.get(readable);
     if (node !== undefined) deepWatchedNodes.add(node);
   }
 function hasDeepSignalSubscribers(readable: object): boolean {
-    const node = foreignAdapter.getNodeForReadable(readable);
+    const node = readableNodes.get(readable);
     return node !== undefined && (
       deepWatchedNodes.has(node) || (deepSignalNodes.has(node) && hasSubscribers(readable))
     );
   }
 function getRenderVersion(readable: object): number {
-    return foreignAdapter.getReadableRevision(readable);
+    return getReadableRevision(readable);
   }
 function subscribeReadables(readables: readonly RuntimeReadable[], notify: () => void): () => void {
     let initial = true;
@@ -930,7 +733,7 @@ function subscribeReadables(readables: readonly RuntimeReadable[], notify: () =>
 
   return {
     runtimeToken, graphOwner, configureRenderAdapter, withRenderAttempt, pushRenderAttempt,
-    getActiveRenderAttempt, getNodeForReadable, getReadableRevision, getDependencyRevision, isComputedClean,
+    getActiveRenderAttempt, getNodeForReadable, getReadableRevision, isComputedClean,
     promoteComputed, evaluateSpeculatively, adopt, hasSubscribers, hasActiveSubscriber, getBatchDepth,
     signal: signalClassBrandHelper, computed: computedClassBrandHelper,
     effect, detachedEffect, batch, untracked, SIGNAL_BRAND, isSignal: isSignalBrandHelper,

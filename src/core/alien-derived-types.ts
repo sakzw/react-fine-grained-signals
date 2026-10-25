@@ -1,8 +1,7 @@
 import type { Link, ReactiveNode } from "alien-signals/system";
-import type { ReadableProtocolV1 } from "./execution-owner.js";
 import type { GraphExecutionOwnerV2 } from "./execution-owner.js";
 
-export type RuntimeNodeKind = "source" | "computed" | "effect" | "external";
+export type RuntimeNodeKind = "source" | "computed" | "effect";
 
 /** RFSG metadata layered onto one Alien Signals graph node. */
 export interface RuntimeNode extends Omit<ReactiveNode, "deps" | "depsTail" | "subs" | "subsTail" | "flags"> {
@@ -20,14 +19,8 @@ export interface RuntimeNode extends Omit<ReactiveNode, "deps" | "depsTail" | "s
   error?: unknown | undefined;
   hasError?: boolean | undefined;
   initialized?: boolean | undefined;
-  foreignDependent?: boolean | undefined;
   fn?: (() => unknown) | undefined;
   cleanup?: (() => unknown) | undefined;
-  protocol?: ReadableProtocolV1 | undefined;
-  readableProtocol?: ReadableProtocolV1 | undefined;
-  revision?: number | undefined;
-  pendingRevision?: number | undefined;
-  unsubscribe?: (() => void) | undefined;
   getRenderVersion?: (() => number) | undefined;
   subscribeRender?: ((listener: () => void) => () => void) | undefined;
 }
@@ -45,21 +38,12 @@ export interface RuntimeComputed extends RuntimeNode {
   error: unknown;
   hasError: boolean;
   initialized: boolean;
-  foreignDependent: boolean;
 }
 
 export interface RuntimeEffect extends RuntimeNode {
   kind: "effect";
   fn: () => unknown;
   cleanup: (() => unknown) | undefined;
-}
-
-export interface RuntimeExternal extends RuntimeNode {
-  kind: "external";
-  protocol: ReadableProtocolV1;
-  revision: number;
-  pendingRevision: number;
-  unsubscribe: (() => void) | undefined;
 }
 
 export type RuntimeLink = Link;
@@ -125,7 +109,6 @@ export interface AlienDerivedGraphRuntime {
   readonly untracked: <T>(callback: () => T) => T;
   readonly getNodeForReadable: (readable: object) => RuntimeNode | undefined;
   readonly getReadableRevision: (readable: object) => number;
-  readonly getDependencyRevision: (dependency: object) => number;
   readonly isComputedClean: (node: RuntimeNode) => boolean;
   readonly promoteComputed: (readable: object, node: RuntimeNode, entry: SpeculativeComputedEntry) => boolean;
   /** Runs a computed's getter for a render attempt; true when it created effects. */
@@ -149,22 +132,6 @@ export interface AlienDerivedGraphRuntime {
   withRenderAttempt<T>(attempt: RenderAttempt | undefined, callback: () => T): T;
   pushRenderAttempt(attempt: RenderAttempt | undefined): () => void;
   getActiveRenderAttempt(): RenderAttempt | undefined;
-}
-
-export interface ForeignReadableAdapterOptions {
-  readonly runtimeToken: object;
-  readonly makeNode: (kind: RuntimeNodeKind, flags: number) => RuntimeNode;
-  readonly mutableFlag: number;
-  readonly dirtyFlag: number;
-  readonly getActiveSubscriber: () => RuntimeNode | undefined;
-  readonly link: (node: RuntimeNode, subscriber: RuntimeNode) => void;
-  readonly propagate: (link: Link, innerWrite: boolean) => void;
-  readonly shallowPropagate: (link: Link) => void;
-  readonly flush: () => void;
-  readonly isRunning: () => boolean;
-  readonly isBatching: () => boolean;
-  readonly effect: (callback: () => unknown) => () => void;
-  readonly own: (dispose: () => void) => void;
 }
 
 export interface RenderReadableDependency {

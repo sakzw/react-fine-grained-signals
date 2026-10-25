@@ -479,15 +479,6 @@ try {
       throw new Error(`Core-only installed consumer unexpectedly bundled React marker ${JSON.stringify(reactMarker)}`);
     }
   }
-
-  // Exercise two freshly copied runtime builds in this same consumer smoke
-  // path. This keeps duplicate-copy coverage independent of stale dist during
-  // ordinary source unit tests.
-  await run(
-    process.execPath,
-    [join(repositoryRoot, "tests", "cross-copy-smoke.mjs")],
-    repositoryRoot,
-  );
 } finally {
   await rm(temporaryRoot, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 }

@@ -15,7 +15,6 @@ export interface ReactiveRuntime {
   readonly graphOwner: {
     readonly kind: "graph";
     readonly runtimeToken: object;
-    add(protocol: object, revision: number): void;
   };
   getNodeForReadable(readable: RuntimeReadonlySignal<unknown>): RuntimeNode | undefined;
   readonly renderAdapter: AlienDerivedRenderAdapter;

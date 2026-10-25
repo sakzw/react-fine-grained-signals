@@ -1,8 +1,3 @@
-import {
-  getReadableInterop,
-  withoutInteropRenderCollector,
-  type ReadableInteropV1,
-} from "./interop.js";
 import { UNTRACKED_OWNER, executionContext, withSynchronousExecutionOwner } from "./execution-owner.js";
 
 /** Internal dependency contract used by the React render collector. */
@@ -13,37 +8,6 @@ export interface RenderDependency {
 
 export interface RenderCollector {
   add(dependency: RenderDependency, observedVersion: number): void;
-}
-
-const foreignRenderDependencies = new WeakMap<ReadableInteropV1, RenderDependency>();
-
-class ForeignRenderDependency implements RenderDependency {
-  constructor(readonly protocol: ReadableInteropV1) {}
-
-  getRenderVersion(): number {
-    return this.protocol.getRevision();
-  }
-
-  subscribeRender(listener: () => void): () => void {
-    const subscription = this.protocol.subscribe(() => listener());
-    return () => subscription.unsubscribe();
-  }
-}
-
-/** Reuse one render adapter for each foreign readable protocol. */
-export function getForeignRenderDependency(protocol: ReadableInteropV1): RenderDependency {
-  let dependency = foreignRenderDependencies.get(protocol);
-  if (dependency === undefined) {
-    dependency = new ForeignRenderDependency(protocol);
-    foreignRenderDependencies.set(protocol, dependency);
-  }
-  return dependency;
-}
-
-/** Resolve the private protocol attached to a foreign candidate readable. */
-export function getForeignReadableRenderDependency(readable: object): RenderDependency | undefined {
-  const protocol = getReadableInterop(readable);
-  return protocol === undefined ? undefined : getForeignRenderDependency(protocol);
 }
 
 export let activeRenderCollector: RenderCollector | undefined;
@@ -77,12 +41,11 @@ export function untrackedRender<T>(callback: () => T): T {
   const previous = setActiveRenderCollector();
   try {
     const owner = executionContext.owner;
-    const run = () => withoutInteropRenderCollector(callback);
     // A render-only pause must keep an enclosing graph subscriber active.
     if (owner !== undefined && typeof owner !== "symbol" && owner.kind === "graph") {
-      return run();
+      return callback();
     }
-    return withSynchronousExecutionOwner(UNTRACKED_OWNER, run);
+    return withSynchronousExecutionOwner(UNTRACKED_OWNER, callback);
   } finally {
     setActiveRenderCollector(previous);
   }

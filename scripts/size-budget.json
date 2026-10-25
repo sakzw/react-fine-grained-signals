@@ -1,26 +1,29 @@
 {
   "signal-only": {
-    "gzip": 7808
+    "gzip": 4992
   },
   "core": {
-    "gzip": 7872
+    "gzip": 5056
   },
   "core+hooks": {
-    "gzip": 10240
+    "gzip": 9024
   },
   "deep": {
-    "gzip": 15744
+    "gzip": 13952
   },
   "index-full": {
-    "gzip": 26624
+    "gzip": 24896
   },
   "jsx-runtime": {
-    "gzip": 15232
+    "gzip": 13056
+  },
+  "full-jsx-child": {
+    "gzip": 12928
   },
   "lite-jsx-child": {
-    "gzip": 7552
+    "gzip": 5952
   },
   "utils": {
-    "gzip": 9920
+    "gzip": 8768
   }
 }

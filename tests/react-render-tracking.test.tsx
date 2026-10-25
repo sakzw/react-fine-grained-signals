@@ -5,8 +5,7 @@ import { StrictMode, Suspense, act, memo } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { executionContext } from "../src/core/execution-owner.js";
-import { getReadableInterop } from "../src/core/interop.js";
-import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
+import { coreRuntime } from "../src/core/core-runtime.js";
 import {
   computed,
   deepSignal,
@@ -349,8 +348,7 @@ describe("useSignalTracking render tracking", () => {
   });
 
   it("preserves the first observed version when a dependency changes between render reads", () => {
-    const runtime = createReactiveRuntime();
-    const source = runtime.signal(0);
+    const source = signal(0);
     const renders = vi.fn();
     let writeDuringRender = true;
 
@@ -372,8 +370,7 @@ describe("useSignalTracking render tracking", () => {
   });
 
   it("detects a render-to-commit change and revert from its first observed version", () => {
-    const runtime = createReactiveRuntime();
-    const source = runtime.signal("same");
+    const source = signal("same");
     const renders = vi.fn();
     let revertDuringRender = true;
 
@@ -391,7 +388,7 @@ describe("useSignalTracking render tracking", () => {
 
     render(<Reader />);
     expect(screen.getByLabelText("reverted observed version").textContent).toBe("same");
-    expect(getReadableInterop(source)?.getRevision()).toBe(2);
+    expect(coreRuntime.getNodeForReadable(source)?.renderRevision).toBe(2);
     expect(renders).toHaveBeenCalledTimes(2);
   });
 

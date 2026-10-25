@@ -161,13 +161,15 @@ isSignal(value: unknown): value is ReadonlySignal<unknown>
 
 値が `signal`、`computed`、`deepSignal` のいずれかに由来するかを返します。カスタムJSXランタイムと制御フローコンポーネントはこの判定で分岐するため、偽陰性はエラーにならず、リアクティブなバインディングが通常のpropに劣化するという形で現れます。
 
-### package instanceをまたぐ判定
+### packageのcopyは1つだけにする
 
-そのため判定はpackage instanceをまたいで機能する必要があります。すべてのsignalは `Symbol.for("react-fine-grained-signals.signal.v2")` をキーとする列挙不可のbrandを持ち、その値はプロトコルバージョン（現在は `1`）です。`isSignal` は、サポートされたバージョンのbrandを持ち、かつ `peek()` を公開している値を受け入れます。これにより、packageが二重に解決された場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）や、realmの境界をまたいだsignalも認識されます。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
+`react-fine-grained-signals` は1つのcopyだけをinstallしてください。すべてのsignalは `Symbol.for("react-fine-grained-signals.signal.v2")` をキーとする列挙不可のbrandを持ち、各copyは独自のグラフを持つため、signalはそれを作ったcopyからしか読めません。2つ目のcopyが読み込まれている場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）、混在は更新されない値を黙って返すのではなくエラーになります。`effect`、`computed`、追跡されるコンポーネントの内側でcopyをまたいで読むと `Multiple copies of react-fine-grained-signals are loaded` をthrowし、`isSignal` も他方のcopyが作ったsignalに対してthrowします。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
 
-このキーはv0.2の世代を表します。v0.1.xは `react-fine-grained-signals.signal` を使っており、そのsignalはv0.2の追跡に参加できません(v0.2のsignalもv0.1.xの追跡には参加できません)。そのため2つの世代は、互いのsignalを意図的に認識しません。混在させると、更新されない値を描画する代わりに、JSXで明示的に失敗します。1つのページでは本パッケージのメジャー系列を1つに揃えてください。詳しくは[移行ガイド](../migration/v0.2.ja.md#v01xとv02の混在)を参照してください。
+重複はinstall側で解消してください。package managerのdedupe（pnpmの `dedupe-peer-dependents`、`npm dedupe`）を実行するか、bundlerが1つのcopyに解決するようにします（ViteとRollupの `resolve.dedupe: ["react-fine-grained-signals"]`、webpackの `resolve.alias`）。
 
-identityとreactivityは別のcontractを使います。公開signalのshapeを `isSignal()` が認識するための `SIGNAL_BRAND` と、RFSG package copy間でリアクティブなreadを伝えるprivateな `ReadableInteropV1` protocolは別物です。各copyは `alien-signals/system` 上に独自runtimeを持つため、alien-signals moduleの共有は不要です。copyをまたぐbatch呼び出しは1つのatomic transactionにはなりません。詳しくは[パッケージングの検討docs](../../development/design/packaging.ja.md)を参照してください。
+検出には限界があります。`effect`、`computed`、追跡されるコンポーネントの外で別のcopyのsignalを単純に読む場合は、スタックに目印がないためエラーにならず、そのsignalの現在値が返ります。何も更新されませんが、これはリアクティブなコードの外で値を読むのと同じ挙動です。
+
+brandのキーはv0.2の世代を表します。v0.1.xは `react-fine-grained-signals.signal` を使っており、v0.2のsignalを認識しません（逆も同じです）。1つのページでは本パッケージのメジャー系列を1つに揃えてください。
 
 `deepSignal` の状態にbrandを代入すると例外になります。brandが付いた部分木はsignalとして判定され、リアクティブ化されなくなるためです。
 

@@ -86,7 +86,7 @@ A module-scope signal is still fine under SSR when nothing writes to it per requ
 
 **Hot module replacement.** Replacing `store.ts` constructs new signals with their initial values, so the state resets on save. Worse, a component module that was not itself replaced keeps its binding to the old signals and stops seeing writes. Accept the reset, or add an `import.meta.hot.accept` handler that preserves the store across replacements.
 
-**A store in its own package.** RFSG package copies own independent runtimes and can exchange reactive reads through a private same-global protocol, so a store package does not need to resolve the same `alien-signals` module as its consumer. Cross-copy batches remain local and are not atomic across runtimes. `SIGNAL_BRAND` identity and reactive interoperability are separate contracts; see [the packaging note](../../development/design/packaging.md) and [Core primitives](./core-primitives.md#issignal).
+**A store in its own package.** A store package that depends on `react-fine-grained-signals` must resolve the same copy as its consumers. Each copy keeps its own graph, so a second copy is an error: reading its signals from an `effect`, a `computed`, or a tracked component throws `Multiple copies of react-fine-grained-signals are loaded`. Declare the library as a peer dependency of the store package and dedupe it (pnpm's `dedupe-peer-dependents`, or `resolve.dedupe` in Vite and Rollup); see [Core primitives](./core-primitives.md#only-one-copy-of-the-package).
 
 **Tests.** Vitest gives each test *file* a fresh module registry, not each test, so a module-scope signal carries its value from one `it()` to the next within a file. Reset it in `beforeEach`, or create the state inside each test.
 

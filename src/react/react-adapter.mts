@@ -1,7 +1,6 @@
 /* React hooks backed by attempt-local render tracking. */
 import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import type { AlienDerivedRenderAdapter, RenderAttempt, RuntimeReadable } from "../core/alien-derived-types.js";
-import type { ReadableProtocolV1 } from "../core/execution-owner.js";
 import { executionContext, isRenderExecutionOwner } from "../core/execution-owner.js";
 import { plainResultIteratorNext } from "../core/plain-result-iterators.js";
 
@@ -132,18 +131,10 @@ function captureForIn(capture: Capture, getObject: () => unknown): Iterable<stri
 }
 
 export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDerivedRenderAdapter) {
-function isInteropProtocol(dependency: object): dependency is ReadableProtocolV1 {
-  return Reflect.get(dependency, "version") === 1
-    && typeof Reflect.get(dependency, "getRevision") === "function"
-    && typeof Reflect.get(dependency, "subscribe") === "function";
-}
 function dependencyVersion(dependency: object): number {
-  return isInteropProtocol(dependency)
-    ? dependency.getRevision()
-    : render.getRenderVersion(dependency);
+  return render.getRenderVersion(dependency);
 }
 function subscribeDependency(dependency: object, notify: () => void): () => void {
-  if (isInteropProtocol(dependency)) return dependency.subscribe(() => notify()).unsubscribe;
   const subscribeRender = Reflect.get(dependency, "subscribeRender");
   if (typeof subscribeRender === "function") return subscribeRender.call(dependency, notify) as () => void;
   return render.subscribeReadables([dependency], notify);
@@ -226,35 +217,18 @@ class RenderStore {
     let changedDuringRender = !render.promoteRenderAttempt(attempt);
     const desired = attempt.dependencies;
     if (this.#mode === "combined") {
-      let localCount = 0;
-      let changed = false;
-      for (const dependency of desired.keys()) {
-        if (!isInteropProtocol(dependency)) {
-          localCount += 1;
-          if (!this.#combinedDependencies.has(dependency)) changed = true;
+      let changed = desired.size !== this.#combinedDependencies.size;
+      if (!changed) {
+        for (const dependency of desired.keys()) {
+          if (!this.#combinedDependencies.has(dependency)) { changed = true; break; }
         }
       }
-      if (localCount !== this.#combinedDependencies.size) changed = true;
       if (changed) {
-        const local = new Set<object>();
-        for (const dependency of desired.keys()) {
-          if (!isInteropProtocol(dependency)) local.add(dependency);
-        }
+        const dependencies = new Set<object>(desired.keys());
         this.#subscriptions.get(this)?.();
         this.#subscriptions.delete(this);
-        this.#combinedDependencies = local;
-        if (local.size > 0) this.#subscriptions.set(this, render.subscribeReadables([...local], this.#notify));
-      }
-      for (const [dependency, unsubscribe] of this.#subscriptions) {
-        if (dependency !== this && (!isInteropProtocol(dependency) || !desired.has(dependency))) {
-          unsubscribe();
-          this.#subscriptions.delete(dependency);
-        }
-      }
-      for (const dependency of desired.keys()) {
-        if (isInteropProtocol(dependency) && !this.#subscriptions.has(dependency)) {
-          this.#subscriptions.set(dependency, subscribeDependency(dependency, this.#notify));
-        }
+        this.#combinedDependencies = dependencies;
+        if (dependencies.size > 0) this.#subscriptions.set(this, render.subscribeReadables([...dependencies], this.#notify));
       }
     } else {
       for (const [dependency, unsubscribe] of this.#subscriptions) {

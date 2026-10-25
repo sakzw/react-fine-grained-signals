@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { coreRuntime } from "../src/core/core-runtime.js";
 import {
-  getReadableInterop,
-  READABLE_INTEROP_V1,
-} from "../src/core/interop.js";
-import {
   setActiveRenderCollector,
   type RenderDependency,
 } from "../src/core/render-tracking.js";
@@ -43,8 +39,8 @@ describe("public runtime readable surface", () => {
       const shape = ownReadableShape(readable);
       expect(shape.keys).toEqual([]);
       expect(shape.ownNames).toEqual([]);
-      expect(new Set(shape.ownSymbols)).toEqual(new Set([SIGNAL_BRAND, READABLE_INTEROP_V1]));
-      expect(new Set(shape.ownKeys)).toEqual(new Set([SIGNAL_BRAND, READABLE_INTEROP_V1]));
+      expect(new Set(shape.ownSymbols)).toEqual(new Set([SIGNAL_BRAND]));
+      expect(new Set(shape.ownKeys)).toEqual(new Set([SIGNAL_BRAND]));
       expect(shape.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
       expect(shape.prototypeNames.some((name) => publicGraphNames.test(name))).toBe(false);
       expect(shape.prototypeNames).not.toEqual(expect.arrayContaining([
@@ -53,13 +49,6 @@ describe("public runtime readable surface", () => {
       expect(shape.prototypeSymbols).toEqual([]);
       expect("getRenderVersion" in readable).toBe(false);
       expect("subscribeRender" in readable).toBe(false);
-
-      const protocol = getReadableInterop(readable);
-      expect(protocol).toBe(Reflect.get(readable, READABLE_INTEROP_V1));
-      expect(protocol?.version).toBe(1);
-      expect(protocol?.runtimeToken).toEqual(expect.any(Object));
-      expect(typeof protocol?.getRevision).toBe("function");
-      expect(typeof protocol?.subscribe).toBe("function");
     }
   });
 
@@ -81,10 +70,10 @@ describe("public runtime readable surface", () => {
     expect(typeof dependency?.subscribeRender).toBe("function");
   });
 
-  it("keeps internal deep runtime sources unbranded while retaining V1 ownership", () => {
+  it("keeps internal deep runtime sources unbranded", () => {
     const source = coreRuntime.createDeepSignal(1);
     expect(isSignal(source)).toBe(false);
-    expect(Object.getOwnPropertySymbols(source)).toContain(READABLE_INTEROP_V1);
+    expect(Object.getOwnPropertySymbols(source)).toEqual([]);
 
     const seen: number[] = [];
     const stop = coreRuntime.effect(() => {

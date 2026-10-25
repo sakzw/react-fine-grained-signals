@@ -14,13 +14,6 @@ export interface GraphExecutionOwnerV2 {
   readonly version: 2;
   readonly kind: "graph";
   readonly runtimeToken: object;
-  add(protocol: ReadableProtocolV1, revision: number): void;
-  /**
-   * Adopts an effect another copy created while this owner's effect or
-   * computed runs: `dispose` is called when that owner next re-runs or is
-   * disposed. Optional so an owner without it leaves the effect unowned.
-   */
-  own?(dispose: () => void): void;
 }
 
 export interface RenderExecutionOwnerV2 {
@@ -29,21 +22,22 @@ export interface RenderExecutionOwnerV2 {
   readonly scopePolicy?: "managed" | "bare";
   readonly runtimeToken: object;
   closeScope?(): void;
-  add(protocol: ReadableProtocolV1, revision: number): void;
   isSpeculative?(): boolean;
   markSpeculativeDeepRead?(): void;
-  /** As on the graph owner: adopts an effect created by a speculative getter. */
+  /** Adopts an effect created by a speculative getter. */
   own?(dispose: () => void): void;
 }
 
-export interface ReadableProtocolV1 {
-  readonly version: 1;
-  readonly runtimeToken: object;
-  getRevision(): number;
-  subscribe(listener: (revision: number) => void): {
-    unsubscribe(): void;
-    revision: number;
-  };
+/**
+ * Thrown when a read finds another copy of this package's owner. Copies share
+ * one execution owner so that a mix can be detected, but their graphs do not
+ * interoperate.
+ */
+export function multipleCopiesError(): Error {
+  return new Error(
+    "Multiple copies of react-fine-grained-signals are loaded; install a single copy " +
+      "(for example with pnpm's dedupe-peer-dependents or the bundler's resolve.dedupe).",
+  );
 }
 
 export function isGraphExecutionOwner(
