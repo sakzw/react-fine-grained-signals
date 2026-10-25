@@ -20,7 +20,7 @@
 - `tests/cross-copy-smoke.mjs`: `pushInteropRenderScope`と`publishInteropRenderRead`で render scope を検証していたブロックを削除。
 - `tests/phase4-duplicate-smoke.mjs`: `withInteropSpeculativeMode`系のブロックを削除。
 - 上記2つのfixture（`cross-copy-interop-entry.ts`、`phase4-duplicate-entry.ts`）から、削除した関数のexportを外した。
-- transform側: `react-execution.test.ts`の`experimental per-read capture codegen`（`describe`1つ、18件）と、`loadModule`の`experimentalCapture`引数を削除。`react-concurrent-capture.test.ts`（2件）はファイルごと削除した。**M5の棚卸しで挙げられていた`react-concurrent-capture.test.ts`はこの時点で存在しない**。
+- transform側: `loadModule`の`experimentalCapture`引数と、`react-concurrent-capture.test.ts`（2件、ファイルごと）を削除した。`react-execution.test.ts`の`experimental per-read capture codegen`（18件）は、オプションなしでもすべて通ったため、`managed per-read capture codegen`に改名して残した（下記のカバレッジの理由）。**M5の棚卸しで挙げられていた`react-concurrent-capture.test.ts`はこの時点で存在しない**。
 
 これらのファイルはM1でさらに削除・置換される。M0では、M1より前に`main`が常に緑であるよう、最小限の編集にとどめた。
 
@@ -40,10 +40,15 @@ managed出力（`useSignalCapture()`＋closure）を、`panicThreshold`を`none`
 | `pnpm lint` | エラー0（既存のwarningのみ） |
 | `pnpm typecheck` | 成功 |
 | `vitest run --maxWorkers=2` | 45ファイル、990件（変更前は45ファイル、992件。−2は削除した関数のテスト3件に1件を追加した差） |
-| `pnpm test:transform` | 8ファイル、722件（変更前は9ファイル、742件。−1ファイル/−20件は`experimentalCapture`の実験テスト）。初回に`unplugin.test.ts`のesbuild/webpack 4件と`transform.test.ts`のスタック深さ1件が落ちたが、単独実行と2回の再実行ではすべて通った。負荷時のtimeout・スタック深さに依存する不安定さで、変更前のコードに対する確認は取れていない |
+| `pnpm test:transform` | 8ファイル、740件（変更前は9ファイル、742件。−1ファイル/−2件は`react-concurrent-capture.test.ts`）。初回に`unplugin.test.ts`のesbuild/webpack 4件と`transform.test.ts`のスタック深さ1件が落ちたが、単独実行と2回の再実行ではすべて通った。負荷時のtimeout・スタック深さに依存する不安定さで、変更前のコードに対する確認は取れていない |
 | `pnpm build` | 成功 |
 | `pnpm size` | すべて予算内（削除したコードはtree shakingで元々バンドルに入っておらず、サイズの差はない） |
 | `pnpm test:consumer` | 成功 |
 | 公開型 | `dist/*.d.ts`の内容が変更前と同一 |
 | `pnpm test:browser` | 53件成功（chromium、firefox、webkit） |
 | `tests/cross-copy-smoke.mjs`、`tests/phase4-duplicate-smoke.mjs` | 成功 |
+
+## CIで見つかった問題
+
+最初のpush（`3ba289b`）でGitHub CIのTestが失敗した。transformの分岐カバレッジが89.89%でしきい値90%を下回ったため（Website CIとE2Eは成功）。実験テスト18件を削除すると、現行コードの分岐（代入先のTS wrapper、tracked aliasを含む代入先、generatorの呼び出し、JSX属性の判定など）の約12本が、そのテストでしかカバーされなくなっていた。
+18件は`experimentalCapture`なしでも通るため、削除せず`managed per-read capture codegen`として残した。分岐カバレッジは90.26%になった。ローカルの全ゲートでは`test:coverage`を回していなかったため見逃した。**以降のマイルストーンでは、テストを削除したときに`pnpm test:coverage`も回す。**
