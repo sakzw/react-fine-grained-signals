@@ -2,10 +2,10 @@
 
 ## 現在の状態
 
-- 状態: M19.2で承認済みの`index-full` gzip予算26,624 Bを維持（他scenario不変）。M19.3で独立レビューのT1/C1/P1/T3/J5/T2/J1を修正し、ローカルLint・typecheck・coverage・build・size・Consumer・browser・Website検証と、最終コードcommitのGitHub Test/E2E/Website CIが成功。M19.4でR1（Concurrent中の一時的なmixed commit）を各commitの記録で再現し、`useSignalTracking`系と`useDeepSignalValue`をReactのrender終了時consistency checkへ参加させて修正した。v0.3.0はnpm未公開。publish、version/tag/Release、Pages deploy、release freezeは行っていない。修正commitのGitHub Test/E2E/Website CIも成功し、公開判定は既知の制約付きで**GO**。詳細は[M19.3 independent review closure](m19.3-independent-review-findings-closure.ja.md)と[M19.4 R1 record](m19.4-r1-concurrent-commit-consistency.ja.md)。
+- 状態: M19.2で承認済みの`index-full` gzip予算26,624 Bを維持（他scenario不変）。M19.3で独立レビューのT1/C1/P1/T3/J5/T2/J1を修正し、ローカルLint・typecheck・coverage・build・size・Consumer・browser・Website検証と、最終コードcommitのGitHub Test/E2E/Website CIが成功。M19.4でR1（Concurrent中の一時的なmixed commit）を各commitの記録で再現し、`useSignalTracking`系と`useDeepSignalValue`をReactのrender終了時consistency checkへ参加させて修正した。v0.3.0は2026-10-25にnpmへ公開した（下記「公開状態」）。修正commitのGitHub Test/E2E/Website CIも成功し、公開判定は既知の制約付きで**GO**。詳細は[M19.3 independent review closure](m19.3-independent-review-findings-closure.ja.md)と[M19.4 R1 record](m19.4-r1-concurrent-commit-consistency.ja.md)。
 - 統合ブランチ: `main`
 - 最新実装マイルストーン: M19.2 Opus Findings Final Closure。LOW-5の同一Signal multi-option ref churnとLOW-8/9の最終unsubscribe後metadata回収を修正。Transform branch coverageは90.34%、Fast Refreshの新getter/setter適用を実ブラウザーで確認。`index-full`はgzip 25,343 B / 26,624 B予算。最終HEADのTest/E2E/Website CI成功により**READY WITH KNOWN LIMITATIONS**。詳細は[M19.2 final closure](m19-opus-findings-final-closure.ja.md)。
-- 公開状態: repository packageは`0.3.0`、npmのruntime/pluginは両方`0.2.1`（2026-10-19確認）。M19で公開操作・version変更・tag・Pages deploy・release freezeは行わない。
+- 公開状態: **v0.3.0を公開済み**（2026-10-25）。npmの`react-fine-grained-signals@0.3.0`と`unplugin-react-fine-grained-signals@0.3.0`が`latest`。plugin側のpeer rangeは`^0.3.0`に書き換わり、クリーンな環境でのinstallと動作を確認した。tag `v0.3.0`は`c826f45`、[GitHub Release](https://github.com/sakzw/react-fine-grained-signals/releases/tag/v0.3.0)を作成済み。公開commitのGitHub Test `40154583266` / E2E `40154583304` / Website CI `40154583286` success。Pages deployは未実施（手動triggerのみ）。READMEとwebsiteの「未公開」注記は公開に合わせて削除した。
 - v0.2.1 ベースライン: tag `v0.2.1` / commit `58f01b9314a1b09b88b162c57912ff736201e790` (`package version 0.2.1`)
 - M0開始時の作業ツリー: clean。公開済みbaselineはpackage metadata、tag、release記録で確認した。
 - Vue 3.6参照: `v3.6.0-rc.11`、commit `b55f3b92a185e87680ca7f69252451964be08b00`。2026-10-13時点で公式Release一覧の最新3.6候補であり、pre-release。安定版と同じ保証としては扱わない。
