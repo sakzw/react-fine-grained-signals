@@ -1,15 +1,12 @@
-import { useManagedSignals } from "react-fine-grained-signals/internal";
+import { useSignalTracking } from "react-fine-grained-signals";
 import type { ActivityEntry } from "../lib/task-store.js";
 
 /**
  * Same reasoning as TaskRow for *why* it needs its own subscription: plain
  * property access, no `.value` token. Unlike TaskRow, this file is excluded
- * from the build plugin's transform (see vite.config.ts) and reaches for the
- * manual react-fine-grained-signals/internal boundary directly instead -- the
- * documented exact-boundary alternative for a component you want correct
- * independent of build-tool configuration. useManagedSignals() returns a scope
- * handle that must be closed with f() in a finally, not the plugin-provided
- * convenience hook TaskRow uses.
+ * from the build plugin's transform (see vite.config.ts) and calls the bare
+ * useSignalTracking() boundary by hand. That boundary is best-effort, and with
+ * React Compiler in the build the component must opt out of memoization.
  */
 export function ActivityRow({
   entry,
@@ -18,15 +15,13 @@ export function ActivityRow({
   entry: () => ActivityEntry;
   slot: number;
 }) {
-  const scope = useManagedSignals();
-  try {
-    return (
-      <li className="activity-row">
-        <span className="slot">#{slot}</span>
-        <span>{entry().message}</span>
-      </li>
-    );
-  } finally {
-    scope.finish();
-  }
+  "use no memo";
+
+  useSignalTracking();
+  return (
+    <li className="activity-row">
+      <span className="slot">#{slot}</span>
+      <span>{entry().message}</span>
+    </li>
+  );
 }

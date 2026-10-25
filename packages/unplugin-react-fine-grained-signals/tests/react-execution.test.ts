@@ -22,7 +22,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
 import * as libraryJsxRuntime from "../../../src/jsx/jsx-runtime.js";
-import * as libraryRuntime from "../../../src/internal.js";
+import * as libraryInternal from "../../../src/internal.js";
+import { useManagedSignals } from "../../../src/react/use-signals.js";
 import * as libraryUtils from "../../../src/utils.js";
 import {
   transformReactFineGrainedSignals,
@@ -41,7 +42,9 @@ const moduleRegistry: Record<string, unknown> = {
   "react/jsx-runtime": reactJsxRuntime,
   "react-fine-grained-signals": library,
   "react-fine-grained-signals/jsx/jsx-runtime": libraryJsxRuntime,
-  "react-fine-grained-signals/internal": libraryRuntime,
+  // `useManagedSignals` is no longer public; the control fixtures below still
+  // need a hook that behaves like a hand-written boundary.
+  "react-fine-grained-signals/internal": { ...libraryInternal, useManagedSignals },
   "react-fine-grained-signals/utils": libraryUtils,
 };
 

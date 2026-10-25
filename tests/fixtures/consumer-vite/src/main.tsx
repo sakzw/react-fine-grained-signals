@@ -1,6 +1,5 @@
 import { computed, deepSignal, signal } from "react-fine-grained-signals";
 import { memo, useEffect, useState } from "react";
-import { useManagedSignals } from "react-fine-grained-signals/internal";
 import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 const count = signal(0);
@@ -134,16 +133,6 @@ export function ConsumerCanary() {
 
 export function Counter() {
   return <output>{count.value}</output>;
-}
-
-/** @noSignalTracking */
-export function ManagedBoundary() {
-  const signals = useManagedSignals();
-  try {
-    return <output>{count.value}</output>;
-  } finally {
-    signals.finish();
-  }
 }
 
 // A key after a spread is the one shape the automatic runtime cannot express,

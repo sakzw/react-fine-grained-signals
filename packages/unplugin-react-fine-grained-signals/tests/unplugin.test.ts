@@ -226,23 +226,6 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(output).toContain("count.value");
   });
 
-  it("leaves a hand-written useManagedSignals boundary untouched", () => {
-    const source = [
-      'import { useManagedSignals } from "react-fine-grained-signals/internal";',
-      "const count = { value: 1 };",
-      "export function App() {",
-      "  const store = useManagedSignals();",
-      "  try { return <p>{count.value}</p>; }",
-      "  finally { store.finish(); }",
-      "}",
-    ].join("\n");
-
-    // The manually managed call itself is enough to identify its owner. The
-    // plugin leaves the existing exact boundary as authored rather than
-    // wrapping it in a second managed scope.
-    expect(transformSource(source, { mode: "auto" })).toBeUndefined();
-  });
-
   it("keeps an explicit useSignalTracking call in place under the injection transform", () => {
     const output = transformSource(explicitSource, { mode: "auto", transform: "inject" });
 

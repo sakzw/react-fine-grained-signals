@@ -79,37 +79,9 @@ export function Counter() {
 
 `babel-plugin-react-compiler` 1.0.0（2026-10-25）で計測した結果、compilerは `CompileSkip` を記録し、functionを変更せずに出力します。`panicThreshold: "all_errors"` でもthrowしません。`reactCompiler: "off"` ではdirectiveを出力せず、compilerは `CompileSuccess` を記録します。その場合も、capture closureが読み取りを最新に保ちます（`packages/unplugin-react-fine-grained-signals/tests/react-compiler.test.ts` の "keeps managed capture fresh when Compiler integration is disabled"）。つまり、managedの出力がmemo cacheに入らないのは偶然ではなく、directiveによる意図的な結果です。
 
-### 手動ランタイムインポート境界はmanagedの出力と同じ挙動になる
+### 手動ランタイムインポート境界（v0.4で削除）
 
-[hooksのdocs](../../docs/guides/hooks.ja.md)に載せている手動ランタイムインポート境界、つまり `react-fine-grained-signals/runtime` からimportした `useManagedSignals()` を作者自身の `try` / `finally` で閉じる形を、pipelineのstep 1を完全にskipして単独で計測しました。このskipこそが要点です。これはbuild pluginをbuildに入れていない開発者が書く形であり、directiveを挿入するものが存在しません。
-
-```jsx
-import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
-
-export const count = signal(0);
-
-export function Counter() {
-  const store = useManagedSignals();
-  try {
-    return <output>{count.value}</output>;
-  } finally {
-    store.finish();
-  }
-}
-```
-
-compilerが分類するのはsourceであって、その書き手ではありません。transformが生成したmanagedの出力とまったく同じeventを記録し、functionを変更せずに出力します(`react/compiler-runtime` のimportもmemo cacheもありません)。
-
-```
-CompileError: Todo: (BuildHIR::lowerStatement) Handle TryStatement without a catch clause
-```
-
-jsdomでmountすると、componentは書き込みのたびに更新されます(`0`、`1`、`2`)。`"use no memo"` を手書きしても、どちらの結果も変わりません。記録されるeventは `CompileError` のままで、同じdirectiveが `inject` 形のbodyに対して生成する `CompileSkip` にはならず、DOMの推移も同一です。bail-outは構文だけから生じています。したがってこのパターンは、bare `useSignalTracking()` のような「無言で凍結する」ハザードにはあたりません。
-
-それでもdirectiveには意味が1つだけ残ります。`panicThreshold: "all_errors"` の場合です。directiveがなければ `transformSync` がthrowしてbuildは失敗し、あればerror eventは記録されるもののpanicは発生しません。これは上のmanagedの出力で計測した分岐とまったく同じであり、両者が同じ形だと理解すれば当然の結果です。
-
-自動化の欠落は実在しますが、「directiveが付かない」よりは狭い話です。transformは `mode: "auto"` かつ `transform: "managed"` であってもこのfileに手を加えません。functionが既に `useSignalTracking()` を呼んでいるため、directiveを付ける地点に到達する前にskipされ、`transformReactFineGrainedSignals` は `null` を返してfileをtransformされなかったものとして報告します。つまり `"use no memo"` の手書きは、全errorでpanicするbuildに必要なものであり、compilerが将来 `try` / `finally` をlowerできるようになったときにopt-outを有効なまま保つためのものです。
+手書きの `useManagedSignals()` + `try` / `finally` 境界は、v0.3ではここで計測していました。compilerは `catch` なしの `try` をlowerできないため `CompileError` を記録してfunctionを変更せずに出力し、componentは更新され続けました。v0.4で `useManagedSignals` を削除したため、この形はもう存在せず、計測は履歴としてだけ残しています。現行のmanaged出力は同じファイルの前の節で説明しています。
 
 ### leaf hookはcompiler-safe
 

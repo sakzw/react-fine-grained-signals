@@ -94,6 +94,8 @@ runtimeはbest-effortのまま、検出できる範囲でdevelopment buildの誤
 
 利点は、保証内容が正確になり、曖昧な仕組みを減らせることです。欠点は、ライブライブラリとしての体験(render中に `.value` を読むだけで表示が追従する書き味)を弱める、大きなproduct/API判断になることです。
 
+**v0.4の結果:** 変換なしのAPIは限定しませんでしたが、手書きの `useManagedSignals` / `ManagedSignalsStore` 境界（上の「手動のmanaged handle」）は削除しました。transformはもうこれを出力せず、認識もしません。利用者が書く境界は `useSignalTracking()` だけで、`useSignalCapture` は生成コード用に `./internal` にあります。`utils.tsx` は、制御フローコンポーネント自身のためにscopeのライブラリ内部用の実装を保持しています。
+
 ## 当初の判断で使った基準
 
 採用する設計には、少なくとも次の実行可能なtestが必要です。

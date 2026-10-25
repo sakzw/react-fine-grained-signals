@@ -90,37 +90,23 @@ With the build plugin, `mode: "auto"` selects eligible functions from statically
 
 The collection window closes at the next `useSignalTracking()` call, when React starts committing (before any layout effect or ref callback runs), or in a microtask after the current synchronous execution — not at the point the component returns. Reads outside an open window, including the layout effects and refs of the component's own descendants, are ordinary reactive reads.
 
-A capture or managed scope opened while a `useSignalTracking()` window is open suspends that window and gives it back. Reads inside the nested scope (a `useSignalCapture()` / `capture()` call, or a hand-written `useManagedSignals()` ... `finish()` custom Hook) are attributed to that scope, and reads after it returns, in the same component function, go to the component's window again. React exposes no component identity, so a window a previous sibling left open is suspended the same way rather than closed: until it closes, it can collect a later component's uncaptured reads. That can cause an extra render of the sibling, never a missed update.
+A capture scope opened while a `useSignalTracking()` window is open suspends that window and gives it back. Reads inside the nested scope (the build plugin's `useSignalCapture()` / `capture()` calls) are attributed to that scope, and reads after it returns, in the same component function, go to the component's window again. React exposes no component identity, so a window a previous sibling left open is suspended the same way rather than closed: until it closes, it can collect a later component's uncaptured reads. That can cause an extra render of the sibling, never a missed update.
 
 That is why every reading component needs its own call: a read from a sibling or descendant that does not call `useSignalTracking()` can be attributed to another component's still-open window, and that signal then silently stops updating the component that actually read it.
 
 Use the build plugin's `transform: "managed"` (its default) for statically proven synchronous reads. It installs a top-level capture Hook and wraps individual reads, so authored Hooks remain at their normal top level. The supported patterns and diagnostics are listed in the [managed tracking contract](../../packages/unplugin-react-fine-grained-signals/README.md#managed-tracking-contract).
 
-### Exact boundary without the plugin
+### Migrating from `useManagedSignals`
 
-`react-fine-grained-signals/internal` exports `useManagedSignals`, which returns a scope handle that you close yourself with a `try` / `finally`. This manual form provides a lexical boundary without a build transform.
+v0.4 removes `useManagedSignals` and `ManagedSignalsStore` (`react-fine-grained-signals/internal` now holds only the build plugin's generated code). `useSignalTracking()` is the only tracking boundary you write yourself. If you closed a `useManagedSignals()` scope with `try` / `finally`, choose one of:
 
-```tsx
-import { useManagedSignals } from "react-fine-grained-signals/internal";
-
-function Row() {
-  const store = useManagedSignals();
-  try {
-    // signal reads
-  } finally {
-    store.finish();
-  }
-}
-```
-
-- The runtime scope closes exactly where `finally` runs and can collect any synchronous signal read executed inside it, including reads inside a helper called synchronously.
-- This lexical scope is not equivalent to the plugin's current `transform: "managed"` output. The plugin uses a top-level `useSignalCapture()` Hook and wraps only reads it can prove are synchronous at their execution sites. A helper-only or dynamically selected read may therefore be missed; consult the plugin guide before migrating an existing boundary.
+- the build plugin with `transform: "managed"` (the default), which captures statically proven synchronous reads;
+- the leaf hooks `useSignalValue` and `useComputed`, which subscribe one component to one value;
+- `useSignalTracking()`, with the best-effort limits described above.
 
 ### React Compiler
 
-The runtime-import boundary above is not the silent-freeze hazard that a bare `useSignalTracking()` is. Measured against `babel-plugin-react-compiler` 1.0.0, the compiler cannot lower `try` without `catch`, so it abandons the function, emits it unchanged, and the component keeps updating on every write — with or without `"use no memo"`.
-
-What the directive buys is the build, not the runtime: under `panicThreshold: "all_errors"` the same bail-out is fatal without it and merely logged with it. The build plugin adds the directive to its own `managed` output automatically (`reactCompiler: "auto"`, the default) but leaves a hand-written runtime-import boundary untouched. Write it by hand if your build panics on all errors, and for forward compatibility, since the bail-out is a compiler limitation rather than a guarantee.
+A bare `useSignalTracking()` needs `"use no memo"` when the build runs React Compiler; the build plugin adds the directive to the functions it transforms (`reactCompiler: "auto"`, the default). Without it the compiler caches the component's JSX and the component stops updating. See [Rendering optimization](./rendering-optimization.md).
 
 See [the React Compiler compatibility note](../../development/design/react-compiler-compatibility.md) and [the boundary design note](../../development/design/use-signals-boundary-design.md) for the full analysis.
 

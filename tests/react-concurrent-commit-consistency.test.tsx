@@ -21,7 +21,7 @@ import {
   useSignalTracking,
   useSignalValue,
 } from "../src/index.js";
-import { useManagedSignals, useSignalCapture } from "../src/internal.js";
+import { useManagedSignals, useSignalCapture } from "../src/react/use-signals.js";
 
 type ActGlobal = typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean | undefined };
 let previousActEnvironment: boolean | undefined;

@@ -94,31 +94,17 @@ build pluginを使う場合、`mode: "auto"` は静的に認識できる `.value
 
 build pluginの `transform: "managed"`（既定）は、静的に証明できる同期readを追跡します。top-level capture Hookを置き、readごとにcaptureするため、ユーザーが書いたHookは通常どおりtop-levelに残ります。対応patternとdiagnosticsは[managed tracking契約](../../packages/unplugin-react-fine-grained-signals/README.ja.md#managed-tracking契約)を参照してください。
 
-### pluginを使わずに厳密な境界を作る
+### `useManagedSignals` からの移行
 
-`react-fine-grained-signals/internal` は `useManagedSignals` をexportしています。scope handleを返すため、`try` / `finally` で自分で閉じます。build時のtransformなしにlexical boundaryを作れます。
+v0.4で `useManagedSignals` と `ManagedSignalsStore` を削除しました（`react-fine-grained-signals/internal` にはbuild pluginが生成するコードが使うものだけが残ります）。自分で書く追跡境界は `useSignalTracking()` だけです。`useManagedSignals()` のscopeを `try` / `finally` で閉じていた場合は、次のいずれかに移行してください。
 
-```tsx
-import { useManagedSignals } from "react-fine-grained-signals/internal";
-
-function Row() {
-  const store = useManagedSignals();
-  try {
-    // signalの読み取り
-  } finally {
-    store.finish();
-  }
-}
-```
-
-- runtime scopeは `finally` の位置で閉じます。そこで同期的に実行される読み取りなら、同期的に呼び出したhelper内の読み取りも含めて収集できます。
-- このlexical scopeは、現在のpluginの `transform: "managed"` 出力と同等ではありません。pluginはtop-levelの `useSignalCapture()` Hookを挿入し、実行箇所が同期的だと静的に証明できるreadだけを個別にcaptureします。helper内だけのreadや動的に選ばれるreadが漏れる場合があるため、既存境界を移行する前にplugin guideを確認してください。
+- build pluginの `transform: "managed"`（既定）。静的に証明できる同期readをcaptureします。
+- leaf hookの `useSignalValue` と `useComputed`。1つのコンポーネントが1つの値を購読します。
+- `useSignalTracking()`。上で説明したbest-effortの制約があります。
 
 ### React Compiler
 
-上のランタイムインポート境界は、bare `useSignalTracking()` のような「無言で凍結する」ハザードにはあたりません。`babel-plugin-react-compiler` 1.0.0で計測したところ、compilerは `catch` のない `try` を下位表現に落とせないためcompileを中断し、functionをそのまま出力します。その結果、`"use no memo"` の有無にかかわらず、コンポーネントは書き込みのたびに更新され続けます。
-
-このdirectiveが効くのはruntimeではなくbuildです。`panicThreshold: "all_errors"` の場合、directiveがなければ同じbail-outがbuildを失敗させ、あればログに記録されるだけで済みます。build pluginは自身のmanaged出力には既定の `reactCompiler: "auto"` でdirectiveを自動的に挿入しますが、手書きのランタイムインポート境界には手を加えません。buildが全errorでpanicする設定なら手書きで付けてください。また、このbail-outはcompilerの制約であって保証ではないため、将来のversionに備える意味でも付けておく価値があります。
+buildでReact Compilerを使う場合、bare `useSignalTracking()` には `"use no memo"` が必要です。build pluginは、transformした関数にこのdirectiveを付けます（`reactCompiler: "auto"`、既定）。付けないと、compilerがコンポーネントのJSXをcacheして更新が止まります。詳しくは[描画最適化](./rendering-optimization.ja.md)を参照してください。
 
 詳細は[React Compilerとの互換性の検討docs](../../development/design/react-compiler-compatibility.ja.md)と[境界設計の検討docs](../../development/design/use-signals-boundary-design.ja.md)を参照してください。
 

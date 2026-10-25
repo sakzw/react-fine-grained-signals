@@ -284,12 +284,6 @@ try {
       `Vite consumer output should retain managed captures for the consumer canary, found ${captureCalls.length}`,
     );
   }
-  const finishCalls = output.match(/\.finish\s*\(/g) ?? [];
-  if (finishCalls.length !== 1) {
-    throw new Error(
-      `Vite consumer output should retain ManagedBoundary's hand-written finish call, found ${finishCalls.length}`,
-    );
-  }
   if (!output.includes("react/compiler-runtime")) {
     throw new Error("Packed consumer Vite build did not run React Compiler");
   }

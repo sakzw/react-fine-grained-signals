@@ -21,7 +21,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { coreRuntime } from "../src/core/core-runtime.js";
 import { computed, signal, useSignalTracking, type Signal } from "../src/index.js";
-import { useManagedSignals } from "../src/internal.js";
+import { useManagedSignals } from "../src/react/use-signals.js";
 
 // Regression coverage for the independent B' React / JSX re-audit of aca0d30.
 

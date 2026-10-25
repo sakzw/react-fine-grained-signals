@@ -714,8 +714,7 @@ function isNamedUseManagedSignalsImport(
     resolved.specifier.isImportSpecifier() &&
     resolved.source === runtimeSource &&
     t.isIdentifier(resolved.specifier.node.imported) &&
-    (resolved.specifier.node.imported.name === "useManagedSignals" ||
-      resolved.specifier.node.imported.name === "useSignalCapture")
+    resolved.specifier.node.imported.name === "useSignalCapture"
   );
 }
 
@@ -2382,8 +2381,7 @@ function scanFunction(
           managedRuntimeSource,
         )) ||
         (callee.isMemberExpression() &&
-          (getReadPropertyName(callee.node) === "useManagedSignals" ||
-            getReadPropertyName(callee.node) === "useSignalCapture") &&
+          getReadPropertyName(callee.node) === "useSignalCapture" &&
           callee.get("object").isIdentifier() &&
           isNamespaceUseManagedSignalsImport(
             functionPath,
@@ -2407,7 +2405,7 @@ function scanFunction(
 function findRuntimeImports(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
-  importedName: "useSignalTracking" | "useManagedSignals" | "useSignalCapture",
+  importedName: "useSignalTracking" | "useSignalCapture",
 ): RuntimeImport[] {
   const imports: RuntimeImport[] = [];
   for (const statement of programPath.get("body")) {
@@ -2437,7 +2435,7 @@ function findRuntimeImports(
 function addRuntimeImport(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
-  importedName: "useSignalTracking" | "useManagedSignals" | "useSignalCapture",
+  importedName: "useSignalTracking" | "useSignalCapture",
   functionPath: NodePath<t.Function>,
 ): RuntimeImport {
   const local = functionPath.scope.generateUidIdentifier(importedName);

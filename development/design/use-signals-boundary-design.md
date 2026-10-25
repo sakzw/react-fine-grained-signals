@@ -90,6 +90,8 @@ Advantages: low cost, orthogonal to every other option, and directly addresses t
 
 Advantages: makes guarantees honest and reduces ambiguous machinery. Disadvantages: weakens the live-library experience — the authoring style where reading `.value` during render is by itself enough to keep the view live — and is a significant product/API decision.
 
+**v0.4 outcome:** the bare API was not narrowed, but the hand-written `useManagedSignals` / `ManagedSignalsStore` boundary (the "manual managed handle" above) was removed. The transform no longer emits it and no longer recognizes it; `useSignalTracking()` is the only boundary users write, and `useSignalCapture` lives on `./internal` for generated code. `utils.tsx` keeps a library-internal copy of the scope for its own control-flow components.
+
 ## Criteria used for the original decision
 
 Any selected design must have executable tests for:

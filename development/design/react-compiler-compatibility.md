@@ -79,37 +79,9 @@ export function Counter() {
 
 Measured with `babel-plugin-react-compiler` 1.0.0 (2026-10-25): the compiler logs `CompileSkip`, emits the function unchanged, and does not throw under `panicThreshold: "all_errors"`. With `reactCompiler: "off"` the directive is omitted and the compiler logs `CompileSuccess`; the capture closure keeps the read fresh there (see "keeps managed capture fresh when Compiler integration is disabled" in `packages/unplugin-react-fine-grained-signals/tests/react-compiler.test.ts`). The directive is therefore what keeps managed output out of the memo cache by intent, not by accident.
 
-### The manual runtime-import boundary behaves like managed output
+### The manual runtime-import boundary (removed in v0.4)
 
-The manual runtime-import boundary published in [the hooks guide](../../docs/guides/hooks.md) — `useManagedSignals()` imported from `react-fine-grained-signals/runtime`, closed by the author's own `try` / `finally` — was measured on its own, with step 1 of the pipeline skipped entirely. That skip is the point: this is the shape a developer writes when the build plugin is not in the build, so nothing inserts a directive for it.
-
-```jsx
-import { signal } from "react-fine-grained-signals";
-import { useManagedSignals } from "react-fine-grained-signals/runtime";
-
-export const count = signal(0);
-
-export function Counter() {
-  const store = useManagedSignals();
-  try {
-    return <output>{count.value}</output>;
-  } finally {
-    store.finish();
-  }
-}
-```
-
-The compiler classifies the source, not its author. It logs exactly the event transform-generated managed output produces, and emits the function unchanged — no `react/compiler-runtime` import, no memo cache:
-
-```
-CompileError: Todo: (BuildHIR::lowerStatement) Handle TryStatement without a catch clause
-```
-
-Mounted in jsdom, the component updates on every write: `0`, then `1`, then `2`. Adding `"use no memo"` by hand changes neither result. The logged event stays `CompileError` — not the `CompileSkip` the same directive produces on an `inject`-shaped body — and the DOM sequence is identical. The bail-out comes from the syntax alone, so this pattern is not the silent-freeze hazard a bare `useSignalTracking()` is.
-
-The directive still buys one thing, and only under `panicThreshold: "all_errors"`: without it `transformSync` throws and the build fails; with it the error event is still logged, but no panic fires. That is the same split measured on the transform's own managed output above, which is what one would expect once the two shapes are recognized as the same shape.
-
-The automation gap is real, but narrower than a missing directive. The transform leaves such a file untouched even in `mode: "auto"` with `transform: "managed"`: the function already calls `useSignalTracking()`, so it is skipped before the point where the directive would be added, and `transformReactFineGrainedSignals` reports the file as untransformed by returning `null`. Writing `"use no memo"` by hand is therefore what a panic-on-all-errors build needs, and what keeps the opt-out meaningful if a compiler version learns to lower `try` / `finally`.
+The hand-written `useManagedSignals()` + `try` / `finally` boundary was measured here for v0.3: the compiler cannot lower `try` without `catch`, so it logged `CompileError` and left the function unchanged, and the component kept updating. v0.4 removes `useManagedSignals`, so that shape no longer exists and the measurement is kept only as history. The same file's earlier section describes the current managed output.
 
 ### Leaf hooks are compiler-safe
 

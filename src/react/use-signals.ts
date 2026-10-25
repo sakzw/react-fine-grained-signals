@@ -24,7 +24,10 @@ export function useSignalTracking(): void {
   reactAdapter.useSignalTracking();
 }
 
-/** Exact lexical render scope for a hand-written `try`/`finally` boundary (the managed transform now emits `useSignalCapture`). */
+/**
+ * Exact lexical render scope closed with `try`/`finally`. Library-internal: the
+ * control-flow components in `utils.tsx` use it, and no public entry exports it.
+ */
 export function useManagedSignals(): ManagedSignalsStore {
   return reactAdapter.useManagedSignals();
 }

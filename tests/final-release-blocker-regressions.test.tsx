@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { computed, effect, isSignal, signal, useSignalTracking } from "../src/index.js";
-import { useManagedSignals } from "../src/internal.js";
+import { useManagedSignals } from "../src/react/use-signals.js";
 
 // Regression coverage for the final targeted v0.2.0 release-blocker validation.
 
