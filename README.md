@@ -4,7 +4,7 @@
 
 An experimental fine-grained rendering layer for React 19, built on [alien-signals](https://www.npmjs.com/package/alien-signals). It provides small reactive primitives, React hooks, and an opt-in JSX runtime for a deliberately narrow set of direct DOM bindings.
 
-**Requires React 19 or newer.** The JSX runtime uses callback-ref cleanup, which is unavailable in React 18.
+**Requires React 19.3 or newer.** The JSX runtime uses callback-ref cleanup, which is unavailable in React 18, and 19.3 fixed `useSyncExternalStore` missing store changes while an `<Activity>` is hidden (React 19.0–19.2 are no longer supported).
 
 ## Documentation
 

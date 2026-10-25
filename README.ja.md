@@ -4,7 +4,7 @@
 
 [alien-signals](https://www.npmjs.com/package/alien-signals) を基盤とした、React 19向けの実験的なfine-grainedレンダリングレイヤーです。小さなリアクティブプリミティブ、Reactフック、そして対象を意図的に絞ったDOMプロパティへの直接バインディング用JSXランタイムを提供します。このJSXランタイムは明示的に有効化した場合のみ使用されます。
 
-**React 19以降が必要です。** JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。
+**React 19.3以降が必要です。** JSXランタイムは、React 18では利用できないcallback refのクリーンアップを使用します。また19.3で、`<Activity>` が隠れている間の `useSyncExternalStore` のstore変更の見落としが修正されました（React 19.0〜19.2は非対応です）。
 
 ## ドキュメント
 
