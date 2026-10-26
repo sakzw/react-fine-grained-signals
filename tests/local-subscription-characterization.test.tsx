@@ -10,7 +10,7 @@ import { Component, act } from "react";
 import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { computed, signal, useSignalValue } from "../src/index.js";
+import { computed, signal, useSignalTracking, useSignalValue } from "../src/index.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -140,5 +140,31 @@ describe("direct JSX binding subscription", () => {
     expect(field.getAttribute("data-label")).toBe("n1");
     act(() => { source.value = 4; });
     expect(field.getAttribute("data-label")).toBe("n0");
+  });
+});
+
+describe("useSignalTracking subscription", () => {
+  it("releases a source the component stopped reading, and everything on unmount", async () => {
+    const first = signal(1);
+    const second = signal(10);
+    function View({ useSecond }: { useSecond: boolean }) {
+      useSignalTracking();
+      return <output data-testid="out">{(useSecond ? second : first).value}</output>;
+    }
+    const view = render(<View useSecond={false} />);
+    expect(coreRuntime.hasSubscribers(first)).toBe(true);
+
+    view.rerender(<View useSecond />);
+    expect(screen.getByTestId("out").textContent).toBe("10");
+    expect(coreRuntime.hasSubscribers(first)).toBe(false);
+    expect(coreRuntime.hasSubscribers(second)).toBe(true);
+
+    act(() => { first.value = 2; });
+    expect(screen.getByTestId("out").textContent).toBe("10");
+
+    view.unmount();
+    // Disposal is deferred a microtask so a hidden-then-shown tree can reuse it.
+    await Promise.resolve();
+    expect(coreRuntime.hasSubscribers(second)).toBe(false);
   });
 });
