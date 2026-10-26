@@ -51,7 +51,7 @@ export interface ReactFineGrainedSignalsOptions {
    */
   transform?: ReactFineGrainedSignalsTransform;
   /**
-   * `auto` (default) marks every transformed function with `"use no memo"`, so
+   * `opt-out` (default) marks every transformed function with `"use no memo"`, so
    * React Compiler cannot memoize away the signal reads render tracking needs.
    * `off` omits the directive; only choose it when the compiler is not used, or
    * when its memoization has been verified against this library's tracking.
@@ -314,6 +314,15 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
         );
       }
     }
+    // Any other value would compare unequal to "opt-out" and silently drop the
+    // directive, so a compiled component would stop updating.
+    const reactCompiler = options.reactCompiler ?? "opt-out";
+    if (reactCompiler !== "opt-out" && reactCompiler !== "off") {
+      throw new TypeError(
+        `[${pluginName}] reactCompiler must be "opt-out" or "off", got ${JSON.stringify(reactCompiler)}` +
+          (reactCompiler === ("auto" as string) ? '; "auto" was renamed to "opt-out" in 0.4.0' : ""),
+      );
+    }
     // esbuild hands a plugin its resolved build options through the `config`
     // hook, which is the only place a project's own `loader` map can be read.
     let configuredLoaders: Record<string, string> | undefined;
@@ -333,7 +342,7 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
         reactImportSource: options.reactImportSource ?? "react",
         mode: options.mode ?? "auto",
         transform: options.transform ?? "managed",
-        reactCompiler: options.reactCompiler ?? "auto",
+        reactCompiler,
         warn: (warning: Error) => {
           const { diagnosticId } = warning as Error & { diagnosticId?: DiagnosticId };
           if (diagnosticId !== undefined && errorOn.includes(diagnosticId)) {

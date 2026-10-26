@@ -12,7 +12,7 @@ function compile(
   mode: ReactFineGrainedSignalsMode = "manual",
   transform: ReactFineGrainedSignalsTransform = "managed",
   importSource = "react-fine-grained-signals",
-  reactCompiler: ReactFineGrainedSignalsReactCompiler = "auto",
+  reactCompiler: ReactFineGrainedSignalsReactCompiler = "opt-out",
   reactImportSource = "react",
 ): string {
   return (
@@ -224,9 +224,9 @@ describe("managed render transform", () => {
       const count = { value: 1 };
       export const Counter = React.memo(() => <p>{count.value}</p>);
     `;
-    const named = compile(namedSource, "auto", "managed", "react-fine-grained-signals", "auto", "./react-compat");
+    const named = compile(namedSource, "auto", "managed", "react-fine-grained-signals", "opt-out", "./react-compat");
     const namespaced = compile(
-      namespaceSource, "auto", "managed", "react-fine-grained-signals", "auto", "./react-compat",
+      namespaceSource, "auto", "managed", "react-fine-grained-signals", "opt-out", "./react-compat",
     );
 
     expect(named).toContain("const Counter = memo(() => {");
@@ -246,7 +246,7 @@ describe("managed render transform", () => {
       const count = { value: 1 };
       export const MemoCounter = memo(() => <p>{count.value}</p>);
       export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
-    `, "auto", "managed", "react-fine-grained-signals", "auto", "./react-compat");
+    `, "auto", "managed", "react-fine-grained-signals", "opt-out", "./react-compat");
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = memo(() => {");
@@ -711,7 +711,7 @@ describe("managed render transform", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code ?? "";
 
@@ -983,7 +983,7 @@ describe("managed render transform", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -1457,7 +1457,7 @@ describe("managed render transform", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto" as const,
       transform: "managed" as const,
-      reactCompiler: "auto" as const,
+      reactCompiler: "opt-out" as const,
       reactImportSource: "react",
     };
     const source = "const count = { value: 1 }; class Store { @dec accessor x = 1; }";
@@ -1475,7 +1475,7 @@ describe("managed render transform", () => {
         importSource: "react-fine-grained-signals",
         mode: "auto",
         transform: "managed",
-        reactCompiler: "auto",
+        reactCompiler: "opt-out",
         reactImportSource: "react",
       },
     );
@@ -1489,7 +1489,7 @@ describe("managed render transform", () => {
     const options = {
       importSource: "react-fine-grained-signals",
       transform: "managed" as const,
-      reactCompiler: "auto" as const,
+      reactCompiler: "opt-out" as const,
       reactImportSource: "react",
     };
     // Syntax the configured parser cannot handle at all: reaching the parser
@@ -1542,7 +1542,7 @@ describe("managed render transform", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto" as const,
       transform: "inject" as const,
-      reactCompiler: "auto" as const,
+      reactCompiler: "opt-out" as const,
       reactImportSource: "react",
     };
 
@@ -1928,7 +1928,7 @@ describe("anonymous default exports", () => {
         importSource: "react-fine-grained-signals",
         mode: "auto",
         transform: "managed",
-        reactCompiler: "auto",
+        reactCompiler: "opt-out",
         reactImportSource: "react",
       },
     )?.code;
@@ -1952,7 +1952,7 @@ describe("anonymous default exports", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto" as const,
       transform: "managed" as const,
-      reactCompiler: "auto" as const,
+      reactCompiler: "opt-out" as const,
       reactImportSource: "react",
     };
 
@@ -1974,7 +1974,7 @@ describe("anonymous default exports", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })).toBeNull();
     expect(warn).not.toHaveBeenCalled();
@@ -1988,7 +1988,7 @@ describe("anonymous default exports", () => {
       importSource: "react-fine-grained-signals",
       mode: "all",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
@@ -2392,7 +2392,7 @@ describe("parse failures", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto" as const,
       transform: "managed" as const,
-      reactCompiler: "auto" as const,
+      reactCompiler: "opt-out" as const,
       reactImportSource: "react",
     };
 
@@ -2438,7 +2438,7 @@ describe("parse failures", () => {
         importSource: "react-fine-grained-signals",
         mode: "auto" as const,
         transform: "managed" as const,
-        reactCompiler: "auto" as const,
+        reactCompiler: "opt-out" as const,
         reactImportSource: "react",
       });
     } catch (error) {
@@ -2767,7 +2767,7 @@ describe("signal reads in parameter defaults", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -2838,7 +2838,7 @@ async function compileAndParse(
     importSource: "react-fine-grained-signals",
     mode: "auto",
     transform,
-    reactCompiler: "auto",
+    reactCompiler: "opt-out",
     reactImportSource: "react",
   })?.code;
   if (output === undefined) throw new Error(`${id} was not transformed`);
@@ -3053,7 +3053,7 @@ async function lowerJsx(
     importSource: "react-fine-grained-signals",
     mode: "auto",
     transform,
-    reactCompiler: "auto",
+    reactCompiler: "opt-out",
     reactImportSource: "react",
   })?.code;
   if (output === undefined) throw new Error(`${id} was not transformed`);
@@ -3427,7 +3427,7 @@ export function ServerBadge() { return <output>{count.value}</output>; }
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -3454,7 +3454,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -3481,7 +3481,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -3521,7 +3521,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -3540,7 +3540,7 @@ export function App() {
         importSource,
         mode: "auto",
         transform: "managed",
-        reactCompiler: "auto",
+        reactCompiler: "opt-out",
         reactImportSource: "react",
         warn: (warning) => warnings.push(warning),
       });
@@ -3593,7 +3593,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -3622,7 +3622,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     });
@@ -3644,7 +3644,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     })?.code;
@@ -3669,7 +3669,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     })?.code;
@@ -3693,7 +3693,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     })?.code;
@@ -3717,7 +3717,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     })?.code;
@@ -3752,7 +3752,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     })?.code ?? "";
@@ -3776,7 +3776,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     })?.code;
@@ -3801,7 +3801,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning),
     })?.code;
@@ -3830,7 +3830,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning.message),
     })?.code ?? "";

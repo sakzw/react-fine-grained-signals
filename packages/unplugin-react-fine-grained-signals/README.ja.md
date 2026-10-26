@@ -155,7 +155,7 @@ export default {
     [境界設計の検討docs](../../development/design/use-signals-boundary-design.ja.md)
     を参照してください。
 - `reactCompiler`
-  - `"auto"`（既定）: 変換したすべての関数に `"use no memo"` を付け、render
+  - `"opt-out"`（既定）: 変換したすべての関数に `"use no memo"` を付け、render
     trackingが必要とするsignal読み取りをReact Compilerがmemoizationで
     消さないようにします。付けない場合、compile済みcomponentはJSXをcacheし、
     最初のsignal書き込み以降、無言で更新が止まります。

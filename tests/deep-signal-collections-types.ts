@@ -51,6 +51,11 @@ deepSignal(new Set<string>());
 deepSignal(new WeakMap<object, string>());
 // @ts-expect-error use deepCollectionSignal() for a WeakSet root.
 deepSignal(new WeakSet<object>());
+// @ts-expect-error a collection in an explicit union type argument is rejected too.
+deepSignal<{ count: number } | Map<string, number>>(new Map());
+// Unions of plain objects, and any, are still accepted.
+deepSignal<{ kind: "a"; a: number } | { kind: "b"; b: string }>({ kind: "a", a: 1 });
+deepSignal({ count: 0 } as any);
 
 // The two kinds of deep signal are distinct types.
 const plain = deepSignal({ count: 0 });

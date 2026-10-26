@@ -34,6 +34,12 @@ state.value.items.push(4);
 export const leaf: DeepReadonly<string | number | null> = null;
 export const wide: DeepReadonly<number> = 1;
 
+// unknown and any stay as they are instead of becoming `{}`, so null is still allowed.
+const loose = deepSignal<{ data: unknown; raw: any }>({ data: null, raw: 1 });
+// @ts-expect-error an unknown property stays unknown, not `{}`.
+export const notObject: {} = loose.peek().data;
+export const anyData: string = loose.peek().raw;
+
 // A DeepSignal still narrows through isSignal and is not a ReadonlySignal<T>.
 export function narrowed(value: unknown) {
   if (isSignal(value)) return value;

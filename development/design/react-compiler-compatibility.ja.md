@@ -66,7 +66,7 @@ export function Counter() {
 
 ### `transform: "managed"`: directiveでcompilerにskipさせる
 
-managedの出力はかつて、compilerがlowerできない `try` / `finally` scopeでした。現在は `useSignalCapture()` の呼び出しと、追跡する読み取りごとのclosureであり、bail-outの原因になる `try` はありません。`reactCompiler: "auto"` では、transformがopt-out directiveを出力します。
+managedの出力はかつて、compilerがlowerできない `try` / `finally` scopeでした。現在は `useSignalCapture()` の呼び出しと、追跡する読み取りごとのclosureであり、bail-outの原因になる `try` はありません。`reactCompiler: "opt-out"` では、transformがopt-out directiveを出力します。
 
 ```jsx
 export function Counter() {
@@ -111,7 +111,7 @@ propsを経由して渡されたsignalはreactiveな入力なので、compiler�
 
 ## 対応
 
-build pluginに `reactCompiler` optionを追加しました。値は `"auto"`(default)か `"off"` です。`"auto"` ではtransformしたすべてのfunctionにReact Compilerのopt-out directiveを付けるため、compilerはこのライブラリがreactiveにしたfunctionだけを正確にskipします。
+build pluginに `reactCompiler` optionを追加しました。値は `"opt-out"`(default。0.4.0より前は `"auto"`)か `"off"` です。`"opt-out"` ではtransformしたすべてのfunctionにReact Compilerのopt-out directiveを付けるため、compilerはこのライブラリがreactiveにしたfunctionだけを正確にskipします。
 
 ```jsx
 export function Counter() {

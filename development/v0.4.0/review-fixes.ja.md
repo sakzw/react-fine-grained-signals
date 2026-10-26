@@ -34,7 +34,7 @@
 - マイルストーンごとのCI結果の記録（M1〜M8、M11が「push後に確認する」のまま）: 実際にはどのpushでもCIは成功している（M0の最初のpushを除く）。各マイルストーンの記録の末尾に「GitHub CI」として追記した。
 - M3の`useManagedSignals`の内部保持、M8のクラスのインスタンスの扱い: 判断と理由は各記録に残してある。レビューが指摘するとおり、メンテナの個別の確認は得ていない。必要なら判断を仰ぐ（`useManagedSignals`の内部保持は、メンテナの問い合わせに対して「対応した方が良ければ」と任された上で、見送りの理由を示して残した）。
 - v0.3のcopyの`isSignal`がv0.4のsignalを受け入れる件（上記）。
-- `DeepReadonly<unknown>`が`{}`になる型の細部、`PlainRoot`に明示的なunion型引数を渡すと素通りする点: 影響が小さいので保留した。
+- `DeepReadonly<unknown>`が`{}`になる型の細部、`PlainRoot`に明示的なunion型引数を渡すと素通りする点: 影響が小さいので保留した。 → その後修正した（[記録](./compiler-option-and-deep-types.ja.md)）。
 
 ## ゲート
 

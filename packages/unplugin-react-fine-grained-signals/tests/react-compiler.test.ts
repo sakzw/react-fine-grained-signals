@@ -134,7 +134,7 @@ function applySignalsTransform(source: string, options: PipelineOptions): string
       importSource: "react-fine-grained-signals",
       mode: options.mode ?? "auto",
       transform: options.transform ?? "managed",
-      reactCompiler: options.reactCompiler ?? "auto",
+      reactCompiler: options.reactCompiler ?? "opt-out",
       reactImportSource: "react",
     })?.code ?? source
   );

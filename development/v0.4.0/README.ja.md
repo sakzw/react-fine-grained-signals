@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: **計画確定、M0〜M8・M10・M11完了（M9は見送り）。publishは未実施**。マイルストーン後に、`MatchProps`のexport削除（79f70d7）、履歴ベンチの移植（a3a75f9）、Opusレビューの指摘修正（e440c66、[記録](./review-fixes.ja.md)）、バンドルサイズ削減（2071784、[記録](./size-reduction.ja.md)）、SVG/MathMLのタグ名リストの削除（0ee0d91、[記録](./svg-host-bindings.ja.md)）を行った。2026-10-25に調査結果からマイルストーンを起こし、同日にD1〜D10を決定した（D5は行わない、D10は推奨と別の案を採用、それ以外は推奨どおり）。設計・調査ゲートは残っていない。
+- 状態: **計画確定、M0〜M8・M10・M11完了（M9は見送り）。publishは未実施**。マイルストーン後に、`MatchProps`のexport削除（79f70d7）、履歴ベンチの移植（a3a75f9）、Opusレビューの指摘修正（e440c66、[記録](./review-fixes.ja.md)）、バンドルサイズ削減（2071784、[記録](./size-reduction.ja.md)）、SVG/MathMLのタグ名リストの削除（0ee0d91、[記録](./svg-host-bindings.ja.md)）、`reactCompiler: "auto"`の`"opt-out"`への改名とdeep signalの型の修正（[記録](./compiler-option-and-deep-types.ja.md)）を行った。2026-10-25に調査結果からマイルストーンを起こし、同日にD1〜D10を決定した（D5は行わない、D10は推奨と別の案を採用、それ以外は推奨どおり）。設計・調査ゲートは残っていない。
 - 統合ブランチ: `main`（topic branch・PRは作らない）
 - 基準: v0.3.0（tag `v0.3.0` / `c826f45`、2026-10-25 npm公開）
 - 方針: **破壊的変更を許可する**。v0.3で「破壊的なので見送り」とした整理と、公開面の分かりにくさを解消する。新機能の追加は目的にしない。
@@ -223,7 +223,7 @@ D5で行わないと決定した（2026-10-25）。以下は検討時の内容�
 - 既定でエラーにする候補（読み取りが確実に追跡されないもの）: RFGS001、002、004、006。008は要検討。
 - 003、005、009は警告のまま（誤検出があるか、正しい動作でも出るため）。007は、読み取りがある場合だけエラーにする。
 - `diagnostics.errorOn: []`のように、明示的に既定を打ち消せるようにする。
-- 同時に検討してよいもの: `reactCompiler: "auto"`は、Compilerを検出せず常に`"use no memo"`を付けるので、実態に合った名前（例: `"mark"`）にする。
+- 同時に検討してよいもの: `reactCompiler: "auto"`は、Compilerを検出せず常に`"use no memo"`を付けるので、実態に合った名前（例: `"mark"`）にする。（改名だけはM9と切り離して、マイルストーン後に`"opt-out"`として実施した。[記録](./compiler-option-and-deep-types.ja.md)）
 - 記録`development/v0.3.0/m18.3-diagnostics.ja.md`の、診断の件数（この repo の310ファイルでRFGS005が234件など）を参照し、例とwebsiteで新しい既定のビルドが通ることを確認する。
 
 ### M11 `deepSignal`（object/arrayだけ）と`deepCollectionSignal`の分離（D6、D9、D10）
@@ -290,7 +290,7 @@ D5で行わないと決定した（2026-10-25）。以下は検討時の内容�
 | `For`/`Index`の行memo化、deepSignalのobject snapshot、任意callbackの自動追跡 | v0.3で計測し、不採用にした（m18-feature-exploration.ja.md） |
 | 等値に戻ったComputedによる余分な再render | 正確性に影響せず、破壊的変更とも関係しない（m19.5-computed-equality-rerender.ja.md） |
 | transform解析の再帰の反復化 | 実コードで数百段のhelper連鎖が報告されるまで保留（m19.5-transform-stack-depth.ja.md） |
-| 診断の既定エラー化（M9）、`reactCompiler: "auto"`の改名 | D5で見送り。前提として、1モジュール内の診断をまとめて報告する改修が必要になる |
+| 診断の既定エラー化（M9） | D5で見送り。前提として、1モジュール内の診断をまとめて報告する改修が必要になる（`reactCompiler: "auto"`の改名は後から別に実施した） |
 | Node要件の引き上げ | runtimeの`>=22`は2027-04まで妥当。transformはBabel 8の要件に従う |
 
 ## 実装担当への共通ルール

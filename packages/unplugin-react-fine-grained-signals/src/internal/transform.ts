@@ -13,7 +13,7 @@ import type { DiagnosticId } from "./diagnostics.js";
 
 export type ReactFineGrainedSignalsMode = "manual" | "auto" | "all";
 export type ReactFineGrainedSignalsTransform = "inject" | "managed";
-export type ReactFineGrainedSignalsReactCompiler = "auto" | "off";
+export type ReactFineGrainedSignalsReactCompiler = "opt-out" | "off";
 
 export interface InternalTransformOptions {
   importSource: string;
@@ -3451,7 +3451,7 @@ function applyInject(
     );
   }
   const injectedBody = path.node.body;
-  if (options.reactCompiler === "auto" && t.isBlockStatement(injectedBody)) {
+  if (options.reactCompiler === "opt-out" && t.isBlockStatement(injectedBody)) {
     addNoMemoDirective(injectedBody);
   }
   path.scope.crawl();
@@ -5715,7 +5715,7 @@ function applyManaged(
   );
   const transformedBody = t.blockStatement([declaration, ...(body.node as t.BlockStatement).body]);
   transformedBody.directives = directives;
-  if (options.reactCompiler === "auto") addNoMemoDirective(transformedBody);
+  if (options.reactCompiler === "opt-out") addNoMemoDirective(transformedBody);
   body.replaceWith(transformedBody);
   path.scope.crawl();
   invalidateThisReferences(path);
@@ -5839,7 +5839,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
             // Nothing to inject, but the author's own call still makes this
             // function render-tracking, so it needs the memoization opt-out.
             if (
-              options.reactCompiler === "auto" &&
+              options.reactCompiler === "opt-out" &&
               decision.body.isBlockStatement() &&
               addNoMemoDirective(decision.body.node)
             ) {

@@ -140,7 +140,7 @@ The full explanations are in the [diagnostics reference](https://github.com/sakz
 ## React Compiler and Fast Refresh
 
 With React Compiler enabled, register `signals()` before the compiler plugin
-so the signal reads are recognized first. The default `reactCompiler: 'auto'`
+so the signal reads are recognized first. The default `reactCompiler: 'opt-out'`
 adds `"use no memo"` to transformed functions to prevent compiler memoization
 from caching JSX that must respond to a signal. Use `reactCompiler: 'off'` only
 when the compiler is absent or the affected components have been audited.

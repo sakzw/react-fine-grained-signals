@@ -127,7 +127,7 @@ async function loadModule(
       importSource: "react-fine-grained-signals",
       mode,
       transform: codegen,
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code ?? source
     : source;
@@ -216,7 +216,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "all",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code;
     expect(transformed).toContain("useSignalCapture");
@@ -398,7 +398,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "all",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code;
     expect(transformed).not.toContain(".capture(() => state.value)");
@@ -445,7 +445,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code ?? "";
     expect(transformed).toContain("capture(() => recursive(2))");
@@ -578,7 +578,7 @@ function View(next) {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code;
     expect(transformed).toContain(".capture(() => state.value.nested?.value)");
@@ -603,7 +603,7 @@ function View() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code;
     expect(transformed).toContain(".capture(() => state.value.getChild().name)");
@@ -623,7 +623,7 @@ function View(next: number) {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code;
     expect(transformed).toContain("state.value.nested.value! = next");
@@ -839,7 +839,7 @@ export function Rating() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code ?? source;
     expect(transformed.match(/useSignalCapture\(\)/g)).toHaveLength(1);
@@ -882,7 +882,7 @@ export function List() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code ?? source;
     expect(transformed.match(/useSignalCapture\(\)/g)).toHaveLength(1);
@@ -1406,7 +1406,7 @@ function transformedCode(
     importSource: "react-fine-grained-signals",
     mode,
     transform: codegen,
-    reactCompiler: "auto",
+    reactCompiler: "opt-out",
     reactImportSource: "react",
   })?.code ?? source;
 }
@@ -2039,7 +2039,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
     })?.code;
     expect(transformed).toContain("useMemo(() => items.filter(item => item.value), [])");
@@ -2050,7 +2050,7 @@ export function App() {
     importSource: "react-fine-grained-signals",
     mode: "auto",
     transform: "managed",
-    reactCompiler: "auto",
+    reactCompiler: "opt-out",
     reactImportSource: "react",
   })?.code ?? "";
 
@@ -2402,7 +2402,7 @@ export function App() {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning.message),
     });
@@ -2417,7 +2417,7 @@ describe("M17.4 transform review fixes", () => {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning.message),
     })?.code ?? "";
@@ -3147,7 +3147,7 @@ export function App() {
         importSource: "react-fine-grained-signals",
         mode: "auto",
         transform: "managed",
-        reactCompiler: "auto",
+        reactCompiler: "opt-out",
         reactImportSource: "react",
       })?.code ?? "";
       expect(code).not.toMatch(/capture\(\(\) => [^)]*useCallback/);
@@ -3424,7 +3424,7 @@ export function App() {
         importSource: "react-fine-grained-signals",
         mode: "auto",
         transform: "managed",
-        reactCompiler: "auto",
+        reactCompiler: "opt-out",
         reactImportSource: "react",
       });
       return performance.now() - started;
@@ -3512,7 +3512,7 @@ describe("capture decisions for aliases, unresolved calls, and folded helpers", 
       importSource: "react-fine-grained-signals",
       mode,
       transform: "managed",
-      reactCompiler: "auto",
+      reactCompiler: "opt-out",
       reactImportSource: "react",
       warn: (warning) => warnings.push(warning.message),
     })?.code ?? "";

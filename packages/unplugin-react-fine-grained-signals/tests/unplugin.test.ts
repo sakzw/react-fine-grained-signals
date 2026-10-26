@@ -26,7 +26,7 @@ const internalOptions = {
   reactImportSource: "react",
   mode: "auto" as const,
   transform: "managed" as const,
-  reactCompiler: "auto" as const,
+  reactCompiler: "opt-out" as const,
 };
 
 function transformSource(
@@ -440,7 +440,7 @@ describe("bundler adapters", () => {
         reactImportSource: "react",
         mode: "auto",
         transform: "managed",
-        reactCompiler: "auto",
+        reactCompiler: "opt-out",
       });
 
       expect(run.error).toBeNull();
@@ -953,5 +953,16 @@ describe.skipIf(esbuildEntry === undefined)("esbuild adapter build", () => {
     );
 
     expect(output).toContain("react-fine-grained-signals/internal");
+  });
+});
+
+describe("reactCompiler option", () => {
+  it("rejects an unknown value when the plugin is created instead of dropping the directive", () => {
+    expect(() => rollupAdapter({ reactCompiler: "auto" as "off" }))
+      .toThrow(/reactCompiler must be "opt-out" or "off", got "auto"; "auto" was renamed to "opt-out" in 0\.4\.0/);
+    expect(() => rollupAdapter({ reactCompiler: "none" as "off" }))
+      .toThrow(/reactCompiler must be "opt-out" or "off", got "none"$/);
+    expect(() => rollupAdapter({ reactCompiler: "opt-out" })).not.toThrow();
+    expect(() => rollupAdapter({ reactCompiler: "off" })).not.toThrow();
   });
 });

@@ -111,7 +111,7 @@ v0.4 removes `useManagedSignals` and `ManagedSignalsStore` (`react-fine-grained-
 
 ### React Compiler
 
-A bare `useSignalTracking()` needs `"use no memo"` when the build runs React Compiler; the build plugin adds the directive to the functions it transforms (`reactCompiler: "auto"`, the default). Without it the compiler caches the component's JSX and the component stops updating. See [Rendering optimization](./rendering-optimization.md).
+A bare `useSignalTracking()` needs `"use no memo"` when the build runs React Compiler; the build plugin adds the directive to the functions it transforms (`reactCompiler: "opt-out"`, the default). Without it the compiler caches the component's JSX and the component stops updating. See [Rendering optimization](./rendering-optimization.md).
 
 See [the React Compiler compatibility note](../../development/design/react-compiler-compatibility.md) and [the boundary design note](../../development/design/use-signals-boundary-design.md) for the full analysis.
 

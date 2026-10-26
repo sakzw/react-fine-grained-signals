@@ -157,7 +157,7 @@ export default {
     [the boundary design investigation](../../development/design/use-signals-boundary-design.md)
     for the known sibling-misattribution limitation this mode can expose.
 - `reactCompiler`:
-  - `"auto"` (default): marks every transformed function with `"use no memo"`,
+  - `"opt-out"` (default): marks every transformed function with `"use no memo"`,
     so React Compiler does not memoize away the signal reads render tracking
     depends on. Without it, a compiled component caches its JSX and silently
     stops updating after the first signal write.

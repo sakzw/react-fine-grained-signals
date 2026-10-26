@@ -35,7 +35,9 @@ type DeepReadonlyLeaf =
  * promises and functions are left as they are. TypeScript cannot tell a class
  * instance from a plain object, so a class instance is mapped like one.
  */
-export type DeepReadonly<T> = T extends DeepReadonlyLeaf
+export type DeepReadonly<T> = unknown extends T
+  ? T
+  : T extends DeepReadonlyLeaf
   ? T
   : T extends ReadonlyMap<infer K, infer V>
     ? ReadonlyMap<K, DeepReadonly<V>>
@@ -95,9 +97,10 @@ export interface DeepCollectionSignal<T extends object> extends Omit<ReadonlySig
  * `deepCollectionSignal` for those.
  */
 export type PlainRoot<T> = T & (
-  T extends ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> | WeakMap<WeakKey, unknown> | WeakSet<WeakKey>
-    ? never
-    : unknown
+  unknown extends T ? unknown
+  : [Extract<T, ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> | WeakMap<WeakKey, unknown> | WeakSet<WeakKey>>] extends [never]
+    ? unknown
+    : never
 );
 
 /**

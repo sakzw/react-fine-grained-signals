@@ -109,7 +109,7 @@ v0.4で `useManagedSignals` と `ManagedSignalsStore` を削除しました（`r
 
 ### React Compiler
 
-buildでReact Compilerを使う場合、bare `useSignalTracking()` には `"use no memo"` が必要です。build pluginは、transformした関数にこのdirectiveを付けます（`reactCompiler: "auto"`、既定）。付けないと、compilerがコンポーネントのJSXをcacheして更新が止まります。詳しくは[描画最適化](./rendering-optimization.ja.md)を参照してください。
+buildでReact Compilerを使う場合、bare `useSignalTracking()` には `"use no memo"` が必要です。build pluginは、transformした関数にこのdirectiveを付けます（`reactCompiler: "opt-out"`、既定）。付けないと、compilerがコンポーネントのJSXをcacheして更新が止まります。詳しくは[描画最適化](./rendering-optimization.ja.md)を参照してください。
 
 詳細は[React Compilerとの互換性の検討docs](../../development/design/react-compiler-compatibility.ja.md)と[境界設計の検討docs](../../development/design/use-signals-boundary-design.ja.md)を参照してください。
 

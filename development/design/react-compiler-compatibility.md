@@ -66,7 +66,7 @@ export function Counter() {
 
 ### `transform: "managed"`: the compiler skips it by directive
 
-The managed output used to be a `try` / `finally` scope that the compiler could not lower. It is now a `useSignalCapture()` call plus a closure around each tracked read, so there is no `try` to bail on. With `reactCompiler: "auto"` the transform emits the opt-out directive:
+The managed output used to be a `try` / `finally` scope that the compiler could not lower. It is now a `useSignalCapture()` call plus a closure around each tracked read, so there is no `try` to bail on. With `reactCompiler: "opt-out"` the transform emits the opt-out directive:
 
 ```jsx
 export function Counter() {
@@ -111,7 +111,7 @@ A signal reached through props is a reactive input, so the compiler emits the re
 
 ## The fix
 
-The build plugin gained a `reactCompiler` option, `"auto"` (default) or `"off"`. In `"auto"` it marks every function it transforms with React Compiler's opt-out directive, so the compiler skips exactly the functions this library made reactive:
+The build plugin gained a `reactCompiler` option, `"opt-out"` (default; named `"auto"` before 0.4.0) or `"off"`. In `"opt-out"` it marks every function it transforms with React Compiler's opt-out directive, so the compiler skips exactly the functions this library made reactive:
 
 ```jsx
 export function Counter() {
