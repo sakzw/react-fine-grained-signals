@@ -36,7 +36,7 @@ For apps that need **Signal children only**, the package also provides an explic
 
 Use the default `react-fine-grained-signals` source when you need `bindValue`, `bindChecked`, or Signal-valued host props. Lite rejects those props in TypeScript and reports them at runtime when passed through JavaScript or a spread. The choice is explicit per project or file; the default runtime and its behavior are unchanged.
 
-Lite reduces transfer size only when the Full runtime is absent from the same eagerly loaded chunks. In M18.17's small production Consumer, Lite was 6,029 gzip bytes smaller than Full and 477 bytes larger than React JSX plus `useSignalValue`. In a larger M18.18 Vite Consumer, synchronously importing both runtimes added 543 gzip bytes over Full alone; a lazy Full import kept its implementation in a 7,055-byte gzip chunk loaded after the user action. These are fixture-specific measurements, not fixed package-size guarantees.
+Lite reduces transfer size only when the Full runtime is absent from the same eagerly loaded chunks. In the repository's `pnpm size` scenarios, the Full JSX runtime with a Signal child is 11.82 kB gzip and the Lite equivalent is 5.31 kB, about 6.5 kB smaller. Importing both runtimes synchronously loads Full as well, so the saving disappears; a lazily imported Full keeps its implementation out of the initial request. These are fixture-specific measurements, not fixed package-size guarantees.
 
 Vite reads both of those from `tsconfig.json` — with its default transform and with `@vitejs/plugin-react` alike — so `vite.config.ts` needs no JSX configuration of its own, which is what [`tests/fixtures/consumer-vite`](../../tests/fixtures/consumer-vite) relies on.
 
