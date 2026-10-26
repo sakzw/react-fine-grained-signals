@@ -25,7 +25,7 @@ SVG/MathMLをHTMLホストと同じ経路で扱う。
 
 ## テスト
 
-- `tests/react-signal-elements.test.tsx`: SVG要素で`id`/`hidden`/`style`のsignalが属性として更新されること、非HTMLホストに`bindValue`/`bindChecked`/allowlist外のsignal propを付けると例外になること。
+- `tests/react-signal-elements.test.tsx`: SVG要素で`id`・`hidden`・`style`のsignalが属性として更新されること、非HTMLホストに`bindValue`/`bindChecked`/allowlist外のsignal propを付けると例外になること。
 - `tests/react-review-regressions.test.tsx`: `<svg title={signal}>`の例外の確認を`<svg viewBox={signal}>`に差し替えた。
 - `tests/jsx-types.tsx`: SVGへの`id`/`className`/`style`のsignalが型として通ること（`@ts-expect-error`を外した）。
 
