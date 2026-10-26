@@ -39,7 +39,7 @@
 
 - **コアからdeep用・render用のコードを切り出す**: `signal-only`・`core`だけを使うアプリ向けに、約150行（推定0.5〜0.9 kB）を別moduleに分けられる。ただしReact利用者のバンドルには入るので、効果は非React利用に限られる。コアのクロージャとの絡みが強く、リスクに見合わないと判断して見送った。
 - **エラーメッセージの本番での短縮**（`process.env.NODE_ENV`による分岐）: 文字列は全体の1割以下で、効果が小さく、テストとdocsのメッセージ検査に影響するため見送った。
-- **JSXの要素名リスト**（`SVG_ELEMENTS`など）の表現変更: 型にも使われており、効果が小さい（推定0.1 kB以下）ので見送った。
+- **JSXの要素名リスト**（`SVG_ELEMENTS`など）: 後日、リスト自体を消す仕様変更を行った（[svg-host-bindings.ja.md](./svg-host-bindings.ja.md)）。`UNITLESS_CSS_PROPERTIES`はReact互換のために残す。
 
 ## ゲート
 

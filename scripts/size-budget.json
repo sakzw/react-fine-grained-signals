@@ -18,10 +18,10 @@
     "gzip": 17152
   },
   "jsx-runtime": {
-    "gzip": 12800
+    "gzip": 12288
   },
   "full-jsx-child": {
-    "gzip": 12736
+    "gzip": 12224
   },
   "lite-jsx-child": {
     "gzip": 5760

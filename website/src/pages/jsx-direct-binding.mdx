@@ -44,7 +44,7 @@ default package source when direct bindings are needed.
 
 Lite saves bytes only if Full is absent from the same eagerly loaded chunk. In
 the repository's `pnpm size` scenarios, the Full JSX runtime with a Signal child is
-11.82 kB gzip and the Lite equivalent is 5.31 kB, about 6.5 kB smaller. Importing
+11.31 kB gzip and the Lite equivalent is 5.32 kB, about 6.0 kB smaller. Importing
 both runtimes synchronously loads Full as well, so the saving disappears; a
 lazily imported Full keeps its implementation out of the initial request.
 Results vary with the app and bundler.

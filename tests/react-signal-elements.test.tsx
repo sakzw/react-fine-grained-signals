@@ -2,11 +2,13 @@
 // @vitest-environment jsdom
 
 import { StrictMode, createRef, act } from "react";
+import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { Fragment, jsx, jsxs } from "../src/jsx/jsx-runtime.js";
 import { jsxDEV } from "../src/jsx/jsx-dev-runtime.js";
 import { signal } from "../src/index.js";
+import { createElement as createSignalAwareElement } from "../src/jsx.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -117,6 +119,39 @@ describe("Signal children, props, and refs", () => {
       className.value = "after";
     });
     expect(link.getAttribute("class")).toBe("after");
+  });
+
+  it("binds the shared props on SVG and MathML hosts as attributes", () => {
+    const id = signal("a");
+    const hidden = signal(true);
+    const opacity = signal(0.5);
+
+    render(
+      <svg aria-label="svg host">
+        <circle aria-label="circle" id={id} style={{ opacity }} />
+        {createSignalAwareElement("rect", { "aria-label": "rect", hidden }) as ReactNode}
+      </svg>,
+    );
+    const circle = screen.getByLabelText("circle");
+    expect(circle.getAttribute("id")).toBe("a");
+    const rect = screen.getByLabelText("rect");
+    expect(rect.hasAttribute("hidden")).toBe(true);
+    expect(circle.style.opacity).toBe("0.5");
+
+    act(() => {
+      id.value = "b";
+      hidden.value = false;
+      opacity.value = 1;
+    });
+    expect(circle.getAttribute("id")).toBe("b");
+    expect(rect.hasAttribute("hidden")).toBe(false);
+    expect(circle.style.opacity).toBe("1");
+  });
+
+  it("rejects two-way bindings and unsupported signal props on non-HTML hosts", () => {
+    expect(() => jsx("circle", { bindValue: signal("x") })).toThrow(/text-like, number, or range input\/textarea\/select only/);
+    expect(() => jsx("circle", { bindChecked: signal(true) })).toThrow(/checkbox only/);
+    expect(() => jsx("circle", { r: signal(1) })).toThrow(/does not support Signal-valued r props on <circle>/);
   });
 
   it("does not unwrap a signal passed as a React component prop", () => {

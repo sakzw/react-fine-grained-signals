@@ -36,7 +36,7 @@
 
 `bindValue`、`bindChecked`、Signal値のhost propsが必要な場合は、既定の `react-fine-grained-signals` を使ってください。LiteはこれらをTypeScriptで拒否し、JavaScriptやspread経由で渡された場合もruntimeで診断します。選択はproject単位またはfile単位のopt-inで、既定runtimeとその動作は変わりません。
 
-Liteの転送量削減は、同じ初回読み込みchunkにFull Runtimeが含まれない場合に限られます。リポジトリの`pnpm size`では、Signalの子を持つFull JSX Runtimeがgzip 11.82 kB、同等のLiteが5.31 kBで、Liteが約6.5 kB小さい結果でした。FullとLiteを同期importするとFullも読み込まれるため削減効果はなくなり、Fullを遅延importすれば初回requestからFull実装を外せます。これらは測定fixture固有の値で、パッケージ全体に共通する保証値ではありません。
+Liteの転送量削減は、同じ初回読み込みchunkにFull Runtimeが含まれない場合に限られます。リポジトリの`pnpm size`では、Signalの子を持つFull JSX Runtimeがgzip 11.31 kB、同等のLiteが5.32 kBで、Liteが約6.0 kB小さい結果でした。FullとLiteを同期importするとFullも読み込まれるため削減効果はなくなり、Fullを遅延importすれば初回requestからFull実装を外せます。これらは測定fixture固有の値で、パッケージ全体に共通する保証値ではありません。
 
 Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じで、[`tests/fixtures/consumer-vite`](../../tests/fixtures/consumer-vite)はこれに依存しています。
 
@@ -191,7 +191,7 @@ SSRではsignalの初期値を対応するdefault valueとして出力します�
 
 ## 制約
 
-- allowlistにないevent handler、SVG props、その他のhost propsはdirect bindingされません。
+- allowlistにないevent handlerやその他のhost props（SVGの`r`や`viewBox`など）はdirect bindingされません。allowlistのpropsはSVGやMathMLの要素でも使え、属性として書き込まれます。
 - direct bindingの書き込みはReactのschedulerの外で行われ、実験的な最適化のままです。
 - host propはレンダーごとに素の値とsignalを切り替えられます。要素の型は変わらず、子のstateも保たれます。切り替わるのはbindingの付け外しだけです(ただし `value`/`checked` をsignalと素の値で切り替えると、inputはReactのuncontrolled/controlledの間で切り替わり、React標準の警告が出ます)。
 - bindingはhost要素自身のrefを通じて付けられます。渡したrefは、Reactが直接呼ぶ場合とまったく同じように要素を受け取ります。refが安定していれば、bindingが変わらない限り再レンダーで呼び直されることはありません。bindingが変わるのは、bindingが別のsignalや素の値に切り替わったときと、bindingしたpropや `style` が前回のレンダーと異なる値でレンダーされたとき(2回のレンダーの間に書き込みがあった場合)です。このときrefは同じcommitの中で一度外れ、再び付けられます。

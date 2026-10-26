@@ -36,7 +36,7 @@ For apps that need **Signal children only**, the package also provides an explic
 
 Use the default `react-fine-grained-signals` source when you need `bindValue`, `bindChecked`, or Signal-valued host props. Lite rejects those props in TypeScript and reports them at runtime when passed through JavaScript or a spread. The choice is explicit per project or file; the default runtime and its behavior are unchanged.
 
-Lite reduces transfer size only when the Full runtime is absent from the same eagerly loaded chunks. In the repository's `pnpm size` scenarios, the Full JSX runtime with a Signal child is 11.82 kB gzip and the Lite equivalent is 5.31 kB, about 6.5 kB smaller. Importing both runtimes synchronously loads Full as well, so the saving disappears; a lazily imported Full keeps its implementation out of the initial request. These are fixture-specific measurements, not fixed package-size guarantees.
+Lite reduces transfer size only when the Full runtime is absent from the same eagerly loaded chunks. In the repository's `pnpm size` scenarios, the Full JSX runtime with a Signal child is 11.31 kB gzip and the Lite equivalent is 5.32 kB, about 6.0 kB smaller. Importing both runtimes synchronously loads Full as well, so the saving disappears; a lazily imported Full keeps its implementation out of the initial request. These are fixture-specific measurements, not fixed package-size guarantees.
 
 Vite reads both of those from `tsconfig.json` — with its default transform and with `@vitejs/plugin-react` alike — so `vite.config.ts` needs no JSX configuration of its own, which is what [`tests/fixtures/consumer-vite`](../../tests/fixtures/consumer-vite) relies on.
 
@@ -195,7 +195,7 @@ These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "reac
 
 ## Constraints
 
-- No event handlers, SVG props, or other host props outside the allowlist above are direct-bound.
+- No event handlers or other host props outside the allowlist above are direct-bound, SVG geometry attributes such as `r` or `viewBox` included. The allowlisted props work on SVG and MathML hosts too, written as attributes.
 - Direct-binding writes happen outside the React scheduler and remain an experimental optimization.
 - Binding props can switch between writable signals across renders. The element keeps its type and children keep their state; only the binding is attached or detached. Keep `value`/`checked` for ordinary React-controlled behavior.
 - Bindings are attached through a ref on the host element itself. A ref you pass is still called with the element exactly as React would call it. As long as it is stable, a re-render does not re-invoke it unless the bindings changed: a binding switched to another signal or to a plain value, or a bound prop or `style` now renders a different value than the previous render did (after a write between the two renders). Then the ref is detached and attached again within the same commit.

@@ -167,7 +167,7 @@ describe("classic createElement fallback (B1)", () => {
     const href = signal("/signal-url");
     expect(() => createElement("a", { href })).toThrow(/does not support Signal-valued href props on <a>/);
     expect(() => jsx("a", { href })).toThrow(/does not support Signal-valued href props on <a>/);
-    expect(() => createElement("svg", { title: signal("svg title") })).toThrow(/does not support Signal-valued title props on <svg>/);
+    expect(() => createElement("svg", { viewBox: signal("0 0 1 1") })).toThrow(/does not support Signal-valued viewBox props on <svg>/);
     expect(() => createElement("div", {
       title: signal("title"),
       "aria-label": signal("aria"),

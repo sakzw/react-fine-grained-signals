@@ -85,46 +85,6 @@ const UNITLESS_CSS_PROPERTIES = new Set([
   "scale", "tabSize", "WebkitLineClamp", "widows", "zIndex", "zoom",
 ]);
 
-// SVG has a different property model (for example, className is an SVGAnimatedString).
-// Keeping it out of the host fast path makes the supported surface explicit.
-const SVG_ELEMENTS = [
-  "svg", "animate", "animateMotion", "animateTransform", "circle", "clipPath",
-  "defs", "desc", "ellipse", "feBlend", "feColorMatrix", "feComponentTransfer",
-  "feComposite", "feConvolveMatrix", "feDiffuseLighting", "feDisplacementMap",
-  "feDistantLight", "feDropShadow", "feFlood", "feFuncA", "feFuncB", "feFuncG",
-  "feFuncR", "feGaussianBlur", "feImage", "feMerge", "feMergeNode", "feMorphology",
-  "feOffset", "fePointLight", "feSpecularLighting", "feSpotLight", "feTile",
-  "feTurbulence", "filter", "foreignObject", "g", "image", "line", "linearGradient",
-  "marker", "mask", "metadata", "mpath", "path", "pattern", "polygon", "polyline",
-  "radialGradient", "rect", "set", "stop", "switch", "symbol", "text", "textPath",
-  "tspan", "use", "view",
-] as const;
-
-type SvgElement = (typeof SVG_ELEMENTS)[number];
-
-// MathML properties do not share the HTML DOM property model either.  React
-// currently types only SVG separately, but custom JSX factories can still
-// receive these host tags at runtime.
-const MATHML_ELEMENTS = [
-  "annotation", "annotation-xml", "maction", "math", "merror", "mfrac",
-  "mi", "mmultiscripts", "mn", "mo", "mover", "mpadded", "mphantom",
-  "mprescripts", "mroot", "mrow", "ms", "mspace", "msqrt", "mstyle",
-  "msub", "msubsup", "msup", "mtable", "mtd", "mtext", "mtr", "munder",
-  "munderover", "semantics",
-] as const;
-
-type MathMlElement = (typeof MATHML_ELEMENTS)[number];
-type NonHtmlHostElement = SvgElement | MathMlElement;
-// Built without array spread: a bundler has to assume spreading may run an
-// iterator with side effects, which kept this module's tag lists in every
-// bundle that imports the `/jsx` entry (it re-exports `createElement` from
-// here) even when nothing from this module is used.
-const NON_HTML_HOST_ELEMENTS: ReadonlySet<string> = /* @__PURE__ */ (() => {
-  const tags = new Set<string>(SVG_ELEMENTS);
-  for (const tag of MATHML_ELEMENTS) tags.add(tag);
-  return tags;
-})();
-
 type HostProps = Record<string, unknown>;
 type StylePropertyBinding = { readonly entries: readonly (readonly [string, unknown])[] };
 type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
@@ -323,7 +283,8 @@ function setDomProp(node: Element, name: string, value: unknown): void {
   // SVG. The JSX factory only sees the tag name, so defer the final namespace
   // decision until React gives us the actual DOM node.
   if (node.namespaceURI !== HTML_NAMESPACE) {
-    setAttribute(node, name === "className" ? "class" : name, value);
+    // Boolean attributes follow the HTML path: false removes, true is present.
+    setAttribute(node, name === "className" ? "class" : name, (name === "hidden" || name === "disabled") && value === false ? null : value);
     return;
   }
 
@@ -1669,21 +1630,11 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
  */
 function transformHostProps(type: string, input: unknown): { props: HostProps; bindings: Binding[] } {
   const inputProps = (input ?? {}) as HostProps;
-  const isHtmlHost = !NON_HTML_HOST_ELEMENTS.has(type);
-  const styleProperties = isHtmlHost ? getStylePropertyBinding(inputProps.style) : undefined;
+  const styleProperties = getStylePropertyBinding(inputProps.style);
   const normalizedProps = styleProperties === undefined
     ? inputProps
     : { ...inputProps, style: styleProperties.snapshot };
-  if (!isHtmlHost && (normalizedProps.bindValue !== undefined || normalizedProps.bindChecked !== undefined)) {
-    throw new TypeError(`${normalizedProps.bindValue !== undefined ? "bindValue: text-like, number, or range input/textarea/select only." : "bindChecked: checkbox only."}`);
-  }
-  const isCustomElement = type.includes("-") && !NON_HTML_HOST_ELEMENTS.has(type);
-  if (!isHtmlHost && !isCustomElement) {
-    for (const [name, value] of Object.entries(normalizedProps)) {
-      assertSupportedSignalHostProp(name, value, type);
-    }
-  }
-  const bindings = isHtmlHost ? findHostBindings(normalizedProps, type) : [];
+  const bindings = findHostBindings(normalizedProps, type);
   // Binding props never reach the DOM, including ones left `undefined`.
   const strayBindingProps = Object.prototype.hasOwnProperty.call(normalizedProps, "bindValue")
     || Object.prototype.hasOwnProperty.call(normalizedProps, "bindChecked");
@@ -1915,9 +1866,7 @@ type SignalIntrinsicElement<Tag extends keyof React.JSX.IntrinsicElements> = Tag
     ? BoundTextareaProps<React.JSX.IntrinsicElements[Tag]>
     : Tag extends "select"
       ? BoundSelectProps<React.JSX.IntrinsicElements[Tag]>
-      : Tag extends NonHtmlHostElement
-        ? AddSignalChildren<React.JSX.IntrinsicElements[Tag]>
-        : AddHtmlSignalProps<React.JSX.IntrinsicElements[Tag]>;
+      : AddHtmlSignalProps<React.JSX.IntrinsicElements[Tag]>;
 
 /** Types exposed by `jsxImportSource: "react-fine-grained-signals/jsx"`. */
 export namespace JSX {

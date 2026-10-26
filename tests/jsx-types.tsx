@@ -154,13 +154,11 @@ const conditionalBinding = <input bindValue={optionalBoundName} />;
 // Signal children work for every native host, including non-HTML hosts.
 const svgChild = <svg>{text}</svg>;
 
-// Direct signal bindings are intentionally constrained to HTML hosts.
+// Direct signal bindings are limited to the props a host element has.
 // @ts-expect-error `div` does not support the `disabled` property.
 const unsupportedHtmlBinding = <div disabled={enabled} />;
-// @ts-expect-error SVG properties do not support direct signal bindings.
-const unsupportedSvgBinding = <svg title={text} />;
-// @ts-expect-error SVG does not support the `style` direct binding either.
-const unsupportedSvgStyle = <svg style={boxStyle} />;
+// Non-HTML hosts take the same direct bindings on the props they share.
+const svgBinding = <svg id={text} className={text} style={boxStyle} />;
 
 // Component props and children remain fully transparent.
 const component = <Custom value={text}>{text}</Custom>;
@@ -225,8 +223,7 @@ void [
   conditionalBinding,
   svgChild,
   unsupportedHtmlBinding,
-  unsupportedSvgBinding,
-  unsupportedSvgStyle,
+  svgBinding,
   component,
   HookCreatedBinding,
   HookWritableComputedBinding,
