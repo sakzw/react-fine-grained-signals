@@ -33,7 +33,7 @@
 
 ## ゲート
 
-lint、typecheck、runtime vitest（41ファイル・911件）、transform（`--maxWorkers=2`で8ファイル・733件）、`pnpm size`（変化なし）、`test:consumer`、`test:browser`（53件）、website（pack、typecheck、build）は通過。transformとブラウザは、並行して重い処理が走っていた回に既知の不安定な失敗（esbuild adapter、スタック深さ、ブラウザのcrash）が出たが、単独で再実行すると全件成功した（このマシンでは`bash`のfork失敗も出ており、資源不足が原因と見ている）。CIはpush後に確認する。
+lint、typecheck、runtime vitest（41ファイル・911件）、transform（`--maxWorkers=2`で8ファイル・733件）、`pnpm size`（変化なし）、`test:consumer`、`test:browser`（53件）、website（pack、typecheck、build）は通過。transformとブラウザは、並行して重い処理が走っていた回に既知の不安定な失敗（esbuild adapter、スタック深さ、ブラウザのcrash）が出たが、単独で再実行すると全件成功した（このマシンでは`bash`のfork失敗も出ており、資源不足が原因と見ている）。CIは末尾の「GitHub CI」を参照。
 
 ## 追補: `MatchProps`の扱い（メンテナ判断後、v0.4.0の準備中に実施）
 
@@ -43,3 +43,7 @@ lint、typecheck、runtime vitest（41ファイル・911件）、transform（`--
 - `tests/utils-types.tsx`: `MatchProps`の型を直接検証していたテスト（`directEqualsProps`など6件）を削除した。`equals`の型制約は、`Match`をJSXで使う既存のテスト（`equals`が`T`の外だとエラーになる、など）が引き続き固定している。
 - `docs/guides/control-flow.md`（英日）: `MatchProps`の宣言を、`Match`の2つの形（`equals`あり／なし）の説明に置き換えた。
 - 移行ガイド・リリースノート（`docs/migration/v0.4*.md`、`docs/releases/v0.4.0.md`）に、`MatchProps`のexport削除を載せた。
+
+## GitHub CI
+
+0fc2fee（実装）と9e0d53a（README）のpushで、0fc2feeはTest、E2E、Website CIがすべて成功した。9e0d53aはTestとE2Eが成功した（websiteに触れていないのでWebsite CIは走っていない）。

@@ -28,4 +28,8 @@
 
 ## ゲート
 
-lint、typecheck（runtime・transform・examples・website）、runtime vitest（41ファイル・911件、実行時の変更なし）、transform（8ファイル・733件）、`pnpm size`（変化なし）、`test:consumer`、`test:browser`（53件）、website（build）は通過。CIはpush後に確認する。
+lint、typecheck（runtime・transform・examples・website）、runtime vitest（41ファイル・911件、実行時の変更なし）、transform（8ファイル・733件）、`pnpm size`（変化なし）、`test:consumer`、`test:browser`（53件）、website（build）は通過。CIは末尾の「GitHub CI」を参照。
+
+## GitHub CI
+
+c281fabのpushで、Test、E2E、Website CIがすべて成功した。

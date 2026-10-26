@@ -61,4 +61,8 @@
 
 ## ゲート
 
-lint、typecheck（runtime・transform・examples・website）、runtime vitest（42ファイル・923件）、transform（`--maxWorkers=2`で8ファイル・733件。プラグイン側の`react-execution`のfixtureを`deepCollectionSignal`へ直した）、`pnpm size`、`test:consumer`、`test:browser`（53件）、website（build）は通過。CIはpush後に確認する。
+lint、typecheck（runtime・transform・examples・website）、runtime vitest（42ファイル・923件）、transform（`--maxWorkers=2`で8ファイル・733件。プラグイン側の`react-execution`のfixtureを`deepCollectionSignal`へ直した）、`pnpm size`、`test:consumer`、`test:browser`（53件）、website（build）は通過。CIは末尾の「GitHub CI」を参照。
+
+## GitHub CI
+
+ac5c91fのpushで、Test、E2E、Website CIがすべて成功した。

@@ -43,4 +43,4 @@
 
 ## ゲート
 
-lint、typecheck（runtime・transform・examples・website）、runtime vitest（43ファイル・931件）、transform（8ファイル・733件）、`pnpm size`（予算を下げた）、`test:consumer`、`test:browser`（53件）、website（build）は通過した。CIはpush後に確認する。
+lint、typecheck（runtime・transform・examples・website）、runtime vitest（43ファイル・931件）、transform（8ファイル・733件）、`pnpm size`（予算を下げた）、`test:consumer`、`test:browser`（53件）、website（build）は通過した。CIは2071784のpushでTest、E2E、Website CIがすべて成功した。

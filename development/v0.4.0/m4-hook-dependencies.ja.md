@@ -32,4 +32,8 @@
 
 ## ゲート
 
-lint、typecheck、runtime vitest（41ファイル・911件）、`pnpm size`、`test:consumer`、`test:browser`は通過した。transformは既知の不安定な2件（esbuild adapter、webpack RSC）が負荷時に落ちたが、単独実行では61件すべて成功。`test:browser`は1回目に3件、2回目に1件（Firefoxの`page.goto`が30秒でtimeout）が落ち、Firefox単独の再実行では14件すべて成功した（環境要因）。CIは push 後に確認する。
+lint、typecheck、runtime vitest（41ファイル・911件）、`pnpm size`、`test:consumer`、`test:browser`は通過した。transformは既知の不安定な2件（esbuild adapter、webpack RSC）が負荷時に落ちたが、単独実行では61件すべて成功。`test:browser`は1回目に3件、2回目に1件（Firefoxの`page.goto`が30秒でtimeout）が落ち、Firefox単独の再実行では14件すべて成功した（環境要因）。CIは末尾の「GitHub CI」を参照。
+
+## GitHub CI
+
+77fa926のpushで、Test、E2E、Website CIがすべて成功した。

@@ -36,4 +36,8 @@
 
 ## ゲート
 
-lint、typecheck、runtime vitest（41ファイル・910件）、`pnpm build`、`pnpm size`、`pnpm test:consumer`は通過。`test:transform`は上記のtimeoutを除いて通過。`test:browser`・website build・CIは下記に追記する。
+lint、typecheck、runtime vitest（41ファイル・910件）、`pnpm build`、`pnpm size`、`pnpm test:consumer`は通過。`test:transform`は上記のtimeoutを除いて通過。`test:browser`（負荷の高い初回は5件が失敗、再実行で53件成功）と、websiteのpackし直し・typecheck・build・smokeも成功。CIは末尾の「GitHub CI」を参照。
+
+## GitHub CI
+
+e2e57aaのpushで、Test、E2E、Website CIがすべて成功した。

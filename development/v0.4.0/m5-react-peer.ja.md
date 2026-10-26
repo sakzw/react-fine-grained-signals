@@ -19,4 +19,8 @@
 
 ## ゲート
 
-lint、typecheck、runtime vitest（41ファイル・911件）、transform（8ファイル・733件）、`pnpm size`、`test:consumer`、`test:browser`（53件）、website（pack、typecheck、build）は通過。CIはpush後に確認する。
+lint、typecheck、runtime vitest（41ファイル・911件）、transform（8ファイル・733件）、`pnpm size`、`test:consumer`、`test:browser`（53件）、website（pack、typecheck、build）は通過。CIは末尾の「GitHub CI」を参照。
+
+## GitHub CI
+
+1cab3b0のpushで、Test、E2E、Website CIがすべて成功した。

@@ -52,3 +52,5 @@ managed出力（`useSignalCapture()`＋closure）を、`panicThreshold`を`none`
 
 最初のpush（`3ba289b`）でGitHub CIのTestが失敗した。transformの分岐カバレッジが89.89%でしきい値90%を下回ったため（Website CIとE2Eは成功）。実験テスト18件を削除すると、現行コードの分岐（代入先のTS wrapper、tracked aliasを含む代入先、generatorの呼び出し、JSX属性の判定など）の約12本が、そのテストでしかカバーされなくなっていた。
 18件は`experimentalCapture`なしでも通るため、削除せず`managed per-read capture codegen`として残した。分岐カバレッジは90.26%になった。ローカルの全ゲートでは`test:coverage`を回していなかったため見逃した。**以降のマイルストーンでは、テストを削除したときに`pnpm test:coverage`も回す。**
+
+修正のpush（`9a68499`）で、Test、E2E、Website CIがすべて成功した。

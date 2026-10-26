@@ -67,4 +67,8 @@
 
 ## ゲート
 
-lint、typecheck、runtime vitest、`test:transform`、`size`、`test:consumer`は通過。`test:browser`・CIは下記に追記する。
+lint、typecheck、runtime vitest、`test:transform`、`size`、`test:consumer`は通過。`test:browser`は53件成功（chromium、firefox、webkit）。CIは末尾の「GitHub CI」を参照。
+
+## GitHub CI
+
+233ad06（コード）と3f556f8（README）のpushで、どちらもTest、E2E、Website CIがすべて成功した。

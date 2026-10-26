@@ -19,7 +19,7 @@
 
 ## ゲート
 
-lint、typecheck、runtime vitest（41ファイル・910件）、transform（`react-execution` 317件を含め、timeoutする既知の2テストを除いて通過）、`pnpm size`（変化なし、予算内）、`test:consumer`、`test:browser`（53件）、website（pack、typecheck、build）は通過。完了時のファイル数・件数は変更前と同じ。CIは push 後に確認する。
+lint、typecheck、runtime vitest（41ファイル・910件）、transform（`react-execution` 317件を含め、timeoutする既知の2テストを除いて通過）、`pnpm size`（変化なし、予算内）、`test:consumer`、`test:browser`（53件）、website（pack、typecheck、build）は通過。完了時のファイル数・件数は変更前と同じ。CIは末尾の「GitHub CI」を参照。
 
 ## 追補（v0.4.0の準備後）
 
@@ -28,3 +28,7 @@ lint、typecheck、runtime vitest（41ファイル・910件）、transform（`re
   1. 削れるコードがほとんどない。`react-adapter.mts`の`useManagedSignals`は数行で、`RenderStore`などの本体は`useSignalCapture`と共有している。
   2. 厳密なscopeには意味がある。`utils`は`children`のrender propも含めて関数本体全体をscopeで包むため、render prop内のreadも、そのcomponentに帰属する。`capture`に移すと本体全体を`capture(() => ...)`で包むことになり、同じ挙動を作るために別の不安定さ（`Switch`のループ内の複数read、`Index`の後から呼ばれるaccessorとの境界）を持ち込む。
   3. 影響するテストが多い（`use-signals-managed`ほか約14箇所）。利用者への影響はなく、公開APIからは既に消えているので、リスクに見合う利益がない。
+
+## GitHub CI
+
+a42757cのpushで、Test、E2E、Website CIがすべて成功した。
