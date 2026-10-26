@@ -37,7 +37,7 @@ differ in where pnpm gets them.
 
 ### Repository development mode (current)
 
-v0.3.0 is not on npm yet, so the site uses the library at the current commit:
+v0.4.0 is not on npm yet, so the site uses the library at the current commit:
 
 ```sh
 node scripts/pack-local-rfsg.mjs  # builds and packs ../ into vendor/*.tgz
@@ -63,13 +63,13 @@ the library source changes, the tarballs' integrity in `pnpm-lock.yaml` changes
 too; run `pnpm install` (not `--frozen-lockfile`) after packing and commit the
 updated lockfile.
 
-### Standalone mode (after v0.3.0 is published)
+### Standalone mode (after v0.4.0 is published)
 
 Switch both packages to registry versions — no other file changes:
 
 ```sh
-pnpm add react-fine-grained-signals@^0.3.0
-pnpm add -D unplugin-react-fine-grained-signals@^0.3.0
+pnpm add react-fine-grained-signals@^0.4.0
+pnpm add -D unplugin-react-fine-grained-signals@^0.4.0
 rm -rf vendor
 ```
 

@@ -1,4 +1,21 @@
-# Migrate from v0.2.x to v0.3.0
+# Migration
+
+## From v0.3 to v0.4
+
+v0.4.0 is a breaking release. Review the complete
+[v0.4 migration guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.4.md),
+then run your typecheck and browser tests. The short list:
+
+- Install one copy of the package; a second copy throws instead of interoperating.
+- Set `jsxImportSource` to `react-fine-grained-signals/jsx` (or
+  `react-fine-grained-signals/jsx/lite`); the old `jsx-runtime`, `lite` and
+  `runtime` entries are gone, and `createElement` left the root.
+- Replace `useManagedSignals`; use `useWritableComputed` for `{ get, set }`.
+- Move `Map` and `Set` state from `deepSignal` to `deepCollectionSignal`.
+- Replace `FormBindableSignal` with `Signal`; `deepSignal().peek()` is now read-only.
+- React 19.3 or newer.
+
+## From v0.2.x to v0.3.0
 
 The v0.3.0 line changes deep collection behavior, JSX form bindings, and the
 Managed Transform's tracking boundary. Review the complete guide before

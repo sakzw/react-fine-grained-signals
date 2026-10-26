@@ -10,9 +10,10 @@
 
 ユーザー向けドキュメントの索引は[`docs/README.ja.md`](docs/README.ja.md)を参照してください。
 動くサンプル付きのドキュメントサイト(英語)は、独立したVocsプロジェクトの[`website/`](website)からbuildします。
+v0.3からの移行については[v0.4移行ガイド](./docs/migration/v0.4.ja.md)を参照してください。
 v0.2.1からの移行については[v0.3移行ガイド](./docs/migration/v0.3.ja.md)を参照してください。
 v0.1.1からの移行については[v0.2移行ガイド](./docs/migration/v0.2.ja.md)を参照してください。
-変更内容は[v0.3.0 release notes](./docs/releases/v0.3.0.md)を参照してください。
+変更内容は[v0.4.0 release notes](./docs/releases/v0.4.0.md)を参照してください。
 
 ## インストール
 
@@ -20,7 +21,7 @@ v0.1.1からの移行については[v0.2移行ガイド](./docs/migration/v0.2.
 pnpm add react-fine-grained-signals
 ```
 
-v0.3系がinstallされます。v0.2.1からupgradeする場合の移行内容は[v0.3移行ガイド](./docs/migration/v0.3.ja.md)を参照してください。
+v0.4系がinstallされます。v0.3からupgradeする場合の移行内容は[v0.4移行ガイド](./docs/migration/v0.4.ja.md)を参照してください。
 
 React(19以降)はpeer dependencyで、Node.js 22以降が必要です。packageはESMのみで、
 entry pointと型を `exports` で公開しているため、`react-fine-grained-signals/utils`
@@ -93,7 +94,7 @@ DOMの直接bindingは不要で、reactiveなSignal子要素だけが必要な�
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-runtimeとpluginは、同じ`0.3.x` release lineをinstallしてください。
+runtimeとpluginは、同じ`0.4.x` release lineをinstallしてください。
 
 そのうえで、bundlerに応じたentry point（`/vite`、`/rollup`、`/webpack`、`/rspack`、`/esbuild`）をbuild設定に追加します。
 

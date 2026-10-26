@@ -4,11 +4,13 @@
 
 ## 移行ガイド
 
+- [v0.4への移行](migration/v0.4.ja.md)
 - [v0.3への移行](migration/v0.3.ja.md)
 - [v0.2への移行](migration/v0.2.ja.md) — v0.1.1からのAPIとdependencyの変更点。
 
 ## Release notes
 
+- [v0.4.0 release notes](releases/v0.4.0.md)
 - [v0.3.0 release notes](releases/v0.3.0.md)
 
 ## ガイド

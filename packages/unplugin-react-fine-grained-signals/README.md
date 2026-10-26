@@ -17,13 +17,13 @@ pnpm add react-fine-grained-signals
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-Install matching `0.3.x` versions of both packages; do not mix v0.2.x with the
+Install matching `0.4.x` versions of both packages; do not mix v0.3.x or earlier with the
 instructions below.
 
 `react-fine-grained-signals` is a peer dependency. Node.js `^22.18.0 || >=24.11.0`
 is required — the range Babel 8, which the transform runs on, declares.
 
-Use the plugin and the runtime from the same release line (`0.3.x` with `0.3.x`): the
+Use the plugin and the runtime from the same release line (`0.4.x` with `0.4.x`): the
 generated code imports runtime entry points that change between lines. When
 upgrading from v0.1, upgrade both packages together and rename the
 `@useSignals` / `@noUseSignals` comments — see the

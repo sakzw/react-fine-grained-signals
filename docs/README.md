@@ -4,11 +4,13 @@
 
 ## Migration
 
+- [Migration to v0.4](migration/v0.4.md)
 - [Migration to v0.3](migration/v0.3.md)
 - [Migration to v0.2](migration/v0.2.md) — API and dependency changes from v0.1.1.
 
 ## Release notes
 
+- [v0.4.0 release notes](releases/v0.4.0.md)
 - [v0.3.0 release notes](releases/v0.3.0.md)
 
 ## Guides

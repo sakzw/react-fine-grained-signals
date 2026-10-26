@@ -10,9 +10,10 @@ An experimental fine-grained rendering layer for React 19, built on [alien-signa
 
 See [`docs/README.md`](docs/README.md) for the user documentation index.
 The documentation site with live examples is built from [`website/`](website), an independent Vocs project.
-For upgrades from v0.2.1, see the [v0.3 migration guide](./docs/migration/v0.3.md).
+For upgrades from v0.3, see the [v0.4 migration guide](./docs/migration/v0.4.md).
+For earlier upgrades from v0.2.1, see the [v0.3 migration guide](./docs/migration/v0.3.md).
 For earlier upgrades from v0.1.1, see the [v0.2 migration guide](./docs/migration/v0.2.md).
-See the [v0.3.0 release notes](./docs/releases/v0.3.0.md) for what changed.
+See the [v0.4.0 release notes](./docs/releases/v0.4.0.md) for what changed.
 
 ## Installation
 
@@ -20,8 +21,8 @@ See the [v0.3.0 release notes](./docs/releases/v0.3.0.md) for what changed.
 pnpm add react-fine-grained-signals
 ```
 
-This installs the v0.3 line. If you are upgrading from v0.2.1, see the
-[v0.3 migration guide](./docs/migration/v0.3.md) for the upgrade contract.
+This installs the v0.4 line. If you are upgrading from v0.3, see the
+[v0.4 migration guide](./docs/migration/v0.4.md) for the upgrade contract.
 
 React (19 or newer) is a peer dependency, and Node.js 22 or newer is required.
 The package is ESM-only and publishes its entry points and types through
@@ -116,7 +117,7 @@ the build. For the best-effort `useSignalTracking()` boundary, select
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-Install matching `0.3.x` versions of the runtime and the plugin.
+Install matching `0.4.x` versions of the runtime and the plugin.
 
 It then needs a bundler entry point — `/vite`, `/rollup`, `/webpack`,
 `/rspack`, or `/esbuild` — added to the build configuration:

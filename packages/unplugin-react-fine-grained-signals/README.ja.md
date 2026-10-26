@@ -16,12 +16,12 @@ pnpm add react-fine-grained-signals
 pnpm add -D unplugin-react-fine-grained-signals
 ```
 
-両packageの同じ`0.3.x` release lineをinstallしてください。v0.2.xを以下のv0.3.0向け設定と組み合わせないでください。
+両packageの同じ`0.4.x` release lineをinstallしてください。v0.3.x以前を以下のv0.4.0向け設定と組み合わせないでください。
 
 `react-fine-grained-signals` はpeer dependencyです。Node.jsは
 `^22.18.0 || >=24.11.0` が必要です。変換が依存するBabel 8が宣言している範囲です。
 
-pluginとruntimeは同じrelease line(0.3.x同士)で使ってください。生成されるコードが
+pluginとruntimeは同じrelease line(0.4.x同士)で使ってください。生成されるコードが
 importするruntimeのentry pointはline間で変わります。v0.1からupgradeする場合は、
 両方のpackageを同時に更新し、`@useSignals` / `@noUseSignals` commentを書き換えて
 ください。[v0.2移行ガイド](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.2.ja.md#transform-plugin)を参照してください。
