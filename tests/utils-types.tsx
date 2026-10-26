@@ -1,5 +1,5 @@
 import { signal } from "../src/index.js";
-import { For, Index, Match, Show, Switch, type MatchProps, type Truthy } from "react-fine-grained-signals/utils";
+import { For, Index, Match, Show, Switch, type Truthy } from "react-fine-grained-signals/utils";
 
 const users = signal([{ id: "ada", name: "Ada" }]);
 const tags = signal(new Set(["react"]));
@@ -85,50 +85,6 @@ const unionMatch = <Match when={signal<View>("list")} equals="list">{(value) => 
   return <p>{exact}</p>;
 }}</Match>;
 
-const directStringInput = signal<string>("list");
-const directEqualsProps: MatchProps<string, "list"> = {
-  when: directStringInput,
-  equals: "list",
-  children: (value) => {
-    const exact: "list" = value;
-    return <p>{exact.toUpperCase()}</p>;
-  },
-};
-const directLegacyProps: MatchProps<string> = {
-  when: directStringInput,
-  children: (value) => {
-    const exact: string = value;
-    return <p>{exact}</p>;
-  },
-};
-const directFalseProps: MatchProps<false | true, false> = {
-  when: signal<false | true>(false),
-  equals: false,
-  children: (value) => {
-    const exact: false = value;
-    return <p>{String(exact)}</p>;
-  },
-};
-const directZeroProps: MatchProps<number, 0> = {
-  when: signal<number>(0),
-  equals: 0,
-  children: (value) => {
-    const exact: 0 = value;
-    return <p>{exact}</p>;
-  },
-};
-const directUndefinedProps: MatchProps<string | undefined, undefined> = {
-  when: signal<string | undefined>(undefined),
-  equals: undefined,
-  children: (value) => {
-    const exact: undefined = value;
-    return <p>{String(exact)}</p>;
-  },
-};
-
-// @ts-expect-error MatchProps rejects equals values outside of T.
-const invalidDirectEquals: MatchProps<string, 42> = { when: directStringInput, equals: 42, children: <p /> };
-
 const explicitUndefinedMatch = <Match when={mode} equals={undefined}>{(value) => {
   const exact: undefined = value;
   return <p>{String(exact)}</p>;
@@ -141,9 +97,7 @@ const invalidEquals = <Match when={mode} equals={42}><p>invalid</p></Match>;
 const missingKey = <For each={users}>{(user) => <p>{user.name}</p>}</For>;
 
 void [keyedArray, keyedSet, keyedMap, indexed, missingKey, matched, falsyMatch, invalidEquals];
-void [zeroMatch, nullMatch, emptyStringMatch, broadStringMatch, broadNumberMatch, unionMatch,
-  directEqualsProps, directLegacyProps, directFalseProps, directZeroProps, invalidDirectEquals,
-  directUndefinedProps, explicitUndefinedMatch];
+void [zeroMatch, nullMatch, emptyStringMatch, broadStringMatch, broadNumberMatch, unionMatch, explicitUndefinedMatch];
 
 // Show and Match (without equals) hand the callback a truthy value: the falsy
 // members of the union are removed, not only null and undefined.

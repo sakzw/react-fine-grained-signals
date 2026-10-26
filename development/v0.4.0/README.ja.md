@@ -31,7 +31,7 @@ v0.3.0公開時点で利用者はほぼいない（npm週間DL 26、GitHub star/
 | M3 | 追跡境界Hookの整理 | M2 | 利用者向けの境界APIが`useSignalTracking`だけになる | **完了**（[記録](./m3-tracking-boundary.ja.md)） |
 | M4 | Hookの依存配列の統一と`useWritableComputed` | M3、D3 | 全Hookで「省略と`[]`は同じ」になり、writableが別Hookになる | **完了**（[記録](./m4-hook-dependencies.ja.md)） |
 | M5 | React peerを`>=19.3`へ | D4 | peer更新、Activity/transition関連の回避策の棚卸し | **完了**（[記録](./m5-react-peer.ja.md)） |
-| M6 | utilsの型整理（`Show`/`Match`） | M2 | truthy判定と型が一致する | **完了**（`MatchProps`削除は保留、[記録](./m6-utils-types.ja.md)） |
+| M6 | utilsの型整理（`Show`/`Match`） | M2 | truthy判定と型が一致する | **完了**（`MatchProps`は非export化、[記録](./m6-utils-types.ja.md)） |
 | M7 | `Signal`型の名目化と`FormBindableSignal`の統合 | M4、D7 | `Signal`/`ReadonlySignal`が名目的になり、`FormBindableSignal`が消える | **完了**（[記録](./m7-signal-type.ja.md)） |
 | M8 | `deepSignal(...).peek()`の戻り値を深いreadonly型に | M1、D8 | `peek()`経由の書き込みがコンパイルエラーになる | **完了**（[記録](./m8-deep-peek.ja.md)） |
 | M9 | 診断の既定エラー化 | — | D5で行わないと決定 | **見送り** |

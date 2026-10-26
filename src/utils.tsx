@@ -60,23 +60,12 @@ export function Show<T>({ when, fallback = null, children }: ShowProps<T>): Reac
   }
 }
 
-/**
- * A branch declaration consumed by the nearest `Switch`.
- * Omit E for legacy truthy matching; provide E to describe the equals value
- * and the corresponding callback value.
- */
-export type MatchProps<T, E extends T = never> = [E] extends [never]
-  ? {
-      when: SignalInput<T>;
-      equals?: never;
-      children: ReactNode | ((value: Truthy<T>) => ReactNode);
-    }
-  : {
-      when: SignalInput<T>;
-      /** When provided, match this value using `Object.is`, including falsy values. */
-      equals: E;
-      children: ReactNode | ((value: MatchValue<T, E>) => ReactNode);
-    };
+/** What `Switch` reads from a `Match` element; `Match`'s overloads are the typed API. */
+interface MatchElementProps {
+  when: SignalInput<unknown>;
+  equals?: unknown;
+  children: ReactNode | ((value: unknown) => ReactNode);
+}
 
 /**
  * Declares a `Switch` branch. `Match` only has meaning as a child of `Switch`.
@@ -108,7 +97,7 @@ export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
   const store = useManagedSignals();
   try {
     for (const match of collectMatches(children)) {
-      const props = match.props as MatchProps<unknown, unknown>;
+      const props = match.props as MatchElementProps;
       const value = readSignalInput(props.when);
       const hasEquals = Object.prototype.hasOwnProperty.call(props, "equals");
       if (hasEquals ? !Object.is(value, props.equals) : !value) continue;
@@ -221,8 +210,8 @@ function readSignalInput<T>(value: SignalInput<T>): T {
   return isSignal(value) ? (value.value as T) : value;
 }
 
-function collectMatches(children: ReactNode): Array<ReactElement<MatchProps<unknown, unknown>>> {
-  const matches: Array<ReactElement<MatchProps<unknown, unknown>>> = [];
+function collectMatches(children: ReactNode): Array<ReactElement<MatchElementProps>> {
+  const matches: Array<ReactElement<MatchElementProps>> = [];
 
   Children.forEach(children, (child) => {
     if (!isValidElement(child)) return;
@@ -230,7 +219,7 @@ function collectMatches(children: ReactNode): Array<ReactElement<MatchProps<unkn
       const fragment = child as ReactElement<{ children?: ReactNode }>;
       matches.push(...collectMatches(fragment.props.children));
     } else if (child.type === Match) {
-      matches.push(child as ReactElement<MatchProps<unknown, unknown>>);
+      matches.push(child as ReactElement<MatchElementProps>);
     }
   });
 

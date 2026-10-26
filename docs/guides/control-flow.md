@@ -38,19 +38,9 @@ interface SwitchProps {
   fallback?: ReactNode;
   children?: ReactNode;
 }
-
-type MatchProps<T, E extends T = T> =
-  | {
-      when: SignalInput<T>;
-      equals: E;
-      children: ReactNode | ((value: E) => ReactNode);
-    }
-  | {
-      when: SignalInput<T>;
-      equals?: never;
-      children: ReactNode | ((value: Truthy<T>) => ReactNode);
-    };
 ```
+
+`Match` has two forms, typed by its overloads: `when` with `equals` (the child receives the value narrowed to the matched literal), or `when` alone (the child receives a `Truthy<T>`; `equals` is not allowed).
 
 `Switch` renders the first `Match` that matches. Without `equals`, `when` uses its
 legacy truthy test. With `equals`, `Switch` compares the `when` value using
