@@ -33,7 +33,7 @@ Keeps one signal for the component lifetime.
 ## useDeepSignal
 
 ```ts
-useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
+useDeepSignal<T extends object>(initialValue: PlainRoot<T> | (() => PlainRoot<T>)): DeepSignal<T> // PlainRoot rejects a Map, Set, WeakMap or WeakSet root
 ```
 
 Keeps one deep signal, with property-level tracking, for the component lifetime.
@@ -137,7 +137,7 @@ useDeepCollectionSignal<T extends object>(initialValue: T | (() => T)): DeepColl
 
 ```ts
 useDeepSignalValue<T extends object, S extends SignalSnapshot>(
-  source: DeepSignal<T>,
+  source: DeepSignal<T> | DeepCollectionSignal<T>,
   selector: (value: T) => S,
   dependencies?: DependencyList,
 ): S

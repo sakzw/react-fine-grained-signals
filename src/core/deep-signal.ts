@@ -7,7 +7,7 @@ import {
   registerSignal,
   untracked,
 } from "./base.js";
-import type { Signal } from "./base.js";
+import type { ReadonlySignal } from "./base.js";
 
 declare const deepSignalBrand: unique symbol;
 declare const plainDeepSignalKind: unique symbol;
@@ -53,11 +53,14 @@ export type DeepReadonly<T> = T extends DeepReadonlyLeaf
  * when one is replaced, not when its contents change. Use
  * {@link DeepCollectionSignal} (from `deepCollectionSignal`) to track those.
  *
- * It is not a `Signal<T>`: `peek()` returns the raw object without tracking,
- * so writes through it would be lost, and its type is `DeepReadonly<T>`.
- * Change state through `.value`.
+ * It is never a `Signal<T>`, so it cannot be bound for writing: `peek()` returns
+ * the raw object without tracking, so writes through it would be lost, and its
+ * type is `DeepReadonly<T>`. Change state through `.value`. It still counts as
+ * a `ReadonlySignal` for reading (`For`, `Show`, `computed` inputs) when `T`
+ * has no arrays or collections to make `DeepReadonly<T>` differ from `T`.
  */
-export interface DeepSignal<T extends object> extends Omit<Signal<T>, "peek"> {
+export interface DeepSignal<T extends object> extends Omit<ReadonlySignal<T>, "value" | "peek"> {
+  value: T;
   /** The raw state, read without tracking. Read-only: write through `.value`. */
   peek(): DeepReadonly<T>;
   /**
@@ -76,7 +79,8 @@ export interface DeepSignal<T extends object> extends Omit<Signal<T>, "peek"> {
  * `Signal<T>`: `peek()` is a read-only snapshot, and state changes go
  * through `.value`.
  */
-export interface DeepCollectionSignal<T extends object> extends Omit<Signal<T>, "peek"> {
+export interface DeepCollectionSignal<T extends object> extends Omit<ReadonlySignal<T>, "value" | "peek"> {
+  value: T;
   /** The raw state, read without tracking. Read-only: write through `.value`. */
   peek(): DeepReadonly<T>;
   /** Type-only marker; see {@link DeepSignal}. */

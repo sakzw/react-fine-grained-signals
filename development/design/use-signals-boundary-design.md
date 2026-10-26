@@ -56,7 +56,7 @@ Advantages: preserves source ergonomics and gives lexical ownership. Disadvantag
 
 ### 3. Document the manual runtime-import boundary
 
-**Status: selected as the exact plugin-free manual path.** `transform: "managed"` remains the primary/recommended path when the build plugin is available; the manual runtime-import boundary provides an exact boundary without a build transform.
+**Status: selected as the exact plugin-free manual path in v0.2–v0.3; removed in v0.4 (see the v0.4 outcome note below).** `transform: "managed"` remains the primary/recommended path when the build plugin is available; the manual runtime-import boundary provides an exact boundary without a build transform.
 
 The managed runtime ships an exact boundary that needs no compiler: `react-fine-grained-signals/runtime` exports `useManagedSignals`, which returns a scope handle closed with `finish()`. `const store = useManagedSignals(); try { … } finally { store.finish(); }` is documented as a public pattern in [the hooks guide](../../docs/guides/hooks.md) ("Tracking boundary"), offering strict ownership with no build integration and no wrapper. [The React Compiler compatibility note](./react-compiler-compatibility.md#the-manual-runtime-import-boundary-behaves-like-managed-output) separately measures this manual runtime-import boundary under `babel-plugin-react-compiler`.
 

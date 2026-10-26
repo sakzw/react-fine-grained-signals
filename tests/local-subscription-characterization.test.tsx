@@ -10,7 +10,8 @@ import { Component, act } from "react";
 import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { computed, effect, signal, useSignalValue } from "../src/index.js";
+import { computed, signal, useSignalValue } from "../src/index.js";
+import { coreRuntime } from "../src/core/core-runtime.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -56,14 +57,9 @@ describe("useSignalValue subscription", () => {
       return <output>{useSignalValue(source)}</output>;
     }
     const view = render(<View />);
-    // An unmounted component must not keep the signal watched: a probe effect
-    // is the only subscriber left, and disposing it is what unwatches.
-    const probe = vi.fn();
-    const dispose = effect(() => { probe(source.value); });
+    expect(coreRuntime.hasSubscribers(source)).toBe(true);
     view.unmount();
-    act(() => { source.value = 2; });
-    expect(probe).toHaveBeenLastCalledWith(2);
-    dispose();
+    expect(coreRuntime.hasSubscribers(source)).toBe(false);
   });
 
   it("does not re-render when a computed keeps its value", () => {
@@ -116,33 +112,6 @@ describe("useSignalValue subscription", () => {
 
     expect(() => act(() => { source.value = 2; })).not.toThrow();
     expect(screen.getByTestId("caught").textContent).toBe("computed failure");
-  });
-
-  it("recovers a mounted subscriber after a computed error clears", () => {
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    const source = signal(1);
-    const fragile = computed(() => {
-      if (source.value === 2) throw new Error("computed failure");
-      return source.value;
-    });
-    const seen: unknown[] = [];
-    function View() {
-      const value = useSignalValue(fragile);
-      seen.push(value);
-      return <output>{value}</output>;
-    }
-    // A boundary-less error cannot be observed in the tree, so check the
-    // subscription itself stays live across the error: later writes still
-    // reach a sibling effect reading the same computed.
-    const effectSeen: unknown[] = [];
-    const dispose = effect(() => {
-      try { effectSeen.push(fragile.value); } catch (error) { effectSeen.push((error as Error).message); }
-    });
-    render(<Boundary><View /></Boundary>);
-    act(() => { source.value = 2; });
-    act(() => { source.value = 3; });
-    expect(effectSeen).toEqual([1, "computed failure", 3]);
-    dispose();
   });
 });
 

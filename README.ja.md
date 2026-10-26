@@ -23,7 +23,7 @@ pnpm add react-fine-grained-signals
 
 v0.4系がinstallされます。v0.3からupgradeする場合の移行内容は[v0.4移行ガイド](./docs/migration/v0.4.ja.md)を参照してください。
 
-React(19以降)はpeer dependencyで、Node.js 22以降が必要です。packageはESMのみで、
+React(19.3以降)はpeer dependencyで、Node.js 22以降が必要です。packageはESMのみで、
 entry pointと型を `exports` で公開しているため、`react-fine-grained-signals/utils`
 やJSXランタイムを解決するには、TypeScriptの `moduleResolution` を `bundler`、
 `node16`、`nodenext` のいずれかにしてください。

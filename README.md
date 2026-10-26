@@ -24,7 +24,7 @@ pnpm add react-fine-grained-signals
 This installs the v0.4 line. If you are upgrading from v0.3, see the
 [v0.4 migration guide](./docs/migration/v0.4.md) for the upgrade contract.
 
-React (19 or newer) is a peer dependency, and Node.js 22 or newer is required.
+React (19.3 or newer) is a peer dependency, and Node.js 22 or newer is required.
 The package is ESM-only and publishes its entry points and types through
 `exports`, so TypeScript needs `moduleResolution` set to `bundler`, `node16`, or
 `nodenext` to resolve `react-fine-grained-signals/utils` and the JSX runtime.

@@ -176,7 +176,7 @@ function TextField<TMeta>({ value, label }: TextFieldProps<TMeta>) {
 }
 ```
 
-The capability is a TypeScript-only opaque marker; it is not a JavaScript property. Runtime binding validates the package's private signal brand and writable value descriptor. A value annotated as plain `Signal<T>` no longer carries enough type information for JSX binding. Getter-only computed values remain rejected.
+The capability is a TypeScript-only opaque marker; it is not a JavaScript property. Runtime binding validates the package's private signal brand and writable value descriptor. A value annotated as `Signal<T>` binds directly. Getter-only computed values (`ReadonlySignal<T>`) remain rejected.
 
 An explicit binding owns that DOM state: do not combine `bindValue` with `value` or `defaultValue` (radio and checkbox-group options still take their string `value`), or `bindChecked` with `checked` or `defaultChecked`. A prop explicitly set to `undefined` counts as absent, so `bindValue={enabled ? field : undefined}` renders an unbound field. The runtime rejects those combinations, and the RFSG JSX types reject statically visible conflicts. Standard React-controlled selects remain available with `value={selected.value}` and an `onChange` handler. With `bindValue`, the native change listener updates the signal before React's `onChange` runs, so no signal assignment is needed in that handler unless it normalizes the value.
 

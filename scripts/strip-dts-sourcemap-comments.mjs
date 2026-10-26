@@ -18,7 +18,8 @@ import { join } from "node:path";
 const DIST = "dist";
 const COMMENT = /\r?\n?\/\/# sourceMappingURL=[^\n]*\.d\.ts\.map\s*$/;
 
-const entries = readdirSync(DIST);
+// Recursive: the JSX entries live in subdirectories (`dist/jsx/`, `dist/jsx/lite/`).
+const entries = readdirSync(DIST, { recursive: true }).map(String);
 
 // If a declaration map is ever emitted again, its comment is load-bearing and
 // stripping it would silently break the map instead of tidying a dead pointer.

@@ -1,5 +1,5 @@
 /* Attempt-local render and speculative adapter for the production graph. */
-import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
+import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, multipleCopiesError, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
 import type { RenderExecutionOwnerV2 } from "./execution-owner.js";
 import { activeRenderCollector, setActiveRenderCollector } from "./render-tracking.js";
 import type { RenderCollector } from "./render-tracking.js";
@@ -110,6 +110,7 @@ function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bar
     kind: "render" as const,
     scopePolicy,
     runtimeToken: core.runtimeToken,
+    add() { throw multipleCopiesError(); },
     isSpeculative() { return activeSpeculativeComputed !== undefined; },
     markSpeculativeDeepRead() { attempt.markSpeculativeDeepRead(); },
     own: core.adopt,

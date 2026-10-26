@@ -578,6 +578,30 @@ describe("deepSignal", () => {
       expect(() => { plain.value.slot = collections.value.child; }).toThrow(/cannot share the same plain object or array/);
     });
 
+    it("rejects a mode mismatch where the value is assigned, not at a later read", () => {
+      const collections = deepCollectionSignal({ child: { count: 1 } });
+      const plain = deepSignal({ slot: undefined as unknown });
+      const mismatch = /cannot share the same plain object or array/;
+      // Inside a carrier object.
+      expect(() => { plain.value.slot = { inner: collections.value.child }; }).toThrow(mismatch);
+      // A raw object that peek() handed out.
+      expect(() => { plain.value.slot = collections.peek().child; }).toThrow(mismatch);
+      // A root replacement.
+      const other = deepSignal({ child: undefined as unknown });
+      expect(() => { (other as unknown as { value: unknown }).value = collections.peek(); }).toThrow(mismatch);
+      // The failed assignments left the plain state untouched.
+      expect(plain.value.slot).toBeUndefined();
+    });
+
+    it("does not reuse a carrier copy made for the other kind of signal", () => {
+      const first = deepSignal({ child: { count: 1 } });
+      const carrier = { inner: first.value.child };
+      const second = deepSignal({ slot: undefined as unknown });
+      second.value.slot = carrier;
+      const collections = deepCollectionSignal({ slot: undefined as unknown });
+      expect(() => { collections.value.slot = carrier; }).toThrow(/cannot share the same plain object or array/);
+    });
+
     it("shares a raw Map by identity: untracked in deepSignal, reactive in deepCollectionSignal", () => {
       const map = new Map([["a", 1]]);
       const plain = deepSignal({ map });

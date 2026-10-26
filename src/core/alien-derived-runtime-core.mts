@@ -156,7 +156,12 @@ function isForeignOwner(owner: ExecutionContextOwnerV2 | undefined): owner is Ex
   return (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken;
 }
 
-const graphOwner: GraphExecutionOwnerV2 = { version: 2, kind: "graph", runtimeToken };
+const graphOwner: GraphExecutionOwnerV2 = {
+  version: 2,
+  kind: "graph",
+  runtimeToken,
+  add() { throw multipleCopiesError(); },
+};
 // User callbacks (computed getters, effect bodies) are called as `() => T`:
 // no arguments and no `this`, as in v0.1.1.
 function withGraphOwner<T>(callback: () => T): T {

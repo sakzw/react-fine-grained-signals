@@ -21,6 +21,7 @@ const state = deepSignal<State>({
 });
 
 const deepSignalCompatible: DeepSignal<State> = state;
+// @ts-expect-error A DeepSignal is never a writable Signal, even for a plain-object root.
 const signalCompatible: Signal<{ value: number }> = deepSignal({ value: 1 });
 const name: string = state.value.user.name;
 const firstTupleValue: string = state.value.tuple[0];

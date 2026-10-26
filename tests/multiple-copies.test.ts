@@ -1,4 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createElement } from "react";
+import { renderToString } from "react-dom/server";
+import { coreRuntime } from "../src/core/core-runtime.js";
+import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -14,6 +18,8 @@ interface Copy {
   computed<T>(getter: () => T): Signal<T>;
   effect(callback: () => void): () => void;
   isSignal(value: unknown): boolean;
+  useSignalTracking(): void;
+  useSignalValue<T>(source: Signal<T>): T;
 }
 
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
@@ -52,6 +58,12 @@ beforeAll(async () => {
 afterAll(async () => {
   if (temporaryRoot !== "") await rm(temporaryRoot, { recursive: true, force: true });
 });
+
+function suppressConsoleError() {
+  const original = console.error;
+  console.error = () => {};
+  return { restore() { console.error = original; } };
+}
 
 describe("two loaded copies of the package", () => {
   it("keeps each copy working on its own signals", () => {
@@ -94,6 +106,44 @@ describe("two loaded copies of the package", () => {
     expect(() => a.isSignal(b.signal(1))).toThrow(MULTIPLE_COPIES);
     expect(() => b.isSignal(a.computed(() => 1))).toThrow(MULTIPLE_COPIES);
     expect(a.isSignal({ value: 1, peek() { return 1; } })).toBe(false);
+  });
+
+  it("throws when a tracked component of one copy reads another copy's signal", () => {
+    const foreign = b.signal(1);
+    function Tracked() {
+      a.useSignalTracking();
+      return createElement("p", null, String(foreign.value));
+    }
+    const errors = suppressConsoleError();
+    try {
+      expect(() => renderToString(createElement(Tracked))).toThrow(MULTIPLE_COPIES);
+    } finally {
+      errors.restore();
+    }
+  });
+
+  it("throws when useSignalValue is given another copy's signal, instead of going stale", () => {
+    const foreign = b.signal(1);
+    function Leaf() {
+      return createElement("p", null, String(a.useSignalValue(foreign)));
+    }
+    const errors = suppressConsoleError();
+    try {
+      expect(() => renderToString(createElement(Leaf))).toThrow(MULTIPLE_COPIES);
+    } finally {
+      errors.restore();
+    }
+  });
+
+  it("fails clearly when a v0.3 copy reports a foreign read to a v0.4 owner", () => {
+    // v0.3 copies called `owner.add(protocol, revision)` on the owner they found
+    // in the shared execution context. v0.4 owners answer with the same error.
+    const graphOwner = coreRuntime.graphOwner as unknown as { add(...args: unknown[]): never };
+    expect(() => graphOwner.add({}, 0)).toThrow(MULTIPLE_COPIES);
+    const adapter = coreRuntime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
+    const attempt = adapter.createRenderAttempt();
+    const renderOwner = adapter.createRenderOwner(attempt) as unknown as { add(...args: unknown[]): never };
+    expect(() => renderOwner.add({}, 0)).toThrow(MULTIPLE_COPIES);
   });
 
   it("cannot detect a plain read made outside any reactive scope", () => {

@@ -56,7 +56,7 @@ source上の `useSignalTracking()` 呼び出しは維持しながら、opt-inし
 
 ### 3. 手動ランタイムインポート境界を文書化する
 
-**状態: pluginを使わない場合の厳密な手動経路として採用。** build pluginを利用できる場合は `transform: "managed"` が主要な推奨経路であり、手動ランタイムインポート境界はbuild変換なしに厳密な境界を提供します。
+**状態: pluginを使わない場合の厳密な手動経路として採用（v0.2〜v0.3）。v0.4で削除（下の「v0.4の結果」を参照）。** build pluginを利用できる場合は `transform: "managed"` が主要な推奨経路であり、手動ランタイムインポート境界はbuild変換なしに厳密な境界を提供します。
 
 managed runtimeは、compilerなしでも厳密な境界を備えています。`react-fine-grained-signals/runtime` は `useManagedSignals` をexportし、`finish()` で閉じるscope handleを返します。`const store = useManagedSignals(); try { … } finally { store.finish(); }` は、公開patternとして[hooksのdocs](../../docs/guides/hooks.ja.md)(「追跡境界について」)に文書化されており、build integrationもwrapperもなしで厳密な所有権を提供します。[React Compilerとの互換性の検討docs](./react-compiler-compatibility.ja.md#手動ランタイムインポート境界はmanagedの出力と同じ挙動になる)では、この手動ランタイムインポート境界の `babel-plugin-react-compiler` 下での挙動を別途計測しています。
 

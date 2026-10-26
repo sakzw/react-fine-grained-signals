@@ -5729,7 +5729,7 @@ function applyManaged(
 /**
  * Drops an `import { useSignalTracking } from "<importSource>"` the managed transform
  * absorbed and nothing else refers to any more, along with the whole
- * declaration once its last specifier goes. A reused `/runtime` import survives
+ * declaration once its last specifier goes. A reused `/internal` import survives
  * this untouched: the emitted store declaration still calls it, so the binding
  * is still referenced.
  */

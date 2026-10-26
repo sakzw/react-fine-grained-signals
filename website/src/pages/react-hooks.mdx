@@ -37,7 +37,7 @@ that same component: `useSignalTracking()` or the
 ## useDeepSignal
 
 ```ts
-useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
+useDeepSignal<T extends object>(initialValue: PlainRoot<T> | (() => PlainRoot<T>)): DeepSignal<T>
 ```
 
 Keeps one [deep signal](/deep-signal). Pass a factory for an expensive initial
@@ -116,7 +116,7 @@ its own call; the window is not inherited from a parent.
 
 ```ts
 useSignalValue<T>(source: ReadonlySignal<T>): T
-useDeepSignalValue<T extends object, S extends SignalSnapshot>(source: DeepSignal<T>, selector: (value: T) => S, dependencies?: DependencyList): S
+useDeepSignalValue<T extends object, S extends SignalSnapshot>(source: DeepSignal<T> | DeepCollectionSignal<T>, selector: (value: T) => S, dependencies?: DependencyList): S
 ```
 
 Explicit single subscriptions, for when you want one named subscription instead
@@ -124,9 +124,9 @@ of a component-wide window. `useDeepSignalValue` selects one primitive
 (`SignalSnapshot`) from deep state; `useSignalValue` takes a plain signal, not a
 `deepSignal`. Omitting dependencies retains the initial selector closure and is for
 selectors that read only signal state; it does not track props automatically.
-Use `[]` for an explicit empty dependency array, or pass every captured
-non-signal value such as `[prefix]`. Keep the chosen mode and explicit array
-length stable for the lifetime of the component.
+Omitting the array is the same as `[]`. To capture a non-signal value, pass
+every one of them, such as `[prefix]`, and keep the array length stable for the
+lifetime of the component.
 
 ```tsx
 const name = useDeepSignalValue(state, (value) => value.user.name);

@@ -5,7 +5,7 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { computed, deepCollectionSignal, deepSignal, signal, untracked } from "../core/index.js";
+import { computed, deepCollectionSignal, deepSignal, isSignal, signal, untracked } from "../core/index.js";
 import { detachedEffect } from "../core/base.js";
 import type {
   DeepCollectionSignal,
@@ -348,6 +348,10 @@ export function useSignalEffect(
  * with `useDeepSignalValue` or inside a tracked component instead.
  */
 export function useSignalValue<T>(source: ReadonlySignal<T> & NotDeepSignal): T {
+  // A signal another loaded copy of the package created cannot be subscribed to
+  // from here. `isSignal` throws for it, so the mix fails now instead of
+  // leaving the component on a value that never updates.
+  isSignal(source);
   const subscribe = useCallback((notify: () => void) => {
     const unsubscribe = subscribeLocalReadable(source, notify);
     if (unsubscribe !== undefined) return unsubscribe;

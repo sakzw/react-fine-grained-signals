@@ -172,7 +172,7 @@ function TextField<TMeta>({ value, label }: TextFieldProps<TMeta>) {
 }
 ```
 
-このcapabilityはTypeScript専用のopaque markerであり、JavaScript propertyとしては存在しません。runtimeはpackageのprivate signal brandとvalueの書き込み可能性を検証します。`Signal<T>`と注釈した値にはJSX bindingに必要な型情報が残らず、getter-only computedも引き続き拒否されます。
+このcapabilityはTypeScript専用のopaque markerであり、JavaScript propertyとしては存在しません。runtimeはpackageのprivate signal brandとvalueの書き込み可能性を検証します。`Signal<T>`と注釈した値はそのままJSX bindingに使え、getter-only computed（`ReadonlySignal<T>`）は引き続き拒否されます。
 
 明示bindingがDOM stateを所有します。`bindValue`と`value`/`defaultValue`(radioとcheckbox groupのoptionはstring `value`を指定します)、`bindChecked`と`checked`/`defaultChecked`は併用できません。明示的に`undefined`を渡したpropは指定なしとして扱うため、`bindValue={enabled ? field : undefined}`はbindingなしのfieldになります。runtimeで拒否し、静的に分かる競合はRFSG JSX型でも拒否します。React標準のcontrolled selectは引き続き`value={selected.value}`と`onChange`で利用できます。`bindValue`ではnative change listenerがReactの`onChange`より前にsignalを更新するため、正規化処理がなければhandler内のsignal代入は不要です。
 

@@ -156,6 +156,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   // stored. Remember that copy so assigning the same carrier again preserves the
   // same identity and aliases, just like assigning an ordinary raw object does.
   const normalizedProxyCarriers = new WeakMap<object, object>();
+  // The mode each cached carrier copy was made for; `null` is plain `deepSignal`.
+  const carrierSupports = new WeakMap<object, CollectionSupport | null>();
   let collectionSupport: CollectionSupport | undefined;
   const isSpeculative = adapter.isSpeculative ?? (() => false);
   const markSpeculativeDeepRead = adapter.markSpeculativeDeepRead ?? (() => {});
@@ -299,6 +301,10 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
               : "deepSignal() cannot store a deep collection view inside an opaque value",
           );
         }
+        // A proxy that is only a carrier's member is not caught by the check in
+        // `prepareDeepValue`, which looks at the assigned value itself.
+        const wrapped = rawToMetadata.get(wrapperRaw);
+        if (wrapped !== undefined && wrapped.support !== support) throw modeError();
         // The raw graph was validated when this proxy (or collection view) was
         // created. Do not walk it again: this makes `{ inner: state.value.large }`
         // proportional to the new carrier rather than the already-known subtree.
@@ -370,6 +376,10 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       }
 
       if (!insideOpaque) {
+        // A raw object another kind of signal already wrapped (for example one
+        // handed out by `peek()`) cannot be adopted here either.
+        const existing = rawToMetadata.get(raw);
+        if (existing !== undefined && existing.support !== support) throw modeError();
         assertExtensible(raw);
         assertDataProperties(raw);
       }
@@ -564,7 +574,10 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         }
       }
     }
-    for (const [source, target] of created) normalizedProxyCarriers.set(source, target);
+    for (const [source, target] of created) {
+      normalizedProxyCarriers.set(source, target);
+      carrierSupports.set(source, support ?? null);
+    }
     return root;
   }
 
@@ -581,7 +594,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     }
     if (isObjectLike(value)) {
       const cached = normalizedProxyCarriers.get(value);
-      if (cached !== undefined && matchesNormalizedGraph(value, cached, support)) return cached as T;
+      if (
+        cached !== undefined &&
+        carrierSupports.get(value) === (support ?? null) &&
+        matchesNormalizedGraph(value, cached, support)
+      ) return cached as T;
     }
     const containsProxy = assertDeepDataGraph(value, support);
     return containsProxy ? cloneReactiveGraph(value, support) : value;

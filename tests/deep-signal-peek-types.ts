@@ -1,5 +1,5 @@
 import { deepSignal, isSignal } from "../src/index.js";
-import type { DeepReadonly, DeepSignal, ReadonlySignal } from "../src/index.js";
+import type { DeepReadonly, DeepSignal, ReadonlySignal, Signal } from "../src/index.js";
 
 // Type-only checks, verified by `pnpm typecheck`.
 
@@ -40,8 +40,10 @@ export function narrowed(value: unknown) {
   return undefined;
 }
 export const asDeep: DeepSignal<{ count: number }> = deepSignal({ count: 1 });
-// A plain-object root is still structurally assignable (readonly does not affect
-// assignability), but arrays and collections are not.
+// For reading, a plain-object root is still structurally a ReadonlySignal (readonly does
+// not affect assignability), but arrays and collections are not. It is never a Signal.
+// @ts-expect-error a DeepSignal is not a writable Signal, even for a plain-object root.
+export const objectAsSignal: Signal<{ count: number }> = asDeep;
 export const objectRoot: ReadonlySignal<{ count: number }> = asDeep;
 // @ts-expect-error a DeepSignal over an array is not a ReadonlySignal of that array.
 export const arrayRoot: ReadonlySignal<number[]> = deepSignal([1]);

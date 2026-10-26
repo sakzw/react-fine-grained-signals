@@ -101,6 +101,8 @@ export default [Show, Switch, Match, For, Index];`,
 const DEEP_SIGNAL_MARKER = "deepSignal() only accepts plain objects and arrays";
 // Only the collection module contains this one, so it proves that module was bundled.
 const DEEP_COLLECTION_MARKER = "deepSignal() reactive collections do not support own properties";
+// The collection module's weak-key probe must not run (or ship) without it.
+const WEAK_KEY_PROBE_MARKER = "weak-key-probe";
 const REACT_STORE_MARKER = "useSyncExternalStore";
 const SIGNAL_CHILD_RUNTIME_MARKER = "rfgs-signal:";
 const FORM_BINDING_MARKERS = [
@@ -117,8 +119,8 @@ const LITE_BINDING_DIAGNOSTIC_MARKER = "The lite JSX runtime supports Signal chi
 const absenceChecks = {
   "signal-only": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
   core: [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
-  "core+hooks": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER],
-  deep: [DEEP_COLLECTION_MARKER],
+  "core+hooks": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER, WEAK_KEY_PROBE_MARKER],
+  deep: [DEEP_COLLECTION_MARKER, WEAK_KEY_PROBE_MARKER],
   "lite-jsx-child": [...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS],
 };
 
@@ -126,7 +128,7 @@ const absenceChecks = {
 // marker string is renamed or deleted, quietly turning the whole check vacuous.
 const presenceChecks = {
   deep: [DEEP_SIGNAL_MARKER],
-  "deep-collections": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER],
+  "deep-collections": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER, WEAK_KEY_PROBE_MARKER],
   "index-full": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER, REACT_STORE_MARKER],
   "core+hooks": [REACT_STORE_MARKER],
   "full-jsx-child": [SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS],

@@ -129,7 +129,7 @@ state.value.items.push("second");
 ```
 
 - 監視できるのは、`state.value` を経由した代入、削除、標準的な配列操作だけです。
-- `state.peek()` は依存関係を収集しない、読み取り専用のスナップショットです。型は `DeepReadonly<T>` で、objectのpropertyは `readonly`、配列は `ReadonlyArray`、`Map` と `Set` は `ReadonlyMap` と `ReadonlySet` になり、`WeakMap` と `WeakSet` からは `set`、`add`、`delete` が取り除かれます。そのため `state.peek().count = 1` や `state.peek().items.push(x)` はコンパイルエラーです。変更は `state.value` 経由で行ってください。実行時の `peek()` は生のオブジェクトを返すため、型をすり抜けた書き込みは通知されずに失われます。したがって `DeepSignal<T>` は `Signal<T>` ではありません。
+- `state.peek()` は依存関係を収集しない、読み取り専用のスナップショットです。型は `DeepReadonly<T>` で、objectのpropertyは `readonly`、配列は `ReadonlyArray`、`Map` と `Set` は `ReadonlyMap` と `ReadonlySet` になり、`WeakMap` と `WeakSet` からは `set`、`add`、`delete` が取り除かれます。そのため `state.peek().count = 1` や `state.peek().items.push(x)` はコンパイルエラーです。変更は `state.value` 経由で行ってください。実行時の `peek()` は生のオブジェクトを返すため、型をすり抜けた書き込みは通知されずに失われます。したがって `DeepSignal<T>` は `Signal<T>` ではありません。読み取り用途では、配列やcollectionを含まない `T` なら `ReadonlySignal<T>` として扱えます。
 - ルートにはデータプロパティを持つ変更可能なプレーンオブジェクトまたは配列を渡します。`Map`、`Set`、`WeakMap`、`WeakSet` をルートにすると型エラーになり、実行時は `deepCollectionSignal` を案内する `TypeError` を投げます。アクセサプロパティ、descriptor/prototypeの変更、`freeze`/`seal`は、一部だけリアクティブになる事態を避けるため、v1では拒否されます(拡張不可のオブジェクトも同様です)。
 - ネストしたプレーンオブジェクトと配列はリアクティブです。クラスのインスタンス、関数、`Date`、Promise、既存のsignal、そしてネストした `Map`、`Set`、`WeakMap`、`WeakSet` は追跡しない値として扱われ、identityを保ちます。signalが通知するのは、それを保持するプロパティに別の値が代入されたときだけです。**ネストしたcollectionの変更(`state.value.tags.add(x)`)は追跡されず、型の上では変更できてしまいます。** collectionの中身をリアクティブにしたい場合は `deepCollectionSignal` を使ってください。
 - 配列の変更メソッド(`push`、`splice`、`sort` など)は、呼び出し側を変更対象の配列に購読させません。通知されるのは、影響を受けたindex、`length`、keyを読んでいる側だけです。そのため、effect内での `push` によって、そのeffectが以後の `push` のたびに再実行されることはありません。
@@ -173,7 +173,7 @@ isSignal(value: unknown): value is ReadonlySignal<unknown>
 
 `react-fine-grained-signals` は1つのcopyだけをinstallしてください。すべてのsignalは `Symbol.for("react-fine-grained-signals.signal.v2")` をキーとする列挙不可のbrandを持ち、各copyは独自のグラフを持つため、signalはそれを作ったcopyからしか読めません。2つ目のcopyが読み込まれている場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）、混在は更新されない値を黙って返すのではなくエラーになります。`effect`、`computed`、追跡されるコンポーネントの内側でcopyをまたいで読むと `Multiple copies of react-fine-grained-signals are loaded` をthrowし、`isSignal` も他方のcopyが作ったsignalに対してthrowします。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
 
-重複はinstall側で解消してください。package managerのdedupe（pnpmの `dedupe-peer-dependents`、`npm dedupe`）を実行するか、bundlerが1つのcopyに解決するようにします（ViteとRollupの `resolve.dedupe: ["react-fine-grained-signals"]`、webpackの `resolve.alias`）。
+重複はinstall側で解消してください。package managerのdedupeコマンド（`pnpm dedupe`、`npm dedupe`）を実行するか、bundlerが1つのcopyに解決するようにします（Viteの `resolve.dedupe: ["react-fine-grained-signals"]`、`@rollup/plugin-node-resolve` の `dedupe` オプション、webpackの `resolve.alias`）。
 
 検出には限界があります。`effect`、`computed`、追跡されるコンポーネントの外で別のcopyのsignalを単純に読む場合は、スタックに目印がないためエラーにならず、そのsignalの現在値が返ります。何も更新されませんが、これはリアクティブなコードの外で値を読むのと同じ挙動です。
 

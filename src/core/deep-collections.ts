@@ -68,7 +68,12 @@ interface CollectionMetadata {
   proxy: object;
 }
 
-const supportsWeakSymbolKeys = (() => {
+let weakSymbolKeys: boolean | undefined;
+// Probed on first use, not at import, so loading this module has no effect.
+function supportsWeakSymbolKeys(): boolean {
+  return weakSymbolKeys ??= probeWeakSymbolKeys();
+}
+function probeWeakSymbolKeys(): boolean {
   try {
     const key = Symbol("weak-key-probe");
     const collection = new WeakMap<object, boolean>();
@@ -77,11 +82,11 @@ const supportsWeakSymbolKeys = (() => {
   } catch {
     return false;
   }
-})();
+}
 
 function isWeakCollectionKey(value: unknown): value is object | symbol {
   return isObjectLike(value) || (
-    supportsWeakSymbolKeys
+    supportsWeakSymbolKeys()
     && typeof value === "symbol"
     // Native WeakMap/WeakSet accept non-registered symbols where supported,
     // but Symbol.for() symbols are shared registry entries and never valid
