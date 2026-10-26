@@ -59,3 +59,7 @@ pluginの`reactCompiler`は`"auto"`（既定）と`"off"`の2値だった。`"au
 - `pnpm build`、`pnpm size`（型だけの変更とplugin側の変更なので、runtimeのサイズは変わらない）、`pnpm test:consumer`
 - `pnpm test:browser`: 53件
 - websiteのbuild
+
+## GitHub CI
+
+`9d8c44d`のpushで、Test・E2E・Website CIがすべて成功した。
