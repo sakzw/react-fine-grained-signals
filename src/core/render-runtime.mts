@@ -1,5 +1,5 @@
 /* Attempt-local render and speculative adapter for the production graph. */
-import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, multipleCopiesError, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
+import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
 import type { RenderExecutionOwnerV2 } from "./execution-owner.js";
 import { activeRenderCollector, setActiveRenderCollector } from "./render-tracking.js";
 import type { RenderCollector } from "./render-tracking.js";
@@ -110,7 +110,6 @@ function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bar
     kind: "render" as const,
     scopePolicy,
     runtimeToken: core.runtimeToken,
-    add() { throw multipleCopiesError(); },
     isSpeculative() { return activeSpeculativeComputed !== undefined; },
     markSpeculativeDeepRead() { attempt.markSpeculativeDeepRead(); },
     own: core.adopt,
@@ -231,18 +230,11 @@ function subscribeReadables(readables: readonly RuntimeReadable[], notify: () =>
   });
 }
 
-function captureRenderSnapshot(readable: RuntimeReadable): { value: unknown; dependencies: Map<object, number>; attempt: RenderAttempt } {
-  const attempt = createRenderAttempt();
-  let value: unknown;
-  withRenderScope(attempt, () => { value = readable.value; });
-  return { value, dependencies: attempt.dependencies, attempt };
-}
-
 function getExecutionOwner() { return executionContext.owner; }
   return {
     createRenderAttempt, createRenderOwner, pushRenderScope, withRenderScope,
     promoteRenderAttempt, settleRenderAttempt, isRenderAttemptCurrent, getRenderVersion, hasActiveRenderOwner, isSpeculative,
-    markSpeculativeDeepRead, subscribeReadables, captureRenderSnapshot,
+    markSpeculativeDeepRead, subscribeReadables,
     getExecutionOwner,
   };
 }

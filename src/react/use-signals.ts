@@ -1,5 +1,6 @@
 import { coreRuntime } from "../core/core-runtime.js";
 import { createAlienDerivedRenderAdapter } from "../core/render-runtime.mjs";
+import { captureForIn, captureIteration } from "./capture-iteration.js";
 import { createAlienDerivedReactAdapter } from "./react-adapter.mjs";
 
 const renderAdapter = coreRuntime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
@@ -34,5 +35,13 @@ export function useManagedSignals(): ManagedSignalsStore {
 
 /** Capture synchronous signal reads without keeping an ambient render scope open. */
 export function useSignalCapture(): SignalCaptureStore {
-  return reactAdapter.useSignalCapture();
+  const scope = reactAdapter.useSignalCapture();
+  const { capture } = scope;
+  // `iterate` and `forIn` live apart from the adapter so that an app that
+  // never imports this hook does not ship them.
+  return {
+    ...scope,
+    iterate: (getIterable) => captureIteration(capture, getIterable),
+    forIn: (getObject) => captureForIn(capture, getObject),
+  };
 }

@@ -14,17 +14,9 @@ export interface GraphExecutionOwnerV2 {
   readonly version: 2;
   readonly kind: "graph";
   readonly runtimeToken: object;
-  /**
-   * v0.3 copies reported foreign reads through `add`. Nothing here does, so it
-   * throws: a v0.3 copy reading a v0.4 signal fails with the "multiple copies"
-   * message instead of "owner.add is not a function".
-   */
-  add?(...args: unknown[]): never;
 }
 
 export interface RenderExecutionOwnerV2 {
-  /** See {@link GraphExecutionOwnerV2.add}. */
-  add?(...args: unknown[]): never;
   readonly version: 2;
   readonly kind: "render";
   readonly scopePolicy?: "managed" | "bare";

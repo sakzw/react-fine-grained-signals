@@ -1,8 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createElement } from "react";
 import { renderToString } from "react-dom/server";
-import { coreRuntime } from "../src/core/core-runtime.js";
-import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -133,17 +131,6 @@ describe("two loaded copies of the package", () => {
     } finally {
       errors.restore();
     }
-  });
-
-  it("fails clearly when a v0.3 copy reports a foreign read to a v0.4 owner", () => {
-    // v0.3 copies called `owner.add(protocol, revision)` on the owner they found
-    // in the shared execution context. v0.4 owners answer with the same error.
-    const graphOwner = coreRuntime.graphOwner as unknown as { add(...args: unknown[]): never };
-    expect(() => graphOwner.add({}, 0)).toThrow(MULTIPLE_COPIES);
-    const adapter = coreRuntime.initializeRenderAdapter(createAlienDerivedRenderAdapter);
-    const attempt = adapter.createRenderAttempt();
-    const renderOwner = adapter.createRenderOwner(attempt) as unknown as { add(...args: unknown[]): never };
-    expect(() => renderOwner.add({}, 0)).toThrow(MULTIPLE_COPIES);
   });
 
   it("cannot detect a plain read made outside any reactive scope", () => {

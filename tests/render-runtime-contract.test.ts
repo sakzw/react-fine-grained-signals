@@ -31,11 +31,14 @@ describe("render adapter contracts", () => {
     expect(factory).toHaveBeenCalledOnce();
   });
 
-  it("captures render snapshots and resolves supported dependency versions", () => {
+  it("collects render dependencies and resolves supported dependency versions", () => {
     const runtime = createRenderRuntime();
     const source = runtime.signal(2);
     const doubled = runtime.computed(() => source.value * 2);
-    const { value, dependencies } = runtime.renderAdapter.captureRenderSnapshot(doubled);
+    const attempt = runtime.renderAdapter.createRenderAttempt();
+    let value: number | undefined;
+    runtime.renderAdapter.withRenderScope(attempt, () => { value = doubled.value; });
+    const { dependencies } = attempt;
 
     expect(value).toBe(4);
     expect(dependencies.has(source)).toBe(false);

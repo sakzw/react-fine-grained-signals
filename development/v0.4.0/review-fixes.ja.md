@@ -6,7 +6,7 @@
 ## 直した不具合
 
 1. **別コピーのsignalを`useSignalValue`に渡すと、エラーなしで更新が止まる。** `useSignalValue`がrender中に`isSignal(source)`を呼ぶようにした。別コピーのsignalでは`isSignal`が`multipleCopiesError`をthrowする。`tests/multiple-copies.test.ts`に、追跡コンポーネントと`useSignalValue`のレンダー時のテストを追加した（`renderToString`、2つの実ビルド）。
-2. **v0.3のコピーがv0.4のsignalを読むと`owner.add is not a function`になる。** v0.4のgraph owner・render ownerに、`multipleCopiesError`をthrowする`add()`を持たせた（型は`add?(...args): never`）。v0.3は`publishForeignReadable`でこの`add`を呼ぶので、「複数のcopy」のメッセージで失敗する。テストを追加した。
+2. **v0.3のコピーがv0.4のsignalを読むと`owner.add is not a function`になる。** いったんv0.4のowner（graph・render）に`multipleCopiesError`をthrowする`add()`を持たせたが、メンテナから「v0.3ユーザーは考えなくてよい。バンドルサイズを小さくしてほしい」と指示があり、削除した（`development/v0.4.0/size-reduction.ja.md`）。v0.3とv0.4の混在は非対応で、特別な処理はしない。
    - **未対応（要判断）**: v0.3の`isSignal(v0.4のsignal)`が`true`を返す件。brandのキー（`signal.v2`）が同じためで、直すにはbrandのキーを変える必要がある。v0.3のコピーに対しては何もできず、v0.4側でbrandを新しくして旧brandを「複数コピー」として扱う案があるが、破壊的なので保留した。
 3. **モードの不一致が代入時ではなく、あとの読み取り時にしか失敗しない経路があった。** `assertDeepDataGraph`が、carrierの中の他モードのproxy、`peek()`が返した生のオブジェクト、ルートの置き換えでも、代入時に`TypeError`を投げるようにした。carrierのコピーのキャッシュ（`normalizedProxyCarriers`）は、作ったモードを記録して、別のモードでは再利用しない。
 4. **`DeepSignal<T>`がplain objectのルートで`Signal<T>`に代入できた。** `DeepSignal`/`DeepCollectionSignal`は`ReadonlySignal`のbrandだけを引き継ぎ、書き込み用のmarkerは持たない形にした。これで`T`によらず`Signal<T>`には代入できない。読み取り用途（`For`、`Index`、`Show`、`computed`の入力）には、これまでどおり渡せる（plain objectのルートなら`ReadonlySignal<T>`にも代入できる。配列・collectionのルートは`DeepReadonly<T>`が`T`と異なるため不可）。型テストを更新した。

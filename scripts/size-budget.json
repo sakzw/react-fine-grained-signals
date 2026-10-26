@@ -1,32 +1,32 @@
 {
   "signal-only": {
-    "gzip": 4992
+    "gzip": 4800
   },
   "core": {
-    "gzip": 5056
+    "gzip": 4864
   },
   "core+hooks": {
-    "gzip": 8832
+    "gzip": 7872
   },
   "deep": {
-    "gzip": 10880
+    "gzip": 10752
   },
   "deep-collections": {
-    "gzip": 14400
+    "gzip": 14336
   },
   "index-full": {
-    "gzip": 17408
+    "gzip": 17152
   },
   "jsx-runtime": {
-    "gzip": 13056
+    "gzip": 12800
   },
   "full-jsx-child": {
-    "gzip": 12928
+    "gzip": 12736
   },
   "lite-jsx-child": {
-    "gzip": 5952
+    "gzip": 5760
   },
   "utils": {
-    "gzip": 8768
+    "gzip": 7808
   }
 }

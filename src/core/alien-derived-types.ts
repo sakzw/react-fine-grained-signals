@@ -83,7 +83,6 @@ export interface AlienDerivedRenderAdapter {
   isSpeculative(): boolean;
   markSpeculativeDeepRead(): void;
   subscribeReadables(readables: readonly object[], notify: () => void): () => void;
-  captureRenderSnapshot(readable: object): { value: unknown; dependencies: Map<object, number>; attempt: RenderAttempt };
   getExecutionOwner(): unknown;
 }
 
@@ -99,7 +98,6 @@ export interface RuntimeWritable<T = unknown> extends RuntimeReadable<T> {
 export interface AlienDerivedGraphRuntime {
   readonly runtimeToken: object;
   readonly graphOwner: GraphExecutionOwnerV2;
-  readonly SIGNAL_BRAND: symbol;
   readonly signal: <T>(initialValue: T) => RuntimeWritable<T>;
   readonly computed: <T>(getter: () => T) => RuntimeReadable<T>;
   readonly effect: (callback: () => unknown) => () => void;
@@ -125,11 +123,7 @@ export interface AlienDerivedGraphRuntime {
   readonly onDeepSignalUnwatched: (readable: object, callback: () => void) => void;
   readonly markDeepSignalWatched: (readable: object) => void;
   readonly hasDeepSignalSubscribers: (readable: object) => boolean;
-  readonly getRenderVersion: (readable: object) => number;
-  readonly subscribeReadables: (readables: readonly RuntimeReadable[], notify: () => void) => () => void;
-  readonly isSignal: (value: unknown) => boolean;
   configureRenderAdapter(adapter: RenderAdapterForCore): void;
-  withRenderAttempt<T>(attempt: RenderAttempt | undefined, callback: () => T): T;
   pushRenderAttempt(attempt: RenderAttempt | undefined): () => void;
   getActiveRenderAttempt(): RenderAttempt | undefined;
 }

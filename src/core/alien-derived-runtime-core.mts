@@ -8,7 +8,7 @@ import type { Link, ReactiveFlags, ReactiveNode } from "alien-signals/system";
 import { UNTRACKED_OWNER, executionContext, isGraphExecutionOwner, isRenderExecutionOwner, multipleCopiesError, withSynchronousExecutionOwner } from "./execution-owner.js";
 import type { ExecutionContextOwnerV2, ExecutionOwnerV2, GraphExecutionOwnerV2 } from "./execution-owner.js";
 import { activeRenderCollector, trackRenderDependency } from "./render-tracking.js";
-import { SIGNAL_BRAND, SIGNAL_BRAND_MIN_VERSION, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
+import { SIGNAL_BRAND, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
 import type { AlienDerivedGraphRuntime, RenderAdapterForCore, RenderAttempt, RuntimeNode, RuntimeSource, RuntimeComputed, RuntimeEffect, RuntimeReadable, RuntimeWritable, SpeculativeComputedEntry } from "./alien-derived-types.js";
 
 // These mirror `ReactiveFlags` in alien-signals/system 3.2.1 bit for bit; the
@@ -156,12 +156,7 @@ function isForeignOwner(owner: ExecutionContextOwnerV2 | undefined): owner is Ex
   return (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken;
 }
 
-const graphOwner: GraphExecutionOwnerV2 = {
-  version: 2,
-  kind: "graph",
-  runtimeToken,
-  add() { throw multipleCopiesError(); },
-};
+const graphOwner: GraphExecutionOwnerV2 = { version: 2, kind: "graph", runtimeToken };
 // User callbacks (computed getters, effect bodies) are called as `() => T`:
 // no arguments and no `this`, as in v0.1.1.
 function withGraphOwner<T>(callback: () => T): T {
@@ -180,12 +175,6 @@ function withGraphOwner<T>(callback: () => T): T {
 
 function configureRenderAdapter(adapter: RenderAdapterForCore): void {
   renderAdapter = adapter;
-}
-
-function withRenderAttempt<T>(attempt: RenderAttempt | undefined, callback: () => T): T {
-  const restore = pushRenderAttempt(attempt);
-  try { return callback(); }
-  finally { restore(); }
 }
 
 function pushRenderAttempt(attempt: RenderAttempt | undefined): () => void {
@@ -555,16 +544,17 @@ function inlineWrite(node: RuntimeSource, value: unknown): void {
   }
 }
 
-function inlineDeepSignalWrite(node: RuntimeSource, value: unknown): void {
-  // DeepSignal version sources use this specialized entry point so liveness
-  // bookkeeping stays exact without classifying every ordinary source write.
-  deepWatchedNodes.delete(node);
-  inlineWrite(node, value);
-}
-
 class HelperBrandSignal<T = unknown> {
   #node: RuntimeSource;
-  constructor(node: RuntimeSource, branded = true) { this.#node = node; if (branded) registerHelperBrand(this); registerReadable(this, node); }
+  // A deep-signal source is unbranded, and every write first clears its
+  // watched flag so liveness bookkeeping stays exact (even for an equal write).
+  readonly #deep: boolean;
+  constructor(node: RuntimeSource, branded = true, deep = false) {
+    this.#node = node;
+    this.#deep = deep;
+    if (branded) registerHelperBrand(this);
+    registerReadable(this, node);
+  }
   get value(): T {
     const node = this.#node;
     const currentOwner = executionContext.owner;
@@ -589,42 +579,13 @@ class HelperBrandSignal<T = unknown> {
     if (isForeignOwner(currentOwner)) throw multipleCopiesError();
     return readSource(node) as T;
   }
-  set value(value: T) { inlineWrite(this.#node, value); }
+  set value(value: T) {
+    if (this.#deep) deepWatchedNodes.delete(this.#node);
+    inlineWrite(this.#node, value);
+  }
   peek(): T { return this.#node.pendingValue as T; }
 }
 
-/** Internal DeepSignal root and per-property version sources have a distinct
- * write entry point because their liveness markers must be cleared before any
- * write, including an Object.is-equal write. Ordinary branded signals never
- * pay that bookkeeping cost. */
-class DeepSignalRuntimeSource<T = unknown> {
-  #node: RuntimeSource;
-  constructor(node: RuntimeSource) { this.#node = node; registerReadable(this, node); }
-  get value(): T {
-    const node = this.#node;
-    const currentOwner = executionContext.owner;
-    if (currentOwner === undefined) {
-      const value = readSource(node);
-      const collector = activeRenderCollector;
-      if (collector !== undefined) {
-        trackRenderDependency(getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency);
-      }
-      return value as T;
-    }
-    // Reads inside this copy's own effects and computeds: no render attempt is
-    // installed (`withGraphOwner` clears it), nothing is untracked or foreign.
-    if (currentOwner === graphOwner) return readSource(node) as T;
-    const attempt = activeRenderAttempt;
-    if (attempt !== undefined && isRenderExecutionOwner(currentOwner) && currentOwner.runtimeToken === runtimeToken && renderAdapter !== undefined) {
-      return renderAdapter.readSource(this, node, attempt) as T;
-    }
-    if (currentOwner === UNTRACKED_OWNER) return readSourceUntracked(node) as T;
-    if (isForeignOwner(currentOwner)) throw multipleCopiesError();
-    return readSource(node) as T;
-  }
-  set value(value: T) { inlineDeepSignalWrite(this.#node, value); }
-  peek(): T { return this.#node.pendingValue as T; }
-}
 function createBrandedSignal<T>(makeReadable: new (node: RuntimeSource) => RuntimeWritable<T>, initialValue: T): RuntimeWritable<T> {
   const node = makeNode("source", Mutable);
   node.currentValue = initialValue;
@@ -686,25 +647,11 @@ function createBrandedComputed<T>(getter: () => T, setter?: (value: T) => void):
 }
 const computedClassBrandHelper = <T,>(getter: () => T, setter?: (value: T) => void): RuntimeReadable<T> => createBrandedComputed(getter, setter);
 
-function hasBrandAndPeek(value: unknown): value is { peek(): unknown } & object {
-  if (typeof value !== "object" || value === null) return false;
-  const version = Reflect.get(value, SIGNAL_BRAND);
-  return typeof version === "number" && version >= SIGNAL_BRAND_MIN_VERSION && typeof Reflect.get(value, "peek") === "function";
-}
-const isSignalBrandHelper = hasBrandAndPeek;
 function createDeepSignal<T>(initialValue: T): RuntimeWritable<T> {
   const node = makeNode("source", Mutable);
   node.currentValue = initialValue;
   node.pendingValue = initialValue;
-  const readable = new DeepSignalRuntimeSource<T>(node as RuntimeSource);
-  deepSignalNodes.add(node);
-  return readable;
-}
-function createDeepSignalVersion<T>(initialValue: T): RuntimeWritable<T> {
-  const node = makeNode("source", Mutable);
-  node.currentValue = initialValue;
-  node.pendingValue = initialValue;
-  const readable = new DeepSignalRuntimeSource<T>(node as RuntimeSource);
+  const readable = new HelperBrandSignal<T>(node as RuntimeSource, false, true);
   deepSignalNodes.add(node);
   return readable;
 }
@@ -722,28 +669,14 @@ function hasDeepSignalSubscribers(readable: object): boolean {
       deepWatchedNodes.has(node) || (deepSignalNodes.has(node) && hasSubscribers(readable))
     );
   }
-function getRenderVersion(readable: object): number {
-    return getReadableRevision(readable);
-  }
-function subscribeReadables(readables: readonly RuntimeReadable[], notify: () => void): () => void {
-    let initial = true;
-    return detachedEffect(() => {
-      for (const readable of readables) {
-        try { readable.value; } catch { /* Keep errored computed boundaries observed. */ }
-      }
-      if (initial) initial = false;
-      else notify();
-    });
-  }
 
   return {
-    runtimeToken, graphOwner, configureRenderAdapter, withRenderAttempt, pushRenderAttempt,
+    runtimeToken, graphOwner, configureRenderAdapter, pushRenderAttempt,
     getActiveRenderAttempt, getNodeForReadable, getReadableRevision, isComputedClean,
     promoteComputed, evaluateSpeculatively, adopt, hasSubscribers, hasActiveSubscriber, getBatchDepth,
     signal: signalClassBrandHelper, computed: computedClassBrandHelper,
-    effect, detachedEffect, batch, untracked, SIGNAL_BRAND, isSignal: isSignalBrandHelper,
-    createDeepSignal, createDeepSignalVersion, onDeepSignalUnwatched,
+    effect, detachedEffect, batch, untracked,
+    createDeepSignal, createDeepSignalVersion: createDeepSignal, onDeepSignalUnwatched,
     markDeepSignalWatched, hasDeepSignalSubscribers,
-    getRenderVersion, subscribeReadables,
   };
 }
