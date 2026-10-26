@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { batch, deepSignal, effect, isSignal, signal } from "../src/index.js";
+import { batch, deepCollectionSignal, deepSignal, effect, isSignal, signal } from "../src/index.js";
 import { inspectDeepSignalMetadata } from "../src/core/deep-signal.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
 
@@ -321,41 +321,6 @@ describe("deepSignal", () => {
     expect(runs).toBe(1);
   });
 
-  it("normalizes deep proxies used as collection keys, values, and members", () => {
-    const state = deepSignal({
-      source: { count: 1 },
-      map: new Map<string | object, unknown>(),
-      set: new Set<unknown>(),
-      carrier: undefined as { collection: Map<unknown, unknown> } | undefined,
-    });
-    const source = state.value.source;
-    const mapWithProxyKey = new Map([[source, "value"]]);
-    const mapWithProxyValue = new Map([["source", source]]);
-    const setWithProxy = new Set([source]);
-    const nestedCarrier = { collection: new Map([["source", source]]) };
-
-    state.value.map = mapWithProxyKey;
-    expect(state.value.map.get(source)).toBe("value");
-    expect(state.value.map.get(state.peek().source)).toBe("value");
-
-    state.value.map = mapWithProxyValue;
-    expect(state.value.map.get("source")).toBe(source);
-    expect(state.peek().map.get("source")).toBe(state.peek().source);
-
-    state.value.set = setWithProxy;
-    expect(state.value.set.has(source)).toBe(true);
-    expect(state.value.set.has(state.peek().source)).toBe(true);
-
-    state.value.carrier = nestedCarrier;
-    expect(state.value.carrier?.collection.get("source")).toBe(source);
-    expect(state.peek().carrier?.collection.get("source")).toBe(state.peek().source);
-
-    const reassigned = deepSignal({ map: mapWithProxyValue });
-    expect(reassigned.value.map.get("source")).toBe(source);
-    expect(() => structuredClone(state.peek())).not.toThrow();
-    expect(() => structuredClone(state.peek())).not.toThrow();
-  });
-
   it("rejects deep proxies in every opaque value without changing state", () => {
     class Box {
       ref: unknown;
@@ -393,88 +358,6 @@ describe("deepSignal", () => {
     expect(state.peek().callback).toBeUndefined();
     expect(state.peek().carrier).toBeUndefined();
     expect(() => structuredClone(state.peek())).not.toThrow();
-  });
-
-  it("exposes Map and Set values through stable reactive proxies", () => {
-    const state = deepSignal({
-      source: { count: 1 },
-      map: new Map<string, number>([["first", 1]]),
-      set: new Set(["first"]),
-    });
-    const map = state.value.map;
-    const set = state.value.set;
-
-    expect(map).toBe(state.value.map);
-    expect(set).toBe(state.value.set);
-    expect(map).not.toBe(state.peek().map);
-    expect(set).not.toBe(state.peek().set);
-    expect(map.size).toBe(1);
-    expect(map.get("first")).toBe(1);
-    expect([...map.keys()]).toEqual(["first"]);
-    expect([...map.values()]).toEqual([1]);
-    expect([...map.entries()]).toEqual([["first", 1]]);
-    expect(new Map(map)).toEqual(new Map([["first", 1]]));
-    let mapThirdArgument: ReadonlyMap<string, number> | undefined;
-    map.forEach((_value, _key, collection) => {
-      mapThirdArgument = collection;
-    });
-    expect(mapThirdArgument).toBe(map);
-
-    expect(set.size).toBe(1);
-    expect(set.has("first")).toBe(true);
-    expect([...set.keys()]).toEqual(["first"]);
-    expect([...set.values()]).toEqual(["first"]);
-    expect([...set.entries()]).toEqual([["first", "first"]]);
-    expect(new Set(set)).toEqual(new Set(["first"]));
-    let setThirdArgument: ReadonlySet<string> | undefined;
-    set.forEach((_value, _key, collection) => {
-      setThirdArgument = collection;
-    });
-    expect(setThirdArgument).toBe(set);
-
-    type SetOperations<T> = Set<T> & {
-      union(other: ReadonlySet<T>): Set<T>;
-      intersection(other: ReadonlySet<T>): Set<T>;
-      difference(other: ReadonlySet<T>): Set<T>;
-      symmetricDifference(other: ReadonlySet<T>): Set<T>;
-      isSubsetOf(other: ReadonlySet<T>): boolean;
-      isSupersetOf(other: ReadonlySet<T>): boolean;
-      isDisjointFrom(other: ReadonlySet<T>): boolean;
-    };
-    const setOperations = set as SetOperations<string>;
-    const other = deepSignal({ set: new Set(["first", "second"]) }).value.set;
-    expect(setOperations.union(other)).toEqual(new Set(["first", "second"]));
-    expect(setOperations.intersection(other)).toEqual(new Set(["first"]));
-    expect(setOperations.difference(other)).toEqual(new Set());
-    expect(setOperations.symmetricDifference(other)).toEqual(new Set(["second"]));
-    expect(setOperations.isSubsetOf(other)).toBe(true);
-    expect(setOperations.isSupersetOf(other)).toBe(false);
-    expect(setOperations.isDisjointFrom(other)).toBe(false);
-
-    expect(state.peek().map).toEqual(new Map([["first", 1]]));
-    expect(state.peek().set).toEqual(new Set(["first"]));
-    expect(() => structuredClone(state.peek())).not.toThrow();
-
-    // Collection methods keep their native return values while mutations are
-    // tracked and update the raw graph behind `.peek()`.
-    expect(map.set("source", 2)).toBe(map);
-    expect(map.delete("first")).toBe(true);
-    expect(map.get("source")).toBe(2);
-    expect(map.clear()).toBeUndefined();
-    expect(set.add("second")).toBe(set);
-    expect(set.delete("first")).toBe(true);
-    expect(set.has("second")).toBe(true);
-    expect(set.clear()).toBeUndefined();
-
-    state.value = {
-      source: { count: 2 },
-      map: map as unknown as Map<string, number>,
-      set: set as unknown as Set<string>,
-    };
-    expect(state.peek().map).not.toBe(map);
-    expect(state.peek().set).not.toBe(set);
-    expect(new Map(state.value.map)).toEqual(new Map());
-    expect(new Set(state.value.set)).toEqual(new Set());
   });
 
   it("does not rescan a direct deep proxy assignment", () => {
@@ -621,10 +504,108 @@ describe("deepSignal", () => {
     const state = deepSignal({ box, map, nestedSignal });
 
     expect(state.value.box).toBe(box);
-    expect(state.value.map).not.toBe(map);
-    expect(new Map(state.value.map)).toEqual(map);
+    expect(state.value.map).toBe(map);
     expect(state.peek().map).toBe(map);
     expect(state.value.nestedSignal).toBe(nestedSignal);
+  });
+
+  describe("Map, Set, WeakMap and WeakSet without collection support", () => {
+    it("keeps nested collections as untracked values with their own identity", () => {
+      const map = new Map([["a", 1]]);
+      const set = new Set([1]);
+      const weakMap = new WeakMap<object, number>();
+      const weakSet = new WeakSet<object>();
+      const state = deepSignal({ map, set, weakMap, weakSet, list: [map] });
+
+      expect(state.value.map).toBe(map);
+      expect(state.value.set).toBe(set);
+      expect(state.value.weakMap).toBe(weakMap);
+      expect(state.value.weakSet).toBe(weakSet);
+      expect(state.value.list[0]).toBe(map);
+    });
+
+    it("does not notify when a nested collection's contents change", () => {
+      const state = deepSignal({ tags: new Set(["a"]), counts: new Map([["a", 1]]) });
+      const seen: Array<[number, number]> = [];
+      const stop = effect(() => { seen.push([state.value.tags.size, state.value.counts.size]); });
+
+      state.value.tags.add("b");
+      state.value.counts.set("b", 2);
+      expect(seen).toEqual([[1, 1]]);
+      expect(state.value.tags.has("b")).toBe(true);
+      stop();
+    });
+
+    it("notifies when a nested collection is replaced", () => {
+      const state = deepSignal({ tags: new Set(["a"]) });
+      const seen: number[] = [];
+      const stop = effect(() => { seen.push(state.value.tags.size); });
+
+      state.value.tags = new Set(["a", "b"]);
+      expect(seen).toEqual([1, 2]);
+      stop();
+    });
+
+    it.each([
+      ["Map", () => new Map()],
+      ["Set", () => new Set()],
+      ["WeakMap", () => new WeakMap()],
+      ["WeakSet", () => new WeakSet()],
+    ])("rejects a %s root and points to deepCollectionSignal", (_name, create) => {
+      expect(() => deepSignal(create() as object)).toThrow(/use deepCollectionSignal\(\) for a collection root/);
+      const state = deepSignal({ value: 1 }) as unknown as { value: unknown };
+      expect(() => { state.value = create(); }).toThrow(/use deepCollectionSignal\(\)/);
+    });
+
+    it("rejects a deep proxy hidden inside a nested collection", () => {
+      const inner = deepSignal({ nested: { value: 1 } });
+      expect(() => deepSignal({ map: new Map([["k", inner.value.nested]]) })).toThrow(/inside an opaque value/);
+      expect(() => deepSignal({ set: new Set([inner.value.nested]) })).toThrow(/inside an opaque value/);
+    });
+  });
+
+  describe("sharing state with deepCollectionSignal", () => {
+    it("throws when one plain object is wrapped by both kinds of signal", () => {
+      const shared = { count: 1 };
+      const plain = deepSignal(shared);
+      expect(plain.value.count).toBe(1);
+      expect(() => deepCollectionSignal(shared)).toThrow(/cannot share the same plain object or array/);
+    });
+
+    it("throws when a proxy of one kind is assigned into the other", () => {
+      const collections = deepCollectionSignal({ child: { count: 1 } });
+      const plain = deepSignal({ slot: undefined as unknown });
+      expect(() => { plain.value.slot = collections.value.child; }).toThrow(/cannot share the same plain object or array/);
+    });
+
+    it("shares a raw Map by identity: untracked in deepSignal, reactive in deepCollectionSignal", () => {
+      const map = new Map([["a", 1]]);
+      const plain = deepSignal({ map });
+      const collections = deepCollectionSignal({ map });
+      expect(plain.value.map).toBe(map);
+      expect(collections.value.map).not.toBe(map);
+      expect(collections.value.map.get("a")).toBe(1);
+
+      const seen: Array<number | undefined> = [];
+      const stop = effect(() => { seen.push(collections.value.map.get("a")); });
+      collections.value.map.set("a", 2);
+      expect(seen).toEqual([1, 2]);
+      // The same raw Map is visible through the plain signal, with no notification of its own.
+      expect(plain.value.map.get("a")).toBe(2);
+      stop();
+    });
+
+    it("keeps separate signals of the same kind independent", () => {
+      const a = deepCollectionSignal({ items: new Set([1]) });
+      const b = deepCollectionSignal({ items: new Set([1]) });
+      const seen: number[] = [];
+      const stop = effect(() => { seen.push(a.value.items.size); });
+      b.value.items.add(2);
+      expect(seen).toEqual([1]);
+      a.value.items.add(2);
+      expect(seen).toEqual([1, 2]);
+      stop();
+    });
   });
 
   it("does not let deep state answer the signal identity probe", () => {
@@ -918,44 +899,6 @@ describe("deepSignal", () => {
 
     expect(metadataOf(state.value).properties).toEqual([]);
     expect(render.settleRenderAttempt(attempt)).toBe(false);
-  });
-
-  it("reports a frozen collection-valued property with the library's own error", () => {
-    // `wrap()` substitutes a proxy for a Map/Set exactly as it
-    // substitutes a proxy for a plain object, and neither can be handed back
-    // through a non-configurable, non-writable slot without violating the
-    // proxy invariants. Gating the check on `isPlainObjectOrArray` let the
-    // Map/Set case fall through to a raw engine TypeError instead.
-    const withMap = Object.defineProperty({}, "collection", {
-      value: new Map([["a", 1]]),
-      writable: false,
-      configurable: false,
-      enumerable: true,
-    }) as { collection: Map<string, number> };
-    const mapState = deepSignal(withMap);
-    expect(() => mapState.value.collection).toThrow(
-      /non-configurable, non-writable object property/,
-    );
-
-    const withSet = Object.defineProperty({}, "collection", {
-      value: new Set([1]),
-      writable: false,
-      configurable: false,
-      enumerable: true,
-    }) as { collection: Set<number> };
-    const setState = deepSignal(withSet);
-    expect(() => setState.value.collection).toThrow(
-      /non-configurable, non-writable object property/,
-    );
-
-    // An opaque value needs no substitution, so it is still readable.
-    const withDate = Object.defineProperty({}, "at", {
-      value: new Date(0),
-      writable: false,
-      configurable: false,
-      enumerable: true,
-    }) as { at: Date };
-    expect(deepSignal(withDate).value.at.getTime()).toBe(0);
   });
 
   it("keeps a sparse carrier's identity across repeated assignment", () => {

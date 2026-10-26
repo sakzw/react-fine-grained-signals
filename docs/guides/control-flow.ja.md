@@ -131,7 +131,7 @@ interface IndexProps<T> {
 
 ## Map と Set の入力
 
-`deepSignal`は同一realmの`Map`、`Set`、`WeakMap`、`WeakSet`を既定で追跡し、ネストしたcollectionも対象です。`.value`経由で読み書きしてください。元のcollection参照や`.peek()`経由の変更は通知されません。Mapのkey読み取り、membership、size、iterationは、それぞれ独立したdependencyを使います。Weak collectionはネイティブで可能なkey操作だけを追跡します。
+`deepCollectionSignal`は同一realmの`Map`、`Set`、`WeakMap`、`WeakSet`を、ネストしたcollectionも含めて追跡します(`deepSignal`はそれらを追跡しない値として扱います)。`.value`経由で読み書きしてください。生のcollection参照や`.peek()`は通知を迂回します。
 
 `.value`から取得したcollectionの変更はリアクティブで、変更されたkeyやiteration dependencyを読んだconsumerへ通知されます。collectionをその場で更新できます。周囲のstate更新が分かりやすくなる場合はimmutable replacementも使えます。
 

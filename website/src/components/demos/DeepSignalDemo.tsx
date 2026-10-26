@@ -1,6 +1,6 @@
 'use client'
 
-import { useDeepSignal, useSignal } from 'react-fine-grained-signals'
+import { useDeepCollectionSignal, useSignal } from 'react-fine-grained-signals'
 import { button, field, muted, row } from './styles'
 
 interface Todo {
@@ -10,12 +10,12 @@ interface Todo {
 }
 
 export function DeepSignalDemo() {
-  const state = useDeepSignal(() => ({
+  const state = useDeepCollectionSignal(() => ({
     todos: [
       { id: 1, title: 'Read the guide', done: true },
       { id: 2, title: 'Try deepSignal', done: false },
     ] as Todo[],
-    // Standard collections are reactive too: here, how often each title was toggled.
+    // Standard collections are reactive with useDeepCollectionSignal: here, how often each title was toggled.
     toggles: new Map<number, number>(),
   }))
   const draft = useSignal('')

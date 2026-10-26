@@ -7,8 +7,7 @@ import { DeepSignalDemo } from '../components/demos/DeepSignalDemo'
 deepSignal<T extends object>(initialValue: T): DeepSignal<T>
 ```
 
-`deepSignal` tracks plain objects, arrays, and same-realm standard collections
-property by property. Changing one property re-renders only the readers of that
+`deepSignal` tracks plain objects and arrays property by property. Changing one property re-renders only the readers of that
 property.
 
 ```ts
@@ -34,9 +33,10 @@ state.value.items.push('second')
   read-only snapshot typed `DeepReadonly<T>`: writing through it is a compile
   error. Change state through `state.value`.
 - Assignment, deletion, and the standard array mutations are observable.
-- Nested plain objects, arrays, `Map`, `Set`, `WeakMap`, and `WeakSet` are
-  reactive. Class instances, functions, `Date`, promises, and existing signals
-  are opaque values.
+- Nested plain objects and arrays are reactive. Class instances, functions,
+  `Date`, promises, existing signals, and nested `Map`, `Set`, `WeakMap`, and
+  `WeakSet` values are opaque: the signal notifies only when the property
+  holding one is replaced. Use `deepCollectionSignal` to track their contents.
 - Accessor properties, frozen or sealed objects, and non-extensible objects are
   rejected instead of being made partly reactive.
 - A `deepSignal` cannot be a JSX signal child or bound prop; read it inside a
@@ -44,12 +44,19 @@ state.value.items.push('second')
 
 ## Collections
 
-Collections are reactive by default, including as the root:
+`deepCollectionSignal` also tracks `Map`, `Set`, `WeakMap`, and `WeakSet`,
+including as the root. It is a separate function so an app using only plain
+objects and arrays does not load the collection support (about 3 kB gzip
+smaller):
 
 ```ts
-const state = deepSignal(new Map<string, { count: number }>())
+const state = deepCollectionSignal(new Map<string, { count: number }>())
 state.value.set('item', { count: 1 })
 ```
+
+A single plain object or array cannot be shared between a `deepSignal` and a
+`deepCollectionSignal`; that throws. In React, use `useDeepCollectionSignal`;
+`useDeepSignalValue` accepts both kinds.
 
 - `Map` `get` and `has` track per key; `size`, key iteration, and entry
   iteration are tracked separately.
@@ -59,8 +66,9 @@ state.value.set('item', { count: 1 })
   proxies.
 
 :::warning
-v0.3 changed collections: v0.2.1 returned read-only views. See the
-[migration guide](https://github.com/sakzw/react-fine-grained-signals/blob/main/docs/migration/v0.3.md#reactive-collections-in-deepsignal).
+v0.4 moved collection tracking from `deepSignal` to `deepCollectionSignal`. If
+you put a `Map` or `Set` in a `deepSignal` in v0.3, switch to
+`deepCollectionSignal`.
 :::
 
 The complete reference is

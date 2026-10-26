@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { deepSignal, effect } from "../src/index.js";
+import { deepCollectionSignal, effect } from "../src/index.js";
 
-describe("deepSignal reactive symbol keys", () => {
+describe("deepCollectionSignal reactive symbol keys", () => {
   const disposers: Array<() => void> = [];
 
   afterEach(() => {
@@ -10,8 +10,8 @@ describe("deepSignal reactive symbol keys", () => {
 
   it("tracks registered symbols through Map get/has and Set has across mutations", () => {
     const key = Symbol.for("react-fine-grained-signals.registered-map-key");
-    const map = deepSignal(new Map<symbol, number>());
-    const set = deepSignal(new Set<symbol>());
+    const map = deepCollectionSignal(new Map<symbol, number>());
+    const set = deepCollectionSignal(new Set<symbol>());
     const values: Array<number | undefined> = [];
     const mapPresence: boolean[] = [];
     const setPresence: boolean[] = [];
@@ -50,8 +50,8 @@ describe("deepSignal reactive symbol keys", () => {
     const symbols = [registered, local, wellKnown];
     const nativeWeakMap = new WeakMap<object, number>();
     const nativeWeakSet = new WeakSet<object>();
-    const reactiveWeakMap = deepSignal(new WeakMap<object, number>());
-    const reactiveWeakSet = deepSignal(new WeakSet<object>());
+    const reactiveWeakMap = deepCollectionSignal(new WeakMap<object, number>());
+    const reactiveWeakSet = deepCollectionSignal(new WeakSet<object>());
 
     const keyList = [objectKey, ...symbols] as unknown as object[];
     for (const key of keyList) {
@@ -96,9 +96,9 @@ describe("deepSignal reactive symbol keys", () => {
     revocable.revoke();
     const keys = [opaque, revocable.proxy];
     const nativeMap = new WeakMap<object, number>();
-    const reactiveMap = deepSignal(new WeakMap<object, number>());
+    const reactiveMap = deepCollectionSignal(new WeakMap<object, number>());
     const nativeSet = new WeakSet<object>();
-    const reactiveSet = deepSignal(new WeakSet<object>());
+    const reactiveSet = deepCollectionSignal(new WeakSet<object>());
 
     for (const key of keys) {
       expect(capture(() => reactiveMap.value.get(key))).toEqual(capture(() => nativeMap.get(key)));
@@ -118,7 +118,7 @@ describe("deepSignal reactive symbol keys", () => {
   it("preserves reactive reads for local and well-known symbols", () => {
     const local = Symbol("local-map-key");
     const wellKnown = Symbol.iterator;
-    const map = deepSignal(new Map<symbol, number>([[local, 1], [wellKnown, 3]]));
+    const map = deepCollectionSignal(new Map<symbol, number>([[local, 1], [wellKnown, 3]]));
     const localValues: Array<number | undefined> = [];
     const wellKnownValues: Array<number | undefined> = [];
     disposers.push(effect(() => { localValues.push(map.value.get(local)); }));
@@ -137,8 +137,8 @@ describe("deepSignal reactive symbol keys", () => {
     } catch {
       // Older runtimes still support these keys in strong Map/Set metadata.
     }
-    const weakMap = deepSignal(new WeakMap<object, number>());
-    const weakSet = deepSignal(new WeakSet<object>());
+    const weakMap = deepCollectionSignal(new WeakMap<object, number>());
+    const weakSet = deepCollectionSignal(new WeakSet<object>());
     const weakValues: Array<number | undefined> = [];
     const weakPresence: boolean[] = [];
     if (supportsWeakSymbolKeys) {
@@ -153,7 +153,7 @@ describe("deepSignal reactive symbol keys", () => {
 
   it("keeps object-key subscriptions disposable and reusable", () => {
     const key = {};
-    const map = deepSignal(new Map<object, number>([[key, 1]]));
+    const map = deepCollectionSignal(new Map<object, number>([[key, 1]]));
     const firstValues: Array<number | undefined> = [];
     const disposeFirst = effect(() => { firstValues.push(map.value.get(key)); });
     disposeFirst();

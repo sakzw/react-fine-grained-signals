@@ -123,6 +123,14 @@ useSignalValue<T>(source: ReadonlySignal<T>): T // deepSignalはコンパイル�
 
 - 追うのはsignalの値の置き換えだけです。ネストした変更では再レンダーされないため、`deepSignal` は型でエラーになります。deepな状態から値を選ぶには [`useDeepSignalValue`](#usedeepsignalvalue) を使ってください。
 
+## useDeepCollectionSignal
+
+```ts
+useDeepCollectionSignal<T extends object>(initialValue: T | (() => T)): DeepCollectionSignal<T>
+```
+
+`Map`、`Set`、`WeakMap`、`WeakSet` も追跡する `useDeepSignal` です([`deepCollectionSignal`](./core-primitives.ja.md#deepcollectionsignal)を参照)。identityとfactoryのルールは `useDeepSignal` と同じです。`useDeepSignal` はcollectionを追跡しないため、`Map` や `Set` をルートにすると拒否されます。
+
 ## useDeepSignalValue
 
 ```ts

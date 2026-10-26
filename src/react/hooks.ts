@@ -5,15 +5,16 @@ import {
   useRef,
   useSyncExternalStore,
 } from "react";
-import { computed, deepSignal, signal, untracked } from "../core/index.js";
+import { computed, deepCollectionSignal, deepSignal, signal, untracked } from "../core/index.js";
 import { detachedEffect } from "../core/base.js";
 import type {
+  DeepCollectionSignal,
   DeepSignal,
   Signal,
   ReadonlySignal,
   WritableComputedOptions,
 } from "../core/index.js";
-import type { NotDeepSignal } from "../core/deep-signal.js";
+import type { NotDeepSignal, PlainRoot } from "../core/deep-signal.js";
 import { untrackedRender } from "../core/render-tracking.js";
 import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import type { DependencyList } from "react";
@@ -108,7 +109,7 @@ function createEffectBackedStoreSubscription(
  * render.
  */
 function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
-  source: DeepSignal<T>,
+  source: DeepSignal<T> | DeepCollectionSignal<T>,
   selector: (value: T) => S,
 ) {
   const evaluate = (): SelectorResult<S> => {
@@ -188,7 +189,7 @@ export function useSignal<T>(initialValue: T): Signal<T> {
  * it must remain pure because React Strict Mode may replay initial rendering.
  */
 export function useDeepSignal<T extends object>(
-  initialValue: T | (() => T),
+  initialValue: PlainRoot<T> | (() => PlainRoot<T>),
 ): DeepSignal<T> {
   const signalRef = useRef<DeepSignal<T> | undefined>(undefined);
 
@@ -202,7 +203,27 @@ export function useDeepSignal<T extends object>(
 }
 
 /**
- * Selects a property-level primitive snapshot from a deep signal.
+ * Creates a deep collection signal whose identity is stable for the component
+ * lifetime: a {@link useDeepSignal} that also tracks Map, Set, WeakMap and
+ * WeakSet values. The factory rules are the same.
+ */
+export function useDeepCollectionSignal<T extends object>(
+  initialValue: T | (() => T),
+): DeepCollectionSignal<T> {
+  const signalRef = useRef<DeepCollectionSignal<T> | undefined>(undefined);
+
+  if (signalRef.current === undefined) {
+    signalRef.current = deepCollectionSignal(
+      typeof initialValue === "function" ? initialValue() : initialValue,
+    );
+  }
+
+  return signalRef.current;
+}
+
+/**
+ * Selects a property-level primitive snapshot from a deep signal (from
+ * `deepSignal` or `deepCollectionSignal`).
  *
  * When `dependencies` is omitted, the initial selector closure is retained and
  * it must only depend on the deep signal. When non-empty, every non-signal
@@ -218,7 +239,7 @@ export function useDeepSignalValue<
   T extends object,
   S extends SignalSnapshot,
 >(
-  source: DeepSignal<T>,
+  source: DeepSignal<T> | DeepCollectionSignal<T>,
   selector: (value: T) => S,
   dependencies?: DependencyList,
 ): S {

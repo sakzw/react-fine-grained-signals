@@ -2122,8 +2122,8 @@ export function useFirst() {
 
   it("tracks for-of over reactive collections and Iterator helpers", async () => {
     const source = `
-import { deepSignal } from "react-fine-grained-signals";
-export const state = deepSignal({ map: new Map([["a", 1]]), set: new Set(["x"]) });
+import { deepCollectionSignal } from "react-fine-grained-signals";
+export const state = deepCollectionSignal({ map: new Map([["a", 1]]), set: new Set(["x"]) });
 export function App() {
   let out = "";
   for (const [key, value] of state.value.map) out += key + value;

@@ -133,7 +133,7 @@ Renders an array whose row identity is intentionally its position, so it takes n
 
 ## Map and Set inputs
 
-`deepSignal` tracks same-realm `Map`, `Set`, `WeakMap`, and `WeakSet` values by default, including nested collections. Read and mutate them through `.value`; raw collection references and `.peek()` bypass notifications. Map key reads, collection membership, size, and iteration use separate dependencies where the native collection exposes them. Weak collections support key operations only.
+`deepCollectionSignal` tracks same-realm `Map`, `Set`, `WeakMap`, and `WeakSet` values, including nested collections (`deepSignal` treats them as opaque values). Read and mutate them through `.value`; raw collection references and `.peek()` bypass notifications.
 
 Mutations through a collection obtained from `.value` are reactive and notify the consumers that read the affected key or iteration dependency. You can update the collection in place; immutable replacement remains an option when it makes the surrounding state update clearer.
 

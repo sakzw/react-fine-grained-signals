@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createDeepSignalFactory } from "../src/core/deep-signal-engine.js";
+import { createCollectionSupport } from "../src/core/deep-collections.js";
 import type { DeepSignalRuntimeAdapter, DeepSignalSource } from "../src/core/deep-signal-engine.js";
 
 const makeSource = <T>(initial: T): DeepSignalSource<T> => {
@@ -30,16 +31,19 @@ function makeHarness() {
     hasActiveSubscriber: () => true,
     getBatchDepth: () => 0,
   };
-  return { ...createDeepSignalFactory(adapter), active, checked, versions };
+  const factory = createDeepSignalFactory(adapter);
+  const deepCollectionSignal = <T extends object>(initial: T) =>
+    factory.deepCollectionSignal(initial, createCollectionSupport);
+  return { ...factory, deepCollectionSignal, active, checked, versions };
 }
 
 describe("reactive collection metadata sweeps", () => {
   it("skips empty primitive metadata sweeps for unrelated collection mutations", () => {
     const harness = makeHarness();
-    const map = harness.deepSignal(new Map<string, number>()).value;
-    const set = harness.deepSignal(new Set<string>()).value;
-    const weakMap = harness.deepSignal(new WeakMap<object, number>()).value;
-    const weakSet = harness.deepSignal(new WeakSet<object>()).value;
+    const map = harness.deepCollectionSignal(new Map<string, number>()).value;
+    const set = harness.deepCollectionSignal(new Set<string>()).value;
+    const weakMap = harness.deepCollectionSignal(new WeakMap<object, number>()).value;
+    const weakSet = harness.deepCollectionSignal(new WeakSet<object>()).value;
     const key = {};
     const nativeEntries = Map.prototype.entries;
     let emptyEntriesCalls = 0;
@@ -60,7 +64,7 @@ describe("reactive collection metadata sweeps", () => {
 
   it("cleans up large registered-symbol subscriptions after unsubscribe", async () => {
     const harness = makeHarness();
-    const collection = harness.deepSignal(new Map<symbol, number>()).value;
+    const collection = harness.deepCollectionSignal(new Map<symbol, number>()).value;
     const keys = Array.from({ length: 300 }, (_, index) => Symbol.for(`cleanup-symbol-${index}`));
     for (const key of keys) collection.get(key);
     expect(harness.versions).toHaveLength(keys.length);
@@ -91,7 +95,7 @@ describe("reactive collection metadata sweeps", () => {
 
   it("bounds synchronous work and rechecks changed candidates before eventual cleanup", async () => {
     const harness = makeHarness();
-    const collection = harness.deepSignal(new Map<string, number>()).value;
+    const collection = harness.deepCollectionSignal(new Map<string, number>()).value;
     for (let index = 0; index < 300; index += 1) collection.get(`key-${index}`);
     const retainedVersion = harness.versions[0]!;
     harness.active.clear();

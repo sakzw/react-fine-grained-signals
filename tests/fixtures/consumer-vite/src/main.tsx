@@ -1,4 +1,4 @@
-import { computed, deepSignal, signal } from "react-fine-grained-signals";
+import { computed, deepCollectionSignal, deepSignal, signal } from "react-fine-grained-signals";
 import { memo, useEffect, useState } from "react";
 import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
@@ -13,8 +13,8 @@ const tooltip = signal("spread");
 export const canaryState = {
   count: signal(1),
   profile: deepSignal({ user: { name: "Ada" } }),
-  labels: deepSignal(new Map([["ada", "Ada"]])),
-  features: deepSignal(new Set(["signals"])),
+  labels: deepCollectionSignal(new Map([["ada", "Ada"]])),
+  features: deepCollectionSignal(new Set(["signals"])),
   title: signal("initial title"),
   active: signal(false),
   text: signal("ready"),

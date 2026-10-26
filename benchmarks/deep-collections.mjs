@@ -1,6 +1,6 @@
 import os from "node:os";
 import { appendFileSync } from "node:fs";
-import { deepSignal } from "../dist/index.js";
+import { deepCollectionSignal } from "../dist/index.js";
 
 const iterations = Number.parseInt(process.env.BENCH_ITERATIONS ?? "10000", 10);
 const warmups = Number.parseInt(process.env.BENCH_WARMUPS ?? "2", 10);
@@ -9,7 +9,7 @@ if (![iterations, warmups, samples].every(Number.isSafeInteger) || iterations < 
   throw new Error("Invalid collection benchmark iteration counts");
 }
 const collectionValue = (value) => process.env.BENCH_COLLECTIONS_REACTIVE === "true"
-  ? deepSignal(value).value
+  ? deepCollectionSignal(value).value
   : value;
 
 const cases = [

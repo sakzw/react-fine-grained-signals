@@ -43,6 +43,16 @@ useDeepSignal<T extends object>(initialValue: T | (() => T)): DeepSignal<T>
 Keeps one [deep signal](/deep-signal). Pass a factory for an expensive initial
 value.
 
+## useDeepCollectionSignal
+
+```ts
+useDeepCollectionSignal<T extends object>(initialValue: T | (() => T)): DeepCollectionSignal<T>
+```
+
+`useDeepSignal` that also tracks `Map`, `Set`, `WeakMap`, and `WeakSet`; see
+[Deep Signal & Collections](/deep-signal). `useDeepSignal` rejects a collection
+root.
+
 ## useComputed
 
 ```ts

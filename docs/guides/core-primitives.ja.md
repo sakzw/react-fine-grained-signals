@@ -113,7 +113,7 @@ untracked<T>(fn: () => T): T
 deepSignal<T extends object>(initialValue: T): DeepSignal<T>
 ```
 
-プレーンオブジェクト、配列、同一realmの標準collectionにプロパティまたはkey単位の追跡を追加します。Proxyはアクセス時に遅延生成されてキャッシュされるため、別名参照や循環参照でも同一性が安定して維持されます。
+プレーンオブジェクトと配列にプロパティ単位の追跡を追加します。proxyは遅延生成されてキャッシュされるため、エイリアスや循環参照でも同一性が保たれます。`Map`、`Set`、`WeakMap`、`WeakSet`は `deepSignal` では追跡しません。それらには[`deepCollectionSignal`](#deepcollectionsignal)を使ってください。
 
 ```ts
 import { computed, deepSignal } from "react-fine-grained-signals";
@@ -130,20 +130,28 @@ state.value.items.push("second");
 
 - 監視できるのは、`state.value` を経由した代入、削除、標準的な配列操作だけです。
 - `state.peek()` は依存関係を収集しない、読み取り専用のスナップショットです。型は `DeepReadonly<T>` で、objectのpropertyは `readonly`、配列は `ReadonlyArray`、`Map` と `Set` は `ReadonlyMap` と `ReadonlySet` になり、`WeakMap` と `WeakSet` からは `set`、`add`、`delete` が取り除かれます。そのため `state.peek().count = 1` や `state.peek().items.push(x)` はコンパイルエラーです。変更は `state.value` 経由で行ってください。実行時の `peek()` は生のオブジェクトを返すため、型をすり抜けた書き込みは通知されずに失われます。したがって `DeepSignal<T>` は `Signal<T>` ではありません。
-- ルートにはデータプロパティを持つ変更可能なプレーンオブジェクト、配列、または同一realmの標準collectionが必要です。v1では、アクセサプロパティ、プロパティ記述子やプロトタイプの変更、`freeze` / `seal` を拒否します。拡張不可のオブジェクトも、部分的にリアクティブにせず拒否します。
-- ネストしたプレーンオブジェクト、配列、`Map`、`Set`、`WeakMap`、`WeakSet`はリアクティブです。クラスインスタンス、関数、`Date`、Promise、既存のsignalは不透明な値として扱います。
+- ルートにはデータプロパティを持つ変更可能なプレーンオブジェクトまたは配列を渡します。`Map`、`Set`、`WeakMap`、`WeakSet` をルートにすると型エラーになり、実行時は `deepCollectionSignal` を案内する `TypeError` を投げます。アクセサプロパティ、descriptor/prototypeの変更、`freeze`/`seal`は、一部だけリアクティブになる事態を避けるため、v1では拒否されます(拡張不可のオブジェクトも同様です)。
+- ネストしたプレーンオブジェクトと配列はリアクティブです。クラスのインスタンス、関数、`Date`、Promise、既存のsignal、そしてネストした `Map`、`Set`、`WeakMap`、`WeakSet` は追跡しない値として扱われ、identityを保ちます。signalが通知するのは、それを保持するプロパティに別の値が代入されたときだけです。**ネストしたcollectionの変更(`state.value.tags.add(x)`)は追跡されず、型の上では変更できてしまいます。** collectionの中身をリアクティブにしたい場合は `deepCollectionSignal` を使ってください。
 - 配列の変更メソッド(`push`、`splice`、`sort` など)は、呼び出し側を変更対象の配列に購読させません。通知されるのは、影響を受けたindex、`length`、keyを読んでいる側だけです。そのため、effect内での `push` によって、そのeffectが以後の `push` のたびに再実行されることはありません。
 - keyの列挙や自身のkeyの確認(`Object.keys`、`for...in`、`Object.hasOwn`、`hasOwnProperty.call`)は、値ではなくkeyの有無に依存します。`Object.getOwnPropertyDescriptor(...).value` を通じた値の読み取りは値の読み取りとして追跡されないため、プロパティそのものを読んでください。
 - `Object.prototype` から継承したkey(`constructor`、`toString` など)も、辞書的なオブジェクトではリアクティブなままです。読み取りや存在確認は、そのkeyが自身のプロパティになった時点で再実行されます。
 
-### Reactive collections
-
-collectionは既定でリアクティブです。collectionをroot値として渡すこともできます。
+## deepCollectionSignal
 
 ```ts
-const state = deepSignal(new Map<string, { count: number }>());
+deepCollectionSignal<T extends object>(initialValue: T): DeepCollectionSignal<T>
+```
+
+`deepSignal` が追跡するものに加えて、同一realmの `Map`、`Set`、`WeakMap`、`WeakSet` を、ルートでもネストでも追跡します。別の関数に分けてあるのは、プレーンオブジェクトと配列だけを使うアプリがcollection対応のコードを読み込まないようにするためです(gzipで約3 kB小さくなります)。
+
+```ts
+import { deepCollectionSignal } from "react-fine-grained-signals";
+
+const state = deepCollectionSignal(new Map<string, { count: number }>());
 state.value.set("item", { count: 1 });
 ```
+
+`DeepCollectionSignal<T>` と `DeepSignal<T>` は別の型です。どちらも `useDeepSignalValue` に渡せます。1つのプレーンオブジェクトや配列を2種類のsignalで共有することはできません。同じ生のオブジェクトを両方でラップしたり、片方のproxyをもう片方に代入したりすると `TypeError` を投げます。1つのオブジェクトは1種類のsignalにだけ入れてください。v0.3で `deepSignal` に `Map` や `Set` を入れていた場合は、`deepCollectionSignal` に変えてください。
 
 Mapの`get`と`has`はkeyごとに別々に追跡されます。`size`、key iteration、entry iterationも別の依存です。Setの`has`、`size`、iterationも別に追跡されます。Weak collectionはkey操作だけを追跡し、列挙、`size`、`clear`はできません。
 

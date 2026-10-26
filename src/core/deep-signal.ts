@@ -10,6 +10,8 @@ import {
 import type { Signal } from "./base.js";
 
 declare const deepSignalBrand: unique symbol;
+declare const plainDeepSignalKind: unique symbol;
+declare const collectionDeepSignalKind: unique symbol;
 
 type DeepReadonlyLeaf =
   | string
@@ -46,7 +48,10 @@ export type DeepReadonly<T> = T extends DeepReadonlyLeaf
           : { readonly [K in keyof T]: DeepReadonly<T[K]> };
 
 /**
- * A signal whose plain-object, array, and standard collection values are reactive.
+ * A signal whose plain-object and array values are reactive. Map, Set, WeakMap
+ * and WeakSet values inside are opaque, like a Date: the signal notifies only
+ * when one is replaced, not when its contents change. Use
+ * {@link DeepCollectionSignal} (from `deepCollectionSignal`) to track those.
  *
  * It is not a `Signal<T>`: `peek()` returns the raw object without tracking,
  * so writes through it would be lost, and its type is `DeepReadonly<T>`.
@@ -61,7 +66,35 @@ export interface DeepSignal<T extends object> extends Omit<Signal<T>, "peek"> {
    * because they would not re-render on nested mutations.
    */
   readonly [deepSignalBrand]: true;
+  /** Type-only marker that tells this apart from a {@link DeepCollectionSignal}. */
+  readonly [plainDeepSignalKind]: true;
 }
+
+/**
+ * A signal whose plain-object, array, and standard collection (Map, Set,
+ * WeakMap, WeakSet) values are reactive. Like {@link DeepSignal} it is not a
+ * `Signal<T>`: `peek()` is a read-only snapshot, and state changes go
+ * through `.value`.
+ */
+export interface DeepCollectionSignal<T extends object> extends Omit<Signal<T>, "peek"> {
+  /** The raw state, read without tracking. Read-only: write through `.value`. */
+  peek(): DeepReadonly<T>;
+  /** Type-only marker; see {@link DeepSignal}. */
+  readonly [deepSignalBrand]: true;
+  /** Type-only marker that tells this apart from a {@link DeepSignal}. */
+  readonly [collectionDeepSignalKind]: true;
+}
+
+/**
+ * `T` when it is a plain object or an array, and `never` for a Map, Set,
+ * WeakMap or WeakSet, which `deepSignal` does not accept as a root. Use
+ * `deepCollectionSignal` for those.
+ */
+export type PlainRoot<T> = T & (
+  T extends ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> | WeakMap<WeakKey, unknown> | WeakSet<WeakKey>
+    ? never
+    : unknown
+);
 
 /**
  * Package-internal: intersected with `ReadonlySignal<T>` where only root
@@ -72,7 +105,8 @@ export type NotDeepSignal = { readonly [deepSignalBrand]?: never };
 
 let productionDeepSignals: ReturnType<typeof createDeepSignalFactory> | undefined;
 
-function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
+/** Package-internal: the shared engine behind `deepSignal` and `deepCollectionSignal`. */
+export function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
   return productionDeepSignals ??= createDeepSignalFactory({
     createSignal<T>(initial: T) {
       return coreRuntime.createDeepSignal(initial);
@@ -124,10 +158,13 @@ export function inspectCollectionMetadata(value: object): ReturnType<
 }
 
 /**
- * Creates a signal that lazily tracks nested plain-object, array, and standard
- * collection reads. Mutations must go through `.value`; changes made through
- * the original raw value or `.peek()` are intentionally not observable.
+ * Creates a signal that lazily tracks nested plain-object and array reads.
+ * Map, Set, WeakMap and WeakSet values inside are opaque, like a Date: the
+ * signal notifies only when one is replaced. The root must be a plain object
+ * or an array; pass a collection to `deepCollectionSignal` instead.
+ * Mutations must go through `.value`; changes made through the original raw
+ * value or `.peek()` are intentionally not observable.
  */
-export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
+export function deepSignal<T extends object>(initialValue: PlainRoot<T>): DeepSignal<T> {
   return getProductionDeepSignals().deepSignal(initialValue) as unknown as DeepSignal<T>;
 }

@@ -1,5 +1,5 @@
 import os from "node:os";
-import { effect, deepSignal } from "../dist/index.js";
+import { effect, deepCollectionSignal } from "../dist/index.js";
 
 const quick = process.argv.includes("--quick");
 const trackedCounts = quick ? [10, 1_000, 10_000] : [0, 10, 1_000, 10_000];
@@ -32,7 +32,7 @@ function measureTracked(kind, subscribedKeys, name, operation, prepare = () => {
   const warmupIterations = Math.min(100, iterations);
   const measuredMutations = iterations * samples;
   const raw = kind === "Map" ? new Map([ ["churn", 0] ]) : new Set(["churn"]);
-  const collection = deepSignal(raw).value;
+  const collection = deepCollectionSignal(raw).value;
   prepare(collection, measuredMutations + warmupIterations + 100);
   const dispose = effect(() => {
     for (let index = 0; index < subscribedKeys; index += 1) {
@@ -78,7 +78,7 @@ function createObjectKey(index, shape) {
 
 function runWeakCase(kind, mode, shape, name, operation) {
   const raw = kind === "WeakMap" ? new WeakMap() : new WeakSet();
-  const collection = mode === "reactive" ? deepSignal(raw).value : raw;
+  const collection = mode === "reactive" ? deepCollectionSignal(raw).value : raw;
   const keys = Array.from({ length: weakIterations }, (_, index) => createObjectKey(index, shape));
   let sum = 0;
   for (let index = 0; index < weakIterations; index += 1) sum += operation(collection, keys, index);
@@ -93,7 +93,7 @@ function measureWeak(kind, mode, shape, name, operation) {
   }
   for (let sample = 0; sample < samples; sample += 1) {
     const raw = kind === "WeakMap" ? new WeakMap() : new WeakSet();
-    const collection = mode === "reactive" ? deepSignal(raw).value : raw;
+    const collection = mode === "reactive" ? deepCollectionSignal(raw).value : raw;
     const keys = Array.from({ length: weakIterations }, (_, index) => createObjectKey(index, shape));
     let sum = 0;
     const start = process.hrtime.bigint();
@@ -154,7 +154,7 @@ async function measureCleanup(kind, keyCount) {
     global.gc();
     const before = process.memoryUsage().heapUsed;
     const raw = kind === "Map" ? new Map() : new Set();
-    const collection = deepSignal(raw).value;
+    const collection = deepCollectionSignal(raw).value;
     const dispose = effect(() => {
       for (let index = 0; index < keyCount; index += 1) {
         const key = `cleanup-${index}`;

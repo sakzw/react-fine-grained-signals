@@ -113,7 +113,7 @@ Runs the callback without collecting reactive dependencies, and returns its resu
 deepSignal<T extends object>(initialValue: T): DeepSignal<T>
 ```
 
-Adds property-level tracking for plain objects, arrays, and same-realm standard collections. Proxies are created lazily and cached, so aliases and cycles retain stable identity.
+Adds property-level tracking for plain objects and arrays. Proxies are created lazily and cached, so aliases and cycles retain stable identity. `Map`, `Set`, `WeakMap`, and `WeakSet` are not tracked by `deepSignal`; use [`deepCollectionSignal`](#deepcollectionsignal) for those.
 
 ```ts
 import { computed, deepSignal } from "react-fine-grained-signals";
@@ -130,20 +130,28 @@ state.value.items.push("second");
 
 - Only assignment, deletion, and standard array mutations made through `state.value` are observable.
 - `state.peek()` is an untracked, read-only snapshot of the raw root. Its type is `DeepReadonly<T>`: object properties are `readonly`, arrays are `ReadonlyArray`, `Map` and `Set` are `ReadonlyMap` and `ReadonlySet`, and `WeakMap` and `WeakSet` lose `set`, `add` and `delete`, so `state.peek().count = 1` and `state.peek().items.push(x)` are compile errors. Change state through `state.value`. At runtime `peek()` still returns the raw object, so a write that escapes the types is lost without notifying. A `DeepSignal<T>` is therefore not a `Signal<T>`.
-- The root must be a mutable plain object, array, or same-realm standard collection. Accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1, as are non-extensible objects — they are rejected rather than made partially reactive.
-- Nested plain objects, arrays, `Map`, `Set`, `WeakMap`, and `WeakSet` values are reactive. Class instances, functions, `Date`, promises, and existing signals are treated as opaque values.
+- The root must be a mutable plain object or array. A `Map`, `Set`, `WeakMap`, or `WeakSet` root is a type error and throws a `TypeError` that points to `deepCollectionSignal`. Accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1, as are non-extensible objects — they are rejected rather than made partially reactive.
+- Nested plain objects and arrays are reactive. Class instances, functions, `Date`, promises, existing signals, and nested `Map`, `Set`, `WeakMap`, and `WeakSet` values are treated as opaque values: they keep their identity and the signal notifies only when the property holding one is assigned a different value. **Mutating a nested collection (`state.value.tags.add(x)`) is not tracked, and its type still allows it**; use `deepCollectionSignal` when the collection's contents must be reactive.
 - Array mutation methods (`push`, `splice`, `sort`, ...) do not subscribe the caller to the array they change; only the readers of the affected indices, `length`, and keys are notified. A `push` inside an effect therefore does not make that effect re-run on every later push.
 - Key enumeration and own-key checks (`Object.keys`, `for...in`, `Object.hasOwn`, `hasOwnProperty.call`) depend on which keys exist, not on their values. Reading a value through `Object.getOwnPropertyDescriptor(...).value` is not tracked as a value read; read the property itself.
 - Keys inherited from `Object.prototype` (`constructor`, `toString`, ...) stay reactive in dictionary-style objects: reading or checking one re-runs once it becomes an own property.
 
-### Reactive collections
-
-Collections are reactive by default, including collection roots:
+## deepCollectionSignal
 
 ```ts
-const state = deepSignal(new Map<string, { count: number }>());
+deepCollectionSignal<T extends object>(initialValue: T): DeepCollectionSignal<T>
+```
+
+Everything `deepSignal` tracks, plus same-realm `Map`, `Set`, `WeakMap`, and `WeakSet` values, both as the root and nested. It is a separate function so that an app using only plain objects and arrays does not load the collection support (about 3 kB gzip smaller).
+
+```ts
+import { deepCollectionSignal } from "react-fine-grained-signals";
+
+const state = deepCollectionSignal(new Map<string, { count: number }>());
 state.value.set("item", { count: 1 });
 ```
+
+`DeepCollectionSignal<T>` and `DeepSignal<T>` are different types. Both are accepted by `useDeepSignalValue`. A single plain object or array cannot be shared between the two kinds of signal: wrapping the same raw object with both, or assigning a proxy from one into the other, throws a `TypeError`. Keep each object in one kind of signal. If you used `deepSignal` with a `Map` or `Set` in v0.3, switch to `deepCollectionSignal`.
 
 Map `get` and `has` track independently per key; `size`, key iteration, and entry iteration have separate dependencies. Set `has`, `size`, and iteration are tracked separately. Weak collections track only their key operations and cannot be enumerated or observed through `size` or `clear`.
 

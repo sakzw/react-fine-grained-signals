@@ -125,6 +125,14 @@ Subscribes to a single signal and returns its current value. This is the low-lev
 
 - It follows replacement of the signal's value only. A `deepSignal` is rejected by its type, because nested mutations would never re-render; use [`useDeepSignalValue`](#usedeepsignalvalue) to select from deep state.
 
+## useDeepCollectionSignal
+
+```ts
+useDeepCollectionSignal<T extends object>(initialValue: T | (() => T)): DeepCollectionSignal<T>
+```
+
+`useDeepSignal` with `Map`, `Set`, `WeakMap`, and `WeakSet` tracking (see [`deepCollectionSignal`](./core-primitives.md#deepcollectionsignal)). The identity and factory rules are the same as `useDeepSignal`. `useDeepSignal` does not track collections, so a `Map` or `Set` root is rejected.
+
 ## useDeepSignalValue
 
 ```ts

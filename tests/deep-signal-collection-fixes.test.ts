@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deepSignal, effect } from "../src/index.js";
+import { deepCollectionSignal, effect } from "../src/index.js";
 
 type Composable = Set<unknown> & {
   union(other: unknown): Set<unknown>;
@@ -16,7 +16,7 @@ describe("reactive Set composition results (C3)", () => {
   afterEach(() => { while (disposers.length > 0) disposers.pop()?.(); });
 
   it("returns a plain Set whose receiver members are reactive proxies", () => {
-    const state = deepSignal({ tags: new Set([{ name: "a" }]) });
+    const state = deepCollectionSignal({ tags: new Set([{ name: "a" }]) });
     const seen: string[] = [];
     disposers.push(effect(() => { for (const tag of state.value.tags) seen.push(tag.name); }));
     const tags = state.value.tags as unknown as Composable;
@@ -33,7 +33,7 @@ describe("reactive Set composition results (C3)", () => {
   it.each(["union", "intersection", "difference", "symmetricDifference"] as const)("wraps receiver members for %s", (method) => {
     const a = { n: "a" };
     const b = { n: "b" };
-    const state = deepSignal({ left: new Set([a, b]), right: new Set([a]) });
+    const state = deepCollectionSignal({ left: new Set([a, b]), right: new Set([a]) });
     const left = state.value.left as unknown as Composable;
     for (const other of [state.value.right, new Set([state.value.right.values().next().value])]) {
       for (const member of left[method](other)) {
@@ -44,7 +44,7 @@ describe("reactive Set composition results (C3)", () => {
 
   it("keeps the identity the argument held for members that only came from it", () => {
     const outsider = { n: "outsider" };
-    const state = deepSignal({ left: new Set([{ n: "a" }]), right: new Set([{ n: "r" }]) });
+    const state = deepCollectionSignal({ left: new Set([{ n: "a" }]), right: new Set([{ n: "r" }]) });
     const left = state.value.left as unknown as Composable;
     // A plain Set of unrelated objects: they are not reactive state, so they stay raw.
     const result = left.union(new Set([outsider]));
@@ -170,7 +170,7 @@ describe("reactive Set set-like argument protocol matches native (C4)", () => {
         const nativeLog: Log = [];
         const reactiveLog: Log = [];
         const native = new Set([1, 2, 3]) as unknown as Composable;
-        const reactive = deepSignal(new Set([1, 2, 3])).value as unknown as Composable;
+        const reactive = deepCollectionSignal(new Set([1, 2, 3])).value as unknown as Composable;
         const expected = outcome(native, method, instrument(nativeLog, spec), nativeLog);
         const actual = outcome(reactive, method, instrument(reactiveLog, spec), reactiveLog);
         expect(actual).toBe(expected);
@@ -182,7 +182,7 @@ describe("reactive Set set-like argument protocol matches native (C4)", () => {
     for (const method of METHODS) {
       for (const other of [1, "x", undefined, null]) {
         const native = new Set([1]) as unknown as Composable;
-        const reactive = deepSignal(new Set([1])).value as unknown as Composable;
+        const reactive = deepCollectionSignal(new Set([1])).value as unknown as Composable;
         expect(() => reactive[method](other)).toThrow(TypeError);
         expect(() => native[method](other)).toThrow(TypeError);
       }
@@ -191,7 +191,7 @@ describe("reactive Set set-like argument protocol matches native (C4)", () => {
 
   it("reads done once per step and calls has once per member for user set-likes holding raw members", () => {
     const member = { n: 1 };
-    const state = deepSignal({ s: new Set([member]) });
+    const state = deepCollectionSignal({ s: new Set([member]) });
     const log: Log = [];
     const other = instrument(log, { items: [], present: [] });
     (state.value.s as unknown as Composable).isSubsetOf(other);
@@ -202,7 +202,7 @@ describe("reactive Set set-like argument protocol matches native (C4)", () => {
   });
 
   it("still matches proxies held by plain Sets and reactive collections", () => {
-    const state = deepSignal({ s: new Set([{ n: 1 }, { n: 2 }]), t: new Set([{ n: 3 }]) });
+    const state = deepCollectionSignal({ s: new Set([{ n: 1 }, { n: 2 }]), t: new Set([{ n: 3 }]) });
     const s = state.value.s as unknown as Composable;
     expect(s.isSupersetOf(new Set(state.value.s))).toBe(true);
     expect(s.isSubsetOf(new Set(state.value.s))).toBe(true);
@@ -213,7 +213,7 @@ describe("reactive Set set-like argument protocol matches native (C4)", () => {
 
 describe("collection carrier keys keep their first identity (C5)", () => {
   it("does not duplicate a Map key carrier after the caller mutates it", () => {
-    const state = deepSignal({ users: [{ id: 1 }], map: new Map<object, string>() });
+    const state = deepCollectionSignal({ users: [{ id: 1 }], map: new Map<object, string>() });
     const key: Record<string, unknown> = { user: state.value.users[0] };
     state.value.map.set(key, "first");
     key.note = "x";
@@ -226,7 +226,7 @@ describe("collection carrier keys keep their first identity (C5)", () => {
   });
 
   it("does not duplicate a Set member carrier after the caller mutates it", () => {
-    const state = deepSignal({ users: [{ id: 1 }], set: new Set<object>() });
+    const state = deepCollectionSignal({ users: [{ id: 1 }], set: new Set<object>() });
     const member: Record<string, unknown> = { user: state.value.users[0] };
     state.value.set.add(member);
     member.note = "x";
@@ -236,9 +236,9 @@ describe("collection carrier keys keep their first identity (C5)", () => {
   });
 
   it("covers carriers normalized while initializing the collection", () => {
-    const seed = deepSignal({ users: [{ id: 1 }] });
+    const seed = deepCollectionSignal({ users: [{ id: 1 }] });
     const key: Record<string, unknown> = { user: seed.value.users[0] };
-    const map = deepSignal(new Map<object, string>([[key, "first"]]));
+    const map = deepCollectionSignal(new Map<object, string>([[key, "first"]]));
     key.note = "x";
     map.value.set(key, "second");
     expect(map.value.size).toBe(1);
@@ -246,7 +246,7 @@ describe("collection carrier keys keep their first identity (C5)", () => {
   });
 
   it("stores a fresh clone when the carrier was deleted and is re-added", () => {
-    const state = deepSignal({ users: [{ id: 1 }], map: new Map<object, string>() });
+    const state = deepCollectionSignal({ users: [{ id: 1 }], map: new Map<object, string>() });
     const key: Record<string, unknown> = { user: state.value.users[0] };
     state.value.map.set(key, "first");
     state.value.map.delete(key);
@@ -259,7 +259,7 @@ describe("collection carrier keys keep their first identity (C5)", () => {
   });
 
   it("still rejects an invalid new key", () => {
-    const state = deepSignal({ map: new Map<object, number>() });
+    const state = deepCollectionSignal({ map: new Map<object, number>() });
     const bad = { get accessor() { return 1; } };
     expect(() => state.value.map.set(bad, 1)).toThrow(TypeError);
   });
@@ -267,7 +267,7 @@ describe("collection carrier keys keep their first identity (C5)", () => {
 
 describe("Map.set on an existing key stays O(1) in the key graph (perf)", () => {
   it("does not re-walk an existing key or an unchanged value", () => {
-    const state = deepSignal({ map: new Map<object, object>() });
+    const state = deepCollectionSignal({ map: new Map<object, object>() });
     let node: Record<string, unknown> = { leaf: true };
     for (let index = 0; index < 1500; index++) node = { index, child: node };
     const key = node;
@@ -299,7 +299,7 @@ describe("getOrInsertComputed argument order (C6)", () => {
 
   it("rejects an invalid WeakMap key before running the callback", () => {
     install(WeakMap.prototype);
-    const weak = deepSignal(new WeakMap<object, number>()).value as unknown as { getOrInsertComputed(key: unknown, callback: () => number): number };
+    const weak = deepCollectionSignal(new WeakMap<object, number>()).value as unknown as { getOrInsertComputed(key: unknown, callback: () => number): number };
     const callback = vi.fn(() => 1);
     for (const key of [1, "x", null, undefined, Symbol.for("registered")]) {
       expect(() => weak.getOrInsertComputed(key, callback)).toThrow(TypeError);
@@ -312,7 +312,7 @@ describe("getOrInsertComputed argument order (C6)", () => {
 
   it("canonicalizes -0 to +0 before the callback sees the key", () => {
     install(Map.prototype);
-    const map = deepSignal(new Map<number, string>()).value as unknown as Map<number, string> & { getOrInsertComputed(key: number, callback: (key: number) => string): string };
+    const map = deepCollectionSignal(new Map<number, string>()).value as unknown as Map<number, string> & { getOrInsertComputed(key: number, callback: (key: number) => string): string };
     const keys: number[] = [];
     expect(map.getOrInsertComputed(-0, (key) => { keys.push(key); return "zero"; })).toBe("zero");
     expect(Object.is(keys[0], 0)).toBe(true);

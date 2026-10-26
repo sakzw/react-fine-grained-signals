@@ -1,11 +1,13 @@
 export {
   batch,
   computed,
+  deepCollectionSignal,
   deepSignal,
   effect,
   isSignal,
   signal,
   untracked,
+  type DeepCollectionSignal,
   type DeepReadonly,
   type DeepSignal,
   type ReadonlySignal,
@@ -14,6 +16,7 @@ export {
 } from "./core/index.js";
 export {
   useComputed,
+  useDeepCollectionSignal,
   useDeepSignal,
   useDeepSignalValue,
   useSignal,

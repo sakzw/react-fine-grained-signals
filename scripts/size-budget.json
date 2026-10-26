@@ -9,7 +9,10 @@
     "gzip": 8832
   },
   "deep": {
-    "gzip": 13824
+    "gzip": 10880
+  },
+  "deep-collections": {
+    "gzip": 14400
   },
   "index-full": {
     "gzip": 17408

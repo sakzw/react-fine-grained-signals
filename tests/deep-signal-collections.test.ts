@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { runInNewContext } from "node:vm";
-import { batch, deepSignal, effect, signal, untracked } from "../src/index.js";
+import { batch, deepCollectionSignal, effect, signal, untracked } from "../src/index.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
 import { inspectCollectionMetadata } from "../src/core/deep-signal.js";
 
-describe("deepSignal reactive collections", () => {
+describe("deepCollectionSignal reactive collections", () => {
   const disposers: Array<() => void> = [];
 
   afterEach(() => {
@@ -13,8 +13,8 @@ describe("deepSignal reactive collections", () => {
 
   it("reacts to collection roots and nested collections by default", () => {
     const rawMap = new Map([["a", 1]]);
-    const nested = deepSignal({ map: rawMap });
-    const reactive = deepSignal(rawMap);
+    const nested = deepCollectionSignal({ map: rawMap });
+    const reactive = deepCollectionSignal(rawMap);
     expect(reactive.value).toBeInstanceOf(Map);
     expect(reactive.value).toBe(nested.value.map);
     const values: Array<number | undefined> = [];
@@ -25,7 +25,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("tracks Map keys, values, size and both iteration domains independently", () => {
-    const map = deepSignal(new Map([["a", 1], ["b", 2]]));
+    const map = deepCollectionSignal(new Map([["a", 1], ["b", 2]]));
     const values: Array<number | undefined> = [];
     const existence: boolean[] = [];
     const sizes: number[] = [];
@@ -65,7 +65,7 @@ describe("deepSignal reactive collections", () => {
   it("normalizes raw and proxy Map keys and Set members while wrapping iteration values", () => {
     const key = { id: 1 };
     const value = { count: 1 };
-    const state = deepSignal({ map: new Map([[key, value]]), set: new Set([key]) });
+    const state = deepCollectionSignal({ map: new Map([[key, value]]), set: new Set([key]) });
     const proxyKey = [...state.value.map.keys()][0]!;
     const proxySetMember = [...state.value.set][0]!;
 
@@ -87,12 +87,12 @@ describe("deepSignal reactive collections", () => {
   it("rejects collection subclasses and cross-realm collections in reactive mode", () => {
     class CustomMap extends Map<string, number> {}
     const crossRealmMap = runInNewContext("new Map([['a', 1]])") as Map<string, number>;
-    expect(() => deepSignal(new CustomMap())).toThrow(/same-realm/);
-    expect(() => deepSignal({ map: crossRealmMap })).toThrow(/same-realm/);
+    expect(() => deepCollectionSignal(new CustomMap())).toThrow(/same-realm/);
+    expect(() => deepCollectionSignal({ map: crossRealmMap })).toThrow(/same-realm/);
   });
 
   it("rejects prototype mutation on reactive collection proxies", () => {
-    const map = deepSignal(new Map([["a", 1]]));
+    const map = deepCollectionSignal(new Map([["a", 1]]));
 
     expect(() => Reflect.set(map.value, "extra", 1)).toThrow(/own properties/);
     expect(() => Reflect.deleteProperty(map.value, "a")).toThrow(/own properties/);
@@ -104,11 +104,11 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("rejects Map key collisions caused by normalizing this runtime's proxy", () => {
-    const source = deepSignal({ key: { id: 1 } });
+    const source = deepCollectionSignal({ key: { id: 1 } });
     const rawKey = source.peek().key;
     const proxyKey = source.value.key;
     const colliding = new Map< object, number>([[rawKey, 1], [proxyKey, 2]]);
-    expect(() => deepSignal(colliding)).toThrow(/collide after proxy normalization/);
+    expect(() => deepCollectionSignal(colliding)).toThrow(/collide after proxy normalization/);
   });
 
   it("wraps nested collection values and preserves aliases and cycles", () => {
@@ -120,7 +120,7 @@ describe("deepSignal reactive collections", () => {
       second: shared,
     };
     raw.self = raw;
-    const state = deepSignal(raw);
+    const state = deepCollectionSignal(raw);
     const root = state.value;
 
     expect(root.first).toBe(root.second);
@@ -130,8 +130,8 @@ describe("deepSignal reactive collections", () => {
 
   it("tracks WeakMap and WeakSet operations only by object key", () => {
     const key = {};
-    const weakMap = deepSignal(new WeakMap<object, { count: number }>());
-    const weakSet = deepSignal(new WeakSet<object>());
+    const weakMap = deepCollectionSignal(new WeakMap<object, { count: number }>());
+    const weakSet = deepCollectionSignal(new WeakSet<object>());
     expect("clear" in weakMap.value).toBe(false);
     expect("clear" in weakSet.value).toBe(false);
     const seen: Array<number | undefined> = [];
@@ -169,7 +169,7 @@ describe("deepSignal reactive collections", () => {
     }
     const symbolValues: Array<number | undefined> = [];
     if (supportsWeakSymbols) {
-      const weakSymbolMap = deepSignal(new WeakMap<object, number>());
+      const weakSymbolMap = deepCollectionSignal(new WeakMap<object, number>());
       const weakSymbolKey = symbolKey as unknown as object;
       disposers.push(effect(() => { symbolValues.push(weakSymbolMap.value.get(weakSymbolKey)); }));
       weakSymbolMap.value.set(weakSymbolKey, 1);
@@ -182,8 +182,8 @@ describe("deepSignal reactive collections", () => {
       isSubsetOf?: (other: ReadonlySet<unknown>) => boolean;
     };
     if (typeof (Set.prototype as SetWithIsSubsetOf).isSubsetOf !== "function") return;
-    const left = deepSignal(new Set([1]));
-    const right = deepSignal(new Set([1]));
+    const left = deepCollectionSignal(new Set([1]));
+    const right = deepCollectionSignal(new Set([1]));
     const results: boolean[] = [];
     disposers.push(effect(() => { results.push((left.value as SetWithIsSubsetOf).isSubsetOf!(right.value)); }));
 
@@ -192,7 +192,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("batches collection changes and leaves untracked reads unsubscribed", () => {
-    const state = deepSignal({ map: new Map<string, number>() });
+    const state = deepCollectionSignal({ map: new Map<string, number>() });
     let runs = 0;
     disposers.push(effect(() => { state.value.map.get("a"); runs++; }));
 
@@ -205,7 +205,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("keeps subscribed primitive-key metadata through unrelated mutations", () => {
-    const map = deepSignal(new Map<string, number>([["watched", 1]]));
+    const map = deepCollectionSignal(new Map<string, number>([["watched", 1]]));
     const seen: Array<number | undefined> = [];
     disposers.push(effect(() => { seen.push(map.value.get("watched")); }));
 
@@ -217,7 +217,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("reclaims disposed primitive-key reads and tracks them again on reuse", () => {
-    const map = deepSignal(new Map<string, number>());
+    const map = deepCollectionSignal(new Map<string, number>());
     const staleSeen: Array<number | undefined> = [];
     const dispose = effect(() => { staleSeen.push(map.value.get("reused")); });
     dispose();
@@ -234,8 +234,8 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("notifies key and iteration readers when clearing Map and Set and leaves empty clear as a no-op", () => {
-    const map = deepSignal(new Map([["a", 1], ["b", 2]]));
-    const set = deepSignal(new Set(["a", "b"]));
+    const map = deepCollectionSignal(new Map([["a", 1], ["b", 2]]));
+    const set = deepCollectionSignal(new Set(["a", "b"]));
     const mapSnapshots: string[] = [];
     const setSnapshots: string[] = [];
     disposers.push(effect(() => {
@@ -257,8 +257,8 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("tracks Map and Set forEach reads with native callback arguments and thisArg", () => {
-    const map = deepSignal(new Map([["a", 1]]));
-    const set = deepSignal(new Set(["x"]));
+    const map = deepCollectionSignal(new Map([["a", 1]]));
+    const set = deepCollectionSignal(new Set(["x"]));
     const mapSnapshots: string[] = [];
     const setSnapshots: string[] = [];
     const context = { prefix: "ctx" };
@@ -290,7 +290,7 @@ describe("deepSignal reactive collections", () => {
     const accessorKey = { get x() { keyCalls.count += 1; return 1; } };
     const frozenKey = Object.freeze({});
     class Opaque { constructor(readonly inner: unknown) {} }
-    const state = deepSignal({ map: new Map<unknown, string>(), set: new Set<unknown>(), nested: { a: 1 } });
+    const state = deepCollectionSignal({ map: new Map<unknown, string>(), set: new Set<unknown>(), nested: { a: 1 } });
     const opaqueKey = new Opaque(state.value.nested);
 
     for (const key of [accessorKey, frozenKey, opaqueKey, Object.prototype, new (class extends Map {})()]) {
@@ -318,7 +318,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("returns iterators that inherit Iterator helpers", () => {
-    const state = deepSignal({ map: new Map([["a", { n: 1 }]]), set: new Set(["x"]) });
+    const state = deepCollectionSignal({ map: new Map([["a", { n: 1 }]]), set: new Set(["x"]) });
     const entries = state.value.map.entries();
     expect(Object.prototype.toString.call(entries)).toBe("[object Map Iterator]");
     expect(entries[Symbol.iterator]()).toBe(entries);
@@ -334,8 +334,8 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("releases lookup-only primitive keys once their readers are gone", async () => {
-    const map = deepSignal(new Map<string, number>([["kept", 1]]));
-    const set = deepSignal(new Set<string>());
+    const map = deepCollectionSignal(new Map<string, number>([["kept", 1]]));
+    const set = deepCollectionSignal(new Set<string>());
     const query = signal("q0");
     const dispose = effect(() => {
       map.value.has(query.value);
@@ -360,8 +360,8 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("reclaims read-only primitive-key lookups without collection writes and keeps current subscriptions live", async () => {
-    const map = deepSignal(new Map<string, number>());
-    const set = deepSignal(new Set<string>());
+    const map = deepCollectionSignal(new Map<string, number>());
+    const set = deepCollectionSignal(new Set<string>());
     const query = signal("lookup-0");
     const seen: Array<[number | undefined, boolean, boolean]> = [];
     const dispose = effect(() => {
@@ -399,8 +399,8 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("reclaims the final read-only collection key after its subscriber disposes without further activity", async () => {
-    const map = deepSignal(new Map<string, number>());
-    const set = deepSignal(new Set<string>());
+    const map = deepCollectionSignal(new Map<string, number>());
+    const set = deepCollectionSignal(new Set<string>());
     const dispose = effect(() => {
       map.value.get("final-key");
       map.value.has("final-key");
@@ -422,7 +422,7 @@ describe("deepSignal reactive collections", () => {
   });
 
   it("keeps a pending render attempt valid across an unrelated write and releases its key in a later task", async () => {
-    const map = deepSignal(new Map<string, number>());
+    const map = deepCollectionSignal(new Map<string, number>());
     const render = coreRuntime.renderAdapter;
     const attempt = render.createRenderAttempt();
     render.withRenderScope(attempt, () => { map.value.get("pending"); });
@@ -442,7 +442,7 @@ describe("deepSignal reactive collections", () => {
     const a = { n: "a" };
     const b = { n: "b" };
     const c = { n: "c" };
-    const state = deepSignal({ left: new Set([a, b, c]), right: new Set([a]) });
+    const state = deepCollectionSignal({ left: new Set([a, b, c]), right: new Set([a]) });
     // Set composition methods postdate the ES2022 lib this project typechecks against.
     type Item = { n: string };
     type Composable = Set<Item> & {
@@ -474,7 +474,7 @@ describe("deepSignal reactive collections", () => {
     prototype.getOrInsert = function () { throw new Error("native getOrInsert must not run on the raw target"); };
     prototype.getOrInsertComputed = function () { throw new Error("native getOrInsertComputed must not run on the raw target"); };
     try {
-      const map = deepSignal(new Map<string, number>([["a", 1]]));
+      const map = deepCollectionSignal(new Map<string, number>([["a", 1]]));
       const seen: Array<number | undefined> = [];
       disposers.push(effect(() => { seen.push(map.value.get("b")); }));
       const upsert = map.value as unknown as {
@@ -494,7 +494,7 @@ describe("deepSignal reactive collections", () => {
   it("stores opaque values without probing them as collections", () => {
     const probe = vi.spyOn(Map.prototype, "has");
     try {
-      const state = deepSignal({ rows: [] as Array<{ at: Date; owner: object }> });
+      const state = deepCollectionSignal({ rows: [] as Array<{ at: Date; owner: object }> });
       class Owner {}
       state.value.rows = Array.from({ length: 50 }, () => ({ at: new Date(0), owner: new Owner() }));
       expect(probe).not.toHaveBeenCalled();
@@ -526,7 +526,7 @@ describe("deepSignal reactive collections", () => {
       return { disjoint, log };
     };
     const native = run(new Set(["a", "b"]) as Composable);
-    const reactive = run(deepSignal(new Set(["a", "b"])).value as unknown as Composable);
+    const reactive = run(deepCollectionSignal(new Set(["a", "b"])).value as unknown as Composable);
     expect(reactive).toEqual(native);
     expect(native.log).toContain("finally");
   });

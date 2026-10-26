@@ -52,9 +52,15 @@ export default [signal, computed, effect, useSignal, useSignalValue, useSignalTr
   },
   {
     name: "deep",
-    description: "deepSignal and its hooks",
+    description: "deepSignal and its hooks, without collection support",
     source: `import { deepSignal, useDeepSignal, useDeepSignalValue } from "DIST/index.js";
 export default [deepSignal, useDeepSignal, useDeepSignalValue];`,
+  },
+  {
+    name: "deep-collections",
+    description: "deepCollectionSignal and its hooks (adds Map, Set, WeakMap and WeakSet tracking)",
+    source: `import { deepCollectionSignal, useDeepCollectionSignal, useDeepSignalValue } from "DIST/index.js";
+export default [deepCollectionSignal, useDeepCollectionSignal, useDeepSignalValue];`,
   },
   {
     name: "index-full",
@@ -92,7 +98,9 @@ export default [Show, Switch, Match, For, Index];`,
 
 // Markers are string literals a minifier cannot rename, so they survive as a
 // reliable probe for whether a module made it into the bundle.
-const DEEP_SIGNAL_MARKER = "deepSignal() only accepts plain objects, arrays, or same-realm standard collections";
+const DEEP_SIGNAL_MARKER = "deepSignal() only accepts plain objects and arrays";
+// Only the collection module contains this one, so it proves that module was bundled.
+const DEEP_COLLECTION_MARKER = "deepSignal() reactive collections do not support own properties";
 const REACT_STORE_MARKER = "useSyncExternalStore";
 const SIGNAL_CHILD_RUNTIME_MARKER = "rfgs-signal:";
 const FORM_BINDING_MARKERS = [
@@ -109,7 +117,8 @@ const LITE_BINDING_DIAGNOSTIC_MARKER = "The lite JSX runtime supports Signal chi
 const absenceChecks = {
   "signal-only": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
   core: [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
-  "core+hooks": [DEEP_SIGNAL_MARKER],
+  "core+hooks": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER],
+  deep: [DEEP_COLLECTION_MARKER],
   "lite-jsx-child": [...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS],
 };
 
@@ -117,7 +126,8 @@ const absenceChecks = {
 // marker string is renamed or deleted, quietly turning the whole check vacuous.
 const presenceChecks = {
   deep: [DEEP_SIGNAL_MARKER],
-  "index-full": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER],
+  "deep-collections": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER],
+  "index-full": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER, REACT_STORE_MARKER],
   "core+hooks": [REACT_STORE_MARKER],
   "full-jsx-child": [SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS],
   "lite-jsx-child": [SIGNAL_CHILD_RUNTIME_MARKER, LITE_BINDING_DIAGNOSTIC_MARKER],
