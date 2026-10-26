@@ -24,7 +24,7 @@ dispose();
 ## signal
 
 ```ts
-signal<T>(initialValue: T): FormBindableSignal<T>
+signal<T>(initialValue: T): Signal<T>
 ```
 
 書き込み可能なリアクティブ値を作成します。
@@ -37,7 +37,7 @@ signal<T>(initialValue: T): FormBindableSignal<T>
 
 ```ts
 computed<T>(getter: () => T): ReadonlySignal<T>
-computed<T>(options: { get: () => T; set: (value: T) => void }): FormBindableSignal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
 ```
 
 遅延評価される読み取り専用の派生値を作成します。`signal` と同じ `.value` と `.peek()` を公開し、getterが読んだ依存が変化したあと、次の読み取り時に再評価されます。
@@ -60,9 +60,9 @@ fullName.value = "Ada Lovelace";
 console.log(fullName.value); // "Ada Lovelace"
 ```
 
-getterだけの形式は引き続き`ReadonlySignal<T>`で、書き込みが必要なJSX form bindingには使えません。getter/setter形式はpackageの書き込み可能な`Signal<T>`である`FormBindableSignal<T>`を返し、値の型が合えば`bindValue`、`bindChecked`、単一・複数select bindingで使えます。setterとgetterが完全な逆変換でなくてもかまいません。代入後の読み取り値は、setterが変更した状態からgetterが導出した値です。再利用可能なform propsを通す場合も`FormBindableSignal<T>`のまま保ってください。`Signal<T>`へ広げるとbinding capabilityが失われ、JSX型が拒否します。
+getterだけの形式は引き続き`ReadonlySignal<T>`で、書き込みが必要なJSX form bindingには使えません。getter/setter形式は書き込み可能な`Signal<T>`を返し、値の型が合えば`bindValue`、`bindChecked`、単一・複数select bindingで使えます。setterとgetterが完全な逆変換でなくてもかまいません。代入後の読み取り値は、setterが変更した状態からgetterが導出した値です。
 
-`FormBindableSignal<T>`は、packageが作った書き込み可能signalと任意のstructural signalやgetter-only computedをTypeScriptで区別するための、型専用capabilityを持ちます。このmarkerはJavaScript propertyとして存在しません。runtimeではpackageのprivate signal brandと書き込み可能性を確認します。
+`Signal<T>`と`ReadonlySignal<T>`は名目的な型です。それぞれ型専用のmarker（JavaScript propertyではありません）を持つため、TypeScriptは、packageが作ったsignalと、任意の`{ value, peek() }`オブジェクトを区別します（`isSignal`もruntimeで後者を拒否します）。`ReadonlySignal<T>`は`T`について共変です。`Signal<T>`は書き込みにも使うため不変で、`Signal<"a" | "b">`を`Signal<string>`が期待される場所には渡せません。runtimeではpackageのprivate signal brandと書き込み可能性を確認します。
 
 ### getterが例外を投げた場合
 

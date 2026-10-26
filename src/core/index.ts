@@ -6,7 +6,6 @@ export {
   signal,
   untracked,
   type ReadonlySignal,
-  type FormBindableSignal,
   type Signal,
   type WritableComputedOptions,
 } from "./base.js";

@@ -137,11 +137,11 @@ const enabled = signal(false);
 <input type="checkbox" bindChecked={enabled} />
 ```
 
-`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）と`type="number"`（どちらも`FormBindableSignal<string>`）、`textarea`、`FormBindableSignal<string>`を使う単一選択select、`FormBindableSignal<string[]>`を使うmultiple selectに対応します。同じform ownerと`name`のradio inputは`FormBindableSignal<string>`を共有できます。各optionにはstringの`value`が必要です。同じform ownerと`name`のcheckbox inputは`FormBindableSignal<string[]>`を共有できます。各checkboxにはstringの`value`が必要です。`bindChecked`は独立したcheckbox 1つを同期する用途で、`FormBindableSignal<boolean>`が必要です。selectの配列bindingでは`multiple`を静的に`true`にしてください。型は動的booleanを拒否するため、動的な`multiple`にはcastが必要です。その場合は現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。
+`bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）と`type="number"`（どちらも`Signal<string>`）、`textarea`、`Signal<string>`を使う単一選択select、`Signal<string[]>`を使うmultiple selectに対応します。同じform ownerと`name`のradio inputは`Signal<string>`を共有できます。各optionにはstringの`value`が必要です。同じform ownerと`name`のcheckbox inputは`Signal<string[]>`を共有できます。各checkboxにはstringの`value`が必要です。`bindChecked`は独立したcheckbox 1つを同期する用途で、`Signal<boolean>`が必要です。selectの配列bindingでは`multiple`を静的に`true`にしてください。型は動的booleanを拒否するため、動的な`multiple`にはcastが必要です。その場合は現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。
 
 `type="number"`の`bindValue`が保持するのはDOMの`.value`文字列です。空欄は`""`であり、RFSGは`valueAsNumber`への変換、`min`/`max`へのclamp、`step`への丸めを行いません。数値入力のsanitizeとconstraint validationはブラウザーに任せます。例えば`rangeUnderflow`、`rangeOverflow`、`stepMismatch`、`valueMissing`、場合によっては`badInput`が`input.validity`で確認できます。入力途中の不正・未完成文字列はブラウザーによりsanitizeされて`.value`が空になる場合があり、RFSGがDOMの`.value`で取得できない文字列まで保持する保証はありません。
 
-`type="range"`も`FormBindableSignal<string>`を使い、DOMの`.value`文字列を保持します。RFSGは`valueAsNumber`へparseせず、min/max/stepの補正も追加しません。ユーザー操作や値の代入に対するrange control固有の動作はブラウザーに任せます。アプリで数値が必要な場合は明示的にparseしてください。
+`type="range"`も`Signal<string>`を使い、DOMの`.value`文字列を保持します。RFSGは`valueAsNumber`へparseせず、min/max/stepの補正も追加しません。ユーザー操作や値の代入に対するrange control固有の動作はブラウザーに任せます。アプリで数値が必要な場合は明示的にparseしてください。
 
 ```tsx
 const amount = signal("");
@@ -156,13 +156,13 @@ native radio groupは`Signal`のidentityではなくform ownerと`name`で排他
 
 checkbox groupの配列は、別optionを選択しても既存の順序と重複を維持します。新たに選んだ値は重複がなければ末尾へ追加し、解除時はその値をすべて削除します。
 
-JSX bindingの型はpackage capabilityである`FormBindableSignal<T>`を要求します。`signal()`、`useSignal()`、書き込み可能な`computed({ get, set })`はこの型を返します。再利用可能なform propsでも`Signal<T>`へ広げず、この型を保ってください。
+JSX bindingの型は`Signal<T>`を要求します。`signal()`、`useSignal()`、書き込み可能な`computed({ get, set })`はこの型を返し、`Signal<T>`は`T`について不変です。選択肢型のbinding（radio、select、checkbox group）は`Signal<"a" | "b">`のようなリテラルunionのsignalを受け付けますが、text系のbindingには`Signal<string>`が必要です。再利用可能なform propsでは、そのまま使ってください。
 
 ```tsx
-import type { FormBindableSignal } from "react-fine-grained-signals";
+import type { Signal } from "react-fine-grained-signals";
 
 type TextFieldProps<TMeta> = {
-  value: FormBindableSignal<string>;
+  value: Signal<string>;
   label: string;
   metadata?: TMeta;
 };

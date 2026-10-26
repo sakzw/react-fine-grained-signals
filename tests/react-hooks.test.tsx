@@ -13,7 +13,7 @@ import {
   useSignalValue,
   useSignalTracking,
 } from "../src/index.js";
-import type { FormBindableSignal, ReadonlySignal } from "../src/index.js";
+import type { ReadonlySignal, Signal } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -272,7 +272,9 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
   it("keeps structural readables on the compatibility subscription and releases it on unmount", () => {
     const backing = signal("before");
     const reads = vi.fn();
-    const structural: ReadonlySignal<string> = {
+    // The type is nominal, so a structural object needs a cast; the runtime
+    // still accepts it through the effect-backed fallback.
+    const structural = {
       get value() {
         reads();
         return backing.value;
@@ -280,7 +282,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
       peek() {
         return backing.peek();
       },
-    };
+    } as unknown as ReadonlySignal<string>;
 
     function Reader({ version }: { version: number }) {
       return <output aria-label="structural readable">{`${version}:${useSignalValue(structural)}`}</output>;
@@ -373,7 +375,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
 
   it("keeps a writable useComputed stable and forwards writes to its setter", () => {
     const source = signal(2);
-    let writable: FormBindableSignal<number> | undefined;
+    let writable: Signal<number> | undefined;
     const renders = vi.fn();
 
     function Writable({ label }: { label: string }) {
@@ -398,7 +400,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
 
   it("updates writable useComputed getter and setter together when dependencies change", () => {
     const source = signal(2);
-    let writable: FormBindableSignal<number> | undefined;
+    let writable: Signal<number> | undefined;
 
     function Product({ factor }: { factor: number }) {
       writable = useWritableComputed({
@@ -427,7 +429,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     let releaseSuspense!: () => void;
     const pending = new Promise<void>((resolve) => { releaseSuspense = resolve; });
     let canShowFive = false;
-    let committed: FormBindableSignal<number> | undefined;
+    let committed: Signal<number> | undefined;
 
     function Product({ factor }: { factor: number }) {
       const product = useWritableComputed({
@@ -478,7 +480,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     const right = signal(2);
     const renders = vi.fn();
 
-    let total: FormBindableSignal<number> | undefined;
+    let total: Signal<number> | undefined;
     function Capture() {
       total = useWritableComputed({
         get: () => left.value + right.value,

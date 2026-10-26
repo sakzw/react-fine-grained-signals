@@ -21,14 +21,14 @@ function Counter({ step }: { step: number }) {
 ## useSignal
 
 ```ts
-useSignal<T>(initialValue: T): FormBindableSignal<T>
+useSignal<T>(initialValue: T): Signal<T>
 ```
 
 コンポーネントの生存期間中、同じsignalを1つ保持します。
 
 - `initialValue` が使われるのは初回レンダーのみで、以降は同じsignalが返ります。
 - レンダー中に `.value` を読むには、そのコンポーネント自身で [`useSignalTracking()`](#usesignaltracking)（またはplugin）が必要です。
-- `useSignal()` は書き込み可能な `Signal<T>` の一種である `FormBindableSignal<T>` を返します。汎用フォームコンポーネントへ渡す場合も、この型を保ってください。`Signal<T>` に注釈すると型が広がり、`bindValue` / `bindChecked` が要求するcapabilityが失われます。
+- `useSignal()` は書き込み可能な `Signal<T>` を返し、`bindValue` / `bindChecked` にそのまま渡せます。`Signal<T>` は `T` について不変なので、広い型ではなく正確な値の型で注釈してください。
 
 ## useDeepSignal
 
@@ -57,10 +57,10 @@ useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal
 ## useWritableComputed
 
 ```ts
-useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
+useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): Signal<T>
 ```
 
-`{ get, set }`から書き込み可能なcomputed signalを作ります。`FormBindableSignal<T>`を返すため、型が合う`bindValue`または`bindChecked`に渡せます。依存関係のルールは`useComputed`と同じで、依存配列の省略は`[]`と同じ、`get`と`set`が捕捉するsignal以外の値は列挙します。依存値が変わると、そのrenderで新しいgetterとsetterを持つ別のcomputedを作るため、返るsignalのidentityが変わります。以前のsignalは元のcallbackを保持します。form bindingではgetterが表示値の正本です。setterが入力を拒否または正規化した場合、Reactがユーザーイベントを処理した後にgetterの値へDOMを戻します。
+`{ get, set }`から書き込み可能なcomputed signalを作ります。`Signal<T>`を返すため、型が合う`bindValue`または`bindChecked`に渡せます。依存関係のルールは`useComputed`と同じで、依存配列の省略は`[]`と同じ、`get`と`set`が捕捉するsignal以外の値は列挙します。依存値が変わると、そのrenderで新しいgetterとsetterを持つ別のcomputedを作るため、返るsignalのidentityが変わります。以前のsignalは元のcallbackを保持します。form bindingではgetterが表示値の正本です。setterが入力を拒否または正規化した場合、Reactがユーザーイベントを処理した後にgetterの値へDOMを戻します。
 
 ## useSignalEffect
 

@@ -1,6 +1,6 @@
 /** @jsxImportSource react-fine-grained-signals/jsx */
 
-import { computed, signal, useComputed, useWritableComputed, useSignal, type FormBindableSignal, type Signal } from "../src/index.js";
+import { computed, signal, useComputed, useWritableComputed, useSignal, type Signal } from "../src/index.js";
 import type React from "react";
 
 const text = signal("value");
@@ -16,16 +16,16 @@ const writableText = computed({ get: () => text.value, set: (value) => { text.va
 const writableChecked = computed({ get: () => enabled.value, set: (value) => { enabled.value = value; } });
 const writableSelection = computed({ get: () => text.value, set: (value) => { text.value = value; } });
 const writableManySelection = computed({ get: () => selectedMany.value, set: (value) => { selectedMany.value = value; } });
-const customWritableSignal: Signal<string> = {
+const customWritableSignal = {
   get value() { return text.value; },
   set value(value: string) { text.value = value; },
   peek: () => text.peek(),
 };
-const widenedSignal: Signal<string> = signal("annotated");
+const annotatedSignal: Signal<string> = signal("annotated");
 
 function GenericTextField<TLabel extends string>({ label, value }: {
   label: TLabel;
-  value: FormBindableSignal<string>;
+  value: Signal<string>;
 }) {
   return <label>{label}<input bindValue={value} /></label>;
 }
@@ -44,7 +44,7 @@ function HookWritableComputedBinding() {
     get: () => text.value,
     set: (value: string) => { text.value = value; },
   });
-  const capability: FormBindableSignal<string> = hookComputed;
+  const capability: Signal<string> = hookComputed;
   return <input bindValue={capability} />;
 }
 
@@ -76,13 +76,12 @@ const controlledNumberInput = <input type="number" value={numberValue.value} onC
 const numberScalarBinding = <input type="number" bindValue={numberValue} />;
 // @ts-expect-error Range binding stores the DOM value as a string too.
 const rangeScalarBinding = <input type="range" bindValue={numberValue} />;
-// Widening a package signal to Signal<T> erases the direct-binding capability.
-// @ts-expect-error Keep FormBindableSignal<T> when a value will be used by bindValue.
-const widenedSignalBinding = <input bindValue={widenedSignal} />;
+// Signal<T> is the binding capability itself, so annotating with it keeps bindValue working.
+const annotatedSignalBinding = <input bindValue={annotatedSignal} />;
 const genericTextField = <GenericTextField label="name" value={text} />;
 const boundCheckbox = <input type="checkbox" bindChecked={enabled} />;
 const writableComputedInput = <input bindValue={writableText} />;
-// @ts-expect-error Structural writable signals remain assignable to Signal<T>, but JSX binding requires an RFSG-created source.
+// @ts-expect-error A structural { value, peek } object is not a Signal<T>, so JSX binding rejects it.
 const unsupportedCustomBinding = <input bindValue={customWritableSignal} />;
 const writableComputedCheckbox = <input type="checkbox" bindChecked={writableChecked} />;
 const boundCheckboxWithFormValue = <input type="checkbox" name="permission" value="admin" bindChecked={enabled} />;
@@ -149,7 +148,7 @@ function TextareaWrapper(props: React.ComponentPropsWithoutRef<"textarea">) {
 function SelectWrapper(props: React.ComponentPropsWithoutRef<"select">) {
   return <select {...props} />;
 }
-const optionalBoundName: FormBindableSignal<string> | undefined = enabled.value ? text : undefined;
+const optionalBoundName: Signal<string> | undefined = enabled.value ? text : undefined;
 const conditionalBinding = <input bindValue={optionalBoundName} />;
 
 // Signal children work for every native host, including non-HTML hosts.
@@ -191,7 +190,7 @@ void [
   controlledNumberInput,
   numberScalarBinding,
   rangeScalarBinding,
-  widenedSignalBinding,
+  annotatedSignalBinding,
   genericTextField,
   boundCheckbox,
   writableComputedInput,

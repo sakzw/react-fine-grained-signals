@@ -21,14 +21,14 @@ function Counter({ step }: { step: number }) {
 ## useSignal
 
 ```ts
-useSignal<T>(initialValue: T): FormBindableSignal<T>
+useSignal<T>(initialValue: T): Signal<T>
 ```
 
 Keeps one signal for the component lifetime.
 
 - `initialValue` is used on the first render only; later renders return the same signal.
 - Reading `.value` during render requires [`useSignalTracking()`](#usesignaltracking) (or the plugin) in that same component.
-- `useSignal()` returns `FormBindableSignal<T>`, which is also a writable `Signal<T>`. Keep this specific type when passing the value through a generic form component; annotating it as `Signal<T>` widens away the capability required by `bindValue` and `bindChecked`.
+- `useSignal()` returns a writable `Signal<T>`, which works directly with `bindValue` and `bindChecked`. `Signal<T>` is invariant in `T`, so annotate it with the exact value type rather than a wider one.
 
 ## useDeepSignal
 
@@ -57,10 +57,10 @@ Creates a read-only computed signal whose identity stays stable while its depend
 ## useWritableComputed
 
 ```ts
-useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): FormBindableSignal<T>
+useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): Signal<T>
 ```
 
-Creates a writable computed signal from `{ get, set }`. It returns `FormBindableSignal<T>`, so it can be passed to a matching `bindValue` or `bindChecked`. The dependency rules are those of `useComputed`: omitting `dependencies` is the same as `[]`, and `get` and `set` must list any non-signal value they capture. When dependencies change, the render creates a separate computed with the new getter and setter, so the returned signal's identity changes; the previous signal keeps its own callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
+Creates a writable computed signal from `{ get, set }`. It returns `Signal<T>`, so it can be passed to a matching `bindValue` or `bindChecked`. The dependency rules are those of `useComputed`: omitting `dependencies` is the same as `[]`, and `get` and `set` must list any non-signal value they capture. When dependencies change, the render creates a separate computed with the new getter and setter, so the returned signal's identity changes; the previous signal keeps its own callbacks. For form binding, the getter is the displayed value: if the setter rejects or normalizes input, the binding restores the getter result after React has observed the user event.
 
 ## useSignalEffect
 

@@ -28,7 +28,7 @@ involved.
 ## signal
 
 ```ts
-signal<T>(initialValue: T): FormBindableSignal<T>
+signal<T>(initialValue: T): Signal<T>
 ```
 
 A writable reactive value.
@@ -41,7 +41,7 @@ A writable reactive value.
 
 ```ts
 computed<T>(getter: () => T): ReadonlySignal<T>
-computed<T>(options: { get: () => T; set: (value: T) => void }): FormBindableSignal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
 ```
 
 A lazily evaluated derived value. It re-evaluates on the next read after a

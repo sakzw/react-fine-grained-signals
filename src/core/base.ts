@@ -2,37 +2,46 @@ import { coreRuntime } from "./core-runtime.js";
 import { multipleCopiesError } from "./execution-owner.js";
 import { SIGNAL_BRAND, SIGNAL_BRAND_MIN_VERSION, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
 
-/** A readable reactive value. */
+declare const readonlySignalBrand: unique symbol;
+declare const signalWriteType: unique symbol;
+
+/**
+ * A readable reactive value.
+ *
+ * The brand is type-only (it does not exist at runtime) and makes the type
+ * nominal: an object that merely has `value` and `peek()` is not a
+ * `ReadonlySignal`, matching `isSignal`. `T` stays covariant, so a
+ * `ReadonlySignal<"a">` is a `ReadonlySignal<string>`.
+ */
 export interface ReadonlySignal<T> {
   readonly value: T;
   peek(): T;
-}
-
-/** A readable and writable reactive value. */
-export interface Signal<T> extends ReadonlySignal<T> {
-  value: T;
-}
-
-declare const formBindableSignalType: unique symbol;
-
-/** A package signal accepted by the direct JSX binding runtime. */
-export interface FormBindableSignal<T> extends Signal<T> {
-  /**
-   * Type-only capability; runtime validation uses the private RFSG signal
-   * brand. Its parameter makes the capability contravariant in `T`: a binding
-   * that writes any string (`<input bindValue>`) rejects a signal typed as a
-   * narrower union, which the user could otherwise fill with other values.
-   */
-  readonly [formBindableSignalType]: (value: T) => void;
+  readonly [readonlySignalBrand]: true;
 }
 
 /**
- * A form-bindable signal whose value may be narrower than `T`. Option-based
+ * A readable and writable reactive value, and the signal type accepted by the
+ * direct JSX bindings (`bindValue`, `bindChecked`).
+ *
+ * The type-only write marker makes `T` invariant: a binding that writes any
+ * string rejects a `Signal<"a" | "b">`, which the user could otherwise fill
+ * with other values.
+ */
+export interface Signal<T> extends ReadonlySignal<T> {
+  value: T;
+  readonly [signalWriteType]: (value: T) => void;
+}
+
+/**
+ * A writable signal whose value may be narrower than `T`. Option-based
  * bindings (radio, select, checkbox groups) only write the option values the
  * author rendered, so they accept a literal-union signal.
  * @internal Used by the JSX binding prop types.
  */
-export type FormBindableChoiceSignal<T> = Signal<T> & { readonly [formBindableSignalType]: (value: never) => void };
+export type NarrowableSignal<T> = ReadonlySignal<T> & {
+  value: T;
+  readonly [signalWriteType]: (value: never) => void;
+};
 
 const signalInstances = new WeakSet<object>();
 
@@ -76,8 +85,8 @@ export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
 }
 
 /** Creates a writable reactive value. */
-export function signal<T>(initialValue: T): FormBindableSignal<T> {
-  return coreRuntime.signal(initialValue) as FormBindableSignal<T>;
+export function signal<T>(initialValue: T): Signal<T> {
+  return coreRuntime.signal(initialValue) as unknown as Signal<T>;
 }
 
 /** Getter/setter behavior for a lazily evaluated writable computed signal. */
@@ -89,10 +98,10 @@ export interface WritableComputedOptions<T> {
 /** Creates a lazily evaluated readonly computed signal. */
 export function computed<T>(getter: () => T): ReadonlySignal<T>;
 /** Creates a lazily evaluated writable computed signal. */
-export function computed<T>(options: WritableComputedOptions<T>): FormBindableSignal<T>;
+export function computed<T>(options: WritableComputedOptions<T>): Signal<T>;
 export function computed<T>(source: (() => T) | WritableComputedOptions<T>): ReadonlySignal<T> | Signal<T> {
-  if (typeof source === "function") return coreRuntime.computed(source);
-  return coreRuntime.computed(source.get, source.set) as FormBindableSignal<T>;
+  if (typeof source === "function") return coreRuntime.computed(source) as unknown as ReadonlySignal<T>;
+  return coreRuntime.computed(source.get, source.set) as unknown as Signal<T>;
 }
 
 /** Runs a reactive side effect and returns a disposer. */

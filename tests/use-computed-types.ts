@@ -1,5 +1,5 @@
 import { useComputed, useWritableComputed } from "../src/index.js";
-import type { FormBindableSignal, ReadonlySignal } from "../src/index.js";
+import type { ReadonlySignal, Signal } from "../src/index.js";
 
 // Type-only checks, verified by `pnpm typecheck`.
 
@@ -7,7 +7,7 @@ export function readOnlyForm(): ReadonlySignal<number> {
   return useComputed(() => 1);
 }
 
-export function writableForm(): FormBindableSignal<number> {
+export function writableForm(): Signal<number> {
   return useWritableComputed({ get: () => 1, set: (_next: number) => {} });
 }
 
@@ -21,7 +21,7 @@ export function useWritableComputedRejectsGetter() {
   return useWritableComputed(() => 1);
 }
 
-export function readOnlyIsNotWritable(): FormBindableSignal<number> {
+export function readOnlyIsNotWritable(): Signal<number> {
   // @ts-expect-error a read-only computed is not a writable signal.
   return useComputed(() => 1);
 }

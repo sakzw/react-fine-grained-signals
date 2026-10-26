@@ -1,8 +1,8 @@
 import { isSignal, untracked } from "../core/index.js";
-import { detachedEffect, type FormBindableChoiceSignal } from "../core/base.js";
+import { detachedEffect, type NarrowableSignal } from "../core/base.js";
 import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
-import type { FormBindableSignal, ReadonlySignal, Signal } from "../core/index.js";
+import type { ReadonlySignal, Signal } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
 import { normalizeChild, SignalValue, type SignalChild } from "./jsx-children.js";
 import { createElement, Fragment } from "react";
@@ -1848,7 +1848,7 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     defaultValue?: never | undefined;
     checked?: never | undefined;
     defaultChecked?: never | undefined;
-    bindValue?: (FormBindableSignal<string> & NotDeepSignal) | undefined;
+    bindValue?: (Signal<string> & NotDeepSignal) | undefined;
     bindChecked?: never | undefined;
   }
   | {
@@ -1859,7 +1859,7 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     checked?: never | undefined;
     defaultChecked?: never | undefined;
     bindValue?: never | undefined;
-    bindChecked?: (FormBindableSignal<boolean> & NotDeepSignal) | undefined;
+    bindChecked?: (Signal<boolean> & NotDeepSignal) | undefined;
   }
   | {
     type: "radio";
@@ -1868,7 +1868,7 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     defaultValue?: never | undefined;
     checked?: never | undefined;
     defaultChecked?: never | undefined;
-    bindValue: FormBindableChoiceSignal<string> & NotDeepSignal;
+    bindValue: NarrowableSignal<string> & NotDeepSignal;
     bindChecked?: never | undefined;
   }
   | {
@@ -1878,14 +1878,14 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddH
     defaultValue?: never | undefined;
     checked?: never | undefined;
     defaultChecked?: never | undefined;
-    bindValue: FormBindableChoiceSignal<string[]> & NotDeepSignal;
+    bindValue: NarrowableSignal<string[]> & NotDeepSignal;
     bindChecked?: never | undefined;
   }
 );
 
 type BoundTextareaProps<P extends React.JSX.IntrinsicElements["textarea"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "bindValue"> & (
   Pick<P, "value" | "defaultValue"> & { bindValue?: never | undefined }
-  | { value?: never | undefined; defaultValue?: never | undefined; bindValue?: (FormBindableSignal<string> & NotDeepSignal) | undefined }
+  | { value?: never | undefined; defaultValue?: never | undefined; bindValue?: (Signal<string> & NotDeepSignal) | undefined }
 );
 
 type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "multiple" | "bindValue"> & (
@@ -1899,13 +1899,13 @@ type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<Ad
     multiple?: false | undefined;
     value?: never | undefined;
     defaultValue?: never | undefined;
-    bindValue?: (FormBindableChoiceSignal<string> & NotDeepSignal) | undefined;
+    bindValue?: (NarrowableSignal<string> & NotDeepSignal) | undefined;
   }
   | {
     multiple: true;
     value?: never | undefined;
     defaultValue?: never | undefined;
-    bindValue?: (FormBindableChoiceSignal<string[]> & NotDeepSignal) | undefined;
+    bindValue?: (NarrowableSignal<string[]> & NotDeepSignal) | undefined;
   }
 );
 

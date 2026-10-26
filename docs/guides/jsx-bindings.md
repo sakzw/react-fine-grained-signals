@@ -143,11 +143,11 @@ const enabled = signal(false);
 </select>
 ```
 
-`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`) and `type="number"`, each with `FormBindableSignal<string>`, plus `textarea`, single selects with `FormBindableSignal<string>`, and `multiple` selects with `FormBindableSignal<string[]>`. Radio inputs with the same form owner and `name` can share a `FormBindableSignal<string>`; each option needs a string `value`. Every bound radio in that native group must use the same signal. The runtime rejects different sources when it can see both bindings in the same RFSG runtime copy. Do not mix `bindValue` radios with React `checked`/`defaultChecked` radios or with bindings from another RFSG runtime copy in the same native group; those peers cannot be diagnosed across ownership boundaries. Checkbox inputs with the same form owner and `name` can share a `FormBindableSignal<string[]>`; each checkbox needs a string `value`. `bindChecked` remains available for one independent checkbox and requires `FormBindableSignal<boolean>`. The `multiple` attribute must be a literal `true` for the select array form; the types reject a dynamic boolean, so a dynamic `multiple` needs a cast, after which the runtime checks it against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later, and a kept option whose `value` attribute or text changes, are observed and the current signal selection is reapplied.
+`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`) and `type="number"`, each with `Signal<string>`, plus `textarea`, single selects with `Signal<string>`, and `multiple` selects with `Signal<string[]>`. Radio inputs with the same form owner and `name` can share a `Signal<string>`; each option needs a string `value`. Every bound radio in that native group must use the same signal. The runtime rejects different sources when it can see both bindings in the same RFSG runtime copy. Do not mix `bindValue` radios with React `checked`/`defaultChecked` radios or with bindings from another RFSG runtime copy in the same native group; those peers cannot be diagnosed across ownership boundaries. Checkbox inputs with the same form owner and `name` can share a `Signal<string[]>`; each checkbox needs a string `value`. `bindChecked` remains available for one independent checkbox and requires `Signal<boolean>`. The `multiple` attribute must be a literal `true` for the select array form; the types reject a dynamic boolean, so a dynamic `multiple` needs a cast, after which the runtime checks it against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later, and a kept option whose `value` attribute or text changes, are observed and the current signal selection is reapplied.
 
 For `type="number"`, `bindValue` stores the DOM `.value` as a string. An empty field is `""`; RFSG does not convert through `valueAsNumber`, clamp to `min`/`max`, or round to `step`. The browser owns number-input sanitization and constraint validation: for example, `rangeUnderflow`, `rangeOverflow`, `stepMismatch`, `valueMissing`, and sometimes `badInput` are exposed through `input.validity`. Invalid or incomplete keystrokes may be sanitized by the browser to an empty `.value`; the binding does not promise to preserve text the browser does not expose as `.value`.
 
-`type="range"` also uses `FormBindableSignal<string>` and the DOM `.value` string. RFSG does not parse `valueAsNumber` or add min/max/step correction; the browser applies its native range-control behavior when users interact with the control or when its value is assigned. Keep numeric parsing explicit when your application needs a number.
+`type="range"` also uses `Signal<string>` and the DOM `.value` string. RFSG does not parse `valueAsNumber` or add min/max/step correction; the browser applies its native range-control behavior when users interact with the control or when its value is assigned. Keep numeric parsing explicit when your application needs a number.
 
 ```tsx
 const amount = signal("");
@@ -160,13 +160,13 @@ Guard the empty string before parsing because `Number("")` is `0`. If a user mus
 
 Checkbox-group arrays retain their existing order and duplicates when another option is selected; a newly selected value is appended once. Unchecking a value removes all of its occurrences.
 
-The binding types require the package capability `FormBindableSignal<T>`. `signal()`, `useSignal()`, and writable `computed({ get, set })` return this type. Keep it in reusable form props instead of widening the value to `Signal<T>`:
+The binding types require a `Signal<T>`. `signal()`, `useSignal()`, and writable `computed({ get, set })` return this type, and `Signal<T>` is invariant in `T`: option-based bindings (radio, select, checkbox group) accept a literal-union signal such as `Signal<"a" | "b">`, but a text binding needs `Signal<string>`. Use it directly in reusable form props:
 
 ```tsx
-import type { FormBindableSignal } from "react-fine-grained-signals";
+import type { Signal } from "react-fine-grained-signals";
 
 type TextFieldProps<TMeta> = {
-  value: FormBindableSignal<string>;
+  value: Signal<string>;
   label: string;
   metadata?: TMeta;
 };

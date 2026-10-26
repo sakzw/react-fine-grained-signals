@@ -24,7 +24,7 @@ dispose();
 ## signal
 
 ```ts
-signal<T>(initialValue: T): FormBindableSignal<T>
+signal<T>(initialValue: T): Signal<T>
 ```
 
 Creates a writable reactive value.
@@ -37,7 +37,7 @@ Creates a writable reactive value.
 
 ```ts
 computed<T>(getter: () => T): ReadonlySignal<T>
-computed<T>(options: { get: () => T; set: (value: T) => void }): FormBindableSignal<T>
+computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
 ```
 
 Creates a lazily evaluated, read-only derived value. It exposes the same `.value` and `.peek()` as `signal`, and re-evaluates on the next read after a dependency its getter read has changed.
@@ -60,9 +60,9 @@ fullName.value = "Ada Lovelace";
 console.log(fullName.value); // "Ada Lovelace"
 ```
 
-The getter-only form remains `ReadonlySignal<T>` and cannot be used with writable JSX form bindings. The getter/setter form returns `FormBindableSignal<T>`, a writable package `Signal<T>` that works with `bindValue`, `bindChecked`, and single or multiple select bindings when its value type matches. A setter need not be a mathematical inverse: after assignment, reads show whatever the getter derives from the state the setter wrote. Keep the `FormBindableSignal<T>` type when passing it through reusable form props; widening it to `Signal<T>` loses the binding capability and is rejected by JSX types.
+The getter-only form remains `ReadonlySignal<T>` and cannot be used with writable JSX form bindings. The getter/setter form returns a writable `Signal<T>` that works with `bindValue`, `bindChecked`, and single or multiple select bindings when its value type matches. A setter need not be a mathematical inverse: after assignment, reads show whatever the getter derives from the state the setter wrote.
 
-`FormBindableSignal<T>` carries a type-only capability so TypeScript can distinguish package-created writable sources from arbitrary structural signals and getter-only computed values. That marker is not a JavaScript property. At runtime, the binding checks the package's private signal brand and writability.
+`Signal<T>` and `ReadonlySignal<T>` are nominal types: each carries a type-only marker (not a JavaScript property) so TypeScript distinguishes package-created signals from an arbitrary `{ value, peek() }` object, which `isSignal` also rejects at runtime. `ReadonlySignal<T>` is covariant in `T`; `Signal<T>` is invariant, because it is also written through, so a `Signal<"a" | "b">` cannot be passed where a `Signal<string>` is expected. At runtime, the binding checks the package's private signal brand and writability.
 
 ### When the getter throws
 
