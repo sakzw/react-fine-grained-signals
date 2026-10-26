@@ -1,5 +1,5 @@
 import { signal } from "../src/index.js";
-import { For, Index, Match, Switch, type MatchProps } from "react-fine-grained-signals/utils";
+import { For, Index, Match, Show, Switch, type MatchProps, type Truthy } from "react-fine-grained-signals/utils";
 
 const users = signal([{ id: "ada", name: "Ada" }]);
 const tags = signal(new Set(["react"]));
@@ -144,3 +144,58 @@ void [keyedArray, keyedSet, keyedMap, indexed, missingKey, matched, falsyMatch, 
 void [zeroMatch, nullMatch, emptyStringMatch, broadStringMatch, broadNumberMatch, unionMatch,
   directEqualsProps, directLegacyProps, directFalseProps, directZeroProps, invalidDirectEquals,
   directUndefinedProps, explicitUndefinedMatch];
+
+// Show and Match (without equals) hand the callback a truthy value: the falsy
+// members of the union are removed, not only null and undefined.
+const count = signal<0 | 1 | 2 | null>(1);
+const truthyShow = (
+  <Show when={count}>
+    {(value) => {
+      const nonZero: 1 | 2 = value;
+      // @ts-expect-error 0 is falsy, so it is not part of the callback value.
+      const zero: 0 = value;
+      return <p>{nonZero + zero}</p>;
+    }}
+  </Show>
+);
+
+const flag = signal<boolean>(true);
+const booleanShow = (
+  <Show when={flag}>
+    {(value) => {
+      const only: true = value;
+      return <p>{String(only)}</p>;
+    }}
+  </Show>
+);
+
+const label = signal<"" | "a" | undefined>("a");
+const labelMatch = (
+  <Match when={label}>
+    {(value) => {
+      const only: "a" = value;
+      // @ts-expect-error "" is falsy, so it is not part of the callback value.
+      const empty: "" = value;
+      return <p>{only + empty}</p>;
+    }}
+  </Match>
+);
+
+const wideNumber = signal<number | null>(1);
+const wideShow = (
+  <Show when={wideNumber}>
+    {(value) => {
+      // A wide number can be nonzero, so it stays number.
+      const n: number = value;
+      // @ts-expect-error null is removed.
+      const nil: null = value;
+      return <p>{n}{String(nil)}</p>;
+    }}
+  </Show>
+);
+
+const truthyPlain: Truthy<0 | "" | false | null | undefined | 0n | "x" | 2> = "x";
+// @ts-expect-error falsy literals are not Truthy.
+const falsyPlain: Truthy<0 | ""> = 0;
+
+void [truthyShow, booleanShow, labelMatch, wideShow, truthyPlain, falsyPlain];

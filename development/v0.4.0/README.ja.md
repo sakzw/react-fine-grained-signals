@@ -2,7 +2,7 @@
 
 ## 現在の状態
 
-- 状態: **計画確定、M0〜M5完了、M6以降は未着手**。2026-10-25に調査結果からマイルストーンを起こし、同日にD1〜D10を決定した（D5は行わない、D10は推奨と別の案を採用、それ以外は推奨どおり）。設計・調査ゲートは残っていない。
+- 状態: **計画確定、M0〜M6完了、M7以降は未着手**。2026-10-25に調査結果からマイルストーンを起こし、同日にD1〜D10を決定した（D5は行わない、D10は推奨と別の案を採用、それ以外は推奨どおり）。設計・調査ゲートは残っていない。
 - 統合ブランチ: `main`（topic branch・PRは作らない）
 - 基準: v0.3.0（tag `v0.3.0` / `c826f45`、2026-10-25 npm公開）
 - 方針: **破壊的変更を許可する**。v0.3で「破壊的なので見送り」とした整理と、公開面の分かりにくさを解消する。新機能の追加は目的にしない。
@@ -33,7 +33,7 @@ v0.3.0公開時点で利用者はほぼいない（npm週間DL 26、GitHub star/
 | M5 | React peerを`>=19.3`へ | D4 | peer更新、Activity/transition関連の回避策の棚卸し | **完了**（[記録](./m5-react-peer.ja.md)） |
 | M6 | utilsの型整理（`Show`/`Match`） | M2 | truthy判定と型が一致する | 未着手 |
 | M7 | `Signal`型の名目化と`FormBindableSignal`の統合 | M4、D7 | `Signal`/`ReadonlySignal`が名目的になり、`FormBindableSignal`が消える | 未着手 |
-| M8 | `deepSignal(...).peek()`の戻り値を深いreadonly型に | M1、D8 | `peek()`経由の書き込みがコンパイルエラーになる | 未着手 |
+| M8 | `deepSignal(...).peek()`の戻り値を深いreadonly型に | M1、D8 | `peek()`経由の書き込みがコンパイルエラーになる | **完了**（`MatchProps`削除は保留、[記録](./m6-utils-types.ja.md)） |
 | M9 | 診断の既定エラー化 | — | D5で行わないと決定 | **見送り** |
 | M11 | `deepSignal`（object/arrayだけ）と`deepCollectionSignal`の分離 | M8、D6、D9、D10 | object/arrayだけを使う場合にコレクション対応のコードが入らない | 未着手 |
 | M10 | 移行ガイド・リリースノート・最終ゲート | M0〜M8、M11 | 英日migration guide、release notes、website、CI成功 | 未着手 |

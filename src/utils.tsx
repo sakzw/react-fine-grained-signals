@@ -24,13 +24,20 @@ import { useManagedSignals } from "./react/use-signals.js";
 /** A plain value or a value created by `signal`, `computed`, or `deepSignal`. */
 export type SignalInput<T> = T | ReadonlySignal<T>;
 
+/**
+ * `T` without the values `Show` and `Match` treat as false: `null`,
+ * `undefined`, `false`, `0`, `""` and `0n`. Wider types such as `number` or
+ * `string` are unchanged, since only some of their values are falsy.
+ */
+export type Truthy<T> = Exclude<T, null | undefined | false | 0 | "" | 0n>;
+
 type MatchValue<T, E> = [Extract<T, E>] extends [never] ? E : Extract<T, E>;
 
 /** Renders its children only while `when` is truthy. */
 export interface ShowProps<T> {
   when: SignalInput<T>;
   fallback?: ReactNode;
-  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+  children: ReactNode | ((value: Truthy<T>) => ReactNode);
 }
 
 /**
@@ -46,7 +53,7 @@ export function Show<T>({ when, fallback = null, children }: ShowProps<T>): Reac
 
     if (!value) return fallback;
     return typeof children === "function"
-      ? children(value as NonNullable<T>)
+      ? children(value as Truthy<T>)
       : children;
   } finally {
     store.finish();
@@ -62,7 +69,7 @@ export type MatchProps<T, E extends T = never> = [E] extends [never]
   ? {
       when: SignalInput<T>;
       equals?: never;
-      children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+      children: ReactNode | ((value: Truthy<T>) => ReactNode);
     }
   : {
       when: SignalInput<T>;
@@ -82,7 +89,7 @@ export function Match<T, const E>(props: {
 export function Match<T>(props: {
   when: SignalInput<T>;
   equals?: never;
-  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+  children: ReactNode | ((value: Truthy<T>) => ReactNode);
 }): null;
 export function Match(_props: { when: unknown }): null {
   return null;

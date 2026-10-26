@@ -16,7 +16,7 @@ import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/util
 interface ShowProps<T> {
   when: SignalInput<T>;
   fallback?: ReactNode;
-  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+  children: ReactNode | ((value: Truthy<T>) => ReactNode);
 }
 ```
 
@@ -28,7 +28,7 @@ interface ShowProps<T> {
 </Show>
 ```
 
-- 関数childrenには絞り込まれたtruthyな値が渡されます。素のnodeを渡した場合はそのままレンダーされます。
+- 関数childrenには、`Truthy<T>` 型のtruthyな値が渡されます。`T` から `null`、`undefined`、`false`、`0`、`""`、`0n` が取り除かれるため、`0 | 1 | null` のsignalなら `1` になります。`number` や `string` のような広い型は変わりません。素のnodeを渡した場合はそのままレンダーされます。
 - `fallback` の既定値は `null` です。
 
 ## Switch と Match
@@ -48,7 +48,7 @@ type MatchProps<T, E extends T = T> =
   | {
       when: SignalInput<T>;
       equals?: never;
-      children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+      children: ReactNode | ((value: Truthy<T>) => ReactNode);
     };
 ```
 

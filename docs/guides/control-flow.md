@@ -16,7 +16,7 @@ Every input marked `SignalInput<T>` below is `T | ReadonlySignal<T>`: pass a pla
 interface ShowProps<T> {
   when: SignalInput<T>;
   fallback?: ReactNode;
-  children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+  children: ReactNode | ((value: Truthy<T>) => ReactNode);
 }
 ```
 
@@ -28,7 +28,7 @@ Renders its children only while `when` is truthy.
 </Show>
 ```
 
-- A function child receives the narrowed truthy value; a plain node child is rendered as is.
+- A function child receives the truthy value, typed `Truthy<T>`: `null`, `undefined`, `false`, `0`, `""` and `0n` are removed from `T`, so a `0 | 1 | null` signal gives `1`. Wider types such as `number` or `string` are unchanged. A plain node child is rendered as is.
 - `fallback` defaults to `null`.
 
 ## Switch and Match
@@ -48,7 +48,7 @@ type MatchProps<T, E extends T = T> =
   | {
       when: SignalInput<T>;
       equals?: never;
-      children: ReactNode | ((value: NonNullable<T>) => ReactNode);
+      children: ReactNode | ((value: Truthy<T>) => ReactNode);
     };
 ```
 
