@@ -34,4 +34,4 @@
 
 ## GitHub CI
 
-push後に追記する。
+`8256bc7`のpushで、Test、E2E、Website CIがすべて成功した。以前のマイルストーンの最終push（`ac5c91f`）も同様に全て成功している。
