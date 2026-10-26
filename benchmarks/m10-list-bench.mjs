@@ -11,7 +11,7 @@ const React = await import("react");
 const { act } = React;
 const { createRoot } = await import("react-dom/client");
 const { isSignal, signal, useSignalTracking } = await import("../dist/index.js");
-const { useManagedSignals } = await import("../dist/internal.js");
+const { useSignalCapture } = await import("../dist/internal.js");
 const { For, Index } = await import("../dist/utils.js");
 
 const sizes = (process.env.M10_LIST_SIZES ?? "100,1000,10000").split(",").map(Number);
@@ -35,21 +35,19 @@ const makeRows = (count) => Array.from({ length: count }, (_, id) => ({ id: `row
 const read = (each) => isSignal(each) ? each.value : each;
 
 function BaselineFor({ each, by, children }) {
-  const store = useManagedSignals();
-  try {
+  const store = useSignalCapture();
+  return store.capture(() => {
     const collection = read(each);
     if (collection == null) return null;
     const items = Array.isArray(collection) ? collection : Array.from(collection);
     return items.length === 0 ? null : items.map((item, index) =>
       React.createElement(React.Fragment, { key: by(item, index) }, children(item, index)));
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 function DirectKeyFor({ each, fallback = null, by, children }) {
-  const store = useManagedSignals();
-  try {
+  const store = useSignalCapture();
+  return store.capture(() => {
     const collection = read(each);
     if (collection == null) return fallback;
     const items = Array.isArray(collection) ? collection : Array.from(collection);
@@ -61,27 +59,23 @@ function DirectKeyFor({ each, fallback = null, by, children }) {
         ? React.cloneElement(child, { key })
         : React.createElement(React.Fragment, { key }, child);
     });
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 function BaselineIndex({ each, children }) {
-  const store = useManagedSignals();
-  try {
+  const store = useSignalCapture();
+  return store.capture(() => {
     const items = read(each);
     if (items == null || items.length === 0) return null;
     const readAt = (index) => (read(each) ?? items)[index];
     return items.map((_item, index) =>
       React.createElement(React.Fragment, { key: index }, children(() => readAt(index), index)));
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 function DirectKeyIndex({ each, fallback = null, children }) {
-  const store = useManagedSignals();
-  try {
+  const store = useSignalCapture();
+  return store.capture(() => {
     const items = read(each);
     if (items == null || items.length === 0) return fallback;
     const readAt = (index) => (read(each) ?? items)[index];
@@ -91,15 +85,12 @@ function DirectKeyIndex({ each, fallback = null, children }) {
         ? React.cloneElement(child, { key: index })
         : React.createElement(React.Fragment, { key: index }, child);
     });
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 const CandidateRow = React.memo(function CandidateRow({ item, index, children }) {
-  const store = useManagedSignals();
-  try { return children(item, index); }
-  finally { store.finish(); }
+  const store = useSignalCapture();
+  return store.capture(() => children(item, index));
 }, (previous, next) => {
   if (previous.index !== next.index || previous.children !== next.children || previous.mapEntry !== next.mapEntry) return false;
   if (previous.mapEntry) return previous.item[0] === next.item[0] && Object.is(previous.item[1], next.item[1]);
@@ -107,8 +98,8 @@ const CandidateRow = React.memo(function CandidateRow({ item, index, children })
 });
 
 function CandidateFor({ each, fallback = null, by, children }) {
-  const store = useManagedSignals();
-  try {
+  const store = useSignalCapture();
+  return store.capture(() => {
     const collection = read(each);
     if (collection == null) return fallback;
     const items = Array.isArray(collection) ? collection : Array.from(collection);
@@ -117,7 +108,7 @@ function CandidateFor({ each, fallback = null, by, children }) {
     return items.map((item, index) => React.createElement(CandidateRow, {
       key: by(item, index), item, index, children, mapEntry,
     }));
-  } finally { store.finish(); }
+  });
 }
 
 function createHarness(kind, count) {

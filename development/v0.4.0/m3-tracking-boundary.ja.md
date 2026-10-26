@@ -20,3 +20,11 @@
 ## ゲート
 
 lint、typecheck、runtime vitest（41ファイル・910件）、transform（`react-execution` 317件を含め、timeoutする既知の2テストを除いて通過）、`pnpm size`（変化なし、予算内）、`test:consumer`、`test:browser`（53件）、website（pack、typecheck、build）は通過。完了時のファイル数・件数は変更前と同じ。CIは push 後に確認する。
+
+## 追補（v0.4.0の準備後）
+
+- `benchmarks/m10-list-bench.mjs`を、`useManagedSignals`＋`try/finally`から、`useSignalCapture()`＋本体を`store.capture(() => { ... })`で包む形へ移行した（5つのcomponent）。`M10_LIST_SIZES=100`の小さな条件で実行し、動くことを確認した。ゲートではない。
+- ライブラリ内部の`useManagedSignals`（`utils.tsx`の`Show`/`Switch`/`For`/`Index`が使用）は、**意図して残す**ことにした。`utils.tsx`を`useSignalCapture`に書き換える案を検討したが、次の理由で見送った。
+  1. 削れるコードがほとんどない。`react-adapter.mts`の`useManagedSignals`は数行で、`RenderStore`などの本体は`useSignalCapture`と共有している。
+  2. 厳密なscopeには意味がある。`utils`は`children`のrender propも含めて関数本体全体をscopeで包むため、render prop内のreadも、そのcomponentに帰属する。`capture`に移すと本体全体を`capture(() => ...)`で包むことになり、同じ挙動を作るために別の不安定さ（`Switch`のループ内の複数read、`Index`の後から呼ばれるaccessorとの境界）を持ち込む。
+  3. 影響するテストが多い（`use-signals-managed`ほか約14箇所）。利用者への影響はなく、公開APIからは既に消えているので、リスクに見合う利益がない。
