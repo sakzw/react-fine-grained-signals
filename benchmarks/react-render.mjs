@@ -28,7 +28,7 @@ const { signal, computed, useSignalTracking } = await import("../dist/index.js")
 // 57f824e) never calls the bare `useSignalTracking()` above -- it rewrites call
 // sites to this runtime entry point's managed boundary instead. Imported
 // the production runtime entry point's managed boundary.
-const { useManagedSignals, useSignalCapture } = await import("../dist/internal.js");
+const { useSignalCapture } = await import("../dist/internal.js");
 const managedImpl = process.env.BENCH_MANAGED_IMPL ?? "capture";
 if (managedImpl !== "capture" && managedImpl !== "try-finally") {
   throw new Error(`Unknown BENCH_MANAGED_IMPL: ${managedImpl}`);
@@ -161,7 +161,7 @@ function createManagedSignalsVariant(counts) {
 
   const ManagedSignalsCounter = managedImpl === "try-finally"
     ? function ManagedSignalsCounterTryFinally() {
-        const store = useManagedSignals();
+        const store = useSignalCapture();
         try {
           counts.counter += 1;
           return React.createElement("li", null, "count:", count.value);
@@ -203,7 +203,7 @@ function createControlledSignalsVariant(counts, managed, mode) {
   }
   const Counter = managed && managedImpl === "try-finally"
     ? function ManagedCounterTryFinally() {
-        const store = useManagedSignals();
+        const store = useSignalCapture();
         try { return renderCounter(); } finally { store.finish(); }
       }
     : managed
