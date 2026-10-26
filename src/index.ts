@@ -6,6 +6,7 @@ export {
   isSignal,
   signal,
   untracked,
+  type DeepReadonly,
   type DeepSignal,
   type ReadonlySignal,
   type Signal,

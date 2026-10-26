@@ -11,5 +11,6 @@ export {
 } from "./base.js";
 export {
   deepSignal,
+  type DeepReadonly,
   type DeepSignal,
 } from "./deep-signal.js";

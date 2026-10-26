@@ -129,7 +129,7 @@ state.value.items.push("second");
 ```
 
 - 監視できるのは、`state.value` を経由した代入、削除、標準的な配列操作だけです。
-- `state.peek()` は依存関係を収集せず生のルート値を返すため、読み取り専用として扱ってください。
+- `state.peek()` は依存関係を収集しない、読み取り専用のスナップショットです。型は `DeepReadonly<T>` で、objectのpropertyは `readonly`、配列は `ReadonlyArray`、`Map` と `Set` は `ReadonlyMap` と `ReadonlySet` になり、`WeakMap` と `WeakSet` からは `set`、`add`、`delete` が取り除かれます。そのため `state.peek().count = 1` や `state.peek().items.push(x)` はコンパイルエラーです。変更は `state.value` 経由で行ってください。実行時の `peek()` は生のオブジェクトを返すため、型をすり抜けた書き込みは通知されずに失われます。したがって `DeepSignal<T>` は `Signal<T>` ではありません。
 - ルートにはデータプロパティを持つ変更可能なプレーンオブジェクト、配列、または同一realmの標準collectionが必要です。v1では、アクセサプロパティ、プロパティ記述子やプロトタイプの変更、`freeze` / `seal` を拒否します。拡張不可のオブジェクトも、部分的にリアクティブにせず拒否します。
 - ネストしたプレーンオブジェクト、配列、`Map`、`Set`、`WeakMap`、`WeakSet`はリアクティブです。クラスインスタンス、関数、`Date`、Promise、既存のsignalは不透明な値として扱います。
 - 配列の変更メソッド(`push`、`splice`、`sort` など)は、呼び出し側を変更対象の配列に購読させません。通知されるのは、影響を受けたindex、`length`、keyを読んでいる側だけです。そのため、effect内での `push` によって、そのeffectが以後の `push` のたびに再実行されることはありません。

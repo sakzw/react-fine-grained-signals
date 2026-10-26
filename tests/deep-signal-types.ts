@@ -66,6 +66,7 @@ class NominalBox {
 type NominalState = { box: NominalBox };
 const nominal = deepSignal<NominalState>({ box: new NominalBox(1) });
 const nominalBox: NominalBox = nominal.value.box;
+// @ts-expect-error A DeepSignal is not a Signal.
 const nominalSignal: Signal<NominalState> = nominal;
 
 void [signalCompatible, deepSignalCompatible, name, firstTupleValue, mutableMap, mutableSet, nominalBox, nominalSignal];

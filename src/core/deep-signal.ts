@@ -11,8 +11,50 @@ import type { Signal } from "./base.js";
 
 declare const deepSignalBrand: unique symbol;
 
-/** A signal whose plain-object, array, and standard collection values are reactive. */
-export interface DeepSignal<T extends object> extends Signal<T> {
+type DeepReadonlyLeaf =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | Date
+  | RegExp
+  | Error
+  | Promise<unknown>
+  | ((...args: never[]) => unknown);
+
+/**
+ * `T` as seen through a read-only, non-tracking snapshot: plain object
+ * properties are `readonly` recursively, arrays are `ReadonlyArray`, `Map` and
+ * `Set` are `ReadonlyMap` and `ReadonlySet`, and `WeakMap` and `WeakSet` lose
+ * `set`, `add` and `delete`. Primitives, `Date`, `RegExp`, `Error`,
+ * promises and functions are left as they are. TypeScript cannot tell a class
+ * instance from a plain object, so a class instance is mapped like one.
+ */
+export type DeepReadonly<T> = T extends DeepReadonlyLeaf
+  ? T
+  : T extends ReadonlyMap<infer K, infer V>
+    ? ReadonlyMap<K, DeepReadonly<V>>
+    : T extends ReadonlySet<infer U>
+      ? ReadonlySet<DeepReadonly<U>>
+      : T extends WeakMap<infer K extends WeakKey, infer V>
+        ? Omit<WeakMap<K, DeepReadonly<V>>, "set" | "delete">
+        : T extends WeakSet<infer U extends WeakKey>
+          ? Omit<WeakSet<U>, "add" | "delete">
+          : { readonly [K in keyof T]: DeepReadonly<T[K]> };
+
+/**
+ * A signal whose plain-object, array, and standard collection values are reactive.
+ *
+ * It is not a `Signal<T>`: `peek()` returns the raw object without tracking,
+ * so writes through it would be lost, and its type is `DeepReadonly<T>`.
+ * Change state through `.value`.
+ */
+export interface DeepSignal<T extends object> extends Omit<Signal<T>, "peek"> {
+  /** The raw state, read without tracking. Read-only: write through `.value`. */
+  peek(): DeepReadonly<T>;
   /**
    * Type-only marker; never present at runtime. It lets positions that only
    * observe a signal's root value reject a deep signal at compile time,
@@ -87,5 +129,5 @@ export function inspectCollectionMetadata(value: object): ReturnType<
  * the original raw value or `.peek()` are intentionally not observable.
  */
 export function deepSignal<T extends object>(initialValue: T): DeepSignal<T> {
-  return getProductionDeepSignals().deepSignal(initialValue) as DeepSignal<T>;
+  return getProductionDeepSignals().deepSignal(initialValue) as unknown as DeepSignal<T>;
 }

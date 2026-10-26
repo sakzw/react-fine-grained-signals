@@ -30,8 +30,9 @@ state.value.items.push('second')
 
 ## Rules
 
-- Read and write through `state.value`. `state.peek()` returns the raw,
-  untracked root — use it for reads only.
+- Read and write through `state.value`. `state.peek()` is an untracked,
+  read-only snapshot typed `DeepReadonly<T>`: writing through it is a compile
+  error. Change state through `state.value`.
 - Assignment, deletion, and the standard array mutations are observable.
 - Nested plain objects, arrays, `Map`, `Set`, `WeakMap`, and `WeakSet` are
   reactive. Class instances, functions, `Date`, promises, and existing signals

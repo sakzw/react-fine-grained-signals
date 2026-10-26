@@ -35,8 +35,10 @@ function Positions() {
   );
 }
 
-// A deep signal is still assignable to the general signal types.
+// A deep signal is not a general Signal: its peek() is deep read-only.
+// @ts-expect-error DeepSignal<string[]> is not a Signal<string[]>.
 const asSignal: Signal<string[]> = deepList;
+// @ts-expect-error DeepSignal<string[]> is not a ReadonlySignal<string[]>.
 const asReadonly: ReadonlySignal<string[]> = deepList;
 const typed: DeepSignal<{ color: string }> = deepStyle;
 

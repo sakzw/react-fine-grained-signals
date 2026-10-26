@@ -129,7 +129,7 @@ state.value.items.push("second");
 ```
 
 - Only assignment, deletion, and standard array mutations made through `state.value` are observable.
-- `state.peek()` returns the untracked raw root and should be used for reads only.
+- `state.peek()` is an untracked, read-only snapshot of the raw root. Its type is `DeepReadonly<T>`: object properties are `readonly`, arrays are `ReadonlyArray`, `Map` and `Set` are `ReadonlyMap` and `ReadonlySet`, and `WeakMap` and `WeakSet` lose `set`, `add` and `delete`, so `state.peek().count = 1` and `state.peek().items.push(x)` are compile errors. Change state through `state.value`. At runtime `peek()` still returns the raw object, so a write that escapes the types is lost without notifying. A `DeepSignal<T>` is therefore not a `Signal<T>`.
 - The root must be a mutable plain object, array, or same-realm standard collection. Accessor properties, descriptor/prototype changes, and `freeze`/`seal` are rejected in v1, as are non-extensible objects — they are rejected rather than made partially reactive.
 - Nested plain objects, arrays, `Map`, `Set`, `WeakMap`, and `WeakSet` values are reactive. Class instances, functions, `Date`, promises, and existing signals are treated as opaque values.
 - Array mutation methods (`push`, `splice`, `sort`, ...) do not subscribe the caller to the array they change; only the readers of the affected indices, `length`, and keys are notified. A `push` inside an effect therefore does not make that effect re-run on every later push.
