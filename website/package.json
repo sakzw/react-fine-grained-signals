@@ -14,7 +14,7 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-fine-grained-signals": "file:./vendor/react-fine-grained-signals.tgz",
-    "vocs": "2.10.3",
+    "vocs": "2.11.1",
     "waku": "1.0.0-rc.4"
   },
   "devDependencies": {

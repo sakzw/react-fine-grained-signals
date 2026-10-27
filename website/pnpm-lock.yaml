@@ -176,8 +176,8 @@ importers:
         specifier: file:./vendor/react-fine-grained-signals.tgz
         version: file:vendor/react-fine-grained-signals.tgz(react@19.3.1)
       vocs:
-        specifier: 2.10.3
-        version: 2.10.3(@types/react@19.3.0)(@vue/compiler-sfc@3.5.44)(esbuild@0.28.2)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(rolldown@1.2.14)(rollup@4.64.7)(supports-color@8.1.1)(typescript@7.1.0-beta)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(waku@1.0.0-rc.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30))
+        specifier: 2.11.1
+        version: 2.11.1(@types/react@19.3.0)(@vue/compiler-sfc@3.5.44)(esbuild@0.28.2)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(rolldown@1.2.14)(rollup@4.64.7)(supports-color@8.1.1)(typescript@7.1.0-beta)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(waku@1.0.0-rc.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30))
       waku:
         specifier: 1.0.0-rc.4
         version: 1.0.0-rc.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
@@ -739,6 +739,9 @@ packages:
 
   '@phosphor-icons/core@2.1.1':
     resolution: {integrity: sha512-v4ARvrip4qBCImOE5rmPUylOEK4iiED9ZyKjcvzuezqMaiRASCHKcRIuvvxL/twvLpkfnEODCOJp5dM4eZilxQ==}
+
+  '@pierre/highlights@0.2.0':
+    resolution: {integrity: sha512-hTpcOU1EzDAP4bYtEhxmMu2jwMvtkUydRUBUpWMSHTs3dw0IaC3Ld5ansMy18L0GE3b6Vfl2OGkLK+pWWpnBmw==}
 
   '@react-hook/intersection-observer@3.1.2':
     resolution: {integrity: sha512-mWU3BMkmmzyYMSuhO9wu3eJVP21N8TcgYm9bZnTrMwuM818bEk+0NRM3hP+c/TqA9Ln5C7qE53p1H0QMtzYdvQ==}
@@ -1828,6 +1831,11 @@ packages:
 
   ajv-formats@3.0.1:
     resolution: {integrity: sha512-8iUql50EUR+uUcdRQ3HDqa6EVyo3docL8g5WJ3FNcWmu62IbkGUue/pEyLBW8VGKKucTPgqeks4fIU1DA4yowQ==}
+    peerDependencies:
+      ajv: ^8.0.0
+    peerDependenciesMeta:
+      ajv:
+        optional: true
 
   ajv-keywords@5.1.0:
     resolution: {integrity: sha512-YCS/JNFAUyr5vAuhk1DWm1CBxRHW9LbJ2ozWeemrIqpbsqKjHVxYPyi5GC0rjZIT5JxJ3virVTS8wk4i/Z+krw==}
@@ -3201,11 +3209,11 @@ packages:
         optional: true
 
   react-fine-grained-signals@file:vendor/react-fine-grained-signals.tgz:
-    resolution: {integrity: sha512-Y6ck7raS7jt0dRFR4+o5tvs0xBy2ZyljIcfDm+l0EsmTIyHw52Lgp0L6nk7H0P8dYytV/0Z0xnG07k860VMiIA==, tarball: file:vendor/react-fine-grained-signals.tgz}
-    version: 0.3.0
+    resolution: {integrity: sha512-ubtm6t3o1Z9st4/AhTzgN4ullbX90nAHghHi6iQImgvXMMXugADd7tn1WLo7X9ss5WMIN3802vvG033aoTdF+w==, tarball: file:vendor/react-fine-grained-signals.tgz}
+    version: 0.4.0
     engines: {node: '>=22.0.0'}
     peerDependencies:
-      react: '>=19.0.0'
+      react: '>=19.3.0'
 
   react-is@17.0.2:
     resolution: {integrity: sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==}
@@ -3629,11 +3637,11 @@ packages:
         optional: true
 
   unplugin-react-fine-grained-signals@file:vendor/unplugin-react-fine-grained-signals.tgz:
-    resolution: {integrity: sha512-DVJseauDuSATOVKXpszXNERWZZZmLbl05gr/DBDpNkQIJ45/6RxfWfKIZsgySW2VY3abdesPTGiaBhwBv5FIeQ==, tarball: file:vendor/unplugin-react-fine-grained-signals.tgz}
-    version: 0.3.0
+    resolution: {integrity: sha512-8me1NkYfE6mdvSnBTXLvmBGqShgONPwmulvFEYAa72JDQJiL6k10FkEoSlU58BnqSMRlNwBfMvxGU1gz8rwQvA==, tarball: file:vendor/unplugin-react-fine-grained-signals.tgz}
+    version: 0.4.0
     engines: {node: ^22.18.0 || >=24.11.0}
     peerDependencies:
-      react-fine-grained-signals: ^0.3.0
+      react-fine-grained-signals: ^0.4.0
 
   unplugin@2.3.11:
     resolution: {integrity: sha512-5uKD0nqiYVzlmCRs01Fhs2BdkEgBS3SAVP6ndrBsuK42iC2+JHyxM05Rm9G8+5mkmRtzMZGY8Ct5+mliZxU/Ww==}
@@ -3765,8 +3773,8 @@ packages:
       vite:
         optional: true
 
-  vocs@2.10.3:
-    resolution: {integrity: sha512-GVf2+nXnU/b99UKmQh9qsL9GBHAoOM2cQ0gfcVPj18Jq+aNC7dXlWhgjWOzahbqzgHOrSAb6RX+yYYjNtQGkiA==}
+  vocs@2.11.1:
+    resolution: {integrity: sha512-ES/BTMlkXe7GO3CCtoSO55QOHDqJ80rLfojC4AdtMsRsTspmxAIMfc0RVe/osSGNT4ALAE1amwY0no1mMb4AWg==}
     hasBin: true
     peerDependencies:
       '@vocs/twoslash-rust': ^0.1.0
@@ -4546,6 +4554,8 @@ snapshots:
   '@oxc-project/types@0.154.0': {}
 
   '@phosphor-icons/core@2.1.1': {}
+
+  '@pierre/highlights@0.2.0': {}
 
   '@react-hook/intersection-observer@3.1.2(react@19.3.1)':
     dependencies:
@@ -8003,7 +8013,7 @@ snapshots:
     optionalDependencies:
       vite: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1)
 
-  vocs@2.10.3(@types/react@19.3.0)(@vue/compiler-sfc@3.5.44)(esbuild@0.28.2)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(rolldown@1.2.14)(rollup@4.64.7)(supports-color@8.1.1)(typescript@7.1.0-beta)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(waku@1.0.0-rc.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)):
+  vocs@2.11.1(@types/react@19.3.0)(@vue/compiler-sfc@3.5.44)(esbuild@0.28.2)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(rolldown@1.2.14)(rollup@4.64.7)(supports-color@8.1.1)(typescript@7.1.0-beta)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(waku@1.0.0-rc.4(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(react-dom@19.3.1(react@19.3.1))(react-server-dom-webpack@19.3.1(react-dom@19.3.1(react@19.3.1))(react@19.3.1)(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)))(react@19.3.1)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))(webpack@5.112.0(esbuild@0.28.2)(lightningcss@1.33.0)(postcss@8.5.30)):
     dependencies:
       '@base-ui/react': 1.9.0(@types/react@19.3.0)(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
       '@codesandbox/sandpack-react': 2.20.0(react-dom@19.3.1(react@19.3.1))(react@19.3.1)
@@ -8018,6 +8028,7 @@ snapshots:
       '@mdx-js/react': 3.1.1(@types/react@19.3.0)(react@19.3.1)
       '@mdx-js/rollup': 3.1.1(rollup@4.64.7)(supports-color@8.1.1)
       '@modelcontextprotocol/sdk': 1.32.1(supports-color@8.1.1)(zod@4.6.7)
+      '@pierre/highlights': 0.2.0
       '@remix-run/node-fetch-server': 0.13.3
       '@scalar/api-client': 3.23.0(supports-color@8.1.1)(tailwindcss@4.3.3)(typescript@7.1.0-beta)
       '@scalar/openapi-parser': 0.28.16
