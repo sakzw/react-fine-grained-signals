@@ -34,3 +34,5 @@ v0.4.0のマイルストーン後に、コードのformatterとしてoxfmtを入
 ### 対象を広げたときのゲート
 
 `pnpm lint`、`pnpm typecheck`、`pnpm build`、`pnpm size`（変化なし）、`pnpm test:consumer`、`pnpm install --frozen-lockfile`、websiteのtypecheckとbuild、`pnpm exec vitest run --maxWorkers=2`（935件）、`benchmarks/*.mjs`の`node --check`が通った。
+
+`ae83018`のpushでも、Test・E2E・Website CIがすべて成功した。
