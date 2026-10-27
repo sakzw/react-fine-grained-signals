@@ -27,6 +27,10 @@ jobs:
         id: lint
         run: pnpm lint
         background: true
+      - name: Format
+        id: format
+        run: pnpm fmt:check
+        background: true
       - name: Typecheck
         id: typecheck
         run: pnpm typecheck
