@@ -7,7 +7,7 @@
 
 1. **別コピーのsignalを`useSignalValue`に渡すと、エラーなしで更新が止まる。** `useSignalValue`がrender中に`isSignal(source)`を呼ぶようにした。別コピーのsignalでは`isSignal`が`multipleCopiesError`をthrowする。`tests/multiple-copies.test.ts`に、追跡コンポーネントと`useSignalValue`のレンダー時のテストを追加した（`renderToString`、2つの実ビルド）。
 2. **v0.3のコピーがv0.4のsignalを読むと`owner.add is not a function`になる。** いったんv0.4のowner（graph・render）に`multipleCopiesError`をthrowする`add()`を持たせたが、メンテナから「v0.3ユーザーは考えなくてよい。バンドルサイズを小さくしてほしい」と指示があり、削除した（`development/v0.4.0/size-reduction.ja.md`）。v0.3とv0.4の混在は非対応で、特別な処理はしない。
-   - **未対応（要判断）**: v0.3の`isSignal(v0.4のsignal)`が`true`を返す件。brandのキー（`signal.v2`）が同じためで、直すにはbrandのキーを変える必要がある。v0.3のコピーに対しては何もできず、v0.4側でbrandを新しくして旧brandを「複数コピー」として扱う案があるが、破壊的なので保留した。
+   - **対応しない（2026-10-27、メンテナ判断）**: v0.3の`isSignal(v0.4のsignal)`が`true`を返す件。brandのキー（`signal.v2`）が同じためで、直すにはキーを変える必要がある。しかしキーを変えると、v0.4はv0.3のsignalを「brandのないただのオブジェクト」と判定するようになり、いまv0.4側で出ている`multipleCopiesError`が出なくなる。v0.4側の検出を残すには旧キーも調べるコードが要り、サイズが増えるうえ、「v0.3ユーザーは考えなくてよい」という方針とも合わない。v0.3側は壊れ方が変わるだけで、どちらにしても混在は非対応。そのためキーは`signal.v2`のまま据え置く。
 3. **モードの不一致が代入時ではなく、あとの読み取り時にしか失敗しない経路があった。** `assertDeepDataGraph`が、carrierの中の他モードのproxy、`peek()`が返した生のオブジェクト、ルートの置き換えでも、代入時に`TypeError`を投げるようにした。carrierのコピーのキャッシュ（`normalizedProxyCarriers`）は、作ったモードを記録して、別のモードでは再利用しない。
 4. **`DeepSignal<T>`がplain objectのルートで`Signal<T>`に代入できた。** `DeepSignal`/`DeepCollectionSignal`は`ReadonlySignal`のbrandだけを引き継ぎ、書き込み用のmarkerは持たない形にした。これで`T`によらず`Signal<T>`には代入できない。読み取り用途（`For`、`Index`、`Show`、`computed`の入力）には、これまでどおり渡せる（plain objectのルートなら`ReadonlySignal<T>`にも代入できる。配列・collectionのルートは`DeepReadonly<T>`が`T`と異なるため不可）。型テストを更新した。
 
@@ -33,7 +33,7 @@
 
 - マイルストーンごとのCI結果の記録（M1〜M8、M11が「push後に確認する」のまま）: 実際にはどのpushでもCIは成功している（M0の最初のpushを除く）。各マイルストーンの記録の末尾に「GitHub CI」として追記した。
 - M3の`useManagedSignals`の内部保持、M8のクラスのインスタンスの扱い: 判断と理由は各記録に残してある。レビューが指摘するとおり、メンテナの個別の確認は得ていない。必要なら判断を仰ぐ（`useManagedSignals`の内部保持は、メンテナの問い合わせに対して「対応した方が良ければ」と任された上で、見送りの理由を示して残した）。
-- v0.3のcopyの`isSignal`がv0.4のsignalを受け入れる件（上記）。
+- v0.3のcopyの`isSignal`がv0.4のsignalを受け入れる件（上記。brandのキーは据え置くと決定）。
 - `DeepReadonly<unknown>`が`{}`になる型の細部、`PlainRoot`に明示的なunion型引数を渡すと素通りする点: 影響が小さいので保留した。 → その後修正した（[記録](./compiler-option-and-deep-types.ja.md)）。
 
 ## ゲート
