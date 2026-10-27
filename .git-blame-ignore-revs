@@ -3,3 +3,6 @@
 
 # style: format the code with oxfmt
 6057670f534a5364cf320fed669690e9466be454
+
+# style: format JSON, YAML, the website, fixtures and current benchmarks with oxfmt
+5dc601dcdede89b02c63a925a158af9dbaf59e5c
