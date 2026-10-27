@@ -7,9 +7,9 @@ import {
   UNTRACKED_OWNER,
   withExecutionOwner,
   withSynchronousExecutionOwner,
-  type ExecutionOwnerV2,
-  type GraphExecutionOwnerV2,
-  type RenderExecutionOwnerV2,
+  type ExecutionOwner,
+  type GraphExecutionOwner,
+  type RenderExecutionOwner,
 } from "../src/core/execution-owner.js";
 
 afterEach(() => {
@@ -17,14 +17,12 @@ afterEach(() => {
   executionContext.frames.length = 0;
 });
 
-const graphOwner: GraphExecutionOwnerV2 = {
-  version: 2,
+const graphOwner: GraphExecutionOwner = {
   kind: "graph",
   runtimeToken: {},
 };
 
-const renderOwner: RenderExecutionOwnerV2 = {
-  version: 2,
+const renderOwner: RenderExecutionOwner = {
   kind: "render",
   runtimeToken: {},
 };
@@ -42,8 +40,8 @@ describe("execution owner scopes", () => {
   });
 
   it("restores synchronous and stacked owners, including out-of-order cleanup", () => {
-    const parent: ExecutionOwnerV2 = graphOwner;
-    const child: ExecutionOwnerV2 = renderOwner;
+    const parent: ExecutionOwner = graphOwner;
+    const child: ExecutionOwner = renderOwner;
     expect(withExecutionOwner(parent, () => {
       expect(executionContext.owner).toBe(parent);
       const restoreChild = pushExecutionOwner(child);

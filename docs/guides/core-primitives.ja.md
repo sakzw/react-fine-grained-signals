@@ -171,13 +171,13 @@ isSignal(value: unknown): value is ReadonlySignal<unknown>
 
 ### packageのcopyは1つだけにする
 
-`react-fine-grained-signals` は1つのcopyだけをinstallしてください。すべてのsignalは `Symbol.for("react-fine-grained-signals.signal.v2")` をキーとする列挙不可のbrandを持ち、各copyは独自のグラフを持つため、signalはそれを作ったcopyからしか読めません。2つ目のcopyが読み込まれている場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）、混在は更新されない値を黙って返すのではなくエラーになります。`effect`、`computed`、追跡されるコンポーネントの内側でcopyをまたいで読むと `Multiple copies of react-fine-grained-signals are loaded` をthrowし、`isSignal` も他方のcopyが作ったsignalに対してthrowします。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
+`react-fine-grained-signals` は1つのcopyだけをinstallしてください。すべてのsignalは `Symbol.for("react-fine-grained-signals.brand")` をキーとする列挙不可のbrandを持ち、各copyは独自のグラフを持つため、signalはそれを作ったcopyからしか読めません。2つ目のcopyが読み込まれている場合（pnpmのhoistingの差異、monorepoのconsumer、ESM/CJSの分裂）、混在は更新されない値を黙って返すのではなくエラーになります。`effect`、`computed`、追跡されるコンポーネントの内側でcopyをまたいで読むと `Multiple copies of react-fine-grained-signals are loaded` をthrowし、`isSignal` も他方のcopyが作ったsignalに対してthrowします。brandは列挙不可なので、`Object.keys`、`JSON.stringify`、オブジェクトのスプレッド、Reactのprop差分には現れません。
 
 重複はinstall側で解消してください。package managerのdedupeコマンド（`pnpm dedupe`、`npm dedupe`）を実行するか、bundlerが1つのcopyに解決するようにします（Viteの `resolve.dedupe: ["react-fine-grained-signals"]`、`@rollup/plugin-node-resolve` の `dedupe` オプション、webpackの `resolve.alias`）。
 
 検出には限界があります。`effect`、`computed`、追跡されるコンポーネントの外で別のcopyのsignalを単純に読む場合は、スタックに目印がないためエラーにならず、そのsignalの現在値が返ります。何も更新されませんが、これはリアクティブなコードの外で値を読むのと同じ挙動です。
 
-brandのキーはv0.2の世代を表します。v0.1.xは `react-fine-grained-signals.signal` を使っており、v0.2のsignalを認識しません（逆も同じです）。1つのページでは本パッケージのメジャー系列を1つに揃えてください。
+検出はv0.4から始まります。それ以前のreleaseは別のキー（`react-fine-grained-signals.signal`と`.signal.v2`）を使っていたため、v0.1〜v0.3のcopyがv0.4と並んでいても検出されず、互いのsignalをただのオブジェクトとして扱います。v0.4以降はキーを変えないので、以降のrelease同士は検出できます。
 
 `deepSignal` の状態にbrandを代入すると例外になります。brandが付いた部分木はsignalとして判定され、リアクティブ化されなくなるためです。
 

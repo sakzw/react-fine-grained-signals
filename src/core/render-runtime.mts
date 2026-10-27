@@ -1,6 +1,6 @@
 /* Attempt-local render and speculative adapter for the production graph. */
 import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, pushExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
-import type { RenderExecutionOwnerV2 } from "./execution-owner.js";
+import type { RenderExecutionOwner } from "./execution-owner.js";
 import { activeRenderCollector, setActiveRenderCollector } from "./render-tracking.js";
 import type { RenderCollector } from "./render-tracking.js";
 import type { AlienDerivedGraphRuntime, RenderAttempt, RenderReadableDependency, RuntimeComputed, RuntimeNode, RuntimeReadable, RuntimeSource, SpeculativeComputedEntry } from "./alien-derived-types.js";
@@ -104,9 +104,8 @@ function createRenderAttempt(): RenderAttempt {
   };
 }
 
-function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bare" = "managed"): RenderExecutionOwnerV2 {
+function createRenderOwner(attempt: RenderAttempt, scopePolicy: "managed" | "bare" = "managed"): RenderExecutionOwner {
   return {
-    version: 2 as const,
     kind: "render" as const,
     scopePolicy,
     runtimeToken: core.runtimeToken,

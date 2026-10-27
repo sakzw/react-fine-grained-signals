@@ -6,9 +6,9 @@
 import { createReactiveSystem } from "alien-signals/system";
 import type { Link, ReactiveFlags, ReactiveNode } from "alien-signals/system";
 import { UNTRACKED_OWNER, executionContext, isGraphExecutionOwner, isRenderExecutionOwner, multipleCopiesError, withSynchronousExecutionOwner } from "./execution-owner.js";
-import type { ExecutionContextOwnerV2, ExecutionOwnerV2, GraphExecutionOwnerV2 } from "./execution-owner.js";
+import type { ExecutionContextOwner, ExecutionOwner, GraphExecutionOwner } from "./execution-owner.js";
 import { activeRenderCollector, trackRenderDependency } from "./render-tracking.js";
-import { SIGNAL_BRAND, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
+import { SIGNAL_BRAND } from "./signal-brand.js";
 import type { AlienDerivedGraphRuntime, RenderAdapterForCore, RenderAttempt, RuntimeNode, RuntimeSource, RuntimeComputed, RuntimeEffect, RuntimeReadable, RuntimeWritable, SpeculativeComputedEntry } from "./alien-derived-types.js";
 
 // These mirror `ReactiveFlags` in alien-signals/system 3.2.1 bit for bit; the
@@ -152,11 +152,11 @@ function readSourceUntracked(source: RuntimeNode): unknown {
 
 // Another copy's graph or render owner is reading. Copies of this package do
 // not interoperate, so a getter that finds one throws instead of reading.
-function isForeignOwner(owner: ExecutionContextOwnerV2 | undefined): owner is ExecutionOwnerV2 {
+function isForeignOwner(owner: ExecutionContextOwner | undefined): owner is ExecutionOwner {
   return (isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner)) && owner.runtimeToken !== runtimeToken;
 }
 
-const graphOwner: GraphExecutionOwnerV2 = { version: 2, kind: "graph", runtimeToken };
+const graphOwner: GraphExecutionOwner = { kind: "graph", runtimeToken };
 // User callbacks (computed getters, effect bodies) are called as `() => T`:
 // no arguments and no `this`, as in v0.1.1.
 function withGraphOwner<T>(callback: () => T): T {
@@ -527,7 +527,7 @@ function untracked<T>(fn: () => T): T {
 
 // Public API/brand candidates. Each public object is the readable class
 // instance itself; no outer wrapper or per-instance methods.
-const brandDescriptor = () => ({ value: SIGNAL_BRAND_VERSION, enumerable: false, writable: false, configurable: false });
+const brandDescriptor = () => ({ value: true, enumerable: false, writable: false, configurable: false });
 function registerHelperBrand(value: object): void {
   Object.defineProperty(value, SIGNAL_BRAND, brandDescriptor());
 }

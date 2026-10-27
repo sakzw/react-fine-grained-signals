@@ -1,6 +1,6 @@
 import { coreRuntime } from "./core-runtime.js";
 import { multipleCopiesError } from "./execution-owner.js";
-import { SIGNAL_BRAND, SIGNAL_BRAND_MIN_VERSION, SIGNAL_BRAND_VERSION } from "./signal-brand.js";
+import { SIGNAL_BRAND } from "./signal-brand.js";
 
 declare const readonlySignalBrand: unique symbol;
 declare const signalWriteType: unique symbol;
@@ -45,8 +45,8 @@ export type NarrowableSignal<T> = ReadonlySignal<T> & {
 
 const signalInstances = new WeakSet<object>();
 
-// The brand carries a version instead of `true`. A branded value this copy did
-// not create comes from another copy of the package. See signal-brand.ts.
+// A branded value this copy did not create comes from another copy of the
+// package. See signal-brand.ts.
 
 /** Marks an internal signal implementation for the public identity guard. */
 export function registerSignal<T extends object>(value: T): T {
@@ -60,7 +60,7 @@ export function registerSignal<T extends object>(value: T): T {
   // the prototype instead would be worse — that pushes the prototype into
   // dictionary mode, which every lookup through it then pays for.
   Object.defineProperty(value, SIGNAL_BRAND, {
-    value: SIGNAL_BRAND_VERSION,
+    value: true,
     enumerable: false,
     writable: false,
     configurable: false,
@@ -76,7 +76,7 @@ export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
   if (typeof value !== "object" || value === null) return false;
   if (signalInstances.has(value)) return true;
   const brand = (value as { [SIGNAL_BRAND]?: unknown })[SIGNAL_BRAND];
-  if (typeof brand !== "number" || brand < SIGNAL_BRAND_MIN_VERSION) return false;
+  if (brand !== true) return false;
   if (coreRuntime.getNodeForReadable(value as { value: unknown; peek(): unknown }) !== undefined) return true;
   // The brand is an own property of every signal this package creates, so one
   // that is not registered here was created by another loaded copy.

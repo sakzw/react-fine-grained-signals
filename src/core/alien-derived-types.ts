@@ -1,5 +1,5 @@
 import type { Link, ReactiveNode } from "alien-signals/system";
-import type { GraphExecutionOwnerV2 } from "./execution-owner.js";
+import type { GraphExecutionOwner } from "./execution-owner.js";
 
 export type RuntimeNodeKind = "source" | "computed" | "effect";
 
@@ -97,7 +97,7 @@ export interface RuntimeWritable<T = unknown> extends RuntimeReadable<T> {
 
 export interface AlienDerivedGraphRuntime {
   readonly runtimeToken: object;
-  readonly graphOwner: GraphExecutionOwnerV2;
+  readonly graphOwner: GraphExecutionOwner;
   readonly signal: <T>(initialValue: T) => RuntimeWritable<T>;
   readonly computed: <T>(getter: () => T) => RuntimeReadable<T>;
   readonly effect: (callback: () => unknown) => () => void;

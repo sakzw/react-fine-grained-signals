@@ -171,13 +171,13 @@ Reports whether a value came from `signal`, `computed`, or `deepSignal`. The cus
 
 ### Only one copy of the package
 
-Install a single copy of `react-fine-grained-signals`. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.signal.v2")`, and each copy keeps its own graph, so a signal can only be read by the copy that created it. If a second copy is loaded (pnpm hoisting differences, a monorepo consumer, an ESM/CJS split), mixing them is an error rather than a silently stale value: a read that crosses copies from inside an `effect`, a `computed`, or a tracked component throws `Multiple copies of react-fine-grained-signals are loaded`, and `isSignal` throws for a signal the other copy created. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
+Install a single copy of `react-fine-grained-signals`. Every signal carries a non-enumerable brand under `Symbol.for("react-fine-grained-signals.brand")`, and each copy keeps its own graph, so a signal can only be read by the copy that created it. If a second copy is loaded (pnpm hoisting differences, a monorepo consumer, an ESM/CJS split), mixing them is an error rather than a silently stale value: a read that crosses copies from inside an `effect`, a `computed`, or a tracked component throws `Multiple copies of react-fine-grained-signals are loaded`, and `isSignal` throws for a signal the other copy created. The brand stays out of `Object.keys`, `JSON.stringify`, object spread, and React's prop diffing.
 
 Fix the duplication in the install: run your package manager's dedupe command (`pnpm dedupe`, `npm dedupe`), or make the bundler resolve one copy (Vite's `resolve.dedupe: ["react-fine-grained-signals"]`, the `dedupe` option of `@rollup/plugin-node-resolve`, webpack's `resolve.alias`).
 
 Detection has a limit. A plain read of another copy's signal made outside any `effect`, `computed`, or tracked component has nothing on the stack to mark it, so it returns that signal's current value without an error. It will not update anything, which is the same as reading any value outside reactive code.
 
-The brand key names the v0.2 generation. v0.1.x used `react-fine-grained-signals.signal` and does not recognize v0.2 signals (nor the reverse), so keep a single major line of this package per page.
+Detection starts with v0.4. Releases before it used other keys (`react-fine-grained-signals.signal` and `.signal.v2`), so a v0.1 to v0.3 copy next to v0.4 is not detected; each sees the other's signals as plain objects. The keys stay the same from v0.4 on, so later releases detect each other.
 
 Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
 

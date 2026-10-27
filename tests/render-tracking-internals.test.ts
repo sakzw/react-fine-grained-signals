@@ -3,7 +3,7 @@ import {
   executionContext,
   UNTRACKED_OWNER,
   withSynchronousExecutionOwner,
-  type GraphExecutionOwnerV2,
+  type GraphExecutionOwner,
 } from "../src/core/execution-owner.js";
 import {
   activeRenderCollector,
@@ -60,8 +60,7 @@ describe("render tracking internals", () => {
       })).toBe(false);
       expect(hasActiveRenderCollector()).toBe(true);
 
-      const graphOwner: GraphExecutionOwnerV2 = {
-        version: 2,
+      const graphOwner: GraphExecutionOwner = {
         kind: "graph",
         runtimeToken: {},
       };

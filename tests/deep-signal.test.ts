@@ -12,12 +12,12 @@ function metadataOf(value: object) {
 
 // Spelled out rather than imported: the literal string is the cross-instance
 // wire format, so a second copy of the package can only agree by matching it.
-const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.signal.v2");
+const SIGNAL_BRAND = Symbol.for("react-fine-grained-signals.brand");
 
 /** Produces what a signal from a second copy of this package looks like here. */
 function brandForeign<T extends object>(value: T): T {
   Object.defineProperty(value, SIGNAL_BRAND, {
-    value: 1,
+    value: true,
     enumerable: false,
     writable: false,
     configurable: false,
@@ -650,7 +650,7 @@ describe("deepSignal", () => {
     const user = state.value.user as unknown as Record<symbol, unknown>;
 
     expect(() => {
-      user[SIGNAL_BRAND] = 1;
+      user[SIGNAL_BRAND] = true;
     }).toThrow(TypeError);
     expect(isSignal(state.value.user)).toBe(false);
     expect(Object.getOwnPropertySymbols(state.peek().user)).toEqual([]);
@@ -676,7 +676,7 @@ describe("deepSignal", () => {
 
     // The brand is now a non-configurable own value of the proxy target, so the
     // proxy has to report it rather than hide it and trip an invariant.
-    expect((userProxy as unknown as Record<symbol, unknown>)[SIGNAL_BRAND]).toBe(1);
+    expect((userProxy as unknown as Record<symbol, unknown>)[SIGNAL_BRAND]).toBe(true);
     // And the raw object now carries a brand this copy did not create, which
     // is what a signal from another loaded copy looks like.
     expect(() => isSignal(userProxy)).toThrow(/Multiple copies/);
