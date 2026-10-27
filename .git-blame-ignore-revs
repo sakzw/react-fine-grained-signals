@@ -1,0 +1,5 @@
+# Bulk formatting commits, skipped by `git blame` (GitHub reads this file
+# automatically; locally run `git config blame.ignoreRevsFile .git-blame-ignore-revs`).
+
+# style: format the code with oxfmt
+6057670f534a5364cf320fed669690e9466be454
