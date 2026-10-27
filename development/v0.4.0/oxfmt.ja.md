@@ -26,3 +26,7 @@ v0.4.0のマイルストーン後に、コードのformatterとしてoxfmtを入
 - `pnpm exec vitest run --maxWorkers=2`: 43ファイル、935件
 - `pnpm test:transform`（`--maxWorkers=2`）: CPU使用率が90〜100%の状態で実行し、`very long helper chain`のテストが5秒でtimeoutした。整形前のコードでも、単独実行で同じように失敗した（約5.3秒）ので、負荷による失敗で、整形とは関係ない。ほかの2件の失敗も、再実行では通った。
 - `pnpm test:browser`: 同じ負荷のため、ローカルでは実行していない。CIのE2Eで確認する。
+
+## GitHub CI
+
+`33a82c8`のpushで、Test（Formatのステップを含む）・E2E・Website CIがすべて成功した。ローカルで実行しなかったbrowser e2eも、CIのE2Eで通った。
