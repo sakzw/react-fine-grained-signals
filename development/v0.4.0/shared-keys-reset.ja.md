@@ -51,3 +51,7 @@ v0.4.0のマイルストーン後に行った変更の記録。v0.4は別のcopy
 - `pnpm test:transform`: 8ファイル、734件（既定の並列数では、esbuildのビルドテスト1件が5秒でtimeoutした。`--maxWorkers=2`と単独実行では通る。今回の変更はtransformの経路に関係しない）
 - `pnpm size`: signal-only 4.45→4.39 kB、deep 9.95→9.88 kBなど、各scenarioで約0.05〜0.08 kB減った。予算は据え置いた（下げ幅が小さいため）
 - `pnpm test:browser`: 1回目はFirefoxの2件が失敗した（全体が6.4分かかる高負荷の状態だった）。Firefoxだけを再実行すると14件すべて通った
+
+## GitHub CI
+
+`f762a8c`のpushで、Test・E2E・Website CIがすべて成功した。
