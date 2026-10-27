@@ -1,9 +1,8 @@
 {
   "name": "react-fine-grained-signals-website",
-  "private": true,
   "version": "0.0.0",
+  "private": true,
   "type": "module",
-  "packageManager": "pnpm@12.15.0",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/fix-base-path-links.mjs",
@@ -27,5 +26,6 @@
     "typescript": "7.1.0-beta",
     "unplugin-react-fine-grained-signals": "file:./vendor/unplugin-react-fine-grained-signals.tgz",
     "vite": "8.3.5"
-  }
+  },
+  "packageManager": "pnpm@12.15.0"
 }

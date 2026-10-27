@@ -32,7 +32,7 @@ const percentile = (values, p) => {
   return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
 };
 const makeRows = (count) => Array.from({ length: count }, (_, id) => ({ id: `row-${id}`, value: `value-${id}` }));
-const read = (each) => isSignal(each) ? each.value : each;
+const read = (each) => (isSignal(each) ? each.value : each);
 
 function BaselineFor({ each, by, children }) {
   const store = useSignalCapture();
@@ -40,8 +40,11 @@ function BaselineFor({ each, by, children }) {
     const collection = read(each);
     if (collection == null) return null;
     const items = Array.isArray(collection) ? collection : Array.from(collection);
-    return items.length === 0 ? null : items.map((item, index) =>
-      React.createElement(React.Fragment, { key: by(item, index) }, children(item, index)));
+    return items.length === 0
+      ? null
+      : items.map((item, index) =>
+          React.createElement(React.Fragment, { key: by(item, index) }, children(item, index)),
+        );
   });
 }
 
@@ -69,7 +72,12 @@ function BaselineIndex({ each, children }) {
     if (items == null || items.length === 0) return null;
     const readAt = (index) => (read(each) ?? items)[index];
     return items.map((_item, index) =>
-      React.createElement(React.Fragment, { key: index }, children(() => readAt(index), index)));
+      React.createElement(
+        React.Fragment,
+        { key: index },
+        children(() => readAt(index), index),
+      ),
+    );
   });
 }
 
@@ -88,14 +96,18 @@ function DirectKeyIndex({ each, fallback = null, children }) {
   });
 }
 
-const CandidateRow = React.memo(function CandidateRow({ item, index, children }) {
-  const store = useSignalCapture();
-  return store.capture(() => children(item, index));
-}, (previous, next) => {
-  if (previous.index !== next.index || previous.children !== next.children || previous.mapEntry !== next.mapEntry) return false;
-  if (previous.mapEntry) return previous.item[0] === next.item[0] && Object.is(previous.item[1], next.item[1]);
-  return Object.is(previous.item, next.item);
-});
+const CandidateRow = React.memo(
+  function CandidateRow({ item, index, children }) {
+    const store = useSignalCapture();
+    return store.capture(() => children(item, index));
+  },
+  (previous, next) => {
+    if (previous.index !== next.index || previous.children !== next.children || previous.mapEntry !== next.mapEntry)
+      return false;
+    if (previous.mapEntry) return previous.item[0] === next.item[0] && Object.is(previous.item[1], next.item[1]);
+    return Object.is(previous.item, next.item);
+  },
+);
 
 function CandidateFor({ each, fallback = null, by, children }) {
   const store = useSignalCapture();
@@ -105,9 +117,15 @@ function CandidateFor({ each, fallback = null, by, children }) {
     const items = Array.isArray(collection) ? collection : Array.from(collection);
     if (!items.length) return fallback;
     const mapEntry = collection instanceof Map;
-    return items.map((item, index) => React.createElement(CandidateRow, {
-      key: by(item, index), item, index, children, mapEntry,
-    }));
+    return items.map((item, index) =>
+      React.createElement(CandidateRow, {
+        key: by(item, index),
+        item,
+        index,
+        children,
+        mapEntry,
+      }),
+    );
   });
 }
 
@@ -138,7 +156,8 @@ function createHarness(kind, count) {
     if (kind === "direct-key-for") return React.createElement(DirectKeyFor, { each: rows, by, children: childrenFor });
     if (kind === "index") return React.createElement(Index, { each: rows, children: childrenIndex });
     if (kind === "baseline-index") return React.createElement(BaselineIndex, { each: rows, children: childrenIndex });
-    if (kind === "direct-key-index") return React.createElement(DirectKeyIndex, { each: rows, children: childrenIndex });
+    if (kind === "direct-key-index")
+      return React.createElement(DirectKeyIndex, { each: rows, children: childrenIndex });
     useSignalTracking();
     return read(rows).map((item, index) => {
       stats.callback += 1;
@@ -149,32 +168,54 @@ function createHarness(kind, count) {
   const update = (operation) => {
     const before = rows.value;
     switch (operation) {
-      case "singleUpdate": rows.value = before.map((item, index) => index === Math.floor(count / 2)
-        ? { ...item, value: item.value === "changed" ? `value-${index}` : "changed" }
-        : item); break;
-      case "append": rows.value = before.at(-1)?.id === "added" ? before.slice(0, -1) : [...before, { id: "added", value: "added" }]; break;
-      case "prepend": rows.value = before[0]?.id === "added" ? before.slice(1) : [{ id: "added", value: "added" }, ...before]; break;
+      case "singleUpdate":
+        rows.value = before.map((item, index) =>
+          index === Math.floor(count / 2)
+            ? { ...item, value: item.value === "changed" ? `value-${index}` : "changed" }
+            : item,
+        );
+        break;
+      case "append":
+        rows.value = before.at(-1)?.id === "added" ? before.slice(0, -1) : [...before, { id: "added", value: "added" }];
+        break;
+      case "prepend":
+        rows.value = before[0]?.id === "added" ? before.slice(1) : [{ id: "added", value: "added" }, ...before];
+        break;
       case "middleDelete": {
         const middle = Math.floor(count / 2);
         if (before.length === count) rows.value = before.filter((_, index) => index !== middle);
-        else rows.value = [...before.slice(0, middle), { id: `row-${middle}`, value: `value-${middle}` }, ...before.slice(middle)];
+        else
+          rows.value = [
+            ...before.slice(0, middle),
+            { id: `row-${middle}`, value: `value-${middle}` },
+            ...before.slice(middle),
+          ];
         break;
       }
-      case "move": rows.value = before[0]?.id === "row-0"
-        ? [...before.slice(1), before[0]]
-        : [before.at(-1), ...before.slice(0, -1)]; break;
-      case "replaceAll": rows.value = before.map((item, index) => {
-        const original = `value-${index}`;
-        return { ...item, value: item.value.endsWith("-new") ? original : `${original}-new` };
-      }); break;
-      default: throw new Error(`Unknown operation ${operation}`);
+      case "move":
+        rows.value =
+          before[0]?.id === "row-0" ? [...before.slice(1), before[0]] : [before.at(-1), ...before.slice(0, -1)];
+        break;
+      case "replaceAll":
+        rows.value = before.map((item, index) => {
+          const original = `value-${index}`;
+          return { ...item, value: item.value.endsWith("-new") ? original : `${original}-new` };
+        });
+        break;
+      default:
+        throw new Error(`Unknown operation ${operation}`);
     }
   };
-  const clearStats = () => { stats.parent = 0; stats.callback = 0; stats.row = 0; };
+  const clearStats = () => {
+    stats.parent = 0;
+    stats.callback = 0;
+    stats.row = 0;
+  };
   const snapshotStats = () => ({ ...stats });
   const verify = (expectedCount) => {
     const rendered = container.querySelectorAll("li");
-    if (rendered.length !== expectedCount) throw new Error(`${kind}: expected ${expectedCount} rows, got ${rendered.length}`);
+    if (rendered.length !== expectedCount)
+      throw new Error(`${kind}: expected ${expectedCount} rows, got ${rendered.length}`);
     if (expectedCount && !rendered[0].textContent?.startsWith("0:")) throw new Error(`${kind}: incorrect first row`);
   };
   const unmount = () => act(() => root.unmount());
@@ -185,17 +226,24 @@ const results = [];
 const writePartial = async () => {
   if (!process.env.M10_LIST_OUTPUT) return;
   const { writeFileSync } = await import("node:fs");
-  writeFileSync(process.env.M10_LIST_OUTPUT, `${JSON.stringify({
-    node: process.version,
-    react: React.version,
-    sizes,
-    warmups,
-    samples,
-    largeWarmups,
-    largeSamples,
-    gcExposed: typeof globalThis.gc === "function",
-    results,
-  }, null, 2)}\n`);
+  writeFileSync(
+    process.env.M10_LIST_OUTPUT,
+    `${JSON.stringify(
+      {
+        node: process.version,
+        react: React.version,
+        sizes,
+        warmups,
+        samples,
+        largeWarmups,
+        largeSamples,
+        gcExposed: typeof globalThis.gc === "function",
+        results,
+      },
+      null,
+      2,
+    )}\n`,
+  );
 };
 for (const size of sizes) {
   if (!Number.isSafeInteger(size) || size < 1) throw new Error(`Invalid size: ${size}`);
@@ -299,8 +347,8 @@ const report = {
   sizes,
   warmups,
   samples,
-    largeWarmups,
-    largeSamples,
+  largeWarmups,
+  largeSamples,
   gcExposed: typeof globalThis.gc === "function",
   results,
 };

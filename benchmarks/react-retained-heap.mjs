@@ -19,23 +19,40 @@ const cycles = Number.parseInt(process.env.BENCH_CYCLES ?? "10", 10);
 const samples = Number.parseInt(process.env.BENCH_SAMPLES ?? "7", 10);
 const warmups = Number.parseInt(process.env.BENCH_WARMUPS ?? "2", 10);
 const managedImpl = process.env.BENCH_MANAGED_IMPL ?? "capture";
-if (![rows, cycles, samples, warmups].every(Number.isSafeInteger) || rows < 1 || cycles < 1 || samples < 1 || warmups < 0) {
+if (
+  ![rows, cycles, samples, warmups].every(Number.isSafeInteger) ||
+  rows < 1 ||
+  cycles < 1 ||
+  samples < 1 ||
+  warmups < 0
+) {
   throw new Error("BENCH_ROWS, BENCH_CYCLES, BENCH_SAMPLES, and BENCH_WARMUPS must be valid positive counts");
 }
 
 function TrackedRow({ source }) {
   if (managedImpl === "try-finally") {
     const store = useManagedSignals();
-    try { return React.createElement("span", null, source.value); }
-    finally { store.finish(); }
+    try {
+      return React.createElement("span", null, source.value);
+    } finally {
+      store.finish();
+    }
   }
   const capture = useSignalCapture();
-  return React.createElement("span", null, capture.capture(() => source.value));
+  return React.createElement(
+    "span",
+    null,
+    capture.capture(() => source.value),
+  );
 }
 
 function App() {
   const sources = useMemo(() => Array.from({ length: rows }, (_, index) => signal(index)), []);
-  return React.createElement("div", null, sources.map((source, index) => React.createElement(TrackedRow, { key: index, source })));
+  return React.createElement(
+    "div",
+    null,
+    sources.map((source, index) => React.createElement(TrackedRow, { key: index, source })),
+  );
 }
 
 async function settle() {
@@ -50,9 +67,14 @@ async function cycle() {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
-  await act(async () => { root.render(React.createElement(App)); });
-  if (container.querySelectorAll("span").length !== rows) throw new Error("mount output did not contain all tracked rows");
-  await act(async () => { root.unmount(); });
+  await act(async () => {
+    root.render(React.createElement(App));
+  });
+  if (container.querySelectorAll("span").length !== rows)
+    throw new Error("mount output did not contain all tracked rows");
+  await act(async () => {
+    root.unmount();
+  });
   container.remove();
 }
 

@@ -14,12 +14,17 @@ const valueSignal = signal("text");
 const checkedSignal = signal(false);
 const radioSignal = signal("basic");
 const checkboxGroupSignal = signal(["search"]);
-function Component() { return null; }
+function Component() {
+  return null;
+}
 let sink;
 
 const paired = [
   ["host-no-props", (factory) => () => factory("div", {})],
-  ["host-ordinary-props", (factory) => () => factory("div", { title: "title", className: "active", "data-state": "ready", id: "item" })],
+  [
+    "host-ordinary-props",
+    (factory) => () => factory("div", { title: "title", className: "active", "data-state": "ready", id: "item" }),
+  ],
   ["host-one-child", (factory) => () => factory("div", { children: "child" })],
   ["host-multiple-children", (factory) => () => factory("div", { children: ["first", "second"] }), "jsxs"],
   ["custom-no-props", (factory) => () => factory(Component, {})],
@@ -34,8 +39,14 @@ const signalOnly = [
   ["signal-children-array", () => signalJsxs("div", { children: [titleSignal, "suffix"] })],
   ["bind-value", () => signalJsx("input", { type: "text", bindValue: valueSignal })],
   ["bind-checked", () => signalJsx("input", { type: "checkbox", bindChecked: checkedSignal })],
-  ["bind-radio-value", () => signalJsx("input", { type: "radio", name: "plan", value: "basic", bindValue: radioSignal })],
-  ["bind-checkbox-group", () => signalJsx("input", { type: "checkbox", name: "features", value: "search", bindValue: checkboxGroupSignal })],
+  [
+    "bind-radio-value",
+    () => signalJsx("input", { type: "radio", name: "plan", value: "basic", bindValue: radioSignal }),
+  ],
+  [
+    "bind-checkbox-group",
+    () => signalJsx("input", { type: "checkbox", name: "features", value: "search", bindValue: checkboxGroupSignal }),
+  ],
 ];
 
 const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
@@ -66,9 +77,16 @@ function measurePair(reactRun, signalRun) {
   const times = { react: [], rfsg: [] };
   for (let round = 0; round < warmups + samples; round += 1) {
     if (globalThis.gc) globalThis.gc();
-    const runs = round % 2 === 0
-      ? [["react", reactRun], ["rfsg", signalRun]]
-      : [["rfsg", signalRun], ["react", reactRun]];
+    const runs =
+      round % 2 === 0
+        ? [
+            ["react", reactRun],
+            ["rfsg", signalRun],
+          ]
+        : [
+            ["rfsg", signalRun],
+            ["react", reactRun],
+          ];
     for (const [name, run] of runs) {
       const start = process.hrtime.bigint();
       for (let index = 0; index < iterations; index += 1) sink = run(index);
@@ -109,7 +127,8 @@ const report = {
   warmups,
   samples,
   gcExposed: typeof globalThis.gc === "function",
-  methodology: "JSX factory-only; props literals allocated per call; ordinary cases compare React and RFSG; signal/binding cases are RFSG-only feature costs; median and p25/p75 in ns/call.",
+  methodology:
+    "JSX factory-only; props literals allocated per call; ordinary cases compare React and RFSG; signal/binding cases are RFSG-only feature costs; median and p25/p75 in ns/call.",
   results,
   sinkType: typeof sink,
 };

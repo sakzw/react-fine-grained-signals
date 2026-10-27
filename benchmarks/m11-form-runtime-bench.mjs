@@ -20,7 +20,18 @@ globalThis.MutationObserver = class extends nativeMutationObserver {
     super.disconnect();
   }
 };
-for (const name of ["MutationObserver", "Node", "Element", "HTMLElement", "HTMLInputElement", "HTMLSelectElement", "HTMLTextAreaElement", "Event", "MouseEvent", "InputEvent"]) {
+for (const name of [
+  "MutationObserver",
+  "Node",
+  "Element",
+  "HTMLElement",
+  "HTMLInputElement",
+  "HTMLSelectElement",
+  "HTMLTextAreaElement",
+  "Event",
+  "MouseEvent",
+  "InputEvent",
+]) {
   if (name !== "MutationObserver") globalThis[name] = dom.window[name];
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -61,13 +72,45 @@ const children = (factory, kind, value, setter) => {
     case "checked":
       return factory("input", { type: "checkbox", checked: value, onChange: (event) => setter(event.target.checked) });
     case "select":
-      return factory("select", { value, onChange: (event) => setter(event.target.value), children: options.map((item) => factory("option", { key: item, value: item, children: item })) });
+      return factory("select", {
+        value,
+        onChange: (event) => setter(event.target.value),
+        children: options.map((item) => factory("option", { key: item, value: item, children: item })),
+      });
     case "multiple":
-      return factory("select", { multiple: true, value, onChange: (event) => setter(Array.from(event.target.selectedOptions, (option) => option.value)), children: options.map((item) => factory("option", { key: item, value: item, children: item })) });
+      return factory("select", {
+        multiple: true,
+        value,
+        onChange: (event) => setter(Array.from(event.target.selectedOptions, (option) => option.value)),
+        children: options.map((item) => factory("option", { key: item, value: item, children: item })),
+      });
     case "radio":
-      return factory("fieldset", { children: options.map((item) => factory("input", { key: item, type: "radio", name: "choice", value: item, checked: value === item, onChange: () => setter(item) })) });
+      return factory("fieldset", {
+        children: options.map((item) =>
+          factory("input", {
+            key: item,
+            type: "radio",
+            name: "choice",
+            value: item,
+            checked: value === item,
+            onChange: () => setter(item),
+          }),
+        ),
+      });
     case "checkbox-group":
-      return factory("fieldset", { children: options.map((item) => factory("input", { key: item, type: "checkbox", name: "features", value: item, checked: value.includes(item), onChange: (event) => setter(event.target.checked ? [...value, item] : value.filter((entry) => entry !== item)) })) });
+      return factory("fieldset", {
+        children: options.map((item) =>
+          factory("input", {
+            key: item,
+            type: "checkbox",
+            name: "features",
+            value: item,
+            checked: value.includes(item),
+            onChange: (event) =>
+              setter(event.target.checked ? [...value, item] : value.filter((entry) => entry !== item)),
+          }),
+        ),
+      });
     default:
       throw new Error(`Unknown benchmark kind ${kind}`);
   }
@@ -75,25 +118,53 @@ const children = (factory, kind, value, setter) => {
 
 const boundChildren = (kind, value) => {
   switch (kind) {
-    case "text": return signalJsx("input", { type: "text", bindValue: value });
-    case "checked": return signalJsx("input", { type: "checkbox", bindChecked: value });
-    case "select": return signalJsx("select", { bindValue: value, children: options.map((item) => signalJsx("option", { value: item, children: item }, item)) });
-    case "multiple": return signalJsx("select", { multiple: true, bindValue: value, children: options.map((item) => signalJsx("option", { value: item, children: item }, item)) });
-    case "radio": return signalJsxs("fieldset", { children: options.map((item) => signalJsx("input", { type: "radio", name: "choice", value: item, bindValue: value }, item)) });
-    case "checkbox-group": return signalJsxs("fieldset", { children: options.map((item) => signalJsx("input", { type: "checkbox", name: "features", value: item, bindValue: value }, item)) });
-    default: throw new Error(`Unknown benchmark kind ${kind}`);
+    case "text":
+      return signalJsx("input", { type: "text", bindValue: value });
+    case "checked":
+      return signalJsx("input", { type: "checkbox", bindChecked: value });
+    case "select":
+      return signalJsx("select", {
+        bindValue: value,
+        children: options.map((item) => signalJsx("option", { value: item, children: item }, item)),
+      });
+    case "multiple":
+      return signalJsx("select", {
+        multiple: true,
+        bindValue: value,
+        children: options.map((item) => signalJsx("option", { value: item, children: item }, item)),
+      });
+    case "radio":
+      return signalJsxs("fieldset", {
+        children: options.map((item) =>
+          signalJsx("input", { type: "radio", name: "choice", value: item, bindValue: value }, item),
+        ),
+      });
+    case "checkbox-group":
+      return signalJsxs("fieldset", {
+        children: options.map((item) =>
+          signalJsx("input", { type: "checkbox", name: "features", value: item, bindValue: value }, item),
+        ),
+      });
+    default:
+      throw new Error(`Unknown benchmark kind ${kind}`);
   }
 };
 
 function valueFor(kind, index) {
   switch (kind) {
-    case "text": return String(index);
-    case "checked": return index % 2 === 1;
+    case "text":
+      return String(index);
+    case "checked":
+      return index % 2 === 1;
     case "select":
-    case "radio": return options[index % options.length];
-    case "multiple": return index % 2 === 0 ? ["a", "c"] : ["b"];
-    case "checkbox-group": return index % 2 === 0 ? ["a", "c"] : ["b"];
-    default: throw new Error(`Unknown benchmark kind ${kind}`);
+    case "radio":
+      return options[index % options.length];
+    case "multiple":
+      return index % 2 === 0 ? ["a", "c"] : ["b"];
+    case "checkbox-group":
+      return index % 2 === 0 ? ["a", "c"] : ["b"];
+    default:
+      throw new Error(`Unknown benchmark kind ${kind}`);
   }
 }
 
@@ -119,12 +190,16 @@ function createHarness(kind, mode) {
   };
   const verify = (container, index) => {
     const expected = valueFor(kind, index);
-    if (kind === "text" && container.querySelector("input")?.value !== expected) throw new Error(`${mode} text binding diverged`);
-    if (kind === "checked" && container.querySelector("input")?.checked !== expected) throw new Error(`${mode} checked binding diverged`);
-    if (kind === "select" && container.querySelector("select")?.value !== expected) throw new Error(`${mode} select binding diverged`);
+    if (kind === "text" && container.querySelector("input")?.value !== expected)
+      throw new Error(`${mode} text binding diverged`);
+    if (kind === "checked" && container.querySelector("input")?.checked !== expected)
+      throw new Error(`${mode} checked binding diverged`);
+    if (kind === "select" && container.querySelector("select")?.value !== expected)
+      throw new Error(`${mode} select binding diverged`);
     if (kind === "multiple") {
       const actual = Array.from(container.querySelector("select").selectedOptions, (option) => option.value);
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${mode} multiple-select binding diverged`);
+      if (JSON.stringify(actual) !== JSON.stringify(expected))
+        throw new Error(`${mode} multiple-select binding diverged`);
     }
     if (kind === "radio") {
       const actual = container.querySelector('input[type="radio"]:checked')?.value;
@@ -132,10 +207,18 @@ function createHarness(kind, mode) {
     }
     if (kind === "checkbox-group") {
       const actual = Array.from(container.querySelectorAll('input[type="checkbox"]:checked'), (input) => input.value);
-      if (JSON.stringify(actual) !== JSON.stringify(expected)) throw new Error(`${mode} checkbox-group binding diverged`);
+      if (JSON.stringify(actual) !== JSON.stringify(expected))
+        throw new Error(`${mode} checkbox-group binding diverged`);
     }
   };
-  return { element, update, verify, get ownerRenders() { return ownerRenders; } };
+  return {
+    element,
+    update,
+    verify,
+    get ownerRenders() {
+      return ownerRenders;
+    },
+  };
 }
 
 async function runSample(kind, mode) {
@@ -192,7 +275,8 @@ async function mountUnmountBatch(kind, mode) {
   const root = createRoot(container);
   const elements = Array.from({ length: heapWidth }, (_, index) => {
     const initial = valueFor(kind, index);
-    if (mode === "rfsg") return React.createElement(React.Fragment, { key: index }, boundChildren(kind, signal(initial)));
+    if (mode === "rfsg")
+      return React.createElement(React.Fragment, { key: index }, boundChildren(kind, signal(initial)));
     function Controlled() {
       const [value] = React.useState(initial);
       return children(React.createElement, kind, value, () => {});
@@ -200,7 +284,8 @@ async function mountUnmountBatch(kind, mode) {
     return React.createElement(Controlled, { key: index });
   });
   act(() => root.render(React.createElement(React.Fragment, null, elements)));
-  if (kind === "select" || kind === "multiple") selectNodeRefs.push({ kind, mode, reference: new WeakRef(container.querySelector("select")) });
+  if (kind === "select" || kind === "multiple")
+    selectNodeRefs.push({ kind, mode, reference: new WeakRef(container.querySelector("select")) });
   act(() => root.unmount());
   container.remove();
   await new Promise((resolve) => queueMicrotask(resolve));
@@ -242,19 +327,28 @@ if (globalThis.gc) {
   }
 }
 
-console.log(JSON.stringify({
-  node: process.version,
-  react: React.version,
-  warmups,
-  samples,
-  updatesPerSample: updates,
-  heapCycles,
-  heapWidth,
-  mutationObserversCreated,
-  mutationObserversDisconnected,
-  selectNodesAliveAfterGC: selectNodeRefs.filter(({ reference }) => reference.deref() !== undefined).map(({ kind, mode }) => ({ kind, mode })),
-  mutationObserversAliveAfterGC: mutationObserverRefs.filter((reference) => reference.deref() !== undefined).length,
-  methodology: "JSDOM + React act. Each sample mounts one fresh root, applies every update in its own act flush, verifies final DOM state, then unmounts. React-controlled hooks are compared to RFSG direct signal bindings; owner rerenders are counted. Heap deltas use --expose-gc around repeated whole-root mount/unmount and are noisy process-level diagnostics, not browser-retained-heap guarantees. Times are milliseconds; range is p25-p75.",
-  results,
-  retainedHeap,
-}, null, 2));
+console.log(
+  JSON.stringify(
+    {
+      node: process.version,
+      react: React.version,
+      warmups,
+      samples,
+      updatesPerSample: updates,
+      heapCycles,
+      heapWidth,
+      mutationObserversCreated,
+      mutationObserversDisconnected,
+      selectNodesAliveAfterGC: selectNodeRefs
+        .filter(({ reference }) => reference.deref() !== undefined)
+        .map(({ kind, mode }) => ({ kind, mode })),
+      mutationObserversAliveAfterGC: mutationObserverRefs.filter((reference) => reference.deref() !== undefined).length,
+      methodology:
+        "JSDOM + React act. Each sample mounts one fresh root, applies every update in its own act flush, verifies final DOM state, then unmounts. React-controlled hooks are compared to RFSG direct signal bindings; owner rerenders are counted. Heap deltas use --expose-gc around repeated whole-root mount/unmount and are noisy process-level diagnostics, not browser-retained-heap guarantees. Times are milliseconds; range is p25-p75.",
+      results,
+      retainedHeap,
+    },
+    null,
+    2,
+  ),
+);

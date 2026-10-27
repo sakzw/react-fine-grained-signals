@@ -1,18 +1,5 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "printWidth": 120,
-  "ignorePatterns": [
-    "benchmarks/**",
-    "development/**",
-    "website/**",
-    "tests/fixtures/**",
-    "**/*.md",
-    "**/*.mdx",
-    "**/*.json",
-    "**/*.jsonc",
-    "**/*.yaml",
-    "**/*.yml",
-    "**/*.html",
-    "**/*.css"
-  ]
+  "ignorePatterns": ["benchmarks/phase9/**", "development/**", "**/*.md", "**/*.mdx"]
 }

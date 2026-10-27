@@ -3,7 +3,6 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@11.28.8",
   "scripts": {
     "dev": "react-router dev",
     "build": "react-router build",
@@ -25,5 +24,6 @@
     "@types/react-dom": "19.3.0",
     "typescript": "7.0.2",
     "vite": "8.2.2"
-  }
+  },
+  "packageManager": "pnpm@11.28.8"
 }

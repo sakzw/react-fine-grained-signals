@@ -31,7 +31,7 @@ function measureTracked(kind, subscribedKeys, name, operation, prepare = () => {
   const iterations = Math.min(1_000, Math.max(25, Math.floor(candidateChecksPerSample / Math.max(1, subscribedKeys))));
   const warmupIterations = Math.min(100, iterations);
   const measuredMutations = iterations * samples;
-  const raw = kind === "Map" ? new Map([ ["churn", 0] ]) : new Set(["churn"]);
+  const raw = kind === "Map" ? new Map([["churn", 0]]) : new Set(["churn"]);
   const collection = deepCollectionSignal(raw).value;
   prepare(collection, measuredMutations + warmupIterations + 100);
   const dispose = effect(() => {
@@ -62,14 +62,24 @@ function measureTracked(kind, subscribedKeys, name, operation, prepare = () => {
 const trackedScenarios = [
   ["Map", "update", (collection, index) => collection.set("churn", index)],
   ["Map", "add", (collection, index) => collection.set(`insert-${index}`, index)],
-  ["Map", "delete", (collection, index) => collection.delete(`delete-${index}`), (collection, count) => {
-    for (let index = 0; index < count; index += 1) collection.set(`delete-${index}`, index);
-  }],
+  [
+    "Map",
+    "delete",
+    (collection, index) => collection.delete(`delete-${index}`),
+    (collection, count) => {
+      for (let index = 0; index < count; index += 1) collection.set(`delete-${index}`, index);
+    },
+  ],
   ["Set", "duplicate-add", (collection) => collection.add("churn")],
   ["Set", "add", (collection, index) => collection.add(`insert-${index}`)],
-  ["Set", "delete", (collection, index) => collection.delete(`delete-${index}`), (collection, count) => {
-    for (let index = 0; index < count; index += 1) collection.add(`delete-${index}`);
-  }],
+  [
+    "Set",
+    "delete",
+    (collection, index) => collection.delete(`delete-${index}`),
+    (collection, count) => {
+      for (let index = 0; index < count; index += 1) collection.add(`delete-${index}`);
+    },
+  ],
 ];
 
 function createObjectKey(index, shape) {
@@ -82,7 +92,7 @@ function runWeakCase(kind, mode, shape, name, operation) {
   const keys = Array.from({ length: weakIterations }, (_, index) => createObjectKey(index, shape));
   let sum = 0;
   for (let index = 0; index < weakIterations; index += 1) sum += operation(collection, keys, index);
-  const expected = kind === "WeakMap" ? weakIterations * (weakIterations - 1) / 2 : weakIterations;
+  const expected = kind === "WeakMap" ? (weakIterations * (weakIterations - 1)) / 2 : weakIterations;
   if (sum !== expected) throw new Error("weak collection benchmark checksum failed");
 }
 
@@ -99,7 +109,7 @@ function measureWeak(kind, mode, shape, name, operation) {
     const start = process.hrtime.bigint();
     for (let index = 0; index < weakIterations; index += 1) sum += operation(collection, keys, index);
     rawSamples.push(Number(process.hrtime.bigint() - start) / weakIterations);
-    const expected = kind === "WeakMap" ? weakIterations * (weakIterations - 1) / 2 : weakIterations;
+    const expected = kind === "WeakMap" ? (weakIterations * (weakIterations - 1)) / 2 : weakIterations;
     if (sum !== expected) throw new Error("weak collection benchmark checksum failed");
   }
   return {
@@ -114,38 +124,62 @@ function measureWeak(kind, mode, shape, name, operation) {
 }
 
 const weakScenarios = [
-  ["WeakMap", "set-get", (collection, keys, index) => {
-    const key = keys[index];
-    collection.set(key, index);
-    return collection.get(key);
-  }],
-  ["WeakMap", "update-get", (collection, keys, index) => {
-    const key = keys[index % 1_000];
-    collection.set(key, index);
-    return collection.get(key);
-  }],
-  ["WeakMap", "delete-set-get", (collection, keys, index) => {
-    const key = keys[index];
-    collection.delete(key);
-    collection.set(key, index);
-    return collection.get(key);
-  }],
-  ["WeakSet", "add-has", (collection, keys, index) => {
-    const key = keys[index];
-    collection.add(key);
-    return Number(collection.has(key));
-  }],
-  ["WeakSet", "duplicate-add-has", (collection, keys, index) => {
-    const key = keys[index % 1_000];
-    collection.add(key);
-    return Number(collection.has(key));
-  }],
-  ["WeakSet", "delete-add-has", (collection, keys, index) => {
-    const key = keys[index];
-    collection.delete(key);
-    collection.add(key);
-    return Number(collection.has(key));
-  }],
+  [
+    "WeakMap",
+    "set-get",
+    (collection, keys, index) => {
+      const key = keys[index];
+      collection.set(key, index);
+      return collection.get(key);
+    },
+  ],
+  [
+    "WeakMap",
+    "update-get",
+    (collection, keys, index) => {
+      const key = keys[index % 1_000];
+      collection.set(key, index);
+      return collection.get(key);
+    },
+  ],
+  [
+    "WeakMap",
+    "delete-set-get",
+    (collection, keys, index) => {
+      const key = keys[index];
+      collection.delete(key);
+      collection.set(key, index);
+      return collection.get(key);
+    },
+  ],
+  [
+    "WeakSet",
+    "add-has",
+    (collection, keys, index) => {
+      const key = keys[index];
+      collection.add(key);
+      return Number(collection.has(key));
+    },
+  ],
+  [
+    "WeakSet",
+    "duplicate-add-has",
+    (collection, keys, index) => {
+      const key = keys[index % 1_000];
+      collection.add(key);
+      return Number(collection.has(key));
+    },
+  ],
+  [
+    "WeakSet",
+    "delete-add-has",
+    (collection, keys, index) => {
+      const key = keys[index];
+      collection.delete(key);
+      collection.add(key);
+      return Number(collection.has(key));
+    },
+  ],
 ];
 
 async function measureCleanup(kind, keyCount) {
@@ -199,17 +233,23 @@ for (const kind of ["Map", "Set"]) {
   for (const keyCount of cleanupCounts) cleanup.push({ kind, keyCount, samples: await measureCleanup(kind, keyCount) });
 }
 
-console.log(JSON.stringify({
-  runtime: process.version,
-  platform: `${os.platform()} ${os.arch()}`,
-  cpu: os.cpus()[0]?.model ?? "unknown",
-  trackedSamples: samples,
-  trackedCandidateBudgetPerSample: candidateChecksPerSample,
-  weakSamples: samples,
-  weakIterationsPerSample: weakIterations,
-  weakWarmups,
-  cleanupSamples,
-  tracked,
-  weak,
-  cleanup,
-}, null, 2));
+console.log(
+  JSON.stringify(
+    {
+      runtime: process.version,
+      platform: `${os.platform()} ${os.arch()}`,
+      cpu: os.cpus()[0]?.model ?? "unknown",
+      trackedSamples: samples,
+      trackedCandidateBudgetPerSample: candidateChecksPerSample,
+      weakSamples: samples,
+      weakIterationsPerSample: weakIterations,
+      weakWarmups,
+      cleanupSamples,
+      tracked,
+      weak,
+      cleanup,
+    },
+    null,
+    2,
+  ),
+);

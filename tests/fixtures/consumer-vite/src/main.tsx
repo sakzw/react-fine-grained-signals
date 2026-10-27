@@ -92,32 +92,65 @@ export function ConsumerCanary() {
       <output data-testid="react-state">{reactCount}</output>
       <CanaryChild />
       <UnrelatedConsumer />
-      <button data-testid="count-up" title={canaryState.title} data-active={canaryState.active} onClick={() => {
-        canaryState.count.value += 1;
-        canaryState.profile.value.user.name = "Grace";
-        canaryState.labels.value.set("ada", "Grace");
-        canaryState.features.value.add("collections");
-        canaryState.title.value = "updated title";
-        canaryState.active.value = true;
-      }}>Update shared state</button>
-      <button data-testid="count-only-up" onClick={() => {
-        canaryState.count.value += 1;
-      }}>Update only count</button>
-      <button data-testid="react-count-up" onClick={() => setReactCount((value) => value + 1)}>Update React state</button>
-      <button data-testid="replace-and-delete" onClick={() => {
-        canaryState.profile.value = { user: { name: "Lin" } };
-        canaryState.labels.value.delete("ada");
-        canaryState.features.value.delete("signals");
-      }}>Replace profile and delete collection entries</button>
-      <button data-testid="toggle-conditional" onClick={() => {
-        canaryState.visible.value = !canaryState.visible.value;
-      }}>Toggle conditional</button>
-      <button data-testid="switch-details" onClick={() => {
-        canaryState.view.value = "details";
-      }}>Show details</button>
+      <button
+        data-testid="count-up"
+        title={canaryState.title}
+        data-active={canaryState.active}
+        onClick={() => {
+          canaryState.count.value += 1;
+          canaryState.profile.value.user.name = "Grace";
+          canaryState.labels.value.set("ada", "Grace");
+          canaryState.features.value.add("collections");
+          canaryState.title.value = "updated title";
+          canaryState.active.value = true;
+        }}
+      >
+        Update shared state
+      </button>
+      <button
+        data-testid="count-only-up"
+        onClick={() => {
+          canaryState.count.value += 1;
+        }}
+      >
+        Update only count
+      </button>
+      <button data-testid="react-count-up" onClick={() => setReactCount((value) => value + 1)}>
+        Update React state
+      </button>
+      <button
+        data-testid="replace-and-delete"
+        onClick={() => {
+          canaryState.profile.value = { user: { name: "Lin" } };
+          canaryState.labels.value.delete("ada");
+          canaryState.features.value.delete("signals");
+        }}
+      >
+        Replace profile and delete collection entries
+      </button>
+      <button
+        data-testid="toggle-conditional"
+        onClick={() => {
+          canaryState.visible.value = !canaryState.visible.value;
+        }}
+      >
+        Toggle conditional
+      </button>
+      <button
+        data-testid="switch-details"
+        onClick={() => {
+          canaryState.view.value = "details";
+        }}
+      >
+        Show details
+      </button>
       <Switch>
-        <Match when={canaryState.view} equals="list"><p data-testid="switch-view">list</p></Match>
-        <Match when={canaryState.view} equals="details"><p data-testid="switch-view">details</p></Match>
+        <Match when={canaryState.view} equals="list">
+          <p data-testid="switch-view">list</p>
+        </Match>
+        <Match when={canaryState.view} equals="details">
+          <p data-testid="switch-view">details</p>
+        </Match>
       </Switch>
       {canaryState.visible.value ? <ConditionalCanary /> : null}
       <input data-testid="text" bindValue={writableCanaryText} />
@@ -125,7 +158,8 @@ export function ConsumerCanary() {
       <input data-testid="radio-first" type="radio" name="canary-radio" value="first" bindValue={canaryState.radio} />
       <input data-testid="radio-second" type="radio" name="canary-radio" value="second" bindValue={canaryState.radio} />
       <select data-testid="select" bindValue={canaryState.selected}>
-        <option value="one">One</option><option value="two">Two</option>
+        <option value="one">One</option>
+        <option value="two">Two</option>
       </select>
     </main>
   );
@@ -148,7 +182,9 @@ export function Utilities() {
         {(value) => <p>{value}</p>}
       </Show>
       <Switch fallback={<p>fallback</p>}>
-        <Match when={count}><p>counted</p></Match>
+        <Match when={count}>
+          <p>counted</p>
+        </Match>
       </Switch>
       <For each={users} by={(user) => user.id}>
         {(user) => <p>{user.name}</p>}
@@ -156,9 +192,7 @@ export function Utilities() {
       <For each={labels} by={([id]) => id}>
         {([id, label]) => <p>{`${id}:${label}`}</p>}
       </For>
-      <Index each={users}>
-        {(user, index) => <p>{`${index}:${user().name}`}</p>}
-      </Index>
+      <Index each={users}>{(user, index) => <p>{`${index}:${user().name}`}</p>}</Index>
     </>
   );
 }

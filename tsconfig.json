@@ -34,7 +34,5 @@
     "examples/browser/src/**/*.ts",
     "examples/browser/src/**/*.tsx"
   ],
-  "exclude": [
-    "tests/fixtures/**"
-  ]
+  "exclude": ["tests/fixtures/**"]
 }

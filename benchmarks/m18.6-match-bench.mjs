@@ -6,7 +6,7 @@ import { createRoot } from "react-dom/client";
 import { signal, useComputed, useSignalTracking } from "../dist/index.js";
 import { Match, Switch } from "../dist/utils.js";
 
-const dom = new JSDOM("<!doctype html><div id=\"root\"></div>", { url: "http://localhost" });
+const dom = new JSDOM('<!doctype html><div id="root"></div>', { url: "http://localhost" });
 for (const [key, value] of Object.entries({
   window: dom.window,
   document: dom.window.document,
@@ -29,28 +29,72 @@ function run(strategy) {
   function ParentRead() {
     metrics.parentRenders += 1;
     useSignalTracking();
-    return h(Switch, { children: [
-      h(Match, { when: source.value === 0, children: () => { metrics.branchRenders += 1; return h("p", null, "list"); } }),
-      h(Match, { when: source.value === 1, children: () => { metrics.branchRenders += 1; return h("p", null, "details"); } }),
-    ] });
+    return h(Switch, {
+      children: [
+        h(Match, {
+          when: source.value === 0,
+          children: () => {
+            metrics.branchRenders += 1;
+            return h("p", null, "list");
+          },
+        }),
+        h(Match, {
+          when: source.value === 1,
+          children: () => {
+            metrics.branchRenders += 1;
+            return h("p", null, "details");
+          },
+        }),
+      ],
+    });
   }
 
   function ComputedParent() {
     metrics.parentRenders += 1;
     const isList = useComputed(() => source.value === 0, []);
     const isDetails = useComputed(() => source.value === 1, []);
-    return h(Switch, { children: [
-      h(Match, { when: isList, children: () => { metrics.branchRenders += 1; return h("p", null, "list"); } }),
-      h(Match, { when: isDetails, children: () => { metrics.branchRenders += 1; return h("p", null, "details"); } }),
-    ] });
+    return h(Switch, {
+      children: [
+        h(Match, {
+          when: isList,
+          children: () => {
+            metrics.branchRenders += 1;
+            return h("p", null, "list");
+          },
+        }),
+        h(Match, {
+          when: isDetails,
+          children: () => {
+            metrics.branchRenders += 1;
+            return h("p", null, "details");
+          },
+        }),
+      ],
+    });
   }
 
   function EqualsParent() {
     metrics.parentRenders += 1;
-    return h(Switch, { children: [
-      h(Match, { when: source, equals: 0, children: () => { metrics.branchRenders += 1; return h("p", null, "list"); } }),
-      h(Match, { when: source, equals: 1, children: () => { metrics.branchRenders += 1; return h("p", null, "details"); } }),
-    ] });
+    return h(Switch, {
+      children: [
+        h(Match, {
+          when: source,
+          equals: 0,
+          children: () => {
+            metrics.branchRenders += 1;
+            return h("p", null, "list");
+          },
+        }),
+        h(Match, {
+          when: source,
+          equals: 1,
+          children: () => {
+            metrics.branchRenders += 1;
+            return h("p", null, "details");
+          },
+        }),
+      ],
+    });
   }
 
   const Parent = strategy === "parent-read" ? ParentRead : strategy === "useComputed" ? ComputedParent : EqualsParent;
@@ -62,7 +106,9 @@ function run(strategy) {
   const initialMs = performance.now() - initialStart;
   const parentBefore = metrics.parentRenders;
   const updateStart = performance.now();
-  React.act(() => { source.value = 1; });
+  React.act(() => {
+    source.value = 1;
+  });
   const updateMs = performance.now() - updateStart;
   const parentDelta = metrics.parentRenders - parentBefore;
   const selected = container.textContent;
@@ -84,14 +130,16 @@ for (const strategy of strategies) {
       max: Number(ordered.at(-1).toFixed(3)),
     };
   };
-  console.log(JSON.stringify({
-    strategy,
-    samples,
-    initialMs: summarize("initialMs"),
-    updateMs: summarize("updateMs"),
-    unmountMs: summarize("unmountMs"),
-    parentRenderDelta: results.map((result) => result.parentDelta),
-    branchCallbacks: results.map((result) => result.branchRenders),
-    selected: [...new Set(results.map((result) => result.selected))],
-  }));
+  console.log(
+    JSON.stringify({
+      strategy,
+      samples,
+      initialMs: summarize("initialMs"),
+      updateMs: summarize("updateMs"),
+      unmountMs: summarize("unmountMs"),
+      parentRenderDelta: results.map((result) => result.parentDelta),
+      branchCallbacks: results.map((result) => result.branchRenders),
+      selected: [...new Set(results.map((result) => result.selected))],
+    }),
+  );
 }

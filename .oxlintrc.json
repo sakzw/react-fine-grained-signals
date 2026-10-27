@@ -1,12 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": [
-    "typescript",
-    "unicorn",
-    "oxc",
-    "react",
-    "vitest"
-  ],
+  "plugins": ["typescript", "unicorn", "oxc", "react", "vitest"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn"
@@ -53,10 +47,7 @@
       // lists, and the copied React suite uses the same render-capture pattern
       // as the repository's own tests. Those cases are not statically
       // analyzable by the React hook rules.
-      "files": [
-        "benchmarks/phase9/m15/react-adapter.mjs",
-        "benchmarks/phase9/m15/deep-selector-react-hook.mjs"
-      ],
+      "files": ["benchmarks/phase9/m15/react-adapter.mjs", "benchmarks/phase9/m15/deep-selector-react-hook.mjs"],
       "rules": {
         "react/use-memo": "off",
         "react/memo-dependencies": "off",

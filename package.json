@@ -2,39 +2,32 @@
   "name": "react-fine-grained-signals",
   "version": "0.4.0",
   "description": "Fine-grained signal rendering for React 19, built on alien-signals.",
+  "keywords": [
+    "alien-signals",
+    "fine-grained",
+    "jsx",
+    "jsx-runtime",
+    "react",
+    "reactivity",
+    "signal",
+    "signals"
+  ],
+  "homepage": "https://github.com/sakzw/react-fine-grained-signals#readme",
+  "bugs": {
+    "url": "https://github.com/sakzw/react-fine-grained-signals/issues"
+  },
   "license": "MIT",
   "author": "akazawa",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/sakzw/react-fine-grained-signals.git"
   },
-  "homepage": "https://github.com/sakzw/react-fine-grained-signals#readme",
-  "bugs": {
-    "url": "https://github.com/sakzw/react-fine-grained-signals/issues"
-  },
-  "keywords": [
-    "react",
-    "signals",
-    "signal",
-    "fine-grained",
-    "reactivity",
-    "jsx",
-    "jsx-runtime",
-    "alien-signals"
+  "files": [
+    "dist",
+    "LICENSE-ALIEN-SIGNALS.txt"
   ],
   "type": "module",
   "sideEffects": false,
-  "packageManager": "pnpm@12.15.0",
-  "engines": {
-    "node": ">=22.0.0"
-  },
-  "devEngines": {
-    "runtime": {
-      "name": "node",
-      "version": "24.22.1",
-      "onFail": "warn"
-    }
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -73,13 +66,6 @@
       "import": "./dist/utils.js"
     }
   },
-  "files": [
-    "dist",
-    "LICENSE-ALIEN-SIGNALS.txt"
-  ],
-  "dependencies": {
-    "alien-signals": "3.2.1"
-  },
   "scripts": {
     "bench": "pnpm build:runtime && node --expose-gc benchmarks/core.mjs",
     "bench:deep": "pnpm build:runtime && node --expose-gc benchmarks/deep-signal.mjs",
@@ -116,8 +102,8 @@
     "size": "pnpm build:runtime && node scripts/check-size.mjs",
     "size:update": "pnpm build:runtime && node scripts/check-size.mjs --update"
   },
-  "peerDependencies": {
-    "react": ">=19.3.0"
+  "dependencies": {
+    "alien-signals": "3.2.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.64.0",
@@ -141,5 +127,19 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.4",
     "vitest": "^5.0.3"
-  }
+  },
+  "peerDependencies": {
+    "react": ">=19.3.0"
+  },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "24.22.1",
+      "onFail": "warn"
+    }
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "packageManager": "pnpm@12.15.0"
 }

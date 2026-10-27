@@ -5,30 +5,30 @@ on:
     branches:
       - main
     paths:
-      - '.github/workflows/website-ci.yml'
-      - '.github/workflows/website-deploy.yml'
-      - 'website/**'
-      - 'src/**'
-      - 'packages/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsdown.config.ts'
-      - 'tsconfig*.json'
-      - 'vite.config.*'
+      - ".github/workflows/website-ci.yml"
+      - ".github/workflows/website-deploy.yml"
+      - "website/**"
+      - "src/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsdown.config.ts"
+      - "tsconfig*.json"
+      - "vite.config.*"
   pull_request:
     paths:
-      - '.github/workflows/website-ci.yml'
-      - '.github/workflows/website-deploy.yml'
-      - 'website/**'
-      - 'src/**'
-      - 'packages/**'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'tsdown.config.ts'
-      - 'tsconfig*.json'
-      - 'vite.config.*'
+      - ".github/workflows/website-ci.yml"
+      - ".github/workflows/website-deploy.yml"
+      - "website/**"
+      - "src/**"
+      - "packages/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "pnpm-workspace.yaml"
+      - "tsdown.config.ts"
+      - "tsconfig*.json"
+      - "vite.config.*"
   workflow_dispatch:
 
 permissions:

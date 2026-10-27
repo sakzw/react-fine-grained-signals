@@ -21,7 +21,7 @@ function measure(keyCount, operation, prepare = () => {}) {
   for (let sample = 0; sample < samples; sample += 1) {
     const start = performance.now();
     for (let i = 0; i < iterations; i += 1) operation(state.value, i + sample * iterations);
-    durations.push((performance.now() - start) * 1e6 / iterations);
+    durations.push(((performance.now() - start) * 1e6) / iterations);
   }
   dispose();
   durations.sort((a, b) => a - b);
@@ -54,9 +54,13 @@ async function measureHeap(keyCount) {
 const scenarios = [
   ["update", (map, i) => map.set("churn", i)],
   ["add", (map, i) => map.set(`insert-${i}`, i)],
-  ["delete", (map, i) => map.delete(`delete-${i}`), (map, count) => {
-    for (let i = 0; i < count; i += 1) map.set(`delete-${i}`, i);
-  }],
+  [
+    "delete",
+    (map, i) => map.delete(`delete-${i}`),
+    (map, count) => {
+      for (let i = 0; i < count; i += 1) map.set(`delete-${i}`, i);
+    },
+  ],
 ];
 
 const memoryOnly = process.argv.includes("--memory-only");
@@ -72,4 +76,6 @@ for (const subscribedKeys of counts) {
     heap: await measureHeap(subscribedKeys),
   });
 }
-console.log(JSON.stringify({ node: process.version, samples, targetCandidateChecksPerSample, unit: "ns/op", results }, null, 2));
+console.log(
+  JSON.stringify({ node: process.version, samples, targetCandidateChecksPerSample, unit: "ns/op", results }, null, 2),
+);

@@ -159,21 +159,27 @@ function createSignalsVariant(counts) {
 function createManagedSignalsVariant(counts) {
   const count = signal(0);
 
-  const ManagedSignalsCounter = managedImpl === "try-finally"
-    ? function ManagedSignalsCounterTryFinally() {
-        const store = useSignalCapture();
-        try {
-          counts.counter += 1;
-          return React.createElement("li", null, "count:", count.value);
-        } finally {
-          store.finish();
+  const ManagedSignalsCounter =
+    managedImpl === "try-finally"
+      ? function ManagedSignalsCounterTryFinally() {
+          const store = useSignalCapture();
+          try {
+            counts.counter += 1;
+            return React.createElement("li", null, "count:", count.value);
+          } finally {
+            store.finish();
+          }
         }
-      }
-    : function ManagedSignalsCounterCapture() {
-        const capture = useSignalCapture();
-        counts.counter += 1;
-        return React.createElement("li", null, "count:", capture.capture(() => count.value));
-      };
+      : function ManagedSignalsCounterCapture() {
+          const capture = useSignalCapture();
+          counts.counter += 1;
+          return React.createElement(
+            "li",
+            null,
+            "count:",
+            capture.capture(() => count.value),
+          );
+        };
 
   function ManagedSignalsSibling(props) {
     counts.siblings += 1;
@@ -201,30 +207,50 @@ function createControlledSignalsVariant(counts, managed, mode) {
     counts.counter += 1;
     return React.createElement("li", null, "count:", value.value);
   }
-  const Counter = managed && managedImpl === "try-finally"
-    ? function ManagedCounterTryFinally() {
-        const store = useSignalCapture();
-        try { return renderCounter(); } finally { store.finish(); }
-      }
-    : managed
-      ? function ManagedCounterCapture() {
-          const capture = useSignalCapture();
-          counts.counter += 1;
-          return React.createElement("li", null, "count:", capture.capture(() => value.value));
+  const Counter =
+    managed && managedImpl === "try-finally"
+      ? function ManagedCounterTryFinally() {
+          const store = useSignalCapture();
+          try {
+            return renderCounter();
+          } finally {
+            store.finish();
+          }
         }
-      : function UnmanagedCounter() { useSignalTracking(); return renderCounter(); };
+      : managed
+        ? function ManagedCounterCapture() {
+            const capture = useSignalCapture();
+            counts.counter += 1;
+            return React.createElement(
+              "li",
+              null,
+              "count:",
+              capture.capture(() => value.value),
+            );
+          }
+        : function UnmanagedCounter() {
+            useSignalTracking();
+            return renderCounter();
+          };
   function Sibling(props) {
     counts.siblings += 1;
     return React.createElement("li", null, "row ", props.index);
   }
   function App() {
-    return React.createElement("ul", null, React.createElement(managed ? Counter : UnmanagedCounter), ...buildSiblingElements(Sibling, rows));
+    return React.createElement(
+      "ul",
+      null,
+      React.createElement(managed ? Counter : UnmanagedCounter),
+      ...buildSiblingElements(Sibling, rows),
+    );
   }
   return {
     App,
     displayed,
-    increment: () => { trigger.value += 1; },
-    getStart: () => mode === "equality" ? Math.floor(trigger.value / 10) : displayed.value,
+    increment: () => {
+      trigger.value += 1;
+    },
+    getStart: () => (mode === "equality" ? Math.floor(trigger.value / 10) : displayed.value),
   };
 }
 
@@ -239,17 +265,28 @@ function createManySubscriberVariant(counts) {
     return React.createElement("li", null, sources[index].value);
   }
   function App() {
-    return React.createElement("ul", null, ...sources.map((_, index) => React.createElement(Leaf, { key: index, index })));
+    return React.createElement(
+      "ul",
+      null,
+      ...sources.map((_, index) => React.createElement(Leaf, { key: index, index })),
+    );
   }
   return {
     App,
     getStart: () => 0,
-    reset() { for (const source of sources) source.value = 0; renders.fill(0); },
-    increment() { for (const source of sources) source.value += 1; },
+    reset() {
+      for (const source of sources) source.value = 0;
+      renders.fill(0);
+    },
+    increment() {
+      for (const source of sources) source.value += 1;
+    },
     customCheck(state, updateCount) {
-      if (renders.some((count) => count !== updateCount + 1)) throw new Error("many subscribers: a leaf missed or duplicated updates");
+      if (renders.some((count) => count !== updateCount + 1))
+        throw new Error("many subscribers: a leaf missed or duplicated updates");
       const values = Array.from(state.container.querySelectorAll("li"), (element) => Number(element.textContent));
-      if (values.length !== rows || values.some((value) => value !== updateCount)) throw new Error(`many subscribers: wrong final values ${JSON.stringify(values)} (wanted ${updateCount})`);
+      if (values.length !== rows || values.some((value) => value !== updateCount))
+        throw new Error(`many subscribers: wrong final values ${JSON.stringify(values)} (wanted ${updateCount})`);
     },
   };
 }
@@ -343,8 +380,7 @@ const { App: HooksMemoApp, handle: hooksMemoHandle } = createHooksVariant(render
 // `count` is created once, above, and outlives every individual mount --
 // exactly the decoupling from component lifetime that useState can't offer.
 const { App: SignalsApp, count: signalsCount } = createSignalsVariant(renderCounts.signals);
-const { App: ManagedSignalsApp, count: managedSignalsCount } =
-  createManagedSignalsVariant(renderCounts.signalsManaged);
+const { App: ManagedSignalsApp, count: managedSignalsCount } = createManagedSignalsVariant(renderCounts.signalsManaged);
 const unrelatedProduction = createControlledSignalsVariant(renderCounts.unrelatedProduction, false, "unrelated");
 const equalityProduction = createControlledSignalsVariant(renderCounts.equalityProduction, false, "equality");
 const manyProduction = createManySubscriberVariant(renderCounts.manyProduction);
@@ -358,7 +394,18 @@ const { App: JsxHostApp, handle: jsxHostHandle } = createJsxHostVariant(renderCo
  * mount's updates run, so `signals` (whose backing signal is never reset)
  * and the hooks variants (which always start at 0) share one assertion.
  */
-function makeVariant({ name, counts, expectedSiblingRenders, App, increment, getStart, expectedCounterRenders, expectedDisplay, customCheck, reset }) {
+function makeVariant({
+  name,
+  counts,
+  expectedSiblingRenders,
+  App,
+  increment,
+  getStart,
+  expectedCounterRenders,
+  expectedDisplay,
+  customCheck,
+  reset,
+}) {
   return {
     name,
     counts,
@@ -397,7 +444,9 @@ function makeVariant({ name, counts, expectedSiblingRenders, App, increment, get
         counts.siblings === expectedSiblings,
         `${name}: expected ${expectedSiblings} sibling renders, got ${counts.siblings}`,
       );
-      const expectedFinal = expectedDisplay ? expectedDisplay(state.startCount, updateCount) : state.startCount + updateCount;
+      const expectedFinal = expectedDisplay
+        ? expectedDisplay(state.startCount, updateCount)
+        : state.startCount + updateCount;
       const counterNode = state.container.querySelector("li");
       const expectedText = `count:${expectedFinal}`;
       assert(
@@ -451,13 +500,22 @@ const allVariants = [
     },
     getStart: () => managedSignalsCount.value,
   }),
-  ...[["unrelated-production", unrelatedProduction], ["equality-production", equalityProduction]].map(([name, instance]) => makeVariant({
-    name, counts: renderCounts[name === "unrelated-production" ? "unrelatedProduction" : "equalityProduction"],
-    expectedSiblingRenders: () => rows, App: instance.App,
-    increment: instance.increment, getStart: instance.getStart,
-    expectedCounterRenders: name === "unrelated-production" ? () => 1 : (count) => Math.floor(count / 10) + 1,
-    expectedDisplay: name === "unrelated-production" ? (start) => start : (start, count) => start + Math.floor(count / 10),
-  })),
+  ...[
+    ["unrelated-production", unrelatedProduction],
+    ["equality-production", equalityProduction],
+  ].map(([name, instance]) =>
+    makeVariant({
+      name,
+      counts: renderCounts[name === "unrelated-production" ? "unrelatedProduction" : "equalityProduction"],
+      expectedSiblingRenders: () => rows,
+      App: instance.App,
+      increment: instance.increment,
+      getStart: instance.getStart,
+      expectedCounterRenders: name === "unrelated-production" ? () => 1 : (count) => Math.floor(count / 10) + 1,
+      expectedDisplay:
+        name === "unrelated-production" ? (start) => start : (start, count) => start + Math.floor(count / 10),
+    }),
+  ),
   makeVariant({
     name: "many-production",
     counts: renderCounts.manyProduction,
@@ -551,16 +609,25 @@ const results = variants.map(benchmark);
 console.table(results);
 if (process.env.BENCH_OUTPUT) {
   const metadata = {
-    kind: "react-sample", date: process.env.BENCH_DATE ?? new Date().toISOString().slice(0, 10),
+    kind: "react-sample",
+    date: process.env.BENCH_DATE ?? new Date().toISOString().slice(0, 10),
     commit: process.env.BENCH_COMMIT ?? "working-tree",
     workingTree: process.env.BENCH_WORKING_TREE ?? undefined,
     round: Number.parseInt(process.env.BENCH_ROUND ?? "0", 10),
     order: process.env.BENCH_ORDER ?? "",
-    node: process.version, platform: process.platform, arch: process.arch,
-    cpu: os.cpus()[0]?.model, react: "19.3.0", rows, updates, warmups, samples,
+    node: process.version,
+    platform: process.platform,
+    arch: process.arch,
+    cpu: os.cpus()[0]?.model,
+    react: "19.3.0",
+    rows,
+    updates,
+    warmups,
+    samples,
     managedImpl,
   };
-  for (const result of results) appendFileSync(process.env.BENCH_OUTPUT, `${JSON.stringify({ ...metadata, ...result })}\n`);
+  for (const result of results)
+    appendFileSync(process.env.BENCH_OUTPUT, `${JSON.stringify({ ...metadata, ...result })}\n`);
 }
 if (requestedVariant) process.exit(0);
 

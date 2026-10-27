@@ -2,6 +2,23 @@
   "name": "unplugin-react-fine-grained-signals",
   "version": "0.4.0",
   "description": "Universal managed signal tracking transform for React.",
+  "keywords": [
+    "alien-signals",
+    "esbuild",
+    "fine-grained",
+    "react",
+    "react-fine-grained-signals",
+    "rollup",
+    "rspack",
+    "signals",
+    "unplugin",
+    "vite",
+    "webpack"
+  ],
+  "homepage": "https://github.com/sakzw/react-fine-grained-signals/tree/main/packages/unplugin-react-fine-grained-signals#readme",
+  "bugs": {
+    "url": "https://github.com/sakzw/react-fine-grained-signals/issues"
+  },
   "license": "MIT",
   "author": "akazawa",
   "repository": {
@@ -9,27 +26,13 @@
     "url": "git+https://github.com/sakzw/react-fine-grained-signals.git",
     "directory": "packages/unplugin-react-fine-grained-signals"
   },
-  "homepage": "https://github.com/sakzw/react-fine-grained-signals/tree/main/packages/unplugin-react-fine-grained-signals#readme",
-  "bugs": {
-    "url": "https://github.com/sakzw/react-fine-grained-signals/issues"
-  },
-  "keywords": [
-    "unplugin",
-    "vite",
-    "rollup",
-    "webpack",
-    "rspack",
-    "esbuild",
-    "react",
-    "signals",
-    "fine-grained",
-    "react-fine-grained-signals",
-    "alien-signals"
+  "files": [
+    "dist",
+    "README.md",
+    "README.ja.md",
+    "LICENSE"
   ],
   "type": "module",
-  "engines": {
-    "node": "^22.18.0 || >=24.11.0"
-  },
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
@@ -64,12 +67,6 @@
     },
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "README.md",
-    "README.ja.md",
-    "LICENSE"
-  ],
   "scripts": {
     "prepublishOnly": "node -e \"if(!/pnpm/i.test(process.env.npm_config_user_agent||process.env.npm_execpath||'')){console.error('Publish this package with pnpm publish, not npm publish -- workspace: peer ranges must be rewritten.');process.exit(1)}\"",
     "build": "tsdown && node tests/build-smoke.mjs",
@@ -79,9 +76,6 @@
     "test:coverage": "vitest run --coverage",
     "test:react-compiler": "vitest run tests/react-compiler.test.ts",
     "typecheck": "tsc --noEmit"
-  },
-  "peerDependencies": {
-    "react-fine-grained-signals": "workspace:^"
   },
   "dependencies": {
     "@babel/core": "^8.0.7",
@@ -99,5 +93,11 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.3",
     "webpack": "5.111.1"
+  },
+  "peerDependencies": {
+    "react-fine-grained-signals": "workspace:^"
+  },
+  "engines": {
+    "node": "^22.18.0 || >=24.11.0"
   }
 }

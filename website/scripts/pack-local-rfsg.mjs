@@ -31,14 +31,19 @@ for (const { dir, name } of packages) {
   // `pnpm pack` runs the package's own prepack build and rewrites `workspace:`
   // ranges, so the tarball matches what `pnpm publish` would upload.
   const args = ["pack", "--pack-destination", scratch];
-  const result = process.platform === "win32"
-    ? spawnSync("powershell.exe", [
-      "-NoProfile",
-      "-NonInteractive",
-      "-Command",
-      `& 'pnpm' ${args.map((arg) => `'${arg.replaceAll("'", "''")}'`).join(" ")}`,
-    ], { cwd: dir, stdio: "inherit" })
-    : spawnSync("pnpm", args, { cwd: dir, stdio: "inherit" });
+  const result =
+    process.platform === "win32"
+      ? spawnSync(
+          "powershell.exe",
+          [
+            "-NoProfile",
+            "-NonInteractive",
+            "-Command",
+            `& 'pnpm' ${args.map((arg) => `'${arg.replaceAll("'", "''")}'`).join(" ")}`,
+          ],
+          { cwd: dir, stdio: "inherit" },
+        )
+      : spawnSync("pnpm", args, { cwd: dir, stdio: "inherit" });
   if (result.error !== undefined) throw result.error;
   if (result.status !== 0) throw result.error ?? new Error(`pnpm pack failed for ${name}`);
   const [tarball] = readdirSync(scratch).filter((file) => file.endsWith(".tgz"));
