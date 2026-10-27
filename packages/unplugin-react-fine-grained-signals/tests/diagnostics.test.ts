@@ -8,11 +8,7 @@ import loader from "../src/loader.js";
 import rollupAdapter from "../src/rollup.js";
 import viteAdapter from "../src/vite.js";
 import { build as viteBuild } from "vite";
-import {
-  DIAGNOSTIC_IDS,
-  isDiagnosticId,
-  type DiagnosticId,
-} from "../src/internal/diagnostics.js";
+import { DIAGNOSTIC_IDS, isDiagnosticId, type DiagnosticId } from "../src/internal/diagnostics.js";
 import { REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS } from "../src/unplugin.js";
 
 type Warning = Error & { code?: string; diagnosticId?: string; loc?: { file?: string; line: number; column: number } };
@@ -133,8 +129,15 @@ function collect(id: string, code: string): Warning[] {
 describe("diagnostic IDs", () => {
   it("assigns one stable ID to each of the nine warning categories", () => {
     expect(DIAGNOSTIC_IDS).toEqual([
-      "RFGS001", "RFGS002", "RFGS003", "RFGS004", "RFGS005",
-      "RFGS006", "RFGS007", "RFGS008", "RFGS009",
+      "RFGS001",
+      "RFGS002",
+      "RFGS003",
+      "RFGS004",
+      "RFGS005",
+      "RFGS006",
+      "RFGS007",
+      "RFGS008",
+      "RFGS009",
     ]);
     expect(REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS).toBe(DIAGNOSTIC_IDS);
     expect(Object.keys(FIXTURES)).toHaveLength(DIAGNOSTIC_IDS.length);
@@ -183,8 +186,13 @@ export function App() {
     const result = transform.call(rollupContext(warnings), source, "App.tsx");
     expect(result?.code).toContain("capture(() => s.value)");
     expect(warnings.filter((warning) => warning.diagnosticId === "RFGS001")).toEqual([]);
-    expect(() => rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS001"] } })
-      .call(rollupContext([]), FIXTURES.RFGS001.code, FIXTURES.RFGS001.id)).toThrow(/RFGS001/);
+    expect(() =>
+      rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS001"] } }).call(
+        rollupContext([]),
+        FIXTURES.RFGS001.code,
+        FIXTURES.RFGS001.id,
+      ),
+    ).toThrow(/RFGS001/);
   });
 
   it("keeps every diagnostic a warning when errorOn is not set", () => {
@@ -200,8 +208,13 @@ export function App() {
     const warnings: Warning[] = [];
 
     // Promoting RFGS003 fails the build on the render prop; RFGS007 stays a warning.
-    expect(() => rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS003"] } })
-      .call(rollupContext(warnings), source, "123.tsx")).toThrow(/RFGS003/);
+    expect(() =>
+      rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS003"] } }).call(
+        rollupContext(warnings),
+        source,
+        "123.tsx",
+      ),
+    ).toThrow(/RFGS003/);
     expect(warnings.map((warning) => warning.diagnosticId)).toEqual(["RFGS007"]);
   });
 
@@ -211,13 +224,15 @@ export function App() {
     writeFileSync(input, warnOnly);
 
     try {
-      await expect(rollup({
-        input,
-        plugins: [rollupAdapter({ mode: "auto", diagnostics: { errorOn: ["RFGS007"] } }) as never],
-        onwarn(warning) {
-          throw new Error(`Unexpected Rollup warning: ${warning.message}`);
-        },
-      })).rejects.toMatchObject({
+      await expect(
+        rollup({
+          input,
+          plugins: [rollupAdapter({ mode: "auto", diagnostics: { errorOn: ["RFGS007"] } }) as never],
+          onwarn(warning) {
+            throw new Error(`Unexpected Rollup warning: ${warning.message}`);
+          },
+        }),
+      ).rejects.toMatchObject({
         code: "PLUGIN_ERROR",
         pluginCode: "RFGS",
         diagnosticId: "RFGS007",
@@ -231,8 +246,11 @@ export function App() {
   it("fails on the promoted diagnostic and keeps its message, code frame and location", () => {
     const failure = (() => {
       try {
-        rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS007"] } })
-          .call(rollupContext([]), warnOnly, "/project/src/123.tsx");
+        rollupTransform({ mode: "auto", diagnostics: { errorOn: ["RFGS007"] } }).call(
+          rollupContext([]),
+          warnOnly,
+          "/project/src/123.tsx",
+        );
       } catch (error) {
         return error as Warning;
       }
@@ -297,9 +315,11 @@ export function Counter() { return <button>{count.value}</button>; }
   });
 
   it("rejects an unknown ID when the plugin is created, not silently at build time", () => {
-    expect(() => rollupAdapter({
-      diagnostics: { errorOn: ["RFGS042" as DiagnosticId] },
-    })).toThrow(/unknown diagnostic ID: RFGS042/);
+    expect(() =>
+      rollupAdapter({
+        diagnostics: { errorOn: ["RFGS042" as DiagnosticId] },
+      }),
+    ).toThrow(/unknown diagnostic ID: RFGS042/);
   });
 
   it("does not report a duplicate for a site reached more than once", () => {
@@ -314,8 +334,7 @@ export function Counter() { return <button>{count.value}</button>; }
       transform: { handler: Transform };
     };
 
-    expect(() => plugin.transform.handler.call(rollupContext([]), warnOnly, "/project/src/123.tsx"))
-      .toThrow(/RFGS007/);
+    expect(() => plugin.transform.handler.call(rollupContext([]), warnOnly, "/project/src/123.tsx")).toThrow(/RFGS007/);
   });
 
   it("promotes the same diagnostic through the webpack/rspack loader", async () => {
@@ -339,12 +358,15 @@ export function Counter() { return <button>{count.value}</button>; }
 
   it.each([
     ["without an incoming source map", undefined],
-    ["with an incoming source map", {
-      version: 3,
-      sources: ["/project/src/123.tsx"],
-      names: [],
-      mappings: "AAAA",
-    }],
+    [
+      "with an incoming source map",
+      {
+        version: 3,
+        sources: ["/project/src/123.tsx"],
+        names: [],
+        mappings: "AAAA",
+      },
+    ],
   ])("keeps promoted diagnostics as loader errors %s without duplicating other warnings", async (_label, map) => {
     const source = `${warnOnly}${renderProp}`;
     const plugin = rollupAdapter({ mode: "auto", diagnostics: { errorOn: ["RFGS003"] } });
@@ -365,11 +387,13 @@ export function Counter() { return <button>{count.value}</button>; }
     expect(run.error?.message).toMatch(/> \d+ \|/);
     expect(run.error?.code).toBe("RFGS");
     expect(run.error?.diagnosticId).toBe("RFGS003");
-    expect(run.error?.loc).toEqual(expect.objectContaining({
-      file: "/project/src/123.tsx",
-      line: expect.any(Number),
-      column: expect.any(Number),
-    }));
+    expect(run.error?.loc).toEqual(
+      expect.objectContaining({
+        file: "/project/src/123.tsx",
+        line: expect.any(Number),
+        column: expect.any(Number),
+      }),
+    );
     expect(warnings.map((warning) => warning.diagnosticId)).toEqual(["RFGS007"]);
   });
 });
@@ -380,7 +404,10 @@ describe("real bundler builds", () => {
   // The JSX runtime the transformed module imports, stubbed so Vite can finish the build.
   const jsxRuntime = join(dir, "jsx-runtime-stub.js");
   writeFileSync(entry, FIXTURES.RFGS007.code);
-  writeFileSync(jsxRuntime, "export const jsx = () => null;\nexport const jsxs = jsx;\nexport const jsxDEV = jsx;\nexport const Fragment = null;\n");
+  writeFileSync(
+    jsxRuntime,
+    "export const jsx = () => null;\nexport const jsxs = jsx;\nexport const jsxDEV = jsx;\nexport const Fragment = null;\n",
+  );
   afterAll(() => rmSync(dir, { recursive: true, force: true }));
 
   const viteConfig = (errorOn: DiagnosticId[]) => ({
@@ -408,13 +435,15 @@ describe("real bundler builds", () => {
 
   it("esbuild: a promoted ID fails the build and names the ID", async () => {
     const esbuild = await import("esbuild");
-    await expect(esbuild.build({
-      entryPoints: [entry],
-      bundle: true,
-      write: false,
-      logLevel: "silent",
-      plugins: [esbuildAdapter({ diagnostics: { errorOn: ["RFGS007"] } })],
-    })).rejects.toThrow(/RFGS007/);
+    await expect(
+      esbuild.build({
+        entryPoints: [entry],
+        bundle: true,
+        write: false,
+        logLevel: "silent",
+        plugins: [esbuildAdapter({ diagnostics: { errorOn: ["RFGS007"] } })],
+      }),
+    ).rejects.toThrow(/RFGS007/);
   }, 60_000);
 
   it("vite: a promoted ID fails vite.build and names the ID", async () => {

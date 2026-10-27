@@ -31,8 +31,7 @@ import {
   type ReactFineGrainedSignalsTransform,
 } from "../src/internal/transform.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MODULES = "__modules";
 const EXPORTS = "__exports";
@@ -58,20 +57,13 @@ const moduleLinker: PluginObject = {
         if (!t.isImportSpecifier(specifier) || !t.isIdentifier(specifier.imported)) {
           throw path.buildCodeFrameError("fixtures only use named imports");
         }
-        return t.objectProperty(
-          t.identifier(specifier.imported.name),
-          t.cloneNode(specifier.local),
-        );
+        return t.objectProperty(t.identifier(specifier.imported.name), t.cloneNode(specifier.local));
       });
       path.replaceWith(
         t.variableDeclaration("const", [
           t.variableDeclarator(
             t.objectPattern(properties),
-            t.memberExpression(
-              t.identifier(MODULES),
-              t.stringLiteral(path.node.source.value),
-              true,
-            ),
+            t.memberExpression(t.identifier(MODULES), t.stringLiteral(path.node.source.value), true),
           ),
         ]),
       );
@@ -98,7 +90,7 @@ const moduleLinker: PluginObject = {
               t.memberExpression(t.identifier(EXPORTS), t.identifier(name)),
               t.identifier(name),
             ),
-          )
+          ),
         ),
       ]);
     },
@@ -123,13 +115,13 @@ async function loadModule(
 ): Promise<Record<string, unknown>> {
   const fixtureName = typescript ? "Fixture.tsx" : "Fixture.jsx";
   const transformed = transform
-    ? transformReactFineGrainedSignals(source, fixtureName, {
-      importSource: "react-fine-grained-signals",
-      mode,
-      transform: codegen,
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code ?? source
+    ? (transformReactFineGrainedSignals(source, fixtureName, {
+        importSource: "react-fine-grained-signals",
+        mode,
+        transform: codegen,
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      })?.code ?? source)
     : source;
   // `importSource: "react"` is the project-wide default a per-file
   // `@jsxImportSource` pragma overrides, exactly as under Vite.
@@ -151,7 +143,8 @@ async function loadModule(
 
 describe("managed per-read capture codegen", () => {
   it("commits the transformed per-read capture attempt during hydration", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { signal } from "react-fine-grained-signals";
 export const source = signal("server");
 export const unrelated = signal("unchanged");
@@ -161,7 +154,9 @@ export function App() {
   renders += 1;
   return <span data-testid="captured-hydration">{source.value}</span>;
 }
-`, { mode: "all" });
+`,
+      { mode: "all" },
+    );
     const App = module.App as FunctionComponent;
     const getRenders = module.getRenders as () => number;
     const source = module.source as Signal<string>;
@@ -177,15 +172,21 @@ export function App() {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, createElement(App));
 
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(container.querySelector("[data-testid=captured-hydration]")?.textContent).toBe("server");
     expect(getRenders()).toBe(2);
 
-    await act(async () => { unrelated.value = "ignored"; });
+    await act(async () => {
+      unrelated.value = "ignored";
+    });
     expect(getRenders()).toBe(2);
     expect(container.querySelector("[data-testid=captured-hydration]")?.textContent).toBe("server");
 
-    await act(async () => { source.value = "client"; });
+    await act(async () => {
+      source.value = "client";
+    });
     expect(getRenders()).toBe(3);
     expect(container.querySelector("[data-testid=captured-hydration]")?.textContent).toBe("client");
     expect(consoleError).not.toHaveBeenCalled();
@@ -231,7 +232,9 @@ export function App() {
     expect(container.textContent).toBe("before/Ada/Ada/0");
     write(module, "shallow", "after");
     expect(container.textContent).toBe("after/Ada/Ada/0");
-    act(() => { (module.deep as { value: { profile: { name: string } } }).value.profile.name = "Grace"; });
+    act(() => {
+      (module.deep as { value: { profile: { name: string } } }).value.profile.name = "Grace";
+    });
     expect(container.textContent).toBe("after/Grace/Grace/0");
   });
 
@@ -288,8 +291,11 @@ export function App() {
     expect(container.querySelector("li")?.className).toBe("task-row done");
   });
 
-  it.each(["auto", "all"] as const)("keeps a component's explicit useSignalTracking() window open after a compiled custom hook (mode %s)", async (mode) => {
-    const module = await loadModule(`
+  it.each(["auto", "all"] as const)(
+    "keeps a component's explicit useSignalTracking() window open after a compiled custom hook (mode %s)",
+    async (mode) => {
+      const module = await loadModule(
+        `
 import { signal, useSignalTracking } from "react-fine-grained-signals";
 export const count = signal(1);
 export const other = signal("o0");
@@ -299,16 +305,19 @@ export function Comp() {
   const n = useCount();
   return <b>{n}:{other.value}</b>;
 }
-`, { mode });
-    const container = mount(module.Comp);
-    expect(container.textContent).toBe("1:o0");
-    write(module, "other", "o1");
-    expect(container.textContent).toBe("1:o1");
-    write(module, "count", 2);
-    expect(container.textContent).toBe("2:o1");
-    write(module, "other", "o2");
-    expect(container.textContent).toBe("2:o2");
-  });
+`,
+        { mode },
+      );
+      const container = mount(module.Comp);
+      expect(container.textContent).toBe("1:o0");
+      write(module, "other", "o1");
+      expect(container.textContent).toBe("1:o1");
+      write(module, "count", 2);
+      expect(container.textContent).toBe("2:o1");
+      write(module, "other", "o2");
+      expect(container.textContent).toBe("2:o2");
+    },
+  );
 
   it("tracks a computed signal accessor with a runtime key", async () => {
     const module = await loadModule(`
@@ -333,22 +342,28 @@ export function App() { return <output>{source[key.value]}</output>; }
 
   it("captures a synchronous signal read performed by an imported helper", async () => {
     const count = library.signal("before") as Signal<string>;
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { readCount } from "./counter-store";
 export function App() { return <output>{readCount()}</output>; }
-`, {
-      mode: "all",
-      modules: { "./counter-store": { readCount: () => count.value } },
-    });
+`,
+      {
+        mode: "all",
+        modules: { "./counter-store": { readCount: () => count.value } },
+      },
+    );
     const container = mount(module.App);
     expect(container.textContent).toBe("before");
 
-    act(() => { count.value = "after"; });
+    act(() => {
+      count.value = "after";
+    });
     expect(container.textContent).toBe("after");
   });
 
   it("captures known module-scope helper and render-callback reads at their synchronous call", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { deepSignal } from "react-fine-grained-signals";
 export const state = deepSignal({ profile: { name: "Ada" } });
 function readName() { return state.value.profile.name; }
@@ -357,7 +372,9 @@ export function App() {
   const mapped = [0].map(readName)[0];
   return <output>{direct + "/" + mapped}</output>;
 }
-`, { mode: "all" });
+`,
+      { mode: "all" },
+    );
     const container = mount(module.App);
     expect(container.textContent).toBe("Ada/Ada");
     act(() => {
@@ -367,7 +384,8 @@ export function App() {
   });
 
   it("auto-detects reads in a statically resolved synchronous module helper", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { deepSignal } from "react-fine-grained-signals";
 export const state = deepSignal({ profile: { name: "Ada" } });
 function readName() { return state.value.profile.name; }
@@ -375,7 +393,9 @@ export function App() {
   const name = readName();
   return <output>{name}</output>;
 }
-`, { mode: "auto" });
+`,
+      { mode: "auto" },
+    );
     const container = mount(module.App);
     expect(container.textContent).toBe("Ada");
     act(() => {
@@ -407,14 +427,17 @@ export function App() {
   });
 
   it("captures a nested synchronous helper at its callsite instead of retaining a render handle", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { deepSignal } from "react-fine-grained-signals";
 export const state = deepSignal({ profile: { name: "Ada" } });
 export function App() {
   function readLocal() { return state.value.profile.name; }
   return <output>{readLocal()}</output>;
 }
-`, { mode: "auto" });
+`,
+      { mode: "auto" },
+    );
     const container = mount(module.App);
     expect(container.textContent).toBe("Ada");
     act(() => {
@@ -441,13 +464,14 @@ export function App() {
   function recursive(n) { return n > 0 ? recursive(n - 1) : readAgain(); }
 }
 `;
-    const transformed = transformReactFineGrainedSignals(source, "AliasClosure.jsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code ?? "";
+    const transformed =
+      transformReactFineGrainedSignals(source, "AliasClosure.jsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      })?.code ?? "";
     expect(transformed).toContain("capture(() => recursive(2))");
     expect(transformed).not.toContain("capture(() => plain())");
     expect(transformed).not.toContain("capture(() => itemText(plainItems))");
@@ -458,15 +482,20 @@ export function App() {
       const container = mount(module.App as FunctionComponent);
       expect(container.textContent).toBe("0xxpp");
 
-      act(() => { obj.value.items[0]!.t = "y"; });
+      act(() => {
+        obj.value.items[0]!.t = "y";
+      });
       expect(container.textContent).toBe("0yypp");
-      act(() => { count.value = 1; });
+      act(() => {
+        count.value = 1;
+      });
       expect(container.textContent).toBe("1yypp");
     }
   });
 
   it("keeps a suspended attempt separate from the fallback and its later retry", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { signal } from "react-fine-grained-signals";
 
 export const source = signal("before");
@@ -487,14 +516,14 @@ export function Reader() {
 export function Fallback() {
   return <output>{fallbackSource.value}</output>;
 }
-`, {});
+`,
+      {},
+    );
     const Reader = module.Reader as FunctionComponent;
     const Fallback = module.Fallback as FunctionComponent;
-    const container = mount(() => createElement(
-      Suspense,
-      { fallback: createElement(Fallback) },
-      createElement(Reader),
-    ));
+    const container = mount(() =>
+      createElement(Suspense, { fallback: createElement(Fallback) }, createElement(Reader)),
+    );
     expect(container.textContent).toBe("loading");
     const counts = module.renderCounts as { reader: number };
     expect(counts.reader).toBeGreaterThan(0);
@@ -517,7 +546,8 @@ export function Fallback() {
   });
 
   it("keeps suspended capture ownership isolated across React roots", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { signal } from "react-fine-grained-signals";
 
 export const suspendedSource = signal("pending");
@@ -536,12 +566,16 @@ export function SuspendedReader() {
 export function OtherRootReader() {
   return <output>{otherRootSource.value}</output>;
 }
-`, {});
-    const suspendedRoot = mount(() => createElement(
-      Suspense,
-      { fallback: createElement("output", null, "fallback") },
-      createElement(module.SuspendedReader as FunctionComponent),
-    ));
+`,
+      {},
+    );
+    const suspendedRoot = mount(() =>
+      createElement(
+        Suspense,
+        { fallback: createElement("output", null, "fallback") },
+        createElement(module.SuspendedReader as FunctionComponent),
+      ),
+    );
     const otherRoot = mount(module.OtherRootReader);
 
     expect(suspendedRoot.textContent).toBe("fallback");
@@ -561,7 +595,8 @@ export function OtherRootReader() {
   });
 
   it("preserves assignment targets, optional reads, constructor calls, and tagged receivers", () => {
-    const transformed = transformReactFineGrainedSignals(`
+    const transformed = transformReactFineGrainedSignals(
+      `
 import { deepSignal } from "react-fine-grained-signals";
 const state = deepSignal({ nested: { value: 1 }, Ctor: class {}, tag() { return this.nested.value; } });
 function View(next) {
@@ -574,13 +609,16 @@ function View(next) {
   const tagged = state.value.tag\`read\`;
   return <output>{read + instance + tagged}</output>;
 }
-`, "Fixture.jsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code;
+`,
+      "Fixture.jsx",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      },
+    )?.code;
     expect(transformed).toContain(".capture(() => state.value.nested?.value)");
     expect(transformed).toContain(".capture(() => new state.value.Ctor())");
     expect(transformed).toContain(".capture(() => state.value.tag`read`)");
@@ -591,7 +629,8 @@ function View(next) {
   });
 
   it("captures member reads after calls and preserves nested constructor callee evaluation", () => {
-    const transformed = transformReactFineGrainedSignals(`
+    const transformed = transformReactFineGrainedSignals(
+      `
 import { deepSignal } from "react-fine-grained-signals";
 const state = deepSignal({ getChild() { return { name: "Ada" }; }, makeCtor() { return class {} } });
 function View() {
@@ -599,19 +638,23 @@ function View() {
   const instance = new (state.value.makeCtor())();
   return <output>{name + instance}</output>;
 }
-`, "Fixture.jsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code;
+`,
+      "Fixture.jsx",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      },
+    )?.code;
     expect(transformed).toContain(".capture(() => state.value.getChild().name)");
     expect(transformed).toContain(".capture(() => new (state.value.makeCtor())())");
   });
 
   it("does not wrap TypeScript assertions on assignment targets", () => {
-    const transformed = transformReactFineGrainedSignals(`
+    const transformed = transformReactFineGrainedSignals(
+      `
 import { deepSignal } from "react-fine-grained-signals";
 const state = deepSignal({ nested: { value: 1 } });
 function View(next: number) {
@@ -619,13 +662,16 @@ function View(next: number) {
   (state.value.nested.value as number) = next;
   return <output>{state.value.nested.value}</output>;
 }
-`, "Fixture.tsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code;
+`,
+      "Fixture.tsx",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      },
+    )?.code;
     expect(transformed).toContain("state.value.nested.value! = next");
     expect(transformed).toContain("state.value.nested.value as number");
     expect(transformed).not.toContain(".capture(() => state.value.nested.value!");
@@ -747,7 +793,8 @@ export function Label({ v = count.value }) {
 `;
 
   it("control: a default evaluated before the boundary opens is never tracked", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
 import { signal } from "react-fine-grained-signals";
 import { useManagedSignals } from "react-fine-grained-signals/internal";
 
@@ -762,7 +809,9 @@ export function Label({ v = count.value }) {
     store.finish();
   }
 }
-`, { transform: false });
+`,
+      { transform: false },
+    );
     const container = mount(module.Label);
 
     write(module, "count", 1);
@@ -835,13 +884,14 @@ export function Rating() {
 `;
 
   it("does not give the mapFn a hook boundary that runs once per item", async () => {
-    const transformed = transformReactFineGrainedSignals(source, "Fixture.jsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code ?? source;
+    const transformed =
+      transformReactFineGrainedSignals(source, "Fixture.jsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      })?.code ?? source;
     expect(transformed.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(transformed).toMatch(/function Star\(\) \{\s+return <span>/);
   });
@@ -878,13 +928,14 @@ export function List() {
 `;
 
   it("does not give the keyed function a hook boundary that runs once per item", async () => {
-    const transformed = transformReactFineGrainedSignals(source, "Fixture.jsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code ?? source;
+    const transformed =
+      transformReactFineGrainedSignals(source, "Fixture.jsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      })?.code ?? source;
     expect(transformed.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(transformed).toMatch(/Row: \(?item\)? => <li>/);
   });
@@ -933,8 +984,9 @@ export function Badge({ count, label }) {
     const count = library.signal(1);
     const label = library.signal("hello");
 
-    expect(() => mount(() => createElement(module.Badge as FunctionComponent<BadgeProps>, { count, label })))
-      .toThrow(/not valid as a React child/);
+    expect(() => mount(() => createElement(module.Badge as FunctionComponent<BadgeProps>, { count, label }))).toThrow(
+      /not valid as a React child/,
+    );
   });
 
   for (const codegen of ["managed", "inject"] as const) {
@@ -942,9 +994,7 @@ export function Badge({ count, label }) {
       const module = await loadModule(source, { codegen });
       const count = library.signal(1);
       const label = library.signal("hello");
-      const container = mount(() =>
-        createElement(module.Badge as FunctionComponent<BadgeProps>, { count, label })
-      );
+      const container = mount(() => createElement(module.Badge as FunctionComponent<BadgeProps>, { count, label }));
       const paragraph = container.querySelector("p")!;
       expect(paragraph.textContent).toBe("few: hello");
       expect(paragraph.title).toBe("hello");
@@ -1075,7 +1125,8 @@ export function Feed() {
 
 describe("managed destructured signal reads", () => {
   it("preserves getter order and neighboring declarator order", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
       export const events = [];
       const mark = (name) => (events.push(name), name);
       const state = {
@@ -1094,13 +1145,15 @@ describe("managed destructured signal reads", () => {
         const before = mark("before"), { first: { nested }, second } = state.value, after = mark("after");
         return <p>{before + nested + second + after}</p>;
       }
-    `, {
-      modules: {
-        "react-fine-grained-signals/internal": {
-          useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+    `,
+      {
+        modules: {
+          "react-fine-grained-signals/internal": {
+            useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+          },
         },
       },
-    });
+    );
 
     const element = (module.Profile as () => { props: { children: string } })();
     expect(element.props.children).toBe("beforeABafter");
@@ -1108,7 +1161,8 @@ describe("managed destructured signal reads", () => {
   });
 
   it("preserves nullish errors and TDZ when a property getter reads its own binding", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
       const nullSource = { value: null };
       const undefinedSource = { value: undefined };
       export function ReadNull() {
@@ -1124,13 +1178,15 @@ describe("managed destructured signal reads", () => {
         const { chosen } = source.value;
         return <p>{chosen}</p>;
       }
-    `, {
-      modules: {
-        "react-fine-grained-signals/internal": {
-          useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+    `,
+      {
+        modules: {
+          "react-fine-grained-signals/internal": {
+            useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+          },
         },
       },
-    });
+    );
     const readNull = module.ReadNull as () => unknown;
     const readUndefined = module.ReadUndefined as () => unknown;
     const readTDZ = module.ReadTDZ as () => unknown;
@@ -1147,7 +1203,8 @@ describe("managed destructured signal reads", () => {
   });
 
   it("stops property evaluation at the same throwing getter", async () => {
-    const module = await loadModule(`
+    const module = await loadModule(
+      `
       export const events = [];
       const failure = new Error("first getter failed");
       const state = {
@@ -1163,13 +1220,15 @@ describe("managed destructured signal reads", () => {
         const { first, second } = state.value;
         return <p>{first + second}</p>;
       }
-    `, {
-      modules: {
-        "react-fine-grained-signals/internal": {
-          useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+    `,
+      {
+        modules: {
+          "react-fine-grained-signals/internal": {
+            useSignalCapture: () => ({ capture: (read: () => unknown) => read() }),
+          },
         },
       },
-    });
+    );
 
     expect(() => (module.Read as () => unknown)()).toThrow("first getter failed");
     expect(module.events).toEqual(["source", "first"]);
@@ -1293,10 +1352,14 @@ describe("managed destructured signal reads", () => {
     const state = module.state as Signal<{ user: { profile: { name: string } } }>;
     expect(container.textContent).toBe("Ada");
 
-    act(() => { state.value.user.profile.name = "Bea"; });
+    act(() => {
+      state.value.user.profile.name = "Bea";
+    });
     expect(container.textContent).toBe("Bea");
 
-    act(() => { state.value.user = { profile: { name: "Cleo" } }; });
+    act(() => {
+      state.value.user = { profile: { name: "Cleo" } };
+    });
     expect(container.textContent).toBe("Cleo");
   });
 
@@ -1334,7 +1397,9 @@ describe("managed destructured signal reads", () => {
     });
     expect(container.textContent).toBe("Bea");
 
-    act(() => { state.value = sourceObject("Cleo"); });
+    act(() => {
+      state.value = sourceObject("Cleo");
+    });
     expect(container.textContent).toBe("Cleo");
   });
 
@@ -1355,8 +1420,12 @@ describe("managed destructured signal reads", () => {
     let root: Root | undefined;
     try {
       expect(container.textContent).toBe("Server");
-      await act(async () => { root = hydrateRoot(container, createElement(Profile)); });
-      await act(async () => { state.value.user.profile.name = "Client"; });
+      await act(async () => {
+        root = hydrateRoot(container, createElement(Profile));
+      });
+      await act(async () => {
+        state.value.user.profile.name = "Client";
+      });
       expect(container.textContent).toBe("Client");
     } finally {
       if (root !== undefined) await act(async () => root?.unmount());
@@ -1382,17 +1451,17 @@ describe("managed destructured signal reads", () => {
     const root = createRoot(container);
     mounted.push({ root, container });
     const state = module.state as Signal<{ primary: { name: string }; secondary: { name: string } }>;
-    await act(async () => root.render(createElement(
-      module.Profile as FunctionComponent<{ alternate: boolean }>,
-      { alternate: false },
-    )));
+    await act(async () =>
+      root.render(createElement(module.Profile as FunctionComponent<{ alternate: boolean }>, { alternate: false })),
+    );
     expect(container.textContent).toBe("Ada");
-    await act(async () => root.render(createElement(
-      module.Profile as FunctionComponent<{ alternate: boolean }>,
-      { alternate: true },
-    )));
+    await act(async () =>
+      root.render(createElement(module.Profile as FunctionComponent<{ alternate: boolean }>, { alternate: true })),
+    );
     expect(container.textContent).toBe("Grace");
-    await act(async () => { state.value.secondary.name = "Lin"; });
+    await act(async () => {
+      state.value.secondary.name = "Lin";
+    });
     expect(container.textContent).toBe("Lin");
   });
 });
@@ -1402,13 +1471,15 @@ function transformedCode(
   mode: ReactFineGrainedSignalsMode,
   codegen: ReactFineGrainedSignalsTransform,
 ): string {
-  return transformReactFineGrainedSignals(source, "Fixture.jsx", {
-    importSource: "react-fine-grained-signals",
-    mode,
-    transform: codegen,
-    reactCompiler: "opt-out",
-    reactImportSource: "react",
-  })?.code ?? source;
+  return (
+    transformReactFineGrainedSignals(source, "Fixture.jsx", {
+      importSource: "react-fine-grained-signals",
+      mode,
+      transform: codegen,
+      reactCompiler: "opt-out",
+      reactImportSource: "react",
+    })?.code ?? source
+  );
 }
 
 /**
@@ -1434,9 +1505,7 @@ function optionalCallsText(suffix: string): string {
 
 /** `${prefix}${index}${suffix}` for each of `count` items, list after list. */
 function itemText(prefixes: string[], count: number, suffix: string): string {
-  return prefixes
-    .map((prefix) => Array.from({ length: count }, (_, i) => `${prefix}${i}${suffix}`).join(""))
-    .join("");
+  return prefixes.map((prefix) => Array.from({ length: count }, (_, i) => `${prefix}${i}${suffix}`).join("")).join("");
 }
 
 describe("object-literal members reached through a sibling's `this`", () => {
@@ -1526,7 +1595,6 @@ export function Lists() {
   }
 }
 `;
-
 
   it("control: a boundary in the member a sibling calls through this breaks the caller's hook count", async () => {
     vi.spyOn(console, "error").mockImplementation(() => {});
@@ -1773,7 +1841,6 @@ export function Calls() {
     expect(() => write(module, "show", true)).toThrow(/hooks/i);
   });
 
-
   for (const mode of ["auto", "all"] as const) {
     for (const codegen of ["managed", "inject"] as const) {
       it(`survives toggled optional calls and per-item optional callbacks (${mode}, ${codegen})`, async () => {
@@ -1888,7 +1955,9 @@ export function Owner() {
 
   for (const codegen of ["managed", "inject"] as const) {
     it(`updates once the receiver carries its own boundary (${codegen})`, async () => {
-      const module = await loadModule(source.replace("function List", "/** @signalTracking */\nfunction List"), { codegen });
+      const module = await loadModule(source.replace("function List", "/** @signalTracking */\nfunction List"), {
+        codegen,
+      });
       const container = mount(module.Owner);
       expect(container.textContent).toBe("a");
       write(module, "label", "b");
@@ -1981,7 +2050,9 @@ export const deep = deepSignal({ profile: { name: "Ada" }, tasks: [{ title: "a" 
 `;
   type DeepState = { value: { profile: Record<string, string>; tasks: Array<{ title: string }> } };
   const updateDeep = (module: Record<string, unknown>, update: (state: DeepState["value"]) => void): void => {
-    act(() => { update((module.deep as DeepState).value); });
+    act(() => {
+      update((module.deep as DeepState).value);
+    });
   };
 
   it("captures reads made by inline callbacks of any synchronous call", async () => {
@@ -1996,7 +2067,9 @@ export function App() {
 `);
     const container = mount(module.App);
     expect(container.textContent).toBe("1/1/false/1");
-    act(() => { (module.items as Array<Signal<boolean>>)[0]!.value = true; });
+    act(() => {
+      (module.items as Array<Signal<boolean>>)[0]!.value = true;
+    });
     expect(container.textContent).toBe("2/2/true/2");
   });
 
@@ -2015,18 +2088,27 @@ export function App() {
 `);
     const container = mount(module.App);
     expect(container.textContent).toBe('{"name":"Ada"}|false|Ada|Ada|a');
-    updateDeep(module, (state) => { state.profile.name = "Grace"; });
+    updateDeep(module, (state) => {
+      state.profile.name = "Grace";
+    });
     expect(container.textContent).toBe('{"name":"Grace"}|false|Grace|Grace|a');
-    updateDeep(module, (state) => { state.profile.age = "36"; });
+    updateDeep(module, (state) => {
+      state.profile.age = "36";
+    });
     expect(container.textContent).toBe('{"name":"Grace","age":"36"}|true|Grace|Grace|a');
-    updateDeep(module, (state) => { state.tasks[0]!.title = "b"; });
+    updateDeep(module, (state) => {
+      state.tasks[0]!.title = "b";
+    });
     expect(container.textContent).toBe('{"name":"Grace","age":"36"}|true|Grace|Grace|b');
-    updateDeep(module, (state) => { state.tasks.push({ title: "c" }); });
+    updateDeep(module, (state) => {
+      state.tasks.push({ title: "c" });
+    });
     expect(container.textContent).toBe('{"name":"Grace","age":"36"}|true|Grace|Grace|bc');
   });
 
   it("keeps Hook calls out of a widened capture", () => {
-    const transformed = transformReactFineGrainedSignals(`
+    const transformed = transformReactFineGrainedSignals(
+      `
 import { signal } from "react-fine-grained-signals";
 import { useMemo } from "react";
 const items = [signal(false)];
@@ -2035,24 +2117,30 @@ export function App() {
   const label = String(useMemo(() => 1, []), items.filter((item) => item.value).length);
   return <p>{memo.length + label}</p>;
 }
-`, "Fixture.jsx", {
+`,
+      "Fixture.jsx",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      },
+    )?.code;
+    expect(transformed).toContain("useMemo(() => items.filter(item => item.value), [])");
+    expect(transformed).toContain(
+      "String(useMemo(() => 1, []), _signals.capture(() => items.filter(item => item.value)).length)",
+    );
+  });
+
+  const managedOutput = (source: string): string =>
+    transformReactFineGrainedSignals(source, "Fixture.jsx", {
       importSource: "react-fine-grained-signals",
       mode: "auto",
       transform: "managed",
       reactCompiler: "opt-out",
       reactImportSource: "react",
-    })?.code;
-    expect(transformed).toContain("useMemo(() => items.filter(item => item.value), [])");
-    expect(transformed).toContain("String(useMemo(() => 1, []), _signals.capture(() => items.filter(item => item.value)).length)");
-  });
-
-  const managedOutput = (source: string): string => transformReactFineGrainedSignals(source, "Fixture.jsx", {
-    importSource: "react-fine-grained-signals",
-    mode: "auto",
-    transform: "managed",
-    reactCompiler: "opt-out",
-    reactImportSource: "react",
-  })?.code ?? "";
+    })?.code ?? "";
 
   it("iterates a tracked for-of source lazily with native control flow and closing", async () => {
     const source = `
@@ -2113,7 +2201,11 @@ export function useFirst() {
 `;
     const module = await loadModule(source);
     function Probe() {
-      try { (module.useFirst as () => number)(); } catch (error) { (module.log as string[]).push((error as Error).message); }
+      try {
+        (module.useFirst as () => number)();
+      } catch (error) {
+        (module.log as string[]).push((error as Error).message);
+      }
       return null;
     }
     mount(Probe);
@@ -2136,11 +2228,17 @@ export function App() {
     const container = mount(module.App);
     expect(container.textContent).toBe("a1Ax");
     type State = { value: { map: Map<string, number>; set: Set<string> } };
-    act(() => { (module.state as State).value.map.set("b", 2); });
+    act(() => {
+      (module.state as State).value.map.set("b", 2);
+    });
     expect(container.textContent).toBe("a1b2ABx");
-    act(() => { (module.state as State).value.map.set("a", 3); });
+    act(() => {
+      (module.state as State).value.map.set("a", 3);
+    });
     expect(container.textContent).toBe("a3b2ABx");
-    act(() => { (module.state as State).value.set.add("y"); });
+    act(() => {
+      (module.state as State).value.set.add("y");
+    });
     expect(container.textContent).toBe("a3b2ABxy");
   });
 
@@ -2307,18 +2405,30 @@ export function App() {
     ];
     /** Hook calls whose enclosing function is the callback of a `.capture(...)` call. */
     const hooksInsideCapture = (code: string): string[] => {
-      const ast = parseSync(code, { babelrc: false, configFile: false, filename: "Out.jsx", parserOpts: { plugins: ["jsx"] } });
+      const ast = parseSync(code, {
+        babelrc: false,
+        configFile: false,
+        filename: "Out.jsx",
+        parserOpts: { plugins: ["jsx"] },
+      });
       const found: string[] = [];
       traverse(ast!, {
         CallExpression(path) {
           const callee = path.node.callee;
-          const name = t.isIdentifier(callee) ? callee.name
-            : t.isMemberExpression(callee) && t.isIdentifier(callee.property) ? callee.property.name : "";
+          const name = t.isIdentifier(callee)
+            ? callee.name
+            : t.isMemberExpression(callee) && t.isIdentifier(callee.property)
+              ? callee.property.name
+              : "";
           if (!/^use(?:[A-Z]|$)/.test(name) || name === "useSignalCapture") return;
           for (let fn = path.getFunctionParent(); fn !== null; fn = fn.getFunctionParent()) {
             const call = fn.parentPath;
-            if (call?.isCallExpression() && t.isMemberExpression(call.node.callee) &&
-              t.isIdentifier(call.node.callee.property, { name: "capture" })) found.push(name);
+            if (
+              call?.isCallExpression() &&
+              t.isMemberExpression(call.node.callee) &&
+              t.isIdentifier(call.node.callee.property, { name: "capture" })
+            )
+              found.push(name);
           }
         },
       });
@@ -2344,8 +2454,11 @@ export function App() {
 }
 `);
       // Every Hook stays a direct call in the component body.
-      expect({ shape, hooks: hooksInsideCapture(transformed), selected: transformed.includes("useSignalCapture()") })
-        .toEqual({ shape, hooks: [], selected: true });
+      expect({
+        shape,
+        hooks: hooksInsideCapture(transformed),
+        selected: transformed.includes("useSignalCapture()"),
+      }).toEqual({ shape, hooks: [], selected: true });
     }
   });
 
@@ -2389,7 +2502,8 @@ export function App() {
     expect(container.textContent).toBe("2");
 
     const warnings: string[] = [];
-    transformReactFineGrainedSignals(`
+    transformReactFineGrainedSignals(
+      `
 import { useContext } from "react";
 import { signal } from "react-fine-grained-signals";
 import { format } from "./format";
@@ -2398,14 +2512,17 @@ export function App() {
   const text = format(useContext(Ctx), count.value);
   return <p>{text}</p>;
 }
-`, "Fixture.jsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-      warn: (warning) => warnings.push(warning.message),
-    });
+`,
+      "Fixture.jsx",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+        warn: (warning) => warnings.push(warning.message),
+      },
+    );
     expect(warnings.some((message) => message.includes("Hook call shares this call"))).toBe(true);
   });
 });
@@ -2413,14 +2530,15 @@ export function App() {
 describe("M17.4 transform review fixes", () => {
   const transformWithWarnings = (source: string, file = "Fixture.jsx") => {
     const warnings: string[] = [];
-    const code = transformReactFineGrainedSignals(source, file, {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-      warn: (warning) => warnings.push(warning.message),
-    })?.code ?? "";
+    const code =
+      transformReactFineGrainedSignals(source, file, {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+        warn: (warning) => warnings.push(warning.message),
+      })?.code ?? "";
     return { code, warnings };
   };
   type Deep<T> = { value: T };
@@ -2438,14 +2556,17 @@ export function App({ x }) { const r = z.schema()${chain}; return <p>{String(cou
   });
 
   it("keeps optional chains and method receivers intact through TypeScript wrappers", () => {
-    const { code } = transformWithWarnings(`
+    const { code } = transformWithWarnings(
+      `
 import { signal } from "react-fine-grained-signals";
 const count = signal(1);
 const box = signal({ label: "b", get() { return this.label; } });
 export function App({ user }: { user?: { value: { name: string } } }) {
   return <p>{user?.value!.name}{box.value.get!()}{(box.value.get as () => string)()}{count.value}</p>;
 }
-`, "Fixture.tsx");
+`,
+      "Fixture.tsx",
+    );
     expect(code).toContain("_signals.capture(() => user?.value!.name)");
     expect(code).toContain("_signals.capture(() => box.value.get!())");
     expect(code).toContain("_signals.capture(() => (box.value.get as () => string)())");
@@ -2481,21 +2602,36 @@ export function App() {
     const title = () => container.querySelector("p")!.getAttribute("title");
     expect(text()).toBe("1k1|11|1|2|1");
     expect(title()).toBe("a");
-    type State = { items: Array<{ a: number }>; map: Record<string, { n: number }>; props: { title: string }; todos: number[] };
+    type State = {
+      items: Array<{ a: number }>;
+      map: Record<string, { n: number }>;
+      props: { title: string };
+      todos: number[];
+    };
     const state = () => (module.state as Deep<State>).value;
-    act(() => { state().items[0]!.a = 5; });
+    act(() => {
+      state().items[0]!.a = 5;
+    });
     expect(text()).toBe("5k1|11|1|2|1");
-    act(() => { state().map.k!.n = 7; });
+    act(() => {
+      state().map.k!.n = 7;
+    });
     expect(text()).toBe("5k7|11|1|2|1");
     write(module, "limit", 2);
     expect(text()).toBe("5k7|22|1|2|1");
-    act(() => { state().items.push({ a: 2 }); });
+    act(() => {
+      state().items.push({ a: 2 });
+    });
     expect(text()).toBe("52k7|22|2|2|1");
     write(module, "count", 5);
     expect(text()).toBe("52k7|22|2|10|1");
-    act(() => { state().todos.push(2); });
+    act(() => {
+      state().todos.push(2);
+    });
     expect(text()).toBe("52k7|22|2|10|1|2");
-    act(() => { state().props.title = "b"; });
+    act(() => {
+      state().props.title = "b";
+    });
     expect(title()).toBe("b");
   });
 
@@ -2560,9 +2696,13 @@ export function App() {
     const container = mount(module.App);
     expect(container.textContent).toBe("1:1:1");
     type State = { items: Array<{ a: number }>; pairs: number[][] };
-    act(() => { (module.state as Deep<State>).value.items[0]!.a = 2; });
+    act(() => {
+      (module.state as Deep<State>).value.items[0]!.a = 2;
+    });
     expect(container.textContent).toBe("2:1:1");
-    act(() => { (module.state as Deep<State>).value.pairs[0]![0] = 9; });
+    act(() => {
+      (module.state as Deep<State>).value.pairs[0]![0] = 9;
+    });
     expect(container.textContent).toBe("2:9:1");
   });
 });
@@ -2572,7 +2712,8 @@ describe("managed coercion, for-in, Hook arguments and loop-head scope", () => {
   for (const mode of ["auto", "all"] as const) {
     describe(`mode ${mode}`, () => {
       it("tracks for...in key enumeration over a tracked object", async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { deepSignal } from "react-fine-grained-signals";
 export const st = deepSignal({ errors: { a: 1 }, obj: { p: 1 } });
 export function App() {
@@ -2583,18 +2724,25 @@ export function App() {
   for (const k in o) aliased.push(k);
   return <p>{keys.join(",") + "|" + aliased.join(",")}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
         expect(container.textContent).toBe("a|p");
         type S = { errors: Record<string, number>; obj: Record<string, number> };
-        act(() => { (module.st as Deep<S>).value.errors.x = 1; });
+        act(() => {
+          (module.st as Deep<S>).value.errors.x = 1;
+        });
         expect(container.textContent).toBe("a,x|p");
-        act(() => { (module.st as Deep<S>).value.obj.q = 1; });
+        act(() => {
+          (module.st as Deep<S>).value.obj.q = 1;
+        });
         expect(container.textContent).toBe("a,x|p,q");
       });
 
       it("keeps for...in semantics: inherited keys, deletion during iteration, break", async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { signal } from "react-fine-grained-signals";
 export const base = signal({ own: 1, gone: 2, last: 3 });
 export function App() {
@@ -2607,13 +2755,16 @@ export function App() {
   for (const k in base.value) { seen2.push(k); if (k === "own") delete base.peek().gone; if (k === "last") break; }
   return <p>{seen.join(",") + "|" + seen2.join(",")}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
         expect(container.textContent).toBe("a,c,inherited|own,last");
       });
 
       it("runs for...in over a signal holding a Proxy with the native loop's traps", async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { signal } from "react-fine-grained-signals";
 export const log = [];
 // Every trap the engine calls lands in \`log\`; the descriptor of \`throwOn\`
@@ -2638,13 +2789,18 @@ export function App() {
   for (const k in box.value) { firstOnly.push(k); break; }
   return <p>{firstOnly.join(",")}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         type M = { log: string[]; make: (keys: string[], throwOn?: string) => object; box: { value: object } };
         const m = module as unknown as M;
         // The trap sequence of one native \`for...in\` that breaks after its first key.
         const nativeLog = (source: object): string[] => {
           m.log.length = 0;
-          for (const key in source) { void key; break; }
+          for (const key in source) {
+            void key;
+            break;
+          }
           return [...m.log];
         };
         const once = nativeLog(m.make(["a", "b", "c"], "b"));
@@ -2653,12 +2809,15 @@ export function App() {
         expect(container.textContent).toBe("a");
         expect(m.log.length % once.length).toBe(0);
         expect(m.log).toEqual(Array.from({ length: m.log.length / once.length }, () => once).flat());
-        act(() => { m.box.value = m.make(["z", "y"]); });
+        act(() => {
+          m.box.value = m.make(["z", "y"]);
+        });
         expect(container.textContent).toBe("z");
       });
 
       it("tracks reads in the arguments of a Hook whose result is read", async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { signal } from "react-fine-grained-signals";
 export const id = signal("a");
 export const filter = signal("x");
@@ -2671,7 +2830,9 @@ export function App() {
   for (const r of useRows(filter.value).value.items) sum += r;
   return <p>{useStore(id.value).value.name + ":" + sum}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
         expect(container.textContent).toBe("A:3");
         write(module, "id", "b");
@@ -2681,7 +2842,8 @@ export function App() {
       });
 
       it("tracks ToPrimitive coercion of tracked values", async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { deepSignal } from "react-fine-grained-signals";
 export const st = deepSignal({ tags: ["a"], n: { v: 1 } });
 export function App() {
@@ -2691,16 +2853,21 @@ export function App() {
   const num = st.value.n + 1;
   return <p>{t + "|" + c + "|" + lt + "|" + num}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
         expect(container.textContent).toBe("tags: a|a|lt|[object Object]1");
         type S = { tags: string[] };
-        act(() => { (module.st as Deep<S>).value.tags.push("x"); });
+        act(() => {
+          (module.st as Deep<S>).value.tags.push("x");
+        });
         expect(container.textContent).toBe("tags: a,x|a,x|lt|[object Object]1");
       });
 
       it("keeps the loop-head default's outer scope when the body redeclares a name", async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { deepSignal } from "react-fine-grained-signals";
 export const st = deepSignal({ items: [{ id: 1 }, { id: 2, label: "two" }] });
 export function App() {
@@ -2712,16 +2879,21 @@ export function App() {
   for (const { id: b } of st.value.items) { const b = 1; outB.push(b); }
   return <p>{out.join(",") + "|" + outB.join(",")}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
         expect(container.textContent).toBe("1none!,2two!|2,3,1,1");
         type S = { items: Array<{ id: number; label?: string }> };
-        act(() => { (module.st as Deep<S>).value.items[0]!.label = "one"; });
+        act(() => {
+          (module.st as Deep<S>).value.items[0]!.label = "one";
+        });
         expect(container.textContent).toBe("1one!,2two!|2,3,1,1");
       });
 
       it("keeps an assignment-target loop head's scope when the body redeclares a name", async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { deepSignal } from "react-fine-grained-signals";
 export const st = deepSignal({ items: [{ a: 1 }] });
 export function App() {
@@ -2730,10 +2902,14 @@ export function App() {
   for ({ a } of st.value.items) { const _item = "shadow"; seen += _item; }
   return <p>{a + ":" + seen}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
         expect(container.textContent).toBe("1:shadow");
-        act(() => { (module.st as Deep<{ items: Array<{ a: number }> }>).value.items[0]!.a = 5; });
+        act(() => {
+          (module.st as Deep<{ items: Array<{ a: number }> }>).value.items[0]!.a = 5;
+        });
         expect(container.textContent).toBe("5:shadow");
       });
     });
@@ -2761,14 +2937,27 @@ export const s = signal(1);
 export const tick = signal(0);
 `;
   const items = `const items = ["ab", "b", "c"];`;
-  const rename = (module: Record<string, any>): void => { module.st.value.user.name = "b"; };
-  const bumpS = (module: Record<string, any>): void => { module.s.value = 5; };
-  const setQ = (module: Record<string, any>): void => { module.q.value = "b"; };
-  const push = (module: Record<string, any>): void => { module.st.value.tasks.push({ t: "b", done: false }); };
-  const retitle = (module: Record<string, any>): void => { module.st.value.tasks[0].t = "z"; };
+  const rename = (module: Record<string, any>): void => {
+    module.st.value.user.name = "b";
+  };
+  const bumpS = (module: Record<string, any>): void => {
+    module.s.value = 5;
+  };
+  const setQ = (module: Record<string, any>): void => {
+    module.q.value = "b";
+  };
+  const push = (module: Record<string, any>): void => {
+    module.st.value.tasks.push({ t: "b", done: false });
+  };
+  const retitle = (module: Record<string, any>): void => {
+    module.st.value.tasks[0].t = "z";
+  };
 
   /** The text the component shows at every step, in each selection mode. */
-  function scenario(definition: Scenario): { observe: () => Promise<Record<string, string[]>>; expected: Record<string, string[]> } {
+  function scenario(definition: Scenario): {
+    observe: () => Promise<Record<string, string[]>>;
+    expected: Record<string, string[]>;
+  } {
     const texts = definition.steps.map((step) => step.text);
     return {
       expected: { auto: texts, all: texts },
@@ -2782,7 +2971,10 @@ export const tick = signal(0);
           });
           const container = mount(module.App);
           observed[mode] = definition.steps.map((step) => {
-            if (step.run !== undefined) act(() => { step.run!(module); });
+            if (step.run !== undefined)
+              act(() => {
+                step.run!(module);
+              });
             return container.textContent ?? "";
           });
         }
@@ -2952,7 +3144,12 @@ export function App() {
       ["find", "return <p>{String(items.find((x) => matches(x) && x !== 'ab'))}</p>;", "undefined", "b"],
       ["some", "return <p>{String(items.some((x) => matches(x) && x === 'b'))}</p>;", "false", "true"],
       ["every", "return <p>{String(items.every((x) => !matches(x) || x === 'ab'))}</p>;", "true", "false"],
-      ["sort comparator", "return <p>{[...items].sort((a, b) => Number(matches(a)) - Number(matches(b))).join()}</p>;", "b,c,ab", "c,ab,b"],
+      [
+        "sort comparator",
+        "return <p>{[...items].sort((a, b) => Number(matches(a)) - Number(matches(b))).join()}</p>;",
+        "b,c,ab",
+        "c,ab,b",
+      ],
       ["IIFE", "return <p>{(() => String(matches('b')))()}</p>;", "false", "true"],
       [
         "component-local arrow",
@@ -2981,7 +3178,9 @@ export function App() {
 
   describe("T7: synchronous calls with an unresolvable callee", () => {
     const extSignal = library.signal(1);
-    const bumpExt = (): void => { extSignal.value = 5; };
+    const bumpExt = (): void => {
+      extSignal.value = 5;
+    };
     const readsS: Step[] = [{ text: "0:1" }, { run: bumpS, text: "0:5" }];
     it("captures a method of an imported object", async () => {
       const run = scenario({
@@ -2989,7 +3188,15 @@ export function App() {
         prelude: `import { extStore } from "./ext";\n`,
         modules: { "./ext": { extStore: { total: () => extSignal.value } } },
         body: `export function App() { return <p>{tick.value}:{extStore.total()}</p>; }`,
-        steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: bumpExt, text: "0:5" }],
+        steps: [
+          {
+            run: () => {
+              extSignal.value = 1;
+            },
+            text: "0:1",
+          },
+          { run: bumpExt, text: "0:5" },
+        ],
       });
       expect(await run.observe()).toEqual(run.expected);
     });
@@ -3003,7 +3210,15 @@ export function App() {
           prelude: `import { extStore } from "./ext";\n`,
           modules: { "./ext": { extStore: { [method]: () => extSignal.value } } },
           body: `export function App() { return <p>{tick.value}:{extStore.${method}()}</p>; }`,
-          steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: bumpExt, text: "0:5" }],
+          steps: [
+            {
+              run: () => {
+                extSignal.value = 1;
+              },
+              text: "0:1",
+            },
+            { run: bumpExt, text: "0:5" },
+          ],
         });
         expect(await run.observe()).toEqual(run.expected);
       });
@@ -3021,22 +3236,55 @@ export function App() {
     // receiver came from, not that it is a local, decides.
     const aliasShapes: Array<[string, string]> = [
       ["a local alias", "const localStore = extStore;\n    return <p>{tick.value}:{localStore.METHOD()}</p>;"],
-      ["a two-step local alias", "const first = extStore;\n    const second = first;\n    return <p>{tick.value}:{second.METHOD()}</p>;"],
-      ["a conditional", "const picked = tick.value >= 0 ? extStore : null;\n    return <p>{tick.value}:{picked.METHOD()}</p>;"],
-      ["an object property", "const holder = { store: extStore };\n    return <p>{tick.value}:{holder.store.METHOD()}</p>;"],
-      ["a destructured property", "const { store } = { store: extStore };\n    return <p>{tick.value}:{store.METHOD()}</p>;"],
+      [
+        "a two-step local alias",
+        "const first = extStore;\n    const second = first;\n    return <p>{tick.value}:{second.METHOD()}</p>;",
+      ],
+      [
+        "a conditional",
+        "const picked = tick.value >= 0 ? extStore : null;\n    return <p>{tick.value}:{picked.METHOD()}</p>;",
+      ],
+      [
+        "an object property",
+        "const holder = { store: extStore };\n    return <p>{tick.value}:{holder.store.METHOD()}</p>;",
+      ],
+      [
+        "a destructured property",
+        "const { store } = { store: extStore };\n    return <p>{tick.value}:{store.METHOD()}</p>;",
+      ],
       ["an array element", "const [store] = [extStore];\n    return <p>{tick.value}:{store.METHOD()}</p>;"],
-      ["a reassigned let", "let target = [];\n    target = extStore;\n    return <p>{tick.value}:{target.METHOD()}</p>;"],
+      [
+        "a reassigned let",
+        "let target = [];\n    target = extStore;\n    return <p>{tick.value}:{target.METHOD()}</p>;",
+      ],
       ["an element of a local array", "const box = [extStore];\n    return <p>{tick.value}:{box[0].METHOD()}</p>;"],
       ["an element of an array literal", "return <p>{tick.value}:{[extStore][0].METHOD()}</p>;"],
-      ["a local taken from an array element", "const box = [extStore];\n    const item = box[0];\n    return <p>{tick.value}:{item.METHOD()}</p>;"],
-      ["an element of a builtin method result", "const box = [extStore];\n    return <p>{tick.value}:{box.filter(Boolean)[0].METHOD()}</p>;"],
-      ["an element removed from a local array", "const box = [extStore];\n    return <p>{tick.value}:{box.slice().pop().METHOD()}</p>;"],
-      ["an element of a mapped array", "const ids = [1];\n    return <p>{tick.value}:{ids.map(() => extStore)[0].METHOD()}</p>;"],
+      [
+        "a local taken from an array element",
+        "const box = [extStore];\n    const item = box[0];\n    return <p>{tick.value}:{item.METHOD()}</p>;",
+      ],
+      [
+        "an element of a builtin method result",
+        "const box = [extStore];\n    return <p>{tick.value}:{box.filter(Boolean)[0].METHOD()}</p>;",
+      ],
+      [
+        "an element removed from a local array",
+        "const box = [extStore];\n    return <p>{tick.value}:{box.slice().pop().METHOD()}</p>;",
+      ],
+      [
+        "an element of a mapped array",
+        "const ids = [1];\n    return <p>{tick.value}:{ids.map(() => extStore)[0].METHOD()}</p>;",
+      ],
       ["a props reduce result", "return <p>{tick.value}:{items.reduce(() => extStore, extStore).METHOD()}</p>;"],
       ["a props reduce initial value", "return <p>{tick.value}:{empty.reduce((acc) => acc, extStore).METHOD()}</p>;"],
-      ["a props reduceRight result", "return <p>{tick.value}:{items.reduceRight(() => extStore, extStore).METHOD()}</p>;"],
-      ["a local holding a props reduce result", "const acc = items.reduce(() => extStore, null);\n    return <p>{tick.value}:{acc.METHOD()}</p>;"],
+      [
+        "a props reduceRight result",
+        "return <p>{tick.value}:{items.reduceRight(() => extStore, extStore).METHOD()}</p>;",
+      ],
+      [
+        "a local holding a props reduce result",
+        "const acc = items.reduce(() => extStore, null);\n    return <p>{tick.value}:{acc.METHOD()}</p>;",
+      ],
     ];
     for (const method of ["map", "filter", "toString"]) {
       for (const [shape, body] of aliasShapes) {
@@ -3046,7 +3294,15 @@ export function App() {
             prelude: `import { extStore } from "./ext";\n`,
             modules: { "./ext": { extStore: { [method]: () => extSignal.value } } },
             body: `export function App({ items = [1, 2], empty = [] } = {}) {\n    ${body.replaceAll("METHOD", method)}\n  }`,
-            steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: bumpExt, text: "0:5" }],
+            steps: [
+              {
+                run: () => {
+                  extSignal.value = 1;
+                },
+                text: "0:1",
+              },
+              { run: bumpExt, text: "0:5" },
+            ],
           });
           expect(await run.observe()).toEqual(run.expected);
         });
@@ -3135,7 +3391,9 @@ export function App() {
       expect(await run.observe()).toEqual(run.expected);
     });
     it("keeps Hook calls out of capture closures", () => {
-      const code = transformReactFineGrainedSignals(`
+      const code =
+        transformReactFineGrainedSignals(
+          `
 import { signal } from "react-fine-grained-signals";
 import { useCallback } from "react";
 const s = signal(1);
@@ -3143,13 +3401,16 @@ export function App() {
   const get = useCallback(() => s.value, []);
   return <p>{s.value}{get()}</p>;
 }
-`, "Fixture.jsx", {
-        importSource: "react-fine-grained-signals",
-        mode: "auto",
-        transform: "managed",
-        reactCompiler: "opt-out",
-        reactImportSource: "react",
-      })?.code ?? "";
+`,
+          "Fixture.jsx",
+          {
+            importSource: "react-fine-grained-signals",
+            mode: "auto",
+            transform: "managed",
+            reactCompiler: "opt-out",
+            reactImportSource: "react",
+          },
+        )?.code ?? "";
       expect(code).not.toMatch(/capture\(\(\) => [^)]*useCallback/);
       expect(code).toMatch(/const get = useCallback\(/);
     });
@@ -3163,11 +3424,26 @@ export function App() {
       extStore: {
         map: () => extSignal.value,
         total: () => extSignal.value,
-        self() { return this; },
+        self() {
+          return this;
+        },
       },
       extFn: () => extSignal.value,
     };
-    const steps: Step[] = [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: () => { extSignal.value = 5; }, text: "0:5" }];
+    const steps: Step[] = [
+      {
+        run: () => {
+          extSignal.value = 1;
+        },
+        text: "0:1",
+      },
+      {
+        run: () => {
+          extSignal.value = 5;
+        },
+        text: "0:5",
+      },
+    ];
     const shapes: Array<[string, string]> = [
       // How the callee is reached.
       ["a conditional receiver", "return <p>{tick.value}:{(ok ? extStore : extStore).METHOD()}</p>;"],
@@ -3185,32 +3461,80 @@ export function App() {
       ["a global wrapper", "return <p>{tick.value}:{Object(extStore).METHOD()}</p>;"],
       ["a global factory", "return <p>{tick.value}:{Array.of(extStore)[0].METHOD()}</p>;"],
       // Parameters hold what their caller passes.
-      ["an element callback of a local array", "return <p>{tick.value}:{[extStore].map((x) => x.METHOD()).join()}</p>;"],
+      [
+        "an element callback of a local array",
+        "return <p>{tick.value}:{[extStore].map((x) => x.METHOD()).join()}</p>;",
+      ],
       ["a reduce accumulator", "return <p>{tick.value}:{[1].reduce((acc) => acc.METHOD(), extStore)}</p>;"],
       ["an IIFE parameter", "return <p>{tick.value}:{((v) => v.METHOD())(extStore)}</p>;"],
-      ["a local helper parameter", "function h(v) { return v.METHOD(); }\n    return <p>{tick.value}:{h(extStore)}</p>;"],
+      [
+        "a local helper parameter",
+        "function h(v) { return v.METHOD(); }\n    return <p>{tick.value}:{h(extStore)}</p>;",
+      ],
       ["a module helper body", "return <p>{tick.value}:{viaHelper()}</p>;"],
       ["a props default", "return <p>{tick.value}:{store.METHOD()}</p>;"],
       // A name bound to a function chosen at run time.
-      ["a reassigned function", "let f = () => 1;\n    f = () => extStore.METHOD();\n    return <p>{tick.value}:{f()}</p>;"],
-      ["a reassigned object", "let o = { METHOD() { return 1; } };\n    o = extStore;\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
-      ["a reassigned slot", "const o = { METHOD() { return 1; } };\n    o.METHOD = () => extStore.METHOD();\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
+      [
+        "a reassigned function",
+        "let f = () => 1;\n    f = () => extStore.METHOD();\n    return <p>{tick.value}:{f()}</p>;",
+      ],
+      [
+        "a reassigned object",
+        "let o = { METHOD() { return 1; } };\n    o = extStore;\n    return <p>{tick.value}:{o.METHOD()}</p>;",
+      ],
+      [
+        "a reassigned slot",
+        "const o = { METHOD() { return 1; } };\n    o.METHOD = () => extStore.METHOD();\n    return <p>{tick.value}:{o.METHOD()}</p>;",
+      ],
       // Writes that put other values into trusted data.
-      ["an element pushed into a props copy", "const list = items.filter(Boolean);\n    list.push(extStore);\n    return <p>{tick.value}:{list.pop().METHOD()}</p>;"],
-      ["an element assigned into a props copy", "const list = items.slice();\n    list[0] = extStore;\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;"],
-      ["an element spliced into a props copy", "const list = items.slice();\n    list.splice(0, 0, extStore);\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;"],
+      [
+        "an element pushed into a props copy",
+        "const list = items.filter(Boolean);\n    list.push(extStore);\n    return <p>{tick.value}:{list.pop().METHOD()}</p>;",
+      ],
+      [
+        "an element assigned into a props copy",
+        "const list = items.slice();\n    list[0] = extStore;\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;",
+      ],
+      [
+        "an element spliced into a props copy",
+        "const list = items.slice();\n    list.splice(0, 0, extStore);\n    return <p>{tick.value}:{list.shift().METHOD()}</p>;",
+      ],
       // Found by the independent review.
-      ["a constructor that returns its argument", "const o = new Object(extStore);\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
-      ["a method replaced through an alias", "const o = { METHOD() { return 1; } };\n    const a = o;\n    a.METHOD = () => extStore.METHOD();\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
-      ["a method replaced by Object.assign", "const o = { METHOD() { return 1; } };\n    Object.assign(o, { METHOD: () => extStore.METHOD() });\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
-      ["a method replaced by a destructuring write", "const o = { METHOD() { return 1; } };\n    ({ f: o.METHOD } = { f: () => extStore.METHOD() });\n    return <p>{tick.value}:{o.METHOD()}</p>;"],
-      ["a standard instance method replaced through an alias", "const m = new Map();\n    const mm = m;\n    mm.get = () => extStore.METHOD();\n    return <p>{tick.value}:{m.get(1)}</p>;"],
+      [
+        "a constructor that returns its argument",
+        "const o = new Object(extStore);\n    return <p>{tick.value}:{o.METHOD()}</p>;",
+      ],
+      [
+        "a method replaced through an alias",
+        "const o = { METHOD() { return 1; } };\n    const a = o;\n    a.METHOD = () => extStore.METHOD();\n    return <p>{tick.value}:{o.METHOD()}</p>;",
+      ],
+      [
+        "a method replaced by Object.assign",
+        "const o = { METHOD() { return 1; } };\n    Object.assign(o, { METHOD: () => extStore.METHOD() });\n    return <p>{tick.value}:{o.METHOD()}</p>;",
+      ],
+      [
+        "a method replaced by a destructuring write",
+        "const o = { METHOD() { return 1; } };\n    ({ f: o.METHOD } = { f: () => extStore.METHOD() });\n    return <p>{tick.value}:{o.METHOD()}</p>;",
+      ],
+      [
+        "a standard instance method replaced through an alias",
+        "const m = new Map();\n    const mm = m;\n    mm.get = () => extStore.METHOD();\n    return <p>{tick.value}:{m.get(1)}</p>;",
+      ],
       ["a logical assignment", "let x = null;\n    return <p>{tick.value}:{(x ??= extStore).METHOD()}</p>;"],
-      ["a reassigned parameter", "function h(v) { v = extStore; return v.METHOD(); }\n    return <p>{tick.value}:{h(1)}</p>;"],
-      ["a reassigned callback parameter", "return <p>{tick.value}:{items.map((x) => { x = extStore; return x.METHOD(); })[0]}</p>;"],
+      [
+        "a reassigned parameter",
+        "function h(v) { v = extStore; return v.METHOD(); }\n    return <p>{tick.value}:{h(1)}</p>;",
+      ],
+      [
+        "a reassigned callback parameter",
+        "return <p>{tick.value}:{items.map((x) => { x = extStore; return x.METHOD(); })[0]}</p>;",
+      ],
       ["a tagged template", "const tag = () => extStore.METHOD();\n    return <p>{tick.value}:{tag`x`}</p>;"],
       ["a Promise executor passed by reference", "new Promise(exec);\n    return <p>{tick.value}:{box.got}</p>;"],
-      ["an async IIFE", "let got = 0;\n    (async () => { got = extStore.METHOD(); })();\n    return <p>{tick.value}:{got}</p>;"],
+      [
+        "an async IIFE",
+        "let got = 0;\n    (async () => { got = extStore.METHOD(); })();\n    return <p>{tick.value}:{got}</p>;",
+      ],
     ];
     for (const method of ["map", "total"]) {
       for (const [shape, body] of shapes) {
@@ -3227,7 +3551,20 @@ export function App() {
       }
     }
     // A function a builtin calls back is a call too.
-    const callbackSteps: Step[] = [{ run: () => { extSignal.value = 1; }, text: "0:1,1" }, { run: () => { extSignal.value = 5; }, text: "0:5,5" }];
+    const callbackSteps: Step[] = [
+      {
+        run: () => {
+          extSignal.value = 1;
+        },
+        text: "0:1,1",
+      },
+      {
+        run: () => {
+          extSignal.value = 5;
+        },
+        text: "0:5,5",
+      },
+    ];
     for (const [name, callback] of [
       ["an imported function", "extFn"],
       ["a method of an imported object", "extStore.total"],
@@ -3255,20 +3592,44 @@ export function App() {
     const extBox = { got: 0 };
     const ext = {
       extBox,
-      extExec(resolve: () => void) { extBox.got = extSignal.value; resolve(); },
+      extExec(resolve: () => void) {
+        extBox.got = extSignal.value;
+        resolve();
+      },
     };
     const readsS: Step[] = [{ text: "0:1" }, { run: bumpS, text: "0:5" }];
     const shapes: Array<[string, string]> = [
-      ["a named Promise executor", "let seen = 0;\n  function executor(resolve) {\n    seen = s.value;\n    resolve();\n  }\n  new Promise(executor);"],
-      ["a const Promise executor", "let seen = 0;\n  const executor = (resolve) => { seen = s.value; resolve(); };\n  new Promise(executor);"],
+      [
+        "a named Promise executor",
+        "let seen = 0;\n  function executor(resolve) {\n    seen = s.value;\n    resolve();\n  }\n  new Promise(executor);",
+      ],
+      [
+        "a const Promise executor",
+        "let seen = 0;\n  const executor = (resolve) => { seen = s.value; resolve(); };\n  new Promise(executor);",
+      ],
       ["an inline Promise executor", "let seen = 0;\n  new Promise((resolve) => { seen = s.value; resolve(); });"],
-      ["a named async function before its first await", "let seen = 0;\n  async function read() {\n    seen = s.value;\n    await Promise.resolve();\n  }\n  void read();"],
-      ["a const async arrow before its first await", "let seen = 0;\n  const read = async () => { seen = s.value; await null; };\n  read();"],
+      [
+        "a named async function before its first await",
+        "let seen = 0;\n  async function read() {\n    seen = s.value;\n    await Promise.resolve();\n  }\n  void read();",
+      ],
+      [
+        "a const async arrow before its first await",
+        "let seen = 0;\n  const read = async () => { seen = s.value; await null; };\n  read();",
+      ],
       ["an async IIFE before its first await", "let seen = 0;\n  (async () => { seen = s.value; await null; })();"],
-      ["an async forEach callback before its first await", "let seen = 0;\n  [1].forEach(async () => { seen = s.value; await null; });"],
-      ["a Promise executor started by a helper", "let seen = 0;\n  function executor(resolve) { seen = s.value; resolve(); }\n  function start() { return new Promise(executor); }\n  start();"],
+      [
+        "an async forEach callback before its first await",
+        "let seen = 0;\n  [1].forEach(async () => { seen = s.value; await null; });",
+      ],
+      [
+        "a Promise executor started by a helper",
+        "let seen = 0;\n  function executor(resolve) { seen = s.value; resolve(); }\n  function start() { return new Promise(executor); }\n  start();",
+      ],
       ["an async callback handed to some", "let seen = 0;\n  [1].some(async () => { seen = s.value; await null; });"],
-      ["a named async callback", "let seen = 0;\n  async function each() { seen = s.value; await null; }\n  [1].forEach(each);"],
+      [
+        "a named async callback",
+        "let seen = 0;\n  async function each() { seen = s.value; await null; }\n  [1].forEach(each);",
+      ],
     ];
     for (const [name, setup] of shapes) {
       it(`captures ${name}`, async () => {
@@ -3286,14 +3647,28 @@ export function App() {
         prelude: `import { extBox, extExec } from "./ext";\n`,
         modules: { "./ext": ext },
         body: `export function App() {\n  new Promise(extExec);\n  return <p>{tick.value}:{extBox.got}</p>;\n}`,
-        steps: [{ run: () => { extSignal.value = 1; }, text: "0:1" }, { run: () => { extSignal.value = 5; }, text: "0:5" }],
+        steps: [
+          {
+            run: () => {
+              extSignal.value = 1;
+            },
+            text: "0:1",
+          },
+          {
+            run: () => {
+              extSignal.value = 5;
+            },
+            text: "0:5",
+          },
+        ],
       });
       expect(await run.observe()).toEqual(run.expected);
     });
 
     for (const mode of ["auto", "all"] as const) {
       it(`does not subscribe to reads after the first await (${mode})`, async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { signal } from "react-fine-grained-signals";
 export const s = signal(1);
 export const late = signal(1);
@@ -3312,21 +3687,30 @@ export function App() {
   void read();
   return <p>{tick.value}:{seen}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
-        await act(async () => { await Promise.resolve(); });
+        await act(async () => {
+          await Promise.resolve();
+        });
         const getRenders = module.getRenders as () => number;
         const before = getRenders();
         expect(container.textContent).toBe("0:1");
         expect(module.seenLate).toEqual([1]);
-        await act(async () => { (module.late as Signal<number>).value = 2; });
+        await act(async () => {
+          (module.late as Signal<number>).value = 2;
+        });
         expect(getRenders()).toBe(before);
-        await act(async () => { (module.s as Signal<number>).value = 5; });
+        await act(async () => {
+          (module.s as Signal<number>).value = 5;
+        });
         expect(container.textContent).toBe("0:5");
       });
 
       it(`keeps Promise results, rejections, and order around captured executors (${mode})`, async () => {
-        const module = await loadModule(`
+        const module = await loadModule(
+          `
 import { signal } from "react-fine-grained-signals";
 export const s = signal(1);
 export const tick = signal(0);
@@ -3347,9 +3731,13 @@ export function App() {
   });
   return <p>{tick.value}:{log.join(",")}</p>;
 }
-`, { mode });
+`,
+          { mode },
+        );
         const container = mount(module.App);
-        await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+        await act(async () => {
+          await new Promise((resolve) => setTimeout(resolve, 0));
+        });
         expect(container.textContent).toBe("0:before,executor,failing,early,after");
         expect((module.settled as string[]).at(-1)).toBe("fulfilled:1,rejected:TypeError,rejected:RangeError");
       });
@@ -3464,11 +3852,15 @@ export function App() {
       const head = `import { signal } from "react-fine-grained-signals";\nconst s = signal(1);\n`;
       // Each level calls (or holds) the previous one 10 times: 10^7 paths, one answer per node.
       let helpers = `function h0(v) { return v.toFixed(); }\n`;
-      for (let i = 1; i <= 7; i += 1) helpers += `function h${i}(v) { return v ? 1 : [${Array.from({ length: 10 }, () => `h${i - 1}(v)`).join(", ")}]; }\n`;
+      for (let i = 1; i <= 7; i += 1)
+        helpers += `function h${i}(v) { return v ? 1 : [${Array.from({ length: 10 }, () => `h${i - 1}(v)`).join(", ")}]; }\n`;
       let literals = "const a0 = 1;\n";
-      for (let i = 1; i <= 7; i += 1) literals += `  const a${i} = { ${Array.from({ length: 12 }, (_, j) => `p${j}: a${i - 1}`).join(", ")} };\n`;
+      for (let i = 1; i <= 7; i += 1)
+        literals += `  const a${i} = { ${Array.from({ length: 12 }, (_, j) => `p${j}: a${i - 1}`).join(", ")} };\n`;
       expect(fastest(`${head}${helpers}export function Comp() { return <p>{s.value}{h7(1)}</p>; }`)).toBeLessThan(2000);
-      expect(fastest(`${head}export function Comp() {\n  ${literals}  return <p>{s.value}{a7.p0.toFixed()}</p>;\n}`)).toBeLessThan(2000);
+      expect(
+        fastest(`${head}export function Comp() {\n  ${literals}  return <p>{s.value}{a7.p0.toFixed()}</p>;\n}`),
+      ).toBeLessThan(2000);
     });
     it("handles a deep chain of same-module helpers without stack overflow or quadratic time", () => {
       run(helperChain(20));
@@ -3508,14 +3900,15 @@ describe("capture decisions for aliases, unresolved calls, and folded helpers", 
     file = "Fixture.jsx",
   ): { code: string; warnings: string[] } => {
     const warnings: string[] = [];
-    const code = transformReactFineGrainedSignals(source, file, {
-      importSource: "react-fine-grained-signals",
-      mode,
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-      warn: (warning) => warnings.push(warning.message),
-    })?.code ?? "";
+    const code =
+      transformReactFineGrainedSignals(source, file, {
+        importSource: "react-fine-grained-signals",
+        mode,
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+        warn: (warning) => warnings.push(warning.message),
+      })?.code ?? "";
     return { code, warnings };
   };
   const head = `import { signal } from "react-fine-grained-signals";\nconst s = signal(1);\n`;
@@ -3539,7 +3932,15 @@ export function App(p) {
     for (const reads of ["store.map()", "store.list.filter(Boolean)", "moduleStore.toString()", "r.map()"]) {
       expect(code).toContain(`capture(() => ${reads})`);
     }
-    for (const builtin of ["p.items.map", "local.map", "label.toString", "split(", ".join(", "rows.map", "visible.map"]) {
+    for (const builtin of [
+      "p.items.map",
+      "local.map",
+      "label.toString",
+      "split(",
+      ".join(",
+      "rows.map",
+      "visible.map",
+    ]) {
       const captured = new RegExp(`capture\\(\\(\\) => [^\\n]*${builtin.replace(/[.()|]/g, "\\$&")}`).test(code);
       expect(`${builtin} captured: ${captured}`).toBe(`${builtin} captured: false`);
     }
@@ -3547,7 +3948,8 @@ export function App(p) {
 
   it("judges a builtin method name by where the receiver came from, not by its being a local", () => {
     for (const mode of ["auto", "all"] as const) {
-      const { code } = shape(`${head}
+      const { code } = shape(
+        `${head}
 import { store } from "./store";
 export function List({ items, title }) {
   const visible = items.filter(Boolean);
@@ -3569,14 +3971,31 @@ export function Aliased() {
   const holder = { store };
   return <p>{s.value}{second.map()}{holder.store.filter(Boolean)}{first.toString()}</p>;
 }
-`, mode);
-      for (const builtin of ["visible.map", "label.toString", "names.map", "items.filter", "first.trim", "[1, 2].at", "box.map", "last.trim"]) {
+`,
+        mode,
+      );
+      for (const builtin of [
+        "visible.map",
+        "label.toString",
+        "names.map",
+        "items.filter",
+        "first.trim",
+        "[1, 2].at",
+        "box.map",
+        "last.trim",
+      ]) {
         const captured = code.includes(`capture(() => ${builtin}`);
         expect(`${mode} ${builtin} captured: ${captured}`).toBe(`${mode} ${builtin} captured: false`);
       }
       for (const reads of [
-        "second.map()", "holder.store.filter(Boolean)", "first.toString()",
-        "item.map()", "[store][0].filter(Boolean)", "box.slice().pop().toString()", "[store][0].total()", "picked.map()",
+        "second.map()",
+        "holder.store.filter(Boolean)",
+        "first.toString()",
+        "item.map()",
+        "[store][0].filter(Boolean)",
+        "box.slice().pop().toString()",
+        "[store][0].total()",
+        "picked.map()",
       ]) {
         expect(code).toContain(`capture(() => ${reads})`);
       }
@@ -3585,7 +4004,8 @@ export function Aliased() {
 
   it("leaves builtins on proven data alone and never moves a Hook picked by an expression", () => {
     for (const mode of ["auto", "all"] as const) {
-      const { code } = shape(`${head}
+      const { code } = shape(
+        `${head}
 import { useA, useB } from "./hooks";
 function label(row) { return row.name.trim(); }
 export function List(props) {
@@ -3596,9 +4016,17 @@ export function List(props) {
   const seq = (0, useA)();
   return <p>{s.value}{visible.map(String).join(",")}{title.toUpperCase()}{items.map((item) => item.name.trim()).join()}{items.map(label).join()}{fmt.format(1)}{label(items[0])}{[1, 2].at(0)}{picked}{seq}</p>;
 }
-`, mode);
+`,
+        mode,
+      );
       for (const builtin of [
-        "visible.map", "title.toUpperCase", "items.map((item)", "items.map(label)", "fmt.format", "label(items[0])", "[1, 2].at",
+        "visible.map",
+        "title.toUpperCase",
+        "items.map((item)",
+        "items.map(label)",
+        "fmt.format",
+        "label(items[0])",
+        "[1, 2].at",
       ]) {
         const captured = code.includes(`capture(() => ${builtin}`);
         expect(`${mode} ${builtin} captured: ${captured}`).toBe(`${mode} ${builtin} captured: false`);
@@ -3656,7 +4084,8 @@ export function List(props) {
       ["reassignedFormatter.format(1)", true],
     ];
     for (const mode of ["auto", "all"] as const) {
-      const { code } = shape(`${head}
+      const { code } = shape(
+        `${head}
 import * as lib from "react-fine-grained-signals";
 import { ext } from "./ext";
 const holder = { fn: (x) => x };
@@ -3695,7 +4124,9 @@ ${children.map(([child]) => `      {${child}}`).join("\n")}
     </p>
   );
 }
-`, mode);
+`,
+        mode,
+      );
       for (const [child, expected] of children) {
         const captured = code.includes(`capture(() => ${child}`);
         expect(`${mode} ${child} captured: ${captured}`).toBe(`${mode} ${child} captured: ${expected}`);
@@ -3739,7 +4170,15 @@ export function App(p) {
     expect(code).toContain("capture(() => getFn()(3))");
     // A function picked at run time from props is a prop function call like `p.a()`.
     expect(code).toContain("capture(() => (p.a || p.b)())");
-    for (const unrelated of ["Math.max", "JSON.stringify", "signal(2)", "[1, 2].at(0)", "named.Header", "p.name.trim()", "new Intl.NumberFormat"]) {
+    for (const unrelated of [
+      "Math.max",
+      "JSON.stringify",
+      "signal(2)",
+      "[1, 2].at(0)",
+      "named.Header",
+      "p.name.trim()",
+      "new Intl.NumberFormat",
+    ]) {
       const captured = code.includes(`capture(() => ${unrelated}`);
       expect(`${unrelated} captured: ${captured}`).toBe(`${unrelated} captured: false`);
     }
@@ -3810,13 +4249,16 @@ export function E() { return <p>{m()}</p>; }
   });
 
   it("carries JSX through render callbacks however they are also referenced", () => {
-    const { code } = shape(`${head}
+    const { code } = shape(
+      `${head}
 function Row() { return <li>{s.value}</li>; }
 function note(row) { return row; }
 export function ListA({ items }) { return items.map(Row); }
 export function ListB({ items }) { note(Row); return items.map(Row); }
 export function ListC({ items }) { items.map(Row); return note(Row); }
-`, "all");
+`,
+      "all",
+    );
     expect(code.match(/= _useSignalCapture\(\)/g)).toHaveLength(3);
   });
 

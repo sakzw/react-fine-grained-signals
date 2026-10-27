@@ -10,7 +10,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 // from one copy's reactive scope into the other's signal must fail loudly
 // instead of silently going stale. Each copy is a real tsdown bundle of
 // src/index.ts.
-interface Signal<T> { value: T }
+interface Signal<T> {
+  value: T;
+}
 interface Copy {
   signal<T>(value: T): Signal<T>;
   computed<T>(getter: () => T): Signal<T>;
@@ -47,7 +49,7 @@ beforeAll(async () => {
         neverBundle: [/^react(?:\/|$)/, /^react-dom(?:\/|$)/],
       },
     });
-    loaded.push(await import(/* @vite-ignore */ pathToFileURL(join(outDir, "index.js")).href) as Copy);
+    loaded.push((await import(/* @vite-ignore */ pathToFileURL(join(outDir, "index.js")).href)) as Copy);
   }
   a = loaded[0]!;
   b = loaded[1]!;
@@ -60,7 +62,11 @@ afterAll(async () => {
 function suppressConsoleError() {
   const original = console.error;
   console.error = () => {};
-  return { restore() { console.error = original; } };
+  return {
+    restore() {
+      console.error = original;
+    },
+  };
 }
 
 describe("two loaded copies of the package", () => {
@@ -68,7 +74,9 @@ describe("two loaded copies of the package", () => {
     const source = a.signal(1);
     const doubled = a.computed(() => source.value * 2);
     const seen: number[] = [];
-    const dispose = a.effect(() => { seen.push(doubled.value); });
+    const dispose = a.effect(() => {
+      seen.push(doubled.value);
+    });
     source.value = 2;
     dispose();
     expect(seen).toEqual([2, 4]);
@@ -89,9 +97,13 @@ describe("two loaded copies of the package", () => {
     const foreign = b.signal(1);
     const reports: unknown[] = [];
     const original = console.error;
-    console.error = (...args: unknown[]) => { reports.push((args[1] as { cause?: unknown } | undefined)?.cause); };
+    console.error = (...args: unknown[]) => {
+      reports.push((args[1] as { cause?: unknown } | undefined)?.cause);
+    };
     try {
-      const dispose = a.effect(() => { foreign.value; });
+      const dispose = a.effect(() => {
+        foreign.value;
+      });
       dispose();
     } finally {
       console.error = original;
@@ -103,7 +115,14 @@ describe("two loaded copies of the package", () => {
   it("throws from isSignal for a signal the other copy created", () => {
     expect(() => a.isSignal(b.signal(1))).toThrow(MULTIPLE_COPIES);
     expect(() => b.isSignal(a.computed(() => 1))).toThrow(MULTIPLE_COPIES);
-    expect(a.isSignal({ value: 1, peek() { return 1; } })).toBe(false);
+    expect(
+      a.isSignal({
+        value: 1,
+        peek() {
+          return 1;
+        },
+      }),
+    ).toBe(false);
   });
 
   it("throws when a tracked component of one copy reads another copy's signal", () => {

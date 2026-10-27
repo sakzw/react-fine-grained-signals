@@ -1,7 +1,16 @@
 /** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
-import { Component, StrictMode, Suspense, act, startTransition, useState, type ComponentType, type ReactNode } from "react";
+import {
+  Component,
+  StrictMode,
+  Suspense,
+  act,
+  startTransition,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { signal, useSignalEffect } from "../src/index.js";
@@ -15,10 +24,14 @@ afterEach(() => {
 
 function SuspenseTransitionApp({ Observer }: { Observer: ComponentType<{ label: string }> }) {
   const [label, setLabel] = useState("committed");
-  return <>
-    <button onClick={() => startTransition(() => setLabel("pending"))}>suspend update</button>
-    <Suspense fallback={<span>loading</span>}><Observer label={label} /></Suspense>
-  </>;
+  return (
+    <>
+      <button onClick={() => startTransition(() => setLabel("pending"))}>suspend update</button>
+      <Suspense fallback={<span>loading</span>}>
+        <Observer label={label} />
+      </Suspense>
+    </>
+  );
 }
 
 describe("useSignalEffect", () => {
@@ -112,7 +125,9 @@ describe("useSignalEffect", () => {
     const cleanups: string[] = [];
     let allowPending = false;
     let resolvePending!: () => void;
-    const pending = new Promise<void>((resolve) => { resolvePending = resolve; });
+    const pending = new Promise<void>((resolve) => {
+      resolvePending = resolve;
+    });
 
     function Observer({ label }: { label: string }) {
       useSignalEffect(() => {
@@ -133,12 +148,17 @@ describe("useSignalEffect", () => {
     expect(cleanups).toEqual([]);
     expect(screen.getByText("committed")).toBeTruthy();
 
-    act(() => { source.value = 1; });
+    act(() => {
+      source.value = 1;
+    });
     expect(setups).toEqual(["committed", "committed"]);
     expect(cleanups).toEqual(["committed"]);
 
     allowPending = true;
-    await act(async () => { resolvePending(); await Promise.resolve(); });
+    await act(async () => {
+      resolvePending();
+      await Promise.resolve();
+    });
     expect(screen.getByText("pending")).toBeTruthy();
     expect(setups).toEqual(["committed", "committed", "pending"]);
     expect(cleanups).toEqual(["committed", "committed"]);
@@ -166,9 +186,7 @@ describe("useSignalEffect", () => {
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
     const view = render(<Observer label="before" dependencies={before} />);
     expect(setups).toEqual(["before"]);
-    expect(() => view.rerender(<Observer label="after" dependencies={after} />)).toThrow(
-      /dependencies length changed/,
-    );
+    expect(() => view.rerender(<Observer label="after" dependencies={after} />)).toThrow(/dependencies length changed/);
     errorSpy.mockRestore();
   });
 
@@ -185,9 +203,11 @@ describe("useSignalEffect", () => {
       }
 
       render() {
-        return this.state.error
-          ? <button onClick={() => this.setState({ error: false })}>retry</button>
-          : this.props.children;
+        return this.state.error ? (
+          <button onClick={() => this.setState({ error: false })}>retry</button>
+        ) : (
+          this.props.children
+        );
       }
     }
 
@@ -201,16 +221,30 @@ describe("useSignalEffect", () => {
     }
 
     const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-    const view = render(<ErrorBoundary><Observer label="initial" dependencies={[1]} /></ErrorBoundary>);
+    const view = render(
+      <ErrorBoundary>
+        <Observer label="initial" dependencies={[1]} />
+      </ErrorBoundary>,
+    );
     expect(setups).toEqual(["initial"]);
-    view.rerender(<ErrorBoundary><Observer label="invalid" dependencies={[1, 2]} /></ErrorBoundary>);
+    view.rerender(
+      <ErrorBoundary>
+        <Observer label="invalid" dependencies={[1, 2]} />
+      </ErrorBoundary>,
+    );
     expect(screen.getByText("retry")).toBeTruthy();
     expect(cleanups).toEqual(["initial"]);
 
-    view.rerender(<ErrorBoundary key="recovered"><Observer label="recovered" dependencies={[3]} /></ErrorBoundary>);
+    view.rerender(
+      <ErrorBoundary key="recovered">
+        <Observer label="recovered" dependencies={[3]} />
+      </ErrorBoundary>,
+    );
     expect(screen.getByText("recovered")).toBeTruthy();
     expect(setups).toEqual(["initial", "recovered"]);
-    act(() => { source.value = 1; });
+    act(() => {
+      source.value = 1;
+    });
     expect(setups).toEqual(["initial", "recovered", "recovered"]);
     view.unmount();
     expect(cleanups).toEqual(["initial", "recovered", "recovered"]);
@@ -223,11 +257,14 @@ describe("useSignalEffect", () => {
     const cleanups: string[] = [];
 
     function Observer({ label, explicit }: { label: string; explicit: boolean }) {
-      useSignalEffect(() => {
-        source.value;
-        setups.push(label);
-        return () => cleanups.push(label);
-      }, explicit ? [] : undefined);
+      useSignalEffect(
+        () => {
+          source.value;
+          setups.push(label);
+          return () => cleanups.push(label);
+        },
+        explicit ? [] : undefined,
+      );
       return <span>{label}</span>;
     }
 
@@ -235,7 +272,9 @@ describe("useSignalEffect", () => {
     view.rerender(<Observer label="updated" explicit />);
     expect(setups).toEqual(["initial"]);
     expect(cleanups).toEqual([]);
-    act(() => { source.value = 1; });
+    act(() => {
+      source.value = 1;
+    });
     expect(setups).toEqual(["initial", "initial"]);
     view.unmount();
     expect(cleanups).toEqual(["initial", "initial"]);

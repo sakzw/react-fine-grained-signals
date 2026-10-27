@@ -1,12 +1,8 @@
 declare const untrackedOwnerBrand: unique symbol;
-export const UNTRACKED_OWNER = Symbol.for(
-  "react-fine-grained-signals.untracked",
-) as typeof untrackedOwnerBrand;
+export const UNTRACKED_OWNER = Symbol.for("react-fine-grained-signals.untracked") as typeof untrackedOwnerBrand;
 
 /** Shared lexical owner for graph, render, and explicitly untracked reads. */
-export type ExecutionOwner =
-  | GraphExecutionOwner
-  | RenderExecutionOwner;
+export type ExecutionOwner = GraphExecutionOwner | RenderExecutionOwner;
 
 export type ExecutionContextOwner = ExecutionOwner | typeof UNTRACKED_OWNER;
 
@@ -38,15 +34,11 @@ export function multipleCopiesError(): Error {
   );
 }
 
-export function isGraphExecutionOwner(
-  owner: ExecutionContextOwner | undefined,
-): owner is GraphExecutionOwner {
+export function isGraphExecutionOwner(owner: ExecutionContextOwner | undefined): owner is GraphExecutionOwner {
   return typeof owner === "object" && owner !== null && owner.kind === "graph";
 }
 
-export function isRenderExecutionOwner(
-  owner: ExecutionContextOwner | undefined,
-): owner is RenderExecutionOwner {
+export function isRenderExecutionOwner(owner: ExecutionContextOwner | undefined): owner is RenderExecutionOwner {
   return typeof owner === "object" && owner !== null && owner.kind === "render";
 }
 
@@ -87,10 +79,7 @@ export function withExecutionOwner<T>(owner: ExecutionOwner, callback: () => T):
 }
 
 /** Temporarily changes lexical ownership inside one synchronous call. */
-export function withSynchronousExecutionOwner<T>(
-  owner: ExecutionContextOwner,
-  callback: () => T,
-): T {
+export function withSynchronousExecutionOwner<T>(owner: ExecutionContextOwner, callback: () => T): T {
   const previous = executionContext.owner;
   executionContext.owner = owner;
   try {

@@ -41,19 +41,14 @@ function resolvePnpmInvocation() {
       const launchArguments = launchLine?.match(/"([^"]+)"(?:\s+"([^"]+)")?.*%\*/i);
       if (launchArguments === undefined || launchArguments === null) continue;
 
-      const expandShimPath = (value) => resolve(
-        value.replace(/%~dp0/ig, `${shimDirectory}\\`),
-      );
+      const expandShimPath = (value) => resolve(value.replace(/%~dp0/gi, `${shimDirectory}\\`));
       const launcher = expandShimPath(launchArguments[1]);
-      const cliScript = launchArguments[2] === undefined
-        ? undefined
-        : expandShimPath(launchArguments[2]);
+      const cliScript = launchArguments[2] === undefined ? undefined : expandShimPath(launchArguments[2]);
 
       if (/\.exe$/i.test(launcher) && existsSync(launcher)) {
-        const adjacentCli = [
-          join(dirname(launcher), "pnpm.mjs"),
-          join(dirname(launcher), "bin", "pnpm.mjs"),
-        ].find((candidate) => existsSync(candidate));
+        const adjacentCli = [join(dirname(launcher), "pnpm.mjs"), join(dirname(launcher), "bin", "pnpm.mjs")].find(
+          (candidate) => existsSync(candidate),
+        );
         if (adjacentCli !== undefined) {
           return { command: process.execPath, prefixArguments: [adjacentCli] };
         }
@@ -134,16 +129,10 @@ try {
   // Validate the package's current manifest separately from the actual runtime
   // composition checks in the private duplicate-copy smoke test.
   const installedManifest = JSON.parse(
-    await readFile(
-      join(consumerRoot, "node_modules", "react-fine-grained-signals", "package.json"),
-      "utf8",
-    ),
+    await readFile(join(consumerRoot, "node_modules", "react-fine-grained-signals", "package.json"), "utf8"),
   );
   const installedPluginManifest = JSON.parse(
-    await readFile(
-      join(consumerRoot, "node_modules", "unplugin-react-fine-grained-signals", "package.json"),
-      "utf8",
-    ),
+    await readFile(join(consumerRoot, "node_modules", "unplugin-react-fine-grained-signals", "package.json"), "utf8"),
   );
   const installedRuntimePath = join(consumerRoot, "node_modules", "react-fine-grained-signals");
   const installedPluginPath = join(consumerRoot, "node_modules", "unplugin-react-fine-grained-signals");
@@ -180,7 +169,9 @@ try {
   // fixture's TS file covers declaration resolution; this runtime check covers
   // actual package export maps and the minimum usable shape of every adapter.
   const entryContractPath = join(consumerRoot, "entry-contract.mjs");
-  await writeFile(entryContractPath, `
+  await writeFile(
+    entryContractPath,
+    `
     import { Fragment, jsxDEV } from "react-fine-grained-signals/jsx/jsx-dev-runtime";
     import { createElement, Fragment as classicFragment } from "react-fine-grained-signals/jsx";
     import { createElement as liteCreateElement } from "react-fine-grained-signals/jsx/lite";
@@ -248,19 +239,12 @@ try {
       throw new Error("The esbuild entry must create a named plugin with setup()");
     }
     console.log("Packed jsx-dev-runtime and unplugin public entries passed.");
-  `);
+  `,
+  );
   await run(process.execPath, [entryContractPath], consumerRoot);
 
-  await run(
-    pnpmInvocation.command,
-    [...pnpmInvocation.prefixArguments, "exec", "tsc", "--noEmit"],
-    consumerRoot,
-  );
-  await run(
-    pnpmInvocation.command,
-    [...pnpmInvocation.prefixArguments, "exec", "vite", "build"],
-    consumerRoot,
-  );
+  await run(pnpmInvocation.command, [...pnpmInvocation.prefixArguments, "exec", "tsc", "--noEmit"], consumerRoot);
+  await run(pnpmInvocation.command, [...pnpmInvocation.prefixArguments, "exec", "vite", "build"], consumerRoot);
 
   const output = await readFile(join(consumerRoot, "dist", "consumer.js"), "utf8");
   for (const entry of [
@@ -272,7 +256,9 @@ try {
   }
   // `<p {...props} key="spread" />` compiles to the `/jsx` entry's classic factory.
   if (!/import\s*\{[^}]*\bcreateElement\b[^}]*\}\s*from\s*["']react-fine-grained-signals\/jsx["']/.test(output)) {
-    throw new Error("Consumer output must import createElement from react-fine-grained-signals/jsx for a key after a spread");
+    throw new Error(
+      "Consumer output must import createElement from react-fine-grained-signals/jsx for a key after a spread",
+    );
   }
   // Managed codegen keeps user Hooks at function top level and captures proven
   // reads individually. The consumer canary adds several interacting managed
@@ -299,18 +285,16 @@ try {
   const { hydrateRoot } = consumerRequire("react-dom/client");
   const { act } = React;
   const canaryBundle = await import(pathToFileURL(join(consumerRoot, "dist", "consumer.js")).href);
-  const canaryElement = React.createElement(
-    React.StrictMode,
-    null,
-    React.createElement(canaryBundle.ConsumerCanary),
-  );
+  const canaryElement = React.createElement(React.StrictMode, null, React.createElement(canaryBundle.ConsumerCanary));
   console.log("[consumer] rendering the packed canary on the server");
   canaryBundle.resetConsumerCanary();
   const markup = renderToString(canaryElement);
   const dom = new JSDOM(`<!doctype html><div id="root">${markup}</div>`, { url: "http://consumer.test" });
   const globalValues = new Map(
-    ["window", "document", "navigator", "HTMLElement", "MutationObserver", "IS_REACT_ACT_ENVIRONMENT"]
-      .map((key) => [key, Object.getOwnPropertyDescriptor(globalThis, key)]),
+    ["window", "document", "navigator", "HTMLElement", "MutationObserver", "IS_REACT_ACT_ENVIRONMENT"].map((key) => [
+      key,
+      Object.getOwnPropertyDescriptor(globalThis, key),
+    ]),
   );
   for (const [key, value] of Object.entries({
     window: dom.window,
@@ -365,14 +349,15 @@ try {
     }
     const consumerCommits = canaryBundle.readConsumerCommitCount();
     await act(() => read("switch-details").click());
-    if (
-      read("switch-view").textContent !== "details" ||
-      canaryBundle.readConsumerCommitCount() !== consumerCommits
-    ) {
+    if (read("switch-view").textContent !== "details" || canaryBundle.readConsumerCommitCount() !== consumerCommits) {
       throw new Error("Packed Switch/Match equals update failed or rerendered its React Compiler parent");
     }
     await act(() => read("replace-and-delete").click());
-    if (read("deep-name").textContent !== "Lin" || read("map-value").textContent !== "" || read("set-has").textContent !== "false") {
+    if (
+      read("deep-name").textContent !== "Lin" ||
+      read("map-value").textContent !== "" ||
+      read("set-has").textContent !== "false"
+    ) {
       throw new Error("Packed deep destructuring replacement or collection deletion became stale");
     }
     const conditionalBeforeUnmount = read("conditional");
@@ -380,7 +365,11 @@ try {
     if (read("conditional") !== null) throw new Error("Packed canary conditional did not unmount");
     await act(() => read("toggle-conditional").click());
     const conditionalAfterRemount = read("conditional");
-    if (conditionalAfterRemount === null || conditionalAfterRemount === conditionalBeforeUnmount || conditionalAfterRemount.textContent !== "3") {
+    if (
+      conditionalAfterRemount === null ||
+      conditionalAfterRemount === conditionalBeforeUnmount ||
+      conditionalAfterRemount.textContent !== "3"
+    ) {
       throw new Error("Packed canary conditional component did not remount with the current signal value");
     }
     await act(() => read("count-only-up").click());
@@ -406,7 +395,8 @@ try {
     await act(() => {
       canaryBundle.canaryState.text.value = "direct-text";
     });
-    if (input.value !== "direct-text") throw new Error("Packed writable computed source update did not reach the input DOM");
+    if (input.value !== "direct-text")
+      throw new Error("Packed writable computed source update did not reach the input DOM");
     await act(async () => {
       nativeInputValue.call(input, "input longer than twelve");
       input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
@@ -423,9 +413,12 @@ try {
       select.dispatchEvent(new dom.window.Event("change", { bubbles: true }));
     });
     if (
-      !read("checkbox").checked || canaryBundle.canaryState.checked.value !== true ||
-      !read("radio-second").checked || canaryBundle.canaryState.radio.value !== "second" ||
-      read("select").value !== "two" || canaryBundle.canaryState.selected.value !== "two"
+      !read("checkbox").checked ||
+      canaryBundle.canaryState.checked.value !== true ||
+      !read("radio-second").checked ||
+      canaryBundle.canaryState.radio.value !== "second" ||
+      read("select").value !== "two" ||
+      canaryBundle.canaryState.selected.value !== "two"
     ) {
       throw new Error("Packed consumer form bindings did not accept native events");
     }
@@ -451,20 +444,28 @@ try {
   // Build a second entry as a real installed consumer. Do not externalize
   // React: this checks whether importing only core primitives from the package
   // root causes a bundler to pull React into an application bundle.
-  await writeFile(join(consumerRoot, "core-only.html"), `
+  await writeFile(
+    join(consumerRoot, "core-only.html"),
+    `
     <!doctype html>
     <html><head><meta charset="UTF-8"></head><body>
       <script type="module" src="/core-only.js"></script>
     </body></html>
-  `);
-  await writeFile(join(consumerRoot, "core-only.js"), `
+  `,
+  );
+  await writeFile(
+    join(consumerRoot, "core-only.js"),
+    `
     import { computed, signal } from "react-fine-grained-signals";
     const count = signal(1);
     const doubled = computed(() => count.value * 2);
     globalThis.coreOnlyResult = doubled.value;
-  `);
+  `,
+  );
   const coreOnlyConfig = join(consumerRoot, "vite.core-only.config.mjs");
-  await writeFile(coreOnlyConfig, `
+  await writeFile(
+    coreOnlyConfig,
+    `
     import { dirname, resolve } from "node:path";
     import { fileURLToPath } from "node:url";
     const root = dirname(fileURLToPath(import.meta.url));
@@ -477,7 +478,8 @@ try {
         rollupOptions: { input: resolve(root, "core-only.html") },
       },
     };
-  `);
+  `,
+  );
   await run(
     pnpmInvocation.command,
     [...pnpmInvocation.prefixArguments, "exec", "vite", "build", "--config", coreOnlyConfig],

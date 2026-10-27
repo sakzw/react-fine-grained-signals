@@ -89,13 +89,14 @@ test("binds number input strings while leaving sanitization and constraints to t
   const input = page.locator("#number-bound-input");
   const signalValue = page.locator("#number-bound-signal");
   const parsed = page.locator("#number-bound-parsed");
-  const validity = async () => input.evaluate((node: HTMLInputElement) => ({
-    badInput: node.validity.badInput,
-    rangeUnderflow: node.validity.rangeUnderflow,
-    rangeOverflow: node.validity.rangeOverflow,
-    stepMismatch: node.validity.stepMismatch,
-    valueMissing: node.validity.valueMissing,
-  }));
+  const validity = async () =>
+    input.evaluate((node: HTMLInputElement) => ({
+      badInput: node.validity.badInput,
+      rangeUnderflow: node.validity.rangeUnderflow,
+      rangeOverflow: node.validity.rangeOverflow,
+      stepMismatch: node.validity.stepMismatch,
+      valueMissing: node.validity.valueMissing,
+    }));
 
   await expect(input).toHaveValue("1.5");
   await expect(signalValue).toHaveText("1.5");
@@ -179,7 +180,9 @@ test("synchronizes radio and checkbox groups through explicit value bindings", a
   await checkboxA.uncheck();
   await expect(page.locator("#group-selected-values")).toHaveText("b");
 
-  const data = await page.locator("#input-value-groups").evaluate((form) => Object.fromEntries(new FormData(form as HTMLFormElement).entries()));
+  const data = await page
+    .locator("#input-value-groups")
+    .evaluate((form) => Object.fromEntries(new FormData(form as HTMLFormElement).entries()));
   expect(data).toEqual({ "group-choice": "b", "group-features": "b" });
   await page.locator("#input-value-groups").evaluate((form) => (form as HTMLFormElement).reset());
   await expect(radioB).toBeChecked();
@@ -321,13 +324,10 @@ for (const kind of ["tracking", "deep", "value"] as const) {
   test(`${kind}: a signal written while a transition mount yields commits no mixed snapshot`, async ({ page }) => {
     const errors = await openHydrated(page);
     const read = () =>
-      page.evaluate(
-        (name) => {
-          const model = (globalThis as { rfgsConcurrent?: Record<string, ConcurrentRecord> }).rfgsConcurrent?.[name];
-          return model && { commits: model.commits, screens: model.screens, renders: model.renders };
-        },
-        kind,
-      );
+      page.evaluate((name) => {
+        const model = (globalThis as { rfgsConcurrent?: Record<string, ConcurrentRecord> }).rfgsConcurrent?.[name];
+        return model && { commits: model.commits, screens: model.screens, renders: model.renders };
+      }, kind);
 
     await page.locator(`#mount-concurrent-${kind}`).click();
     await expect.poll(async () => (await read())?.screens.at(-1)).toBe("1111");

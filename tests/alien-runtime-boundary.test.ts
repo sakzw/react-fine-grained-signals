@@ -21,8 +21,9 @@ function findAlienImports(source: string): AlienImport[] {
 
   while ((declaration = declarations.exec(code)) !== null) {
     const original = source.slice(declaration.index, declaration.index + declaration[0].length);
-    const moduleSpecifier = original.match(/\bfrom\s*(["'])(alien-signals(?:\/system)?)\1/)
-      ?? original.match(/^\s*(?:import|export)\s*(["'])(alien-signals(?:\/system)?)\1/);
+    const moduleSpecifier =
+      original.match(/\bfrom\s*(["'])(alien-signals(?:\/system)?)\1/) ??
+      original.match(/^\s*(?:import|export)\s*(["'])(alien-signals(?:\/system)?)\1/);
     const specifier = moduleSpecifier?.[2];
     if (specifier === undefined) continue;
     imports.push({
@@ -79,11 +80,13 @@ function maskCommentsAndStrings(source: string): string {
 
 async function listProductionFiles(directory: string): Promise<string[]> {
   const entries = await readdir(directory, { withFileTypes: true });
-  const nestedFiles = await Promise.all(entries.map(async (entry) => {
-    const path = join(directory, entry.name);
-    if (entry.isDirectory()) return listProductionFiles(path);
-    return entry.isFile() && /\.(?:tsx?|mts|mjs)$/.test(entry.name) ? [path] : [];
-  }));
+  const nestedFiles = await Promise.all(
+    entries.map(async (entry) => {
+      const path = join(directory, entry.name);
+      if (entry.isDirectory()) return listProductionFiles(path);
+      return entry.isFile() && /\.(?:tsx?|mts|mjs)$/.test(entry.name) ? [path] : [];
+    }),
+  );
   return nestedFiles.flat();
 }
 
@@ -120,8 +123,10 @@ describe("Alien Signals production dependency boundary", () => {
       for (const alienImport of findAlienImports(source)) {
         if (alienImport.specifier === "alien-signals") {
           violations.push(`${relativeFile}:${alienImport.line} imports the forbidden high-level root API`);
-        } else if (relativeFile === allowedSystemTypeImport
-            && /^\s*import\s+type\b/u.test(source.split("\n")[alienImport.line - 1] ?? "")) {
+        } else if (
+          relativeFile === allowedSystemTypeImport &&
+          /^\s*import\s+type\b/u.test(source.split("\n")[alienImport.line - 1] ?? "")
+        ) {
           // Type-only graph substrate declarations erase from production output.
         } else if (relativeFile !== allowedSystemImport) {
           violations.push(`${relativeFile}:${alienImport.line} imports alien-signals/system outside the allowlist`);
@@ -132,11 +137,13 @@ describe("Alien Signals production dependency boundary", () => {
     }
 
     if (violations.length > 0) {
-      throw new Error([
-        "Production code must not import Alien Signals' high-level root API.",
-        "Use RFSG's private ReactiveRuntime; only src/core/alien-derived-runtime-core.mts may import alien-signals/system at runtime. The graph type module may use erased type-only imports.",
-        ...violations,
-      ].join("\n"));
+      throw new Error(
+        [
+          "Production code must not import Alien Signals' high-level root API.",
+          "Use RFSG's private ReactiveRuntime; only src/core/alien-derived-runtime-core.mts may import alien-signals/system at runtime. The graph type module may use erased type-only imports.",
+          ...violations,
+        ].join("\n"),
+      );
     }
 
     expect(allowedSystemImports).toBeGreaterThan(0);

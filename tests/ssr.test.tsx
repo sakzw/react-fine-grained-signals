@@ -28,41 +28,72 @@ describe("SSR and hydration", () => {
     const choiceSource = signal("b");
     const selectedSource = signal<string[]>(["a", "c"]);
     function App() {
-      const text = useWritableComputed({
-        get: () => textSource.value,
-        set: (next: string) => { textSource.value = next; },
-      }, []);
+      const text = useWritableComputed(
+        {
+          get: () => textSource.value,
+          set: (next: string) => {
+            textSource.value = next;
+          },
+        },
+        [],
+      );
       const choice = useWritableComputed({
         get: () => choiceSource.value,
-        set: (next: string) => { choiceSource.value = next; },
+        set: (next: string) => {
+          choiceSource.value = next;
+        },
       });
       const selected = useWritableComputed({
         get: () => selectedSource.value,
-        set: (next: string[]) => { selectedSource.value = next; },
+        set: (next: string[]) => {
+          selectedSource.value = next;
+        },
       });
-      return <form aria-label="hydrated group bindings">
-        <input aria-label="hydrated computed hook" bindValue={text} />
-        <input type="number" step="any" aria-label="hydrated number binding" bindValue={amountSource} />
-        <input type="range" min="0" max="100" step="1" aria-label="hydrated range binding" bindValue={levelSource} />
-        <input type="radio" name="hydrated choice" value="a" aria-label="hydrated radio a" bindValue={choice} />
-        <input type="radio" name="hydrated choice" value="b" aria-label="hydrated radio b" bindValue={choice} />
-        <input type="checkbox" name="hydrated feature" value="a" aria-label="hydrated feature a" bindValue={selected} />
-        <input type="checkbox" name="hydrated feature" value="b" aria-label="hydrated feature b" bindValue={selected} />
-        <input type="checkbox" name="hydrated feature" value="c" aria-label="hydrated feature c" bindValue={selected} />
-      </form>;
+      return (
+        <form aria-label="hydrated group bindings">
+          <input aria-label="hydrated computed hook" bindValue={text} />
+          <input type="number" step="any" aria-label="hydrated number binding" bindValue={amountSource} />
+          <input type="range" min="0" max="100" step="1" aria-label="hydrated range binding" bindValue={levelSource} />
+          <input type="radio" name="hydrated choice" value="a" aria-label="hydrated radio a" bindValue={choice} />
+          <input type="radio" name="hydrated choice" value="b" aria-label="hydrated radio b" bindValue={choice} />
+          <input
+            type="checkbox"
+            name="hydrated feature"
+            value="a"
+            aria-label="hydrated feature a"
+            bindValue={selected}
+          />
+          <input
+            type="checkbox"
+            name="hydrated feature"
+            value="b"
+            aria-label="hydrated feature b"
+            bindValue={selected}
+          />
+          <input
+            type="checkbox"
+            name="hydrated feature"
+            value="c"
+            aria-label="hydrated feature c"
+            bindValue={selected}
+          />
+        </form>
+      );
     }
 
     const html = renderToString(<App />);
     expect(html).toContain('value="server text"');
     expect(html).toContain('value="12.50"');
     expect(html).toContain('value="50"');
-    expect((html.match(/checked=""/g) ?? [])).toHaveLength(3);
+    expect(html.match(/checked=""/g) ?? []).toHaveLength(3);
     const container = document.createElement("div");
     container.innerHTML = html;
     document.body.appendChild(container);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     const input = container.querySelector('[aria-label="hydrated computed hook"]') as HTMLInputElement;
     const numberInput = container.querySelector('[aria-label="hydrated number binding"]') as HTMLInputElement;
     const rangeInput = container.querySelector('[aria-label="hydrated range binding"]') as HTMLInputElement;
@@ -86,9 +117,13 @@ describe("SSR and hydration", () => {
     expect(choiceSource.value).toBe("a");
     expect(selectedSource.value).toEqual(["a", "c", "b"]);
     expect(consoleError).not.toHaveBeenCalled();
-    await act(async () => { amountSource.value = "13.25"; });
+    await act(async () => {
+      amountSource.value = "13.25";
+    });
     expect(numberInput.value).toBe("13.25");
-    await act(async () => { levelSource.value = "70"; });
+    await act(async () => {
+      levelSource.value = "70";
+    });
     expect(rangeInput.value).toBe("70");
     expect(consoleError).not.toHaveBeenCalled();
     root.unmount();
@@ -98,18 +133,33 @@ describe("SSR and hydration", () => {
 
   it("hydrates single and multiple explicit select bindings with their initial values", async () => {
     const singleSource = signal("b");
-    const singleValue = computed({ get: () => singleSource.value, set: (next: string) => { singleSource.value = next; } });
+    const singleValue = computed({
+      get: () => singleSource.value,
+      set: (next: string) => {
+        singleSource.value = next;
+      },
+    });
     const multipleSource = signal<string[]>(["a", "c"]);
-    const multipleValues = computed({ get: () => multipleSource.value, set: (next: string[]) => { multipleSource.value = next; } });
+    const multipleValues = computed({
+      get: () => multipleSource.value,
+      set: (next: string[]) => {
+        multipleSource.value = next;
+      },
+    });
     function App() {
-      return <>
-        <select aria-label="hydrated single" bindValue={singleValue}>
-          <option value="a">A</option><option value="b">B</option>
-        </select>
-        <select aria-label="hydrated multiple" multiple bindValue={multipleValues}>
-          <option value="a">A</option><option value="b">B</option><option value="c">C</option>
-        </select>
-      </>;
+      return (
+        <>
+          <select aria-label="hydrated single" bindValue={singleValue}>
+            <option value="a">A</option>
+            <option value="b">B</option>
+          </select>
+          <select aria-label="hydrated multiple" multiple bindValue={multipleValues}>
+            <option value="a">A</option>
+            <option value="b">B</option>
+            <option value="c">C</option>
+          </select>
+        </>
+      );
     }
 
     const html = renderToString(<App />);
@@ -119,13 +169,18 @@ describe("SSR and hydration", () => {
     document.body.appendChild(container);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     const single = container.querySelector('[aria-label="hydrated single"]') as HTMLSelectElement;
     const multiple = container.querySelector('[aria-label="hydrated multiple"]') as HTMLSelectElement;
     expect(single.value).toBe("b");
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a", "c"]);
-    await act(async () => { multiple.options[1]!.selected = true; multiple.dispatchEvent(new Event("change", { bubbles: true })); });
+    await act(async () => {
+      multiple.options[1]!.selected = true;
+      multiple.dispatchEvent(new Event("change", { bubbles: true }));
+    });
     expect(multipleSource.value).toEqual(["a", "b", "c"]);
     expect(consoleError).not.toHaveBeenCalled();
 
@@ -136,14 +191,26 @@ describe("SSR and hydration", () => {
 
   it("hydrates writable computed input and checkbox bindings and accepts user edits", async () => {
     const textSource = signal("server value");
-    const text = computed({ get: () => textSource.value, set: (next: string) => { textSource.value = next; } });
+    const text = computed({
+      get: () => textSource.value,
+      set: (next: string) => {
+        textSource.value = next;
+      },
+    });
     const checkedSource = signal(true);
-    const checked = computed({ get: () => checkedSource.value, set: (next: boolean) => { checkedSource.value = next; } });
+    const checked = computed({
+      get: () => checkedSource.value,
+      set: (next: boolean) => {
+        checkedSource.value = next;
+      },
+    });
     function App() {
-      return <>
-        <input aria-label="hydrated computed input" bindValue={text} />
-        <input type="checkbox" aria-label="hydrated computed checkbox" bindChecked={checked} />
-      </>;
+      return (
+        <>
+          <input aria-label="hydrated computed input" bindValue={text} />
+          <input type="checkbox" aria-label="hydrated computed checkbox" bindChecked={checked} />
+        </>
+      );
     }
 
     const html = renderToString(<App />);
@@ -154,7 +221,9 @@ describe("SSR and hydration", () => {
     document.body.appendChild(container);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     const input = container.querySelector('[aria-label="hydrated computed input"]') as HTMLInputElement;
     const checkbox = container.querySelector('[aria-label="hydrated computed checkbox"]') as HTMLInputElement;
@@ -205,8 +274,12 @@ describe("SSR and hydration", () => {
             </For>
           </ul>
           <Switch fallback={<p data-testid="switch-view">unknown</p>}>
-            <Match when={currentView} equals="list"><p data-testid="switch-view">list</p></Match>
-            <Match when={currentView} equals="details"><p data-testid="switch-view">details</p></Match>
+            <Match when={currentView} equals="list">
+              <p data-testid="switch-view">list</p>
+            </Match>
+            <Match when={currentView} equals="details">
+              <p data-testid="switch-view">details</p>
+            </Match>
           </Switch>
         </section>
       );
@@ -241,8 +314,12 @@ describe("SSR and hydration", () => {
       currentView.value = "details";
     });
     expect(container.querySelector("[data-testid=visibility]")?.textContent).toBe("hidden");
-    expect([...container.querySelectorAll("li")].map((item) => item.textContent))
-      .toEqual(["Ada", "Bea", "second", "bea:Bea"]);
+    expect([...container.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
+      "Ada",
+      "Bea",
+      "second",
+      "bea:Bea",
+    ]);
     expect(container.querySelector("[data-testid=switch-view]")?.textContent).toBe("details");
     expect(parentRenders).toHaveBeenCalledTimes(2);
     expect(consoleError).not.toHaveBeenCalled();
@@ -260,9 +337,7 @@ describe("SSR and hydration", () => {
 
     function App() {
       useSignalTracking();
-      return <span data-testid="tracked-ssr-value">{
-        `${derived.value}:${state.value.profile.name}`
-      }</span>;
+      return <span data-testid="tracked-ssr-value">{`${derived.value}:${state.value.profile.name}`}</span>;
     }
 
     const firstHtml = renderToString(<App />);
@@ -308,7 +383,11 @@ describe("SSR and hydration", () => {
     const title = signal("server title");
 
     function App() {
-      return <span data-testid="value" title={title}>{source}</span>;
+      return (
+        <span data-testid="value" title={title}>
+          {source}
+        </span>
+      );
     }
 
     const html = renderToString(<App />);
@@ -345,9 +424,14 @@ describe("SSR and hydration", () => {
     function App() {
       useSignalTracking();
       return (
-        <select data-testid="multi-select" multiple value={selected.value} onChange={(event) => {
-          selected.value = Array.from(event.target.selectedOptions, (option) => option.value);
-        }}>
+        <select
+          data-testid="multi-select"
+          multiple
+          value={selected.value}
+          onChange={(event) => {
+            selected.value = Array.from(event.target.selectedOptions, (option) => option.value);
+          }}
+        >
           <option value="a">A</option>
           <option value="b">B</option>
           <option value="c">C</option>
@@ -362,13 +446,17 @@ describe("SSR and hydration", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
 
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     const select = container.querySelector("[data-testid=multi-select]") as HTMLSelectElement;
     const selectedValues = () => Array.from(select.selectedOptions, (option) => option.value);
     expect(selectedValues()).toEqual(["b", "c"]);
     expect(consoleError).not.toHaveBeenCalled();
 
-    await act(async () => { selected.value = ["a"]; });
+    await act(async () => {
+      selected.value = ["a"];
+    });
     expect(selectedValues()).toEqual(["a"]);
     expect(consoleError).not.toHaveBeenCalled();
 
@@ -383,9 +471,13 @@ describe("SSR and hydration", () => {
     function App() {
       useSignalTracking();
       return (
-        <select data-testid="single-select" value={selected.value} onChange={(event) => {
-          selected.value = event.target.value;
-        }}>
+        <select
+          data-testid="single-select"
+          value={selected.value}
+          onChange={(event) => {
+            selected.value = event.target.value;
+          }}
+        >
           <option value="a">A</option>
           <option value="b">B</option>
           <option value="c">C</option>
@@ -400,12 +492,16 @@ describe("SSR and hydration", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
 
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     const select = container.querySelector("[data-testid=single-select]") as HTMLSelectElement;
     expect(select.value).toBe("b");
     expect(consoleError).not.toHaveBeenCalled();
 
-    await act(async () => { selected.value = "c"; });
+    await act(async () => {
+      selected.value = "c";
+    });
     expect(select.value).toBe("c");
     expect(consoleError).not.toHaveBeenCalled();
 
@@ -421,9 +517,13 @@ describe("SSR and hydration", () => {
     function App() {
       useSignalTracking();
       return (
-        <select data-testid="late-single-select" value={selected.value} onChange={(event) => {
-          selected.value = event.target.value;
-        }}>
+        <select
+          data-testid="late-single-select"
+          value={selected.value}
+          onChange={(event) => {
+            selected.value = event.target.value;
+          }}
+        >
           <option value="a">A</option>
           <option value="b">B</option>
           {showOptionC.value ? <option value="c">C</option> : null}
@@ -438,12 +538,16 @@ describe("SSR and hydration", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
 
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     const select = container.querySelector("[data-testid=late-single-select]") as HTMLSelectElement;
     expect(select.value).toBe("a");
     expect(consoleError).not.toHaveBeenCalled();
 
-    await act(async () => { showOptionC.value = true; });
+    await act(async () => {
+      showOptionC.value = true;
+    });
     expect(select.value).toBe("c");
     expect(selected.value).toBe("c");
     expect(consoleError).not.toHaveBeenCalled();
@@ -464,7 +568,9 @@ describe("SSR and hydration", () => {
         <input
           data-testid="field"
           bindValue={text}
-          onChange={(event) => { text.value = event.target.value; }}
+          onChange={(event) => {
+            text.value = event.target.value;
+          }}
         />
       );
     }
@@ -510,7 +616,9 @@ describe("SSR and hydration", () => {
           type="checkbox"
           data-testid="agree"
           bindChecked={checked}
-          onChange={(event) => { checked.value = event.target.checked; }}
+          onChange={(event) => {
+            checked.value = event.target.checked;
+          }}
         />
       );
     }
@@ -544,7 +652,11 @@ describe("SSR and hydration", () => {
     const style = signal<Record<string, string | number>>({ color: "red" });
 
     function App() {
-      return <span data-testid="styled" style={style}>content</span>;
+      return (
+        <span data-testid="styled" style={style}>
+          content
+        </span>
+      );
     }
 
     const html = renderToString(<App />);
@@ -578,7 +690,11 @@ describe("SSR and hydration", () => {
     const opacity = signal(0.5);
 
     function App() {
-      return <span data-testid="property-styled" style={{ color, opacity, width: 12 }}>content</span>;
+      return (
+        <span data-testid="property-styled" style={{ color, opacity, width: 12 }}>
+          content
+        </span>
+      );
     }
 
     const html = renderToString(<App />);
@@ -590,7 +706,9 @@ describe("SSR and hydration", () => {
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
 
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     const styledNode = container.querySelector("[data-testid=property-styled]") as HTMLSpanElement;
     expect(styledNode.style.color).toBe("purple");
     expect(styledNode.style.opacity).toBe("0.5");
@@ -648,7 +766,9 @@ describe("SSR and hydration", () => {
     const value = signal("initial");
     const reads: string[] = [];
     let releaseSuspense: () => void;
-    const suspensePromise = new Promise<void>((resolve) => { releaseSuspense = resolve; });
+    const suspensePromise = new Promise<void>((resolve) => {
+      releaseSuspense = resolve;
+    });
     let attempts = 0;
 
     function Slow() {

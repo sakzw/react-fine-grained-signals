@@ -76,11 +76,14 @@ describe("array mutators do not subscribe the caller (D1)", () => {
 describe("key enumeration and own-key checks track existence, not values (D2)", () => {
   const readers: Array<[string, (value: Record<string, number>) => unknown]> = [
     ["Object.keys", (value) => Object.keys(value)],
-    ["for...in", (value) => {
-      const keys: string[] = [];
-      for (const key in value) keys.push(key);
-      return keys;
-    }],
+    [
+      "for...in",
+      (value) => {
+        const keys: string[] = [];
+        for (const key in value) keys.push(key);
+        return keys;
+      },
+    ],
     ["Object.hasOwn", (value) => Object.hasOwn(value, "a")],
     ["hasOwnProperty.call", (value) => Object.prototype.hasOwnProperty.call(value, "a")],
   ];
@@ -119,7 +122,11 @@ describe("key enumeration and own-key checks track existence, not values (D2)", 
     });
     state.value.list.push(2);
     state.value.meta[tag] = 1;
-    expect(seen).toEqual([[false, false], [true, false], [true, true]]);
+    expect(seen).toEqual([
+      [false, false],
+      [true, false],
+      [true, true],
+    ]);
     stop();
   });
 
@@ -144,7 +151,10 @@ describe("inherited keys and receivers", () => {
       seen.push([Object.hasOwn(counts.value, "constructor"), "toString" in counts.value]);
     });
     counts.value.constructor = 1 as never;
-    expect(seen).toEqual([[false, true], [true, true]]);
+    expect(seen).toEqual([
+      [false, true],
+      [true, true],
+    ]);
     stop();
   });
 

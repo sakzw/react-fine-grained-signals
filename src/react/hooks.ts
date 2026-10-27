@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect as useReactEffect,
-  useMemo,
-  useRef,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect as useReactEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { computed, deepCollectionSignal, deepSignal, isSignal, signal, untracked } from "../core/index.js";
 import { detachedEffect } from "../core/base.js";
 import type {
@@ -26,11 +20,7 @@ const EMPTY_DEPENDENCIES: DependencyList = [];
  * Throws when a dependency array changes length between renders of one call
  * site. Omitting the array counts as an empty one.
  */
-function useFixedDependencyLength(
-  hook: string,
-  errorName: string,
-  dependencies: DependencyList | undefined,
-): void {
+function useFixedDependencyLength(hook: string, errorName: string, dependencies: DependencyList | undefined): void {
   const length = dependencies?.length ?? 0;
   const initialLengthRef = useRef(length);
   if (length !== initialLengthRef.current) {
@@ -43,14 +33,7 @@ function useFixedDependencyLength(
 }
 
 /** An immutable value that React can safely compare as an external-store snapshot. */
-export type SignalSnapshot =
-  | string
-  | number
-  | boolean
-  | bigint
-  | symbol
-  | null
-  | undefined;
+export type SignalSnapshot = string | number | boolean | bigint | symbol | null | undefined;
 
 type SelectorResult<S extends SignalSnapshot> =
   | { readonly kind: "value"; readonly value: S }
@@ -80,9 +63,7 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
  * read to surface the error to an Error Boundary rather than letting the
  * background effect's exception escape through the signal writer.
  */
-function createEffectBackedStoreSubscription(
-  onEvaluate: () => boolean,
-): (notify: () => void) => () => void {
+function createEffectBackedStoreSubscription(onEvaluate: () => boolean): (notify: () => void) => () => void {
   return (notify: () => void): (() => void) => {
     let isInitialRun = true;
     return detachedEffect(() => {
@@ -188,15 +169,11 @@ export function useSignal<T>(initialValue: T): Signal<T> {
  * A factory is evaluated only while initializing a mounted component instance;
  * it must remain pure because React Strict Mode may replay initial rendering.
  */
-export function useDeepSignal<T extends object>(
-  initialValue: PlainRoot<T> | (() => PlainRoot<T>),
-): DeepSignal<T> {
+export function useDeepSignal<T extends object>(initialValue: PlainRoot<T> | (() => PlainRoot<T>)): DeepSignal<T> {
   const signalRef = useRef<DeepSignal<T> | undefined>(undefined);
 
   if (signalRef.current === undefined) {
-    signalRef.current = deepSignal(
-      typeof initialValue === "function" ? initialValue() : initialValue,
-    );
+    signalRef.current = deepSignal(typeof initialValue === "function" ? initialValue() : initialValue);
   }
 
   return signalRef.current;
@@ -207,15 +184,11 @@ export function useDeepSignal<T extends object>(
  * lifetime: a {@link useDeepSignal} that also tracks Map, Set, WeakMap and
  * WeakSet values. The factory rules are the same.
  */
-export function useDeepCollectionSignal<T extends object>(
-  initialValue: T | (() => T),
-): DeepCollectionSignal<T> {
+export function useDeepCollectionSignal<T extends object>(initialValue: T | (() => T)): DeepCollectionSignal<T> {
   const signalRef = useRef<DeepCollectionSignal<T> | undefined>(undefined);
 
   if (signalRef.current === undefined) {
-    signalRef.current = deepCollectionSignal(
-      typeof initialValue === "function" ? initialValue() : initialValue,
-    );
+    signalRef.current = deepCollectionSignal(typeof initialValue === "function" ? initialValue() : initialValue);
   }
 
   return signalRef.current;
@@ -235,10 +208,7 @@ export function useDeepCollectionSignal<T extends object>(
  * fixed length, matching `useMemo`'s rules; a length change is thrown as a
  * clear error rather than left to degrade into React's silent warning.
  */
-export function useDeepSignalValue<
-  T extends object,
-  S extends SignalSnapshot,
->(
+export function useDeepSignalValue<T extends object, S extends SignalSnapshot>(
   source: DeepSignal<T> | DeepCollectionSignal<T>,
   selector: (value: T) => S,
   dependencies?: DependencyList,
@@ -282,10 +252,7 @@ export function useDeepSignalValue<
  * fixed; a length change throws before `useMemo` can create or reuse a
  * computed for the invalid call.
  */
-export function useComputed<T>(
-  getValue: () => T,
-  dependencies?: DependencyList,
-): ReadonlySignal<T> {
+export function useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T> {
   useFixedDependencyLength("useComputed", "UseComputedDependencyLengthChangeError", dependencies);
   return useMemo(() => computed(getValue), dependencies ?? EMPTY_DEPENDENCIES);
 }
@@ -296,10 +263,7 @@ export function useComputed<T>(
  * as `[]`, and both `get` and `set` must list any non-signal value they
  * capture.
  */
-export function useWritableComputed<T>(
-  options: WritableComputedOptions<T>,
-  dependencies?: DependencyList,
-): Signal<T> {
+export function useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): Signal<T> {
   useFixedDependencyLength("useWritableComputed", "UseWritableComputedDependencyLengthChangeError", dependencies);
   return useMemo(() => computed(options), dependencies ?? EMPTY_DEPENDENCIES);
 }
@@ -318,10 +282,7 @@ export function useWritableComputed<T>(
  * all of those values in `dependencies`. The effect is then reconnected after
  * those dependencies change.
  */
-export function useSignalEffect(
-  callback: () => void | (() => void),
-  dependencies?: DependencyList,
-): void {
+export function useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyList): void {
   const initialDependencyLengthRef = useRef(dependencies?.length ?? 0);
   const dependencyLength = dependencies?.length ?? 0;
   if (dependencyLength !== initialDependencyLengthRef.current) {
@@ -352,15 +313,18 @@ export function useSignalValue<T>(source: ReadonlySignal<T> & NotDeepSignal): T 
   // from here. `isSignal` throws for it, so the mix fails now instead of
   // leaving the component on a value that never updates.
   isSignal(source);
-  const subscribe = useCallback((notify: () => void) => {
-    const unsubscribe = subscribeLocalReadable(source, notify);
-    if (unsubscribe !== undefined) return unsubscribe;
-    // Structural readables from elsewhere need the effect bridge.
-    return createEffectBackedStoreSubscription(() => {
-      source.value;
-      return true;
-    })(notify);
-  }, [source]);
+  const subscribe = useCallback(
+    (notify: () => void) => {
+      const unsubscribe = subscribeLocalReadable(source, notify);
+      if (unsubscribe !== undefined) return unsubscribe;
+      // Structural readables from elsewhere need the effect bridge.
+      return createEffectBackedStoreSubscription(() => {
+        source.value;
+        return true;
+      })(notify);
+    },
+    [source],
+  );
 
   // A leaf subscription owns this read. An unmanaged useSignalTracking() scope may
   // still be open for an ancestor or earlier sibling until React commits, so
@@ -370,10 +334,7 @@ export function useSignalValue<T>(source: ReadonlySignal<T> & NotDeepSignal): T 
   // whose runtime-local `activeSub` is owned by `createReactiveRuntime()`.
   // A snapshot read during an RFSG effect or computed evaluation must use
   // `untracked()` so it cannot graft this source onto that subscriber.
-  const getSnapshot = useCallback(
-    () => untracked(() => source.value),
-    [source],
-  );
+  const getSnapshot = useCallback(() => untracked(() => source.value), [source]);
 
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }

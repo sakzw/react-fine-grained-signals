@@ -25,7 +25,14 @@ describe("JSX control flow utilities", () => {
       setLabel = updateLabel;
       return (
         <LabelContext.Provider value={label}>
-          <For each={rows} by={(row) => row}>{(row) => <><li>{`${label}:${row}`}</li><Label /></>}</For>
+          <For each={rows} by={(row) => row}>
+            {(row) => (
+              <>
+                <li>{`${label}:${row}`}</li>
+                <Label />
+              </>
+            )}
+          </For>
         </LabelContext.Provider>
       );
     }
@@ -114,11 +121,15 @@ describe("JSX control flow utilities", () => {
 
     render(
       <Switch fallback={<p>fallback</p>}>
-        <Match when={primary}><p>primary</p></Match>
+        <Match when={primary}>
+          <p>primary</p>
+        </Match>
         <Fragment>
           <Match when={secondary}>{(value) => <p>secondary:{String(value)}</p>}</Match>
         </Fragment>
-        <Match when={false}><p>later branch</p></Match>
+        <Match when={false}>
+          <p>later branch</p>
+        </Match>
       </Switch>,
     );
 
@@ -148,14 +159,30 @@ describe("JSX control flow utilities", () => {
     const value = signal<unknown>("list");
     const view = render(
       <Switch fallback={<p data-testid="equal-fallback">fallback</p>}>
-        <Match when={value} equals="list"><p data-testid="equal-result">list</p></Match>
-        <Match when={value} equals={0}><p data-testid="equal-result">zero</p></Match>
-        <Match when={value} equals={false}><p data-testid="equal-result">false</p></Match>
-        <Match when={value} equals=""><p data-testid="equal-result">empty string</p></Match>
-        <Match when={value} equals={null}><p data-testid="equal-result">null</p></Match>
-        <Match when={value} equals={undefined}><p data-testid="equal-result">undefined</p></Match>
-        <Match when={value} equals={Number.NaN}><p data-testid="equal-result">nan</p></Match>
-        <Match when={value} equals={-0}><p data-testid="equal-result">negative zero</p></Match>
+        <Match when={value} equals="list">
+          <p data-testid="equal-result">list</p>
+        </Match>
+        <Match when={value} equals={0}>
+          <p data-testid="equal-result">zero</p>
+        </Match>
+        <Match when={value} equals={false}>
+          <p data-testid="equal-result">false</p>
+        </Match>
+        <Match when={value} equals="">
+          <p data-testid="equal-result">empty string</p>
+        </Match>
+        <Match when={value} equals={null}>
+          <p data-testid="equal-result">null</p>
+        </Match>
+        <Match when={value} equals={undefined}>
+          <p data-testid="equal-result">undefined</p>
+        </Match>
+        <Match when={value} equals={Number.NaN}>
+          <p data-testid="equal-result">nan</p>
+        </Match>
+        <Match when={value} equals={-0}>
+          <p data-testid="equal-result">negative zero</p>
+        </Match>
       </Switch>,
     );
 
@@ -169,29 +196,39 @@ describe("JSX control flow utilities", () => {
       [Number.NaN, "nan"],
       [-0, "negative zero"],
     ] as const) {
-      act(() => { value.value = next; });
+      act(() => {
+        value.value = next;
+      });
       expect(screen.getByTestId("equal-result").textContent).toBe(expected);
     }
 
-    act(() => { value.value = +0; });
+    act(() => {
+      value.value = +0;
+    });
     expect(screen.getByTestId("equal-result").textContent).toBe("zero");
     view.unmount();
 
     const signedZero = signal(-0);
     const signedZeroView = render(
       <Switch fallback={<p data-testid="signed-zero-fallback">fallback</p>}>
-        <Match when={signedZero} equals={+0}><p>positive zero</p></Match>
+        <Match when={signedZero} equals={+0}>
+          <p>positive zero</p>
+        </Match>
       </Switch>,
     );
     expect(screen.getByTestId("signed-zero-fallback").textContent).toBe("fallback");
-    act(() => { signedZero.value = +0; });
+    act(() => {
+      signedZero.value = +0;
+    });
     expect(screen.getByText("positive zero")).toBeTruthy();
     signedZeroView.unmount();
 
     const undefinedValue = signal<undefined>(undefined);
     render(
       <Switch fallback={<p>fallback</p>}>
-        <Match when={undefinedValue}><p>legacy truthy</p></Match>
+        <Match when={undefinedValue}>
+          <p>legacy truthy</p>
+        </Match>
       </Switch>,
     );
     expect(screen.getByText("fallback")).toBeTruthy();
@@ -204,10 +241,16 @@ describe("JSX control flow utilities", () => {
 
     function Parent() {
       parentRenders();
-      return <Switch>
-        <Match when={viewValue} equals="list"><p data-testid="selected">list</p></Match>
-        <Match when={viewValue} equals="details"><Details /></Match>
-      </Switch>;
+      return (
+        <Switch>
+          <Match when={viewValue} equals="list">
+            <p data-testid="selected">list</p>
+          </Match>
+          <Match when={viewValue} equals="details">
+            <Details />
+          </Match>
+        </Switch>
+      );
     }
     function Details() {
       branchRenders();
@@ -217,11 +260,15 @@ describe("JSX control flow utilities", () => {
     const view = render(<Parent />);
     expect(parentRenders).toHaveBeenCalledTimes(1);
     expect(coreRuntime.hasSubscribers(viewValue)).toBe(true);
-    act(() => { viewValue.value = "details"; });
+    act(() => {
+      viewValue.value = "details";
+    });
     expect(screen.getByTestId("selected").textContent).toBe("details");
     expect(parentRenders).toHaveBeenCalledTimes(1);
     expect(branchRenders).toHaveBeenCalledTimes(1);
-    act(() => { viewValue.value = "list"; });
+    act(() => {
+      viewValue.value = "list";
+    });
     expect(screen.getByTestId("selected").textContent).toBe("list");
     expect(parentRenders).toHaveBeenCalledTimes(1);
     view.unmount();
@@ -232,8 +279,12 @@ describe("JSX control flow utilities", () => {
     const active = signal<"shared">("shared");
     function App({ reverse }: { reverse: boolean }) {
       const branches = [
-        <Match key="first" when={active} equals="shared"><p>first branch</p></Match>,
-        <Match key="second" when={active} equals="shared"><p>second branch</p></Match>,
+        <Match key="first" when={active} equals="shared">
+          <p>first branch</p>
+        </Match>,
+        <Match key="second" when={active} equals="shared">
+          <p>second branch</p>
+        </Match>,
       ];
       return <Switch>{reverse ? [branches[1], branches[0]] : branches}</Switch>;
     }
@@ -251,13 +302,21 @@ describe("JSX control flow utilities", () => {
     function DirectParent() {
       directParentRenders();
       useSignalTracking();
-      return <Switch>
-        <Match when={source.value === "list"}><p>list</p></Match>
-        <Match when={source.value === "details"}><p>details</p></Match>
-      </Switch>;
+      return (
+        <Switch>
+          <Match when={source.value === "list"}>
+            <p>list</p>
+          </Match>
+          <Match when={source.value === "details"}>
+            <p>details</p>
+          </Match>
+        </Switch>
+      );
     }
     const direct = render(<DirectParent />);
-    act(() => { source.value = "details"; });
+    act(() => {
+      source.value = "details";
+    });
     expect(directParentRenders.mock.calls.length).toBeGreaterThan(1);
     direct.unmount();
     await waitFor(() => expect(coreRuntime.hasSubscribers(source)).toBe(false));
@@ -267,14 +326,22 @@ describe("JSX control flow utilities", () => {
     const computedParentRenders = vi.fn();
     function ComputedParent() {
       computedParentRenders();
-      return <Switch>
-        <Match when={list}><p>list</p></Match>
-        <Match when={details}><p>details</p></Match>
-      </Switch>;
+      return (
+        <Switch>
+          <Match when={list}>
+            <p>list</p>
+          </Match>
+          <Match when={details}>
+            <p>details</p>
+          </Match>
+        </Switch>
+      );
     }
     const computedView = render(<ComputedParent />);
     const computedParentCount = computedParentRenders.mock.calls.length;
-    act(() => { source.value = "list"; });
+    act(() => {
+      source.value = "list";
+    });
     expect(computedParentRenders.mock.calls.length).toBe(computedParentCount);
     computedView.unmount();
     await waitFor(() => expect(coreRuntime.hasSubscribers(source)).toBe(false));
@@ -282,14 +349,22 @@ describe("JSX control flow utilities", () => {
     const equalsParentRenders = vi.fn();
     function EqualsParent() {
       equalsParentRenders();
-      return <Switch>
-        <Match when={source} equals="list"><p>list</p></Match>
-        <Match when={source} equals="details"><p>details</p></Match>
-      </Switch>;
+      return (
+        <Switch>
+          <Match when={source} equals="list">
+            <p>list</p>
+          </Match>
+          <Match when={source} equals="details">
+            <p>details</p>
+          </Match>
+        </Switch>
+      );
     }
     const equalsView = render(<EqualsParent />);
     const equalsParentCount = equalsParentRenders.mock.calls.length;
-    act(() => { source.value = "details"; });
+    act(() => {
+      source.value = "details";
+    });
     expect(screen.getByText("details")).toBeTruthy();
     expect(equalsParentRenders.mock.calls.length).toBe(equalsParentCount);
     equalsView.unmount();
@@ -299,15 +374,23 @@ describe("JSX control flow utilities", () => {
     function HookComputedParent() {
       hookParentRenders();
       const viewState = useComputed(() => source.value, []);
-      return <Switch>
-        <Match when={viewState} equals="list"><p>list</p></Match>
-        <Match when={viewState} equals="details"><p>details</p></Match>
-      </Switch>;
+      return (
+        <Switch>
+          <Match when={viewState} equals="list">
+            <p>list</p>
+          </Match>
+          <Match when={viewState} equals="details">
+            <p>details</p>
+          </Match>
+        </Switch>
+      );
     }
     const hookView = render(<HookComputedParent />);
     expect(screen.getByText("details")).toBeTruthy();
     const hookParentCount = hookParentRenders.mock.calls.length;
-    act(() => { source.value = "list"; });
+    act(() => {
+      source.value = "list";
+    });
     expect(screen.getByText("list")).toBeTruthy();
     expect(hookParentRenders.mock.calls.length).toBe(hookParentCount);
     hookView.unmount();
@@ -322,17 +405,27 @@ describe("JSX control flow utilities", () => {
     }
     function App({ useSignalValue, plain }: { useSignalValue: boolean; plain: "a" | "b" }) {
       const when = useSignalValue ? source : plain;
-      return <Switch fallback={<p>outer fallback</p>}>
-        <Match when={when} equals="a">
-          <Switch><Match when="a" equals="a"><Child /></Match></Switch>
-        </Match>
-        <Match when={when} equals="b"><p>branch B</p></Match>
-      </Switch>;
+      return (
+        <Switch fallback={<p>outer fallback</p>}>
+          <Match when={when} equals="a">
+            <Switch>
+              <Match when="a" equals="a">
+                <Child />
+              </Match>
+            </Switch>
+          </Match>
+          <Match when={when} equals="b">
+            <p>branch B</p>
+          </Match>
+        </Switch>
+      );
     }
 
     const view = render(<App useSignalValue plain="b" />);
     expect(screen.getByText("branch A")).toBeTruthy();
-    act(() => { source.value = "b"; });
+    act(() => {
+      source.value = "b";
+    });
     expect(screen.getByText("branch B")).toBeTruthy();
     expect(screen.queryByText("branch A")).toBeNull();
     view.rerender(<App useSignalValue={false} plain="a" />);
@@ -351,15 +444,25 @@ describe("JSX control flow utilities", () => {
     const parentRenders = vi.fn();
     function App() {
       parentRenders();
-      return <StrictMode><Switch>
-        <Match when={current} equals="list"><p data-testid="strict-match">list</p></Match>
-        <Match when={current} equals="details"><p data-testid="strict-match">details</p></Match>
-      </Switch></StrictMode>;
+      return (
+        <StrictMode>
+          <Switch>
+            <Match when={current} equals="list">
+              <p data-testid="strict-match">list</p>
+            </Match>
+            <Match when={current} equals="details">
+              <p data-testid="strict-match">details</p>
+            </Match>
+          </Switch>
+        </StrictMode>
+      );
     }
 
     const view = render(<App />);
     const before = parentRenders.mock.calls.length;
-    act(() => { current.value = "details"; });
+    act(() => {
+      current.value = "details";
+    });
     expect(screen.getByTestId("strict-match").textContent).toBe("details");
     expect(parentRenders.mock.calls.length).toBe(before);
     view.unmount();
@@ -368,25 +471,37 @@ describe("JSX control flow utilities", () => {
   it("closes the Switch tracking scope when a concurrent branch suspends or is abandoned", async () => {
     const mode = signal<"ready" | "suspend">("ready");
     let release!: () => void;
-    const pending = new Promise<void>((resolve) => { release = resolve; });
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     let shouldSuspend = false;
     function App() {
-      return <Suspense fallback={<p>pending branch</p>}>
-        <Switch>
-          <Match when={mode} equals="suspend">{() => {
-            if (shouldSuspend) throw pending;
-            return <p>stale suspended branch</p>;
-          }}</Match>
-          <Match when={mode} equals="ready"><p>ready branch</p></Match>
-        </Switch>
-      </Suspense>;
+      return (
+        <Suspense fallback={<p>pending branch</p>}>
+          <Switch>
+            <Match when={mode} equals="suspend">
+              {() => {
+                if (shouldSuspend) throw pending;
+                return <p>stale suspended branch</p>;
+              }}
+            </Match>
+            <Match when={mode} equals="ready">
+              <p>ready branch</p>
+            </Match>
+          </Switch>
+        </Suspense>
+      );
     }
 
     const view = render(<App />);
     shouldSuspend = true;
-    act(() => { mode.value = "suspend"; });
+    act(() => {
+      mode.value = "suspend";
+    });
     expect(screen.getByText("pending branch")).toBeTruthy();
-    act(() => { mode.value = "ready"; });
+    act(() => {
+      mode.value = "ready";
+    });
     expect(screen.getByText("ready branch")).toBeTruthy();
     await act(async () => {
       release();
@@ -421,21 +536,30 @@ describe("JSX control flow utilities", () => {
       </ul>,
     );
     const list = view.container.querySelector("ul")!;
-    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["a:Ada", "b:Bea", "c:Cy"]);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["a:Ada", "b:Bea", "c:Cy"]);
 
     act(() => {
       items.value = [items.value[2]!, items.value[0]!, items.value[1]!];
     });
-    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["c:Cy", "a:Ada", "b:Bea"]);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["c:Cy", "a:Ada", "b:Bea"]);
     const callsBeforeLeafUpdate = keyCalls.mock.calls.length;
 
     act(() => {
       items.value[0]!.label = "Cyra";
     });
-    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["c:Cyra", "a:Ada", "b:Bea"]);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["c:Cyra", "a:Ada", "b:Bea"]);
     expect(keyCalls).toHaveBeenCalledTimes(callsBeforeLeafUpdate);
 
     act(() => {
@@ -449,7 +573,9 @@ describe("JSX control flow utilities", () => {
 
     render(
       <ul>
-        <For each={items} by={(item) => item} fallback={<li>empty</li>}>{(item) => <li>{item}</li>}</For>
+        <For each={items} by={(item) => item} fallback={<li>empty</li>}>
+          {(item) => <li>{item}</li>}
+        </For>
       </ul>,
     );
     expect(screen.getAllByRole("listitem").map((item) => item.textContent)).toEqual(["Ada"]);
@@ -477,7 +603,9 @@ describe("JSX control flow utilities", () => {
     render(
       <>
         <ul data-testid="tags">
-          <For each={tags} by={(tag) => tag}>{(tag) => <li>{tag}</li>}</For>
+          <For each={tags} by={(tag) => tag}>
+            {(tag) => <li>{tag}</li>}
+          </For>
         </ul>
         <ul data-testid="users">
           <For each={users} by={([id]) => id}>
@@ -487,10 +615,16 @@ describe("JSX control flow utilities", () => {
       </>,
     );
 
-    expect(within(screen.getByTestId("tags")).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["react"]);
-    expect(within(screen.getByTestId("users")).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["ada:Ada"]);
+    expect(
+      within(screen.getByTestId("tags"))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["react"]);
+    expect(
+      within(screen.getByTestId("users"))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["ada:Ada"]);
 
     act(() => {
       tags.value = new Set(["signals", "react"]);
@@ -499,10 +633,16 @@ describe("JSX control flow utilities", () => {
         ["ada", { name: "Ada Lovelace" }],
       ]);
     });
-    expect(within(screen.getByTestId("tags")).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["signals", "react"]);
-    expect(within(screen.getByTestId("users")).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["bea:Bea", "ada:Ada Lovelace"]);
+    expect(
+      within(screen.getByTestId("tags"))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["signals", "react"]);
+    expect(
+      within(screen.getByTestId("users"))
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["bea:Bea", "ada:Ada Lovelace"]);
   });
 
   it("keeps Index row state at a position while its item changes", () => {
@@ -526,20 +666,29 @@ describe("JSX control flow utilities", () => {
       </ul>,
     );
     const list = view.container.querySelector("ul")!;
-    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["ada:Ada", "bea:Bea"]);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["ada:Ada", "bea:Bea"]);
 
     act(() => {
       items.value = [items.value[1]!, items.value[0]!];
     });
-    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["ada:Bea", "bea:Ada"]);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["ada:Bea", "bea:Ada"]);
 
     act(() => {
       items.value[0]!.name = "Beatrice";
     });
-    expect(within(list).getAllByRole("listitem").map((item) => item.textContent))
-      .toEqual(["ada:Beatrice", "bea:Ada"]);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((item) => item.textContent),
+    ).toEqual(["ada:Beatrice", "bea:Ada"]);
 
     act(() => {
       items.value = [];
@@ -604,8 +753,11 @@ describe("JSX control flow utilities", () => {
       </ul>,
     );
     const list = view.container.querySelector("ul")!;
-    expect(within(list).getAllByRole("listitem").map((entry) => entry.textContent))
-      .toEqual(["a", "b"]);
+    expect(
+      within(list)
+        .getAllByRole("listitem")
+        .map((entry) => entry.textContent),
+    ).toEqual(["a", "b"]);
 
     act(() => {
       rows.value = ["z", "b"];

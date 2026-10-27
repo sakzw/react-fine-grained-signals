@@ -35,7 +35,11 @@ function waitForNextTask(): Promise<void> {
 }
 
 /** Dispatch one native text input after bypassing React's programmatic value tracker. */
-function dispatchUserTextInput(node: HTMLInputElement | HTMLTextAreaElement, value: string, beforeDispatch?: () => void): void {
+function dispatchUserTextInput(
+  node: HTMLInputElement | HTMLTextAreaElement,
+  value: string,
+  beforeDispatch?: () => void,
+): void {
   const prototype = node instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
   const setter = Object.getOwnPropertyDescriptor(prototype, "value")?.set;
   if (!setter) throw new Error("The DOM text control has no native value setter.");
@@ -52,20 +56,22 @@ describe("Direct DOM binding", () => {
 
     function Field({ source }: { source: typeof level }) {
       ownerRenders += 1;
-      return <form aria-label="range binding form">
-        <input
-          aria-label="level"
-          type="range"
-          min="0"
-          max="100"
-          step="10"
-          bindValue={source}
-          onInput={(event) => events.push(`input:${event.currentTarget.value}:${level.value}`)}
-          onChange={(event) => events.push(`change:${event.currentTarget.value}:${level.value}`)}
-        />
-        <output aria-label="level output">{level}</output>
-        <output aria-label="range owner renders">{ownerRenders}</output>
-      </form>;
+      return (
+        <form aria-label="range binding form">
+          <input
+            aria-label="level"
+            type="range"
+            min="0"
+            max="100"
+            step="10"
+            bindValue={source}
+            onInput={(event) => events.push(`input:${event.currentTarget.value}:${level.value}`)}
+            onChange={(event) => events.push(`change:${event.currentTarget.value}:${level.value}`)}
+          />
+          <output aria-label="level output">{level}</output>
+          <output aria-label="range owner renders">{ownerRenders}</output>
+        </form>
+      );
     }
 
     const view = render(<Field source={level} />);
@@ -84,12 +90,17 @@ describe("Direct DOM binding", () => {
     expect(events).toEqual(["input:80:80", "change:80:80"]);
     expect(ownerRenders).toBe(1);
 
-    act(() => { level.value = "30"; });
+    act(() => {
+      level.value = "30";
+    });
     expect(input.value).toBe("30");
     expect(screen.getByLabelText("level output").textContent).toBe("30");
     expect(ownerRenders).toBe(1);
 
-    await act(async () => { form.reset(); await Promise.resolve(); });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
     expect(level.value).toBe("30");
     expect(input.value).toBe("30");
     expect(ownerRenders).toBe(1);
@@ -97,35 +108,41 @@ describe("Direct DOM binding", () => {
     const replacement = signal("60");
     view.rerender(<Field source={replacement} />);
     expect(input.value).toBe("60");
-    act(() => { level.value = "40"; });
+    act(() => {
+      level.value = "40";
+    });
     expect(input.value).toBe("60");
-    act(() => { replacement.value = "90"; });
+    act(() => {
+      replacement.value = "90";
+    });
     expect(input.value).toBe("90");
     expect(ownerRenders).toBe(2);
   });
 
   it("binds number inputs through the string value path without parsing or constraint normalization", async () => {
     const amount = signal("1.5");
-    const parsed = computed(() => amount.value === "" ? "empty" : String(Number(amount.value)));
+    const parsed = computed(() => (amount.value === "" ? "empty" : String(Number(amount.value))));
     const events: string[] = [];
     let ownerRenders = 0;
 
     function Field() {
       ownerRenders += 1;
-      return <form aria-label="number binding form">
-        <input
-          aria-label="number amount"
-          type="number"
-          min="0"
-          max="10"
-          step="0.5"
-          required
-          bindValue={amount}
-          onInput={(event) => events.push(`input:${event.currentTarget.value}:${amount.value}`)}
-          onChange={(event) => events.push(`change:${event.currentTarget.value}:${amount.value}`)}
-        />
-        <output aria-label="parsed amount">{parsed}</output>
-      </form>;
+      return (
+        <form aria-label="number binding form">
+          <input
+            aria-label="number amount"
+            type="number"
+            min="0"
+            max="10"
+            step="0.5"
+            required
+            bindValue={amount}
+            onInput={(event) => events.push(`input:${event.currentTarget.value}:${amount.value}`)}
+            onChange={(event) => events.push(`change:${event.currentTarget.value}:${amount.value}`)}
+          />
+          <output aria-label="parsed amount">{parsed}</output>
+        </form>
+      );
     }
 
     render(<Field />);
@@ -145,18 +162,25 @@ describe("Direct DOM binding", () => {
     expect(events).toEqual(["input:2.25:2.25", "change:2.25:2.25"]);
     expect(ownerRenders).toBe(1);
 
-    act(() => { amount.value = "12"; });
+    act(() => {
+      amount.value = "12";
+    });
     expect(input.value).toBe("12");
     expect(input.validity.rangeOverflow).toBe(true);
     expect(amount.value).toBe("12");
 
-    act(() => { amount.value = ""; });
+    act(() => {
+      amount.value = "";
+    });
     expect(input.value).toBe("");
     expect(input.validity.valueMissing).toBe(true);
     expect(screen.getByLabelText("parsed amount").textContent).toBe("empty");
     expect(amount.value).toBe("");
 
-    await act(async () => { form.reset(); await Promise.resolve(); });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
     expect(input.value).toBe("");
     expect(amount.value).toBe("");
     expect(ownerRenders).toBe(1);
@@ -198,10 +222,12 @@ describe("Direct DOM binding", () => {
     }
     function Box() {
       parentRenders();
-      return <>
-        {createSignalAwareElement(Label, undefined, "preserved child")}
-        {createSignalAwareElement("div", { "aria-label": "classic style", style: { color, width: 12 } })}
-      </>;
+      return (
+        <>
+          {createSignalAwareElement(Label, undefined, "preserved child")}
+          {createSignalAwareElement("div", { "aria-label": "classic style", style: { color, width: 12 } })}
+        </>
+      );
     }
 
     render(<Box />);
@@ -211,7 +237,9 @@ describe("Direct DOM binding", () => {
     expect(screen.getByLabelText("classic custom child").textContent).toBe("preserved child");
     expect(parentRenders).toHaveBeenCalledTimes(1);
 
-    act(() => { color.value = "mediumseagreen"; });
+    act(() => {
+      color.value = "mediumseagreen";
+    });
     expect(box.style.color).toBe("mediumseagreen");
     expect(parentRenders).toHaveBeenCalledTimes(1);
   });
@@ -225,7 +253,9 @@ describe("Direct DOM binding", () => {
         <>
           <div aria-label="HTML host" title={title} id={id} />
           <svg>
-            <title title={title} id={id}>SVG title element</title>
+            <title title={title} id={id}>
+              SVG title element
+            </title>
           </svg>
         </>
       </StrictMode>,
@@ -264,24 +294,39 @@ describe("Direct DOM binding", () => {
     const title = signal<string | null | undefined>(null);
     const id = signal<string | null | undefined>(undefined);
     function App({ mode }: { mode: "visible" | "hidden" }) {
-      return <Activity mode={mode}><div title={title} id={id} /></Activity>;
+      return (
+        <Activity mode={mode}>
+          <div title={title} id={id} />
+        </Activity>
+      );
     }
 
     const view = render(<App mode="visible" />);
     const node = view.container.querySelector("div")!;
-    act(() => { title.value = "before hide"; id.value = "before-hide"; });
+    act(() => {
+      title.value = "before hide";
+      id.value = "before-hide";
+    });
     expect(node.getAttribute("title")).toBe("before hide");
     expect(node.getAttribute("id")).toBe("before-hide");
 
     view.rerender(<App mode="hidden" />);
-    await act(async () => { await Promise.resolve(); });
-    act(() => { title.value = null; id.value = undefined; });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      title.value = null;
+      id.value = undefined;
+    });
     view.rerender(<App mode="visible" />);
     expect(view.container.querySelector("div")).toBe(node);
     expect(node.hasAttribute("title")).toBe(false);
     expect(node.hasAttribute("id")).toBe(false);
 
-    act(() => { title.value = "after reveal"; id.value = "after-reveal"; });
+    act(() => {
+      title.value = "after reveal";
+      id.value = "after-reveal";
+    });
     expect(node.getAttribute("title")).toBe("after reveal");
     expect(node.getAttribute("id")).toBe("after-reveal");
   });
@@ -291,14 +336,20 @@ describe("Direct DOM binding", () => {
     const id = signal<string | null | undefined>(undefined);
     let ready = false;
     let resolve!: () => void;
-    const gate = new Promise<void>((done) => { resolve = done; });
+    const gate = new Promise<void>((done) => {
+      resolve = done;
+    });
 
     function App() {
       if (!ready) throw gate;
       return <div title={title} id={id} />;
     }
 
-    const view = render(<Suspense fallback={<span>loading</span>}><App /></Suspense>);
+    const view = render(
+      <Suspense fallback={<span>loading</span>}>
+        <App />
+      </Suspense>,
+    );
     expect(view.container.querySelector("div")).toBeNull();
     await act(async () => {
       ready = true;
@@ -309,7 +360,10 @@ describe("Direct DOM binding", () => {
     const node = view.container.querySelector("div")!;
     expect(node.hasAttribute("title")).toBe(false);
     expect(node.hasAttribute("id")).toBe(false);
-    act(() => { title.value = "revealed"; id.value = "revealed-id"; });
+    act(() => {
+      title.value = "revealed";
+      id.value = "revealed-id";
+    });
     expect(node.getAttribute("title")).toBe("revealed");
     expect(node.getAttribute("id")).toBe("revealed-id");
   });
@@ -333,13 +387,7 @@ describe("Direct DOM binding", () => {
           >
             toggle
           </button>
-          <input
-            aria-label="bound field"
-            disabled={disabled}
-            hidden={hidden}
-            title={title}
-            data-state={dataState}
-          />
+          <input aria-label="bound field" disabled={disabled} hidden={hidden} title={title} data-state={dataState} />
         </>
       );
     }
@@ -452,9 +500,12 @@ describe("Direct DOM binding", () => {
     let propertyBinding = true;
 
     function Box() {
-      return <div aria-label="changing property style" style={propertyBinding
-        ? { color, width: 12 }
-        : { backgroundColor: "steelblue" }} />;
+      return (
+        <div
+          aria-label="changing property style"
+          style={propertyBinding ? { color, width: 12 } : { backgroundColor: "steelblue" }}
+        />
+      );
     }
 
     const view = render(<Box />);
@@ -468,7 +519,9 @@ describe("Direct DOM binding", () => {
     expect(box.style.width).toBe("");
     expect(box.style.backgroundColor).toBe("steelblue");
 
-    act(() => { color.value = "royalblue"; });
+    act(() => {
+      color.value = "royalblue";
+    });
     expect(box.style.color).toBe("");
     expect(box.style.backgroundColor).toBe("steelblue");
   });
@@ -574,7 +627,7 @@ describe("Direct DOM binding", () => {
     expect(box.style.background).toBe("");
   });
 
-  it("preserves the DOM-native \"until-found\" hidden value instead of coercing it to a boolean", () => {
+  it('preserves the DOM-native "until-found" hidden value instead of coercing it to a boolean', () => {
     // Regression test: the `hidden` content attribute also accepts the
     // keyword "until-found" (a collapsible, find-in-page-revealable hidden
     // state). `setDomProp`'s "hidden" case used to run every value through
@@ -615,7 +668,15 @@ describe("Direct DOM binding", () => {
     const text = signal("initial");
 
     function Field() {
-      return <input aria-label="field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return (
+        <input
+          aria-label="field"
+          bindValue={text}
+          onChange={(event) => {
+            text.value = event.target.value;
+          }}
+        />
+      );
     }
 
     render(<Field />);
@@ -667,9 +728,15 @@ describe("Direct DOM binding", () => {
   it("rejects implicit signal-valued form props and readonly binding sources", () => {
     const writable = signal("value");
     const readonly = computed(() => writable.value);
-    expect(() => createSignalAwareElement("input", { value: writable })).toThrow(/Use bindValue.*value\.value for signal props/);
-    expect(() => createSignalAwareElement("input", { checked: signal(true) })).toThrow(/Use bindChecked.*checked\.value for signal props/);
-    expect(() => createSignalAwareElement("input", { bindValue: readonly })).toThrow(/bindValue requires writable signal/);
+    expect(() => createSignalAwareElement("input", { value: writable })).toThrow(
+      /Use bindValue.*value\.value for signal props/,
+    );
+    expect(() => createSignalAwareElement("input", { checked: signal(true) })).toThrow(
+      /Use bindChecked.*checked\.value for signal props/,
+    );
+    expect(() => createSignalAwareElement("input", { bindValue: readonly })).toThrow(
+      /bindValue requires writable signal/,
+    );
     expect(() => createSignalAwareElement("input", { type: "radio", bindChecked: signal(false) })).toThrow(/checkbox/);
   });
 
@@ -677,19 +744,49 @@ describe("Direct DOM binding", () => {
     const text = signal("a");
     const checked = signal(true);
     const list = signal<string[]>(["a"]);
-    expect(() => createSignalAwareElement("input", { bindValue: text, value: "a" })).toThrow(/bindValue cannot be combined/);
-    expect(() => createSignalAwareElement("textarea", { bindValue: text, defaultValue: "a" })).toThrow(/bindValue cannot be combined/);
-    expect(() => createSignalAwareElement("select", { bindValue: text, defaultValue: "a" })).toThrow(/bindValue cannot be combined/);
-    expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, checked: true })).toThrow(/bindChecked cannot be combined/);
-    expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, defaultChecked: true })).toThrow(/bindChecked cannot be combined/);
-    expect(() => createSignalAwareElement("select", { multiple: true, bindValue: text })).toThrow(/Invalid select bindValue/);
+    expect(() => createSignalAwareElement("input", { bindValue: text, value: "a" })).toThrow(
+      /bindValue cannot be combined/,
+    );
+    expect(() => createSignalAwareElement("textarea", { bindValue: text, defaultValue: "a" })).toThrow(
+      /bindValue cannot be combined/,
+    );
+    expect(() => createSignalAwareElement("select", { bindValue: text, defaultValue: "a" })).toThrow(
+      /bindValue cannot be combined/,
+    );
+    expect(() => createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, checked: true })).toThrow(
+      /bindChecked cannot be combined/,
+    );
+    expect(() =>
+      createSignalAwareElement("input", { type: "checkbox", bindChecked: checked, defaultChecked: true }),
+    ).toThrow(/bindChecked cannot be combined/);
+    expect(() => createSignalAwareElement("select", { multiple: true, bindValue: text })).toThrow(
+      /Invalid select bindValue/,
+    );
     expect(() => createSignalAwareElement("select", { bindValue: list })).toThrow(/Invalid select bindValue/);
-    expect(() => createSignalAwareElement("input", { type: "date", bindValue: text })).toThrow(/text-like, number, or range input\/textarea\/select only/);
-    expect(() => createSignalAwareElement("input", { type: "radio", value: "a", bindValue: text })).toThrow(/requires a non-empty name/);
-    expect(() => createSignalAwareElement("input", { type: "radio", name: "choice", value: "a", bindValue: list })).toThrow(/Radio bindValue requires a string/);
-    expect(() => createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: text })).toThrow(/array of strings/);
-    expect(() => createSignalAwareElement("input", { type: "radio", name: "choice", value: "a", defaultChecked: true, bindValue: text })).toThrow(/cannot be combined/);
-    expect(() => createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: list, bindChecked: checked })).toThrow(/cannot be combined/);
+    expect(() => createSignalAwareElement("input", { type: "date", bindValue: text })).toThrow(
+      /text-like, number, or range input\/textarea\/select only/,
+    );
+    expect(() => createSignalAwareElement("input", { type: "radio", value: "a", bindValue: text })).toThrow(
+      /requires a non-empty name/,
+    );
+    expect(() =>
+      createSignalAwareElement("input", { type: "radio", name: "choice", value: "a", bindValue: list }),
+    ).toThrow(/Radio bindValue requires a string/);
+    expect(() => createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: text })).toThrow(
+      /array of strings/,
+    );
+    expect(() =>
+      createSignalAwareElement("input", {
+        type: "radio",
+        name: "choice",
+        value: "a",
+        defaultChecked: true,
+        bindValue: text,
+      }),
+    ).toThrow(/cannot be combined/);
+    expect(() =>
+      createSignalAwareElement("input", { type: "checkbox", value: "a", bindValue: list, bindChecked: checked }),
+    ).toThrow(/cannot be combined/);
   });
 
   it("does not let an unrelated re-render move the caret on a direct-bound value", () => {
@@ -699,7 +796,15 @@ describe("Direct DOM binding", () => {
     function Field() {
       useSignalTracking();
       void bump.value;
-      return <input aria-label="field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return (
+        <input
+          aria-label="field"
+          bindValue={text}
+          onChange={(event) => {
+            text.value = event.target.value;
+          }}
+        />
+      );
     }
 
     render(<Field />);
@@ -736,7 +841,9 @@ describe("Direct DOM binding", () => {
     input.focus();
     input.setSelectionRange(2, 4, "backward");
 
-    act(() => { text.value = "uvwxyz"; });
+    act(() => {
+      text.value = "uvwxyz";
+    });
     expect(input.value).toBe("uvwxyz");
     expect(input.selectionStart).toBe(2);
     expect(input.selectionEnd).toBe(4);
@@ -747,7 +854,15 @@ describe("Direct DOM binding", () => {
     const text = signal("abc");
 
     function Field() {
-      return <input aria-label="ime field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return (
+        <input
+          aria-label="ime field"
+          bindValue={text}
+          onChange={(event) => {
+            text.value = event.target.value;
+          }}
+        />
+      );
     }
 
     render(<Field />);
@@ -782,7 +897,9 @@ describe("Direct DOM binding", () => {
           type="checkbox"
           aria-label="agree"
           bindChecked={checked}
-          onChange={(event) => { checked.value = event.target.checked; }}
+          onChange={(event) => {
+            checked.value = event.target.checked;
+          }}
         />
       );
     }
@@ -811,7 +928,9 @@ describe("Direct DOM binding", () => {
         type="checkbox"
         aria-label="seen"
         bindChecked={checked}
-        onChange={(event) => { seen.push([event.target.checked, checked.value]); }}
+        onChange={(event) => {
+          seen.push([event.target.checked, checked.value]);
+        }}
       />,
     );
     fireEvent.click(screen.getByLabelText("seen"));
@@ -822,19 +941,25 @@ describe("Direct DOM binding", () => {
     const agree = signal(false);
     const choice = signal("a");
     const tags = signal<string[]>(["x"]);
-    const cancel = (event: { preventDefault(): void }) => { event.preventDefault(); };
-    render(<form>
-      <input type="checkbox" aria-label="agree" bindChecked={agree} onClick={cancel} />
-      <input type="radio" name="choice" value="a" aria-label="choice a" bindValue={choice} />
-      <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onClick={cancel} />
-      <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} />
-      <input type="checkbox" name="tags" value="y" aria-label="tag y" bindValue={tags} onClick={cancel} />
-    </form>);
+    const cancel = (event: { preventDefault(): void }) => {
+      event.preventDefault();
+    };
+    render(
+      <form>
+        <input type="checkbox" aria-label="agree" bindChecked={agree} onClick={cancel} />
+        <input type="radio" name="choice" value="a" aria-label="choice a" bindValue={choice} />
+        <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onClick={cancel} />
+        <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} />
+        <input type="checkbox" name="tags" value="y" aria-label="tag y" bindValue={tags} onClick={cancel} />
+      </form>,
+    );
 
     fireEvent.click(screen.getByLabelText("agree"));
     fireEvent.click(screen.getByLabelText("choice b"));
     fireEvent.click(screen.getByLabelText("tag y"));
-    await act(async () => { await waitForNextTask(); });
+    await act(async () => {
+      await waitForNextTask();
+    });
 
     expect(agree.value).toBe(false);
     expect((screen.getByLabelText("agree") as HTMLInputElement).checked).toBe(false);
@@ -845,13 +970,26 @@ describe("Direct DOM binding", () => {
     expect((screen.getByLabelText("tag y") as HTMLInputElement).checked).toBe(false);
 
     // Cancel now, accept after a later confirmation: the deferred write wins.
-    render(<input type="checkbox" aria-label="manual" bindChecked={agree} onClick={(event) => {
-      event.preventDefault();
-      setTimeout(() => { agree.value = true; }, 0);
-    }} />);
+    render(
+      <input
+        type="checkbox"
+        aria-label="manual"
+        bindChecked={agree}
+        onClick={(event) => {
+          event.preventDefault();
+          setTimeout(() => {
+            agree.value = true;
+          }, 0);
+        }}
+      />,
+    );
     fireEvent.click(screen.getByLabelText("manual"));
-    await act(async () => { await waitForNextTask(); });
-    await act(async () => { await waitForNextTask(); });
+    await act(async () => {
+      await waitForNextTask();
+    });
+    await act(async () => {
+      await waitForNextTask();
+    });
     expect(agree.value).toBe(true);
     expect((screen.getByLabelText("manual") as HTMLInputElement).checked).toBe(true);
   });
@@ -866,10 +1004,12 @@ describe("Direct DOM binding", () => {
 
     function Field() {
       renders();
-      return <form aria-label="radio group">
-        <input type="radio" name="choice" value="a" aria-label="choice a" bindValue={choice} onChange={changes} />
-        <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onChange={changes} />
-      </form>;
+      return (
+        <form aria-label="radio group">
+          <input type="radio" name="choice" value="a" aria-label="choice a" bindValue={choice} onChange={changes} />
+          <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onChange={changes} />
+        </form>
+      );
     }
 
     render(<Field />);
@@ -878,7 +1018,9 @@ describe("Direct DOM binding", () => {
     expect(a.checked).toBe(false);
     expect(b.checked).toBe(true);
 
-    act(() => { choice.value = "a"; });
+    act(() => {
+      choice.value = "a";
+    });
     expect(a.checked).toBe(true);
     expect(b.checked).toBe(false);
     const ownerRenders = renders.mock.calls.length;
@@ -896,21 +1038,31 @@ describe("Direct DOM binding", () => {
   it("rejects distinct binding sources inside one native radio group", () => {
     const selectedA = signal("a");
     const selectedB = signal("b");
-    expect(() => render(<form aria-label="radio source mismatch">
-      <input type="radio" name="mismatch" value="a" aria-label="mismatch a" bindValue={selectedA} />
-      <input type="radio" name="mismatch" value="b" aria-label="mismatch b" bindValue={selectedB} />
-    </form>)).toThrow("Radio bindValue controls in the same native group must share one signal.");
+    expect(() =>
+      render(
+        <form aria-label="radio source mismatch">
+          <input type="radio" name="mismatch" value="a" aria-label="mismatch a" bindValue={selectedA} />
+          <input type="radio" name="mismatch" value="b" aria-label="mismatch b" bindValue={selectedB} />
+        </form>,
+      ),
+    ).toThrow("Radio bindValue controls in the same native group must share one signal.");
   });
 
   it("disposes bindings mounted before a later binding on the same node throws", async () => {
     const selectedA = signal("a");
     const selectedB = signal("b");
     const title = signal("t0");
-    expect(() => render(<form>
-      <input type="radio" name="partial" value="a" bindValue={selectedA} />
-      <input type="radio" name="partial" value="b" title={title} bindValue={selectedB} />
-    </form>)).toThrow("Radio bindValue controls in the same native group must share one signal.");
-    await act(async () => { await waitForNextTask(); });
+    expect(() =>
+      render(
+        <form>
+          <input type="radio" name="partial" value="a" bindValue={selectedA} />
+          <input type="radio" name="partial" value="b" title={title} bindValue={selectedB} />
+        </form>,
+      ),
+    ).toThrow("Radio bindValue controls in the same native group must share one signal.");
+    await act(async () => {
+      await waitForNextTask();
+    });
     expect(coreRuntime.hasSubscribers(title)).toBe(false);
   });
 
@@ -920,13 +1072,17 @@ describe("Direct DOM binding", () => {
     function Field() {
       const [useSourceB, setUseSourceB] = useState(false);
       const source = useSourceB ? sourceB : sourceA;
-      return <StrictMode>
-        <form aria-label="radio source switch">
-          <input type="radio" name="source-switch" value="a" aria-label="source switch a" bindValue={source} />
-          <input type="radio" name="source-switch" value="b" aria-label="source switch b" bindValue={source} />
-          <button type="button" aria-label="switch radio source" onClick={() => setUseSourceB(true)}>Switch</button>
-        </form>
-      </StrictMode>;
+      return (
+        <StrictMode>
+          <form aria-label="radio source switch">
+            <input type="radio" name="source-switch" value="a" aria-label="source switch a" bindValue={source} />
+            <input type="radio" name="source-switch" value="b" aria-label="source switch b" bindValue={source} />
+            <button type="button" aria-label="switch radio source" onClick={() => setUseSourceB(true)}>
+              Switch
+            </button>
+          </form>
+        </StrictMode>
+      );
     }
 
     render(<Field />);
@@ -942,30 +1098,44 @@ describe("Direct DOM binding", () => {
   it("allows replacing a detached radio group member with a different source in one commit", async () => {
     const selectedA = signal("a");
     const selectedB = signal("b");
-    const view = render(<form aria-label="radio replacement">
-      <input key="old" type="radio" name="replace" value="a" aria-label="old radio" bindValue={selectedA} />
-    </form>);
+    const view = render(
+      <form aria-label="radio replacement">
+        <input key="old" type="radio" name="replace" value="a" aria-label="old radio" bindValue={selectedA} />
+      </form>,
+    );
 
-    view.rerender(<form aria-label="radio replacement">
-      <input key="new" type="radio" name="replace" value="b" aria-label="new radio" bindValue={selectedB} />
-    </form>);
-    await act(async () => { await Promise.resolve(); });
+    view.rerender(
+      <form aria-label="radio replacement">
+        <input key="new" type="radio" name="replace" value="b" aria-label="new radio" bindValue={selectedB} />
+      </form>,
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     const replacement = screen.getByLabelText("new radio") as HTMLInputElement;
     expect(replacement.checked).toBe(true);
     fireEvent.click(replacement);
     expect(selectedB.value).toBe("b");
-    act(() => { selectedA.value = "a"; });
+    act(() => {
+      selectedA.value = "a";
+    });
     expect(replacement.checked).toBe(true);
   });
 
   it("keeps same-name radios with different form owners independent", () => {
     const first = signal("a");
     const second = signal("b");
-    render(<>
-      <form aria-label="first radio owner"><input type="radio" name="choice" value="a" aria-label="first radio" bindValue={first} /></form>
-      <form aria-label="second radio owner"><input type="radio" name="choice" value="b" aria-label="second radio" bindValue={second} /></form>
-    </>);
+    render(
+      <>
+        <form aria-label="first radio owner">
+          <input type="radio" name="choice" value="a" aria-label="first radio" bindValue={first} />
+        </form>
+        <form aria-label="second radio owner">
+          <input type="radio" name="choice" value="b" aria-label="second radio" bindValue={second} />
+        </form>
+      </>,
+    );
     const a = screen.getByLabelText("first radio") as HTMLInputElement;
     const b = screen.getByLabelText("second radio") as HTMLInputElement;
     expect([a.checked, b.checked]).toEqual([true, true]);
@@ -977,10 +1147,16 @@ describe("Direct DOM binding", () => {
 
   it("refreshes one shared radio signal across different native form owners", () => {
     const selected = signal("a");
-    render(<>
-      <form aria-label="shared first owner"><input type="radio" name="choice" value="a" aria-label="shared first radio" bindValue={selected} /></form>
-      <form aria-label="shared second owner"><input type="radio" name="choice" value="b" aria-label="shared second radio" bindValue={selected} /></form>
-    </>);
+    render(
+      <>
+        <form aria-label="shared first owner">
+          <input type="radio" name="choice" value="a" aria-label="shared first radio" bindValue={selected} />
+        </form>
+        <form aria-label="shared second owner">
+          <input type="radio" name="choice" value="b" aria-label="shared second radio" bindValue={selected} />
+        </form>
+      </>,
+    );
     const a = screen.getByLabelText("shared first radio") as HTMLInputElement;
     const b = screen.getByLabelText("shared second radio") as HTMLInputElement;
     expect([a.checked, b.checked]).toEqual([true, false]);
@@ -999,8 +1175,21 @@ describe("Direct DOM binding", () => {
     const hostB = document.createElement("div");
     form.append(hostA, hostB);
     document.body.appendChild(form);
-    const rootA = render(<input type="radio" name="cross-root" value="a" aria-label="cross root a" bindValue={selected} />, { container: hostA });
-    const rootB = render(<input type="radio" name="cross-root" value="b" aria-label="cross root b" bindValue={selected} onChange={changes} />, { container: hostB });
+    const rootA = render(
+      <input type="radio" name="cross-root" value="a" aria-label="cross root a" bindValue={selected} />,
+      { container: hostA },
+    );
+    const rootB = render(
+      <input
+        type="radio"
+        name="cross-root"
+        value="b"
+        aria-label="cross root b"
+        bindValue={selected}
+        onChange={changes}
+      />,
+      { container: hostB },
+    );
     const a = screen.getByLabelText("cross root a") as HTMLInputElement;
     const b = screen.getByLabelText("cross root b") as HTMLInputElement;
     expect([a.checked, b.checked]).toEqual([true, false]);
@@ -1022,10 +1211,21 @@ describe("Direct DOM binding", () => {
     document.body.append(firstForm, secondForm);
     function Field() {
       const [owner, setOwner] = useState(firstForm.id);
-      return <>
-        <button aria-label="move reset owner" onClick={() => setOwner(secondForm.id)}>Move</button>
-        <input type="radio" form={owner} name="owner-switch" value="a" aria-label="owner switched radio" bindValue={selected} />
-      </>;
+      return (
+        <>
+          <button aria-label="move reset owner" onClick={() => setOwner(secondForm.id)}>
+            Move
+          </button>
+          <input
+            type="radio"
+            form={owner}
+            name="owner-switch"
+            value="a"
+            aria-label="owner switched radio"
+            bindValue={selected}
+          />
+        </>
+      );
     }
     const result = render(<Field />);
     const radio = screen.getByLabelText("owner switched radio") as HTMLInputElement;
@@ -1058,11 +1258,27 @@ describe("Direct DOM binding", () => {
       expect(selected.value.includes(event.currentTarget.value)).toBe(event.currentTarget.checked);
     });
 
-    render(<form aria-label="checkbox group">
-      <input type="checkbox" name="features" value="a" aria-label="feature a" bindValue={selected} onChange={changes} />
-      <input type="checkbox" name="features" value="b" aria-label="feature b" bindValue={selected} onChange={changes} />
-      <input type="checkbox" name="features" value="c" aria-label="feature c" bindValue={selected} disabled />
-    </form>);
+    render(
+      <form aria-label="checkbox group">
+        <input
+          type="checkbox"
+          name="features"
+          value="a"
+          aria-label="feature a"
+          bindValue={selected}
+          onChange={changes}
+        />
+        <input
+          type="checkbox"
+          name="features"
+          value="b"
+          aria-label="feature b"
+          bindValue={selected}
+          onChange={changes}
+        />
+        <input type="checkbox" name="features" value="c" aria-label="feature c" bindValue={selected} disabled />
+      </form>,
+    );
     const a = screen.getByLabelText("feature a") as HTMLInputElement;
     const b = screen.getByLabelText("feature b") as HTMLInputElement;
     const c = screen.getByLabelText("feature c") as HTMLInputElement;
@@ -1078,7 +1294,9 @@ describe("Direct DOM binding", () => {
     expect(selected.value).toEqual(["a"]);
     expect(changes).toHaveBeenCalledTimes(2);
 
-    act(() => { selected.value = ["c", "b"]; });
+    act(() => {
+      selected.value = ["c", "b"];
+    });
     expect([a.checked, b.checked, c.checked]).toEqual([false, true, true]);
     const data = new FormData(screen.getByLabelText("checkbox group") as HTMLFormElement);
     expect(data.getAll("features")).toEqual(["b"]);
@@ -1087,12 +1305,14 @@ describe("Direct DOM binding", () => {
   it("uses the latest accepted group signal values as form reset defaults", async () => {
     const choice = signal("a");
     const selected = signal<string[]>(["x"]);
-    render(<form aria-label="group reset form">
-      <input type="radio" name="choice" value="a" aria-label="reset radio a" bindValue={choice} />
-      <input type="radio" name="choice" value="b" aria-label="reset radio b" bindValue={choice} />
-      <input type="checkbox" name="features" value="x" aria-label="reset feature x" bindValue={selected} />
-      <input type="checkbox" name="features" value="y" aria-label="reset feature y" bindValue={selected} />
-    </form>);
+    render(
+      <form aria-label="group reset form">
+        <input type="radio" name="choice" value="a" aria-label="reset radio a" bindValue={choice} />
+        <input type="radio" name="choice" value="b" aria-label="reset radio b" bindValue={choice} />
+        <input type="checkbox" name="features" value="x" aria-label="reset feature x" bindValue={selected} />
+        <input type="checkbox" name="features" value="y" aria-label="reset feature y" bindValue={selected} />
+      </form>,
+    );
     const form = screen.getByLabelText("group reset form") as HTMLFormElement;
     const radioB = screen.getByLabelText("reset radio b") as HTMLInputElement;
     const checkboxY = screen.getByLabelText("reset feature y") as HTMLInputElement;
@@ -1101,7 +1321,10 @@ describe("Direct DOM binding", () => {
     fireEvent.click(checkboxY);
     expect(choice.value).toBe("b");
     expect(selected.value).toEqual(["x", "y"]);
-    await act(async () => { form.reset(); await Promise.resolve(); });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
     expect(radioB.checked).toBe(true);
     expect(checkboxY.checked).toBe(true);
     expect(choice.value).toBe("b");
@@ -1112,22 +1335,35 @@ describe("Direct DOM binding", () => {
     const accepted = signal("a");
     const choice = computed({
       get: () => accepted.value,
-      set: (next: string) => { if (next === "a") accepted.value = next; },
+      set: (next: string) => {
+        if (next === "a") accepted.value = next;
+      },
     });
     const changes = vi.fn((event: ChangeEvent<HTMLInputElement>) => {
       expect(event.currentTarget.value).toBe("b");
       expect(event.currentTarget.checked).toBe(true);
     });
-    render(<>
-      <input type="radio" name="rejecting choice" value="a" aria-label="accepted radio" bindValue={choice} />
-      <input type="radio" name="rejecting choice" value="b" aria-label="rejected radio" bindValue={choice} onChange={changes} />
-    </>);
+    render(
+      <>
+        <input type="radio" name="rejecting choice" value="a" aria-label="accepted radio" bindValue={choice} />
+        <input
+          type="radio"
+          name="rejecting choice"
+          value="b"
+          aria-label="rejected radio"
+          bindValue={choice}
+          onChange={changes}
+        />
+      </>,
+    );
     const a = screen.getByLabelText("accepted radio") as HTMLInputElement;
     const b = screen.getByLabelText("rejected radio") as HTMLInputElement;
     fireEvent.click(b);
     expect(changes).toHaveBeenCalledTimes(1);
     expect(b.checked).toBe(true);
-    await act(async () => { await waitForNextTask(); });
+    await act(async () => {
+      await waitForNextTask();
+    });
     expect(choice.value).toBe("a");
     expect(a.checked).toBe(true);
     expect(b.checked).toBe(false);
@@ -1137,44 +1373,59 @@ describe("Direct DOM binding", () => {
     const accepted = signal("a");
     const rejecting = computed({
       get: () => accepted.value,
-      set: (next: string) => { if (next === "a") accepted.value = next; },
+      set: (next: string) => {
+        if (next === "a") accepted.value = next;
+      },
     });
     const replacement = signal("b");
     const useReplacement = signal(false);
     function Field() {
       useSignalTracking();
       const source = useReplacement.value ? replacement : rejecting;
-      return <input
-        type="radio"
-        name="replaceable choice"
-        value="b"
-        aria-label="replaceable radio"
-        bindValue={source}
-        onChange={() => { useReplacement.value = true; }}
-      />;
+      return (
+        <input
+          type="radio"
+          name="replaceable choice"
+          value="b"
+          aria-label="replaceable radio"
+          bindValue={source}
+          onChange={() => {
+            useReplacement.value = true;
+          }}
+        />
+      );
     }
     render(<Field />);
     const input = screen.getByLabelText("replaceable radio") as HTMLInputElement;
     expect(input.checked).toBe(false);
     fireEvent.click(input);
     expect(useReplacement.value).toBe(true);
-    await act(async () => { await waitForNextTask(); });
+    await act(async () => {
+      await waitForNextTask();
+    });
     expect(input.checked).toBe(true);
     expect(replacement.value).toBe("b");
   });
 
   it("keeps checkbox group reset aligned with the latest signal selection", async () => {
     const selected = signal<string[]>(["a"]);
-    render(<form aria-label="checkbox group reset">
-      <input type="checkbox" name="items" value="a" aria-label="reset item a" bindValue={selected} />
-      <input type="checkbox" name="items" value="b" aria-label="reset item b" bindValue={selected} />
-    </form>);
+    render(
+      <form aria-label="checkbox group reset">
+        <input type="checkbox" name="items" value="a" aria-label="reset item a" bindValue={selected} />
+        <input type="checkbox" name="items" value="b" aria-label="reset item b" bindValue={selected} />
+      </form>,
+    );
     const form = screen.getByLabelText("checkbox group reset") as HTMLFormElement;
     const a = screen.getByLabelText("reset item a") as HTMLInputElement;
     const b = screen.getByLabelText("reset item b") as HTMLInputElement;
-    act(() => { selected.value = ["b"]; });
+    act(() => {
+      selected.value = ["b"];
+    });
     expect([a.checked, b.checked]).toEqual([false, true]);
-    await act(async () => { form.reset(); await Promise.resolve(); });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
     expect(selected.value).toEqual(["b"]);
     expect([a.checked, b.checked]).toEqual([false, true]);
   });
@@ -1191,21 +1442,39 @@ describe("Direct DOM binding", () => {
       },
     });
     const checkedSource = signal(false);
-    const checked = computed({ get: () => checkedSource.value, set: (value) => { checkedSource.value = value; } });
+    const checked = computed({
+      get: () => checkedSource.value,
+      set: (value) => {
+        checkedSource.value = value;
+      },
+    });
     const selectedSource = signal("a");
-    const selected = computed({ get: () => selectedSource.value, set: (value) => { selectedSource.value = value; } });
+    const selected = computed({
+      get: () => selectedSource.value,
+      set: (value) => {
+        selectedSource.value = value;
+      },
+    });
     const manySource = signal<string[]>(["a"]);
-    const many = computed({ get: () => manySource.value, set: (value) => { manySource.value = value; } });
+    const many = computed({
+      get: () => manySource.value,
+      set: (value) => {
+        manySource.value = value;
+      },
+    });
 
     render(
       <form aria-label="writable computed form">
         <input aria-label="full name" bindValue={fullName} />
         <input type="checkbox" aria-label="writable checked" bindChecked={checked} />
         <select aria-label="writable single select" bindValue={selected}>
-          <option value="a">A</option><option value="b">B</option>
+          <option value="a">A</option>
+          <option value="b">B</option>
         </select>
         <select aria-label="writable multiple select" multiple bindValue={many}>
-          <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
         </select>
       </form>,
     );
@@ -1238,7 +1507,11 @@ describe("Direct DOM binding", () => {
     multiple.options[2]!.selected = true;
     fireEvent.change(multiple);
     expect([first.value, last.value, checkedSource.value, selectedSource.value, manySource.value]).toEqual([
-      "Grace", "Hopper", false, "a", ["a", "c"],
+      "Grace",
+      "Hopper",
+      false,
+      "a",
+      ["a", "c"],
     ]);
   });
 
@@ -1252,8 +1525,12 @@ describe("Direct DOM binding", () => {
     });
 
     const observedEvents: string[] = [];
-    const onChange = vi.fn((event: ChangeEvent<HTMLInputElement>) => observedEvents.push(`change:${event.currentTarget.value}`));
-    const onInput = vi.fn((event: ReactInputEvent<HTMLInputElement>) => observedEvents.push(`input:${event.currentTarget.value}`));
+    const onChange = vi.fn((event: ChangeEvent<HTMLInputElement>) =>
+      observedEvents.push(`change:${event.currentTarget.value}`),
+    );
+    const onInput = vi.fn((event: ReactInputEvent<HTMLInputElement>) =>
+      observedEvents.push(`input:${event.currentTarget.value}`),
+    );
     render(<input aria-label="digits" bindValue={digits} onChange={onChange} onInput={onInput} />);
     const input = screen.getByLabelText("digits") as HTMLInputElement;
     let changesDuringEvent = 0;
@@ -1277,25 +1554,33 @@ describe("Direct DOM binding", () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
-      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+      set: (next: string) => {
+        if (/^\d+$/.test(next)) source.value = next;
+      },
     });
     const replacement = signal("123x");
 
     function RebindingInput() {
       const [useReplacement, setUseReplacement] = useState(false);
-      return <input
-        aria-label="rebound computed input"
-        bindValue={useReplacement ? replacement : digits}
-        onChange={() => setUseReplacement(true)}
-      />;
+      return (
+        <input
+          aria-label="rebound computed input"
+          bindValue={useReplacement ? replacement : digits}
+          onChange={() => setUseReplacement(true)}
+        />
+      );
     }
 
     render(<RebindingInput />);
     const input = screen.getByLabelText("rebound computed input") as HTMLInputElement;
-    await act(async () => { dispatchUserTextInput(input, "123x"); });
+    await act(async () => {
+      dispatchUserTextInput(input, "123x");
+    });
     expect(input.value).toBe("123x");
 
-    await act(async () => { await waitForNextTask(); });
+    await act(async () => {
+      await waitForNextTask();
+    });
     expect(replacement.value).toBe("123x");
     expect(input.value).toBe("123x");
   });
@@ -1303,12 +1588,14 @@ describe("Direct DOM binding", () => {
   it("preserves React onChange for one accepted direct text input", async () => {
     const text = signal("before");
     const events: string[] = [];
-    render(<input
-      aria-label="accepted event"
-      bindValue={text}
-      onInput={(event) => events.push(`input:${event.currentTarget.value}`)}
-      onChange={(event) => events.push(`change:${event.currentTarget.value}`)}
-    />);
+    render(
+      <input
+        aria-label="accepted event"
+        bindValue={text}
+        onInput={(event) => events.push(`input:${event.currentTarget.value}`)}
+        onChange={(event) => events.push(`change:${event.currentTarget.value}`)}
+      />,
+    );
     let eventsDuringInput: string[] = [];
     await act(async () => {
       dispatchUserTextInput(screen.getByLabelText("accepted event") as HTMLInputElement, "typed");
@@ -1324,7 +1611,9 @@ describe("Direct DOM binding", () => {
     const source = signal("ABC");
     const normalized = computed({
       get: () => source.value,
-      set: (next: string) => { source.value = next.trim().toUpperCase(); },
+      set: (next: string) => {
+        source.value = next.trim().toUpperCase();
+      },
     });
     const onChange = vi.fn();
     const onInput = vi.fn();
@@ -1352,7 +1641,9 @@ describe("Direct DOM binding", () => {
     const source = signal("before");
     const normalized = computed({
       get: () => source.value,
-      set: (next: string) => { source.value = next.trim().toUpperCase(); },
+      set: (next: string) => {
+        source.value = next.trim().toUpperCase();
+      },
     });
     const onChange = vi.fn();
     render(<input aria-label="normalized changed text" bindValue={normalized} onChange={onChange} />);
@@ -1374,7 +1665,9 @@ describe("Direct DOM binding", () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
-      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+      set: (next: string) => {
+        if (/^\d+$/.test(next)) source.value = next;
+      },
     });
     const onChange = vi.fn();
     render(<textarea aria-label="computed textarea" bindValue={digits} onChange={onChange} />);
@@ -1400,7 +1693,9 @@ describe("Direct DOM binding", () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
-      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+      set: (next: string) => {
+        if (/^\d+$/.test(next)) source.value = next;
+      },
     });
     render(<input aria-label="composing digits" bindValue={digits} />);
     const input = screen.getByLabelText("composing digits") as HTMLInputElement;
@@ -1419,7 +1714,9 @@ describe("Direct DOM binding", () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
-      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+      set: (next: string) => {
+        if (/^\d+$/.test(next)) source.value = next;
+      },
     });
     render(<input aria-label="queued composing digits" bindValue={digits} />);
     const input = screen.getByLabelText("queued composing digits") as HTMLInputElement;
@@ -1440,29 +1737,41 @@ describe("Direct DOM binding", () => {
     const checkedSource = signal(true);
     const checked = computed({
       get: () => checkedSource.value,
-      set: (next: boolean) => { if (next) checkedSource.value = next; },
+      set: (next: boolean) => {
+        if (next) checkedSource.value = next;
+      },
     });
     const singleSource = signal("b");
     const single = computed({
       get: () => singleSource.value,
-      set: (next: string) => { if (next === "c") singleSource.value = next; },
+      set: (next: string) => {
+        if (next === "c") singleSource.value = next;
+      },
     });
     const multipleSource = signal<string[]>(["a"]);
     const multiple = computed({
       get: () => multipleSource.value,
-      set: (next: string[]) => { if (next.length > 0 && next.every((value) => value !== "b")) multipleSource.value = next; },
+      set: (next: string[]) => {
+        if (next.length > 0 && next.every((value) => value !== "b")) multipleSource.value = next;
+      },
     });
     const checkboxChange = vi.fn();
 
-    render(<>
-      <input type="checkbox" aria-label="computed checkbox" bindChecked={checked} onChange={checkboxChange} />
-      <select aria-label="computed single" bindValue={single}>
-        <option value="a">A</option><option value="b">B</option><option value="c">C</option>
-      </select>
-      <select aria-label="computed multiple" multiple bindValue={multiple}>
-        <option value="a">A</option><option value="b">B</option><option value="c">C</option>
-      </select>
-    </>);
+    render(
+      <>
+        <input type="checkbox" aria-label="computed checkbox" bindChecked={checked} onChange={checkboxChange} />
+        <select aria-label="computed single" bindValue={single}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+        <select aria-label="computed multiple" multiple bindValue={multiple}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+      </>,
+    );
 
     const checkbox = screen.getByLabelText("computed checkbox") as HTMLInputElement;
     const singleSelect = screen.getByLabelText("computed single") as HTMLSelectElement;
@@ -1473,7 +1782,9 @@ describe("Direct DOM binding", () => {
     multipleSelect.options[1]!.selected = true;
     fireEvent.change(multipleSelect);
     // A rejected checkbox write is restored after the click dispatch finishes.
-    await act(async () => { await waitForNextTask(); });
+    await act(async () => {
+      await waitForNextTask();
+    });
 
     expect(checkedSource.value).toBe(true);
     expect(checkbox.checked).toBe(true);
@@ -1496,7 +1807,9 @@ describe("Direct DOM binding", () => {
       },
     });
     const observations: string[] = [];
-    const dispose = effect(() => { observations.push(fullName.value); });
+    const dispose = effect(() => {
+      observations.push(fullName.value);
+    });
     render(<input aria-label="batched full name" bindValue={fullName} />);
     const input = screen.getByLabelText("batched full name") as HTMLInputElement;
 
@@ -1512,13 +1825,17 @@ describe("Direct DOM binding", () => {
     const source = signal("123");
     const digits = computed({
       get: () => source.value,
-      set: (next: string) => { if (/^\d+$/.test(next)) source.value = next; },
+      set: (next: string) => {
+        if (/^\d+$/.test(next)) source.value = next;
+      },
     });
     function Form() {
-      return <form aria-label="computed reset form">
-        <input aria-label="computed reset text" bindValue={digits} />
-        <button type="reset">Reset</button>
-      </form>;
+      return (
+        <form aria-label="computed reset form">
+          <input aria-label="computed reset text" bindValue={digits} />
+          <button type="reset">Reset</button>
+        </form>
+      );
     }
 
     render(<Form />);
@@ -1533,7 +1850,10 @@ describe("Direct DOM binding", () => {
       await waitForNextTask();
     });
     expect(input.value).toBe("456");
-    await act(async () => { form.reset(); await Promise.resolve(); });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
     expect(source.value).toBe("456");
     expect(digits.value).toBe("456");
     expect(input.value).toBe("456");
@@ -1564,8 +1884,21 @@ describe("Direct DOM binding", () => {
     function Form() {
       return (
         <form aria-label="bound reset form">
-          <input aria-label="reset text" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />
-          <input type="checkbox" aria-label="reset checkbox" bindChecked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
+          <input
+            aria-label="reset text"
+            bindValue={text}
+            onChange={(event) => {
+              text.value = event.target.value;
+            }}
+          />
+          <input
+            type="checkbox"
+            aria-label="reset checkbox"
+            bindChecked={checked}
+            onChange={(event) => {
+              checked.value = event.target.checked;
+            }}
+          />
           <button type="reset">Reset</button>
         </form>
       );
@@ -1583,12 +1916,13 @@ describe("Direct DOM binding", () => {
     expect(input.value).toBe("latest text");
     expect(checkbox.checked).toBe(true);
 
-    act(() => { form.reset(); });
+    act(() => {
+      form.reset();
+    });
     expect(input.value).toBe("latest text");
     expect(checkbox.checked).toBe(true);
     expect(text.value).toBe("latest text");
     expect(checked.value).toBe(true);
-
   });
 
   it("keeps the signal and reset default in sync after an accepted user edit", async () => {
@@ -1598,8 +1932,21 @@ describe("Direct DOM binding", () => {
     function Form() {
       return (
         <form aria-label="accepted edit reset form">
-          <input aria-label="accepted edit reset text" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />
-          <input type="checkbox" aria-label="accepted edit reset checkbox" bindChecked={checked} onChange={(event) => { checked.value = event.target.checked; }} />
+          <input
+            aria-label="accepted edit reset text"
+            bindValue={text}
+            onChange={(event) => {
+              text.value = event.target.value;
+            }}
+          />
+          <input
+            type="checkbox"
+            aria-label="accepted edit reset checkbox"
+            bindChecked={checked}
+            onChange={(event) => {
+              checked.value = event.target.checked;
+            }}
+          />
         </form>
       );
     }
@@ -1659,7 +2006,13 @@ describe("Direct DOM binding", () => {
     function Field() {
       useSignalTracking();
       return (
-        <select aria-label="choice" value={choice.value} onChange={(event) => { choice.value = event.target.value; }}>
+        <select
+          aria-label="choice"
+          value={choice.value}
+          onChange={(event) => {
+            choice.value = event.target.value;
+          }}
+        >
           <option value="a">A</option>
           <option value="b">B</option>
           <option value="c">C</option>
@@ -1717,11 +2070,13 @@ describe("Direct DOM binding", () => {
 
     function Field() {
       renders();
-      return <select aria-label="bound choice" bindValue={choice} onChange={changes}>
-        <option value="a">A</option>
-        <option value="b">B</option>
-        <option value="c">C</option>
-      </select>;
+      return (
+        <select aria-label="bound choice" bindValue={choice} onChange={changes}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+          <option value="c">C</option>
+        </select>
+      );
     }
 
     render(<Field />);
@@ -1729,7 +2084,9 @@ describe("Direct DOM binding", () => {
     expect(select.value).toBe("b");
     const firstRenderCount = renders.mock.calls.length;
 
-    act(() => { choice.value = "a"; });
+    act(() => {
+      choice.value = "a";
+    });
     expect(select.value).toBe("a");
     expect(renders).toHaveBeenCalledTimes(firstRenderCount);
 
@@ -1743,16 +2100,20 @@ describe("Direct DOM binding", () => {
   it("bindValue synchronizes multiple selects from selectedOptions in DOM order", () => {
     const choices = signal<string[]>(["c", "a"]);
     const changes = vi.fn();
-    render(<select aria-label="bound choices" multiple bindValue={choices} onChange={changes}>
-      <option value="a">A</option>
-      <option value="b">B</option>
-      <option value="c">C</option>
-    </select>);
+    render(
+      <select aria-label="bound choices" multiple bindValue={choices} onChange={changes}>
+        <option value="a">A</option>
+        <option value="b">B</option>
+        <option value="c">C</option>
+      </select>,
+    );
     const select = screen.getByLabelText("bound choices") as HTMLSelectElement;
     const selected = () => Array.from(select.selectedOptions, (option) => option.value);
     expect(selected()).toEqual(["a", "c"]);
 
-    act(() => { choices.value = ["b"]; });
+    act(() => {
+      choices.value = ["b"];
+    });
     expect(selected()).toEqual(["b"]);
 
     select.options[0]!.selected = true;
@@ -1771,27 +2132,40 @@ describe("Direct DOM binding", () => {
     const disconnect = vi.spyOn(MutationObserver.prototype, "disconnect");
     function Field() {
       useSignalTracking();
-      return <select aria-label="replaceable select" bindValue={useSecond.value ? second : first}>
-        <option value="a">A</option><option value="b">B</option>
-      </select>;
+      return (
+        <select aria-label="replaceable select" bindValue={useSecond.value ? second : first}>
+          <option value="a">A</option>
+          <option value="b">B</option>
+        </select>
+      );
     }
     const view = render(<Field />);
     const select = screen.getByLabelText("replaceable select") as HTMLSelectElement;
     expect(select.value).toBe("a");
     expect(observe).toHaveBeenCalledTimes(1);
 
-    act(() => { useSecond.value = true; });
+    act(() => {
+      useSecond.value = true;
+    });
     expect(select.value).toBe("b");
     expect(observe).toHaveBeenCalledTimes(2);
-    act(() => { first.value = "a"; });
+    act(() => {
+      first.value = "a";
+    });
     expect(select.value).toBe("b");
-    act(() => { second.value = "a"; });
+    act(() => {
+      second.value = "a";
+    });
     expect(select.value).toBe("a");
 
     view.unmount();
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(disconnect).toHaveBeenCalledTimes(2);
-    act(() => { second.value = "b"; });
+    act(() => {
+      second.value = "b";
+    });
     expect(select.value).toBe("a");
   });
 
@@ -1801,16 +2175,18 @@ describe("Direct DOM binding", () => {
     const showLate = signal(false);
     function Field() {
       useSignalTracking();
-      return <>
-        <select aria-label="dynamic single" bindValue={choice}>
-          <option value="a">A</option>
-          {showLate.value ? <option value="late">Late</option> : null}
-        </select>
-        <select aria-label="dynamic multiple" multiple bindValue={choices}>
-          <option value="a">A</option>
-          {showLate.value ? <option value="late">Late</option> : null}
-        </select>
-      </>;
+      return (
+        <>
+          <select aria-label="dynamic single" bindValue={choice}>
+            <option value="a">A</option>
+            {showLate.value ? <option value="late">Late</option> : null}
+          </select>
+          <select aria-label="dynamic multiple" multiple bindValue={choices}>
+            <option value="a">A</option>
+            {showLate.value ? <option value="late">Late</option> : null}
+          </select>
+        </>
+      );
     }
     render(<Field />);
     const single = screen.getByLabelText("dynamic single") as HTMLSelectElement;
@@ -1818,12 +2194,16 @@ describe("Direct DOM binding", () => {
     expect(single.value).toBe("");
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a"]);
 
-    act(() => { showLate.value = true; });
+    act(() => {
+      showLate.value = true;
+    });
     await waitFor(() => {
       expect(single.value).toBe("late");
       expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a", "late"]);
     });
-    act(() => { showLate.value = false; });
+    act(() => {
+      showLate.value = false;
+    });
     await waitFor(() => {
       expect(single.value).toBe("");
       expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a"]);
@@ -1838,33 +2218,52 @@ describe("Direct DOM binding", () => {
     const includeLateOption = signal(false);
     function Form() {
       useSignalTracking();
-      return <form aria-label="bound select reset" onReset={(event) => {
-        if (event.currentTarget.dataset.cancel === "true") event.preventDefault();
-      }}>
-        <select aria-label="reset bound single" bindValue={choice}>
-          <option value="a">A</option><option value="b">B</option>
-          {includeLateOption.value ? <option value="late">Late</option> : null}
-        </select>
-        <select aria-label="reset bound multiple" multiple bindValue={choices}>
-          <option value="a">A</option><option value="b">B</option>
-          {includeLateOption.value ? <option value="late">Late</option> : null}
-        </select>
-      </form>;
+      return (
+        <form
+          aria-label="bound select reset"
+          onReset={(event) => {
+            if (event.currentTarget.dataset.cancel === "true") event.preventDefault();
+          }}
+        >
+          <select aria-label="reset bound single" bindValue={choice}>
+            <option value="a">A</option>
+            <option value="b">B</option>
+            {includeLateOption.value ? <option value="late">Late</option> : null}
+          </select>
+          <select aria-label="reset bound multiple" multiple bindValue={choices}>
+            <option value="a">A</option>
+            <option value="b">B</option>
+            {includeLateOption.value ? <option value="late">Late</option> : null}
+          </select>
+        </form>
+      );
     }
     render(<Form />);
     const form = screen.getByLabelText("bound select reset") as HTMLFormElement;
     const single = screen.getByLabelText("reset bound single") as HTMLSelectElement;
     const multiple = screen.getByLabelText("reset bound multiple") as HTMLSelectElement;
-    act(() => { choice.value = "b"; choices.value = ["b"]; });
-    await act(async () => { form.reset(); await Promise.resolve(); });
+    act(() => {
+      choice.value = "b";
+      choices.value = ["b"];
+    });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
     expect(choice.value).toBe("b");
     expect(single.value).toBe("b");
     expect(choices.value).toEqual(["b"]);
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b"]);
 
     form.dataset.cancel = "true";
-    act(() => { single.value = "a"; multiple.options[0]!.selected = true; });
-    await act(async () => { fireEvent.reset(form); await Promise.resolve(); });
+    act(() => {
+      single.value = "a";
+      multiple.options[0]!.selected = true;
+    });
+    await act(async () => {
+      fireEvent.reset(form);
+      await Promise.resolve();
+    });
     expect(single.value).toBe("a");
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["a", "b"]);
     expect(choice.value).toBe("b");
@@ -1879,7 +2278,10 @@ describe("Direct DOM binding", () => {
       expect(single.value).toBe("late");
       expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["late"]);
     });
-    await act(async () => { form.reset(); await Promise.resolve(); });
+    await act(async () => {
+      form.reset();
+      await Promise.resolve();
+    });
     expect(single.value).toBe("late");
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["late"]);
   });
@@ -1891,7 +2293,13 @@ describe("Direct DOM binding", () => {
     function Field() {
       useSignalTracking();
       return (
-        <select aria-label="late choice" value={choice.value} onChange={(event) => { choice.value = event.target.value; }}>
+        <select
+          aria-label="late choice"
+          value={choice.value}
+          onChange={(event) => {
+            choice.value = event.target.value;
+          }}
+        >
           <option value="a">A</option>
           <option value="b">B</option>
           {showOptionC.value ? <option value="c">C</option> : null}
@@ -1921,14 +2329,25 @@ describe("Direct DOM binding", () => {
       useSignalTracking();
       return (
         <form aria-label="select reset form">
-          <select aria-label="reset choice" value={choice.value} onChange={(event) => { choice.value = event.target.value; }}>
+          <select
+            aria-label="reset choice"
+            value={choice.value}
+            onChange={(event) => {
+              choice.value = event.target.value;
+            }}
+          >
             <option value="a">A</option>
             <option value="b">B</option>
             <option value="c">C</option>
           </select>
-          <select aria-label="reset choices" multiple value={choices.value} onChange={(event) => {
-            choices.value = Array.from(event.target.selectedOptions, (option) => option.value);
-          }}>
+          <select
+            aria-label="reset choices"
+            multiple
+            value={choices.value}
+            onChange={(event) => {
+              choices.value = Array.from(event.target.selectedOptions, (option) => option.value);
+            }}
+          >
             <option value="a">A</option>
             <option value="b">B</option>
             <option value="c">C</option>
@@ -1950,7 +2369,9 @@ describe("Direct DOM binding", () => {
     expect(single.value).toBe("c");
     expect(Array.from(multiple.selectedOptions, (option) => option.value)).toEqual(["b", "c"]);
 
-    act(() => { form.reset(); });
+    act(() => {
+      form.reset();
+    });
     expect(single.value).toBe("a");
     // React's controlled multi-select does not define a signal reset contract;
     // jsdom resets it to the current native defaults (none selected here).
@@ -1973,14 +2394,18 @@ describe("Direct DOM binding", () => {
             name="choice"
             aria-label="option a"
             checked={isA.value}
-            onChange={() => { selected.value = "a"; }}
+            onChange={() => {
+              selected.value = "a";
+            }}
           />
           <input
             type="radio"
             name="choice"
             aria-label="option b"
             checked={isB.value}
-            onChange={() => { selected.value = "b"; }}
+            onChange={() => {
+              selected.value = "b";
+            }}
           />
         </fieldset>
       );
@@ -2007,7 +2432,13 @@ describe("Direct DOM binding", () => {
       void bump.value;
       return (
         <StrictMode>
-          <input aria-label="strict field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />
+          <input
+            aria-label="strict field"
+            bindValue={text}
+            onChange={(event) => {
+              text.value = event.target.value;
+            }}
+          />
         </StrictMode>
       );
     }
@@ -2048,39 +2479,62 @@ describe("Direct DOM binding: ref identity stability", () => {
   it.each([9, 16, 32])("keeps callback refs stable across %i bound siblings", async (count) => {
     const bases = Array.from({ length: count }, (_, index) => signal(String(index)));
     const evaluations = Array.from({ length: count }, () => 0);
-    const sources = bases.map((base, index) => computed(() => {
-      evaluations[index] = (evaluations[index] ?? 0) + 1;
-      return base.value;
-    }));
+    const sources = bases.map((base, index) =>
+      computed(() => {
+        evaluations[index] = (evaluations[index] ?? 0) + 1;
+        return base.value;
+      }),
+    );
     const shared = signal("shared");
     const bump = signal(0);
     const calls: (Element | null)[] = [];
-    const userRef = (node: Element | null) => { calls.push(node); };
+    const userRef = (node: Element | null) => {
+      calls.push(node);
+    };
 
     function Rows() {
       useSignalTracking();
       void bump.value;
-      return <>{sources.map((source, index) => <div key={index} title={shared} data-row={source} ref={userRef} />)}</>;
+      return (
+        <>
+          {sources.map((source, index) => (
+            <div key={index} title={shared} data-row={source} ref={userRef} />
+          ))}
+        </>
+      );
     }
 
     const view = render(<Rows />);
     const nodes = [...view.container.querySelectorAll("[data-row]")];
     expect(calls).toEqual(nodes);
 
-    act(() => { bump.value += 1; });
-    act(() => { bump.value += 1; });
+    act(() => {
+      bump.value += 1;
+    });
+    act(() => {
+      bump.value += 1;
+    });
     expect(calls).toEqual(nodes);
 
     const beforeSignalUpdate = [...evaluations];
-    act(() => { bases.forEach((base, index) => { base.value = `updated-${index}`; }); });
+    act(() => {
+      bases.forEach((base, index) => {
+        base.value = `updated-${index}`;
+      });
+    });
     expect(nodes.map((node) => node.getAttribute("data-row"))).toEqual(bases.map((_, index) => `updated-${index}`));
     expect(evaluations).toEqual(beforeSignalUpdate.map((count) => count + 1));
 
     const beforeUnmount = [...evaluations];
     view.unmount();
     expect(calls).toEqual([...nodes, ...Array.from({ length: count }, () => null)]);
-    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
-    bases.forEach((base, index) => { base.value = `after-${index}`; });
+    await act(async () => {
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    bases.forEach((base, index) => {
+      base.value = `after-${index}`;
+    });
     expect(evaluations).toEqual(beforeUnmount);
   });
 
@@ -2128,7 +2582,15 @@ describe("Direct DOM binding: ref identity stability", () => {
     function Field() {
       useSignalTracking();
       void bump.value;
-      return <input aria-label="listener field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return (
+        <input
+          aria-label="listener field"
+          bindValue={text}
+          onChange={(event) => {
+            text.value = event.target.value;
+          }}
+        />
+      );
     }
 
     render(<Field />);
@@ -2150,7 +2612,15 @@ describe("Direct DOM binding: ref identity stability", () => {
     function Field() {
       useSignalTracking();
       void bump.value;
-      return <input aria-label="ime churn field" bindValue={text} onChange={(event) => { text.value = event.target.value; }} />;
+      return (
+        <input
+          aria-label="ime churn field"
+          bindValue={text}
+          onChange={(event) => {
+            text.value = event.target.value;
+          }}
+        />
+      );
     }
 
     render(<Field />);
@@ -2258,13 +2728,7 @@ describe("Direct DOM binding: ref identity stability", () => {
 
     function Field() {
       useSignalTracking();
-      return (
-        <input
-          aria-label="mixed field"
-          bindValue={text}
-          data-state={useSecond.value ? second : first}
-        />
-      );
+      return <input aria-label="mixed field" bindValue={text} data-state={useSecond.value ? second : first} />;
     }
 
     render(<Field />);
@@ -2332,48 +2796,67 @@ describe("Direct DOM binding: ref identity stability", () => {
         const radioSelection = signal(values[0]!);
         const checkboxSelection = signal<string[]>([values[0]!]);
         const refEvents: (Element | null)[] = [];
-        const commonRef = (node: Element | null) => { refEvents.push(node); };
+        const commonRef = (node: Element | null) => {
+          refEvents.push(node);
+        };
         const addClick = vi.spyOn(HTMLInputElement.prototype, "addEventListener");
         const removeClick = vi.spyOn(HTMLInputElement.prototype, "removeEventListener");
-        const createOptions = () => kind === "radio"
-          ? values.map((value) => createSignalAwareElement("input", {
-            type: "radio",
-            name: "same-options",
-            value,
-            bindValue: radioSelection,
-            ...(useCommonRef ? { ref: commonRef } : {}),
-          }))
-          : values.map((value) => createSignalAwareElement("input", {
-            type: "checkbox",
-            name: "same-options",
-            value,
-            bindValue: checkboxSelection,
-            ...(useCommonRef ? { ref: commonRef } : {}),
-          }));
+        const createOptions = () =>
+          kind === "radio"
+            ? values.map((value) =>
+                createSignalAwareElement("input", {
+                  type: "radio",
+                  name: "same-options",
+                  value,
+                  bindValue: radioSelection,
+                  ...(useCommonRef ? { ref: commonRef } : {}),
+                }),
+              )
+            : values.map((value) =>
+                createSignalAwareElement("input", {
+                  type: "checkbox",
+                  name: "same-options",
+                  value,
+                  bindValue: checkboxSelection,
+                  ...(useCommonRef ? { ref: commonRef } : {}),
+                }),
+              );
         function Group() {
           const [revision, setRevision] = useState(0);
-          return <form aria-label={`${kind} group ${count} ${useCommonRef}`}>
-            <button type="button" aria-label="rerender option group" onClick={() => setRevision((value) => value + 1)}>{revision}</button>
-            {values.map((value) => kind === "radio"
-              ? <input
-                key={value}
-                type="radio"
-                name="same-options"
-                value={value}
-                aria-label={value}
-                bindValue={radioSelection}
-                ref={useCommonRef ? commonRef : undefined}
-              />
-              : <input
-                key={value}
-                type="checkbox"
-                name="same-options"
-                value={value}
-                aria-label={value}
-                bindValue={checkboxSelection}
-                ref={useCommonRef ? commonRef : undefined}
-              />)}
-          </form>;
+          return (
+            <form aria-label={`${kind} group ${count} ${useCommonRef}`}>
+              <button
+                type="button"
+                aria-label="rerender option group"
+                onClick={() => setRevision((value) => value + 1)}
+              >
+                {revision}
+              </button>
+              {values.map((value) =>
+                kind === "radio" ? (
+                  <input
+                    key={value}
+                    type="radio"
+                    name="same-options"
+                    value={value}
+                    aria-label={value}
+                    bindValue={radioSelection}
+                    ref={useCommonRef ? commonRef : undefined}
+                  />
+                ) : (
+                  <input
+                    key={value}
+                    type="checkbox"
+                    name="same-options"
+                    value={value}
+                    aria-label={value}
+                    bindValue={checkboxSelection}
+                    ref={useCommonRef ? commonRef : undefined}
+                  />
+                ),
+              )}
+            </form>
+          );
         }
 
         const view = render(<Group />);
@@ -2381,36 +2864,68 @@ describe("Direct DOM binding: ref identity stability", () => {
         const secondRefs = createOptions().map((element) => (element.props as { ref?: unknown }).ref);
         expect(secondRefs).toEqual(firstRefs);
         const inputs = values.map((value) => screen.getByLabelText(value) as HTMLInputElement);
-        expect(inputs.every((input) => input.checked === (kind === "radio" ? radioSelection.value === input.value : checkboxSelection.value.includes(input.value)))).toBe(true);
+        expect(
+          inputs.every(
+            (input) =>
+              input.checked ===
+              (kind === "radio" ? radioSelection.value === input.value : checkboxSelection.value.includes(input.value)),
+          ),
+        ).toBe(true);
         const mountedRefEvents = [...refEvents];
-        const initialClickAdds = addClick.mock.calls.filter((call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement).length;
+        const initialClickAdds = addClick.mock.calls.filter(
+          (call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement,
+        ).length;
         addClick.mockClear();
         removeClick.mockClear();
 
         fireEvent.click(screen.getByLabelText("rerender option group"));
 
         expect(refEvents).toEqual(mountedRefEvents);
-        expect(addClick.mock.calls.filter((call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
-        expect(removeClick.mock.calls.filter((call, index) => call[0] === "click" && removeClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
+        expect(
+          addClick.mock.calls.filter(
+            (call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement,
+          ),
+        ).toHaveLength(0);
+        expect(
+          removeClick.mock.calls.filter(
+            (call, index) => call[0] === "click" && removeClick.mock.contexts[index] instanceof HTMLInputElement,
+          ),
+        ).toHaveLength(0);
         if (kind === "radio") {
           fireEvent.click(inputs[count - 1]!);
         } else {
           fireEvent.click(inputs[count - 1]!);
         }
-        expect(kind === "radio" ? radioSelection.value : checkboxSelection.value)
-          .toEqual(kind === "radio" ? values[count - 1] : [values[0], values[count - 1]]);
+        expect(kind === "radio" ? radioSelection.value : checkboxSelection.value).toEqual(
+          kind === "radio" ? values[count - 1] : [values[0], values[count - 1]],
+        );
         expect(inputs[count - 1]!.checked).toBe(true);
         fireEvent.click(screen.getByLabelText("rerender option group"));
         expect(refEvents).toEqual(mountedRefEvents);
-        expect(addClick.mock.calls.filter((call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
-        expect(removeClick.mock.calls.filter((call, index) => call[0] === "click" && removeClick.mock.contexts[index] instanceof HTMLInputElement)).toHaveLength(0);
+        expect(
+          addClick.mock.calls.filter(
+            (call, index) => call[0] === "click" && addClick.mock.contexts[index] instanceof HTMLInputElement,
+          ),
+        ).toHaveLength(0);
+        expect(
+          removeClick.mock.calls.filter(
+            (call, index) => call[0] === "click" && removeClick.mock.contexts[index] instanceof HTMLInputElement,
+          ),
+        ).toHaveLength(0);
         const form = screen.getByLabelText(`${kind} group ${count} ${useCommonRef}`) as HTMLFormElement;
-        await act(async () => { form.reset(); await waitForNextTask(); });
-        expect(kind === "radio" ? radioSelection.value : checkboxSelection.value).toEqual(kind === "radio" ? values[count - 1] : [values[0], values[count - 1]]);
+        await act(async () => {
+          form.reset();
+          await waitForNextTask();
+        });
+        expect(kind === "radio" ? radioSelection.value : checkboxSelection.value).toEqual(
+          kind === "radio" ? values[count - 1] : [values[0], values[count - 1]],
+        );
         expect(inputs[count - 1]!.checked).toBe(true);
 
         view.unmount();
-        await act(async () => { await waitForNextTask(); });
+        await act(async () => {
+          await waitForNextTask();
+        });
         expect(coreRuntime.hasSubscribers(kind === "radio" ? radioSelection : checkboxSelection)).toBe(false);
         expect(refEvents.filter((node) => node === null)).toHaveLength(useCommonRef ? count : 0);
         expect(initialClickAdds).toBe(count);
@@ -2422,7 +2937,11 @@ describe("Direct DOM binding: ref identity stability", () => {
 });
 
 describe("M17.4 form binding review fixes", () => {
-  const nextTask = async () => { await act(async () => { await waitForNextTask(); }); };
+  const nextTask = async () => {
+    await act(async () => {
+      await waitForNextTask();
+    });
+  };
 
   it("reverts a canceled click even when the handler unmounts the control", async () => {
     const agree = signal(false);
@@ -2430,14 +2949,19 @@ describe("M17.4 form binding review fixes", () => {
     const choice = signal("a");
     function Panel() {
       const [open, setOpen] = useState(true);
-      const close = (event: { preventDefault(): void }) => { event.preventDefault(); setOpen(false); };
+      const close = (event: { preventDefault(): void }) => {
+        event.preventDefault();
+        setOpen(false);
+      };
       if (!open) return <p>closed</p>;
-      return <form>
-        <input type="checkbox" aria-label="agree" bindChecked={agree} onClick={close} />
-        <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} onClick={close} />
-        <input type="radio" name="choice" value="a" bindValue={choice} />
-        <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onClick={close} />
-      </form>;
+      return (
+        <form>
+          <input type="checkbox" aria-label="agree" bindChecked={agree} onClick={close} />
+          <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} onClick={close} />
+          <input type="radio" name="choice" value="a" bindValue={choice} />
+          <input type="radio" name="choice" value="b" aria-label="choice b" bindValue={choice} onClick={close} />
+        </form>
+      );
     }
     for (const label of ["agree", "tag x", "choice b"]) {
       const view = render(<Panel />);
@@ -2452,14 +2976,28 @@ describe("M17.4 form binding review fixes", () => {
 
   it("keeps React's onChange for a radio whose setter normalizes to another option", async () => {
     const base = signal("a");
-    const normalized = computed({ get: () => base.value, set: (next: string) => { base.value = next === "b" ? "c" : next; } });
+    const normalized = computed({
+      get: () => base.value,
+      set: (next: string) => {
+        base.value = next === "b" ? "c" : next;
+      },
+    });
     const seen: string[] = [];
-    render(<form>
-      {["a", "b", "c"].map((option) => (
-        <input key={option} type="radio" name="n" value={option} aria-label={`n ${option}`} bindValue={normalized}
-          onChange={(event) => seen.push(`${option}:${event.target.checked}`)} />
-      ))}
-    </form>);
+    render(
+      <form>
+        {["a", "b", "c"].map((option) => (
+          <input
+            key={option}
+            type="radio"
+            name="n"
+            value={option}
+            aria-label={`n ${option}`}
+            bindValue={normalized}
+            onChange={(event) => seen.push(`${option}:${event.target.checked}`)}
+          />
+        ))}
+      </form>,
+    );
     fireEvent.click(screen.getByLabelText("n b"));
     expect(seen).toEqual(["b:true"]);
     await nextTask();
@@ -2470,11 +3008,19 @@ describe("M17.4 form binding review fixes", () => {
 
   it("lets React's onChange see the user's selection before a select correction", async () => {
     const base = signal("a");
-    const rejecting = computed({ get: () => base.value, set: (next: string) => { if (next !== "b") base.value = next; } });
+    const rejecting = computed({
+      get: () => base.value,
+      set: (next: string) => {
+        if (next !== "b") base.value = next;
+      },
+    });
     const seen: string[] = [];
-    render(<select aria-label="rejecting" bindValue={rejecting} onChange={(event) => seen.push(event.target.value)}>
-      <option value="a">A</option><option value="b">B</option>
-    </select>);
+    render(
+      <select aria-label="rejecting" bindValue={rejecting} onChange={(event) => seen.push(event.target.value)}>
+        <option value="a">A</option>
+        <option value="b">B</option>
+      </select>,
+    );
     const select = screen.getByLabelText("rejecting") as HTMLSelectElement;
     fireEvent.change(select, { target: { value: "b" } });
     expect(seen).toEqual(["b"]);
@@ -2484,10 +3030,19 @@ describe("M17.4 form binding review fixes", () => {
 
   it("reverts only the canceled option when another group member is clicked in the same task", async () => {
     const tags = signal<string[]>([]);
-    render(<form>
-      <input type="checkbox" name="tags" value="x" aria-label="tag x" bindValue={tags} onClick={(event) => event.preventDefault()} />
-      <input type="checkbox" name="tags" value="y" aria-label="tag y" bindValue={tags} />
-    </form>);
+    render(
+      <form>
+        <input
+          type="checkbox"
+          name="tags"
+          value="x"
+          aria-label="tag x"
+          bindValue={tags}
+          onClick={(event) => event.preventDefault()}
+        />
+        <input type="checkbox" name="tags" value="y" aria-label="tag y" bindValue={tags} />
+      </form>,
+    );
     fireEvent.click(screen.getByLabelText("tag x"));
     fireEvent.click(screen.getByLabelText("tag y"));
     await nextTask();
@@ -2500,11 +3055,18 @@ describe("M17.4 form binding review fixes", () => {
     const text = signal("t");
     const agree = signal(true);
     const conditional = undefined as typeof text | undefined;
-    render(<>
-      <input aria-label="optional binding" {...({ bindValue: conditional } as object)} />
-      <input aria-label="undefined value" bindValue={text} {...({ value: undefined } as object)} />
-      <input type="checkbox" aria-label="undefined checked" bindChecked={agree} {...({ checked: undefined } as object)} />
-    </>);
+    render(
+      <>
+        <input aria-label="optional binding" {...({ bindValue: conditional } as object)} />
+        <input aria-label="undefined value" bindValue={text} {...({ value: undefined } as object)} />
+        <input
+          type="checkbox"
+          aria-label="undefined checked"
+          bindChecked={agree}
+          {...({ checked: undefined } as object)}
+        />
+      </>,
+    );
     expect(screen.getByLabelText("optional binding").hasAttribute("bindvalue")).toBe(false);
     expect((screen.getByLabelText("undefined value") as HTMLInputElement).value).toBe("t");
     expect((screen.getByLabelText("undefined checked") as HTMLInputElement).checked).toBe(true);
@@ -2513,19 +3075,34 @@ describe("M17.4 form binding review fixes", () => {
   it("restores the DOM after a throwing setter and ignores clicks on disabled checkboxes", async () => {
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const windowErrors: unknown[] = [];
-    const onError = (event: ErrorEvent) => { windowErrors.push(event.error); event.preventDefault(); };
+    const onError = (event: ErrorEvent) => {
+      windowErrors.push(event.error);
+      event.preventDefault();
+    };
     window.addEventListener("error", onError);
     try {
       const textBase = signal("ok");
-      const text = computed({ get: () => textBase.value, set: () => { throw new Error("no text"); } });
+      const text = computed({
+        get: () => textBase.value,
+        set: () => {
+          throw new Error("no text");
+        },
+      });
       const flagBase = signal(false);
-      const flag = computed({ get: () => flagBase.value, set: () => { throw new Error("no flag"); } });
+      const flag = computed({
+        get: () => flagBase.value,
+        set: () => {
+          throw new Error("no flag");
+        },
+      });
       const disabledFlag = signal(false);
-      render(<>
-        <input aria-label="throwing text" bindValue={text} />
-        <input type="checkbox" aria-label="throwing flag" bindChecked={flag} />
-        <input type="checkbox" aria-label="disabled flag" disabled bindChecked={disabledFlag} />
-      </>);
+      render(
+        <>
+          <input aria-label="throwing text" bindValue={text} />
+          <input type="checkbox" aria-label="throwing flag" bindChecked={flag} />
+          <input type="checkbox" aria-label="disabled flag" disabled bindChecked={disabledFlag} />
+        </>,
+      );
       const input = screen.getByLabelText("throwing text") as HTMLInputElement;
       dispatchUserTextInput(input, "ok!");
       fireEvent.click(screen.getByLabelText("throwing flag"));
@@ -2545,7 +3122,9 @@ describe("M17.4 form binding review fixes", () => {
     try {
       render(<svg>{createSignalAwareElement("circle", { bindValue: undefined, r: 1 }) as ReactNode}</svg>);
       expect(errors).not.toHaveBeenCalled();
-      expect(() => createSignalAwareElement("circle", { bindValue: signal("x") })).toThrow(/text-like, number, or range input\/textarea\/select only/);
+      expect(() => createSignalAwareElement("circle", { bindValue: signal("x") })).toThrow(
+        /text-like, number, or range input\/textarea\/select only/,
+      );
     } finally {
       errors.mockRestore();
     }

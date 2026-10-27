@@ -101,11 +101,17 @@ describe("local readable subscription", () => {
     const notify = vi.fn();
     const unsubscribe = subscribeLocalReadable(value, notify)!;
 
-    expect(() => { source.value = 2; }).not.toThrow();
+    expect(() => {
+      source.value = 2;
+    }).not.toThrow();
     expect(() => value.value).toThrow(firstError);
-    expect(() => { source.value = 3; }).not.toThrow();
+    expect(() => {
+      source.value = 3;
+    }).not.toThrow();
     expect(() => value.value).toThrow(secondError);
-    expect(() => { source.value = 4; }).not.toThrow();
+    expect(() => {
+      source.value = 4;
+    }).not.toThrow();
     expect(value.value).toBe(4);
     expect(notify).toHaveBeenCalledTimes(3);
     unsubscribe();

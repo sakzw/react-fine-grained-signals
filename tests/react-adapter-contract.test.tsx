@@ -41,7 +41,9 @@ describe("React adapter contracts", () => {
     expect(screen.getByText("1")).toBeTruthy();
     expect(subscribe).toHaveBeenCalledOnce();
 
-    act(() => { source.value = 1; });
+    act(() => {
+      source.value = 1;
+    });
     expect(screen.getByText("2")).toBeTruthy();
     expect(subscribe).toHaveBeenCalledOnce();
   });

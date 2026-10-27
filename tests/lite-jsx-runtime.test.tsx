@@ -50,13 +50,23 @@ describe("lite JSX runtime", () => {
     let parentRenders = 0;
     function App() {
       parentRenders++;
-      return <main><output>{count}</output></main>;
+      return (
+        <main>
+          <output>{count}</output>
+        </main>
+      );
     }
 
-    const container = mount(<StrictMode><App /></StrictMode>);
+    const container = mount(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
     const committedRenderCount = parentRenders;
     expect(container.textContent).toBe("0");
-    act(() => { count.value = 1; });
+    act(() => {
+      count.value = 1;
+    });
     expect(container.textContent).toBe("1");
     expect(parentRenders).toBe(committedRenderCount);
   });
@@ -64,18 +74,26 @@ describe("lite JSX runtime", () => {
   it("normalizes nested array children and Fragments while passing React components through", () => {
     const first = signal("first");
     const second = signal("second");
-    const container = mount(<>
-      <div>{[first, [" / ", second]]}</div>
-      <Label><span>component child</span></Label>
-    </>);
+    const container = mount(
+      <>
+        <div>{[first, [" / ", second]]}</div>
+        <Label>
+          <span>component child</span>
+        </Label>
+      </>,
+    );
     expect(container.textContent).toBe("first / secondcomponent child");
-    act(() => { second.value = "updated"; });
+    act(() => {
+      second.value = "updated";
+    });
     expect(container.textContent).toBe("first / updatedcomponent child");
   });
 
   it("throws clear runtime errors for binding props and Signal-valued host attributes", () => {
     const source = signal("value");
-    expect(() => liteJsx("input", { bindValue: source }, undefined)).toThrow(/form bindings require the default JSX runtime/);
+    expect(() => liteJsx("input", { bindValue: source }, undefined)).toThrow(
+      /form bindings require the default JSX runtime/,
+    );
     expect(() => liteJsx("div", { title: source }, undefined)).toThrow(/Signal-valued title props/);
     expect(() => liteJsx("div", { style: { color: source } }, undefined)).toThrow(/Signal-valued style\.color/);
   });
@@ -84,21 +102,36 @@ describe("lite JSX runtime", () => {
     const source = signal("classic");
     const container = mount(liteCreateElement("output", null, source));
     expect(container.textContent).toBe("classic");
-    act(() => { source.value = "updated"; });
+    act(() => {
+      source.value = "updated";
+    });
     expect(container.textContent).toBe("updated");
   });
 
   it("supports the development jsxDEV entry for Signal children", () => {
     const source = signal("development");
-    const container = mount(liteJsxDEV("output", { children: source }, undefined, false, { fileName: "lite.tsx", lineNumber: 1, columnNumber: 1 }, undefined));
+    const container = mount(
+      liteJsxDEV(
+        "output",
+        { children: source },
+        undefined,
+        false,
+        { fileName: "lite.tsx", lineNumber: 1, columnNumber: 1 },
+        undefined,
+      ),
+    );
     expect(container.textContent).toBe("development");
-    act(() => { source.value = "updated"; });
+    act(() => {
+      source.value = "updated";
+    });
     expect(container.textContent).toBe("updated");
   });
 
   it("renders to string and hydrates Signal children without a mismatch", async () => {
     const source = signal("server");
-    function App() { return <output>{source}</output>; }
+    function App() {
+      return <output>{source}</output>;
+    }
     const html = renderToString(<App />);
     expect(html).toContain("server");
     const container = document.createElement("div");
@@ -106,9 +139,13 @@ describe("lite JSX runtime", () => {
     document.body.append(container);
     const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, <App />);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(container.textContent).toBe("server");
-    await act(async () => { source.value = "client"; });
+    await act(async () => {
+      source.value = "client";
+    });
     expect(container.textContent).toBe("client");
     expect(consoleError).not.toHaveBeenCalled();
     root.unmount();
@@ -120,13 +157,19 @@ describe("lite JSX runtime", () => {
     const source = signal("committed");
     let ready = false;
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     function Deferred() {
       if (!ready) throw gate;
       return <output>{source}</output>;
     }
 
-    const container = mount(<Suspense fallback={<p>waiting</p>}><Deferred /></Suspense>);
+    const container = mount(
+      <Suspense fallback={<p>waiting</p>}>
+        <Deferred />
+      </Suspense>,
+    );
     expect(container.textContent).toBe("waiting");
     await act(async () => {
       ready = true;
@@ -134,7 +177,9 @@ describe("lite JSX runtime", () => {
       await gate;
     });
     expect(container.textContent).toBe("committed");
-    act(() => { source.value = "updated"; });
+    act(() => {
+      source.value = "updated";
+    });
     expect(container.textContent).toBe("updated");
   });
 
@@ -143,7 +188,9 @@ describe("lite JSX runtime", () => {
     const fullElement = fullJsx("span", { children: source });
     const container = mount(createElement("section", null, <output>{source}</output>, fullElement));
     expect(container.textContent).toBe("litelite");
-    act(() => { source.value = "shared"; });
+    act(() => {
+      source.value = "shared";
+    });
     expect(container.textContent).toBe("sharedshared");
   });
 });

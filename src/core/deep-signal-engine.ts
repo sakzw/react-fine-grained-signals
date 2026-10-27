@@ -232,8 +232,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     return prototypes;
   })();
 
-  const isIntrinsicPrototype = (value: unknown): boolean =>
-    isObjectLike(value) && INTRINSIC_PROTOTYPES.has(value);
+  const isIntrinsicPrototype = (value: unknown): boolean => isObjectLike(value) && INTRINSIC_PROTOTYPES.has(value);
 
   function isPlainObjectOrArray(value: unknown): value is object {
     if (typeof value !== "object" || value === null || adapter.isSignal(value)) return false;
@@ -263,17 +262,22 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         support.assertReactive(value as object);
         return;
       }
-      throw new TypeError("deepCollectionSignal() only accepts plain objects, arrays, or same-realm standard collections");
+      throw new TypeError(
+        "deepCollectionSignal() only accepts plain objects, arrays, or same-realm standard collections",
+      );
     }
     if (value instanceof Map || value instanceof Set || value instanceof WeakMap || value instanceof WeakSet) {
-      throw new TypeError("deepSignal() does not track Map, Set, WeakMap or WeakSet; use deepCollectionSignal() for a collection root");
+      throw new TypeError(
+        "deepSignal() does not track Map, Set, WeakMap or WeakSet; use deepCollectionSignal() for a collection root",
+      );
     }
     throw new TypeError("deepSignal() only accepts plain objects and arrays");
   }
 
-  const modeError = (): TypeError => new TypeError(
-    "deepSignal() and deepCollectionSignal() cannot share the same plain object or array; keep each object in one kind of signal",
-  );
+  const modeError = (): TypeError =>
+    new TypeError(
+      "deepSignal() and deepCollectionSignal() cannot share the same plain object or array; keep each object in one kind of signal",
+    );
 
   function assertDeepDataGraph(value: unknown, support: CollectionSupport | undefined): boolean {
     if (!isObjectLike(value)) return false;
@@ -282,9 +286,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     // that value's observable identity, so reject it instead of leaking a proxy
     // into the raw tree.
     const seen = new WeakMap<object, number>();
-    const pending: Array<{ value: object; insideOpaque: boolean }> = [
-      { value, insideOpaque: false },
-    ];
+    const pending: Array<{ value: object; insideOpaque: boolean }> = [{ value, insideOpaque: false }];
     let needsNormalization = false;
 
     while (pending.length > 0) {
@@ -452,11 +454,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         if (currentSource !== currentTarget) return false;
         continue;
       }
-      if (
-        typeof currentTarget !== "object" ||
-        currentTarget === null ||
-        !isPlainObjectOrArray(currentTarget)
-      ) {
+      if (typeof currentTarget !== "object" || currentTarget === null || !isPlainObjectOrArray(currentTarget)) {
         return false;
       }
 
@@ -531,8 +529,13 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       if (!plain && !map && !set) return current;
       const found = clones.get(current);
       if (found !== undefined) return found;
-      const clone: object = map ? new Map() : set ? new Set() :
-        Array.isArray(current) ? emptyArrayOfLength(current.length) : Object.create(Object.getPrototypeOf(current));
+      const clone: object = map
+        ? new Map()
+        : set
+          ? new Set()
+          : Array.isArray(current)
+            ? emptyArrayOfLength(current.length)
+            : Object.create(Object.getPrototypeOf(current));
       clones.set(current, clone);
       created.push([current, clone]);
       pending.push(current);
@@ -554,7 +557,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       if (source instanceof Map && target instanceof Map) {
         for (const [key, entry] of source) {
           const normalizedKey = resolveCollectionEntry(key);
-          if (target.has(normalizedKey)) throw new TypeError("deepSignal() collection keys collide after proxy normalization");
+          if (target.has(normalizedKey))
+            throw new TypeError("deepSignal() collection keys collide after proxy normalization");
           target.set(normalizedKey, resolveCollectionEntry(entry));
         }
       } else if (source instanceof Set && target instanceof Set) {
@@ -598,7 +602,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         cached !== undefined &&
         carrierSupports.get(value) === (support ?? null) &&
         matchesNormalizedGraph(value, cached, support)
-      ) return cached as T;
+      )
+        return cached as T;
     }
     const containsProxy = assertDeepDataGraph(value, support);
     return containsProxy ? cloneReactiveGraph(value, support) : value;
@@ -619,9 +624,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   // key is *not* an own property, so a real data property named `map` or
   // `toString` — and an array's own `length` — stays fully reactive, and a
   // null-prototype object (which inherits nothing) is never affected.
-  const OBJECT_PROTOTYPE_KEYS: ReadonlySet<PropertyKey> = new Set(
-    Reflect.ownKeys(Object.prototype),
-  );
+  const OBJECT_PROTOTYPE_KEYS: ReadonlySet<PropertyKey> = new Set(Reflect.ownKeys(Object.prototype));
   const ARRAY_PROTOTYPE_KEYS: ReadonlySet<PropertyKey> = new Set([
     ...Reflect.ownKeys(Object.prototype),
     ...Reflect.ownKeys(Array.prototype),
@@ -700,7 +703,10 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   const hasLinkedSubscribers = (version: VersionSignal): boolean =>
     (adapter.hasLinkedSubscribers ?? adapter.hasSubscribers)(version);
   const retirePropertyVersion = (version: VersionSignal | undefined): void => {
-    if (version !== undefined) adapter.untracked(() => { version.value = version.peek() + 1; });
+    if (version !== undefined)
+      adapter.untracked(() => {
+        version.value = version.peek() + 1;
+      });
   };
 
   const sweepPrunedKeys = (metadata: PropertyMetadata, target: object, settled = false): void => {
@@ -802,14 +808,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     trackIterationOf(metadata);
   };
 
-  const notifyTruncatedIndices = (
-    metadata: PropertyMetadata,
-    currentLength: number,
-    oldLength: number,
-  ): void => {
+  const notifyTruncatedIndices = (metadata: PropertyMetadata, currentLength: number, oldLength: number): void => {
     const truncatedCount = oldLength - currentLength;
-    const trackedCount =
-      metadata.propertyIndices.size + metadata.existenceIndices.size;
+    const trackedCount = metadata.propertyIndices.size + metadata.existenceIndices.size;
     if (trackedCount === 0) return;
 
     if (truncatedCount <= trackedCount) {
@@ -844,9 +845,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
    * whose value cannot be substituted, before `wrap()` performs the swap.
    */
   const isWrappedByValue = (value: unknown, support: CollectionSupport | undefined): boolean =>
-    isPlainObjectOrArray(value) || (support !== undefined && (
-      value instanceof Map || value instanceof Set || value instanceof WeakMap || value instanceof WeakSet
-    ));
+    isPlainObjectOrArray(value) ||
+    (support !== undefined &&
+      (value instanceof Map || value instanceof Set || value instanceof WeakMap || value instanceof WeakSet));
 
   const wrap = <T>(value: T, support: CollectionSupport | undefined): T => {
     const rawValue = (toRaw(value) as T | undefined) ?? value;
@@ -889,11 +890,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         track(metadata, target, metadata.properties, metadata.propertyIndices, key);
         const result = Reflect.get(target, key, receiver);
 
-        if (
-          Array.isArray(target) &&
-          ARRAY_MUTATORS.has(key) &&
-          typeof result === "function"
-        ) {
+        if (Array.isArray(target) && ARRAY_MUTATORS.has(key) && typeof result === "function") {
           const cachedMethod = metadata.arrayMethods.get(key);
           if (cachedMethod?.method === result) return cachedMethod.wrapper;
 
@@ -915,11 +912,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           return wrapper;
         }
 
-        if (
-          Array.isArray(target) &&
-          ARRAY_SEARCHES.has(key) &&
-          typeof result === "function"
-        ) {
+        if (Array.isArray(target) && ARRAY_SEARCHES.has(key) && typeof result === "function") {
           const cachedMethod = metadata.arrayMethods.get(key);
           if (cachedMethod?.method === result) return cachedMethod.wrapper;
 
@@ -954,9 +947,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
             descriptor.configurable === false &&
             descriptor.writable === false
           ) {
-            throw new TypeError(
-              "deepSignal() cannot wrap a non-configurable, non-writable object property",
-            );
+            throw new TypeError("deepSignal() cannot wrap a non-configurable, non-writable object property");
           }
         }
 
@@ -993,27 +984,29 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           metadata.prunableRevision = (metadata.prunableRevision ?? 0) + 1;
         }
 
-        adapter.batch(() => adapter.untracked(() => {
-          if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
-            notify(metadata.properties, key);
-          }
-          // Existence versions back both `in` (any key in the chain) and own-key
-          // checks such as `Object.hasOwn` (see `getOwnPropertyDescriptor`), so
-          // either kind of change notifies them.
-          if (existed !== existsNow || owned !== ownedNow) notify(metadata.existence, key);
-          if (owned !== ownedNow) notifyIteration(metadata);
+        adapter.batch(() =>
+          adapter.untracked(() => {
+            if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
+              notify(metadata.properties, key);
+            }
+            // Existence versions back both `in` (any key in the chain) and own-key
+            // checks such as `Object.hasOwn` (see `getOwnPropertyDescriptor`), so
+            // either kind of change notifies them.
+            if (existed !== existsNow || owned !== ownedNow) notify(metadata.existence, key);
+            if (owned !== ownedNow) notifyIteration(metadata);
 
-          if (Array.isArray(target) && oldLength !== undefined) {
-            const currentLength = target.length;
-            if (key !== "length" && oldLength !== currentLength) {
-              notify(metadata.properties, "length");
+            if (Array.isArray(target) && oldLength !== undefined) {
+              const currentLength = target.length;
+              if (key !== "length" && oldLength !== currentLength) {
+                notify(metadata.properties, "length");
+              }
+              if (key === "length" && currentLength < oldLength) {
+                notifyTruncatedIndices(metadata, currentLength, oldLength);
+                notifyIteration(metadata);
+              }
             }
-            if (key === "length" && currentLength < oldLength) {
-              notifyTruncatedIndices(metadata, currentLength, oldLength);
-              notifyIteration(metadata);
-            }
-          }
-        }));
+          }),
+        );
         sweepPrunedKeys(metadata, target);
 
         return true;
@@ -1024,14 +1017,16 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         const succeeded = Reflect.deleteProperty(target, key);
         if (!succeeded || !owned) return succeeded;
 
-        adapter.batch(() => adapter.untracked(() => {
-          notify(metadata.properties, key);
-          // An own key was removed, which own-key existence checks observe even
-          // when `in` still finds the key on the prototype.
-          notify(metadata.existence, key);
-          notifyIteration(metadata);
-          markPrunable(metadata, key);
-        }));
+        adapter.batch(() =>
+          adapter.untracked(() => {
+            notify(metadata.properties, key);
+            // An own key was removed, which own-key existence checks observe even
+            // when `in` still finds the key on the prototype.
+            notify(metadata.existence, key);
+            notifyIteration(metadata);
+            markPrunable(metadata, key);
+          }),
+        );
         sweepPrunedKeys(metadata, target);
         return true;
       },
@@ -1127,12 +1122,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
    * only — it is deliberately absent from every published entry point, and the
    * shape it returns is internal detail, not API.
    */
-  function inspectDeepSignalMetadata(value: object): {
-    properties: PropertyKey[];
-    existence: PropertyKey[];
-    propertyIndices: number[];
-    existenceIndices: number[];
-  } | undefined {
+  function inspectDeepSignalMetadata(value: object):
+    | {
+        properties: PropertyKey[];
+        existence: PropertyKey[];
+        propertyIndices: number[];
+        existenceIndices: number[];
+      }
+    | undefined {
     const metadata = rawToMetadata.get(toRaw(value) ?? value);
     if (metadata === undefined) return undefined;
     return {
@@ -1144,7 +1141,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   }
 
   const collectionContext: CollectionContext = {
-    adapter, shouldTrackDeepRead, toRaw, proxyToRaw, normalizedProxyCarriers, isPlainObjectOrArray, prepareDeepValue, wrap,
+    adapter,
+    shouldTrackDeepRead,
+    toRaw,
+    proxyToRaw,
+    normalizedProxyCarriers,
+    isPlainObjectOrArray,
+    prepareDeepValue,
+    wrap,
   };
 
   /** Primitive collection keys that still retain version metadata. */

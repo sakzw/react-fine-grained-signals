@@ -37,7 +37,9 @@ describe("render adapter contracts", () => {
     const doubled = runtime.computed(() => source.value * 2);
     const attempt = runtime.renderAdapter.createRenderAttempt();
     let value: number | undefined;
-    runtime.renderAdapter.withRenderScope(attempt, () => { value = doubled.value; });
+    runtime.renderAdapter.withRenderScope(attempt, () => {
+      value = doubled.value;
+    });
     const { dependencies } = attempt;
 
     expect(value).toBe(4);

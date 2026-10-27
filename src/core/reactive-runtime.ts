@@ -18,7 +18,9 @@ export interface ReactiveRuntime {
   };
   getNodeForReadable(readable: RuntimeReadonlySignal<unknown>): RuntimeNode | undefined;
   readonly renderAdapter: AlienDerivedRenderAdapter;
-  initializeRenderAdapter(factory: (graph: AlienDerivedGraphRuntime) => AlienDerivedRenderAdapter): AlienDerivedRenderAdapter;
+  initializeRenderAdapter(
+    factory: (graph: AlienDerivedGraphRuntime) => AlienDerivedRenderAdapter,
+  ): AlienDerivedRenderAdapter;
   signal<T>(value: T): RuntimeSignal<T>;
   computed<T>(getter: () => T): RuntimeReadonlySignal<T>;
   computed<T>(getter: () => T, setter: (value: T) => void): RuntimeSignal<T>;

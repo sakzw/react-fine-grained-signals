@@ -18,19 +18,14 @@ export function hasActiveRenderCollector(): boolean {
 }
 
 /** Replaces the current render collector and returns the previous collector. */
-export function setActiveRenderCollector(
-  collector?: RenderCollector,
-): RenderCollector | undefined {
+export function setActiveRenderCollector(collector?: RenderCollector): RenderCollector | undefined {
   const previous = activeRenderCollector;
   activeRenderCollector = collector;
   return previous;
 }
 
 /** Records a dependency and reports whether render collection was active. */
-export function trackRenderDependency(
-  dependency: RenderDependency,
-  observedVersion?: number,
-): boolean {
+export function trackRenderDependency(dependency: RenderDependency, observedVersion?: number): boolean {
   if (activeRenderCollector === undefined) return false;
   activeRenderCollector.add(dependency, observedVersion ?? dependency.getRenderVersion());
   return true;
@@ -61,10 +56,7 @@ export class RenderSubscription implements RenderDependency {
   #listeners?: Set<() => void> | undefined;
   #version = 0;
 
-  constructor(
-    onFirstSubscriber?: () => void,
-    onLastSubscriber?: () => void,
-  ) {
+  constructor(onFirstSubscriber?: () => void, onLastSubscriber?: () => void) {
     this.#onFirstSubscriber = onFirstSubscriber;
     this.#onLastSubscriber = onLastSubscriber;
   }

@@ -9,16 +9,7 @@ import { createElement, Fragment } from "react";
 import type * as React from "react";
 
 /** The small set of DOM properties that support direct signal bindings. */
-const REACTIVE_PROP_NAMES = new Set([
-  "title",
-  "id",
-  "className",
-  "hidden",
-  "disabled",
-  "style",
-  "value",
-  "checked",
-]);
+const REACTIVE_PROP_NAMES = new Set(["title", "id", "className", "hidden", "disabled", "style", "value", "checked"]);
 
 /**
  * The concrete strategy a direct binding is mounted with. Resolved once, in
@@ -30,7 +21,15 @@ const REACTIVE_PROP_NAMES = new Set([
  * same facts from the mounted DOM node's `tagName`. It is also half of a
  * binding's identity for `NodeBinder`'s re-attach diff.
  */
-type BindingKind = "style" | "style-properties" | "select-value" | "text-value" | "radio-value" | "checkbox-group" | "checked" | "prop";
+type BindingKind =
+  | "style"
+  | "style-properties"
+  | "select-value"
+  | "text-value"
+  | "radio-value"
+  | "checkbox-group"
+  | "checked"
+  | "prop";
 
 function resolveBindingKind(tagName: string, name: string, props?: HostProps): BindingKind {
   if (name === "bindValue") {
@@ -48,7 +47,13 @@ function resolveBindingKind(tagName: string, name: string, props?: HostProps): B
 }
 
 function isTwoWayBindingKind(kind: BindingKind): boolean {
-  return kind === "select-value" || kind === "text-value" || kind === "radio-value" || kind === "checkbox-group" || kind === "checked";
+  return (
+    kind === "select-value" ||
+    kind === "text-value" ||
+    kind === "radio-value" ||
+    kind === "checkbox-group" ||
+    kind === "checked"
+  );
 }
 
 function isStylePropertyBinding(source: BindingSource): source is StylePropertyBinding {
@@ -76,13 +81,43 @@ const UNCONTROLLED_PROP_NAMES: Record<string, string> = {
 // instead of getting a "px" suffix. Not exhaustive (SVG-only properties are
 // omitted since style binding is HTML-host-only), but covers the common cases.
 const UNITLESS_CSS_PROPERTIES = new Set([
-  "animationIterationCount", "aspectRatio", "borderImageOutset", "borderImageSlice",
-  "borderImageWidth", "boxFlex", "boxFlexGroup", "boxOrdinalGroup", "columnCount",
-  "columns", "flex", "flexGrow", "flexPositive", "flexShrink", "flexNegative",
-  "flexOrder", "gridArea", "gridColumn", "gridColumnEnd", "gridColumnSpan",
-  "gridColumnStart", "gridRow", "gridRowEnd", "gridRowSpan", "gridRowStart",
-  "fontWeight", "lineClamp", "lineHeight", "opacity", "order", "orphans",
-  "scale", "tabSize", "WebkitLineClamp", "widows", "zIndex", "zoom",
+  "animationIterationCount",
+  "aspectRatio",
+  "borderImageOutset",
+  "borderImageSlice",
+  "borderImageWidth",
+  "boxFlex",
+  "boxFlexGroup",
+  "boxOrdinalGroup",
+  "columnCount",
+  "columns",
+  "flex",
+  "flexGrow",
+  "flexPositive",
+  "flexShrink",
+  "flexNegative",
+  "flexOrder",
+  "gridArea",
+  "gridColumn",
+  "gridColumnEnd",
+  "gridColumnSpan",
+  "gridColumnStart",
+  "gridRow",
+  "gridRowEnd",
+  "gridRowSpan",
+  "gridRowStart",
+  "fontWeight",
+  "lineClamp",
+  "lineHeight",
+  "opacity",
+  "order",
+  "orphans",
+  "scale",
+  "tabSize",
+  "WebkitLineClamp",
+  "widows",
+  "zIndex",
+  "zoom",
 ]);
 
 type HostProps = Record<string, unknown>;
@@ -91,12 +126,20 @@ type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
 
 function assertSupportedSignalHostProp(name: string, value: unknown, tagName: string): void {
   if (name !== "children" && !tagName.includes("-") && isSignal(value)) {
-    throw new TypeError(`The full JSX runtime does not support Signal-valued ${name} props on <${tagName}>; use a supported Signal binding or pass ${name}.value.`);
+    throw new TypeError(
+      `The full JSX runtime does not support Signal-valued ${name} props on <${tagName}>; use a supported Signal binding or pass ${name}.value.`,
+    );
   }
 }
 // `snapshot` is the value React itself was handed for the prop at render (see
 // `transformHostProps`); a binding hands the node back to it on detach.
-type Binding = readonly [name: string, source: BindingSource, kind: BindingKind, snapshot: unknown, config?: readonly unknown[]];
+type Binding = readonly [
+  name: string,
+  source: BindingSource,
+  kind: BindingKind,
+  snapshot: unknown,
+  config?: readonly unknown[],
+];
 const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 
 export { SignalValue };
@@ -108,12 +151,15 @@ function isReactiveHostProp(name: string, value: unknown): value is ReadonlySign
 
 function isWritableSignal(value: unknown): value is Signal<unknown> {
   if (!isSignal(value)) return false;
-  const descriptor = Object.getOwnPropertyDescriptor(value, "value") ??
+  const descriptor =
+    Object.getOwnPropertyDescriptor(value, "value") ??
     Object.getOwnPropertyDescriptor(Object.getPrototypeOf(value), "value");
   return descriptor !== undefined && (typeof descriptor.set === "function" || descriptor.writable === true);
 }
 
-function getStylePropertyBinding(value: unknown): { source: StylePropertyBinding; snapshot: Record<string, unknown> } | undefined {
+function getStylePropertyBinding(
+  value: unknown,
+): { source: StylePropertyBinding; snapshot: Record<string, unknown> } | undefined {
   if (typeof value !== "object" || value === null || Array.isArray(value) || isSignal(value)) return undefined;
   const entries = Object.entries(value as Record<string, unknown>);
   if (!entries.some(([, entry]) => isSignal(entry))) return undefined;
@@ -170,10 +216,7 @@ type FailureEpisode = { hasReported: boolean };
  * `computed()` that fails on every keystroke from spamming one `console.error`
  * per keystroke.
  */
-function readBoundSignal<T>(
-  read: () => T,
-  episode: FailureEpisode,
-): { ok: true; value: T } | { ok: false } {
+function readBoundSignal<T>(read: () => T, episode: FailureEpisode): { ok: true; value: T } | { ok: false } {
   try {
     const value = read();
     episode.hasReported = false;
@@ -198,11 +241,7 @@ function readBoundSignal<T>(
  * re-apply in `bindSelectValue`, which reads outside the reactive graph via
  * `.peek()`.
  */
-function applyBoundSignal<T>(
-  read: () => T,
-  apply: (value: T) => void,
-  episode: FailureEpisode,
-): void {
+function applyBoundSignal<T>(read: () => T, apply: (value: T) => void, episode: FailureEpisode): void {
   const result = readBoundSignal(read, episode);
   if (result.ok) apply(result.value);
 }
@@ -284,7 +323,11 @@ function setDomProp(node: Element, name: string, value: unknown): void {
   // decision until React gives us the actual DOM node.
   if (node.namespaceURI !== HTML_NAMESPACE) {
     // Boolean attributes follow the HTML path: false removes, true is present.
-    setAttribute(node, name === "className" ? "class" : name, (name === "hidden" || name === "disabled") && value === false ? null : value);
+    setAttribute(
+      node,
+      name === "className" ? "class" : name,
+      (name === "hidden" || name === "disabled") && value === false ? null : value,
+    );
     return;
   }
 
@@ -379,7 +422,10 @@ function setControlledProp(node: Element, name: string, value: unknown): void {
   if (input.defaultChecked !== next) input.defaultChecked = next;
 }
 
-function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement, refresh: () => void): () => void {
+function bindFormReset(
+  node: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement,
+  refresh: () => void,
+): () => void {
   // Listen at the control's root (its document, or the shadow root that
   // `reset` does not cross), filtering by the control's *current* form: the
   // association can begin or change after mount (`form="id"` naming a form
@@ -407,15 +453,13 @@ function bindFormReset(node: HTMLInputElement | HTMLTextAreaElement | HTMLSelect
  * typing for a multi-select) is applied that way instead.
  */
 function isSelectValue(value: unknown, multiple: boolean): boolean {
-  return multiple
-    ? Array.isArray(value) && value.every((item) => typeof item === "string")
-    : typeof value === "string";
+  return multiple ? Array.isArray(value) && value.every((item) => typeof item === "string") : typeof value === "string";
 }
 
 function setSelectValue(select: HTMLSelectElement, value: unknown): void {
   const multiple = select.multiple;
   if (!isSelectValue(value, multiple)) throw new TypeError("Invalid select bindValue.");
-  const values = new Set(multiple ? value as string[] : [value as string]);
+  const values = new Set(multiple ? (value as string[]) : [value as string]);
   // A single select keeps going through `.value`, which also handles a value
   // no option matches (nothing selected).
   if (!multiple) {
@@ -445,7 +489,11 @@ function readSelectValue(select: HTMLSelectElement): string | string[] {
   return select.multiple ? Array.from(select.selectedOptions, (option) => option.value) : select.value;
 }
 
-function bindSelectValue(select: HTMLSelectElement, source: Signal<unknown>, apply: (value: unknown) => void): BindingSubscription {
+function bindSelectValue(
+  select: HTMLSelectElement,
+  source: Signal<unknown>,
+  apply: (value: unknown) => void,
+): BindingSubscription {
   // Shared by both read sites below: a subscription-triggered failure and a
   // MutationObserver-triggered failure are the same underlying computed
   // erroring, so they report as one episode, not two.
@@ -517,23 +565,30 @@ const groupClickTargets = new WeakMap<object, HTMLInputElement>();
 function defersToGroupClick(member: HTMLInputElement, target: HTMLInputElement | undefined): boolean {
   if (target === undefined) return false;
   if (member === target) return true;
-  return member.type === "radio" && target.type === "radio" && member.name === target.name
-    && member.form === target.form && member.getRootNode() === target.getRootNode();
+  return (
+    member.type === "radio" &&
+    target.type === "radio" &&
+    member.name === target.name &&
+    member.form === target.form &&
+    member.getRootNode() === target.getRootNode()
+  );
 }
 
 function getNativeRadioPeers(input: HTMLInputElement): HTMLInputElement[] {
   const form = input.form;
   const root = input.getRootNode();
-  const candidates: Element[] = form !== null
-    ? Array.from(form.elements)
-    : Array.from((root as ParentNode).querySelectorAll("input[type='radio']"));
-  return candidates.filter((candidate): candidate is HTMLInputElement =>
-    candidate.localName === "input"
-    && candidate !== input
-    && (candidate as HTMLInputElement).type === "radio"
-    && (candidate as HTMLInputElement).name === input.name
-    && (candidate as HTMLInputElement).form === form
-    && candidate.getRootNode() === root,
+  const candidates: Element[] =
+    form !== null
+      ? Array.from(form.elements)
+      : Array.from((root as ParentNode).querySelectorAll("input[type='radio']"));
+  return candidates.filter(
+    (candidate): candidate is HTMLInputElement =>
+      candidate.localName === "input" &&
+      candidate !== input &&
+      (candidate as HTMLInputElement).type === "radio" &&
+      (candidate as HTMLInputElement).name === input.name &&
+      (candidate as HTMLInputElement).form === form &&
+      candidate.getRootNode() === root,
   );
 }
 
@@ -565,10 +620,7 @@ function isInputValueGroupChecked(value: unknown, kind: InputValueGroupKind, opt
   return value.includes(optionValue);
 }
 
-function registerInputValueGroupMember(
-  source: Signal<unknown>,
-  member: InputValueGroupMember,
-): () => void {
+function registerInputValueGroupMember(source: Signal<unknown>, member: InputValueGroupMember): () => void {
   let members = inputValueGroupMembers.get(source);
   if (members === undefined) {
     members = new Set();
@@ -620,7 +672,8 @@ function bindInputValueGroup(
     // browser already moved the native state, and checking a peer (a
     // normalizing setter selecting another radio) would uncheck the target
     // before React's delegated onChange runs. Members elsewhere update now.
-    if (!defersToGroupClick(input, groupClickTargets.get(source))) write(isInputValueGroupChecked(value, kind, optionValue));
+    if (!defersToGroupClick(input, groupClickTargets.get(source)))
+      write(isInputValueGroupChecked(value, kind, optionValue));
   };
   const subscription = createBindingSubscription(source, apply, episode);
   let active = true;
@@ -664,7 +717,9 @@ function bindInputValueGroup(
       const current = source.peek();
       if (!isCheckboxGroupValue(current)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
       attempted = native
-        ? current.includes(optionValue) ? current : [...current, optionValue]
+        ? current.includes(optionValue)
+          ? current
+          : [...current, optionValue]
         : current.filter((value) => value !== optionValue);
     }
 
@@ -716,7 +771,10 @@ function bindInputValueGroup(
         }
       });
     }
-    if (isInputValueGroupChecked(written, kind, optionValue) === input.checked && input.defaultChecked !== input.checked) {
+    if (
+      isInputValueGroupChecked(written, kind, optionValue) === input.checked &&
+      input.defaultChecked !== input.checked
+    ) {
       // The target's write was deferred above to preserve React's click
       // tracker. Keep the browser reset default current without touching it.
       input.defaultChecked = input.checked;
@@ -833,21 +891,25 @@ function bindTextValue(
   // A failed read must bail out before this touches `pending`/`hasPending` —
   // a stale or garbage value must never latch in. `createBindingSubscription`
   // already skips `apply` on a failed read, so that guard lives there once.
-  const subscription = createBindingSubscription(source, (next) => {
-    if (composing) {
-      hasPending = true;
-      pending = next;
-      return;
-    }
-    if (handlingInput) {
-      // The write is skipped (the DOM already holds the typed text), but an
-      // accepted value must still become the reset default.
-      const text = next == null ? "" : String(next);
-      if (node.value === text && node.defaultValue !== text) node.defaultValue = text;
-      return;
-    }
-    write(next);
-  }, episode);
+  const subscription = createBindingSubscription(
+    source,
+    (next) => {
+      if (composing) {
+        hasPending = true;
+        pending = next;
+        return;
+      }
+      if (handlingInput) {
+        // The write is skipped (the DOM already holds the typed text), but an
+        // accepted value must still become the reset default.
+        const text = next == null ? "" : String(next);
+        if (node.value === text && node.defaultValue !== text) node.defaultValue = text;
+        return;
+      }
+      write(next);
+    },
+    episode,
+  );
   const disposeReset = bindFormReset(node, subscription.refresh);
 
   return {
@@ -882,9 +944,7 @@ function setStyleProperty(style: CSSStyleDeclaration, key: string, value: unknow
     style.setProperty(key, String(value));
     return;
   }
-  const cssValue = typeof value === "number" && !UNITLESS_CSS_PROPERTIES.has(key)
-    ? `${value}px`
-    : String(value);
+  const cssValue = typeof value === "number" && !UNITLESS_CSS_PROPERTIES.has(key) ? `${value}px` : String(value);
   (style as unknown as Record<string, string>)[key] = cssValue;
 }
 
@@ -898,7 +958,10 @@ function applyStyle(node: HTMLElement, value: unknown, previousKeys: readonly st
   // a string, for instance) would make `Object.keys` walk string indices
   // instead of CSS property names; treat anything that is not a plain object
   // as empty rather than writing garbage keys to the node's style.
-  const nextStyle = (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}) as Record<string, unknown>;
+  const nextStyle = (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}) as Record<
+    string,
+    unknown
+  >;
   const nextKeys = Object.keys(nextStyle);
   const nextKeySet = new Set(nextKeys);
 
@@ -944,9 +1007,7 @@ function subscribeStylePropertyEntries(
     restore(nextSnapshot) {
       if (!isSameStyle(applied, nextSnapshot)) {
         previousKeys = applyStyle(node as HTMLElement, nextSnapshot, previousKeys);
-        applied = typeof nextSnapshot === "object" && nextSnapshot !== null
-          ? { ...(nextSnapshot as HostProps) }
-          : {};
+        applied = typeof nextSnapshot === "object" && nextSnapshot !== null ? { ...(nextSnapshot as HostProps) } : {};
       }
     },
   };
@@ -982,27 +1043,29 @@ type MountedBinding = {
 // `b` is optional so callers can pass a positional lookup straight in: a
 // missing counterpart is simply not the same binding.
 function isSameBinding(a: Binding, b: Binding | undefined): b is Binding {
-  return b !== undefined
-    && a[0] === b[0]
-    && sameBindingSource(a[1], b[1])
-    && a[2] === b[2]
-    && sameBindingConfig(a[4], b[4]);
+  return (
+    b !== undefined && a[0] === b[0] && sameBindingSource(a[1], b[1]) && a[2] === b[2] && sameBindingConfig(a[4], b[4])
+  );
 }
 
 function sameBindingConfig(left: readonly unknown[] | undefined, right: readonly unknown[] | undefined): boolean {
   if (left === right) return true;
-  return left !== undefined
-    && right !== undefined
-    && left.length === right.length
-    && left.every((value, index) => Object.is(value, right[index]));
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.length === right.length &&
+    left.every((value, index) => Object.is(value, right[index]))
+  );
 }
 
 /** Whether two style values set the same properties to the same values. */
 function isSameStyle(a: unknown, b: unknown): boolean {
   if (typeof a !== "object" || a === null || typeof b !== "object" || b === null) return Object.is(a, b);
   const keys = Object.keys(a);
-  return keys.length === Object.keys(b).length
-    && keys.every((key) => Object.is((a as HostProps)[key], (b as HostProps)[key]));
+  return (
+    keys.length === Object.keys(b).length &&
+    keys.every((key) => Object.is((a as HostProps)[key], (b as HostProps)[key]))
+  );
 }
 
 /**
@@ -1012,9 +1075,10 @@ function isSameStyle(a: unknown, b: unknown): boolean {
  * every render (see `readInitialValue`), so it is compared by content.
  */
 function hasSameSnapshot(a: Binding, b: Binding): boolean {
-  return isTwoWayBindingKind(a[2]) || (a[2] === "style" || a[2] === "style-properties"
-    ? isSameStyle(a[3], b[3])
-    : Object.is(a[3], b[3]));
+  return (
+    isTwoWayBindingKind(a[2]) ||
+    (a[2] === "style" || a[2] === "style-properties" ? isSameStyle(a[3], b[3]) : Object.is(a[3], b[3]))
+  );
 }
 
 /** What `subscribeBinding` hands back to `mountBinding`. See `MountedBinding`. */
@@ -1045,9 +1109,11 @@ function subscribeBinding(
 ): Subscription {
   // Between a detach and its deferred teardown (see `NodeBinder`) the node is
   // no longer React's, so writes are held back; a re-attach refreshes instead.
-  const whileAttached = <T,>(write: (value: T) => void) => (value: T) => {
-    if (binder.attached) write(value);
-  };
+  const whileAttached =
+    <T>(write: (value: T) => void) =>
+    (value: T) => {
+      if (binder.attached) write(value);
+    };
   switch (kind) {
     case "style": {
       if (isStylePropertyBinding(source)) throw new Error("Internal style binding kind mismatch");
@@ -1070,7 +1136,9 @@ function subscribeBinding(
           subscription.refresh();
         },
         getStyleKeys: () => previousKeys,
-        restore: (snapshot) => { if (!isSameStyle(applied, snapshot)) write(snapshot); },
+        restore: (snapshot) => {
+          if (!isSameStyle(applied, snapshot)) write(snapshot);
+        },
       };
     }
     case "style-properties": {
@@ -1079,13 +1147,21 @@ function subscribeBinding(
     }
     case "select-value":
       return {
-        ...bindSelectValue(node as HTMLSelectElement, source as Signal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        ...bindSelectValue(
+          node as HTMLSelectElement,
+          source as Signal<unknown>,
+          whileAttached((value: unknown) => setControlledProp(node, "value", value)),
+        ),
         getStyleKeys: undefined,
         restore: undefined,
       };
     case "text-value":
       return {
-        ...bindTextValue(node as HTMLInputElement | HTMLTextAreaElement, source as Signal<unknown>, whileAttached((value: unknown) => setControlledProp(node, "value", value))),
+        ...bindTextValue(
+          node as HTMLInputElement | HTMLTextAreaElement,
+          source as Signal<unknown>,
+          whileAttached((value: unknown) => setControlledProp(node, "value", value)),
+        ),
         getStyleKeys: undefined,
         restore: undefined,
       };
@@ -1178,7 +1254,10 @@ function subscribeBinding(
         };
       }
       return {
-        ...createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached((value: unknown) => setControlledProp(node, name, value))),
+        ...createBindingSubscription(
+          source as ReadonlySignal<unknown>,
+          whileAttached((value: unknown) => setControlledProp(node, name, value)),
+        ),
         getStyleKeys: undefined,
         restore: undefined,
       };
@@ -1191,7 +1270,9 @@ function subscribeBinding(
       return {
         ...createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached(write)),
         getStyleKeys: undefined,
-        restore: (snapshot) => { if (!Object.is(applied, snapshot)) write(snapshot); },
+        restore: (snapshot) => {
+          if (!Object.is(applied, snapshot)) write(snapshot);
+        },
       };
     }
   }
@@ -1206,16 +1287,23 @@ function subscribeBinding(
  * binding re-attached for a newer render widens its own keys the same way.
  */
 function getInitialStyleKeys(staleKeys: readonly string[] | undefined, snapshot: unknown): readonly string[] {
-  const keys = typeof snapshot === "object" && snapshot !== null && !Array.isArray(snapshot) ? Object.keys(snapshot) : [];
+  const keys =
+    typeof snapshot === "object" && snapshot !== null && !Array.isArray(snapshot) ? Object.keys(snapshot) : [];
   if (staleKeys === undefined) return keys;
   for (const key of staleKeys) if (!keys.includes(key)) keys.push(key);
   return keys;
 }
 
-function mountBinding(node: Element, binding: Binding, binder: NodeBinder, staleStyleKeys?: readonly string[]): MountedBinding {
-  const initialStyleKeys = binding[2] === "style" || binding[2] === "style-properties"
-    ? getInitialStyleKeys(staleStyleKeys, binding[3])
-    : undefined;
+function mountBinding(
+  node: Element,
+  binding: Binding,
+  binder: NodeBinder,
+  staleStyleKeys?: readonly string[],
+): MountedBinding {
+  const initialStyleKeys =
+    binding[2] === "style" || binding[2] === "style-properties"
+      ? getInitialStyleKeys(staleStyleKeys, binding[3])
+      : undefined;
   const { dispose, refresh, getStyleKeys, restore } = subscribeBinding(
     node,
     binding[0],
@@ -1350,8 +1438,8 @@ class NodeBinder {
     // The common re-attach — a re-render that changed nothing about the
     // bindings — costs one walk and allocates nothing.
     if (
-      mounted.length === bindings.length
-      && mounted.every((entry, index) => isSameBinding(entry.binding, bindings[index]))
+      mounted.length === bindings.length &&
+      mounted.every((entry, index) => isSameBinding(entry.binding, bindings[index]))
     ) {
       return;
     }
@@ -1455,8 +1543,10 @@ const BINDING_REF_PENDING_LIMIT = 8;
 // Also compares snapshots, so a ref is only ever attached for the exact values
 // React was handed: the detach in `NodeBinder` restores to those.
 function haveSameBindings(a: readonly Binding[], b: readonly Binding[]): boolean {
-  return a.length === b.length
-    && a.every((binding, index) => isSameBinding(binding, b[index]) && hasSameSnapshot(binding, b[index]!));
+  return (
+    a.length === b.length &&
+    a.every((binding, index) => isSameBinding(binding, b[index]) && hasSameSnapshot(binding, b[index]!))
+  );
 }
 
 function descendBindingRefCache(node: BindingRefCacheNode, source: object): BindingRefCacheNode {
@@ -1511,16 +1601,16 @@ function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (no
     bindings,
     attachedNodes: 0,
     ref: createBindingRef(
-    bindings,
-    userRef,
-    () => {
-      if (entry.attachedNodes === 0 && !entries.includes(entry)) entries.push(entry);
-      entry.attachedNodes += 1;
-    },
-    () => {
-      entry.attachedNodes -= 1;
-      if (entry.attachedNodes === 0) removeBindingRefEntry(node, entry);
-    },
+      bindings,
+      userRef,
+      () => {
+        if (entry.attachedNodes === 0 && !entries.includes(entry)) entries.push(entry);
+        entry.attachedNodes += 1;
+      },
+      () => {
+        entry.attachedNodes -= 1;
+        if (entry.attachedNodes === 0) removeBindingRefEntry(node, entry);
+      },
     ),
   };
   retainPendingBindingRef(node, entry);
@@ -1576,11 +1666,14 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
           const initial = readInitialValue(value, kind);
           if (typeof initial !== "string") throw new TypeError("Radio bindValue requires a string.");
           if (typeof props.value !== "string") throw new TypeError("Radio bindValue requires a string value option.");
-          if (typeof props.name !== "string" || props.name.length === 0) throw new TypeError("Radio bindValue requires a non-empty name.");
+          if (typeof props.name !== "string" || props.name.length === 0)
+            throw new TypeError("Radio bindValue requires a non-empty name.");
         } else if (kind === "checkbox-group") {
           const initial = readInitialValue(value, kind);
-          if (!isCheckboxGroupValue(initial)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
-          if (typeof props.value !== "string") throw new TypeError("Checkbox group bindValue requires a string value option.");
+          if (!isCheckboxGroupValue(initial))
+            throw new TypeError("Checkbox group bindValue requires an array of strings.");
+          if (typeof props.value !== "string")
+            throw new TypeError("Checkbox group bindValue requires a string value option.");
         } else if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(resolvedInputType))) {
           throw new TypeError("bindValue: text-like, number, or range input/textarea/select only.");
         }
@@ -1631,13 +1724,13 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
 function transformHostProps(type: string, input: unknown): { props: HostProps; bindings: Binding[] } {
   const inputProps = (input ?? {}) as HostProps;
   const styleProperties = getStylePropertyBinding(inputProps.style);
-  const normalizedProps = styleProperties === undefined
-    ? inputProps
-    : { ...inputProps, style: styleProperties.snapshot };
+  const normalizedProps =
+    styleProperties === undefined ? inputProps : { ...inputProps, style: styleProperties.snapshot };
   const bindings = findHostBindings(normalizedProps, type);
   // Binding props never reach the DOM, including ones left `undefined`.
-  const strayBindingProps = Object.prototype.hasOwnProperty.call(normalizedProps, "bindValue")
-    || Object.prototype.hasOwnProperty.call(normalizedProps, "bindChecked");
+  const strayBindingProps =
+    Object.prototype.hasOwnProperty.call(normalizedProps, "bindValue") ||
+    Object.prototype.hasOwnProperty.call(normalizedProps, "bindChecked");
   if (styleProperties !== undefined) {
     bindings.push(["style", styleProperties.source, "style-properties", styleProperties.snapshot]);
   }
@@ -1697,11 +1790,7 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
  */
 function transformFragmentProps(input: unknown): unknown {
   const props = input as HostProps | null;
-  if (
-    props == null
-    || !("children" in props)
-    || (!isSignal(props.children) && !Array.isArray(props.children))
-  ) {
+  if (props == null || !("children" in props) || (!isSignal(props.children) && !Array.isArray(props.children))) {
     return input;
   }
   return { ...props, children: normalizeChild(props.children) };
@@ -1759,9 +1848,8 @@ export function createSignalAwareElement(
   }
   const normalizedChildren = children.map((child) => normalizeChild(child)) as React.ReactNode[];
   if (typeof type !== "string") {
-    const normalizedConfig = children.length === 0
-      ? transformFragmentProps(config) as Record<string, unknown> | null | undefined
-      : config;
+    const normalizedConfig =
+      children.length === 0 ? (transformFragmentProps(config) as Record<string, unknown> | null | undefined) : config;
     return createElement(type, normalizedConfig, ...normalizedChildren);
   }
   const { props, bindings } = transformHostProps(type, config ?? {});
@@ -1774,15 +1862,17 @@ type SignalableStyleObject<T> = {
 };
 type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style";
 type AriaPropName = `aria-${string}`;
-type SignalableHtmlProp<Name extends PropertyKey, Value> = Signalable<
-  Value | (Name extends "title" | "id" ? null : never)
-> | (Name extends "style" ? SignalableStyleObject<NonNullable<Value>> : never);
+type SignalableHtmlProp<Name extends PropertyKey, Value> =
+  | Signalable<Value | (Name extends "title" | "id" ? null : never)>
+  | (Name extends "style" ? SignalableStyleObject<NonNullable<Value>> : never);
 type AddSignalChildren<P> = Omit<P, "children"> & {
   children?: SignalChild;
 };
 type SignalizeKnownHtmlProps<P> = {
-  [Name in keyof P as Name extends DirectSignalPropName | AriaPropName ? Name : never]:
-    SignalableHtmlProp<Name, P[Name]>;
+  [Name in keyof P as Name extends DirectSignalPropName | AriaPropName ? Name : never]: SignalableHtmlProp<
+    Name,
+    P[Name]
+  >;
 };
 type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "children"> & {
   [Name in keyof SignalizeKnownHtmlProps<P>]: SignalizeKnownHtmlProps<P>[Name];
@@ -1790,75 +1880,94 @@ type AddHtmlSignalProps<P> = Omit<P, DirectSignalPropName | AriaPropName | "chil
   [name: `data-${string}`]: Signalable<string | number | boolean | undefined>;
 } & AddSignalChildren<{}>;
 
-type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "checked" | "defaultChecked" | "bindValue" | "bindChecked" | "name"> & (
-  Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked" | "name"> & { bindValue?: never | undefined; bindChecked?: never | undefined }
-  | {
-    type?: "text" | "search" | "tel" | "url" | "password" | "email" | "number" | "range";
-    name?: P["name"];
-    value?: never | undefined;
-    defaultValue?: never | undefined;
-    checked?: never | undefined;
-    defaultChecked?: never | undefined;
-    bindValue?: (Signal<string> & NotDeepSignal) | undefined;
-    bindChecked?: never | undefined;
-  }
-  | {
-    type: "checkbox";
-    name?: P["name"];
-    value?: P["value"];
-    defaultValue?: P["defaultValue"];
-    checked?: never | undefined;
-    defaultChecked?: never | undefined;
-    bindValue?: never | undefined;
-    bindChecked?: (Signal<boolean> & NotDeepSignal) | undefined;
-  }
-  | {
-    type: "radio";
-    name: string;
-    value: string;
-    defaultValue?: never | undefined;
-    checked?: never | undefined;
-    defaultChecked?: never | undefined;
-    bindValue: NarrowableSignal<string> & NotDeepSignal;
-    bindChecked?: never | undefined;
-  }
-  | {
-    type: "checkbox";
-    name?: P["name"];
-    value: string;
-    defaultValue?: never | undefined;
-    checked?: never | undefined;
-    defaultChecked?: never | undefined;
-    bindValue: NarrowableSignal<string[]> & NotDeepSignal;
-    bindChecked?: never | undefined;
-  }
-);
+type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<
+  AddHtmlSignalProps<P>,
+  "value" | "defaultValue" | "checked" | "defaultChecked" | "bindValue" | "bindChecked" | "name"
+> &
+  (
+    | (Pick<P, "value" | "defaultValue" | "checked" | "defaultChecked" | "name"> & {
+        bindValue?: never | undefined;
+        bindChecked?: never | undefined;
+      })
+    | {
+        type?: "text" | "search" | "tel" | "url" | "password" | "email" | "number" | "range";
+        name?: P["name"];
+        value?: never | undefined;
+        defaultValue?: never | undefined;
+        checked?: never | undefined;
+        defaultChecked?: never | undefined;
+        bindValue?: (Signal<string> & NotDeepSignal) | undefined;
+        bindChecked?: never | undefined;
+      }
+    | {
+        type: "checkbox";
+        name?: P["name"];
+        value?: P["value"];
+        defaultValue?: P["defaultValue"];
+        checked?: never | undefined;
+        defaultChecked?: never | undefined;
+        bindValue?: never | undefined;
+        bindChecked?: (Signal<boolean> & NotDeepSignal) | undefined;
+      }
+    | {
+        type: "radio";
+        name: string;
+        value: string;
+        defaultValue?: never | undefined;
+        checked?: never | undefined;
+        defaultChecked?: never | undefined;
+        bindValue: NarrowableSignal<string> & NotDeepSignal;
+        bindChecked?: never | undefined;
+      }
+    | {
+        type: "checkbox";
+        name?: P["name"];
+        value: string;
+        defaultValue?: never | undefined;
+        checked?: never | undefined;
+        defaultChecked?: never | undefined;
+        bindValue: NarrowableSignal<string[]> & NotDeepSignal;
+        bindChecked?: never | undefined;
+      }
+  );
 
-type BoundTextareaProps<P extends React.JSX.IntrinsicElements["textarea"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "bindValue"> & (
-  Pick<P, "value" | "defaultValue"> & { bindValue?: never | undefined }
-  | { value?: never | undefined; defaultValue?: never | undefined; bindValue?: (Signal<string> & NotDeepSignal) | undefined }
-);
+type BoundTextareaProps<P extends React.JSX.IntrinsicElements["textarea"]> = Omit<
+  AddHtmlSignalProps<P>,
+  "value" | "defaultValue" | "bindValue"
+> &
+  (
+    | (Pick<P, "value" | "defaultValue"> & { bindValue?: never | undefined })
+    | {
+        value?: never | undefined;
+        defaultValue?: never | undefined;
+        bindValue?: (Signal<string> & NotDeepSignal) | undefined;
+      }
+  );
 
-type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<AddHtmlSignalProps<P>, "value" | "defaultValue" | "multiple" | "bindValue"> & (
-  {
-    multiple?: boolean | undefined;
-    value?: React.JSX.IntrinsicElements["select"]["value"];
-    defaultValue?: React.JSX.IntrinsicElements["select"]["defaultValue"];
-    bindValue?: never | undefined;
-  }
-  | {
-    multiple?: false | undefined;
-    value?: never | undefined;
-    defaultValue?: never | undefined;
-    bindValue?: (NarrowableSignal<string> & NotDeepSignal) | undefined;
-  }
-  | {
-    multiple: true;
-    value?: never | undefined;
-    defaultValue?: never | undefined;
-    bindValue?: (NarrowableSignal<string[]> & NotDeepSignal) | undefined;
-  }
-);
+type BoundSelectProps<P extends React.JSX.IntrinsicElements["select"]> = Omit<
+  AddHtmlSignalProps<P>,
+  "value" | "defaultValue" | "multiple" | "bindValue"
+> &
+  (
+    | {
+        multiple?: boolean | undefined;
+        value?: React.JSX.IntrinsicElements["select"]["value"];
+        defaultValue?: React.JSX.IntrinsicElements["select"]["defaultValue"];
+        bindValue?: never | undefined;
+      }
+    | {
+        multiple?: false | undefined;
+        value?: never | undefined;
+        defaultValue?: never | undefined;
+        bindValue?: (NarrowableSignal<string> & NotDeepSignal) | undefined;
+      }
+    | {
+        multiple: true;
+        value?: never | undefined;
+        defaultValue?: never | undefined;
+        bindValue?: (NarrowableSignal<string[]> & NotDeepSignal) | undefined;
+      }
+  );
 
 type SignalIntrinsicElement<Tag extends keyof React.JSX.IntrinsicElements> = Tag extends "input"
   ? BoundInputProps<React.JSX.IntrinsicElements[Tag]>

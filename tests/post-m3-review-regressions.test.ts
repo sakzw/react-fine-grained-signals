@@ -76,7 +76,9 @@ describe("effect creation with a self-invalidating first run", () => {
       effect(() => {
         childRuns += 1;
         count.value;
-        return () => { childCleanups += 1; };
+        return () => {
+          childCleanups += 1;
+        };
       });
     });
 
@@ -104,7 +106,9 @@ describe("effect creation with a self-invalidating first run", () => {
     const a = signal(0);
     const b = signal(0);
     const seen: number[] = [];
-    const stopDouble = effect(() => { b.value = a.value * 2; });
+    const stopDouble = effect(() => {
+      b.value = a.value * 2;
+    });
     const stop = effect(() => {
       seen.push(b.value);
       if (a.value === 0) a.value = 5;
@@ -116,7 +120,6 @@ describe("effect creation with a self-invalidating first run", () => {
     stop();
     stopDouble();
   });
-
 });
 
 describe("deepSignal array identity lookups", () => {
@@ -222,7 +225,9 @@ describe("deepSignal array identity lookups", () => {
     // A lookup is a read: it must not hold back a write made around it.
     const count = signal(0);
     const counts: number[] = [];
-    const stop = effect(() => { counts.push(count.value); });
+    const stop = effect(() => {
+      counts.push(count.value);
+    });
     state.value.items.indexOf(a);
     count.value = 1;
     expect(counts).toEqual([0, 1]);

@@ -1,12 +1,7 @@
 import { coreRuntime } from "./core-runtime.js";
 import { executionContext, UNTRACKED_OWNER } from "./execution-owner.js";
 import { createDeepSignalFactory } from "./deep-signal-engine.js";
-import {
-  batch,
-  isSignal,
-  registerSignal,
-  untracked,
-} from "./base.js";
+import { batch, isSignal, registerSignal, untracked } from "./base.js";
 import type { ReadonlySignal } from "./base.js";
 
 declare const deepSignalBrand: unique symbol;
@@ -38,16 +33,16 @@ type DeepReadonlyLeaf =
 export type DeepReadonly<T> = unknown extends T
   ? T
   : T extends DeepReadonlyLeaf
-  ? T
-  : T extends ReadonlyMap<infer K, infer V>
-    ? ReadonlyMap<K, DeepReadonly<V>>
-    : T extends ReadonlySet<infer U>
-      ? ReadonlySet<DeepReadonly<U>>
-      : T extends WeakMap<infer K extends WeakKey, infer V>
-        ? Omit<WeakMap<K, DeepReadonly<V>>, "set" | "delete">
-        : T extends WeakSet<infer U extends WeakKey>
-          ? Omit<WeakSet<U>, "add" | "delete">
-          : { readonly [K in keyof T]: DeepReadonly<T[K]> };
+    ? T
+    : T extends ReadonlyMap<infer K, infer V>
+      ? ReadonlyMap<K, DeepReadonly<V>>
+      : T extends ReadonlySet<infer U>
+        ? ReadonlySet<DeepReadonly<U>>
+        : T extends WeakMap<infer K extends WeakKey, infer V>
+          ? Omit<WeakMap<K, DeepReadonly<V>>, "set" | "delete">
+          : T extends WeakSet<infer U extends WeakKey>
+            ? Omit<WeakSet<U>, "add" | "delete">
+            : { readonly [K in keyof T]: DeepReadonly<T[K]> };
 
 /**
  * A signal whose plain-object and array values are reactive. Map, Set, WeakMap
@@ -96,12 +91,17 @@ export interface DeepCollectionSignal<T extends object> extends Omit<ReadonlySig
  * WeakMap or WeakSet, which `deepSignal` does not accept as a root. Use
  * `deepCollectionSignal` for those.
  */
-export type PlainRoot<T> = T & (
-  unknown extends T ? unknown
-  : [Extract<T, ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> | WeakMap<WeakKey, unknown> | WeakSet<WeakKey>>] extends [never]
+export type PlainRoot<T> = T &
+  (unknown extends T
     ? unknown
-    : never
-);
+    : [
+          Extract<
+            T,
+            ReadonlyMap<unknown, unknown> | ReadonlySet<unknown> | WeakMap<WeakKey, unknown> | WeakSet<WeakKey>
+          >,
+        ] extends [never]
+      ? unknown
+      : never);
 
 /**
  * Package-internal: intersected with `ReadonlySignal<T>` where only root
@@ -114,17 +114,25 @@ let productionDeepSignals: ReturnType<typeof createDeepSignalFactory> | undefine
 
 /** Package-internal: the shared engine behind `deepSignal` and `deepCollectionSignal`. */
 export function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
-  return productionDeepSignals ??= createDeepSignalFactory({
+  return (productionDeepSignals ??= createDeepSignalFactory({
     createSignal<T>(initial: T) {
       return coreRuntime.createDeepSignal(initial);
     },
     createVersionSignal<T>(initial: T) {
       return coreRuntime.createDeepSignalVersion(initial);
     },
-    onUnwatched(source, callback) { coreRuntime.onDeepSignalUnwatched(source, callback); },
-    markWatched(source) { coreRuntime.markDeepSignalWatched(source); },
-    hasSubscribers(source) { return coreRuntime.hasDeepSignalSubscribers(source); },
-    hasLinkedSubscribers(source) { return coreRuntime.hasSubscribers(source); },
+    onUnwatched(source, callback) {
+      coreRuntime.onDeepSignalUnwatched(source, callback);
+    },
+    markWatched(source) {
+      coreRuntime.markDeepSignalWatched(source);
+    },
+    hasSubscribers(source) {
+      return coreRuntime.hasDeepSignalSubscribers(source);
+    },
+    hasLinkedSubscribers(source) {
+      return coreRuntime.hasSubscribers(source);
+    },
     batch,
     untracked,
     isSignal,
@@ -133,9 +141,10 @@ export function getProductionDeepSignals(): NonNullable<typeof productionDeepSig
       // Another copy's `untracked()` only clears that copy's subscriber; the
       // shared owner is what says this read must not be tracked by anyone.
       if (owner === UNTRACKED_OWNER) return false;
-      return coreRuntime.hasActiveSubscriber() ||
-        (owner !== undefined && typeof owner !== "symbol" &&
-          (owner.kind === "graph" || owner.kind === "render"));
+      return (
+        coreRuntime.hasActiveSubscriber() ||
+        (owner !== undefined && typeof owner !== "symbol" && (owner.kind === "graph" || owner.kind === "render"))
+      );
     },
     getBatchDepth: () => coreRuntime.getBatchDepth(),
     isSpeculative: () => coreRuntime.isSpeculative(),
@@ -143,7 +152,7 @@ export function getProductionDeepSignals(): NonNullable<typeof productionDeepSig
     registerDeepSignal(value) {
       registerSignal(value as DeepSignal<object>);
     },
-  });
+  }));
 }
 
 /**
@@ -151,16 +160,16 @@ export function getProductionDeepSignals(): NonNullable<typeof productionDeepSig
  * (or for the raw object behind it). This package-internal helper is not part
  * of any published entry point.
  */
-export function inspectDeepSignalMetadata(value: object): ReturnType<
-  ReturnType<typeof createDeepSignalFactory>["inspectDeepSignalMetadata"]
-> {
+export function inspectDeepSignalMetadata(
+  value: object,
+): ReturnType<ReturnType<typeof createDeepSignalFactory>["inspectDeepSignalMetadata"]> {
   return getProductionDeepSignals().inspectDeepSignalMetadata(value);
 }
 
 /** Package-internal: primitive collection keys that still retain version metadata. */
-export function inspectCollectionMetadata(value: object): ReturnType<
-  ReturnType<typeof createDeepSignalFactory>["inspectCollectionMetadata"]
-> {
+export function inspectCollectionMetadata(
+  value: object,
+): ReturnType<ReturnType<typeof createDeepSignalFactory>["inspectCollectionMetadata"]> {
   return getProductionDeepSignals().inspectCollectionMetadata(value);
 }
 

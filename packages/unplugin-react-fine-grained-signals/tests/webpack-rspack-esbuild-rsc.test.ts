@@ -21,20 +21,26 @@ writeFileSync(
   }).code,
 );
 
-writeFileSync(serverEntry, [
-  '"use server";',
-  'import { signal } from "react-fine-grained-signals";',
-  "const count = signal(0);",
-  "export function ServerAction() { return <output>{count.value}</output>; }",
-  "",
-].join("\n"));
-writeFileSync(clientEntry, [
-  '"use client";',
-  'import { signal } from "react-fine-grained-signals";',
-  "const count = signal(0);",
-  "export function Client() { return <output>{count.value}</output>; }",
-  "",
-].join("\n"));
+writeFileSync(
+  serverEntry,
+  [
+    '"use server";',
+    'import { signal } from "react-fine-grained-signals";',
+    "const count = signal(0);",
+    "export function ServerAction() { return <output>{count.value}</output>; }",
+    "",
+  ].join("\n"),
+);
+writeFileSync(
+  clientEntry,
+  [
+    '"use client";',
+    'import { signal } from "react-fine-grained-signals";',
+    "const count = signal(0);",
+    "export function Client() { return <output>{count.value}</output>; }",
+    "",
+  ].join("\n"),
+);
 
 afterAll(() => {
   rmSync(fixtureDir, { recursive: true, force: true });
@@ -55,8 +61,7 @@ function useSourceLoader<T extends PluginWithApply>(plugin: T): T {
   const apply = plugin.apply.bind(plugin);
   plugin.apply = (compiler: unknown) => {
     apply(compiler);
-    const rules = (compiler as { options?: { module?: { rules?: RuleWithDynamicUse[] } } })
-      .options?.module?.rules;
+    const rules = (compiler as { options?: { module?: { rules?: RuleWithDynamicUse[] } } }).options?.module?.rules;
     for (const rule of rules ?? []) {
       if (rule.enforce !== "pre" || typeof rule.use !== "function") continue;
       const originalUse = rule.use as (data: unknown) => unknown;
@@ -64,8 +69,7 @@ function useSourceLoader<T extends PluginWithApply>(plugin: T): T {
         const entries = originalUse(data);
         if (!Array.isArray(entries)) return entries;
         return entries.map((entry) =>
-          entry !== null && typeof entry === "object" &&
-            (entry as { ident?: unknown }).ident === pluginName
+          entry !== null && typeof entry === "object" && (entry as { ident?: unknown }).ident === pluginName
             ? { ...(entry as object), loader: sourceLoader }
             : entry,
         );
@@ -110,12 +114,17 @@ describe("Webpack adapter RSC integration", () => {
 
     try {
       const stats = await new Promise<import("webpack").Stats>((resolve, reject) => {
-        compiler.run((error, result) => error ? reject(error) : result ? resolve(result) : reject(new Error("Webpack returned no stats")));
+        compiler.run((error, result) =>
+          error ? reject(error) : result ? resolve(result) : reject(new Error("Webpack returned no stats")),
+        );
       });
       expect(stats.hasErrors()).toBe(false);
-      const warning = stats.compilation.warnings.find((entry) => entry.message.includes('top-level "use server" directive'));
+      const warning = stats.compilation.warnings.find((entry) =>
+        entry.message.includes('top-level "use server" directive'),
+      );
       expect(warning?.message).toContain('top-level "use server" directive');
-      if (warning === undefined) throw new Error(JSON.stringify(stats.compilation.warnings.map((entry) => entry.message)));
+      if (warning === undefined)
+        throw new Error(JSON.stringify(stats.compilation.warnings.map((entry) => entry.message)));
       assertBuildArtifacts(
         readFileSync(join(outputDir, "server.js"), "utf8"),
         readFileSync(join(outputDir, "client.js"), "utf8"),
@@ -143,15 +152,21 @@ describe("Webpack adapter RSC integration", () => {
       optimization: { minimize: false },
       externals: [/^(?:react|react-fine-grained-signals)(?:\/|$)/],
       module: { rules: [{ test: /\.jsx$/, enforce: "post", use: [join(import.meta.dirname, "jsx-loader.cjs")] }] },
-      plugins: [useSourceLoader(webpackAdapter({
-        mode: "auto",
-        diagnostics: { errorOn: ["RFGS009"] },
-      }))],
+      plugins: [
+        useSourceLoader(
+          webpackAdapter({
+            mode: "auto",
+            diagnostics: { errorOn: ["RFGS009"] },
+          }),
+        ),
+      ],
     });
 
     try {
       const stats = await new Promise<import("webpack").Stats>((resolve, reject) => {
-        compiler.run((error, result) => error ? reject(error) : result ? resolve(result) : reject(new Error("Webpack returned no stats")));
+        compiler.run((error, result) =>
+          error ? reject(error) : result ? resolve(result) : reject(new Error("Webpack returned no stats")),
+        );
       });
       expect(stats.hasErrors()).toBe(true);
       const failure = stats.compilation.errors.find((entry) => entry.message.includes("RFGS009"));
@@ -181,12 +196,17 @@ describe("Rspack adapter RSC integration", () => {
 
     try {
       const stats = await new Promise<import("@rspack/core").Stats>((resolve, reject) => {
-        compiler.run((error, result) => error ? reject(error) : result ? resolve(result) : reject(new Error("Rspack returned no stats")));
+        compiler.run((error, result) =>
+          error ? reject(error) : result ? resolve(result) : reject(new Error("Rspack returned no stats")),
+        );
       });
       expect(stats.hasErrors()).toBe(false);
-      const warning = stats.compilation.warnings.find((entry) => entry.message.includes('top-level "use server" directive'));
+      const warning = stats.compilation.warnings.find((entry) =>
+        entry.message.includes('top-level "use server" directive'),
+      );
       expect(warning?.message).toContain('top-level "use server" directive');
-      if (warning === undefined) throw new Error(JSON.stringify(stats.compilation.warnings.map((entry) => entry.message)));
+      if (warning === undefined)
+        throw new Error(JSON.stringify(stats.compilation.warnings.map((entry) => entry.message)));
       assertBuildArtifacts(
         readFileSync(join(outputDir, "server.js"), "utf8"),
         readFileSync(join(outputDir, "client.js"), "utf8"),
@@ -214,15 +234,21 @@ describe("Rspack adapter RSC integration", () => {
       optimization: { minimize: false },
       externals: [/^(?:react|react-fine-grained-signals)(?:\/|$)/],
       module: { rules: [{ test: /\.jsx$/, enforce: "post", use: [join(import.meta.dirname, "jsx-loader.cjs")] }] },
-      plugins: [useSourceLoader(rspackAdapter({
-        mode: "auto",
-        diagnostics: { errorOn: ["RFGS009"] },
-      }))],
+      plugins: [
+        useSourceLoader(
+          rspackAdapter({
+            mode: "auto",
+            diagnostics: { errorOn: ["RFGS009"] },
+          }),
+        ),
+      ],
     });
 
     try {
       const stats = await new Promise<import("@rspack/core").Stats>((resolve, reject) => {
-        compiler.run((error, result) => error ? reject(error) : result ? resolve(result) : reject(new Error("Rspack returned no stats")));
+        compiler.run((error, result) =>
+          error ? reject(error) : result ? resolve(result) : reject(new Error("Rspack returned no stats")),
+        );
       });
       expect(stats.hasErrors()).toBe(true);
       const failure = stats.compilation.errors.find((entry) => entry.message.includes("RFGS009"));

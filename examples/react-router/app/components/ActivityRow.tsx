@@ -8,13 +8,7 @@ import type { ActivityEntry } from "../lib/task-store.js";
  * useSignalTracking() boundary by hand. That boundary is best-effort, and with
  * React Compiler in the build the component must opt out of memoization.
  */
-export function ActivityRow({
-  entry,
-  slot,
-}: {
-  entry: () => ActivityEntry;
-  slot: number;
-}) {
+export function ActivityRow({ entry, slot }: { entry: () => ActivityEntry; slot: number }) {
   "use no memo";
 
   useSignalTracking();

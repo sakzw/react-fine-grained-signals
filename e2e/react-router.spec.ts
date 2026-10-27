@@ -70,9 +70,7 @@ test("hydrates without console errors and responds to a real click", async ({ pa
   expect(errors).toEqual([]);
 });
 
-test("streams the activity route's Suspense fallback before its resolved insight", async ({
-  request,
-}) => {
+test("streams the activity route's Suspense fallback before its resolved insight", async ({ request }) => {
   // A raw streamed fetch, not `page`: Chromium's own load pipeline can
   // easily outrun InsightPanel's short simulated delay (see
   // InsightPanel.tsx), so a browser-side poll for the fallback text is
@@ -89,9 +87,7 @@ test("streams the activity route's Suspense fallback before its resolved insight
   expect(resolvedAt).toBeGreaterThan(fallbackAt);
 });
 
-test("navigates to the activity route client-side, without a full page reload", async ({
-  page,
-}) => {
+test("navigates to the activity route client-side, without a full page reload", async ({ page }) => {
   const errors = await openHydrated(page);
 
   let fullPageLoads = 0;
@@ -105,10 +101,7 @@ test("navigates to the activity route client-side, without a full page reload", 
   await page.waitForURL(/\/activity$/);
   await expect(page.locator("h1")).toHaveText("アクティビティログ");
   await expect(page.locator(".activity-list")).toContainText("ボードを開きました");
-  await expect(page.getByRole("link", { name: "アクティビティ" })).toHaveAttribute(
-    "aria-current",
-    "page",
-  );
+  await expect(page.getByRole("link", { name: "アクティビティ" })).toHaveAttribute("aria-current", "page");
 
   // No `load` event fired after the initial one from openHydrated's
   // page.goto — this was a client-side (SPA) navigation, not a full
@@ -117,9 +110,7 @@ test("navigates to the activity route client-side, without a full page reload", 
   expect(errors).toEqual([]);
 });
 
-test("resolves the streamed insight after a client-side navigation too", async ({
-  page,
-}) => {
+test("resolves the streamed insight after a client-side navigation too", async ({ page }) => {
   const errors = await openHydrated(page);
 
   await page.getByRole("link", { name: "アクティビティ" }).click();
@@ -138,9 +129,7 @@ test("resolves the streamed insight after a client-side navigation too", async (
   expect(errors).toEqual([]);
 });
 
-test("propagates a task added on the board into the activity log across routes", async ({
-  page,
-}) => {
+test("propagates a task added on the board into the activity log across routes", async ({ page }) => {
   const errors = await openHydrated(page);
 
   // The board and the log read the same TaskStore via useOutletContext (see
@@ -160,9 +149,7 @@ test("propagates a task added on the board into the activity log across routes",
   expect(errors).toEqual([]);
 });
 
-test("reorders and limits the activity log positionally via LogSettingsForm", async ({
-  page,
-}) => {
+test("reorders and limits the activity log positionally via LogSettingsForm", async ({ page }) => {
   const errors = await openHydrated(page);
 
   for (const title of ["First task", "Second task", "Third task"]) {

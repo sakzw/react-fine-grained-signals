@@ -8,18 +8,27 @@ type CreateElement = typeof reactJsx;
 
 function assertSupportedProps(props: Record<string, unknown> | null | undefined): void {
   if (props == null) return;
-  if (Object.prototype.hasOwnProperty.call(props, "bindValue") || Object.prototype.hasOwnProperty.call(props, "bindChecked")) {
-    throw new TypeError("The lite JSX runtime supports Signal children only; form bindings require the default JSX runtime.");
+  if (
+    Object.prototype.hasOwnProperty.call(props, "bindValue") ||
+    Object.prototype.hasOwnProperty.call(props, "bindChecked")
+  ) {
+    throw new TypeError(
+      "The lite JSX runtime supports Signal children only; form bindings require the default JSX runtime.",
+    );
   }
   for (const [name, value] of Object.entries(props)) {
     if (name === "children") continue;
     if (isSignal(value)) {
-      throw new TypeError(`The lite JSX runtime does not support Signal-valued ${name} props; use a Signal child or the default JSX runtime.`);
+      throw new TypeError(
+        `The lite JSX runtime does not support Signal-valued ${name} props; use a Signal child or the default JSX runtime.`,
+      );
     }
     if (name === "style" && typeof value === "object" && value !== null) {
       const signalStyleProperty = Object.entries(value).find(([, entry]) => isSignal(entry));
       if (signalStyleProperty !== undefined) {
-        throw new TypeError(`The lite JSX runtime does not support Signal-valued style.${signalStyleProperty[0]}; use the default JSX runtime.`);
+        throw new TypeError(
+          `The lite JSX runtime does not support Signal-valued style.${signalStyleProperty[0]}; use the default JSX runtime.`,
+        );
       }
     }
   }

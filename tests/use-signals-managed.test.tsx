@@ -117,7 +117,9 @@ describe("managed useManagedSignals render scope", () => {
   it("discards dependencies captured by a suspended render attempt", async () => {
     const source = signal("before");
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     let suspended = true;
     const renders = vi.fn();
 
@@ -130,7 +132,11 @@ describe("managed useManagedSignals render scope", () => {
       });
     }
 
-    render(<Suspense fallback={<output aria-label="managed fallback">loading</output>}><Reader /></Suspense>);
+    render(
+      <Suspense fallback={<output aria-label="managed fallback">loading</output>}>
+        <Reader />
+      </Suspense>,
+    );
     expect(screen.getByLabelText("managed fallback").textContent).toBe("loading");
 
     // This is an abandoned attempt, so the write must not publish a stale
@@ -224,7 +230,11 @@ describe("managed useManagedSignals render scope", () => {
       });
     }
 
-    const view = render(<StrictMode><Reader /></StrictMode>);
+    const view = render(
+      <StrictMode>
+        <Reader />
+      </StrictMode>,
+    );
     act(() => {
       source.value = 1;
     });
@@ -256,7 +266,12 @@ describe("managed useManagedSignals render scope", () => {
       });
     }
 
-    render(<><Writer /><Reader /></>);
+    render(
+      <>
+        <Writer />
+        <Reader />
+      </>,
+    );
 
     expect(screen.getByLabelText("managed computed race").textContent).toBe("4");
     expect(renders).toHaveBeenCalledTimes(2);
@@ -288,10 +303,7 @@ describe("managed useManagedSignals render scope", () => {
     const renders = vi.fn();
 
     function Reader() {
-      const remaining = useComputed(
-        () => state.value.tasks.filter((task) => !task.done).length,
-        [state],
-      );
+      const remaining = useComputed(() => state.value.tasks.filter((task) => !task.done).length, [state]);
       return managed(() => {
         renders();
         return <output aria-label="managed deep computed">{remaining.value}</output>;
@@ -351,16 +363,13 @@ describe("managed useManagedSignals render scope", () => {
         const nestedValues = useMiddleValues();
         const afterNestedScope = outer.value;
         return (
-          <output aria-label="three nested scopes">
-            {`${beforeNestedScope}/${nestedValues}/${afterNestedScope}`}
-          </output>
+          <output aria-label="three nested scopes">{`${beforeNestedScope}/${nestedValues}/${afterNestedScope}`}</output>
         );
       });
     }
 
     render(<Reader />);
-    expect(screen.getByLabelText("three nested scopes").textContent)
-      .toBe("outer-0/middle-0/inner-0/outer-0");
+    expect(screen.getByLabelText("three nested scopes").textContent).toBe("outer-0/middle-0/inner-0/outer-0");
     expect(hasActiveRenderCollector()).toBe(false);
 
     for (const [source, next] of [
@@ -371,8 +380,7 @@ describe("managed useManagedSignals render scope", () => {
       act(() => {
         source.value = next;
       });
-      expect(screen.getByLabelText("three nested scopes").textContent)
-        .toContain(next);
+      expect(screen.getByLabelText("three nested scopes").textContent).toContain(next);
       expect(hasActiveRenderCollector()).toBe(false);
     }
     expect(renders).toHaveBeenCalledTimes(4);
@@ -434,7 +442,11 @@ describe("managed useManagedSignals render scope", () => {
         return <output aria-label="managed then bare">{`${first}/${middle}/${last}`}</output>;
       } finally {
         managedScope.finish();
-        owners = { managed: managedOwner, bare: bareOwner, afterManagedClose: executionContext.owner as object | undefined };
+        owners = {
+          managed: managedOwner,
+          bare: bareOwner,
+          afterManagedClose: executionContext.owner as object | undefined,
+        };
       }
     }
 
@@ -443,11 +455,17 @@ describe("managed useManagedSignals render scope", () => {
     expect(owners?.managed).not.toBe(owners?.bare);
     expect(screen.getByLabelText("managed then bare").textContent).toBe("managed/bare/still bare");
 
-    act(() => { beforeBare.value = "managed updated"; });
+    act(() => {
+      beforeBare.value = "managed updated";
+    });
     expect(renders).toHaveBeenCalledTimes(2);
-    act(() => { insideBare.value = "bare updated"; });
+    act(() => {
+      insideBare.value = "bare updated";
+    });
     expect(renders).toHaveBeenCalledTimes(3);
-    act(() => { afterBare.value = "still bare updated"; });
+    act(() => {
+      afterBare.value = "still bare updated";
+    });
     expect(renders).toHaveBeenCalledTimes(4);
   });
 
@@ -484,11 +502,17 @@ describe("managed useManagedSignals render scope", () => {
     expect(owners?.bare).not.toBe(owners?.managed);
     expect(screen.getByLabelText("bare then managed").textContent).toBe("bare/managed/bare again");
 
-    act(() => { beforeManaged.value = "bare updated"; });
+    act(() => {
+      beforeManaged.value = "bare updated";
+    });
     expect(renders).toHaveBeenCalledTimes(2);
-    act(() => { insideManaged.value = "managed updated"; });
+    act(() => {
+      insideManaged.value = "managed updated";
+    });
     expect(renders).toHaveBeenCalledTimes(3);
-    act(() => { afterManaged.value = "bare resumed"; });
+    act(() => {
+      afterManaged.value = "bare resumed";
+    });
     expect(renders).toHaveBeenCalledTimes(4);
     expect(screen.getByLabelText("bare then managed").textContent).toBe("bare updated/managed updated/bare resumed");
   });
@@ -503,13 +527,21 @@ describe("managed useManagedSignals render scope", () => {
     function Comp() {
       useSignalTracking();
       const n = useCount();
-      return <b aria-label="capture hook">{n}:{other.value}</b>;
+      return (
+        <b aria-label="capture hook">
+          {n}:{other.value}
+        </b>
+      );
     }
     render(<Comp />);
     expect(screen.getByLabelText("capture hook").textContent).toBe("1:o0");
-    act(() => { other.value = "o1"; });
+    act(() => {
+      other.value = "o1";
+    });
     expect(screen.getByLabelText("capture hook").textContent).toBe("1:o1");
-    act(() => { count.value = 2; });
+    act(() => {
+      count.value = 2;
+    });
     expect(screen.getByLabelText("capture hook").textContent).toBe("2:o1");
   });
 
@@ -523,11 +555,17 @@ describe("managed useManagedSignals render scope", () => {
     function Row({ item }: { item: { done: boolean } }) {
       useSignalTracking();
       const t = useTheme();
-      return <i aria-label="row">{t}:{item.done ? "done" : "todo"}</i>;
+      return (
+        <i aria-label="row">
+          {t}:{item.done ? "done" : "todo"}
+        </i>
+      );
     }
     render(<Row item={task.value} />);
     expect(screen.getByLabelText("row").textContent).toBe("light:todo");
-    act(() => { task.value.done = true; });
+    act(() => {
+      task.value.done = true;
+    });
     expect(screen.getByLabelText("row").textContent).toBe("light:done");
   });
 
@@ -536,15 +574,25 @@ describe("managed useManagedSignals render scope", () => {
     const other = signal("o0");
     function useCount() {
       const scope = useManagedSignals();
-      try { return count.value; } finally { scope.finish(); }
+      try {
+        return count.value;
+      } finally {
+        scope.finish();
+      }
     }
     function Comp() {
       useSignalTracking();
       const n = useCount();
-      return <b aria-label="managed hook">{n}:{other.value}</b>;
+      return (
+        <b aria-label="managed hook">
+          {n}:{other.value}
+        </b>
+      );
     }
     render(<Comp />);
-    act(() => { other.value = "o1"; });
+    act(() => {
+      other.value = "o1";
+    });
     expect(screen.getByLabelText("managed hook").textContent).toBe("1:o1");
   });
 
@@ -568,13 +616,27 @@ describe("managed useManagedSignals render scope", () => {
     }
     function Capturing() {
       const n = useCaptured();
-      return <span>{n}{hidden.value}</span>;
+      return (
+        <span>
+          {n}
+          {hidden.value}
+        </span>
+      );
     }
-    render(<><Sibling /><Capturing /></>);
+    render(
+      <>
+        <Sibling />
+        <Capturing />
+      </>,
+    );
     const before = siblingRenders.mock.calls.length;
-    act(() => { hidden.value = "changed"; });
+    act(() => {
+      hidden.value = "changed";
+    });
     expect(siblingRenders.mock.calls.length).toBeLessThanOrEqual(before + 1);
-    act(() => { own.value = "b"; });
+    act(() => {
+      own.value = "b";
+    });
     expect(screen.getAllByText("b").length).toBeGreaterThan(0);
   });
 
@@ -584,9 +646,7 @@ describe("managed useManagedSignals render scope", () => {
     function SelfOverlapping() {
       const store = useManagedSignals();
       try {
-        return (
-          <output aria-label="self overlapping">{state.value.overlapped}</output>
-        );
+        return <output aria-label="self overlapping">{state.value.overlapped}</output>;
       } finally {
         store.finish();
       }
@@ -607,9 +667,7 @@ describe("managed useManagedSignals render scope", () => {
     // rather than inheriting a leaked one.
     const untracked = deepSignal({ leaked: 0 });
     function Ordinary() {
-      return managed(() => (
-        <output aria-label="ordinary">{untracked.value.leaked}</output>
-      ));
+      return managed(() => <output aria-label="ordinary">{untracked.value.leaked}</output>);
     }
     render(<Ordinary />);
     expect(hasActiveRenderCollector()).toBe(false);
@@ -638,7 +696,14 @@ describe("useSignalCapture iterate", () => {
             void nextTag.value;
             return () => {
               const step = ++index;
-              return { get done() { return step > limit.value; }, get value() { return prefix.value + step; } };
+              return {
+                get done() {
+                  return step > limit.value;
+                },
+                get value() {
+                  return prefix.value + step;
+                },
+              };
             };
           },
           get return() {
@@ -655,21 +720,34 @@ describe("useSignalCapture iterate", () => {
       let out = "";
       for (const item of scope.iterate(() => list.value)) out += item;
       for (const item of scope.iterate(() => custom)) out += item;
-      for (const item of scope.iterate(() => custom)) { out += `|${item}`; break; }
+      for (const item of scope.iterate(() => custom)) {
+        out += `|${item}`;
+        break;
+      }
       return <output aria-label="iterated">{out}</output>;
     }
     render(<Reader />);
     const read = () => screen.getByLabelText("iterated").textContent;
     expect(read()).toBe("ap1|p1");
-    act(() => { list.value = ["a", "b"]; });
+    act(() => {
+      list.value = ["a", "b"];
+    });
     expect(read()).toBe("abp1|p1");
-    act(() => { limit.value = 2; });
+    act(() => {
+      limit.value = 2;
+    });
     expect(read()).toBe("abp1p2|p1");
-    act(() => { prefix.value = "q"; });
+    act(() => {
+      prefix.value = "q";
+    });
     expect(read()).toBe("abq1q2|q1");
     const before = renders.mock.calls.length;
-    act(() => { nextTag.value = 1; });
-    act(() => { closeTag.value = 1; });
+    act(() => {
+      nextTag.value = 1;
+    });
+    act(() => {
+      closeTag.value = 1;
+    });
     expect(renders.mock.calls.length).toBe(before + 2);
   });
 
@@ -678,19 +756,36 @@ describe("useSignalCapture iterate", () => {
     const custom = {
       [Symbol.iterator]() {
         let step = 0;
-        return { next: () => { step += 1; return { done: false, get value() { return tag.value + step; } }; } };
+        return {
+          next: () => {
+            step += 1;
+            return {
+              done: false,
+              get value() {
+                return tag.value + step;
+              },
+            };
+          },
+        };
       },
     };
-    function* delegate() { yield* custom; }
+    function* delegate() {
+      yield* custom;
+    }
     function Reader() {
       const scope = useSignalCapture();
       let out = "";
-      for (const item of scope.iterate(() => delegate())) { out += item; break; }
+      for (const item of scope.iterate(() => delegate())) {
+        out += item;
+        break;
+      }
       return <output aria-label="delegated">{out}</output>;
     }
     render(<Reader />);
     expect(screen.getByLabelText("delegated").textContent).toBe("a1");
-    act(() => { tag.value = "b"; });
+    act(() => {
+      tag.value = "b";
+    });
     expect(screen.getByLabelText("delegated").textContent).toBe("b1");
   });
 
@@ -708,11 +803,20 @@ describe("useSignalCapture iterate", () => {
       // A read the transform could not capture.
       return <span>{hidden.value}</span>;
     }
-    render(<><Sibling /><Capturing /></>);
+    render(
+      <>
+        <Sibling />
+        <Capturing />
+      </>,
+    );
     const before = siblingRenders.mock.calls.length;
-    act(() => { hidden.value = "changed"; });
+    act(() => {
+      hidden.value = "changed";
+    });
     expect(siblingRenders.mock.calls.length).toBeLessThanOrEqual(before + 1);
-    act(() => { own.value = "b"; });
+    act(() => {
+      own.value = "b";
+    });
     expect(screen.getAllByText("b").length).toBeGreaterThan(0);
   });
 
@@ -725,14 +829,19 @@ describe("useSignalCapture iterate", () => {
     render(<Holder />);
     const loop = (iterable: unknown) => {
       const seen: unknown[] = [];
-      for (const item of scope.iterate(() => iterable as Iterable<unknown>)) { seen.push(item); break; }
+      for (const item of scope.iterate(() => iterable as Iterable<unknown>)) {
+        seen.push(item);
+        break;
+      }
       return seen;
     };
     expect(() => loop({ [Symbol.iterator]: () => 1 })).toThrow(TypeError);
     expect(() => loop({ [Symbol.iterator]: () => ({ next: () => 1 }) })).toThrow(TypeError);
     // No `return` method: breaking out simply stops.
     expect(loop({ [Symbol.iterator]: () => ({ next: () => ({ done: false, value: 7 }) }) })).toEqual([7]);
-    expect(() => loop({ [Symbol.iterator]: () => ({ next: () => ({ done: false, value: 1 }), return: () => 1 }) })).toThrow(TypeError);
+    expect(() =>
+      loop({ [Symbol.iterator]: () => ({ next: () => ({ done: false, value: 1 }), return: () => 1 }) }),
+    ).toThrow(TypeError);
   });
 
   it("throws a native-style TypeError for a source that is not iterable", () => {
@@ -742,7 +851,9 @@ describe("useSignalCapture iterate", () => {
       return null;
     }
     render(<Holder />);
-    const loop = (iterable: unknown) => { for (const _ of scope.iterate(() => iterable as Iterable<unknown>)) void _; };
+    const loop = (iterable: unknown) => {
+      for (const _ of scope.iterate(() => iterable as Iterable<unknown>)) void _;
+    };
     expect(() => loop({})).toThrow(/object is not iterable/);
     expect(() => loop(undefined)).toThrow(/undefined is not iterable/);
     expect(() => loop(5)).toThrow(/5 is not iterable/);
@@ -758,9 +869,14 @@ describe("useSignalCapture forIn", () => {
       for (const key of scope.forIn(() => state.value.errors)) keys.push(key);
       const proto = { inherited: 1 };
       const object: Record<string, number> = Object.create(proto);
-      object.a = 1; object.b = 2; object.c = 3;
+      object.a = 1;
+      object.b = 2;
+      object.c = 3;
       const seen: string[] = [];
-      for (const key of scope.forIn(() => object)) { seen.push(key); if (key === "a") delete object.b; }
+      for (const key of scope.forIn(() => object)) {
+        seen.push(key);
+        if (key === "a") delete object.b;
+      }
       for (const key of scope.forIn(() => null)) seen.push(key);
       for (const key of scope.forIn(() => "ab")) seen.push(key);
       return <output aria-label="keys">{keys.join(",") + "|" + seen.join(",")}</output>;
@@ -768,7 +884,9 @@ describe("useSignalCapture forIn", () => {
     render(<Reader />);
     const read = () => screen.getByLabelText("keys").textContent;
     expect(read()).toBe("a|a,c,inherited,0,1");
-    act(() => { state.value.errors.x = 1; });
+    act(() => {
+      state.value.errors.x = 1;
+    });
     expect(read()).toBe("a,x|a,c,inherited,0,1");
   });
 });
@@ -778,26 +896,56 @@ describe("useSignalCapture forIn matches the native loop's trap calls", () => {
   // engine calls during enumeration lands in the log, in order.
   function logged(log: string[], throwOn?: string): Record<string, number> {
     const traps = (prefix: string, throwKey?: string): ProxyHandler<object> => ({
-      ownKeys(target) { log.push(`${prefix}ownKeys`); return Reflect.ownKeys(target); },
+      ownKeys(target) {
+        log.push(`${prefix}ownKeys`);
+        return Reflect.ownKeys(target);
+      },
       getOwnPropertyDescriptor(target, key) {
         log.push(`${prefix}gOPD ${String(key)}`);
         if (key === throwKey) throw new Error(`gOPD ${String(key)}`);
         return Reflect.getOwnPropertyDescriptor(target, key);
       },
-      getPrototypeOf(target) { log.push(`${prefix}getPrototypeOf`); return Reflect.getPrototypeOf(target); },
-      has(target, key) { log.push(`${prefix}has ${String(key)}`); return Reflect.has(target, key); },
-      deleteProperty(target, key) { log.push(`${prefix}delete ${String(key)}`); return Reflect.deleteProperty(target, key); },
+      getPrototypeOf(target) {
+        log.push(`${prefix}getPrototypeOf`);
+        return Reflect.getPrototypeOf(target);
+      },
+      has(target, key) {
+        log.push(`${prefix}has ${String(key)}`);
+        return Reflect.has(target, key);
+      },
+      deleteProperty(target, key) {
+        log.push(`${prefix}delete ${String(key)}`);
+        return Reflect.deleteProperty(target, key);
+      },
     });
     const proto = new Proxy({ p: 1 }, traps("proto."));
     const base = Object.create(proto) as Record<string, number>;
-    base.a = 1; base.b = 2; base.c = 3;
+    base.a = 1;
+    base.b = 2;
+    base.c = 3;
     return new Proxy(base, traps("", throwOn)) as Record<string, number>;
   }
-  type Loop = (keys: (object: Record<string, number>) => Iterable<string>, object: Record<string, number>, out: string[]) => void;
+  type Loop = (
+    keys: (object: Record<string, number>) => Iterable<string>,
+    object: Record<string, number>,
+    out: string[],
+  ) => void;
   const loops: Record<string, Loop> = {
-    all: (keys, object, out) => { for (const key of keys(object)) out.push(key); },
-    breakFirst: (keys, object, out) => { for (const key of keys(object)) { out.push(key); break; } },
-    deleteAhead: (keys, object, out) => { for (const key of keys(object)) { out.push(key); if (key === "a") delete object.b; } },
+    all: (keys, object, out) => {
+      for (const key of keys(object)) out.push(key);
+    },
+    breakFirst: (keys, object, out) => {
+      for (const key of keys(object)) {
+        out.push(key);
+        break;
+      }
+    },
+    deleteAhead: (keys, object, out) => {
+      for (const key of keys(object)) {
+        out.push(key);
+        if (key === "a") delete object.b;
+      }
+    },
     continueThenThrow: (keys, object, out) => {
       for (const key of keys(object)) {
         if (key === "a") continue;
@@ -808,9 +956,21 @@ describe("useSignalCapture forIn matches the native loop's trap calls", () => {
   };
   // The same loops written with `for...in`.
   const native: Record<string, (object: Record<string, number>, out: string[]) => void> = {
-    all: (object, out) => { for (const key in object) out.push(key); },
-    breakFirst: (object, out) => { for (const key in object) { out.push(key); break; } },
-    deleteAhead: (object, out) => { for (const key in object) { out.push(key); if (key === "a") delete object.b; } },
+    all: (object, out) => {
+      for (const key in object) out.push(key);
+    },
+    breakFirst: (object, out) => {
+      for (const key in object) {
+        out.push(key);
+        break;
+      }
+    },
+    deleteAhead: (object, out) => {
+      for (const key in object) {
+        out.push(key);
+        if (key === "a") delete object.b;
+      }
+    },
     continueThenThrow: (object, out) => {
       for (const key in object) {
         if (key === "a") continue;
@@ -823,23 +983,35 @@ describe("useSignalCapture forIn matches the native loop's trap calls", () => {
     const log: string[] = [];
     const out: string[] = [];
     let error: string | undefined;
-    try { run(logged(log, throwOn), out); } catch (caught) { error = (caught as Error).message; }
+    try {
+      run(logged(log, throwOn), out);
+    } catch (caught) {
+      error = (caught as Error).message;
+    }
     return { out, error, log };
   };
 
-  it.each(Object.keys(loops).flatMap((name) => [[name, undefined], [name, "b"]] as Array<[string, string | undefined]>))(
-    "%s (getOwnPropertyDescriptor throws on: %s)",
-    (name, throwOn) => {
-      let scope!: ReturnType<typeof useSignalCapture>;
-      function Holder() {
-        scope = useSignalCapture();
-        return null;
-      }
-      render(<Holder />);
-      const captured = outcome((object, out) => loops[name]!((source) => scope.forIn(() => source), object, out), throwOn);
-      expect(captured).toEqual(outcome(native[name]!, throwOn));
-    },
-  );
+  it.each(
+    Object.keys(loops).flatMap(
+      (name) =>
+        [
+          [name, undefined],
+          [name, "b"],
+        ] as Array<[string, string | undefined]>,
+    ),
+  )("%s (getOwnPropertyDescriptor throws on: %s)", (name, throwOn) => {
+    let scope!: ReturnType<typeof useSignalCapture>;
+    function Holder() {
+      scope = useSignalCapture();
+      return null;
+    }
+    render(<Holder />);
+    const captured = outcome(
+      (object, out) => loops[name]!((source) => scope.forIn(() => source), object, out),
+      throwOn,
+    );
+    expect(captured).toEqual(outcome(native[name]!, throwOn));
+  });
 });
 
 describe("per-read useSignalCapture prototype", () => {
@@ -888,9 +1060,13 @@ describe("per-read useSignalCapture prototype", () => {
     expect(() => render(<Throwing />)).toThrow("capture failed");
     expect(hasActiveRenderCollector()).toBe(false);
     render(<Healthy />);
-    act(() => { abandoned.value = "changed"; });
+    act(() => {
+      abandoned.value = "changed";
+    });
     expect(healthyRenders).toHaveBeenCalledTimes(1);
-    act(() => { healthy.value = "updated"; });
+    act(() => {
+      healthy.value = "updated";
+    });
     expect(screen.getByLabelText("capture healthy").textContent).toBe("updated");
   });
 
@@ -909,9 +1085,13 @@ describe("per-read useSignalCapture prototype", () => {
     render(<Reader />);
     const readAfterCommit = capture(() => late.value);
     expect(readAfterCommit).toBe("late");
-    act(() => { late.value = "changed"; });
+    act(() => {
+      late.value = "changed";
+    });
     expect(renders).toHaveBeenCalledTimes(1);
-    act(() => { source.value = "updated"; });
+    act(() => {
+      source.value = "updated";
+    });
     expect(screen.getByLabelText("capture after commit").textContent).toBe("updated");
     expect(renders).toHaveBeenCalledTimes(2);
   });
@@ -926,16 +1106,24 @@ describe("per-read useSignalCapture prototype", () => {
       return <output aria-label="strict capture">{capture.capture(() => source.value)}</output>;
     }
 
-    const view = render(<StrictMode><Reader /></StrictMode>);
+    const view = render(
+      <StrictMode>
+        <Reader />
+      </StrictMode>,
+    );
     expect(screen.getByLabelText("strict capture").textContent).toBe("strict mount");
     const mountedRenderCount = renders.mock.calls.length;
-    act(() => { source.value = "strict update"; });
+    act(() => {
+      source.value = "strict update";
+    });
     expect(screen.getByLabelText("strict capture").textContent).toBe("strict update");
     expect(renders.mock.calls.length).toBeGreaterThan(mountedRenderCount);
 
     view.unmount();
     const unmountedRenderCount = renders.mock.calls.length;
-    act(() => { source.value = "after unmount"; });
+    act(() => {
+      source.value = "after unmount";
+    });
     expect(renders).toHaveBeenCalledTimes(unmountedRenderCount);
   });
 

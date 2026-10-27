@@ -10,20 +10,26 @@ const fixtureDir = mkdtempSync(join(tmpdir(), "signals-rollup-rsc-"));
 const serverEntry = join(fixtureDir, "server.jsx");
 const clientEntry = join(fixtureDir, "client.jsx");
 
-writeFileSync(serverEntry, [
-  '"use server";',
-  'import { signal } from "react-fine-grained-signals";',
-  "const count = signal(0);",
-  "export function ServerAction() { return <output>{count.value}</output>; }",
-  "",
-].join("\n"));
-writeFileSync(clientEntry, [
-  '"use client";',
-  'import { signal } from "react-fine-grained-signals";',
-  "const count = signal(0);",
-  "export function Client() { return <output>{count.value}</output>; }",
-  "",
-].join("\n"));
+writeFileSync(
+  serverEntry,
+  [
+    '"use server";',
+    'import { signal } from "react-fine-grained-signals";',
+    "const count = signal(0);",
+    "export function ServerAction() { return <output>{count.value}</output>; }",
+    "",
+  ].join("\n"),
+);
+writeFileSync(
+  clientEntry,
+  [
+    '"use client";',
+    'import { signal } from "react-fine-grained-signals";',
+    "const count = signal(0);",
+    "export function Client() { return <output>{count.value}</output>; }",
+    "",
+  ].join("\n"),
+);
 
 afterAll(() => {
   rmSync(fixtureDir, { recursive: true, force: true });
@@ -58,12 +64,8 @@ describe("Rollup adapter RSC integration", () => {
 
     try {
       const { output } = await bundle.generate({ format: "es", sourcemap: true });
-      const server = output.find(
-        (item): item is OutputChunk => item.type === "chunk" && item.name === "server",
-      );
-      const client = output.find(
-        (item): item is OutputChunk => item.type === "chunk" && item.name === "client",
-      );
+      const server = output.find((item): item is OutputChunk => item.type === "chunk" && item.name === "server");
+      const client = output.find((item): item is OutputChunk => item.type === "chunk" && item.name === "client");
       const rfgsWarning = warnings.find((warning) => warning.pluginCode === "RFGS");
 
       expect(rfgsWarning?.message).toContain('top-level "use server" directive');

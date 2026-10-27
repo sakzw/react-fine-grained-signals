@@ -113,12 +113,27 @@ const FORM_BINDING_MARKERS = [
   "Invalid select bindValue.",
 ];
 const FULL_ATTRIBUTE_BINDING_MARKERS = ["className", "style-properties", "signal props."];
-const LITE_BINDING_DIAGNOSTIC_MARKER = "The lite JSX runtime supports Signal children only; form bindings require the default JSX runtime.";
+const LITE_BINDING_DIAGNOSTIC_MARKER =
+  "The lite JSX runtime supports Signal children only; form bindings require the default JSX runtime.";
 
 /** Code that must be absent from a bundle, proving the shake actually worked. */
 const absenceChecks = {
-  "signal-only": [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
-  core: [DEEP_SIGNAL_MARKER, REACT_STORE_MARKER, SIGNAL_CHILD_RUNTIME_MARKER, ...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS, LITE_BINDING_DIAGNOSTIC_MARKER],
+  "signal-only": [
+    DEEP_SIGNAL_MARKER,
+    REACT_STORE_MARKER,
+    SIGNAL_CHILD_RUNTIME_MARKER,
+    ...FORM_BINDING_MARKERS,
+    ...FULL_ATTRIBUTE_BINDING_MARKERS,
+    LITE_BINDING_DIAGNOSTIC_MARKER,
+  ],
+  core: [
+    DEEP_SIGNAL_MARKER,
+    REACT_STORE_MARKER,
+    SIGNAL_CHILD_RUNTIME_MARKER,
+    ...FORM_BINDING_MARKERS,
+    ...FULL_ATTRIBUTE_BINDING_MARKERS,
+    LITE_BINDING_DIAGNOSTIC_MARKER,
+  ],
   "core+hooks": [DEEP_SIGNAL_MARKER, DEEP_COLLECTION_MARKER, WEAK_KEY_PROBE_MARKER],
   deep: [DEEP_COLLECTION_MARKER, WEAK_KEY_PROBE_MARKER],
   "lite-jsx-child": [...FORM_BINDING_MARKERS, ...FULL_ATTRIBUTE_BINDING_MARKERS],
@@ -135,21 +150,13 @@ const presenceChecks = {
   "lite-jsx-child": [SIGNAL_CHILD_RUNTIME_MARKER, LITE_BINDING_DIAGNOSTIC_MARKER],
 };
 
-const external = [
-  "react",
-  "react-dom",
-  "react/jsx-runtime",
-  "react/jsx-dev-runtime",
-];
+const external = ["react", "react-dom", "react/jsx-runtime", "react/jsx-dev-runtime"];
 
 async function measure(scenario, outputRoot) {
   const entryDirectory = join(outputRoot, scenario.name);
   mkdirSync(entryDirectory, { recursive: true });
   const entryPath = join(entryDirectory, "entry.js");
-  writeFileSync(
-    entryPath,
-    scenario.source.replaceAll("DIST", distDirectory.replaceAll("\\", "/")),
-  );
+  writeFileSync(entryPath, scenario.source.replaceAll("DIST", distDirectory.replaceAll("\\", "/")));
 
   const outDir = join(entryDirectory, "out");
   await build({
@@ -191,27 +198,20 @@ function newestModification(directory) {
   let newest = 0;
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    newest = Math.max(
-      newest,
-      entry.isDirectory() ? newestModification(path) : statSync(path).mtimeMs,
-    );
+    newest = Math.max(newest, entry.isDirectory() ? newestModification(path) : statSync(path).mtimeMs);
   }
   return newest;
 }
 
 if (newestModification(join(repositoryRoot, "src")) > newestModification(distDirectory)) {
-  console.error(
-    `The build at ${distDirectory} is older than src/. Run \`pnpm build:runtime\` first.`,
-  );
+  console.error(`The build at ${distDirectory} is older than src/. Run \`pnpm build:runtime\` first.`);
   process.exit(1);
 }
 
 const shouldUpdate = process.argv.includes("--update");
 const showExact = process.argv.includes("--exact");
 const outputRoot = mkdtempSync(join(tmpdir(), "ras-size-"));
-const budget = shouldUpdate
-  ? {}
-  : JSON.parse(readFileSync(budgetPath, "utf8"));
+const budget = shouldUpdate ? {} : JSON.parse(readFileSync(budgetPath, "utf8"));
 const results = {};
 // Structural failures mean a tree-shaking guarantee broke; they are always
 // fatal. Budget failures are only growth, so `--update` may accept them.
@@ -229,9 +229,7 @@ try {
 
     for (const forbidden of absenceChecks[scenario.name] ?? []) {
       if (measured.text.includes(forbidden)) {
-        failures.push(
-          `${scenario.name}: expected tree-shaking to drop code containing ${JSON.stringify(forbidden)}`,
-        );
+        failures.push(`${scenario.name}: expected tree-shaking to drop code containing ${JSON.stringify(forbidden)}`);
       }
     }
 
@@ -284,10 +282,7 @@ try {
     } else {
       // Keep a small, explicit 5% headroom over measured application bundles.
       const updated = Object.fromEntries(
-        Object.entries(results).map(([name, sizes]) => [
-          name,
-          { gzip: Math.ceil((sizes.gzip * 1.05) / 64) * 64 },
-        ]),
+        Object.entries(results).map(([name, sizes]) => [name, { gzip: Math.ceil((sizes.gzip * 1.05) / 64) * 64 }]),
       );
       writeFileSync(budgetPath, `${JSON.stringify(updated, null, 2)}\n`);
       console.log(`\nWrote budgets to ${budgetPath}`);

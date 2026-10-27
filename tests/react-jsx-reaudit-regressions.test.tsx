@@ -68,7 +68,12 @@ function createLayoutWriter<T>(source: Signal<T>) {
     });
     return null;
   }
-  return { LayoutWriter, arm: (value: T) => { pending = { value }; } };
+  return {
+    LayoutWriter,
+    arm: (value: T) => {
+      pending = { value };
+    },
+  };
 }
 
 /** A later sibling that writes `source` during render, after the owner snapshotted it. */
@@ -82,7 +87,12 @@ function createRenderWriter<T>(source: Signal<T>) {
     }
     return null;
   }
-  return { RenderWriter, arm: (value: T) => { pending = { value }; } };
+  return {
+    RenderWriter,
+    arm: (value: T) => {
+      pending = { value };
+    },
+  };
 }
 
 const STRICT_MODES = [false, true] as const;
@@ -106,12 +116,18 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
       function App() {
         const [n, setN] = useState(0);
         rerender = setN;
-        return <div data-n={n} style={style as never}><writer.LayoutWriter /></div>;
+        return (
+          <div data-n={n} style={style as never}>
+            <writer.LayoutWriter />
+          </div>
+        );
       }
       const { container } = mount(<App />, strict);
       const box = container.firstChild as HTMLElement;
 
-      act(() => { style.value = { color: "red", width: 10 }; });
+      act(() => {
+        style.value = { color: "red", width: 10 };
+      });
       expect(box.style.cssText).toBe("color: red; width: 10px;");
       writer.arm({ color: "red" });
       act(() => rerender(1));
@@ -119,9 +135,13 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
       expect(box.style.cssText).toBe("color: red;");
 
       // Later writes keep following the signal and still clear dropped keys.
-      act(() => { style.value = { color: "blue", padding: 2 }; });
+      act(() => {
+        style.value = { color: "blue", padding: 2 };
+      });
       expect(box.style.cssText).toBe("color: blue; padding: 2px;");
-      act(() => { style.value = { color: "blue" }; });
+      act(() => {
+        style.value = { color: "blue" };
+      });
       expect(box.style.cssText).toBe("color: blue;");
       expect(container.firstChild).toBe(box);
     });
@@ -134,14 +154,24 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
         function App() {
           const [n, setN] = useState(0);
           rerender = setN;
-          return <><div data-n={n} style={style as never} /><writer.RenderWriter /></>;
+          return (
+            <>
+              <div data-n={n} style={style as never} />
+              <writer.RenderWriter />
+            </>
+          );
         }
         const { container } = mount(<App />, strict);
         const box = container.firstChild as HTMLElement;
 
-        act(() => { style.value = { color: "red", width: 10 }; });
+        act(() => {
+          style.value = { color: "red", width: 10 };
+        });
         writer.arm({ color: "red" });
-        act(() => { if (transition) startTransition(() => rerender(1)); else rerender(1); });
+        act(() => {
+          if (transition) startTransition(() => rerender(1));
+          else rerender(1);
+        });
         await settle();
         expect(style.peek()).toEqual({ color: "red" });
         expect(box.style.cssText).toBe("color: red;");
@@ -156,12 +186,18 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     function App() {
       const [n, setN] = useState(0);
       rerender = setN;
-      return <div data-n={n} style={style as never}><writer.LayoutWriter /></div>;
+      return (
+        <div data-n={n} style={style as never}>
+          <writer.LayoutWriter />
+        </div>
+      );
     }
     const { container } = mount(<App />);
     const box = container.firstChild as HTMLElement;
 
-    act(() => { style.value = { "--gap": "1px", "--accent": "red" }; });
+    act(() => {
+      style.value = { "--gap": "1px", "--accent": "red" };
+    });
     writer.arm({ "--gap": "2px" });
     act(() => rerender(1));
     await settle();
@@ -178,7 +214,11 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     function App() {
       const [n, setN] = useState(0);
       step = setN;
-      return <div ref={n === 2 ? refB : ignoreNode} data-n={n} style={style as never}><writer.LayoutWriter /></div>;
+      return (
+        <div ref={n === 2 ? refB : ignoreNode} data-n={n} style={style as never}>
+          <writer.LayoutWriter />
+        </div>
+      );
     }
     const { container } = mount(<App />, true);
     const box = container.firstChild as HTMLElement;
@@ -186,7 +226,9 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     // The initial mount subscribed once; re-attaching must not subscribe again.
     subscribe.mockClear();
 
-    act(() => { style.value = { color: "red", width: 10 }; });
+    act(() => {
+      style.value = { color: "red", width: 10 };
+    });
     writer.arm({ color: "green" });
     act(() => step(1));
     await settle();
@@ -211,7 +253,11 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     function App() {
       const [isB, setIsB] = useState(false);
       useB = setIsB;
-      return <div data-b={isB} style={(isB ? b : a) as never}><writer.LayoutWriter /></div>;
+      return (
+        <div data-b={isB} style={(isB ? b : a) as never}>
+          <writer.LayoutWriter />
+        </div>
+      );
     }
     const { container } = mount(<App />);
     const box = container.firstChild as HTMLElement;
@@ -221,7 +267,9 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     await settle();
     expect(box.style.cssText).toBe("color: blue;");
     expect(coreRuntime.hasSubscribers(a)).toBe(false);
-    act(() => { a.value = { color: "red", padding: 4 }; });
+    act(() => {
+      a.value = { color: "red", padding: 4 };
+    });
     expect(box.style.cssText).toBe("color: blue;");
   });
 
@@ -233,7 +281,11 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
       const [mode, setModeState] = useState(0);
       setMode = setModeState;
       const value = mode === 1 ? style : { color: "red" };
-      return <div data-mode={mode} style={value as never}><writer.LayoutWriter /></div>;
+      return (
+        <div data-mode={mode} style={value as never}>
+          <writer.LayoutWriter />
+        </div>
+      );
     }
     const { container } = mount(<App />);
     const box = container.firstChild as HTMLElement;
@@ -243,12 +295,16 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     await settle();
     expect(box.style.cssText).toBe("color: green;");
 
-    act(() => { style.value = { color: "green", height: 3 }; });
+    act(() => {
+      style.value = { color: "green", height: 3 };
+    });
     act(() => setMode(2));
     await settle();
     expect(box.style.cssText).toBe("color: red;");
     expect(coreRuntime.hasSubscribers(style)).toBe(false);
-    act(() => { style.value = { color: "pink" }; });
+    act(() => {
+      style.value = { color: "pink" };
+    });
     expect(box.style.cssText).toBe("color: red;");
   });
 
@@ -264,12 +320,18 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     function App() {
       const [mode, setModeState] = useState<"visible" | "hidden">("visible");
       setMode = setModeState;
-      return <Activity mode={mode}><Box /></Activity>;
+      return (
+        <Activity mode={mode}>
+          <Box />
+        </Activity>
+      );
     }
     const { container } = mount(<App />);
     const box = container.querySelector("#box") as HTMLElement;
 
-    act(() => { style.value = { color: "red", width: 10 }; });
+    act(() => {
+      style.value = { color: "red", width: 10 };
+    });
     // Hide, re-render with the newer snapshot, drop a key and reveal, all
     // before the deferred teardown runs, so the binding is kept.
     act(() => {
@@ -295,17 +357,31 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
     function App() {
       const [n, setN] = useState(0);
       rerender = setN;
-      return <Suspense fallback={<i>loading</i>}><div id="box" data-n={n} style={style as never} /><Suspend /></Suspense>;
+      return (
+        <Suspense fallback={<i>loading</i>}>
+          <div id="box" data-n={n} style={style as never} />
+          <Suspend />
+        </Suspense>
+      );
     }
     const { container } = mount(<App />);
     const box = container.querySelector("#box") as HTMLElement;
 
-    act(() => { style.value = { color: "red", width: 10 }; });
-    pending = new Promise<void>((done) => { resolve = () => { pending = undefined; done(); }; });
+    act(() => {
+      style.value = { color: "red", width: 10 };
+    });
+    pending = new Promise<void>((done) => {
+      resolve = () => {
+        pending = undefined;
+        done();
+      };
+    });
     act(() => rerender(1));
     await settle();
     expect(container.textContent).toContain("loading");
-    act(() => { style.value = { color: "blue" }; });
+    act(() => {
+      style.value = { color: "blue" };
+    });
     await act(async () => {
       resolve();
       await new Promise((done) => setTimeout(done, 400));
@@ -338,12 +414,22 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
       function Inner() {
         const [n, setN] = useState(0);
         rerender = setN;
-        return <div ref={ref} data-n={n} style={style as never}><writer.LayoutWriter /></div>;
+        return (
+          <div ref={ref} data-n={n} style={style as never}>
+            <writer.LayoutWriter />
+          </div>
+        );
       }
-      const { container } = mount(<Boundary><Inner /></Boundary>);
+      const { container } = mount(
+        <Boundary>
+          <Inner />
+        </Boundary>,
+      );
       const box = container.firstChild as HTMLElement;
 
-      act(() => { style.value = { color: "red", width: 10 }; });
+      act(() => {
+        style.value = { color: "red", width: 10 };
+      });
       armed = true;
       writer.arm({ color: "red" });
       act(() => rerender(1));
@@ -351,7 +437,9 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
       expect(container.querySelector("#error")?.textContent).toBe("attach boom");
       expect(coreRuntime.hasSubscribers(style)).toBe(false);
       const removed = box.style.cssText;
-      act(() => { style.value = { color: "blue", height: 1 }; });
+      act(() => {
+        style.value = { color: "blue", height: 1 };
+      });
       expect(box.style.cssText).toBe(removed);
     });
 
@@ -365,16 +453,25 @@ describe("B'1: a kept style binding clears keys from the render snapshot it re-a
         unmountTarget = () => setVisible(false);
         return visible ? <div ref={ref} style={style as never} /> : null;
       }
-      const { container } = mount(<Boundary><Inner /></Boundary>, true);
+      const { container } = mount(
+        <Boundary>
+          <Inner />
+        </Boundary>,
+        true,
+      );
       const box = container.firstChild as HTMLElement;
 
-      act(() => { style.value = { color: "red", width: 10 }; });
+      act(() => {
+        style.value = { color: "red", width: 10 };
+      });
       act(() => unmountTarget());
       await settle();
       expect(container.querySelector("#error")?.textContent).toBe("cleanup boom");
       expect(coreRuntime.hasSubscribers(style)).toBe(false);
       const removed = box.style.cssText;
-      act(() => { style.value = { color: "blue" }; });
+      act(() => {
+        style.value = { color: "blue" };
+      });
       expect(box.style.cssText).toBe(removed);
     });
   });
@@ -412,7 +509,9 @@ function createActivityApp(Reader: ComponentType) {
     controls.setShown = setShown;
     return (
       <>
-        <button id="hide" onClick={() => setMode("hidden")}>hide</button>
+        <button id="hide" onClick={() => setMode("hidden")}>
+          hide
+        </button>
         <Activity mode={mode}>{shown ? <Reader /> : null}</Activity>
       </>
     );
@@ -424,7 +523,8 @@ function hide(container: HTMLElement, controls: { setMode: (mode: "visible" | "h
   act(() => {
     if (lane === "transition") startTransition(() => controls.setMode("hidden"));
     else if (lane === "default") controls.setMode("hidden");
-    else (container.querySelector("#hide") as HTMLButtonElement).dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    else
+      (container.querySelector("#hide") as HTMLButtonElement).dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
 
@@ -457,8 +557,12 @@ describe("B'2: a tracked component deleted inside a hidden Activity releases its
             act(() => controls.setShown(false));
             await settle();
             let before = probe.evaluations();
-            act(() => { probe.source.value = 1; });
-            act(() => { probe.source.value = 2; });
+            act(() => {
+              probe.source.value = 1;
+            });
+            act(() => {
+              probe.source.value = 2;
+            });
             await settle();
             expect(probe.evaluations()).toBe(before);
             expect(coreRuntime.hasSubscribers(probe.value)).toBe(false);
@@ -467,7 +571,9 @@ describe("B'2: a tracked component deleted inside a hidden Activity releases its
             roots = roots.filter((entry) => entry !== root);
             await settle();
             before = probe.evaluations();
-            act(() => { probe.source.value = 3; });
+            act(() => {
+              probe.source.value = 3;
+            });
             await settle();
             expect(probe.evaluations()).toBe(before);
           });
@@ -483,8 +589,12 @@ describe("B'2: a tracked component deleted inside a hidden Activity releases its
         hide(container, controls, "transition");
         await settle();
         const before = probe.evaluations();
-        act(() => { probe.source.value = 7; });
-        act(() => { probe.source.value = 8; });
+        act(() => {
+          probe.source.value = 7;
+        });
+        act(() => {
+          probe.source.value = 8;
+        });
         await settle();
         expect(probe.evaluations()).toBe(before);
 
@@ -492,11 +602,12 @@ describe("B'2: a tracked component deleted inside a hidden Activity releases its
         await settle();
         expect(container.querySelector("#reader")?.textContent).toBe("8");
         expect(coreRuntime.hasSubscribers(probe.value)).toBe(true);
-        act(() => { probe.source.value = 9; });
+        act(() => {
+          probe.source.value = 9;
+        });
         await settle();
         expect(container.querySelector("#reader")?.textContent).toBe("9");
       });
-
     }
 
     it(`${scope}: a visible re-render after a Strict Mode effect replay keeps the subscription`, async () => {
@@ -506,14 +617,21 @@ describe("B'2: a tracked component deleted inside a hidden Activity releases its
       function App() {
         const [n, setN] = useState(0);
         rerender = setN;
-        return <><i>{n}</i><Reader /></>;
+        return (
+          <>
+            <i>{n}</i>
+            <Reader />
+          </>
+        );
       }
       const { container } = mount(<App />, true);
       await settle();
       act(() => rerender(1));
       await settle();
       expect(coreRuntime.hasSubscribers(probe.value)).toBe(true);
-      act(() => { probe.source.value = 5; });
+      act(() => {
+        probe.source.value = 5;
+      });
       await settle();
       expect(container.querySelector("#reader")?.textContent).toBe("5");
     });

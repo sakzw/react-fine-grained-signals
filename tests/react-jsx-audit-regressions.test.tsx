@@ -1,17 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
-import {
-  Activity,
-  Component,
-  StrictMode,
-  Suspense,
-  act,
-  memo,
-  useLayoutEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { Activity, Component, StrictMode, Suspense, act, memo, useLayoutEffect, useState, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import { computed, signal, type Signal } from "../src/index.js";
@@ -24,10 +14,11 @@ import { computed, signal, type Signal } from "../src/index.js";
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** Lets the deferred binding teardown (a microtask after detach) run. */
-const flushMicrotasks = () => act(async () => {
-  await Promise.resolve();
-  await Promise.resolve();
-});
+const flushMicrotasks = () =>
+  act(async () => {
+    await Promise.resolve();
+    await Promise.resolve();
+  });
 
 type Mounted = { container: HTMLElement; root: Root; caught: unknown[] };
 const mountedRoots: Mounted[] = [];
@@ -37,7 +28,11 @@ function mount(element: ReactNode): Mounted {
   const container = document.createElement("div");
   document.body.appendChild(container);
   const caught: unknown[] = [];
-  const root = createRoot(container, { onCaughtError: (error) => { caught.push(error); } });
+  const root = createRoot(container, {
+    onCaughtError: (error) => {
+      caught.push(error);
+    },
+  });
   act(() => root.render(element));
   const mounted = { container, root, caught };
   mountedRoots.push(mounted);
@@ -81,7 +76,10 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
     const { base, source, evaluations } = countedSource("a");
     const boom = new Error("ref cleanup boom");
     const userRef = (node: Element | null) => {
-      if (node) return () => { throw boom; };
+      if (node)
+        return () => {
+          throw boom;
+        };
     };
     let setVisible!: (visible: boolean) => void;
     function App() {
@@ -89,7 +87,11 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
       setVisible = set;
       return visible ? <div id="target" className={source} ref={userRef} /> : null;
     }
-    const { container, caught } = mount(<Boundary><App /></Boundary>);
+    const { container, caught } = mount(
+      <Boundary>
+        <App />
+      </Boundary>,
+    );
     const node = container.querySelector("#target")!;
     base.value = "b";
     expect(node.className).toBe("b");
@@ -108,7 +110,10 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
     const { base, source, evaluations } = countedSource("a");
     const boom = new Error("ref cleanup boom");
     const userRef = (node: Element | null) => {
-      if (node) return () => { throw boom; };
+      if (node)
+        return () => {
+          throw boom;
+        };
     };
     let setBound!: (bound: boolean) => void;
     function App() {
@@ -116,7 +121,11 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
       setBound = set;
       return <div id="target" className={bound ? source : "plain"} ref={userRef} />;
     }
-    const { container, caught } = mount(<Boundary><App /></Boundary>);
+    const { container, caught } = mount(
+      <Boundary>
+        <App />
+      </Boundary>,
+    );
     const node = container.querySelector("#target")!;
 
     act(() => setBound(false));
@@ -144,7 +153,11 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
         throw boom;
       }
     };
-    const { container, caught } = mount(<Boundary><div id="target" className={source} ref={userRef} /></Boundary>);
+    const { container, caught } = mount(
+      <Boundary>
+        <div id="target" className={source} ref={userRef} />
+      </Boundary>,
+    );
     await flushMicrotasks();
     expect(caught).toEqual([boom]);
     expect(container.querySelector("#fallback")).not.toBeNull();
@@ -163,7 +176,9 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
     const userRef = (node: Element | null) => {
       if (!node) return;
       log.push("attach");
-      return () => { log.push("cleanup"); };
+      return () => {
+        log.push("cleanup");
+      };
     };
     let setVisible!: (visible: boolean) => void;
     function App() {
@@ -171,7 +186,11 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
       setVisible = set;
       return visible ? <div id="target" className={source} ref={userRef} /> : null;
     }
-    const { container } = mount(<StrictMode><App /></StrictMode>);
+    const { container } = mount(
+      <StrictMode>
+        <App />
+      </StrictMode>,
+    );
     const node = container.querySelector("#target")!;
     await flushMicrotasks();
     expect(log).toEqual(["attach", "cleanup", "attach"]);
@@ -188,7 +207,10 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
     expect(evaluations()).toBe(before);
   });
 
-  for (const [label, throwingCleanup] of [["replayed", 1], ["final", 2]] as const) {
+  for (const [label, throwingCleanup] of [
+    ["replayed", 1],
+    ["final", 2],
+  ] as const) {
     it(`cleans up when the user's ref cleanup throws during StrictMode's ${label} detach`, async () => {
       const { base, source, evaluations } = countedSource("a");
       const boom = new Error(`strict ${label} cleanup boom`);
@@ -208,7 +230,13 @@ describe("B1: a throwing user ref does not leak the element's bindings", () => {
         setVisible = set;
         return visible ? <div id="target" className={source} ref={userRef} /> : null;
       }
-      const { caught } = mount(<StrictMode><Boundary><App /></Boundary></StrictMode>);
+      const { caught } = mount(
+        <StrictMode>
+          <Boundary>
+            <App />
+          </Boundary>
+        </StrictMode>,
+      );
       await flushMicrotasks();
       // A replayed-detach error unmounts the subtree right away; otherwise
       // the final detach comes from unmounting the element.
@@ -326,7 +354,11 @@ describe("B2: a new style binding clears keys React wrote from its snapshot", ()
     function App() {
       const [mode, set] = useState<"visible" | "hidden">("visible");
       setMode = set;
-      return <Activity mode={mode}><Box /></Activity>;
+      return (
+        <Activity mode={mode}>
+          <Box />
+        </Activity>
+      );
     }
     const { container } = mount(<App />);
     const node = container.querySelector<HTMLElement>("#target")!;

@@ -88,7 +88,9 @@ describe("Direct DOM binding: missing-key warnings", () => {
           {/* Deliberately unkeyed: this test pins that React's real, valid
               warning for a genuinely dynamic array still fires. */}
           {/* oxlint-disable-next-line react/jsx-key */}
-          {rows.map((row) => <li>{row}</li>)}
+          {rows.map((row) => (
+            <li>{row}</li>
+          ))}
         </ul>
       );
     }
@@ -115,7 +117,9 @@ describe("Direct DOM binding: missing-key warnings", () => {
         <select
           aria-label="unkeyed choice with ref"
           value={choice.value}
-          onChange={(event) => { choice.value = event.target.value; }}
+          onChange={(event) => {
+            choice.value = event.target.value;
+          }}
           ref={trackRef}
         >
           <option value="a">A</option>

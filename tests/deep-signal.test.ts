@@ -39,13 +39,17 @@ describe("deepSignal", () => {
     const names: string[] = [];
     let ageRuns = 0;
 
-    disposers.push(effect(() => {
-      names.push(state.value.user.name);
-    }));
-    disposers.push(effect(() => {
-      state.value.user.age;
-      ageRuns++;
-    }));
+    disposers.push(
+      effect(() => {
+        names.push(state.value.user.name);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        state.value.user.age;
+        ageRuns++;
+      }),
+    );
 
     expect(names).toEqual(["Ada"]);
     expect(ageRuns).toBe(1);
@@ -61,13 +65,17 @@ describe("deepSignal", () => {
   it("does not track deep-signal property notifications as reads of the writer", () => {
     const state = deepSignal({ a: 1, b: 0 });
     let writerRuns = 0;
-    disposers.push(effect(() => {
-      state.value.b;
-    }));
-    disposers.push(effect(() => {
-      writerRuns += 1;
-      state.value.b = state.value.a * 2;
-    }));
+    disposers.push(
+      effect(() => {
+        state.value.b;
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        writerRuns += 1;
+        state.value.b = state.value.a * 2;
+      }),
+    );
 
     expect(state.value.b).toBe(2);
     expect(writerRuns).toBe(1);
@@ -100,24 +108,32 @@ describe("deepSignal", () => {
     let writerRuns = 0;
     const seenKeys: string[][] = [];
     const seenLengths: number[] = [];
-    disposers.push(effect(() => {
-      writerRuns += 1;
-      const trigger = state.value.trigger;
-      state.value.target = trigger;
-      if (trigger > 0) delete state.value.removable;
-      state.value.list.length = trigger;
-    }));
+    disposers.push(
+      effect(() => {
+        writerRuns += 1;
+        const trigger = state.value.trigger;
+        state.value.target = trigger;
+        if (trigger > 0) delete state.value.removable;
+        state.value.list.length = trigger;
+      }),
+    );
     // Separate subscribers prove notification delivery still happens after
     // the writer's untracked mutation scope has ended.
-    disposers.push(effect(() => {
-      seenKeys.push(Object.keys(state.value));
-    }));
-    disposers.push(effect(() => {
-      seenLengths.push(state.value.list.length);
-    }));
-    disposers.push(effect(() => {
-      if (state.value.target === 1) state.value.nested = 10;
-    }));
+    disposers.push(
+      effect(() => {
+        seenKeys.push(Object.keys(state.value));
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        seenLengths.push(state.value.list.length);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        if (state.value.target === 1) state.value.nested = 10;
+      }),
+    );
 
     state.value.trigger = 1;
     expect(writerRuns).toBe(2);
@@ -144,16 +160,18 @@ describe("deepSignal", () => {
     const state = deepSignal({ trigger: 0, value: 0 });
     const invalid = Object.preventExtensions({ nested: 1 });
     let runs = 0;
-    disposers.push(effect(() => {
-      runs += 1;
-      const trigger = state.value.trigger;
-      try {
-        (state.value as { invalid?: object }).invalid = invalid;
-      } catch {
-        // Validation rejects the write before mutation notifications run.
-      }
-      state.value.value = trigger;
-    }));
+    disposers.push(
+      effect(() => {
+        runs += 1;
+        const trigger = state.value.trigger;
+        try {
+          (state.value as { invalid?: object }).invalid = invalid;
+        } catch {
+          // Validation rejects the write before mutation notifications run.
+        }
+        state.value.value = trigger;
+      }),
+    );
 
     expect(runs).toBe(1);
     state.value.trigger = 1;
@@ -165,9 +183,11 @@ describe("deepSignal", () => {
     const state = deepSignal({ user: { name: "Ada" } });
     const values: string[] = [];
 
-    disposers.push(effect(() => {
-      values.push(state.value.user.name);
-    }));
+    disposers.push(
+      effect(() => {
+        values.push(state.value.user.name);
+      }),
+    );
     state.value.user = { name: "Grace" };
     state.value.user.name = "Lin";
 
@@ -179,13 +199,17 @@ describe("deepSignal", () => {
     const zeroes: number[] = [];
     let nanRuns = 0;
 
-    disposers.push(effect(() => {
-      zeroes.push(state.value.value);
-    }));
-    disposers.push(effect(() => {
-      state.value.nan;
-      nanRuns++;
-    }));
+    disposers.push(
+      effect(() => {
+        zeroes.push(state.value.value);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        state.value.nan;
+        nanRuns++;
+      }),
+    );
 
     state.value.value = 0;
     state.value.value = -0;
@@ -200,13 +224,15 @@ describe("deepSignal", () => {
     const state = deepSignal<Record<string, number>>({});
     const snapshots: Array<{ value: number | undefined; keys: string[]; hasCount: boolean }> = [];
 
-    disposers.push(effect(() => {
-      snapshots.push({
-        value: state.value.count,
-        keys: Object.keys(state.value),
-        hasCount: "count" in state.value,
-      });
-    }));
+    disposers.push(
+      effect(() => {
+        snapshots.push({
+          value: state.value.count,
+          keys: Object.keys(state.value),
+          hasCount: "count" in state.value,
+        });
+      }),
+    );
     state.value.count = 1;
     delete state.value.count;
 
@@ -221,9 +247,11 @@ describe("deepSignal", () => {
     const state = deepSignal({ items: ["first"] });
     const snapshots: string[] = [];
 
-    disposers.push(effect(() => {
-      snapshots.push(`${state.value.items.length}:${state.value.items[1] ?? ""}`);
-    }));
+    disposers.push(
+      effect(() => {
+        snapshots.push(`${state.value.items.length}:${state.value.items[1] ?? ""}`);
+      }),
+    );
     state.value.items.push("second");
     state.value.items.splice(0, 1, "replacement");
     state.value.items.pop();
@@ -232,21 +260,18 @@ describe("deepSignal", () => {
       state.value.items.push("batched-two");
     });
 
-    expect(snapshots).toEqual([
-      "1:",
-      "2:second",
-      "1:",
-      "3:batched-one",
-    ]);
+    expect(snapshots).toEqual(["1:", "2:second", "1:", "3:batched-one"]);
   });
 
   it("notifies tracked array indices when length truncates them", () => {
     const state = deepSignal({ items: ["first", "second"] });
     const secondItems: Array<string | undefined> = [];
 
-    disposers.push(effect(() => {
-      secondItems.push(state.value.items[1]);
-    }));
+    disposers.push(
+      effect(() => {
+        secondItems.push(state.value.items[1]);
+      }),
+    );
     state.value.items.length = 1;
 
     expect(secondItems).toEqual(["second", undefined]);
@@ -260,8 +285,16 @@ describe("deepSignal", () => {
     // The range removed by this length change is much larger than the number
     // of observed indices. This exercises the sparse-index path and verifies
     // both value reads and `in` checks remain subscribed after truncation.
-    disposers.push(effect(() => { values.push(state.value.items[90]); }));
-    disposers.push(effect(() => { existence.push(92 in state.value.items); }));
+    disposers.push(
+      effect(() => {
+        values.push(state.value.items[90]);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        existence.push(92 in state.value.items);
+      }),
+    );
 
     state.value.items.length = 50;
 
@@ -284,9 +317,11 @@ describe("deepSignal", () => {
 
     expect(state.value.left).toBe(state.value.right);
     expect(state.value.cyclic).toBe(state.value.cyclic.self);
-    disposers.push(effect(() => {
-      counts.push(state.value.left.count);
-    }));
+    disposers.push(
+      effect(() => {
+        counts.push(state.value.left.count);
+      }),
+    );
     state.value.right.count = 2;
 
     expect(counts).toEqual([1, 2]);
@@ -295,9 +330,7 @@ describe("deepSignal", () => {
   it("never stores deep proxies in the raw tree", () => {
     const state = deepSignal({
       source: { count: 1 },
-      wrapped: undefined as
-        | { source: { count: number }; self?: unknown }
-        | undefined,
+      wrapped: undefined as { source: { count: number }; self?: unknown } | undefined,
     });
     const wrapped: { source: { count: number }; self?: unknown } = {
       source: state.value.source,
@@ -311,10 +344,12 @@ describe("deepSignal", () => {
     expect(() => structuredClone(state.peek())).not.toThrow();
 
     let runs = 0;
-    disposers.push(effect(() => {
-      state.value.source;
-      runs++;
-    }));
+    disposers.push(
+      effect(() => {
+        state.value.source;
+        runs++;
+      }),
+    );
     // Intentional self-assignment: verifies an equal value doesn't re-notify.
     // oxlint-disable-next-line no-self-assign
     state.value.source = state.value.source;
@@ -466,12 +501,16 @@ describe("deepSignal", () => {
     const leftValues: number[] = [];
     const rightValues: number[] = [];
 
-    disposers.push(effect(() => {
-      leftValues.push(left.value.shared.count);
-    }));
-    disposers.push(effect(() => {
-      rightValues.push(right.value.shared.count);
-    }));
+    disposers.push(
+      effect(() => {
+        leftValues.push(left.value.shared.count);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        rightValues.push(right.value.shared.count);
+      }),
+    );
 
     left.value.shared.count = 2;
 
@@ -485,9 +524,11 @@ describe("deepSignal", () => {
     const values: string[] = [];
 
     expect(isSignal(state)).toBe(true);
-    disposers.push(effect(() => {
-      values.push(state.value.user.name);
-    }));
+    disposers.push(
+      effect(() => {
+        values.push(state.value.user.name);
+      }),
+    );
     state.value = { user: { name: "Grace" } };
     state.value.user.name = "Lin";
 
@@ -527,7 +568,9 @@ describe("deepSignal", () => {
     it("does not notify when a nested collection's contents change", () => {
       const state = deepSignal({ tags: new Set(["a"]), counts: new Map([["a", 1]]) });
       const seen: Array<[number, number]> = [];
-      const stop = effect(() => { seen.push([state.value.tags.size, state.value.counts.size]); });
+      const stop = effect(() => {
+        seen.push([state.value.tags.size, state.value.counts.size]);
+      });
 
       state.value.tags.add("b");
       state.value.counts.set("b", 2);
@@ -539,7 +582,9 @@ describe("deepSignal", () => {
     it("notifies when a nested collection is replaced", () => {
       const state = deepSignal({ tags: new Set(["a"]) });
       const seen: number[] = [];
-      const stop = effect(() => { seen.push(state.value.tags.size); });
+      const stop = effect(() => {
+        seen.push(state.value.tags.size);
+      });
 
       state.value.tags = new Set(["a", "b"]);
       expect(seen).toEqual([1, 2]);
@@ -554,7 +599,9 @@ describe("deepSignal", () => {
     ])("rejects a %s root and points to deepCollectionSignal", (_name, create) => {
       expect(() => deepSignal(create() as object)).toThrow(/use deepCollectionSignal\(\) for a collection root/);
       const state = deepSignal({ value: 1 }) as unknown as { value: unknown };
-      expect(() => { state.value = create(); }).toThrow(/use deepCollectionSignal\(\)/);
+      expect(() => {
+        state.value = create();
+      }).toThrow(/use deepCollectionSignal\(\)/);
     });
 
     it("rejects a deep proxy hidden inside a nested collection", () => {
@@ -575,7 +622,9 @@ describe("deepSignal", () => {
     it("throws when a proxy of one kind is assigned into the other", () => {
       const collections = deepCollectionSignal({ child: { count: 1 } });
       const plain = deepSignal({ slot: undefined as unknown });
-      expect(() => { plain.value.slot = collections.value.child; }).toThrow(/cannot share the same plain object or array/);
+      expect(() => {
+        plain.value.slot = collections.value.child;
+      }).toThrow(/cannot share the same plain object or array/);
     });
 
     it("rejects a mode mismatch where the value is assigned, not at a later read", () => {
@@ -583,12 +632,18 @@ describe("deepSignal", () => {
       const plain = deepSignal({ slot: undefined as unknown });
       const mismatch = /cannot share the same plain object or array/;
       // Inside a carrier object.
-      expect(() => { plain.value.slot = { inner: collections.value.child }; }).toThrow(mismatch);
+      expect(() => {
+        plain.value.slot = { inner: collections.value.child };
+      }).toThrow(mismatch);
       // A raw object that peek() handed out.
-      expect(() => { plain.value.slot = collections.peek().child; }).toThrow(mismatch);
+      expect(() => {
+        plain.value.slot = collections.peek().child;
+      }).toThrow(mismatch);
       // A root replacement.
       const other = deepSignal({ child: undefined as unknown });
-      expect(() => { (other as unknown as { value: unknown }).value = collections.peek(); }).toThrow(mismatch);
+      expect(() => {
+        (other as unknown as { value: unknown }).value = collections.peek();
+      }).toThrow(mismatch);
       // The failed assignments left the plain state untouched.
       expect(plain.value.slot).toBeUndefined();
     });
@@ -599,7 +654,9 @@ describe("deepSignal", () => {
       const second = deepSignal({ slot: undefined as unknown });
       second.value.slot = carrier;
       const collections = deepCollectionSignal({ slot: undefined as unknown });
-      expect(() => { collections.value.slot = carrier; }).toThrow(/cannot share the same plain object or array/);
+      expect(() => {
+        collections.value.slot = carrier;
+      }).toThrow(/cannot share the same plain object or array/);
     });
 
     it("shares a raw Map by identity: untracked in deepSignal, reactive in deepCollectionSignal", () => {
@@ -611,7 +668,9 @@ describe("deepSignal", () => {
       expect(collections.value.map.get("a")).toBe(1);
 
       const seen: Array<number | undefined> = [];
-      const stop = effect(() => { seen.push(collections.value.map.get("a")); });
+      const stop = effect(() => {
+        seen.push(collections.value.map.get("a"));
+      });
       collections.value.map.set("a", 2);
       expect(seen).toEqual([1, 2]);
       // The same raw Map is visible through the plain signal, with no notification of its own.
@@ -623,7 +682,9 @@ describe("deepSignal", () => {
       const a = deepCollectionSignal({ items: new Set([1]) });
       const b = deepCollectionSignal({ items: new Set([1]) });
       const seen: number[] = [];
-      const stop = effect(() => { seen.push(a.value.items.size); });
+      const stop = effect(() => {
+        seen.push(a.value.items.size);
+      });
       b.value.items.add(2);
       expect(seen).toEqual([1]);
       a.value.items.add(2);
@@ -640,9 +701,7 @@ describe("deepSignal", () => {
     expect(isSignal(state.value.user)).toBe(false);
     expect(isSignal(state.value.tags)).toBe(false);
     expect(Object.getOwnPropertySymbols(state.value)).toEqual([]);
-    expect(
-      (state.value.user as unknown as Record<symbol, unknown>)[SIGNAL_BRAND],
-    ).toBeUndefined();
+    expect((state.value.user as unknown as Record<symbol, unknown>)[SIGNAL_BRAND]).toBeUndefined();
   });
 
   it("rejects branding deep state as a signal", () => {
@@ -687,10 +746,12 @@ describe("deepSignal", () => {
     const state = deepSignal({ user: { name: "Ada" } });
     let runs = 0;
 
-    disposers.push(effect(() => {
-      state.peek().user.name;
-      runs++;
-    }));
+    disposers.push(
+      effect(() => {
+        state.peek().user.name;
+        runs++;
+      }),
+    );
     state.value.user.name = "Grace";
     state.value = { user: { name: "Lin" } };
 
@@ -775,12 +836,14 @@ describe("deepSignal", () => {
   it("does not mint version signals for inherited prototype members", () => {
     const state = deepSignal({ list: ["a", "b", "c"], label: "x" });
 
-    disposers.push(effect(() => {
-      state.value.list.map((entry) => entry.toUpperCase());
-      state.value.list.includes("a");
-      "map" in state.value.list;
-      String(state.value.label);
-    }));
+    disposers.push(
+      effect(() => {
+        state.value.list.map((entry) => entry.toUpperCase());
+        state.value.list.includes("a");
+        "map" in state.value.list;
+        String(state.value.label);
+      }),
+    );
 
     const list = metadataOf(state.value.list);
     // Only real data keys: the indices the read touched, plus `length`.
@@ -793,9 +856,11 @@ describe("deepSignal", () => {
     // A key that shadows a prototype member as real own data stays reactive.
     const shadowing = deepSignal({ map: 1 });
     const seen: number[] = [];
-    disposers.push(effect(() => {
-      seen.push(shadowing.value.map);
-    }));
+    disposers.push(
+      effect(() => {
+        seen.push(shadowing.value.map);
+      }),
+    );
     expect(metadataOf(shadowing.value).properties).toContain("map");
     shadowing.value.map = 2;
     expect(seen).toEqual([1, 2]);
@@ -842,9 +907,11 @@ describe("deepSignal", () => {
     // This subscriber keeps reading index 2 even after it is truncated away,
     // so its version signal must survive — dropping it would strand the
     // effect on a `RenderSubscription` the property map no longer reaches.
-    disposers.push(effect(() => {
-      seen.push(state.value.list[2]);
-    }));
+    disposers.push(
+      effect(() => {
+        seen.push(state.value.list[2]);
+      }),
+    );
     expect(seen).toEqual(["c"]);
 
     state.value.list.length = 2;
@@ -916,7 +983,9 @@ describe("deepSignal", () => {
     const state = deepSignal<Record<string, number>>({});
     const render = coreRuntime.renderAdapter;
     const attempt = render.createRenderAttempt();
-    render.withRenderScope(attempt, () => { void state.value.pending; });
+    render.withRenderScope(attempt, () => {
+      void state.value.pending;
+    });
 
     await new Promise((resolve) => setTimeout(resolve, 0));
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -958,13 +1027,12 @@ describe("deepSignal", () => {
     // carried the raw nested object: this read subscribed to nothing and the
     // effect never re-ran, while `get`, spread, `Object.entries` and
     // `JSON.stringify` all wrapped and tracked the very same property.
-    disposers.push(effect(() => {
-      const descriptor = Object.getOwnPropertyDescriptor(
-        state.value,
-        "nested",
-      ) as PropertyDescriptor;
-      counts.push((descriptor.value as { count: number }).count);
-    }));
+    disposers.push(
+      effect(() => {
+        const descriptor = Object.getOwnPropertyDescriptor(state.value, "nested") as PropertyDescriptor;
+        counts.push((descriptor.value as { count: number }).count);
+      }),
+    );
     expect(counts).toEqual([1]);
 
     state.value.nested.count = 2;
@@ -984,9 +1052,11 @@ describe("deepSignal", () => {
 
     // A missing key reports nothing, but the read is still a subscription.
     const seen: unknown[] = [];
-    disposers.push(effect(() => {
-      seen.push(Object.getOwnPropertyDescriptor(state.value, "added")?.value);
-    }));
+    disposers.push(
+      effect(() => {
+        seen.push(Object.getOwnPropertyDescriptor(state.value, "added")?.value);
+      }),
+    );
     expect(seen).toEqual([undefined]);
     (state.value as { added?: number }).added = 7;
     expect(seen).toEqual([undefined, 7]);
@@ -1010,9 +1080,7 @@ describe("deepSignal", () => {
     expect(descriptor?.value).toBe(frozenState.peek().nested);
     expect(() => Object.getOwnPropertyDescriptors(frozenState.value)).not.toThrow();
     // `get` keeps rejecting it with the library's message rather than lying.
-    expect(() => frozenState.value.nested).toThrow(
-      /non-configurable, non-writable object property/,
-    );
+    expect(() => frozenState.value.nested).toThrow(/non-configurable, non-writable object property/);
 
     // Non-configurable but writable: the invariant permits a substituted
     // value, so this one is wrapped and tracked like any other property.

@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { batch, computed, effect, isSignal, signal, untracked } from "../src/index.js";
-import {
-  setActiveRenderCollector,
-  type RenderDependency,
-} from "../src/core/render-tracking.js";
+import { setActiveRenderCollector, type RenderDependency } from "../src/core/render-tracking.js";
 
 /**
  * Stands in for what a `useSignalTracking()` component's `RenderStore` does: installs
@@ -48,10 +45,12 @@ describe("core signal primitives", () => {
   it("uses Object.is when deciding whether a signal changed", () => {
     const value = signal<number>(0);
     const listener = vi.fn();
-    disposers.push(effect(() => {
-      value.value;
-      listener();
-    }));
+    disposers.push(
+      effect(() => {
+        value.value;
+        listener();
+      }),
+    );
 
     expect(listener).toHaveBeenCalledTimes(1);
     value.value = 0;
@@ -61,10 +60,12 @@ describe("core signal primitives", () => {
 
     const nan = signal(Number.NaN);
     const nanListener = vi.fn();
-    disposers.push(effect(() => {
-      nan.value;
-      nanListener();
-    }));
+    disposers.push(
+      effect(() => {
+        nan.value;
+        nanListener();
+      }),
+    );
     nan.value = Number.NaN;
     expect(nanListener).toHaveBeenCalledTimes(1);
   });
@@ -73,9 +74,11 @@ describe("core signal primitives", () => {
     const source = signal(0);
     const derived = computed(() => source.value);
     const values: number[] = [];
-    disposers.push(effect(() => {
-      values.push(derived.value);
-    }));
+    disposers.push(
+      effect(() => {
+        values.push(derived.value);
+      }),
+    );
 
     source.value = -0;
     expect(values).toHaveLength(2);
@@ -84,9 +87,11 @@ describe("core signal primitives", () => {
     const nanSource = signal(Number.NaN);
     const nanDerived = computed(() => nanSource.value);
     const nanReads: number[] = [];
-    disposers.push(effect(() => {
-      nanReads.push(nanDerived.value);
-    }));
+    disposers.push(
+      effect(() => {
+        nanReads.push(nanDerived.value);
+      }),
+    );
     nanSource.value = Number.NaN;
     expect(nanReads).toHaveLength(1);
   });
@@ -98,9 +103,11 @@ describe("core signal primitives", () => {
     const selected = computed(() => (useFirst.value ? first.value : second.value));
     const values: string[] = [];
 
-    disposers.push(effect(() => {
-      values.push(selected.value);
-    }));
+    disposers.push(
+      effect(() => {
+        values.push(selected.value);
+      }),
+    );
     expect(values).toEqual(["first"]);
 
     first.value = "first-updated";
@@ -133,7 +140,11 @@ describe("core signal primitives", () => {
     expect(evaluations).toBe(1);
 
     const seen: number[] = [];
-    disposers.push(effect(() => { seen.push(total.value); }));
+    disposers.push(
+      effect(() => {
+        seen.push(total.value);
+      }),
+    );
     expect(seen).toEqual([3]);
     total.value = 10;
     expect(first.value).toBe(8);
@@ -153,20 +164,28 @@ describe("core signal primitives", () => {
       },
     });
     let runs = 0;
-    disposers.push(effect(() => {
-      writable.value;
-      runs += 1;
-    }));
+    disposers.push(
+      effect(() => {
+        writable.value;
+        runs += 1;
+      }),
+    );
 
     writable.value = 2;
     expect(runs).toBe(2);
     unrelated.value += 1;
     expect(runs).toBe(2);
 
-    const broken = computed({ get: () => source.value, set: () => { throw new Error("setter failed"); } });
-    expect(() => { broken.value = 3; }).toThrow("setter failed");
+    const broken = computed({
+      get: () => source.value,
+      set: () => {
+        throw new Error("setter failed");
+      },
+    });
+    expect(() => {
+      broken.value = 3;
+    }).toThrow("setter failed");
   });
-
 
   it("coalesces notifications made inside batch", () => {
     const left = signal(1);
@@ -174,9 +193,11 @@ describe("core signal primitives", () => {
     const total = computed(() => left.value + right.value);
     const values: number[] = [];
 
-    disposers.push(effect(() => {
-      values.push(total.value);
-    }));
+    disposers.push(
+      effect(() => {
+        values.push(total.value);
+      }),
+    );
     expect(values).toEqual([3]);
 
     batch(() => {
@@ -191,11 +212,13 @@ describe("core signal primitives", () => {
     const trigger = signal(0);
     const listener = vi.fn();
 
-    disposers.push(effect(() => {
-      trigger.value;
-      untracked(() => source.value);
-      listener();
-    }));
+    disposers.push(
+      effect(() => {
+        trigger.value;
+        untracked(() => source.value);
+        listener();
+      }),
+    );
     expect(listener).toHaveBeenCalledTimes(1);
     source.value = "not-a-dependency";
     expect(listener).toHaveBeenCalledTimes(1);
@@ -251,10 +274,12 @@ describe("core signal primitives", () => {
   it("reads the current value via peek without establishing a dependency", () => {
     const source = signal(0);
     const listener = vi.fn();
-    disposers.push(effect(() => {
-      source.peek();
-      listener();
-    }));
+    disposers.push(
+      effect(() => {
+        source.peek();
+        listener();
+      }),
+    );
     expect(listener).toHaveBeenCalledTimes(1);
     source.value = 1;
     expect(listener).toHaveBeenCalledTimes(1);
@@ -263,10 +288,12 @@ describe("core signal primitives", () => {
     const base = signal(1);
     const doubled = computed(() => base.value * 2);
     const computedListener = vi.fn();
-    disposers.push(effect(() => {
-      doubled.peek();
-      computedListener();
-    }));
+    disposers.push(
+      effect(() => {
+        doubled.peek();
+        computedListener();
+      }),
+    );
     expect(computedListener).toHaveBeenCalledTimes(1);
     base.value = 2;
     expect(computedListener).toHaveBeenCalledTimes(1);
@@ -390,13 +417,15 @@ describe("computed error propagation", () => {
       return source.value * 10;
     });
     const results: Array<number | "error"> = [];
-    disposers.push(effect(() => {
-      try {
-        results.push(flaky.value);
-      } catch {
-        results.push("error");
-      }
-    }));
+    disposers.push(
+      effect(() => {
+        try {
+          results.push(flaky.value);
+        } catch {
+          results.push("error");
+        }
+      }),
+    );
     expect(results).toEqual([10]);
 
     source.value = 2;
@@ -421,13 +450,15 @@ describe("computed error propagation", () => {
     // any throw that still escapes here would have to come from alien-signals'
     // own dirty-checking (run before the effect body executes), not from this
     // unguarded call, because this call IS guarded.
-    disposers.push(effect(() => {
-      try {
-        flaky.value;
-      } catch {
-        // Ignored on purpose: this test only cares whether the write throws.
-      }
-    }));
+    disposers.push(
+      effect(() => {
+        try {
+          flaky.value;
+        } catch {
+          // Ignored on purpose: this test only cares whether the write throws.
+        }
+      }),
+    );
 
     expect(() => {
       source.value = 2;
@@ -457,16 +488,20 @@ describe("computed error propagation", () => {
       return a.value;
     });
     const healthySeen: number[] = [];
-    disposers.push(effect(() => {
-      try {
-        erroring.value;
-      } catch {
-        // Ignored on purpose: only `healthySeen` is under test here.
-      }
-    }));
-    disposers.push(effect(() => {
-      healthySeen.push(b.value * 2);
-    }));
+    disposers.push(
+      effect(() => {
+        try {
+          erroring.value;
+        } catch {
+          // Ignored on purpose: only `healthySeen` is under test here.
+        }
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        healthySeen.push(b.value * 2);
+      }),
+    );
     expect(healthySeen).toEqual([200]);
 
     expect(() => {
@@ -493,12 +528,16 @@ describe("computed error propagation", () => {
     const other = signal(0);
     const healthySeen: number[] = [];
 
-    disposers.push(effect(() => {
-      if (trigger.value === 1) throw new Error("effect boom");
-    }));
-    disposers.push(effect(() => {
-      healthySeen.push(other.value);
-    }));
+    disposers.push(
+      effect(() => {
+        if (trigger.value === 1) throw new Error("effect boom");
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        healthySeen.push(other.value);
+      }),
+    );
     expect(healthySeen).toEqual([0]);
 
     expect(() => {
@@ -553,16 +592,20 @@ describe("computed error propagation", () => {
     const [dependency] = collectRenderDependencies(() => {
       source.value;
     });
-    disposers.push(dependency!.subscribeRender(() => {
-      notifications.push(source.peek());
-    }));
+    disposers.push(
+      dependency!.subscribeRender(() => {
+        notifications.push(source.peek());
+      }),
+    );
 
-    disposers.push(effect(() => {
-      source.value;
-      return () => {
-        throw new Error("cleanup boom");
-      };
-    }));
+    disposers.push(
+      effect(() => {
+        source.value;
+        return () => {
+          throw new Error("cleanup boom");
+        };
+      }),
+    );
 
     expect(() => {
       source.value = 1;
@@ -598,15 +641,19 @@ describe("computed error propagation", () => {
     const other = signal(0);
     const healthySeen: number[] = [];
 
-    disposers.push(effect(() => {
-      trigger.value;
-      return () => {
-        throw new Error("cleanup boom");
-      };
-    }));
-    disposers.push(effect(() => {
-      healthySeen.push(other.value);
-    }));
+    disposers.push(
+      effect(() => {
+        trigger.value;
+        return () => {
+          throw new Error("cleanup boom");
+        };
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        healthySeen.push(other.value);
+      }),
+    );
     expect(healthySeen).toEqual([0]);
 
     expect(() => {
@@ -678,14 +725,16 @@ describe("computed error propagation", () => {
     const runs: number[] = [];
     const cleanups: number[] = [];
 
-    disposers.push(effect(() => {
-      const seen = source.value;
-      runs.push(seen);
-      return () => {
-        cleanups.push(seen);
-        throw new Error("cleanup boom");
-      };
-    }));
+    disposers.push(
+      effect(() => {
+        const seen = source.value;
+        runs.push(seen);
+        return () => {
+          cleanups.push(seen);
+          throw new Error("cleanup boom");
+        };
+      }),
+    );
     expect(runs).toEqual([0]);
 
     source.value = 1;
@@ -731,15 +780,19 @@ describe("computed error propagation", () => {
     try {
       const source = signal(0);
       // Both reporting paths at once: a throwing body and a throwing cleanup.
-      disposers.push(effect(() => {
-        if (source.value > 0) throw new Error("body boom");
-      }));
-      disposers.push(effect(() => {
-        source.value;
-        return () => {
-          throw new Error("cleanup boom");
-        };
-      }));
+      disposers.push(
+        effect(() => {
+          if (source.value > 0) throw new Error("body boom");
+        }),
+      );
+      disposers.push(
+        effect(() => {
+          source.value;
+          return () => {
+            throw new Error("cleanup boom");
+          };
+        }),
+      );
 
       expect(() => {
         source.value = 1;
@@ -769,9 +822,11 @@ describe("computed error propagation", () => {
 
     try {
       const source = signal(0);
-      disposers.push(effect(() => {
-        if (source.value > 0) throw new Error("body boom");
-      }));
+      disposers.push(
+        effect(() => {
+          if (source.value > 0) throw new Error("body boom");
+        }),
+      );
 
       expect(() => {
         source.value = 1;
@@ -806,12 +861,16 @@ describe("computed error propagation", () => {
       const other = signal(0);
       const healthySeen: number[] = [];
 
-      disposers.push(effect(() => {
-        if (trigger.value === 1) throw new Error("body boom");
-      }));
-      disposers.push(effect(() => {
-        healthySeen.push(other.value);
-      }));
+      disposers.push(
+        effect(() => {
+          if (trigger.value === 1) throw new Error("body boom");
+        }),
+      );
+      disposers.push(
+        effect(() => {
+          healthySeen.push(other.value);
+        }),
+      );
 
       expect(() => {
         batch(() => {
@@ -848,12 +907,16 @@ describe("computed error propagation", () => {
       const other = signal(0);
       const healthySeen: number[] = [];
 
-      disposers.push(effect(() => {
-        if (trigger.value === 1) throw new Error("body boom");
-      }));
-      disposers.push(effect(() => {
-        healthySeen.push(other.value);
-      }));
+      disposers.push(
+        effect(() => {
+          if (trigger.value === 1) throw new Error("body boom");
+        }),
+      );
+      disposers.push(
+        effect(() => {
+          healthySeen.push(other.value);
+        }),
+      );
 
       expect(() => {
         batch(() => {
@@ -881,12 +944,16 @@ describe("computed error propagation", () => {
       const other = signal(0);
       const healthySeen: number[] = [];
 
-      disposers.push(effect(() => {
-        if (trigger.value === 1) throw new Error("body boom");
-      }));
-      disposers.push(effect(() => {
-        healthySeen.push(other.value);
-      }));
+      disposers.push(
+        effect(() => {
+          if (trigger.value === 1) throw new Error("body boom");
+        }),
+      );
+      disposers.push(
+        effect(() => {
+          healthySeen.push(other.value);
+        }),
+      );
 
       expect(() => {
         batch(() => {
@@ -910,12 +977,16 @@ describe("computed error propagation", () => {
     });
     const later: number[] = [];
 
-    disposers.push(dependency!.subscribeRender(() => {
-      throw new Error("listener boom");
-    }));
-    disposers.push(dependency!.subscribeRender(() => {
-      later.push(source.peek());
-    }));
+    disposers.push(
+      dependency!.subscribeRender(() => {
+        throw new Error("listener boom");
+      }),
+    );
+    disposers.push(
+      dependency!.subscribeRender(() => {
+        later.push(source.peek());
+      }),
+    );
 
     expect(() => {
       source.value = 1;

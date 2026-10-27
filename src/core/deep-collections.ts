@@ -30,7 +30,9 @@ class ReactiveCollectionIterator {
     const step = this.#iterator.next();
     return step.done ? step : { done: false, value: this.#convert(step.value) };
   }
-  get [Symbol.toStringTag](): string { return this.#tag; }
+  get [Symbol.toStringTag](): string {
+    return this.#tag;
+  }
 }
 
 let reactiveIteratorSetUp = false;
@@ -71,7 +73,7 @@ interface CollectionMetadata {
 let weakSymbolKeys: boolean | undefined;
 // Probed on first use, not at import, so loading this module has no effect.
 function supportsWeakSymbolKeys(): boolean {
-  return weakSymbolKeys ??= probeWeakSymbolKeys();
+  return (weakSymbolKeys ??= probeWeakSymbolKeys());
 }
 function probeWeakSymbolKeys(): boolean {
   try {
@@ -85,17 +87,17 @@ function probeWeakSymbolKeys(): boolean {
 }
 
 function isWeakCollectionKey(value: unknown): value is object | symbol {
-  return isObjectLike(value) || (
-    supportsWeakSymbolKeys()
-    && typeof value === "symbol"
-    // Native WeakMap/WeakSet accept non-registered symbols where supported,
-    // but Symbol.for() symbols are shared registry entries and never valid
-    // weak keys. Symbol.keyFor() returns undefined for local and well-known
-    // symbols, both of which follow the native weak-key contract.
-    && Symbol.keyFor(value) === undefined
+  return (
+    isObjectLike(value) ||
+    (supportsWeakSymbolKeys() &&
+      typeof value === "symbol" &&
+      // Native WeakMap/WeakSet accept non-registered symbols where supported,
+      // but Symbol.for() symbols are shared registry entries and never valid
+      // weak keys. Symbol.keyFor() returns undefined for local and well-known
+      // symbols, both of which follow the native weak-key contract.
+      Symbol.keyFor(value) === undefined)
   );
 }
-
 
 /** Builds the collection support for one engine; called once, on first use. */
 export function createCollectionSupport(ctx: CollectionContext): CollectionSupport {
@@ -124,33 +126,66 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     // realm's Object.prototype without passing a collection prototype (Dates,
     // class instances: every opaque value in stored state) is neither, so the
     // store path does not pay four exceptions per opaque value.
-    for (let prototype = Object.getPrototypeOf(value); prototype !== null; prototype = Object.getPrototypeOf(prototype)) {
+    for (
+      let prototype = Object.getPrototypeOf(value);
+      prototype !== null;
+      prototype = Object.getPrototypeOf(prototype)
+    ) {
       if (prototype === Object.prototype) return undefined;
     }
     const probe = {};
-    try { Map.prototype.has.call(value, probe); return "Map"; } catch { /* try next brand */ }
-    try { Set.prototype.has.call(value, probe); return "Set"; } catch { /* try next brand */ }
-    try { WeakMap.prototype.has.call(value, probe); return "WeakMap"; } catch { /* try next brand */ }
-    try { WeakSet.prototype.has.call(value, probe); return "WeakSet"; } catch { /* not a collection */ }
+    try {
+      Map.prototype.has.call(value, probe);
+      return "Map";
+    } catch {
+      /* try next brand */
+    }
+    try {
+      Set.prototype.has.call(value, probe);
+      return "Set";
+    } catch {
+      /* try next brand */
+    }
+    try {
+      WeakMap.prototype.has.call(value, probe);
+      return "WeakMap";
+    } catch {
+      /* try next brand */
+    }
+    try {
+      WeakSet.prototype.has.call(value, probe);
+      return "WeakSet";
+    } catch {
+      /* not a collection */
+    }
     return undefined;
   }
 
-  function isStandardCollection(value: unknown): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
+  function isStandardCollection(
+    value: unknown,
+  ): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
     if (!isObjectLike(value) || isPlainObjectOrArray(value)) return false;
     return isStandardCollectionPrototype(value);
   }
 
   /** `isStandardCollection` for a value already known not to be plain data. */
-  function isStandardCollectionPrototype(value: object): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
+  function isStandardCollectionPrototype(
+    value: object,
+  ): value is Map<unknown, unknown> | Set<unknown> | WeakMap<object, unknown> | WeakSet<object> {
     // `wrap()` runs this for every opaque value read through a proxy (Dates,
     // class instances). Match the prototype first so those reads skip the
     // throwing internal-slot probes in `getNativeCollectionKind`.
     const prototype = Object.getPrototypeOf(value);
-    const expectedKind = prototype === Map.prototype ? "Map"
-      : prototype === Set.prototype ? "Set"
-      : prototype === WeakMap.prototype ? "WeakMap"
-      : prototype === WeakSet.prototype ? "WeakSet"
-      : undefined;
+    const expectedKind =
+      prototype === Map.prototype
+        ? "Map"
+        : prototype === Set.prototype
+          ? "Set"
+          : prototype === WeakMap.prototype
+            ? "WeakMap"
+            : prototype === WeakSet.prototype
+              ? "WeakSet"
+              : undefined;
     return expectedKind !== undefined && getNativeCollectionKind(value) === expectedKind;
   }
 
@@ -161,9 +196,18 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     }
   }
 
-  const collectionVersion = (metadata: CollectionMetadata, kind: "values" | "existence" | "members", key: unknown): VersionSignal => {
+  const collectionVersion = (
+    metadata: CollectionMetadata,
+    kind: "values" | "existence" | "members",
+    key: unknown,
+  ): VersionSignal => {
     const weakKey = isWeakCollectionKey(key);
-    const weakVersions = kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers;
+    const weakVersions =
+      kind === "values"
+        ? metadata.objectValues
+        : kind === "existence"
+          ? metadata.objectExistence
+          : metadata.objectMembers;
     let version = weakKey ? weakVersions.get(key as object) : metadata[kind].get(key);
     if (version === undefined) {
       version = adapter.createVersionSignal(0);
@@ -192,7 +236,11 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     return version;
   };
 
-  const weakCollectionVersion = (metadata: CollectionMetadata, kind: "weakValues" | "weakExistence" | "weakMembers", key: object): VersionSignal => {
+  const weakCollectionVersion = (
+    metadata: CollectionMetadata,
+    kind: "weakValues" | "weakExistence" | "weakMembers",
+    key: object,
+  ): VersionSignal => {
     const versions = metadata[kind];
     let version = versions.get(key);
     if (version === undefined) {
@@ -207,9 +255,10 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     weakKind: "weakValues" | "weakExistence" | "weakMembers",
     strongKind: "values" | "existence" | "members",
     key: object | symbol,
-  ): VersionSignal => isWeakCollectionKey(key)
-    ? weakCollectionVersion(metadata, weakKind, key as object)
-    : collectionVersion(metadata, strongKind, key);
+  ): VersionSignal =>
+    isWeakCollectionKey(key)
+      ? weakCollectionVersion(metadata, weakKind, key as object)
+      : collectionVersion(metadata, strongKind, key);
 
   const notifyWeakCollectionKey = (
     metadata: CollectionMetadata,
@@ -217,9 +266,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     strongKind: "values" | "existence" | "members",
     key: object | symbol,
   ): void => {
-    const version = isWeakCollectionKey(key)
-      ? metadata[weakKind].get(key as object)
-      : metadata[strongKind].get(key);
+    const version = isWeakCollectionKey(key) ? metadata[weakKind].get(key as object) : metadata[strongKind].get(key);
     if (version !== undefined) version.value += 1;
   };
 
@@ -228,15 +275,27 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     version.value;
   };
 
-  const collectionAggregate = (metadata: CollectionMetadata, kind: "size" | "keysIteration" | "entriesIteration"): VersionSignal => {
+  const collectionAggregate = (
+    metadata: CollectionMetadata,
+    kind: "size" | "keysIteration" | "entriesIteration",
+  ): VersionSignal => {
     let version = metadata[kind];
     if (version === undefined) metadata[kind] = version = adapter.createVersionSignal(0);
     return version;
   };
 
-  const notifyCollectionKey = (metadata: CollectionMetadata, kind: "values" | "existence" | "members", key: unknown): void => {
+  const notifyCollectionKey = (
+    metadata: CollectionMetadata,
+    kind: "values" | "existence" | "members",
+    key: unknown,
+  ): void => {
     const weakKey = isWeakCollectionKey(key);
-    const weakVersions = kind === "values" ? metadata.objectValues : kind === "existence" ? metadata.objectExistence : metadata.objectMembers;
+    const weakVersions =
+      kind === "values"
+        ? metadata.objectValues
+        : kind === "existence"
+          ? metadata.objectExistence
+          : metadata.objectMembers;
     const version = weakKey ? weakVersions.get(key as object) : metadata[kind].get(key);
     if (version !== undefined) version.value += 1;
   };
@@ -250,7 +309,10 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
   // mutation drops only versions nothing has read since their last write, so
   // an unrelated write never invalidates a render that is still in progress.
   const retireCollectionVersion = (version: VersionSignal | undefined): void => {
-    if (version !== undefined) adapter.untracked(() => { version.value = version.peek() + 1; });
+    if (version !== undefined)
+      adapter.untracked(() => {
+        version.value = version.peek() + 1;
+      });
   };
 
   const sweepCollectionKeys = (metadata: CollectionMetadata, settled = false): void => {
@@ -282,7 +344,8 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
       if (!adapter.hasSubscribers(version)) return true;
       // Read since its last write but not linked yet: a render in progress
       // or a reader already gone. Leave it to the settled sweep.
-      if (adapter.hasLinkedSubscribers !== undefined && !adapter.hasLinkedSubscribers(version)) metadata.prunableSweepDeferred = true;
+      if (adapter.hasLinkedSubscribers !== undefined && !adapter.hasLinkedSubscribers(version))
+        metadata.prunableSweepDeferred = true;
       return false;
     };
     let processed = 0;
@@ -307,15 +370,24 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
       let remaining = candidates;
       if ((candidates & 1) !== 0) {
         const version = metadata.values.get(key);
-        if (release(version)) { metadata.values.delete(key); remaining &= ~1; }
+        if (release(version)) {
+          metadata.values.delete(key);
+          remaining &= ~1;
+        }
       }
       if ((candidates & 2) !== 0) {
         const version = metadata.existence.get(key);
-        if (release(version)) { metadata.existence.delete(key); remaining &= ~2; }
+        if (release(version)) {
+          metadata.existence.delete(key);
+          remaining &= ~2;
+        }
       }
       if ((candidates & 4) !== 0) {
         const version = metadata.members.get(key);
-        if (release(version)) { metadata.members.delete(key); remaining &= ~4; }
+        if (release(version)) {
+          metadata.members.delete(key);
+          remaining &= ~4;
+        }
       }
       if (remaining === 0) metadata.prunable.delete(key);
       else if (remaining !== candidates) metadata.prunable.set(key, remaining);
@@ -341,10 +413,19 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     const found = reactiveCollections.get(raw);
     if (found !== undefined) return found.proxy;
     const metadata: CollectionMetadata = {
-      values: new Map(), existence: new Map(), members: new Map(),
-      objectValues: new WeakMap(), objectExistence: new WeakMap(), objectMembers: new WeakMap(),
-      weakValues: new WeakMap(), weakExistence: new WeakMap(), weakMembers: new WeakMap(),
-      prunable: new Map(), prunableRevision: 0, methods: new Map(), proxy: undefined as unknown as object,
+      values: new Map(),
+      existence: new Map(),
+      members: new Map(),
+      objectValues: new WeakMap(),
+      objectExistence: new WeakMap(),
+      objectMembers: new WeakMap(),
+      weakValues: new WeakMap(),
+      weakExistence: new WeakMap(),
+      weakMembers: new WeakMap(),
+      prunable: new Map(),
+      prunableRevision: 0,
+      methods: new Map(),
+      proxy: undefined as unknown as object,
     };
     const normalize = (value: unknown): unknown => unwrap(value);
     // Lookups (`get`/`has`/`delete`) only need the identity a stored key would
@@ -375,7 +456,8 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
       const existing = normalizeLookupKey(value);
       if (hasStoredKey(existing)) return existing;
       const normalized = normalize(value);
-      if (isObjectLike(value) && normalized !== value && toRaw(value) === undefined) carrierKeys.set(value, normalized as object);
+      if (isObjectLike(value) && normalized !== value && toRaw(value) === undefined)
+        carrierKeys.set(value, normalized as object);
       return normalized;
     };
     const normalizeWeakKey = (value: unknown): unknown => {
@@ -411,9 +493,11 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
       const size = Math.trunc(numSize);
       if (size < 0) throw new RangeError("The 'size' property of the set-like argument must not be negative");
       const has = record.has;
-      if (typeof has !== "function") throw new TypeError("The 'has' property of the set-like argument is not a function");
+      if (typeof has !== "function")
+        throw new TypeError("The 'has' property of the set-like argument is not a function");
       const keys = record.keys;
-      if (typeof keys !== "function") throw new TypeError("The 'keys' property of the set-like argument is not a function");
+      if (typeof keys !== "function")
+        throw new TypeError("The 'keys' property of the set-like argument is not a function");
       const retryWithProxy = has === Set.prototype.has || has === Map.prototype.has || toRaw(other) !== undefined;
       return {
         size: size === 0 ? 0 : size,
@@ -425,7 +509,8 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
         },
         keys(): Iterator<unknown> {
           const iterator = Reflect.apply(keys, other, []) as Iterator<unknown>;
-          if (!isObjectLike(iterator)) throw new TypeError("The 'keys' method of the set-like argument returned a non-object");
+          if (!isObjectLike(iterator))
+            throw new TypeError("The 'keys' method of the set-like argument returned a non-object");
           const next = iterator.next;
           return {
             next(): IteratorResult<unknown> {
@@ -456,17 +541,23 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     const batchWrite = <T>(callback: () => T): T => adapter.batch(() => adapter.untracked(callback));
     const memoMethod = <T extends Function>(key: PropertyKey, create: () => T): T => {
       let method = metadata.methods.get(key);
-      if (method === undefined) metadata.methods.set(key, method = create());
+      if (method === undefined) metadata.methods.set(key, (method = create()));
       return method as T;
     };
     // Inherit %IteratorPrototype% like native Map/Set iterators, so Iterator
     // helpers (`keys().toArray()`, `values().map()`) and `instanceof Iterator`
     // keep working where the engine provides them.
-    const wrapIterator = (iterator: Iterator<unknown>, convert: (value: unknown) => unknown, tag: string): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } =>
-      new ReactiveCollectionIterator(iterator, convert, tag) as unknown as IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string };
+    const wrapIterator = (
+      iterator: Iterator<unknown>,
+      convert: (value: unknown) => unknown,
+      tag: string,
+    ): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } =>
+      new ReactiveCollectionIterator(iterator, convert, tag) as unknown as IterableIterator<unknown> & {
+        readonly [Symbol.toStringTag]: string;
+      };
     const proxy = new Proxy(raw, {
       get(target, key) {
-        if (kind === "Map" && key === "size" || kind === "Set" && key === "size") {
+        if ((kind === "Map" && key === "size") || (kind === "Set" && key === "size")) {
           trackAggregate("size");
           return Reflect.get(target, "size", target);
         }
@@ -475,231 +566,332 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
         const method = (target as unknown as Record<PropertyKey, unknown>)[key];
         if (typeof method !== "function") return Reflect.get(target, key, target);
 
-        if ((kind === "Map" || kind === "WeakMap") && key === "get") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
-          if (kind === "WeakMap") {
-            if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.get, target, [normalized]);
-            if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakValues", "values", normalized));
-            return wrapRead(Reflect.apply(WeakMap.prototype.get, target, [normalized]));
-          }
-          if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "values", normalized));
-          return wrapRead(Map.prototype.get.call(target, normalized));
-        });
-        if ((kind === "Map" || kind === "WeakMap") && key === "has") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
-          if (kind === "WeakMap") {
-            if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
-            if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakExistence", "existence", normalized));
-            return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
-          }
-          if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "existence", normalized));
-          return Map.prototype.has.call(target, normalized);
-        });
-        if (kind === "Map" && key === "set" || kind === "WeakMap" && key === "set") return memoMethod(key, () => (inputKey: unknown, inputValue: unknown) => {
-          const normalizedKey = kind === "WeakMap" ? normalizeWeakKey(inputKey) : normalizeWriteKey(inputKey);
-          if (kind === "WeakMap" && !isWeakCollectionKey(normalizedKey)) return WeakMap.prototype.set.call(target, normalizedKey as object, normalize(inputValue));
-          const had = kind === "Map" ? Map.prototype.has.call(target, normalizedKey) : WeakMap.prototype.has.call(target, normalizedKey as object);
-          const oldValue = kind === "Map" ? Map.prototype.get.call(target, normalizedKey) : WeakMap.prototype.get.call(target, normalizedKey as object);
-          // Re-storing the very value an entry already holds needs no revalidation.
-          const normalizedValue = had && isObjectLike(inputValue) && Object.is(oldValue, inputValue) ? oldValue : normalize(inputValue);
-          batchWrite(() => {
-            if (kind === "Map") Map.prototype.set.call(target, normalizedKey, normalizedValue);
-            else WeakMap.prototype.set.call(target, normalizedKey as object, normalizedValue);
-            if (!had) {
+        if ((kind === "Map" || kind === "WeakMap") && key === "get")
+          return memoMethod(key, () => (input: unknown) => {
+            const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
+            if (kind === "WeakMap") {
+              if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.get, target, [normalized]);
+              if (shouldTrackDeepRead())
+                trackCollectionVersion(trackWeakCollectionKey(metadata, "weakValues", "values", normalized));
+              return wrapRead(Reflect.apply(WeakMap.prototype.get, target, [normalized]));
+            }
+            if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "values", normalized));
+            return wrapRead(Map.prototype.get.call(target, normalized));
+          });
+        if ((kind === "Map" || kind === "WeakMap") && key === "has")
+          return memoMethod(key, () => (input: unknown) => {
+            const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
+            if (kind === "WeakMap") {
+              if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
+              if (shouldTrackDeepRead())
+                trackCollectionVersion(trackWeakCollectionKey(metadata, "weakExistence", "existence", normalized));
+              return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
+            }
+            if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "existence", normalized));
+            return Map.prototype.has.call(target, normalized);
+          });
+        if ((kind === "Map" && key === "set") || (kind === "WeakMap" && key === "set"))
+          return memoMethod(key, () => (inputKey: unknown, inputValue: unknown) => {
+            const normalizedKey = kind === "WeakMap" ? normalizeWeakKey(inputKey) : normalizeWriteKey(inputKey);
+            if (kind === "WeakMap" && !isWeakCollectionKey(normalizedKey))
+              return WeakMap.prototype.set.call(target, normalizedKey as object, normalize(inputValue));
+            const had =
+              kind === "Map"
+                ? Map.prototype.has.call(target, normalizedKey)
+                : WeakMap.prototype.has.call(target, normalizedKey as object);
+            const oldValue =
+              kind === "Map"
+                ? Map.prototype.get.call(target, normalizedKey)
+                : WeakMap.prototype.get.call(target, normalizedKey as object);
+            // Re-storing the very value an entry already holds needs no revalidation.
+            const normalizedValue =
+              had && isObjectLike(inputValue) && Object.is(oldValue, inputValue) ? oldValue : normalize(inputValue);
+            batchWrite(() => {
+              if (kind === "Map") Map.prototype.set.call(target, normalizedKey, normalizedValue);
+              else WeakMap.prototype.set.call(target, normalizedKey as object, normalizedValue);
+              if (!had) {
+                if (kind === "Map") {
+                  notifyCollectionKey(metadata, "values", normalizedKey);
+                  notifyCollectionKey(metadata, "existence", normalizedKey);
+                  const size = metadata.size;
+                  if (size !== undefined) size.value += 1;
+                  const keys = metadata.keysIteration;
+                  if (keys !== undefined) keys.value += 1;
+                  const entries = metadata.entriesIteration;
+                  if (entries !== undefined) entries.value += 1;
+                } else {
+                  notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
+                  notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalizedKey as object | symbol);
+                }
+              } else if (!Object.is(oldValue, normalizedValue)) {
+                if (kind === "Map") {
+                  notifyCollectionKey(metadata, "values", normalizedKey);
+                  const entries = metadata.entriesIteration;
+                  if (entries !== undefined) entries.value += 1;
+                } else {
+                  notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
+                }
+              }
+            });
+            sweepCollectionKeys(metadata);
+            return proxy;
+          });
+        if ((kind === "Map" || kind === "WeakMap") && key === "delete")
+          return memoMethod(key, () => (input: unknown) => {
+            const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
+            const had =
+              kind === "Map"
+                ? Map.prototype.has.call(target, normalized)
+                : WeakMap.prototype.has.call(target, normalized as object);
+            if (!had) return false;
+            batchWrite(() => {
+              if (kind === "Map") Map.prototype.delete.call(target, normalized);
+              else WeakMap.prototype.delete.call(target, normalized as object);
               if (kind === "Map") {
-                notifyCollectionKey(metadata, "values", normalizedKey);
-                notifyCollectionKey(metadata, "existence", normalizedKey);
-                const size = metadata.size; if (size !== undefined) size.value += 1;
-                const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
-                const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+                notifyCollectionKey(metadata, "values", normalized);
+                notifyCollectionKey(metadata, "existence", normalized);
+                const size = metadata.size;
+                if (size !== undefined) size.value += 1;
+                const keys = metadata.keysIteration;
+                if (keys !== undefined) keys.value += 1;
+                const entries = metadata.entriesIteration;
+                if (entries !== undefined) entries.value += 1;
               } else {
-                notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
-                notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalizedKey as object | symbol);
+                notifyWeakCollectionKey(metadata, "weakValues", "values", normalized as object | symbol);
+                notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalized as object | symbol);
               }
-            } else if (!Object.is(oldValue, normalizedValue)) {
+            });
+            sweepCollectionKeys(metadata);
+            return true;
+          });
+        if ((kind === "Map" || kind === "Set") && key === "clear")
+          return memoMethod(key, () => () => {
+            if ((kind === "Map" ? (target as Map<unknown, unknown>).size : (target as Set<unknown>).size) === 0)
+              return undefined;
+            batchWrite(() => {
               if (kind === "Map") {
-                notifyCollectionKey(metadata, "values", normalizedKey);
-                const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+                for (const item of Map.prototype.keys.call(target) as IterableIterator<unknown>) {
+                  notifyCollectionKey(metadata, "values", item);
+                  notifyCollectionKey(metadata, "existence", item);
+                }
+                Map.prototype.clear.call(target);
               } else {
-                notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
+                for (const item of Set.prototype.values.call(target) as IterableIterator<unknown>) {
+                  notifyCollectionKey(metadata, "members", item);
+                }
+                Set.prototype.clear.call(target);
               }
-            }
+              const size = metadata.size;
+              if (size !== undefined) size.value += 1;
+              const keys = metadata.keysIteration;
+              if (keys !== undefined) keys.value += 1;
+              const entries = metadata.entriesIteration;
+              if (entries !== undefined) entries.value += 1;
+            });
+            sweepCollectionKeys(metadata);
+            return undefined;
           });
-          sweepCollectionKeys(metadata);
-          return proxy;
-        });
-        if ((kind === "Map" || kind === "WeakMap") && key === "delete") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakMap" ? normalizeWeakKey(input) : normalizeLookupKey(input);
-          const had = kind === "Map" ? Map.prototype.has.call(target, normalized) : WeakMap.prototype.has.call(target, normalized as object);
-          if (!had) return false;
-          batchWrite(() => {
-            if (kind === "Map") Map.prototype.delete.call(target, normalized);
-            else WeakMap.prototype.delete.call(target, normalized as object);
-            if (kind === "Map") {
-              notifyCollectionKey(metadata, "values", normalized);
-              notifyCollectionKey(metadata, "existence", normalized);
-              const size = metadata.size; if (size !== undefined) size.value += 1;
-              const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
-              const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
-            } else {
-              notifyWeakCollectionKey(metadata, "weakValues", "values", normalized as object | symbol);
-              notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalized as object | symbol);
+        if ((kind === "Set" || kind === "WeakSet") && key === "has")
+          return memoMethod(key, () => (input: unknown) => {
+            const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeLookupKey(input);
+            if (kind === "WeakSet") {
+              if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
+              if (shouldTrackDeepRead())
+                trackCollectionVersion(trackWeakCollectionKey(metadata, "weakMembers", "members", normalized));
+              return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
             }
+            if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "members", normalized));
+            return Set.prototype.has.call(target, normalized);
           });
-          sweepCollectionKeys(metadata);
-          return true;
-        });
-        if ((kind === "Map" || kind === "Set") && key === "clear") return memoMethod(key, () => () => {
-          if ((kind === "Map" ? (target as Map<unknown, unknown>).size : (target as Set<unknown>).size) === 0) return undefined;
-          batchWrite(() => {
-            if (kind === "Map") {
-              for (const item of Map.prototype.keys.call(target) as IterableIterator<unknown>) {
-                notifyCollectionKey(metadata, "values", item); notifyCollectionKey(metadata, "existence", item);
+        if ((kind === "Set" || kind === "WeakSet") && key === "add")
+          return memoMethod(key, () => (input: unknown) => {
+            const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeWriteKey(input);
+            if (kind === "WeakSet" && !isWeakCollectionKey(normalized))
+              return WeakSet.prototype.add.call(target, normalized as object);
+            const had =
+              kind === "Set"
+                ? Set.prototype.has.call(target, normalized)
+                : WeakSet.prototype.has.call(target, normalized as object);
+            batchWrite(() => {
+              if (kind === "Set") Set.prototype.add.call(target, normalized);
+              else WeakSet.prototype.add.call(target, normalized as object);
+              if (!had) {
+                if (kind === "Set") {
+                  notifyCollectionKey(metadata, "members", normalized);
+                  const size = metadata.size;
+                  if (size !== undefined) size.value += 1;
+                  const keys = metadata.keysIteration;
+                  if (keys !== undefined) keys.value += 1;
+                  const entries = metadata.entriesIteration;
+                  if (entries !== undefined) entries.value += 1;
+                } else {
+                  notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
+                }
               }
-              Map.prototype.clear.call(target);
-            } else {
-              for (const item of Set.prototype.values.call(target) as IterableIterator<unknown>) {
-                notifyCollectionKey(metadata, "members", item);
-              }
-              Set.prototype.clear.call(target);
-            }
-            const size = metadata.size; if (size !== undefined) size.value += 1;
-            const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
-            const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+            });
+            sweepCollectionKeys(metadata);
+            return proxy;
           });
-          sweepCollectionKeys(metadata);
-          return undefined;
-        });
-        if ((kind === "Set" || kind === "WeakSet") && key === "has") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeLookupKey(input);
-          if (kind === "WeakSet") {
-            if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
-            if (shouldTrackDeepRead()) trackCollectionVersion(trackWeakCollectionKey(metadata, "weakMembers", "members", normalized));
-            return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
-          }
-          if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "members", normalized));
-          return Set.prototype.has.call(target, normalized);
-        });
-        if ((kind === "Set" || kind === "WeakSet") && key === "add") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeWriteKey(input);
-          if (kind === "WeakSet" && !isWeakCollectionKey(normalized)) return WeakSet.prototype.add.call(target, normalized as object);
-          const had = kind === "Set" ? Set.prototype.has.call(target, normalized) : WeakSet.prototype.has.call(target, normalized as object);
-          batchWrite(() => {
-            if (kind === "Set") Set.prototype.add.call(target, normalized); else WeakSet.prototype.add.call(target, normalized as object);
-            if (!had) {
+        if ((kind === "Set" || kind === "WeakSet") && key === "delete")
+          return memoMethod(key, () => (input: unknown) => {
+            const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeLookupKey(input);
+            const had =
+              kind === "Set"
+                ? Set.prototype.has.call(target, normalized)
+                : WeakSet.prototype.has.call(target, normalized as object);
+            if (!had) return false;
+            batchWrite(() => {
+              if (kind === "Set") Set.prototype.delete.call(target, normalized);
+              else WeakSet.prototype.delete.call(target, normalized as object);
               if (kind === "Set") {
                 notifyCollectionKey(metadata, "members", normalized);
-                const size = metadata.size; if (size !== undefined) size.value += 1;
-                const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
-                const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
+                const size = metadata.size;
+                if (size !== undefined) size.value += 1;
+                const keys = metadata.keysIteration;
+                if (keys !== undefined) keys.value += 1;
+                const entries = metadata.entriesIteration;
+                if (entries !== undefined) entries.value += 1;
               } else {
                 notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
               }
-            }
+            });
+            sweepCollectionKeys(metadata);
+            return true;
           });
-          sweepCollectionKeys(metadata);
-          return proxy;
-        });
-        if ((kind === "Set" || kind === "WeakSet") && key === "delete") return memoMethod(key, () => (input: unknown) => {
-          const normalized = kind === "WeakSet" ? normalizeWeakKey(input) : normalizeLookupKey(input);
-          const had = kind === "Set" ? Set.prototype.has.call(target, normalized) : WeakSet.prototype.has.call(target, normalized as object);
-          if (!had) return false;
-          batchWrite(() => {
-            if (kind === "Set") Set.prototype.delete.call(target, normalized); else WeakSet.prototype.delete.call(target, normalized as object);
-            if (kind === "Set") {
-              notifyCollectionKey(metadata, "members", normalized);
-              const size = metadata.size; if (size !== undefined) size.value += 1;
-              const keys = metadata.keysIteration; if (keys !== undefined) keys.value += 1;
-              const entries = metadata.entriesIteration; if (entries !== undefined) entries.value += 1;
-            } else {
-              notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
-            }
-          });
-          sweepCollectionKeys(metadata);
-          return true;
-        });
 
-        if (kind === "Map" && (key === "keys" || key === "values" || key === "entries" || key === Symbol.iterator)) return memoMethod(key, () => () => {
-          trackAggregate(key === "keys" ? "keysIteration" : "entriesIteration");
-          const iterator = key === "keys" ? Map.prototype.keys.call(target) : key === "values" ? Map.prototype.values.call(target) : Map.prototype.entries.call(target);
-          const convert = key === "entries" || key === Symbol.iterator
-            ? (item: unknown) => { const pair = item as [unknown, unknown]; return [wrapRead(pair[0]), wrapRead(pair[1])]; }
-            : (item: unknown) => wrapRead(item);
-          return wrapIterator(iterator as Iterator<unknown>, convert, "Map Iterator");
-        });
-        if (kind === "Set" && (key === "keys" || key === "values" || key === "entries" || key === Symbol.iterator)) return memoMethod(key, () => () => {
-          trackAggregate("entriesIteration");
-          const iterator = key === "entries" ? Set.prototype.entries.call(target) : Set.prototype.values.call(target);
-          const convert = key === "entries"
-            ? (item: unknown) => { const pair = item as [unknown, unknown]; const value = wrapRead(pair[0]); return [value, value]; }
-            : (item: unknown) => wrapRead(item);
-          return wrapIterator(iterator as Iterator<unknown>, convert, "Set Iterator");
-        });
-        if ((kind === "Map" || kind === "Set") && key === "forEach") return memoMethod(key, () => (callback: (value: unknown, key: unknown, collection: object) => void, thisArg?: unknown) => {
-          if (typeof callback !== "function") throw new TypeError("callback must be a function");
-          trackAggregate("entriesIteration");
-          const native = kind === "Map" ? Map.prototype.forEach : Set.prototype.forEach;
-          return Reflect.apply(native, target, [(value: unknown, entryKey: unknown) => Reflect.apply(callback, thisArg, [wrapRead(value), wrapRead(entryKey), proxy])]);
-        });
-        if (kind === "Set" && ["union", "intersection", "difference", "symmetricDifference", "isSubsetOf", "isSupersetOf", "isDisjointFrom"].includes(String(key))) return memoMethod(key, () => {
-          const producesSet = key === "union" || key === "intersection" || key === "difference" || key === "symmetricDifference";
-          return (other: unknown) => {
+        if (kind === "Map" && (key === "keys" || key === "values" || key === "entries" || key === Symbol.iterator))
+          return memoMethod(key, () => () => {
+            trackAggregate(key === "keys" ? "keysIteration" : "entriesIteration");
+            const iterator =
+              key === "keys"
+                ? Map.prototype.keys.call(target)
+                : key === "values"
+                  ? Map.prototype.values.call(target)
+                  : Map.prototype.entries.call(target);
+            const convert =
+              key === "entries" || key === Symbol.iterator
+                ? (item: unknown) => {
+                    const pair = item as [unknown, unknown];
+                    return [wrapRead(pair[0]), wrapRead(pair[1])];
+                  }
+                : (item: unknown) => wrapRead(item);
+            return wrapIterator(iterator as Iterator<unknown>, convert, "Map Iterator");
+          });
+        if (kind === "Set" && (key === "keys" || key === "values" || key === "entries" || key === Symbol.iterator))
+          return memoMethod(key, () => () => {
             trackAggregate("entriesIteration");
-            // Set methods consume `other` through the set-like protocol
-            // (size/has/keys) against this raw target. Reading through a reactive
-            // `other` keeps its tracking, but its keys come back as proxies and a
-            // plain Set built from reactive iteration holds proxies too, so
-            // members would never match the raw ones here. Hand native code a
-            // record that compares raw identities in both directions.
-            if (!producesSet) return Reflect.apply(method, target, [normalizedSetLike(other)]);
-            const origins = new Map<unknown, unknown>();
-            const result = Reflect.apply(method, target, [normalizedSetLike(other, origins)]) as Set<unknown>;
-            // The native result holds raw members. Return a plain Set whose
-            // members read like every other path: receiver members become
-            // proxies; members that only came from `other` keep the identity
-            // `other` held, except that a reactive collection's are proxies too.
-            const fromReactive = isObjectLike(other) && toRaw(other) !== undefined;
-            const wrapped = new Set<unknown>();
-            for (const member of Set.prototype.values.call(result) as IterableIterator<unknown>) {
-              if (Set.prototype.has.call(target, member)) wrapped.add(wrapRead(member));
-              else {
-                const original = origins.has(member) ? origins.get(member) : member;
-                wrapped.add(fromReactive ? wrapRead(original) : original);
+            const iterator = key === "entries" ? Set.prototype.entries.call(target) : Set.prototype.values.call(target);
+            const convert =
+              key === "entries"
+                ? (item: unknown) => {
+                    const pair = item as [unknown, unknown];
+                    const value = wrapRead(pair[0]);
+                    return [value, value];
+                  }
+                : (item: unknown) => wrapRead(item);
+            return wrapIterator(iterator as Iterator<unknown>, convert, "Set Iterator");
+          });
+        if ((kind === "Map" || kind === "Set") && key === "forEach")
+          return memoMethod(
+            key,
+            () => (callback: (value: unknown, key: unknown, collection: object) => void, thisArg?: unknown) => {
+              if (typeof callback !== "function") throw new TypeError("callback must be a function");
+              trackAggregate("entriesIteration");
+              const native = kind === "Map" ? Map.prototype.forEach : Set.prototype.forEach;
+              return Reflect.apply(native, target, [
+                (value: unknown, entryKey: unknown) =>
+                  Reflect.apply(callback, thisArg, [wrapRead(value), wrapRead(entryKey), proxy]),
+              ]);
+            },
+          );
+        if (
+          kind === "Set" &&
+          [
+            "union",
+            "intersection",
+            "difference",
+            "symmetricDifference",
+            "isSubsetOf",
+            "isSupersetOf",
+            "isDisjointFrom",
+          ].includes(String(key))
+        )
+          return memoMethod(key, () => {
+            const producesSet =
+              key === "union" || key === "intersection" || key === "difference" || key === "symmetricDifference";
+            return (other: unknown) => {
+              trackAggregate("entriesIteration");
+              // Set methods consume `other` through the set-like protocol
+              // (size/has/keys) against this raw target. Reading through a reactive
+              // `other` keeps its tracking, but its keys come back as proxies and a
+              // plain Set built from reactive iteration holds proxies too, so
+              // members would never match the raw ones here. Hand native code a
+              // record that compares raw identities in both directions.
+              if (!producesSet) return Reflect.apply(method, target, [normalizedSetLike(other)]);
+              const origins = new Map<unknown, unknown>();
+              const result = Reflect.apply(method, target, [normalizedSetLike(other, origins)]) as Set<unknown>;
+              // The native result holds raw members. Return a plain Set whose
+              // members read like every other path: receiver members become
+              // proxies; members that only came from `other` keep the identity
+              // `other` held, except that a reactive collection's are proxies too.
+              const fromReactive = isObjectLike(other) && toRaw(other) !== undefined;
+              const wrapped = new Set<unknown>();
+              for (const member of Set.prototype.values.call(result) as IterableIterator<unknown>) {
+                if (Set.prototype.has.call(target, member)) wrapped.add(wrapRead(member));
+                else {
+                  const original = origins.has(member) ? origins.get(member) : member;
+                  wrapped.add(fromReactive ? wrapRead(original) : original);
+                }
               }
-            }
-            return wrapped;
-          };
-        });
+              return wrapped;
+            };
+          });
         // Map upsert methods, where the engine has them: compose them from the
         // reactive `has`/`get`/`set` so reads are tracked and inserts notify.
         // Calling the native method on the raw target would bypass both.
-        if ((kind === "Map" || kind === "WeakMap") && key === "getOrInsert") return memoMethod(key, () => (entryKey: unknown, value: unknown) => {
-          const map = proxy as Map<unknown, unknown>;
-          if (!map.has(entryKey)) map.set(entryKey, value);
-          return map.get(entryKey);
-        });
-        if ((kind === "Map" || kind === "WeakMap") && key === "getOrInsertComputed") return memoMethod(key, () => (entryKey: unknown, callback: unknown) => {
-          // Spec order: a WeakMap rejects an unusable key before anything else,
-          // then the callback must be callable; a Map canonicalizes -0 to +0
-          // before the callback sees the key.
-          if (kind === "WeakMap" && !isWeakCollectionKey(normalizeWeakKey(entryKey))) throw new TypeError("Invalid value used as weak map key");
-          if (typeof callback !== "function") throw new TypeError("getOrInsertComputed callback must be a function");
-          const map = proxy as Map<unknown, unknown>;
-          const canonicalKey = kind === "Map" && Object.is(entryKey, -0) ? 0 : entryKey;
-          if (map.has(canonicalKey)) return map.get(canonicalKey);
-          map.set(canonicalKey, Reflect.apply(callback, undefined, [canonicalKey]));
-          return map.get(canonicalKey);
-        });
-        if ((kind === "Map" || kind === "WeakMap") && key === "emplace") return memoMethod(key, () => () => {
-          throw new TypeError("deepSignal() reactive collections do not support emplace; use getOrInsert or has/get/set");
-        });
+        if ((kind === "Map" || kind === "WeakMap") && key === "getOrInsert")
+          return memoMethod(key, () => (entryKey: unknown, value: unknown) => {
+            const map = proxy as Map<unknown, unknown>;
+            if (!map.has(entryKey)) map.set(entryKey, value);
+            return map.get(entryKey);
+          });
+        if ((kind === "Map" || kind === "WeakMap") && key === "getOrInsertComputed")
+          return memoMethod(key, () => (entryKey: unknown, callback: unknown) => {
+            // Spec order: a WeakMap rejects an unusable key before anything else,
+            // then the callback must be callable; a Map canonicalizes -0 to +0
+            // before the callback sees the key.
+            if (kind === "WeakMap" && !isWeakCollectionKey(normalizeWeakKey(entryKey)))
+              throw new TypeError("Invalid value used as weak map key");
+            if (typeof callback !== "function") throw new TypeError("getOrInsertComputed callback must be a function");
+            const map = proxy as Map<unknown, unknown>;
+            const canonicalKey = kind === "Map" && Object.is(entryKey, -0) ? 0 : entryKey;
+            if (map.has(canonicalKey)) return map.get(canonicalKey);
+            map.set(canonicalKey, Reflect.apply(callback, undefined, [canonicalKey]));
+            return map.get(canonicalKey);
+          });
+        if ((kind === "Map" || kind === "WeakMap") && key === "emplace")
+          return memoMethod(key, () => () => {
+            throw new TypeError(
+              "deepSignal() reactive collections do not support emplace; use getOrInsert or has/get/set",
+            );
+          });
         return Reflect.get(target, key, target);
       },
-      set() { throw new TypeError("deepSignal() reactive collections do not support own properties"); },
-      deleteProperty() { throw new TypeError("deepSignal() reactive collections do not support own properties"); },
-      defineProperty() { throw new TypeError("deepSignal() does not support collection property descriptors"); },
-      preventExtensions() { throw new TypeError("deepSignal() reactive collections must remain extensible"); },
-      setPrototypeOf() { throw new TypeError("deepSignal() does not support prototype mutation"); },
+      set() {
+        throw new TypeError("deepSignal() reactive collections do not support own properties");
+      },
+      deleteProperty() {
+        throw new TypeError("deepSignal() reactive collections do not support own properties");
+      },
+      defineProperty() {
+        throw new TypeError("deepSignal() does not support collection property descriptors");
+      },
+      preventExtensions() {
+        throw new TypeError("deepSignal() reactive collections must remain extensible");
+      },
+      setPrototypeOf() {
+        throw new TypeError("deepSignal() does not support prototype mutation");
+      },
     });
     metadata.proxy = proxy;
     reactiveCollections.set(raw, metadata);
@@ -707,13 +899,14 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     return proxy;
   }
 
-
   /** Primitive collection keys that still retain version metadata. */
-  function inspectCollectionMetadata(value: object): {
-    values: unknown[];
-    existence: unknown[];
-    members: unknown[];
-  } | undefined {
+  function inspectCollectionMetadata(value: object):
+    | {
+        values: unknown[];
+        existence: unknown[];
+        members: unknown[];
+      }
+    | undefined {
     const metadata = reactiveCollections.get(toRaw(value) ?? value);
     if (metadata === undefined) return undefined;
     return {
@@ -723,9 +916,9 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     };
   }
 
-
   function proxyFor(raw: object): object {
-    const kind = raw instanceof Map ? "Map" : raw instanceof Set ? "Set" : raw instanceof WeakMap ? "WeakMap" : "WeakSet";
+    const kind =
+      raw instanceof Map ? "Map" : raw instanceof Set ? "Set" : raw instanceof WeakMap ? "WeakMap" : "WeakSet";
     return reactiveCollectionProxy(raw, kind);
   }
 

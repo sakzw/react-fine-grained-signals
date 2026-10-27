@@ -44,9 +44,7 @@ function seedState(): StoreState {
  */
 export function createTaskStore() {
   const state = deepSignal(seedState());
-  const remaining = computed(
-    () => state.value.tasks.filter((task) => !task.done).length,
-  );
+  const remaining = computed(() => state.value.tasks.filter((task) => !task.done).length);
   return { state, remaining };
 }
 

@@ -15,21 +15,9 @@ function TypeContract({ prefix }: { prefix: string }) {
   });
   const name: string = useDeepSignalValue(state, (value) => value.user.name, []);
   const signalOnlyName: string = useDeepSignalValue(state, (value) => value.user.name);
-  const firstTaskDone: boolean | undefined = useDeepSignalValue(
-    state,
-    (value) => value.tasks[0]?.done,
-    [],
-  );
-  const optionalLabel: string | undefined = useDeepSignalValue(
-    state,
-    (value) => value.user.optional?.label,
-    [],
-  );
-  const label: string = useDeepSignalValue(
-    state,
-    (value) => `${prefix}: ${value.user.name}`,
-    [prefix],
-  );
+  const firstTaskDone: boolean | undefined = useDeepSignalValue(state, (value) => value.tasks[0]?.done, []);
+  const optionalLabel: string | undefined = useDeepSignalValue(state, (value) => value.user.optional?.label, []);
+  const label: string = useDeepSignalValue(state, (value) => `${prefix}: ${value.user.name}`, [prefix]);
   // @ts-expect-error selected primitive values retain their inferred type.
   const badName: number = useDeepSignalValue(state, (value) => value.user.name, []);
   // @ts-expect-error selectors only receive the declared root state shape.

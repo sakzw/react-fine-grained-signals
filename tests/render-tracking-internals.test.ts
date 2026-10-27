@@ -40,7 +40,10 @@ describe("render tracking internals", () => {
     } finally {
       setActiveRenderCollector(previous);
     }
-    expect(add.mock.calls).toEqual([[dependency, 7], [dependency, 12]]);
+    expect(add.mock.calls).toEqual([
+      [dependency, 7],
+      [dependency, 12],
+    ]);
     expect(activeRenderCollector).toBeUndefined();
   });
 
@@ -53,11 +56,13 @@ describe("render tracking internals", () => {
     const collector = { add };
     const previous = setActiveRenderCollector(collector);
     try {
-      expect(untrackedRender(() => {
-        expect(hasActiveRenderCollector()).toBe(false);
-        expect(executionContext.owner).toBe(UNTRACKED_OWNER);
-        return trackRenderDependency(dependency);
-      })).toBe(false);
+      expect(
+        untrackedRender(() => {
+          expect(hasActiveRenderCollector()).toBe(false);
+          expect(executionContext.owner).toBe(UNTRACKED_OWNER);
+          return trackRenderDependency(dependency);
+        }),
+      ).toBe(false);
       expect(hasActiveRenderCollector()).toBe(true);
 
       const graphOwner: GraphExecutionOwner = {
@@ -65,10 +70,12 @@ describe("render tracking internals", () => {
         runtimeToken: {},
       };
       withSynchronousExecutionOwner(graphOwner, () => {
-        expect(untrackedRender(() => {
-          expect(executionContext.owner).toBe(graphOwner);
-          return trackRenderDependency(dependency);
-        })).toBe(false);
+        expect(
+          untrackedRender(() => {
+            expect(executionContext.owner).toBe(graphOwner);
+            return trackRenderDependency(dependency);
+          }),
+        ).toBe(false);
       });
     } finally {
       setActiveRenderCollector(previous);
@@ -117,7 +124,9 @@ describe("render tracking internals", () => {
   it("contains listener errors and makes duplicate unsubscribe safe", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const subscription = new RenderSubscription();
-    const failing = vi.fn(() => { throw new Error("subscriber"); });
+    const failing = vi.fn(() => {
+      throw new Error("subscriber");
+    });
     const following = vi.fn();
     const stopFailing = subscription.subscribeRender(failing);
     subscription.subscribeRender(following);
@@ -145,7 +154,9 @@ describe("render tracking internals", () => {
   it("contains a failing notification listener and still calls the next one", () => {
     const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const following = vi.fn();
-    notifyListener(() => { throw new Error("direct notification"); });
+    notifyListener(() => {
+      throw new Error("direct notification");
+    });
     notifyListener(following);
     expect(log).toHaveBeenCalledTimes(1);
     expect(following).toHaveBeenCalledTimes(1);

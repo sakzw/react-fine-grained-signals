@@ -20,13 +20,7 @@ const FILTER_LABEL: Record<Filter, string> = {
 
 /** Mirrors the browser PoC's CustomSignalConsumer: shows whether the value
  * it received is actually a signal, via isSignal(). */
-function RawSignalProbe({
-  label,
-  source,
-}: {
-  label: string;
-  source: ReadonlySignal<unknown>;
-}) {
+function RawSignalProbe({ label, source }: { label: string; source: ReadonlySignal<unknown> }) {
   return (
     <p>
       {label}: <code>isSignal = {String(isSignal(source))}</code>
@@ -34,13 +28,7 @@ function RawSignalProbe({
   );
 }
 
-export function DevPanel({
-  store,
-  filter,
-}: {
-  store: TaskStore;
-  filter: Signal<Filter>;
-}) {
+export function DevPanel({ store, filter }: { store: TaskStore; filter: Signal<Filter> }) {
   // A low-level explicit leaf subscription, distinct from the useComputed
   // booleans that drive the filter tabs' Switch/Match below.
   const currentFilter = useSignalValue(filter);
@@ -78,12 +66,8 @@ export function DevPanel({
       <RawSignalProbe label="store.remaining" source={store.remaining} />
       {/* Explicit direct bindings write checkbox changes back to the signal. */}
       <label>
-        <input
-          type="checkbox"
-          bindChecked={verbose}
-        />
-        詳細ログ(アクティビティ追加時のみconsoleに出力。このチェックボックス自体の
-        切り替えでは再実行されない)
+        <input type="checkbox" bindChecked={verbose} />
+        詳細ログ(アクティビティ追加時のみconsoleに出力。このチェックボックス自体の 切り替えでは再実行されない)
       </label>
     </section>
   );

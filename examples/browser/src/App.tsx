@@ -26,16 +26,9 @@ function HydrationMarker() {
   return null;
 }
 
-function CustomSignalConsumer({
-  source,
-}: {
-  source: ReadonlySignal<string>;
-}) {
+function CustomSignalConsumer({ source }: { source: ReadonlySignal<string> }) {
   return (
-    <output
-      id="custom-value"
-      data-received-signal={String(isSignal(source))}
-    >
+    <output id="custom-value" data-received-signal={String(isSignal(source))}>
       {source.value}
     </output>
   );
@@ -45,12 +38,16 @@ function WritableComputedFormBinding() {
   const source = useSignal("123");
   const inputEvents = useSignal(0);
   const changeEvents = useSignal(0);
-  const digits = useMemo(() => computed({
-    get: () => source.value,
-    set: (next: string) => {
-      if (/^\d+$/.test(next)) source.value = next;
-    },
-  }), [source]);
+  const digits = useMemo(
+    () =>
+      computed({
+        get: () => source.value,
+        set: (next: string) => {
+          if (/^\d+$/.test(next)) source.value = next;
+        },
+      }),
+    [source],
+  );
 
   return (
     <section aria-labelledby="computed-form-heading">
@@ -59,8 +56,12 @@ function WritableComputedFormBinding() {
         id="computed-form-input"
         aria-label="writable computed form input"
         bindValue={digits}
-        onInput={() => { inputEvents.value += 1; }}
-        onChange={() => { changeEvents.value += 1; }}
+        onInput={() => {
+          inputEvents.value += 1;
+        }}
+        onChange={() => {
+          changeEvents.value += 1;
+        }}
       />
       <output id="computed-form-source">{source}</output>
       <output id="computed-form-input-count">{inputEvents}</output>
@@ -71,7 +72,10 @@ function WritableComputedFormBinding() {
 
 function NumberFormBinding() {
   const amount = useSignal("1.5");
-  const parsed = useMemo(() => computed(() => amount.value === "" ? "empty" : String(Number(amount.value))), [amount]);
+  const parsed = useMemo(
+    () => computed(() => (amount.value === "" ? "empty" : String(Number(amount.value)))),
+    [amount],
+  );
   const ownerRenders = useRef(0);
   ownerRenders.current += 1;
 
@@ -92,10 +96,18 @@ function NumberFormBinding() {
         <output id="number-bound-signal">{amount}</output>
         <output id="number-bound-parsed">{parsed}</output>
         <output id="number-bound-owner-renders">{ownerRenders.current}</output>
-        <button id="number-bound-write" type="button" onClick={() => { amount.value = "3.5"; }}>
+        <button
+          id="number-bound-write"
+          type="button"
+          onClick={() => {
+            amount.value = "3.5";
+          }}
+        >
           Write number signal
         </button>
-        <button id="number-bound-reset" type="reset">Reset number form</button>
+        <button id="number-bound-reset" type="reset">
+          Reset number form
+        </button>
       </form>
     </section>
   );
@@ -104,12 +116,16 @@ function NumberFormBinding() {
 function RebindingComputedFormBinding() {
   const source = useSignal("123");
   const replacement = useSignal("123x");
-  const digits = useMemo(() => computed({
-    get: () => source.value,
-    set: (next: string) => {
-      if (/^\d+$/.test(next)) source.value = next;
-    },
-  }), [source]);
+  const digits = useMemo(
+    () =>
+      computed({
+        get: () => source.value,
+        set: (next: string) => {
+          if (/^\d+$/.test(next)) source.value = next;
+        },
+      }),
+    [source],
+  );
   const [useReplacement, setUseReplacement] = useState(false);
 
   return (
@@ -137,8 +153,12 @@ function InputValueGroups() {
         <input id="group-radio-b" type="radio" name="group-choice" value="b" bindValue={choice} />
         <input id="group-checkbox-a" type="checkbox" name="group-features" value="a" bindValue={selected} />
         <input id="group-checkbox-b" type="checkbox" name="group-features" value="b" bindValue={selected} />
-        <output id="group-choice-value" data-value={choice}>{choice}</output>
-        <output id="group-selected-values" data-value={selected.value.join(",")}>{selected.value.join(",")}</output>
+        <output id="group-choice-value" data-value={choice}>
+          {choice}
+        </output>
+        <output id="group-selected-values" data-value={selected.value.join(",")}>
+          {selected.value.join(",")}
+        </output>
       </form>
     </section>
   );
@@ -156,7 +176,9 @@ function IndependentRadioFormOwners() {
       <form id="independent-radio-owner-b">
         <input id="independent-radio-b" type="radio" name="independent-choice" value="b" bindValue={secondChoice} />
       </form>
-      <output id="independent-radio-signals">{firstChoice}|{secondChoice}</output>
+      <output id="independent-radio-signals">
+        {firstChoice}|{secondChoice}
+      </output>
     </section>
   );
 }
@@ -177,7 +199,9 @@ interface ConcurrentModel {
 /** Spins past React's 5 ms frame so the work loop yields after this component. */
 function spin(ms: number): void {
   const end = performance.now() + ms;
-  while (performance.now() < end) { /* busy wait */ }
+  while (performance.now() < end) {
+    /* busy wait */
+  }
 }
 
 /**
@@ -235,7 +259,9 @@ function ConcurrentCommit({ kind }: { kind: ConcurrentKind }) {
     const deep = deepSignal({ n: 0 });
     const model: ConcurrentModel = {
       count: signal(0),
-      get state() { return deep.value; },
+      get state() {
+        return deep.value;
+      },
       commits: [],
       screens: [],
       renders: [],
@@ -248,7 +274,12 @@ function ConcurrentCommit({ kind }: { kind: ConcurrentKind }) {
   return (
     <section aria-labelledby={`concurrent-${kind}-heading`}>
       <h2 id={`concurrent-${kind}-heading`}>Concurrent commit: {kind}</h2>
-      <div id={`concurrent-${kind}-rows`} ref={(node) => { model.container = node; }}>
+      <div
+        id={`concurrent-${kind}-rows`}
+        ref={(node) => {
+          model.container = node;
+        }}
+      >
         {shown
           ? ["A", "B", "C", "D"].map((id) => {
               if (kind === "tracking") return <TrackedRow key={id} id={id} model={model} />;
@@ -357,11 +388,7 @@ export function App({ state }: { state: DemoState }) {
 
       <section aria-labelledby="ime-heading">
         <h2 id="ime-heading">IME composition</h2>
-        <input
-          id="ime-field"
-          aria-label="ime field"
-          bindValue={state.imeText}
-        />
+        <input id="ime-field" aria-label="ime field" bindValue={state.imeText} />
         <button
           id="external-ime-write"
           onClick={() => {
@@ -374,12 +401,15 @@ export function App({ state }: { state: DemoState }) {
 
       <section aria-labelledby="reset-heading">
         <h2 id="reset-heading">Bound form reset</h2>
-        <form id="bound-reset-form" action={() => {
-          state.resetText.value = "action value";
-          state.resetChecked.value = true;
-          state.resetChoice.value = "b";
-          state.resetChoices.value = ["b", "c"];
-        }}>
+        <form
+          id="bound-reset-form"
+          action={() => {
+            state.resetText.value = "action value";
+            state.resetChecked.value = true;
+            state.resetChoice.value = "b";
+            state.resetChoices.value = ["b", "c"];
+          }}
+        >
           <output
             id="bound-reset-signals"
             data-text={state.resetText}
@@ -387,11 +417,7 @@ export function App({ state }: { state: DemoState }) {
             data-choice={state.resetChoice}
             data-choices={state.resetChoices.value.join(",")}
           />
-          <input
-            id="bound-reset-text"
-            aria-label="bound reset text"
-            bindValue={state.resetText}
-          />
+          <input id="bound-reset-text" aria-label="bound reset text" bindValue={state.resetText} />
           <input
             id="bound-reset-checkbox"
             aria-label="bound reset checkbox"
@@ -399,19 +425,33 @@ export function App({ state }: { state: DemoState }) {
             bindChecked={state.resetChecked}
           />
           <select id="bound-reset-choice" aria-label="bound reset choice" bindValue={state.resetChoice}>
-            <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+            <option value="a">A</option>
+            <option value="b">B</option>
+            <option value="c">C</option>
           </select>
           <select id="bound-reset-choices" aria-label="bound reset choices" multiple bindValue={state.resetChoices}>
-            <option value="a">A</option><option value="b">B</option><option value="c">C</option>
+            <option value="a">A</option>
+            <option value="b">B</option>
+            <option value="c">C</option>
           </select>
-          <button id="bound-reset-submit" type="button" onClick={() => {
-            state.resetText.value = "signal updated";
-            state.resetChecked.value = true;
-            state.resetChoice.value = "c";
-            state.resetChoices.value = ["a", "c"];
-          }}>Write signals</button>
-          <button id="bound-reset-action" type="submit">Submit action</button>
-          <button id="bound-reset-button" type="reset">Reset</button>
+          <button
+            id="bound-reset-submit"
+            type="button"
+            onClick={() => {
+              state.resetText.value = "signal updated";
+              state.resetChecked.value = true;
+              state.resetChoice.value = "c";
+              state.resetChoices.value = ["a", "c"];
+            }}
+          >
+            Write signals
+          </button>
+          <button id="bound-reset-action" type="submit">
+            Submit action
+          </button>
+          <button id="bound-reset-button" type="reset">
+            Reset
+          </button>
         </form>
       </section>
 

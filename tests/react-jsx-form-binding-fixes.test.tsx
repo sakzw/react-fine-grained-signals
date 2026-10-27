@@ -56,7 +56,15 @@ describe("J2: second click in the same task after a canceled click", () => {
   it("keeps the second toggle of a bindChecked checkbox", async () => {
     const s = signal(false);
     let n = 0;
-    const { container } = mount(<input type="checkbox" bindChecked={s} onClick={(e) => { if (n++ === 0) e.preventDefault(); }} />);
+    const { container } = mount(
+      <input
+        type="checkbox"
+        bindChecked={s}
+        onClick={(e) => {
+          if (n++ === 0) e.preventDefault();
+        }}
+      />,
+    );
     const el = container.querySelector("input")!;
     act(() => {
       el.click();
@@ -73,7 +81,15 @@ describe("J2: second click in the same task after a canceled click", () => {
     const { container } = mount(
       <div>
         <input type="radio" name="r" value="a" bindValue={s} />
-        <input type="radio" name="r" value="b" bindValue={s} onClick={(e) => { if (n++ === 0) e.preventDefault(); }} />
+        <input
+          type="radio"
+          name="r"
+          value="b"
+          bindValue={s}
+          onClick={(e) => {
+            if (n++ === 0) e.preventDefault();
+          }}
+        />
       </div>,
     );
     const b = container.querySelectorAll("input")[1]!;
@@ -89,7 +105,16 @@ describe("J2: second click in the same task after a canceled click", () => {
   it("keeps the second click on a checkbox group member", async () => {
     const s = signal<string[]>([]);
     let n = 0;
-    const { container } = mount(<input type="checkbox" value="a" bindValue={s} onClick={(e) => { if (n++ === 0) e.preventDefault(); }} />);
+    const { container } = mount(
+      <input
+        type="checkbox"
+        value="a"
+        bindValue={s}
+        onClick={(e) => {
+          if (n++ === 0) e.preventDefault();
+        }}
+      />,
+    );
     const el = container.querySelector("input")!;
     act(() => {
       el.click();
@@ -105,7 +130,9 @@ describe("J3: canceled uncheck restores the checkbox group exactly", () => {
   it("keeps order and does not notify beyond the revert", async () => {
     const features = signal(["search", "export"]);
     const seen: string[][] = [];
-    const stop = effect(() => { seen.push([...features.value]); });
+    const stop = effect(() => {
+      seen.push([...features.value]);
+    });
     const { container } = mount(
       <div>
         <input type="checkbox" value="search" bindValue={features} onClick={(e) => e.preventDefault()} />
@@ -128,7 +155,22 @@ describe("J3: canceled uncheck restores the checkbox group exactly", () => {
 
   it("reinserts at the original index when the group changed meanwhile", async () => {
     const s = signal(["x", "a", "y"]);
-    const { container } = mount(<input type="checkbox" value="a" bindValue={s} onClick={(e) => { e.preventDefault(); queueMicrotask(() => { s.value = s.peek().filter((v) => v !== "z").concat("z"); }); }} />);
+    const { container } = mount(
+      <input
+        type="checkbox"
+        value="a"
+        bindValue={s}
+        onClick={(e) => {
+          e.preventDefault();
+          queueMicrotask(() => {
+            s.value = s
+              .peek()
+              .filter((v) => v !== "z")
+              .concat("z");
+          });
+        }}
+      />,
+    );
     act(() => container.querySelector("input")!.click());
     await tick();
     expect(s.value).toEqual(["x", "a", "y", "z"]);
@@ -144,8 +186,12 @@ describe("J4: bound select follows kept options whose value changes", () => {
         <div>
           <button onClick={() => setV("v2")} />
           <select bindValue={s}>
-            <option key="x" value="other">x</option>
-            <option key="y" value={v}>y</option>
+            <option key="x" value="other">
+              x
+            </option>
+            <option key="y" value={v}>
+              y
+            </option>
           </select>
         </div>
       );
@@ -171,7 +217,9 @@ describe("J4: bound select follows kept options whose value changes", () => {
     );
     const select = container.querySelector("select")!;
     expect(select.value).toBe("one");
-    act(() => { label.value = "uno"; });
+    act(() => {
+      label.value = "uno";
+    });
     await tick();
     expect(s.value).toBe("one");
     expect(select.selectedIndex).toBe(-1);
@@ -232,7 +280,13 @@ describe("form reset inside a shadow root", () => {
     shadow.append(container);
     const root = createRoot(container);
     roots.push(root);
-    act(() => root.render(<form><input bindValue={s} /></form>));
+    act(() =>
+      root.render(
+        <form>
+          <input bindValue={s} />
+        </form>,
+      ),
+    );
     const input = shadow.querySelector("input")!;
     // Drift the DOM and its native reset default away from the signal, then
     // check that the reset re-applies the signal.
@@ -259,7 +313,14 @@ describe("J6: a throwing revert still refreshes the DOM", () => {
     const { container } = mount(
       <div>
         {["r1", "r2", "r3"].map((v) => (
-          <input key={v} type="radio" name="g" value={v} bindValue={rw} onClick={v === "r2" ? (e) => e.preventDefault() : undefined} />
+          <input
+            key={v}
+            type="radio"
+            name="g"
+            value={v}
+            bindValue={rw}
+            onClick={v === "r2" ? (e) => e.preventDefault() : undefined}
+          />
         ))}
       </div>,
     );

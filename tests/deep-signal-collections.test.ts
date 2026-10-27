@@ -18,31 +18,63 @@ describe("deepCollectionSignal reactive collections", () => {
     expect(reactive.value).toBeInstanceOf(Map);
     expect(reactive.value).toBe(nested.value.map);
     const values: Array<number | undefined> = [];
-    disposers.push(effect(() => { values.push(nested.value.map.get("a")); }));
+    disposers.push(
+      effect(() => {
+        values.push(nested.value.map.get("a"));
+      }),
+    );
     expect(nested.value.map.set("a", 2)).toBe(nested.value.map);
     expect(values).toEqual([1, 2]);
     expect(reactive.value.get("a")).toBe(2);
   });
 
   it("tracks Map keys, values, size and both iteration domains independently", () => {
-    const map = deepCollectionSignal(new Map([["a", 1], ["b", 2]]));
+    const map = deepCollectionSignal(
+      new Map([
+        ["a", 1],
+        ["b", 2],
+      ]),
+    );
     const values: Array<number | undefined> = [];
     const existence: boolean[] = [];
     const sizes: number[] = [];
     const keys: string[][] = [];
     const entries: string[][] = [];
-    disposers.push(effect(() => { values.push(map.value.get("a")); }));
-    disposers.push(effect(() => { existence.push(map.value.has("a")); }));
-    disposers.push(effect(() => { sizes.push(map.value.size); }));
-    disposers.push(effect(() => { keys.push([...map.value.keys()]); }));
-    disposers.push(effect(() => { entries.push([...map.value].map(([key, value]) => `${key}=${value}`)); }));
+    disposers.push(
+      effect(() => {
+        values.push(map.value.get("a"));
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        existence.push(map.value.has("a"));
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        sizes.push(map.value.size);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        keys.push([...map.value.keys()]);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        entries.push([...map.value].map(([key, value]) => `${key}=${value}`));
+      }),
+    );
 
     map.value.set("a", 3);
     expect(values).toEqual([1, 3]);
     expect(existence).toEqual([true]);
     expect(sizes).toEqual([2]);
     expect(keys).toEqual([["a", "b"]]);
-    expect(entries).toEqual([["a=1", "b=2"], ["a=3", "b=2"]]);
+    expect(entries).toEqual([
+      ["a=1", "b=2"],
+      ["a=3", "b=2"],
+    ]);
 
     map.value.set("c", 4);
     expect(values).toEqual([1, 3]);
@@ -107,7 +139,10 @@ describe("deepCollectionSignal reactive collections", () => {
     const source = deepCollectionSignal({ key: { id: 1 } });
     const rawKey = source.peek().key;
     const proxyKey = source.value.key;
-    const colliding = new Map< object, number>([[rawKey, 1], [proxyKey, 2]]);
+    const colliding = new Map<object, number>([
+      [rawKey, 1],
+      [proxyKey, 2],
+    ]);
     expect(() => deepCollectionSignal(colliding)).toThrow(/collide after proxy normalization/);
   });
 
@@ -137,9 +172,22 @@ describe("deepCollectionSignal reactive collections", () => {
     const seen: Array<number | undefined> = [];
     const hasValues: boolean[] = [];
     let hasRuns = 0;
-    disposers.push(effect(() => { seen.push(weakMap.value.get(key)?.count); }));
-    disposers.push(effect(() => { hasValues.push(weakMap.value.has(key)); }));
-    disposers.push(effect(() => { weakSet.value.has(key); hasRuns++; }));
+    disposers.push(
+      effect(() => {
+        seen.push(weakMap.value.get(key)?.count);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        hasValues.push(weakMap.value.has(key));
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        weakSet.value.has(key);
+        hasRuns++;
+      }),
+    );
 
     weakMap.value.set(key, { count: 1 });
     expect(hasValues).toEqual([false, true]);
@@ -171,7 +219,11 @@ describe("deepCollectionSignal reactive collections", () => {
     if (supportsWeakSymbols) {
       const weakSymbolMap = deepCollectionSignal(new WeakMap<object, number>());
       const weakSymbolKey = symbolKey as unknown as object;
-      disposers.push(effect(() => { symbolValues.push(weakSymbolMap.value.get(weakSymbolKey)); }));
+      disposers.push(
+        effect(() => {
+          symbolValues.push(weakSymbolMap.value.get(weakSymbolKey));
+        }),
+      );
       weakSymbolMap.value.set(weakSymbolKey, 1);
     }
     expect(symbolValues).toEqual(supportsWeakSymbols ? [undefined, 1] : []);
@@ -185,7 +237,11 @@ describe("deepCollectionSignal reactive collections", () => {
     const left = deepCollectionSignal(new Set([1]));
     const right = deepCollectionSignal(new Set([1]));
     const results: boolean[] = [];
-    disposers.push(effect(() => { results.push((left.value as SetWithIsSubsetOf).isSubsetOf!(right.value)); }));
+    disposers.push(
+      effect(() => {
+        results.push((left.value as SetWithIsSubsetOf).isSubsetOf!(right.value));
+      }),
+    );
 
     right.value.add(2);
     expect(results).toEqual([true, true]);
@@ -194,7 +250,12 @@ describe("deepCollectionSignal reactive collections", () => {
   it("batches collection changes and leaves untracked reads unsubscribed", () => {
     const state = deepCollectionSignal({ map: new Map<string, number>() });
     let runs = 0;
-    disposers.push(effect(() => { state.value.map.get("a"); runs++; }));
+    disposers.push(
+      effect(() => {
+        state.value.map.get("a");
+        runs++;
+      }),
+    );
 
     untracked(() => state.value.map.get("a"));
     batch(() => {
@@ -207,7 +268,11 @@ describe("deepCollectionSignal reactive collections", () => {
   it("keeps subscribed primitive-key metadata through unrelated mutations", () => {
     const map = deepCollectionSignal(new Map<string, number>([["watched", 1]]));
     const seen: Array<number | undefined> = [];
-    disposers.push(effect(() => { seen.push(map.value.get("watched")); }));
+    disposers.push(
+      effect(() => {
+        seen.push(map.value.get("watched"));
+      }),
+    );
 
     // These writes run cleanup without notifying the watched-key subscriber.
     map.value.set("other-1", 1);
@@ -219,7 +284,9 @@ describe("deepCollectionSignal reactive collections", () => {
   it("reclaims disposed primitive-key reads and tracks them again on reuse", () => {
     const map = deepCollectionSignal(new Map<string, number>());
     const staleSeen: Array<number | undefined> = [];
-    const dispose = effect(() => { staleSeen.push(map.value.get("reused")); });
+    const dispose = effect(() => {
+      staleSeen.push(map.value.get("reused"));
+    });
     dispose();
 
     // A later mutation sweeps the disposed dependency candidate. Reusing the
@@ -227,23 +294,36 @@ describe("deepCollectionSignal reactive collections", () => {
     map.value.set("unrelated", 1);
     map.value.set("reused", 2);
     const seen: Array<number | undefined> = [];
-    disposers.push(effect(() => { seen.push(map.value.get("reused")); }));
+    disposers.push(
+      effect(() => {
+        seen.push(map.value.get("reused"));
+      }),
+    );
     map.value.set("reused", 3);
     expect(staleSeen).toEqual([undefined]);
     expect(seen).toEqual([2, 3]);
   });
 
   it("notifies key and iteration readers when clearing Map and Set and leaves empty clear as a no-op", () => {
-    const map = deepCollectionSignal(new Map([["a", 1], ["b", 2]]));
+    const map = deepCollectionSignal(
+      new Map([
+        ["a", 1],
+        ["b", 2],
+      ]),
+    );
     const set = deepCollectionSignal(new Set(["a", "b"]));
     const mapSnapshots: string[] = [];
     const setSnapshots: string[] = [];
-    disposers.push(effect(() => {
-      mapSnapshots.push(`${map.value.get("a")}:${map.value.size}:${[...map.value.keys()].join(",")}`);
-    }));
-    disposers.push(effect(() => {
-      setSnapshots.push(`${set.value.has("a")}:${set.value.size}:${[...set.value].join(",")}`);
-    }));
+    disposers.push(
+      effect(() => {
+        mapSnapshots.push(`${map.value.get("a")}:${map.value.size}:${[...map.value.keys()].join(",")}`);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        setSnapshots.push(`${set.value.has("a")}:${set.value.size}:${[...set.value].join(",")}`);
+      }),
+    );
 
     expect(map.value.clear()).toBeUndefined();
     expect(set.value.clear()).toBeUndefined();
@@ -262,20 +342,24 @@ describe("deepCollectionSignal reactive collections", () => {
     const mapSnapshots: string[] = [];
     const setSnapshots: string[] = [];
     const context = { prefix: "ctx" };
-    disposers.push(effect(() => {
-      map.value.forEach(function (this: typeof context, value, key, collection) {
-        expect(this).toBe(context);
-        expect(collection).toBe(map.value);
-        mapSnapshots.push(`${this.prefix}:${key}=${value}`);
-      }, context);
-    }));
-    disposers.push(effect(() => {
-      set.value.forEach((value, key, collection) => {
-        expect(key).toBe(value);
-        expect(collection).toBe(set.value);
-        setSnapshots.push(`${key}=${value}`);
-      });
-    }));
+    disposers.push(
+      effect(() => {
+        map.value.forEach(function (this: typeof context, value, key, collection) {
+          expect(this).toBe(context);
+          expect(collection).toBe(map.value);
+          mapSnapshots.push(`${this.prefix}:${key}=${value}`);
+        }, context);
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        set.value.forEach((value, key, collection) => {
+          expect(key).toBe(value);
+          expect(collection).toBe(set.value);
+          setSnapshots.push(`${key}=${value}`);
+        });
+      }),
+    );
 
     map.value.set("a", 2);
     set.value.add("y");
@@ -287,9 +371,16 @@ describe("deepCollectionSignal reactive collections", () => {
 
   it("looks up Map and Set keys by identity without validating the key graph", () => {
     const keyCalls = { count: 0 };
-    const accessorKey = { get x() { keyCalls.count += 1; return 1; } };
+    const accessorKey = {
+      get x() {
+        keyCalls.count += 1;
+        return 1;
+      },
+    };
     const frozenKey = Object.freeze({});
-    class Opaque { constructor(readonly inner: unknown) {} }
+    class Opaque {
+      constructor(readonly inner: unknown) {}
+    }
     const state = deepCollectionSignal({ map: new Map<unknown, string>(), set: new Set<unknown>(), nested: { a: 1 } });
     const opaqueKey = new Opaque(state.value.nested);
 
@@ -311,7 +402,11 @@ describe("deepCollectionSignal reactive collections", () => {
     expect(state.value.map.get(storedKey)).toBe("stored");
 
     const seen: Array<string | undefined> = [];
-    disposers.push(effect(() => { seen.push(state.value.map.get(stored)); }));
+    disposers.push(
+      effect(() => {
+        seen.push(state.value.map.get(stored));
+      }),
+    );
     expect(state.value.map.delete(stored)).toBe(true);
     expect(state.value.set.delete(stored)).toBe(true);
     expect(seen).toEqual(["stored", undefined]);
@@ -329,7 +424,11 @@ describe("deepCollectionSignal reactive collections", () => {
     const helpers = (iterator: unknown) => iterator as Helpers;
     expect(entries).toBeInstanceOf(IteratorConstructor);
     expect(helpers(state.value.map.keys()).toArray()).toEqual(["a"]);
-    expect(helpers(state.value.set.values()).map((value) => String(value).toUpperCase()).toArray()).toEqual(["X"]);
+    expect(
+      helpers(state.value.set.values())
+        .map((value) => String(value).toUpperCase())
+        .toArray(),
+    ).toEqual(["X"]);
     expect(helpers(state.value.map.values()).toArray()[0]).toBe(state.value.map.get("a"));
   });
 
@@ -345,7 +444,11 @@ describe("deepCollectionSignal reactive collections", () => {
     for (let index = 1; index < 300; index += 1) query.value = `q${index}`;
     dispose();
     const live: boolean[] = [];
-    disposers.push(effect(() => { live.push(map.value.has("kept")); }));
+    disposers.push(
+      effect(() => {
+        live.push(map.value.has("kept"));
+      }),
+    );
 
     map.value.set("other", 2);
     set.value.add("other");
@@ -395,7 +498,6 @@ describe("deepCollectionSignal reactive collections", () => {
     expect(inspectCollectionMetadata(map.value)!.values).toEqual([]);
     expect(inspectCollectionMetadata(map.value)!.existence).toEqual([]);
     expect(inspectCollectionMetadata(set.value)!.members).toEqual([]);
-
   });
 
   it("reclaims the final read-only collection key after its subscriber disposes without further activity", async () => {
@@ -425,7 +527,9 @@ describe("deepCollectionSignal reactive collections", () => {
     const map = deepCollectionSignal(new Map<string, number>());
     const render = coreRuntime.renderAdapter;
     const attempt = render.createRenderAttempt();
-    render.withRenderScope(attempt, () => { map.value.get("pending"); });
+    render.withRenderScope(attempt, () => {
+      map.value.get("pending");
+    });
     // An unrelated write in the same task does not invalidate the attempt.
     map.value.set("other", 1);
     expect(inspectCollectionMetadata(map.value)!.values).toEqual(["pending"]);
@@ -446,13 +550,21 @@ describe("deepCollectionSignal reactive collections", () => {
     // Set composition methods postdate the ES2022 lib this project typechecks against.
     type Item = { n: string };
     type Composable = Set<Item> & {
-      union(other: unknown): Set<Item>; intersection(other: unknown): Set<Item>; difference(other: unknown): Set<Item>;
-      symmetricDifference(other: unknown): Set<Item>; isSubsetOf(other: unknown): boolean;
-      isSupersetOf(other: unknown): boolean; isDisjointFrom(other: unknown): boolean;
+      union(other: unknown): Set<Item>;
+      intersection(other: unknown): Set<Item>;
+      difference(other: unknown): Set<Item>;
+      symmetricDifference(other: unknown): Set<Item>;
+      isSubsetOf(other: unknown): boolean;
+      isSupersetOf(other: unknown): boolean;
+      isDisjointFrom(other: unknown): boolean;
     };
     const left = state.value.left as Composable;
     const right = state.value.right as Composable;
-    const names = (set: Set<Item>) => [...set].map((item) => item.n).sort().join(",");
+    const names = (set: Set<Item>) =>
+      [...set]
+        .map((item) => item.n)
+        .sort()
+        .join(",");
     expect(names(left.difference(right))).toBe("b,c");
     expect(names(left.intersection(right))).toBe("a");
     expect(left.union(right).size).toBe(3);
@@ -471,12 +583,20 @@ describe("deepCollectionSignal reactive collections", () => {
   it("composes Map upsert methods from reactive reads and writes", () => {
     const prototype = Map.prototype as unknown as Record<string, unknown>;
     const had = { getOrInsert: prototype.getOrInsert, getOrInsertComputed: prototype.getOrInsertComputed };
-    prototype.getOrInsert = function () { throw new Error("native getOrInsert must not run on the raw target"); };
-    prototype.getOrInsertComputed = function () { throw new Error("native getOrInsertComputed must not run on the raw target"); };
+    prototype.getOrInsert = function () {
+      throw new Error("native getOrInsert must not run on the raw target");
+    };
+    prototype.getOrInsertComputed = function () {
+      throw new Error("native getOrInsertComputed must not run on the raw target");
+    };
     try {
       const map = deepCollectionSignal(new Map<string, number>([["a", 1]]));
       const seen: Array<number | undefined> = [];
-      disposers.push(effect(() => { seen.push(map.value.get("b")); }));
+      disposers.push(
+        effect(() => {
+          seen.push(map.value.get("b"));
+        }),
+      );
       const upsert = map.value as unknown as {
         getOrInsert(key: string, value: number): number;
         getOrInsertComputed(key: string, callback: (key: string) => number): number;
@@ -486,8 +606,10 @@ describe("deepCollectionSignal reactive collections", () => {
       expect(upsert.getOrInsertComputed("c", (key) => key.length)).toBe(1);
       expect(seen).toEqual([undefined, 2]);
     } finally {
-      if (had.getOrInsert === undefined) delete prototype.getOrInsert; else prototype.getOrInsert = had.getOrInsert;
-      if (had.getOrInsertComputed === undefined) delete prototype.getOrInsertComputed; else prototype.getOrInsertComputed = had.getOrInsertComputed;
+      if (had.getOrInsert === undefined) delete prototype.getOrInsert;
+      else prototype.getOrInsert = had.getOrInsert;
+      if (had.getOrInsertComputed === undefined) delete prototype.getOrInsertComputed;
+      else prototype.getOrInsertComputed = had.getOrInsertComputed;
     }
   });
 

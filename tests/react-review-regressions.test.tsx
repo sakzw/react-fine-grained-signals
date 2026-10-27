@@ -1,20 +1,22 @@
 /** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
-import { act, createElement as reactCreateElement, createRef, Fragment, startTransition, useEffect, useLayoutEffect, useState } from "react";
+import {
+  act,
+  createElement as reactCreateElement,
+  createRef,
+  Fragment,
+  startTransition,
+  useEffect,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { flushSync } from "react-dom";
 import { hydrateRoot } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  computed,
-  deepSignal,
-  effect,
-  signal,
-  useSignalEffect,
-  useSignalTracking,
-} from "../src/index.js";
+import { computed, deepSignal, effect, signal, useSignalEffect, useSignalTracking } from "../src/index.js";
 import { jsx } from "../src/jsx/jsx-runtime.js";
 import { createElement } from "../src/jsx.js";
 import { createElement as createLiteElement } from "../src/jsx/lite.js";
@@ -51,15 +53,34 @@ describe("classic createElement fallback (B1)", () => {
         <ul>
           {items.map((item) => {
             const rest = { "data-id": item.id };
-            return <li {...rest} key={item.id}>{item.text}{label}</li>;
+            return (
+              <li {...rest} key={item.id}>
+                {item.text}
+                {label}
+              </li>
+            );
           })}
         </ul>
       );
     }
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    const view = render(<List items={[{ id: "1", text: "x" }, { id: "2", text: "y" }]} />);
+    const view = render(
+      <List
+        items={[
+          { id: "1", text: "x" },
+          { id: "2", text: "y" },
+        ]}
+      />,
+    );
     const first = view.container.querySelector('[data-id="1"]');
-    view.rerender(<List items={[{ id: "2", text: "y" }, { id: "1", text: "x" }]} />);
+    view.rerender(
+      <List
+        items={[
+          { id: "2", text: "y" },
+          { id: "1", text: "x" },
+        ]}
+      />,
+    );
     // Same keyed node, moved rather than recreated.
     expect(view.container.querySelector('[data-id="1"]')).toBe(first);
     act(() => {
@@ -103,7 +124,9 @@ describe("classic createElement fallback (B1)", () => {
     const paragraph = view.container.querySelector("#configured-child")!;
     expect(paragraph.textContent).toBe("configured child text");
     expect(paragraph.getAttribute("title")).toBe("kept");
-    act(() => { child.value = "updated child"; });
+    act(() => {
+      child.value = "updated child";
+    });
     expect(paragraph.textContent).toBe("updated child text");
   });
 
@@ -133,7 +156,9 @@ describe("classic createElement fallback (B1)", () => {
     expect(lite.key).toBe("lite");
     const liteView = render(lite);
     expect(liteView.container.textContent).toBe("lite child");
-    act(() => { liteSource.value = "updated lite"; });
+    act(() => {
+      liteSource.value = "updated lite";
+    });
     expect(liteView.container.textContent).toBe("updated lite child");
   });
 
@@ -146,12 +171,18 @@ describe("classic createElement fallback (B1)", () => {
     container.innerHTML = html;
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
     const root = hydrateRoot(container, makeElement());
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(container.textContent).toBe("server fragment");
-    act(() => { source.value = "hydrated update"; });
+    act(() => {
+      source.value = "hydrated update";
+    });
     expect(container.textContent).toBe("hydrated update");
     expect(errors).not.toHaveBeenCalled();
-    await act(async () => { root.unmount(); });
+    await act(async () => {
+      root.unmount();
+    });
   });
 
   it("leaves Signal props on ordinary components untouched in the classic fallback", () => {
@@ -167,13 +198,17 @@ describe("classic createElement fallback (B1)", () => {
     const href = signal("/signal-url");
     expect(() => createElement("a", { href })).toThrow(/does not support Signal-valued href props on <a>/);
     expect(() => jsx("a", { href })).toThrow(/does not support Signal-valued href props on <a>/);
-    expect(() => createElement("svg", { viewBox: signal("0 0 1 1") })).toThrow(/does not support Signal-valued viewBox props on <svg>/);
-    expect(() => createElement("div", {
-      title: signal("title"),
-      "aria-label": signal("aria"),
-      "data-state": signal("data"),
-      style: { opacity: signal(0.5) },
-    })).not.toThrow();
+    expect(() => createElement("svg", { viewBox: signal("0 0 1 1") })).toThrow(
+      /does not support Signal-valued viewBox props on <svg>/,
+    );
+    expect(() =>
+      createElement("div", {
+        title: signal("title"),
+        "aria-label": signal("aria"),
+        "data-state": signal("data"),
+        style: { opacity: signal(0.5) },
+      }),
+    ).not.toThrow();
     expect(() => createElement("x-widget" as never, { href })).not.toThrow();
 
     const html = renderToString(createElement("a", { href: "/server", title: signal("server title") }));
@@ -320,7 +355,7 @@ describe("host identity across signal/plain prop transitions (J1)", () => {
     view.rerender(<Rows ids={["b", "a"]} />);
     expect(view.container.querySelector('[data-id="a"]')).toBe(a);
     // React's own spread-key warning is expected; the missing-key one is not.
-    expect(errors.mock.calls.some((call) => String(call[0]).includes("unique \"key\""))).toBe(false);
+    expect(errors.mock.calls.some((call) => String(call[0]).includes('unique "key"'))).toBe(false);
   });
 
   it("forwards a stable user ref once, not on every unrelated re-render", () => {
@@ -373,7 +408,14 @@ describe("form reset keeps bound value/checked in sync with the signal (J2)", ()
     render(
       <form data-testid="form" action={async () => {}}>
         <input data-testid="text" name="text" bindValue={text} />
-        <select data-testid="select" name="select" value={select.value} onChange={(event) => { select.value = event.currentTarget.value; }}>
+        <select
+          data-testid="select"
+          name="select"
+          value={select.value}
+          onChange={(event) => {
+            select.value = event.currentTarget.value;
+          }}
+        >
           <option value="a">a</option>
           <option value="b">b</option>
         </select>

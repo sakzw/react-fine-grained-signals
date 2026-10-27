@@ -6,13 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { executionContext } from "../src/core/execution-owner.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
-import {
-  computed,
-  deepSignal,
-  signal,
-  useSignalTracking,
-  untracked,
-} from "../src/index.js";
+import { computed, deepSignal, signal, useSignalTracking, untracked } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -30,9 +24,9 @@ describe("useSignalTracking render tracking", () => {
     function Profile() {
       useSignalTracking();
       renders();
-      return <output aria-label="tracked profile">{
-        `${title.value}:${state.value.profile.name}:${state.value.profile.role}`
-      }</output>;
+      return (
+        <output aria-label="tracked profile">{`${title.value}:${state.value.profile.name}:${state.value.profile.role}`}</output>
+      );
     }
 
     render(<Profile />);
@@ -171,7 +165,9 @@ describe("useSignalTracking render tracking", () => {
   it("discards dependencies read by a suspended render attempt, closing via the fallback microtask while idle", async () => {
     const source = signal("before");
     let release!: () => void;
-    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
     let suspended = true;
     const renders = vi.fn();
 
@@ -239,7 +235,12 @@ describe("useSignalTracking render tracking", () => {
       return <output aria-label="tracked right">{state.value.right}</output>;
     }
 
-    render(<><Left /><Right /></>);
+    render(
+      <>
+        <Left />
+        <Right />
+      </>,
+    );
     act(() => {
       state.value.left = "L2";
     });
@@ -276,7 +277,12 @@ describe("useSignalTracking render tracking", () => {
       return <output aria-label="unguarded sibling">{unguarded.value}</output>;
     }
 
-    render(<><Guarded /><Unguarded /></>);
+    render(
+      <>
+        <Guarded />
+        <Unguarded />
+      </>,
+    );
     expect(screen.getByLabelText("guarded sibling").textContent).toBe("X");
     expect(screen.getByLabelText("unguarded sibling").textContent).toBe("Y");
 
@@ -422,9 +428,9 @@ describe("useSignalTracking render tracking", () => {
     function Value() {
       useSignalTracking();
       renders();
-      return <output aria-label="untracked render reads">{
-        `${tracked.value}:${untracked(() => ignored.value)}:${derived.peek()}`
-      }</output>;
+      return (
+        <output aria-label="untracked render reads">{`${tracked.value}:${untracked(() => ignored.value)}:${derived.peek()}`}</output>
+      );
     }
 
     render(<Value />);
@@ -496,7 +502,9 @@ describe("useSignalTracking render tracking", () => {
 
     render(
       <>
-        <span aria-label="isolated binding" title={title}>host</span>
+        <span aria-label="isolated binding" title={title}>
+          host
+        </span>
         <Reader />
       </>,
     );

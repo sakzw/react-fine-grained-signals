@@ -9,7 +9,8 @@ import {
   batch,
   computed,
   signal,
-  useComputed, useWritableComputed,
+  useComputed,
+  useWritableComputed,
   useSignalValue,
   useSignalTracking,
 } from "../src/index.js";
@@ -62,10 +63,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     } as ReadonlySignal<string>;
     const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    class ErrorBoundary extends Component<
-      { children: ReactNode },
-      { error: unknown }
-    > {
+    class ErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
       state: { error: unknown } = { error: undefined };
 
       static getDerivedStateFromError(error: unknown) {
@@ -73,9 +71,11 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
       }
 
       render() {
-        return this.state.error === undefined
-          ? this.props.children
-          : <output aria-label="structural error">caught</output>;
+        return this.state.error === undefined ? (
+          this.props.children
+        ) : (
+          <output aria-label="structural error">caught</output>
+        );
       }
     }
 
@@ -83,7 +83,11 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
       return <output aria-label="structural value">{useSignalValue(structural)}</output>;
     }
 
-    render(<ErrorBoundary><Reader /></ErrorBoundary>);
+    render(
+      <ErrorBoundary>
+        <Reader />
+      </ErrorBoundary>,
+    );
     expect(screen.getByLabelText("structural value").textContent).toBe("ready");
     expect(() => {
       act(() => {
@@ -109,7 +113,11 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     function Parent() {
       useSignalTracking();
       parentRenders();
-      return <section data-parent={parentSource.value}><Leaf /></section>;
+      return (
+        <section data-parent={parentSource.value}>
+          <Leaf />
+        </section>
+      );
     }
 
     render(<Parent />);
@@ -354,10 +362,15 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
       return <output aria-label="length guarded computed">{useSignalValue(product)}</output>;
     }
     function WritableProduct({ b, dependencies }: { b: number; dependencies: number[] }) {
-      const product = useWritableComputed({
-        get: () => source.value * 2 + b,
-        set: (next: number) => { source.value = (next - b) / 2; },
-      }, dependencies);
+      const product = useWritableComputed(
+        {
+          get: () => source.value * 2 + b,
+          set: (next: number) => {
+            source.value = (next - b) / 2;
+          },
+        },
+        dependencies,
+      );
       return <output aria-label="length guarded computed">{useSignalValue(product)}</output>;
     }
 
@@ -367,9 +380,7 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     const Product = writable ? WritableProduct : ReadonlyProduct;
     const view = render(<Product b={initialB} dependencies={before} />);
     expect(screen.getByLabelText("length guarded computed").textContent).toBe(String(2 + initialB));
-    expect(() => view.rerender(<Product b={nextB} dependencies={after} />)).toThrow(
-      /dependencies length changed/,
-    );
+    expect(() => view.rerender(<Product b={nextB} dependencies={after} />)).toThrow(/dependencies length changed/);
     errorSpy.mockRestore();
   });
 
@@ -382,9 +393,15 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
       renders();
       writable = useWritableComputed({
         get: () => source.value * 2,
-        set: (next) => { source.value = next / 2; },
+        set: (next) => {
+          source.value = next / 2;
+        },
       });
-      return <output aria-label="writable computed" data-label={label}>{useSignalValue(writable)}</output>;
+      return (
+        <output aria-label="writable computed" data-label={label}>
+          {useSignalValue(writable)}
+        </output>
+      );
     }
 
     const view = render(<Writable label="first" />);
@@ -393,7 +410,9 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     view.rerender(<Writable label="second" />);
     expect(writable).toBe(initial);
 
-    act(() => { writable!.value = 10; });
+    act(() => {
+      writable!.value = 10;
+    });
     expect(source.value).toBe(5);
     expect(screen.getByLabelText("writable computed").textContent).toBe("10");
   });
@@ -403,10 +422,15 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     let writable: Signal<number> | undefined;
 
     function Product({ factor }: { factor: number }) {
-      writable = useWritableComputed({
-        get: () => source.value * factor,
-        set: (next) => { source.value = next / factor; },
-      }, [factor]);
+      writable = useWritableComputed(
+        {
+          get: () => source.value * factor,
+          set: (next) => {
+            source.value = next / factor;
+          },
+        },
+        [factor],
+      );
       return <output aria-label="writable product">{useSignalValue(writable)}</output>;
     }
 
@@ -418,7 +442,9 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(writable).not.toBe(first);
     expect(screen.getByLabelText("writable product").textContent).toBe("8");
 
-    act(() => { writable!.value = 20; });
+    act(() => {
+      writable!.value = 20;
+    });
     expect(source.value).toBe(5);
     expect(screen.getByLabelText("writable product").textContent).toBe("20");
   });
@@ -427,16 +453,25 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     const source = signal(2);
     const suspendRenders = vi.fn();
     let releaseSuspense!: () => void;
-    const pending = new Promise<void>((resolve) => { releaseSuspense = resolve; });
+    const pending = new Promise<void>((resolve) => {
+      releaseSuspense = resolve;
+    });
     let canShowFive = false;
     let committed: Signal<number> | undefined;
 
     function Product({ factor }: { factor: number }) {
-      const product = useWritableComputed({
-        get: () => source.value * factor,
-        set: (next) => { source.value = next / factor; },
-      }, [factor]);
-      useLayoutEffect(() => { committed = product; }, [product]);
+      const product = useWritableComputed(
+        {
+          get: () => source.value * factor,
+          set: (next) => {
+            source.value = next / factor;
+          },
+        },
+        [factor],
+      );
+      useLayoutEffect(() => {
+        committed = product;
+      }, [product]);
       if (factor === 5 && !canShowFive) {
         suspendRenders();
         throw pending;
@@ -446,10 +481,14 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
 
     function App() {
       const [factor, setFactor] = useState(2);
-      return <>
-        <button onClick={() => startTransition(() => setFactor(5))}>change factor</button>
-        <Suspense fallback={<span>loading</span>}><Product factor={factor} /></Suspense>
-      </>;
+      return (
+        <>
+          <button onClick={() => startTransition(() => setFactor(5))}>change factor</button>
+          <Suspense fallback={<span>loading</span>}>
+            <Product factor={factor} />
+          </Suspense>
+        </>
+      );
     }
 
     render(<App />);
@@ -463,14 +502,21 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(suspendRenders).toHaveBeenCalled();
     expect(committed).toBe(oldCommitted);
 
-    act(() => { committed!.value = 20; });
+    act(() => {
+      committed!.value = 20;
+    });
     expect(source.value).toBe(10);
     expect(screen.getByLabelText("suspended product").textContent).toBe("20");
 
     canShowFive = true;
-    await act(async () => { releaseSuspense(); await Promise.resolve(); });
+    await act(async () => {
+      releaseSuspense();
+      await Promise.resolve();
+    });
     expect(screen.getByLabelText("suspended product").textContent).toBe("50");
-    act(() => { committed!.value = 100; });
+    act(() => {
+      committed!.value = 100;
+    });
     expect(source.value).toBe(20);
     expect(screen.getByLabelText("suspended product").textContent).toBe("100");
   });
@@ -484,10 +530,11 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     function Capture() {
       total = useWritableComputed({
         get: () => left.value + right.value,
-        set: (next) => batch(() => {
-          left.value = next / 2;
-          right.value = next / 2;
-        }),
+        set: (next) =>
+          batch(() => {
+            left.value = next / 2;
+            right.value = next / 2;
+          }),
       });
       renders();
       return <output aria-label="writable total">{useSignalValue(total)}</output>;
@@ -495,7 +542,9 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
 
     render(<Capture />);
     expect(renders).toHaveBeenCalledTimes(1);
-    act(() => { total!.value = 10; });
+    act(() => {
+      total!.value = 10;
+    });
     expect(left.value).toBe(5);
     expect(right.value).toBe(5);
     expect(renders).toHaveBeenCalledTimes(2);
@@ -548,7 +597,12 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     const identities: unknown[] = [];
     function Reader({ dependencies }: { dependencies: number[] | undefined }) {
       const value = useWritableComputed(
-        { get: () => source.value, set: (next: number) => { source.value = next; } },
+        {
+          get: () => source.value,
+          set: (next: number) => {
+            source.value = next;
+          },
+        },
         dependencies,
       );
       identities.push(value);
@@ -563,7 +617,12 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     const source = signal(2);
     function Reader({ dependencies }: { dependencies: number[] }) {
       const value = useWritableComputed(
-        { get: () => source.value, set: (next: number) => { source.value = next; } },
+        {
+          get: () => source.value,
+          set: (next: number) => {
+            source.value = next;
+          },
+        },
         dependencies,
       );
       return <output>{useSignalValue(value)}</output>;
@@ -575,5 +634,4 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     );
     errorSpy.mockRestore();
   });
-
 });

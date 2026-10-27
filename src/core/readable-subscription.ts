@@ -15,15 +15,16 @@ export function delegateSubscription(wrapper: object, target: object): void {
  * dependency, or return `undefined` for any other readable. The listener runs
  * on changes after the initial read; reads that throw stay subscribed.
  */
-export function subscribeLocalReadable(
-  readable: object,
-  listener: () => void,
-): (() => void) | undefined {
+export function subscribeLocalReadable(readable: object, listener: () => void): (() => void) | undefined {
   const target = delegates.get(readable) ?? readable;
   if (coreRuntime.getNodeForReadable(target as { value: unknown; peek(): unknown }) === undefined) return undefined;
   let initial = true;
   return coreRuntime.detachedEffect(() => {
-    try { (target as { value: unknown }).value; } catch { /* Keep errored computed boundaries observed. */ }
+    try {
+      (target as { value: unknown }).value;
+    } catch {
+      /* Keep errored computed boundaries observed. */
+    }
     if (initial) initial = false;
     else notifyListener(listener);
   });

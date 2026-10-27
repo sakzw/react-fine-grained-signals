@@ -24,9 +24,7 @@ async function openApp(page: Page) {
   return errors;
 }
 
-test("mounts the production bundle and updates a signal-driven counter", async ({
-  page,
-}) => {
+test("mounts the production bundle and updates a signal-driven counter", async ({ page }) => {
   const errors = await openApp(page);
 
   await expect(page.locator("#signal-child")).toHaveText("0");
@@ -37,9 +35,7 @@ test("mounts the production bundle and updates a signal-driven counter", async (
   expect(errors).toEqual([]);
 });
 
-test("updates allowlisted host properties directly in the minified bundle", async ({
-  page,
-}) => {
+test("updates allowlisted host properties directly in the minified bundle", async ({ page }) => {
   const errors = await openApp(page);
   const boundButton = page.locator("#bound-button");
 
@@ -55,9 +51,7 @@ test("updates allowlisted host properties directly in the minified bundle", asyn
   expect(errors).toEqual([]);
 });
 
-test("preserves bound form reset behavior in the production bundle", async ({
-  page,
-}) => {
+test("preserves bound form reset behavior in the production bundle", async ({ page }) => {
   const errors = await openApp(page);
   const form = page.locator("#bound-reset-form");
   const input = page.locator("#bound-reset-text");
@@ -107,9 +101,7 @@ test("preserves bound form reset behavior in the production bundle", async ({
   expect(errors).toEqual([]);
 });
 
-test("paints a signal-bound style prop in the production bundle", async ({
-  page,
-}) => {
+test("paints a signal-bound style prop in the production bundle", async ({ page }) => {
   const errors = await openApp(page);
   const styledBox = page.locator("#styled-box");
 

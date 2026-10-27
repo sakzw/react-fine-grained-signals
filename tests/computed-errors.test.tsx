@@ -5,12 +5,7 @@ import { Component, act } from "react";
 import type { ReactNode } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  computed,
-  signal,
-  useSignalValue,
-  useSignalTracking,
-} from "../src/index.js";
+import { computed, signal, useSignalValue, useSignalTracking } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -27,9 +22,7 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { error: unknown 
   }
 
   render() {
-    return this.state.error === undefined
-      ? this.props.children
-      : <output aria-label="boundary caught">caught</output>;
+    return this.state.error === undefined ? this.props.children : <output aria-label="boundary caught">caught</output>;
   }
 }
 
@@ -53,7 +46,11 @@ describe("computed error propagation (React)", () => {
     }
 
     expect(() => {
-      render(<ErrorBoundary><Reader /></ErrorBoundary>);
+      render(
+        <ErrorBoundary>
+          <Reader />
+        </ErrorBoundary>,
+      );
     }).not.toThrow();
     expect(screen.getByLabelText("boundary caught").textContent).toBe("caught");
     expect(reactError).toHaveBeenCalled();
@@ -77,7 +74,11 @@ describe("computed error propagation (React)", () => {
       return <output aria-label="value">{value}</output>;
     }
 
-    render(<ErrorBoundary><Reader /></ErrorBoundary>);
+    render(
+      <ErrorBoundary>
+        <Reader />
+      </ErrorBoundary>,
+    );
     expect(screen.getByLabelText("value").textContent).toBe("1");
 
     expect(() => {
@@ -102,7 +103,11 @@ describe("computed error propagation (React)", () => {
       return <output aria-label="tracked value">{broken.value}</output>;
     }
 
-    render(<ErrorBoundary><Reader /></ErrorBoundary>);
+    render(
+      <ErrorBoundary>
+        <Reader />
+      </ErrorBoundary>,
+    );
     expect(screen.getByLabelText("tracked value").textContent).toBe("1");
 
     expect(() => {
@@ -132,7 +137,11 @@ describe("computed error propagation (React)", () => {
       return <output aria-label="flippy value">{flippy.value}</output>;
     }
 
-    render(<ErrorBoundary><Reader /></ErrorBoundary>);
+    render(
+      <ErrorBoundary>
+        <Reader />
+      </ErrorBoundary>,
+    );
     expect(screen.getByLabelText("flippy value").textContent).toBe("1");
 
     act(() => {
@@ -170,7 +179,9 @@ describe("computed error propagation (React)", () => {
 
     render(
       <>
-        <ErrorBoundary><ErroringReader /></ErrorBoundary>
+        <ErrorBoundary>
+          <ErroringReader />
+        </ErrorBoundary>
         <HealthyReader />
       </>,
     );

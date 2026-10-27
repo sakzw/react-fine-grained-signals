@@ -1,11 +1,4 @@
-import {
-  Children,
-  Fragment,
-  isValidElement,
-  type Key,
-  type ReactElement,
-  type ReactNode,
-} from "react";
+import { Children, Fragment, isValidElement, type Key, type ReactElement, type ReactNode } from "react";
 import { isSignal, type ReadonlySignal } from "./core/index.js";
 import { useManagedSignals } from "./react/use-signals.js";
 
@@ -52,9 +45,7 @@ export function Show<T>({ when, fallback = null, children }: ShowProps<T>): Reac
     const value = readSignalInput(when);
 
     if (!value) return fallback;
-    return typeof children === "function"
-      ? children(value as Truthy<T>)
-      : children;
+    return typeof children === "function" ? children(value as Truthy<T>) : children;
   } finally {
     store.finish();
   }
@@ -70,11 +61,13 @@ interface MatchElementProps {
 /**
  * Declares a `Switch` branch. `Match` only has meaning as a child of `Switch`.
  */
-export function Match<T, const E>(props: {
-  when: SignalInput<T>;
-  equals: E;
-  children: ReactNode | ((value: MatchValue<T, E>) => ReactNode);
-} & (E extends NoInfer<T> ? unknown : never)): null;
+export function Match<T, const E>(
+  props: {
+    when: SignalInput<T>;
+    equals: E;
+    children: ReactNode | ((value: MatchValue<T, E>) => ReactNode);
+  } & (E extends NoInfer<T> ? unknown : never),
+): null;
 export function Match<T>(props: {
   when: SignalInput<T>;
   equals?: never;
@@ -103,9 +96,7 @@ export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
       if (hasEquals ? !Object.is(value, props.equals) : !value) continue;
 
       const branch = props.children;
-      return typeof branch === "function"
-        ? (branch as (matched: unknown) => ReactNode)(value)
-        : branch;
+      return typeof branch === "function" ? (branch as (matched: unknown) => ReactNode)(value) : branch;
     }
 
     return fallback;
@@ -143,9 +134,12 @@ export interface ForMapProps<K, V> {
  */
 export function For<T>(props: ForProps<T>): ReactNode;
 export function For<K, V>(props: ForMapProps<K, V>): ReactNode;
-export function For(
-  { each, fallback = null, by, children }: ForProps<unknown> | ForMapProps<unknown, unknown>,
-): ReactNode {
+export function For({
+  each,
+  fallback = null,
+  by,
+  children,
+}: ForProps<unknown> | ForMapProps<unknown, unknown>): ReactNode {
   const store = useManagedSignals();
   try {
     const collection = readSignalInput(each);
@@ -157,9 +151,7 @@ export function For(
     const items = Array.isArray(collection) ? collection : Array.from(collection);
     if (items.length === 0) return fallback;
 
-    return items.map((item, index) => (
-      <Fragment key={by(item, index)}>{children(item, index)}</Fragment>
-    ));
+    return items.map((item, index) => <Fragment key={by(item, index)}>{children(item, index)}</Fragment>);
   } finally {
     store.finish();
   }
@@ -195,12 +187,9 @@ export function Index<T>({ each, fallback = null, children }: IndexProps<T>): Re
     // has since become null/undefined. `as T` stands in for the old `!`: an
     // out-of-range position reads as `undefined`, exactly as before, and a
     // sparse hole is no longer disguised as a present value.
-    const readAt = (index: number): T =>
-      (readSignalInput(each) ?? items)[index] as T;
+    const readAt = (index: number): T => (readSignalInput(each) ?? items)[index] as T;
 
-    return items.map((_item, index) => (
-      <Fragment key={index}>{children(() => readAt(index), index)}</Fragment>
-    ));
+    return items.map((_item, index) => <Fragment key={index}>{children(() => readAt(index), index)}</Fragment>);
   } finally {
     store.finish();
   }

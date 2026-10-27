@@ -12,22 +12,48 @@ const enabledReadOnly = computed(() => enabled.value);
 const boxStyle = signal({ color: "red" });
 const color = signal("blue");
 const nullishText = signal<string | null | undefined>(null);
-const writableText = computed({ get: () => text.value, set: (value) => { text.value = value; } });
-const writableChecked = computed({ get: () => enabled.value, set: (value) => { enabled.value = value; } });
-const writableSelection = computed({ get: () => text.value, set: (value) => { text.value = value; } });
-const writableManySelection = computed({ get: () => selectedMany.value, set: (value) => { selectedMany.value = value; } });
+const writableText = computed({
+  get: () => text.value,
+  set: (value) => {
+    text.value = value;
+  },
+});
+const writableChecked = computed({
+  get: () => enabled.value,
+  set: (value) => {
+    enabled.value = value;
+  },
+});
+const writableSelection = computed({
+  get: () => text.value,
+  set: (value) => {
+    text.value = value;
+  },
+});
+const writableManySelection = computed({
+  get: () => selectedMany.value,
+  set: (value) => {
+    selectedMany.value = value;
+  },
+});
 const customWritableSignal = {
-  get value() { return text.value; },
-  set value(value: string) { text.value = value; },
+  get value() {
+    return text.value;
+  },
+  set value(value: string) {
+    text.value = value;
+  },
   peek: () => text.peek(),
 };
 const annotatedSignal: Signal<string> = signal("annotated");
 
-function GenericTextField<TLabel extends string>({ label, value }: {
-  label: TLabel;
-  value: Signal<string>;
-}) {
-  return <label>{label}<input bindValue={value} /></label>;
+function GenericTextField<TLabel extends string>({ label, value }: { label: TLabel; value: Signal<string> }) {
+  return (
+    <label>
+      {label}
+      <input bindValue={value} />
+    </label>
+  );
 }
 
 function Custom({ value, children }: { value: typeof text; children: typeof text }) {
@@ -42,7 +68,9 @@ function HookCreatedBinding() {
 function HookWritableComputedBinding() {
   const hookComputed = useWritableComputed({
     get: () => text.value,
-    set: (value: string) => { text.value = value; },
+    set: (value: string) => {
+      text.value = value;
+    },
   });
   const capability: Signal<string> = hookComputed;
   return <input bindValue={capability} />;
@@ -85,17 +113,39 @@ const writableComputedInput = <input bindValue={writableText} />;
 const unsupportedCustomBinding = <input bindValue={customWritableSignal} />;
 const writableComputedCheckbox = <input type="checkbox" bindChecked={writableChecked} />;
 const boundCheckboxWithFormValue = <input type="checkbox" name="permission" value="admin" bindChecked={enabled} />;
-const boundCheckboxWithDefaultFormValue = <input type="checkbox" name="permission" defaultValue="admin" bindChecked={enabled} />;
+const boundCheckboxWithDefaultFormValue = (
+  <input type="checkbox" name="permission" defaultValue="admin" bindChecked={enabled} />
+);
 const boundRadioOption = <input type="radio" name="choice" value="a" bindValue={text} />;
 const boundCheckboxGroupOption = <input type="checkbox" name="features" value="a" bindValue={selectedMany} />;
 // @ts-expect-error Checkbox form values remain ordinary React props, not signal bindings.
 const checkboxImplicitValueBinding = <input type="checkbox" value={text} bindChecked={enabled} />;
 const boundTextarea = <textarea bindValue={text} />;
-const boundSingleSelect = <select bindValue={text}><option value="value">value</option></select>;
-const boundComputedSingleSelect = <select bindValue={writableSelection}><option value="value">value</option></select>;
-const boundMultipleSelect = <select multiple bindValue={selectedMany}><option value="a">A</option></select>;
-const boundComputedMultipleSelect = <select multiple bindValue={writableManySelection}><option value="a">A</option></select>;
-const controlledMultipleSelect = <select multiple value={selectedMany.value}><option value="a">A</option></select>;
+const boundSingleSelect = (
+  <select bindValue={text}>
+    <option value="value">value</option>
+  </select>
+);
+const boundComputedSingleSelect = (
+  <select bindValue={writableSelection}>
+    <option value="value">value</option>
+  </select>
+);
+const boundMultipleSelect = (
+  <select multiple bindValue={selectedMany}>
+    <option value="a">A</option>
+  </select>
+);
+const boundComputedMultipleSelect = (
+  <select multiple bindValue={writableManySelection}>
+    <option value="a">A</option>
+  </select>
+);
+const controlledMultipleSelect = (
+  <select multiple value={selectedMany.value}>
+    <option value="a">A</option>
+  </select>
+);
 // @ts-expect-error Single-select binding values must be strings.
 const wrongSingleSelect = <select bindValue={selectedMany} />;
 // @ts-expect-error Multiple-select binding values must be arrays of strings.
@@ -169,7 +219,11 @@ const literalTextBinding = <input bindValue={mode} />;
 // @ts-expect-error A textarea can write any string, so a literal-union signal is rejected.
 const literalTextareaBinding = <textarea bindValue={mode} />;
 const literalRadioBinding = <input type="radio" name="mode" value="a" bindValue={mode} />;
-const literalSelectBinding = <select bindValue={mode}><option value="a">A</option></select>;
+const literalSelectBinding = (
+  <select bindValue={mode}>
+    <option value="a">A</option>
+  </select>
+);
 const literalMany = signal<Array<"a" | "b">>([]);
 const literalCheckboxGroupBinding = <input type="checkbox" name="modes" value="a" bindValue={literalMany} />;
 void [

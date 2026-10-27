@@ -34,9 +34,7 @@ for (const entry of ["webpack", "rspack"]) {
   }
 }
 
-const artifacts = await import("node:fs/promises").then(({ readdir }) =>
-  readdir(new URL("../dist/", import.meta.url)),
-);
+const artifacts = await import("node:fs/promises").then(({ readdir }) => readdir(new URL("../dist/", import.meta.url)));
 if (artifacts.some((artifact) => artifact.endsWith(".cjs") || artifact.endsWith(".d.cts"))) {
   throw new TypeError("The ESM-only package must not emit CommonJS artifacts");
 }

@@ -111,5 +111,4 @@ describe("Direct DOM binding: error handling", () => {
     expect(labeled.dataset.state).toBe("second");
     expect(consoleError).toHaveBeenCalledTimes(1);
   });
-
 });

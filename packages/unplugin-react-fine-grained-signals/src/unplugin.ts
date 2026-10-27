@@ -7,10 +7,7 @@ import {
   type ReactFineGrainedSignalsTransform,
   type InternalTransformResult,
 } from "./internal/transform.js";
-import {
-  isDiagnosticId,
-  type DiagnosticId,
-} from "./internal/diagnostics.js";
+import { isDiagnosticId, type DiagnosticId } from "./internal/diagnostics.js";
 
 export type {
   ReactFineGrainedSignalsMode,
@@ -160,10 +157,7 @@ const ESBUILD_LOADERS: Record<string, EsbuildLoaderName> = {
  * choice. Exported for the adapter tests, which exercise the decision without
  * needing esbuild itself.
  */
-export function resolveEsbuildLoader(
-  id: string,
-  configuredLoaders?: Record<string, string> | undefined,
-): string {
+export function resolveEsbuildLoader(id: string, configuredLoaders?: Record<string, string> | undefined): string {
   const extension = /\.[^./\\]*$/.exec(cleanModuleId(id))?.[0].toLowerCase() ?? "";
   return configuredLoaders?.[extension] ?? ESBUILD_LOADERS[extension] ?? "js";
 }
@@ -187,7 +181,10 @@ function resolveTransformLoaderPath(): string | null {
  * `"RFGS"` for compatibility with existing filters; `diagnosticId` is the
  * stable category to match on.
  */
-function toBundlerWarning(warning: Error, fallbackFile: string): {
+function toBundlerWarning(
+  warning: Error,
+  fallbackFile: string,
+): {
   code: string;
   message: string;
   diagnosticId?: DiagnosticId;
@@ -241,8 +238,8 @@ function reportLoaderPatchSkipped(reason: string): void {
   loaderPatchReported = true;
   console.warn(
     `[${pluginName}] Source map fix not applied: ${reason}. ` +
-    "Falling back to unplugin's own transform loader, whose output maps point " +
-    "at pre-transform line numbers.",
+      "Falling back to unplugin's own transform loader, whose output maps point " +
+      "at pre-transform line numbers.",
   );
 }
 
@@ -287,9 +284,7 @@ function useOwnTransformLoader(compiler: unknown): void {
       const entries = original(data);
       if (!Array.isArray(entries)) return entries;
       return entries.map((entry) =>
-        entry !== null &&
-          typeof entry === "object" &&
-          (entry as { ident?: unknown }).ident === pluginName
+        entry !== null && typeof entry === "object" && (entry as { ident?: unknown }).ident === pluginName
           ? { ...(entry as object), loader: loaderPath }
           : entry,
       );
@@ -302,119 +297,117 @@ function useOwnTransformLoader(compiler: unknown): void {
   }
 }
 
-export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOptions>(
-  (options = {}) => {
-    // Checked here, once, so a misspelled ID fails at startup instead of
-    // quietly leaving that diagnostic as a warning.
-    const errorOn = options.diagnostics?.errorOn ?? [];
-    for (const diagnosticId of errorOn) {
-      if (!isDiagnosticId(diagnosticId)) {
-        throw new TypeError(
-          `[${pluginName}] diagnostics.errorOn names an unknown diagnostic ID: ${String(diagnosticId)}`,
-        );
-      }
-    }
-    // Any other value would compare unequal to "opt-out" and silently drop the
-    // directive, so a compiled component would stop updating.
-    const reactCompiler = options.reactCompiler ?? "opt-out";
-    if (reactCompiler !== "opt-out" && reactCompiler !== "off") {
+export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOptions>((options = {}) => {
+  // Checked here, once, so a misspelled ID fails at startup instead of
+  // quietly leaving that diagnostic as a warning.
+  const errorOn = options.diagnostics?.errorOn ?? [];
+  for (const diagnosticId of errorOn) {
+    if (!isDiagnosticId(diagnosticId)) {
       throw new TypeError(
-        `[${pluginName}] reactCompiler must be "opt-out" or "off", got ${JSON.stringify(reactCompiler)}` +
-          (reactCompiler === ("auto" as string) ? '; "auto" was renamed to "opt-out" in 0.4.0' : ""),
+        `[${pluginName}] diagnostics.errorOn names an unknown diagnostic ID: ${String(diagnosticId)}`,
       );
     }
-    // esbuild hands a plugin its resolved build options through the `config`
-    // hook, which is the only place a project's own `loader` map can be read.
-    let configuredLoaders: Record<string, string> | undefined;
-    const transform = function (
-      this: { warn?: (warning: never) => void; error?: (error: never) => void } | undefined,
-      code: string,
-      id: string,
-    ): InternalTransformResult | null {
-      const warn = this?.warn as ((warning: unknown) => void) | undefined;
-      const error = this?.error as ((error: unknown) => void) | undefined;
-      // A promoted diagnostic is raised only after the transform returns: the
-      // transform's own Babel `try` rewraps anything thrown during the run as a
-      // parse failure, which would hide the diagnostic behind a misleading one.
-      const promoted: Error[] = [];
-      const result = transformReactFineGrainedSignals(code, id, {
-        importSource: options.importSource ?? "react-fine-grained-signals",
-        reactImportSource: options.reactImportSource ?? "react",
-        mode: options.mode ?? "auto",
-        transform: options.transform ?? "managed",
-        reactCompiler,
-        warn: (warning: Error) => {
-          const { diagnosticId } = warning as Error & { diagnosticId?: DiagnosticId };
-          if (diagnosticId !== undefined && errorOn.includes(diagnosticId)) {
-            promoted.push(warning);
-            return;
-          }
-          if (warn === undefined) console.warn(warning.message);
-          else warn.call(this, toBundlerWarning(warning, cleanModuleId(id)));
-        },
-      });
-      for (const diagnostic of promoted) {
-        // Outside a bundler context there is nothing to report to, so the
-        // diagnostic itself is the failure. esbuild's context collects errors
-        // and does not throw, so each promoted diagnostic is reported there.
-        if (error === undefined) throw diagnostic;
-        error.call(this, toBundlerWarning(diagnostic, cleanModuleId(id)));
-      }
-      return result;
-    };
-    return {
-      name: pluginName,
-      enforce: "pre",
-      transformInclude(id) {
-        return canTransform(id, options);
+  }
+  // Any other value would compare unequal to "opt-out" and silently drop the
+  // directive, so a compiled component would stop updating.
+  const reactCompiler = options.reactCompiler ?? "opt-out";
+  if (reactCompiler !== "opt-out" && reactCompiler !== "off") {
+    throw new TypeError(
+      `[${pluginName}] reactCompiler must be "opt-out" or "off", got ${JSON.stringify(reactCompiler)}` +
+        (reactCompiler === ("auto" as string) ? '; "auto" was renamed to "opt-out" in 0.4.0' : ""),
+    );
+  }
+  // esbuild hands a plugin its resolved build options through the `config`
+  // hook, which is the only place a project's own `loader` map can be read.
+  let configuredLoaders: Record<string, string> | undefined;
+  const transform = function (
+    this: { warn?: (warning: never) => void; error?: (error: never) => void } | undefined,
+    code: string,
+    id: string,
+  ): InternalTransformResult | null {
+    const warn = this?.warn as ((warning: unknown) => void) | undefined;
+    const error = this?.error as ((error: unknown) => void) | undefined;
+    // A promoted diagnostic is raised only after the transform returns: the
+    // transform's own Babel `try` rewraps anything thrown during the run as a
+    // parse failure, which would hide the diagnostic behind a misleading one.
+    const promoted: Error[] = [];
+    const result = transformReactFineGrainedSignals(code, id, {
+      importSource: options.importSource ?? "react-fine-grained-signals",
+      reactImportSource: options.reactImportSource ?? "react",
+      mode: options.mode ?? "auto",
+      transform: options.transform ?? "managed",
+      reactCompiler,
+      warn: (warning: Error) => {
+        const { diagnosticId } = warning as Error & { diagnosticId?: DiagnosticId };
+        if (diagnosticId !== undefined && errorOn.includes(diagnosticId)) {
+          promoted.push(warning);
+          return;
+        }
+        if (warn === undefined) console.warn(warning.message);
+        else warn.call(this, toBundlerWarning(warning, cleanModuleId(id)));
       },
-      transform,
-      // `enforce: "pre"` alone does not put this transform ahead of React
-      // Compiler under Vite. `@vitejs/plugin-react` 6 registers its compiler
-      // step (`vite:react-compiler`) with `enforce: "pre"` too, so the two land
-      // in the same group and Vite falls back to their order in the `plugins`
-      // array: `[react({ compiler: true }), signals()]` compiled every component
-      // first, memoized the JSX holding `count.value` behind the compiler's
-      // cache sentinel, and left this transform nothing to mark -- no
-      // `"use no memo"`, no boundary, and a UI that never updated after mount.
-      //
-      // Vite sorts each hook by its own `order` *within* the enforce-sorted
-      // list (`getSortedPluginsByHook`): every `order: "pre"` hook runs before
-      // every hook without one, in array order among themselves. That is what
-      // makes either array order work against a pre-enforced plugin that sets
-      // no `order` of its own, which is the case for plugin-react's compiler
-      // step. It is not an absolute guarantee: another plugin that also sets
-      // `order: "pre"` and is listed earlier still runs first, and the README
-      // says so.
-      //
-      // Expressed through unplugin's documented per-bundler override rather
-      // than an `order` field on the shared `transform` object: unplugin's own
-      // `ObjectHook` type carries only `filter`/`handler`, so an `order` there
-      // would survive only by accident of how its Vite adapter copies the hook.
-      // The override is merged onto the Vite plugin *after* unplugin wraps the
-      // shared hook, so it replaces that wrapper -- including the
-      // `transformInclude` check -- and has to apply `canTransform` itself.
-      vite: {
-        transform: {
-          order: "pre",
-          handler(this: { warn?: (warning: never) => void }, code: string, id: string) {
-            return canTransform(id, options) ? transform.call(this, code, id) : null;
-          },
+    });
+    for (const diagnostic of promoted) {
+      // Outside a bundler context there is nothing to report to, so the
+      // diagnostic itself is the failure. esbuild's context collects errors
+      // and does not throw, so each promoted diagnostic is reported there.
+      if (error === undefined) throw diagnostic;
+      error.call(this, toBundlerWarning(diagnostic, cleanModuleId(id)));
+    }
+    return result;
+  };
+  return {
+    name: pluginName,
+    enforce: "pre",
+    transformInclude(id) {
+      return canTransform(id, options);
+    },
+    transform,
+    // `enforce: "pre"` alone does not put this transform ahead of React
+    // Compiler under Vite. `@vitejs/plugin-react` 6 registers its compiler
+    // step (`vite:react-compiler`) with `enforce: "pre"` too, so the two land
+    // in the same group and Vite falls back to their order in the `plugins`
+    // array: `[react({ compiler: true }), signals()]` compiled every component
+    // first, memoized the JSX holding `count.value` behind the compiler's
+    // cache sentinel, and left this transform nothing to mark -- no
+    // `"use no memo"`, no boundary, and a UI that never updated after mount.
+    //
+    // Vite sorts each hook by its own `order` *within* the enforce-sorted
+    // list (`getSortedPluginsByHook`): every `order: "pre"` hook runs before
+    // every hook without one, in array order among themselves. That is what
+    // makes either array order work against a pre-enforced plugin that sets
+    // no `order` of its own, which is the case for plugin-react's compiler
+    // step. It is not an absolute guarantee: another plugin that also sets
+    // `order: "pre"` and is listed earlier still runs first, and the README
+    // says so.
+    //
+    // Expressed through unplugin's documented per-bundler override rather
+    // than an `order` field on the shared `transform` object: unplugin's own
+    // `ObjectHook` type carries only `filter`/`handler`, so an `order` there
+    // would survive only by accident of how its Vite adapter copies the hook.
+    // The override is merged onto the Vite plugin *after* unplugin wraps the
+    // shared hook, so it replaces that wrapper -- including the
+    // `transformInclude` check -- and has to apply `canTransform` itself.
+    vite: {
+      transform: {
+        order: "pre",
+        handler(this: { warn?: (warning: never) => void }, code: string, id: string) {
+          return canTransform(id, options) ? transform.call(this, code, id) : null;
         },
       },
-      esbuild: {
-        config(buildOptions: { loader?: Record<string, string> | undefined }) {
-          configuredLoaders = buildOptions.loader;
-        },
-        loader(_code: string, id: string) {
-          return resolveEsbuildLoader(id, configuredLoaders) as EsbuildLoaderName;
-        },
+    },
+    esbuild: {
+      config(buildOptions: { loader?: Record<string, string> | undefined }) {
+        configuredLoaders = buildOptions.loader;
       },
-      webpack: useOwnTransformLoader,
-      rspack: useOwnTransformLoader,
-    };
-  },
-);
+      loader(_code: string, id: string) {
+        return resolveEsbuildLoader(id, configuredLoaders) as EsbuildLoaderName;
+      },
+    },
+    webpack: useOwnTransformLoader,
+    rspack: useOwnTransformLoader,
+  };
+});
 
 export default reactFineGrainedSignals;
 

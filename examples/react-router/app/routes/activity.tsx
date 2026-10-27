@@ -32,17 +32,15 @@ export default function Activity() {
       <p className="hint">
         タスクボードでの操作(追加・切替・クリア)を記録します。ここでは行の
         <strong>同一性</strong>ではなく<strong>位置</strong>
-        (スロット0=最新)に意味があるため、識別子キーが必須の <code>For</code>{" "}
-        ではなく <code>Index</code> で描画しています。
+        (スロット0=最新)に意味があるため、識別子キーが必須の <code>For</code> ではなく <code>Index</code>{" "}
+        で描画しています。
       </p>
 
       <InsightPanel store={store} />
       <LogSettingsForm settings={settings} />
 
       <ol className="activity-list">
-        <Index each={visibleEntries}>
-          {(entry, index) => <ActivityRow entry={entry} slot={index} />}
-        </Index>
+        <Index each={visibleEntries}>{(entry, index) => <ActivityRow entry={entry} slot={index} />}</Index>
       </ol>
     </main>
   );

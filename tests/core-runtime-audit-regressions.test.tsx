@@ -30,7 +30,13 @@ type Attempt = ReturnType<Runtime["renderAdapter"]["createRenderAttempt"]>;
 function renderAttempt<T>(runtime: Runtime, read: () => T, scopePolicy: "managed" | "bare" = "managed") {
   const attempt = runtime.renderAdapter.createRenderAttempt();
   let value!: T;
-  runtime.renderAdapter.withRenderScope(attempt, () => { value = read(); }, scopePolicy);
+  runtime.renderAdapter.withRenderScope(
+    attempt,
+    () => {
+      value = read();
+    },
+    scopePolicy,
+  );
   return { attempt, value };
 }
 
@@ -45,7 +51,9 @@ afterEach(() => {
  */
 function commitNeedsRerender(runtime: Runtime, attempt: Attempt): boolean {
   let changed = !runtime.renderAdapter.promoteRenderAttempt(attempt);
-  const local = [...attempt.dependencies.keys()].filter((dependency) => runtime.getNodeForReadable(dependency as never) !== undefined);
+  const local = [...attempt.dependencies.keys()].filter(
+    (dependency) => runtime.getNodeForReadable(dependency as never) !== undefined,
+  );
   if (local.length > 0) subscriptions.push(runtime.renderAdapter.subscribeReadables(local, () => {}));
   if (!runtime.renderAdapter.settleRenderAttempt(attempt)) changed = true;
   return changed;
@@ -119,7 +127,13 @@ describe("A2: render attempts that observed different values of one computed", (
 
     const parent = renderAttempt(runtime, () => checked.value);
     source.value = 2;
-    const child = renderAttempt(runtime, () => { try { return checked.value; } catch { return "error"; } });
+    const child = renderAttempt(runtime, () => {
+      try {
+        return checked.value;
+      } catch {
+        return "error";
+      }
+    });
     expect([parent.value, child.value]).toEqual([1, "error"]);
 
     expect(commitNeedsRerender(runtime, child.attempt)).toBe(false);
@@ -165,7 +179,9 @@ describe("A4: computed getters are called as () => T", () => {
   it("applies a default parameter on every recomputation", () => {
     const runtime = createRenderRuntime();
     const source = runtime.signal(0);
-    function total(offset = 100) { return source.value + offset; }
+    function total(offset = 100) {
+      return source.value + offset;
+    }
     const value = runtime.computed(total);
 
     const seen = [value.value];
@@ -197,7 +213,9 @@ describe("A4: computed getters are called as () => T", () => {
 
   it("matches v0.1.1 in a tracked component's first render", () => {
     const source = signal(1);
-    function total(offset = 100) { return source.value + offset; }
+    function total(offset = 100) {
+      return source.value + offset;
+    }
     const value = computed(total);
     function View() {
       useSignalTracking();
@@ -206,9 +224,13 @@ describe("A4: computed getters are called as () => T", () => {
 
     const view = render(<View />);
     expect(view.container.textContent).toBe("101");
-    act(() => { source.value = 2; });
+    act(() => {
+      source.value = 2;
+    });
     expect(view.container.textContent).toBe("102");
-    act(() => { source.value = 3; });
+    act(() => {
+      source.value = 3;
+    });
     expect(view.container.textContent).toBe("103");
   });
 });
@@ -220,7 +242,13 @@ describe("follow-up: effects created by a speculatively evaluated getter", () =>
     const tick = runtime.signal(0);
     let live = 0;
     const owner = runtime.computed(() => {
-      runtime.effect(() => { void tick.value; live += 1; return () => { live -= 1; }; });
+      runtime.effect(() => {
+        void tick.value;
+        live += 1;
+        return () => {
+          live -= 1;
+        };
+      });
       return source.value;
     });
 
@@ -237,13 +265,22 @@ describe("follow-up: effects created by a speculatively evaluated getter", () =>
     let live = 0;
     let runs = 0;
     const owner = runtime.computed(() => {
-      runtime.effect(() => { void tick.value; runs += 1; live += 1; return () => { live -= 1; }; });
+      runtime.effect(() => {
+        void tick.value;
+        runs += 1;
+        live += 1;
+        return () => {
+          live -= 1;
+        };
+      });
       return source.value;
     });
 
     const { attempt } = renderAttempt(runtime, () => owner.value);
     commitNeedsRerender(runtime, attempt);
-    const stop = runtime.effect(() => { void owner.value; });
+    const stop = runtime.effect(() => {
+      void owner.value;
+    });
     expect(live).toBe(1);
     const before = runs;
     tick.value = 1;
@@ -260,7 +297,13 @@ describe("follow-up: effects created by a speculatively evaluated getter", () =>
     const tick = signal(0);
     let live = 0;
     const owner = computed(() => {
-      effect(() => { void tick.value; live += 1; return () => { live -= 1; }; });
+      effect(() => {
+        void tick.value;
+        live += 1;
+        return () => {
+          live -= 1;
+        };
+      });
       return source.value;
     });
     function View() {
@@ -270,11 +313,13 @@ describe("follow-up: effects created by a speculatively evaluated getter", () =>
 
     const view = render(<View />);
     expect(live).toBe(1);
-    for (const next of [1, 2, 3]) act(() => { source.value = next; });
+    for (const next of [1, 2, 3])
+      act(() => {
+        source.value = next;
+      });
     expect(live).toBe(1);
     view.unmount();
     await Promise.resolve();
     expect(live).toBe(0);
   });
 });
-

@@ -33,7 +33,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     effect(() => {
       const value = trigger.value;
       seen.push([value, state.value.user.name]);
-      return () => { cleanups.push(state.value.user.name); };
+      return () => {
+        cleanups.push(state.value.user.name);
+      };
     });
     let shouldTrigger = true;
     const evaluate = vi.fn(() => {
@@ -51,11 +53,20 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       return <output aria-label="production-deep-effect">{outer.value}</output>;
     }
     render(<Reader />);
-    expect(seen).toEqual([[0, "Ada"], [1, "Ada"]]);
+    expect(seen).toEqual([
+      [0, "Ada"],
+      [1, "Ada"],
+    ]);
     expect(cleanups).toEqual(["Ada"]);
     const mountedRenders = renders.mock.calls.length;
-    act(() => { state.value.user.name = "Grace"; });
-    expect(seen).toEqual([[0, "Ada"], [1, "Ada"], [1, "Grace"]]);
+    act(() => {
+      state.value.user.name = "Grace";
+    });
+    expect(seen).toEqual([
+      [0, "Ada"],
+      [1, "Ada"],
+      [1, "Grace"],
+    ]);
     expect(cleanups).toEqual(["Ada", "Grace"]);
     expect(renders).toHaveBeenCalledTimes(mountedRenders);
   });
@@ -70,7 +81,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     const outer = computed(() => {
       effect(() => {
         seen.push(state.value.user.name);
-        return () => { cleanupRuns += 1; };
+        return () => {
+          cleanupRuns += 1;
+        };
       });
       return 7;
     });
@@ -86,7 +99,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(cleanupRuns).toBe(1);
     const renderCount = renders.mock.calls.length;
 
-    act(() => { state.value.user.name = "Grace"; });
+    act(() => {
+      state.value.user.name = "Grace";
+    });
     expect(seen).toEqual(["Ada", "Ada", "Grace"]);
     expect(renders).toHaveBeenCalledTimes(renderCount);
     expect(cleanupRuns).toBe(2);
@@ -94,7 +109,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     view.unmount();
     await Promise.resolve();
     expect(cleanupRuns).toBe(3);
-    act(() => { state.value.user.name = "Lin"; });
+    act(() => {
+      state.value.user.name = "Lin";
+    });
     expect(seen).toEqual(["Ada", "Ada", "Grace"]);
   });
 
@@ -113,9 +130,13 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     // Speculative deep-read invalidation now lives on the render attempt.
     expect(renders.mock.calls.length).toBeLessThan(4);
 
-    act(() => { state.value.user.age = 37; });
+    act(() => {
+      state.value.user.age = 37;
+    });
     expect(renders.mock.calls.length).toBeLessThan(4);
-    act(() => { state.value.user.name = "Grace"; });
+    act(() => {
+      state.value.user.name = "Grace";
+    });
     expect(screen.getByLabelText("unstable-deep").textContent).toBe("Grace");
     expect(renders.mock.calls.length).toBeLessThan(4);
   });
@@ -136,7 +157,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(screen.getByLabelText("production-nested-peek").textContent).toBe("Ada!");
     const renderCount = renders.mock.calls.length;
     const outerCount = evaluateOuter.mock.calls.length;
-    act(() => { state.value.user.name = "Grace"; });
+    act(() => {
+      state.value.user.name = "Grace";
+    });
     expect(renders).toHaveBeenCalledTimes(renderCount);
     expect(evaluateOuter).toHaveBeenCalledTimes(outerCount);
     expect(nested.peek()).toBe("Grace");
@@ -157,7 +180,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     }
     render(<Reader />);
     expect(screen.getByLabelText("production-nested-value").textContent).toBe("Ada!");
-    act(() => { state.value.user.name = "Grace"; });
+    act(() => {
+      state.value.user.name = "Grace";
+    });
     expect(screen.getByLabelText("production-nested-value").textContent).toBe("Grace!");
     expect(evaluateNested).toHaveBeenCalledTimes(2);
     expect(evaluateOuter).toHaveBeenCalledTimes(2);
@@ -178,7 +203,11 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     function Parent() {
       useSignalTracking();
       parentRenders();
-      return <section data-parent={parentSource.value}><Leaf /></section>;
+      return (
+        <section data-parent={parentSource.value}>
+          <Leaf />
+        </section>
+      );
     }
 
     render(<Parent />);
@@ -219,10 +248,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     let source: ReturnType<typeof useDeepSignal<{ user: { name: string } }>> | undefined;
     const renders = vi.fn();
 
-    function Profile({ initial, parentVersion }: {
-      initial: { user: { name: string } };
-      parentVersion: number;
-    }) {
+    function Profile({ initial, parentVersion }: { initial: { user: { name: string } }; parentVersion: number }) {
       const state = useDeepSignal(initial);
       source = state;
       renders();
@@ -314,7 +340,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     ["Map", (value: { map: Map<string, number> }) => value.map],
     ["class instance", (value: { opaque: Date }) => value.opaque],
   ])("rejects a %s returned by a deep selector at runtime", (_label, selector) => {
-    const state = deepSignal({ user: { name: "Ada" }, map: new Map([['x', 1]]), opaque: new Date() });
+    const state = deepSignal({ user: { name: "Ada" }, map: new Map([["x", 1]]), opaque: new Date() });
 
     function InvalidSelection() {
       useDeepSignalValue(state, selector as never, []);
@@ -331,7 +357,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
   it.each([
     [
       "an invalid selector result",
-      (value: { fail: boolean }) => value.fail ? new Map() : "ready",
+      (value: { fail: boolean }) => (value.fail ? new Map() : "ready"),
       (state: ReturnType<typeof deepSignal<{ fail: boolean }>>) => {
         state.value.fail = true;
       },
@@ -346,55 +372,11 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
         state.value.fail = true;
       },
     ],
-  ])(
-    "delivers %s from an update to an Error Boundary instead of the writer",
-    (_label, selector, write) => {
-      const state = deepSignal({ fail: false });
-      const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-      class ErrorBoundary extends Component<
-        { children: ReactNode },
-        { error: unknown }
-      > {
-        state: { error: unknown } = { error: undefined };
-
-        static getDerivedStateFromError(error: unknown) {
-          return { error };
-        }
-
-        render() {
-          return this.state.error === undefined
-            ? this.props.children
-            : <output aria-label="selector error">caught</output>;
-        }
-      }
-
-      function Selection() {
-        const value = useDeepSignalValue(state, selector as never, []);
-        return <output aria-label="selector value">{String(value)}</output>;
-      }
-
-      render(<ErrorBoundary><Selection /></ErrorBoundary>);
-      expect(screen.getByLabelText("selector value").textContent).toBe("ready");
-
-      expect(() => {
-        act(() => {
-          write(state);
-        });
-      }).not.toThrow();
-      expect(screen.getByLabelText("selector error").textContent).toBe("caught");
-      expect(reactError).toHaveBeenCalled();
-    },
-  );
-
-  it("surfaces the latest selector error across consecutive failures", () => {
-    const state = deepSignal({ fail: false, attempt: 0 });
+  ])("delivers %s from an update to an Error Boundary instead of the writer", (_label, selector, write) => {
+    const state = deepSignal({ fail: false });
     const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
 
-    class ErrorBoundary extends Component<
-      { children: ReactNode },
-      { error: unknown }
-    > {
+    class ErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
       state: { error: unknown } = { error: undefined };
 
       static getDerivedStateFromError(error: unknown) {
@@ -402,9 +384,52 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       }
 
       render() {
-        return this.state.error === undefined
-          ? this.props.children
-          : <output aria-label="selector error">{(this.state.error as Error).message}</output>;
+        return this.state.error === undefined ? (
+          this.props.children
+        ) : (
+          <output aria-label="selector error">caught</output>
+        );
+      }
+    }
+
+    function Selection() {
+      const value = useDeepSignalValue(state, selector as never, []);
+      return <output aria-label="selector value">{String(value)}</output>;
+    }
+
+    render(
+      <ErrorBoundary>
+        <Selection />
+      </ErrorBoundary>,
+    );
+    expect(screen.getByLabelText("selector value").textContent).toBe("ready");
+
+    expect(() => {
+      act(() => {
+        write(state);
+      });
+    }).not.toThrow();
+    expect(screen.getByLabelText("selector error").textContent).toBe("caught");
+    expect(reactError).toHaveBeenCalled();
+  });
+
+  it("surfaces the latest selector error across consecutive failures", () => {
+    const state = deepSignal({ fail: false, attempt: 0 });
+    const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    class ErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
+      state: { error: unknown } = { error: undefined };
+
+      static getDerivedStateFromError(error: unknown) {
+        return { error };
+      }
+
+      render() {
+        return this.state.error === undefined ? (
+          this.props.children
+        ) : (
+          <output aria-label="selector error">{(this.state.error as Error).message}</output>
+        );
       }
     }
 
@@ -420,7 +445,11 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
       return <output aria-label="selector value">{value}</output>;
     }
 
-    render(<ErrorBoundary><Selection /></ErrorBoundary>);
+    render(
+      <ErrorBoundary>
+        <Selection />
+      </ErrorBoundary>,
+    );
     expect(screen.getByLabelText("selector value").textContent).toBe("ready");
 
     // Both writes land inside the same reactive flush, so the store evaluates
@@ -440,9 +469,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
 
     function Name() {
       state = useDeepSignal({ user: { name: "Ada" } });
-      return <output aria-label="replacement name">{
-        useDeepSignalValue(state, (value) => value.user.name, [])
-      }</output>;
+      return <output aria-label="replacement name">{useDeepSignalValue(state, (value) => value.user.name, [])}</output>;
     }
 
     render(<Name />);
@@ -474,9 +501,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     const second = deepSignal({ user: { name: "Grace" } });
 
     function Name({ state }: { state: typeof first }) {
-      return <output aria-label="state prop name">{
-        useDeepSignalValue(state, (value) => value.user.name)
-      }</output>;
+      return <output aria-label="state prop name">{useDeepSignalValue(state, (value) => value.user.name)}</output>;
     }
 
     const view = render(<Name state={first} />);
@@ -510,11 +535,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     const renders = vi.fn();
 
     function Selected() {
-      const value = useDeepSignalValue(
-        state,
-        (current) => current.useFirst ? current.first : current.second,
-        [],
-      );
+      const value = useDeepSignalValue(state, (current) => (current.useFirst ? current.first : current.second), []);
       renders();
       return <output aria-label="dynamic selection">{value}</output>;
     }
@@ -602,16 +623,22 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     expect(screen.getByLabelText("memoized selector").textContent).toBe("2:Ada");
     expect(selectorCalls).toHaveBeenCalledTimes(3);
 
-    act(() => { state.value.user.age = 37; });
+    act(() => {
+      state.value.user.age = 37;
+    });
     expect(selectorCalls).toHaveBeenCalledTimes(3);
     expect(renders).toHaveBeenCalledTimes(2);
 
-    act(() => { state.value.user.name = "Grace"; });
+    act(() => {
+      state.value.user.name = "Grace";
+    });
     expect(screen.getByLabelText("memoized selector").textContent).toBe("2:Grace");
     expect(selectorCalls).toHaveBeenCalledTimes(4);
 
     view.unmount();
-    act(() => { state.value.user.name = "Lin"; });
+    act(() => {
+      state.value.user.name = "Lin";
+    });
     expect(selectorCalls).toHaveBeenCalledTimes(4);
   });
 
@@ -620,23 +647,36 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     const commits: number[] = [];
     function Selected() {
       const n = useDeepSignalValue(state, (value) => value.n, []);
-      useLayoutEffect(() => { commits.push(n); });
+      useLayoutEffect(() => {
+        commits.push(n);
+      });
       return <output aria-label="activity selection">{n}</output>;
     }
     function App({ mode, tick }: { mode: "visible" | "hidden"; tick: number }) {
-      return <Activity mode={mode}><Selected /><span>{tick}</span></Activity>;
+      return (
+        <Activity mode={mode}>
+          <Selected />
+          <span>{tick}</span>
+        </Activity>
+      );
     }
 
     const view = render(<App mode="visible" tick={0} />);
     view.rerender(<App mode="hidden" tick={0} />);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     // The hidden store is disconnected, so this write leaves its cache behind.
-    act(() => { state.value.n = 5; });
+    act(() => {
+      state.value.n = 5;
+    });
     // A hidden prerender, then the reveal.
     view.rerender(<App mode="hidden" tick={1} />);
     commits.length = 0;
     view.rerender(<App mode="visible" tick={1} />);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     expect(commits).toEqual([5]);
     expect(screen.getByLabelText("activity selection").textContent).toBe("5");
@@ -646,11 +686,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     const state = deepSignal({ count: 1 });
 
     function Product({ multiplier }: { multiplier: number }) {
-      const product = useDeepSignalValue(
-        state,
-        (current) => current.count * multiplier,
-        [multiplier],
-      );
+      const product = useDeepSignalValue(state, (current) => current.count * multiplier, [multiplier]);
       return <output aria-label="selected product">{product}</output>;
     }
 
@@ -674,11 +710,7 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     const state = deepSignal({ count: 1 });
 
     function Selected({ dependencies }: { dependencies: number[] }) {
-      const value = useDeepSignalValue(
-        state,
-        (current) => current.count,
-        dependencies,
-      );
+      const value = useDeepSignalValue(state, (current) => current.count, dependencies);
       return <output aria-label="dependency length guard">{value}</output>;
     }
 
@@ -714,7 +746,10 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     let release!: () => void;
     let isPending = true;
     const pending = new Promise<void>((resolve) => {
-      release = () => { isPending = false; resolve(); };
+      release = () => {
+        isPending = false;
+        resolve();
+      };
     });
     const renders = vi.fn();
 
@@ -739,7 +774,9 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     );
     expect(screen.getByLabelText("selector fallback").textContent).toBe("loading");
     release();
-    await act(async () => { await pending; });
+    await act(async () => {
+      await pending;
+    });
     view.rerender(
       <Suspense fallback={<output aria-label="selector fallback">loading</output>}>
         <Selected source={second} suspend={false} />
@@ -748,9 +785,13 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
 
     expect(screen.getByLabelText("suspended selector").textContent).toBe("Grace");
     const rendersAfterReveal = renders.mock.calls.length;
-    act(() => { first.value.user.name = "ignored"; });
+    act(() => {
+      first.value.user.name = "ignored";
+    });
     expect(renders).toHaveBeenCalledTimes(rendersAfterReveal);
-    act(() => { second.value.user.name = "Lin"; });
+    act(() => {
+      second.value.user.name = "Lin";
+    });
     expect(screen.getByLabelText("suspended selector").textContent).toBe("Lin");
   });
 

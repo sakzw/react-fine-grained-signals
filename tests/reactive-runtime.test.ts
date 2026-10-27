@@ -2,10 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
 import { executionContext } from "../src/core/execution-owner.js";
-import {
-  setActiveRenderCollector,
-  type RenderDependency,
-} from "../src/core/render-tracking.js";
+import { setActiveRenderCollector, type RenderDependency } from "../src/core/render-tracking.js";
 
 const renderRuntimes: ReturnType<typeof createReactiveRuntime>[] = [];
 
@@ -35,10 +32,11 @@ function collectWithVersions(read: () => void): Array<{
 }> {
   const dependencies: Array<{ dependency: RenderDependency; version: number }> = [];
   const previous = setActiveRenderCollector({
-    add: (dependency) => dependencies.push({
-      dependency,
-      version: dependency.getRenderVersion(),
-    }),
+    add: (dependency) =>
+      dependencies.push({
+        dependency,
+        version: dependency.getRenderVersion(),
+      }),
   });
   try {
     read();
@@ -69,7 +67,9 @@ interface GraphLinkInspection {
 function runtimeDependencyOf(readable: { readonly value: unknown }): RenderDependency {
   let dependency: RenderDependency | undefined;
   const previous = setActiveRenderCollector({
-    add(value) { dependency = value; },
+    add(value) {
+      dependency = value;
+    },
   });
   try {
     void readable.value;
@@ -84,7 +84,10 @@ function graphNodeOf(readable: { readonly value: unknown }): GraphNodeInspection
   return runtimeDependencyOf(readable) as GraphNodeInspection;
 }
 
-function graphNodeFrom(runtime: ReturnType<typeof createReactiveRuntime>, readable: { readonly value: unknown; peek(): unknown }): GraphNodeInspection {
+function graphNodeFrom(
+  runtime: ReturnType<typeof createReactiveRuntime>,
+  readable: { readonly value: unknown; peek(): unknown },
+): GraphNodeInspection {
   return runtime.getNodeForReadable(readable) as GraphNodeInspection;
 }
 
@@ -102,14 +105,18 @@ describe("private reactive runtime", () => {
     const source = runtime.signal(1);
     const derived = runtime.computed(() => source.value + 1);
     const framesBefore = executionContext.frames.length;
-    const dispose = runtime.effect(() => { derived.value; });
+    const dispose = runtime.effect(() => {
+      derived.value;
+    });
     expect(executionContext.frames).toHaveLength(framesBefore);
 
     const attempt = runtime.renderAdapter.createRenderAttempt();
     runtime.renderAdapter.withRenderScope(attempt, () => {
       const framesInRender = executionContext.frames.length;
       expect(derived.value).toBe(2);
-      const nestedDispose = runtime.effect(() => { derived.value; });
+      const nestedDispose = runtime.effect(() => {
+        derived.value;
+      });
       expect(executionContext.frames).toHaveLength(framesInRender);
       nestedDispose();
     });
@@ -174,7 +181,7 @@ describe("private reactive runtime", () => {
     const chooseLeft = runtime.signal(true);
     const left = runtime.signal("left");
     const right = runtime.signal("right");
-    const selected = runtime.computed(() => chooseLeft.value ? left.value : right.value);
+    const selected = runtime.computed(() => (chooseLeft.value ? left.value : right.value));
     const seen: string[] = [];
     const dispose = runtime.effect(() => {
       seen.push(selected.value);
@@ -442,10 +449,17 @@ describe("private reactive runtime", () => {
         innerRuns += 1;
       });
     });
-    const outerNode = graphNodeOf(source).subs!.sub as unknown as { deps: { dep: { kind: string }; nextDep: unknown } | undefined };
+    const outerNode = graphNodeOf(source).subs!.sub as unknown as {
+      deps: { dep: { kind: string }; nextDep: unknown } | undefined;
+    };
     const ownedKinds = () => {
       const kinds: string[] = [];
-      for (let link = outerNode.deps as { dep: { kind: string }; nextDep: unknown } | undefined; link; link = link.nextDep as typeof link) kinds.push(link.dep.kind);
+      for (
+        let link = outerNode.deps as { dep: { kind: string }; nextDep: unknown } | undefined;
+        link;
+        link = link.nextDep as typeof link
+      )
+        kinds.push(link.dep.kind);
       return kinds;
     };
     expect(ownedKinds()).toEqual(["source", "effect"]);
@@ -473,7 +487,9 @@ describe("private reactive runtime", () => {
       });
       return id;
     });
-    const stop = runtime.effect(() => { derived.value; });
+    const stop = runtime.effect(() => {
+      derived.value;
+    });
     input.value = 1;
     expect(live).toEqual([1]);
     stop();
@@ -529,10 +545,12 @@ describe("private reactive runtime", () => {
       expect(seen).toEqual([3]);
     });
     expect(seen).toEqual([3, 5]);
-    expect(() => runtime.batch(() => {
-      left.value = 4;
-      throw new Error("batch failed");
-    })).toThrow("batch failed");
+    expect(() =>
+      runtime.batch(() => {
+        left.value = 4;
+        throw new Error("batch failed");
+      }),
+    ).toThrow("batch failed");
     right.value = 4;
     expect(seen).toEqual([3, 5, 7, 8]);
     dispose();
@@ -643,9 +661,11 @@ describe("private reactive runtime", () => {
 
     other.value = 3;
     expect(seen).toEqual([1]);
-    expect(() => runtime.untracked(() => {
-      throw new Error("untracked failure");
-    })).toThrow("untracked failure");
+    expect(() =>
+      runtime.untracked(() => {
+        throw new Error("untracked failure");
+      }),
+    ).toThrow("untracked failure");
     source.value = 2;
     expect(seen).toEqual([1, 2]);
     dispose();
@@ -1012,5 +1032,4 @@ describe("private reactive runtime", () => {
     stopB();
     stopC();
   });
-
 });

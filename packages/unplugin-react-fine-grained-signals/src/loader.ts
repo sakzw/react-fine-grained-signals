@@ -27,11 +27,7 @@ import { Buffer } from "node:buffer";
 /** What a `transform` hook may hand back, per unplugin's own `TransformResult`. */
 type TransformOutput = string | { code: string; map?: unknown } | null | undefined | void;
 
-type TransformHandler = (
-  this: unknown,
-  code: string,
-  id: string,
-) => TransformOutput | Promise<TransformOutput>;
+type TransformHandler = (this: unknown, code: string, id: string) => TransformOutput | Promise<TransformOutput>;
 
 /** The slice of the resolved unplugin plugin this loader reads back. */
 interface LoaderPlugin {
@@ -178,11 +174,7 @@ function createHookContext(loaderContext: LoaderContext): Record<string, unknown
   };
 }
 
-export default function reactFineGrainedSignalsLoader(
-  this: LoaderContext,
-  source: string,
-  map?: unknown,
-): void {
+export default function reactFineGrainedSignalsLoader(this: LoaderContext, source: string, map?: unknown): void {
   const callback = this.async();
   const query = this.query;
   const plugin =
@@ -222,16 +214,19 @@ export default function reactFineGrainedSignalsLoader(
           return runTransform(source);
         });
 
-  transformed.then((result) => {
-    if (result === null || result === undefined) callback(null, source, map);
-    else if (typeof result === "string") {
-      callback(null, withoutInlineSourceMap(result, inlineMap), map);
-    }
-    // What differs from unplugin's own loader: the transform re-printed the
-    // file, so its map -- already composed with the incoming one, when there
-    // was one -- is what the emitted text's line numbers now correspond to.
-    else callback(null, withoutInlineSourceMap(result.code, inlineMap), result.map ?? map);
-  }, (thrown: unknown) => {
-    callback(toError(thrown));
-  });
+  transformed.then(
+    (result) => {
+      if (result === null || result === undefined) callback(null, source, map);
+      else if (typeof result === "string") {
+        callback(null, withoutInlineSourceMap(result, inlineMap), map);
+      }
+      // What differs from unplugin's own loader: the transform re-printed the
+      // file, so its map -- already composed with the incoming one, when there
+      // was one -- is what the emitted text's line numbers now correspond to.
+      else callback(null, withoutInlineSourceMap(result.code, inlineMap), result.map ?? map);
+    },
+    (thrown: unknown) => {
+      callback(toError(thrown));
+    },
+  );
 }

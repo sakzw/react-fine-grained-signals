@@ -29,10 +29,7 @@ const internalOptions = {
   reactCompiler: "opt-out" as const,
 };
 
-function transformSource(
-  source: string,
-  options: ReactFineGrainedSignalsOptions,
-): string | undefined {
+function transformSource(source: string, options: ReactFineGrainedSignalsOptions): string | undefined {
   // The Vite plugin's transform is an `order: "pre"` object hook (see
   // `src/unplugin.ts`); its handler is the same transform every adapter runs.
   const plugin = reactFineGrainedSignals.vite(options) as unknown as {
@@ -67,7 +64,7 @@ describe("unplugin-react-fine-grained-signals", () => {
   it("applies the documented defaults when no plugin options are supplied", () => {
     const output = transformSource(counterSource, {});
 
-    expect(output).toContain('_useSignalCapture()');
+    expect(output).toContain("_useSignalCapture()");
     expect(output).toContain('from "react-fine-grained-signals/internal"');
   });
 
@@ -138,16 +135,14 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(canTransform(sfcId, {})).toBe(false);
     // Claiming it is what turns a file this plugin has no business touching
     // into a parse failure that reads like the author's own syntax error.
-    expect(() => transformReactFineGrainedSignals(counterSource, sfcId, internalOptions))
-      .toThrow(/jsx/);
+    expect(() => transformReactFineGrainedSignals(counterSource, sfcId, internalOptions)).toThrow(/jsx/);
 
     const fragmentId = "/project/src/App.tsx#frag";
 
     expect(canTransform(fragmentId, {})).toBe(true);
     const result = transformReactFineGrainedSignals(counterSource, fragmentId, internalOptions);
     expect(result?.code).toContain("_useSignalCapture()");
-    expect((result?.map as { sources: string[] } | undefined)?.sources)
-      .toEqual(["/project/src/App.tsx"]);
+    expect((result?.map as { sources: string[] } | undefined)?.sources).toEqual(["/project/src/App.tsx"]);
   });
 
   it("leaves modules another plugin generated and owns alone", () => {
@@ -186,9 +181,7 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(plugin.transform.handler(cjs, "/project/src/legacy.cjs")).toBeNull();
     expect(plugin.transform.handler(counterSource, "/project/node_modules/pkg/App.tsx")).toBeNull();
     expect(plugin.transform.handler(counterSource, "/project/excluded/App.tsx")).toBeNull();
-    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain(
-      "_useSignalCapture()",
-    );
+    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain("_useSignalCapture()");
   });
 
   it("accepts the public auto mode option", () => {
@@ -199,7 +192,9 @@ describe("unplugin-react-fine-grained-signals", () => {
     const output = transformCounter({ mode: "auto" });
 
     expect(output).toContain('from "react-fine-grained-signals/internal"');
-    expect(output).toContain('import { useSignalCapture as _useSignalCapture } from "react-fine-grained-signals/internal"');
+    expect(output).toContain(
+      'import { useSignalCapture as _useSignalCapture } from "react-fine-grained-signals/internal"',
+    );
     expect(output).toContain("const _signals = _useSignalCapture();");
     expect(output).not.toContain("try {");
     expect(output).toContain("_signals.capture(() => count.value)");
@@ -235,10 +230,12 @@ describe("unplugin-react-fine-grained-signals", () => {
   });
 
   it("rejects an explicit useSignalTracking call in an async or generator function by default", () => {
-    expect(() => transformSource(explicitAsyncSource, { mode: "auto" }))
-      .toThrow("only supports synchronous, non-generator functions");
-    expect(() => transformSource(explicitGeneratorSource, { mode: "auto" }))
-      .toThrow("only supports synchronous, non-generator functions");
+    expect(() => transformSource(explicitAsyncSource, { mode: "auto" })).toThrow(
+      "only supports synchronous, non-generator functions",
+    );
+    expect(() => transformSource(explicitGeneratorSource, { mode: "auto" })).toThrow(
+      "only supports synchronous, non-generator functions",
+    );
   });
 
   it("leaves an explicit async or generator useSignalTracking call alone under the injection transform", () => {
@@ -413,14 +410,11 @@ describe("bundler adapters", () => {
     expect(typeof plugin.setup).toBe("function");
   });
 
-  it.each(["webpack", "rspack"] as const)(
-    "registers one %s transform rule for application modules only",
-    (bundler) => {
-      expect(transformLoaderEntries(bundler, "/project/src/App.tsx")).toHaveLength(1);
-      expect(transformLoaderEntries(bundler, "/project/src/styles.css")).toHaveLength(0);
-      expect(transformLoaderEntries(bundler, "/project/src/legacy.cjs")).toHaveLength(0);
-    },
-  );
+  it.each(["webpack", "rspack"] as const)("registers one %s transform rule for application modules only", (bundler) => {
+    expect(transformLoaderEntries(bundler, "/project/src/App.tsx")).toHaveLength(1);
+    expect(transformLoaderEntries(bundler, "/project/src/styles.css")).toHaveLength(0);
+    expect(transformLoaderEntries(bundler, "/project/src/legacy.cjs")).toHaveLength(0);
+  });
 
   it.each(["webpack", "rspack"] as const)(
     "%s keeps the transform's own source map when no incoming map exists",
@@ -449,8 +443,7 @@ describe("bundler adapters", () => {
       const map = run.map as { version: number; sources: string[]; mappings: string };
       expect(map.version).toBe(3);
       expect(map.sources).toEqual([resource]);
-      expect(map.mappings)
-        .toBe((expected?.map as { mappings: string } | undefined)?.mappings);
+      expect(map.mappings).toBe((expected?.map as { mappings: string } | undefined)?.mappings);
     },
   );
 
@@ -517,12 +510,7 @@ describe("bundler adapters", () => {
     const resource = "/project/src/App.tsx";
     const [entry] = transformLoaderEntries("webpack", resource);
 
-    const run = await runTransformLoader(
-      entry!,
-      resource,
-      bannerSource,
-      JSON.stringify(upstreamMap()),
-    );
+    const run = await runTransformLoader(entry!, resource, bannerSource, JSON.stringify(upstreamMap()));
 
     expect(run.error).toBeNull();
     expect((run.map as { sources: string[] }).sources).toEqual([upstreamOriginal]);
@@ -618,12 +606,11 @@ describe("bundler adapters", () => {
     // transform rule without breaking the build -- but the source map fix then
     // stops applying, which is exactly the regression nobody would notice.
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const raw = (reactFineGrainedSignals as unknown as {
-      raw(
-        options: ReactFineGrainedSignalsOptions,
-        meta: { framework: string },
-      ): { webpack(compiler: unknown): void };
-    }).raw({ mode: "auto" }, { framework: "webpack" });
+    const raw = (
+      reactFineGrainedSignals as unknown as {
+        raw(options: ReactFineGrainedSignalsOptions, meta: { framework: string }): { webpack(compiler: unknown): void };
+      }
+    ).raw({ mode: "auto" }, { framework: "webpack" });
 
     raw.webpack({ options: { module: { rules: [] } } });
     raw.webpack({ options: { module: { rules: [] } } });
@@ -634,12 +621,11 @@ describe("bundler adapters", () => {
   });
 
   it("keeps webpack integration safe when the compiler has no rules array", () => {
-    const raw = (reactFineGrainedSignals as unknown as {
-      raw(
-        options: ReactFineGrainedSignalsOptions,
-        meta: { framework: string },
-      ): { webpack(compiler: unknown): void };
-    }).raw({ mode: "auto" }, { framework: "webpack" });
+    const raw = (
+      reactFineGrainedSignals as unknown as {
+        raw(options: ReactFineGrainedSignalsOptions, meta: { framework: string }): { webpack(compiler: unknown): void };
+      }
+    ).raw({ mode: "auto" }, { framework: "webpack" });
 
     expect(() => raw.webpack({ options: { module: { rules: null } } })).not.toThrow();
     expect(() => raw.webpack({ options: {} })).not.toThrow();
@@ -653,10 +639,12 @@ describe("bundler adapters", () => {
     };
 
     expect(() => plugin.apply(compiler)).not.toThrow();
-    const ownRule = compiler.options.module.rules.find((rule) =>
-      rule !== null && typeof rule === "object" &&
-      typeof (rule as { use?: unknown }).use === "function" &&
-      Object.keys(rule).every((key) => key === "use" || key === "enforce")
+    const ownRule = compiler.options.module.rules.find(
+      (rule) =>
+        rule !== null &&
+        typeof rule === "object" &&
+        typeof (rule as { use?: unknown }).use === "function" &&
+        Object.keys(rule).every((key) => key === "use" || key === "enforce"),
     ) as { use: (data: unknown) => LoaderEntry[] } | undefined;
     expect(ownRule).toBeDefined();
     const patchedUse = ownRule!.use;
@@ -928,11 +916,7 @@ describe.skipIf(esbuildEntry === undefined)("esbuild adapter build", () => {
   }
 
   it("builds JSX in a .js file the transform never touches", async () => {
-    const output = await build(
-      "untouched.js",
-      "export const Plain = () => <p>plain</p>;\n",
-      { mode: "manual" },
-    );
+    const output = await build("untouched.js", "export const Plain = () => <p>plain</p>;\n", { mode: "manual" });
 
     expect(output).toContain("Plain");
     expect(output).not.toContain("react-fine-grained-signals");
@@ -958,10 +942,12 @@ describe.skipIf(esbuildEntry === undefined)("esbuild adapter build", () => {
 
 describe("reactCompiler option", () => {
   it("rejects an unknown value when the plugin is created instead of dropping the directive", () => {
-    expect(() => rollupAdapter({ reactCompiler: "auto" as "off" }))
-      .toThrow(/reactCompiler must be "opt-out" or "off", got "auto"; "auto" was renamed to "opt-out" in 0\.4\.0/);
-    expect(() => rollupAdapter({ reactCompiler: "none" as "off" }))
-      .toThrow(/reactCompiler must be "opt-out" or "off", got "none"$/);
+    expect(() => rollupAdapter({ reactCompiler: "auto" as "off" })).toThrow(
+      /reactCompiler must be "opt-out" or "off", got "auto"; "auto" was renamed to "opt-out" in 0\.4\.0/,
+    );
+    expect(() => rollupAdapter({ reactCompiler: "none" as "off" })).toThrow(
+      /reactCompiler must be "opt-out" or "off", got "none"$/,
+    );
     expect(() => rollupAdapter({ reactCompiler: "opt-out" })).not.toThrow();
     expect(() => rollupAdapter({ reactCompiler: "off" })).not.toThrow();
   });

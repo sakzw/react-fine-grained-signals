@@ -29,7 +29,13 @@ function createRenderRuntime(): Runtime {
 function renderAndCommit<T>(runtime: Runtime, read: () => T, scopePolicy: "managed" | "bare" = "managed"): T {
   const attempt = runtime.renderAdapter.createRenderAttempt();
   let value!: T;
-  runtime.renderAdapter.withRenderScope(attempt, () => { value = read(); }, scopePolicy);
+  runtime.renderAdapter.withRenderScope(
+    attempt,
+    () => {
+      value = read();
+    },
+    scopePolicy,
+  );
   expect(runtime.renderAdapter.promoteRenderAttempt(attempt)).toBe(true);
   return value;
 }
@@ -64,7 +70,9 @@ describe("a computed first read in a render after an unobserved source write", (
   it("follows the write when the source had a subscriber that went away before the write", () => {
     const runtime = createRenderRuntime();
     const source = runtime.signal("A");
-    const dispose = runtime.effect(() => { void source.value; });
+    const dispose = runtime.effect(() => {
+      void source.value;
+    });
     dispose();
     source.value = "B";
     const value = runtime.computed(() => source.value);
@@ -81,7 +89,9 @@ describe("a computed first read in a render after an unobserved source write", (
     const value = runtime.computed(() => source.value);
     renderAndCommit(runtime, () => value.value);
     const seen: string[] = [];
-    const dispose = runtime.effect(() => { seen.push(value.value); });
+    const dispose = runtime.effect(() => {
+      seen.push(value.value);
+    });
 
     source.value = "A";
     expect(seen).toEqual(["B", "A"]);
@@ -106,7 +116,10 @@ describe("a computed first read in a render after an unobserved source write", (
     const source = runtime.signal(1);
     source.value = 2;
     let evaluations = 0;
-    const value = runtime.computed(() => { evaluations += 1; return source.value * 10; });
+    const value = runtime.computed(() => {
+      evaluations += 1;
+      return source.value * 10;
+    });
 
     expect(renderAndCommit(runtime, () => value.value)).toBe(20);
     expect(evaluations).toBe(1);
@@ -139,7 +152,9 @@ describe("a computed first read in a render after an unobserved source write", (
     expect(inner.peek()).toBe(2);
     const outer = runtime.computed(() => inner.value + 1);
     const attempt = runtime.renderAdapter.createRenderAttempt();
-    runtime.renderAdapter.withRenderScope(attempt, () => { expect(outer.value).toBe(3); });
+    runtime.renderAdapter.withRenderScope(attempt, () => {
+      expect(outer.value).toBe(3);
+    });
     source.value = 2;
 
     expect(runtime.renderAdapter.promoteRenderAttempt(attempt)).toBe(false);
@@ -154,7 +169,9 @@ describe("a computed first read in a render after an unobserved source write", (
     expect(inner.peek()).toBe(2);
     const outer = computed(() => inner.value + 1);
     function Writer() {
-      useLayoutEffect(() => { source.value = 2; }, []);
+      useLayoutEffect(() => {
+        source.value = 2;
+      }, []);
       return null;
     }
     function Reader() {
@@ -162,9 +179,16 @@ describe("a computed first read in a render after an unobserved source write", (
       return <span>{outer.value}</span>;
     }
 
-    const view = render(<><Writer /><Reader /></>);
+    const view = render(
+      <>
+        <Writer />
+        <Reader />
+      </>,
+    );
     expect(view.container.textContent).toBe("5");
-    act(() => { source.value = 3; });
+    act(() => {
+      source.value = 3;
+    });
     expect(view.container.textContent).toBe("7");
   });
 
@@ -174,7 +198,9 @@ describe("a computed first read in a render after an unobserved source write", (
     source.value = "B";
     const value = runtime.computed(() => source.value);
     const attempt = runtime.renderAdapter.createRenderAttempt();
-    runtime.renderAdapter.withRenderScope(attempt, () => { expect(value.value).toBe("B"); });
+    runtime.renderAdapter.withRenderScope(attempt, () => {
+      expect(value.value).toBe("B");
+    });
     source.value = "C";
 
     expect(runtime.renderAdapter.promoteRenderAttempt(attempt)).toBe(false);
@@ -223,10 +249,14 @@ describe("a computed first read in a render after an unobserved source write", (
 
       const view = render(<Theme />);
       expect(view.container.textContent).toBe("dark");
-      act(() => { darkMode.value = false; });
+      act(() => {
+        darkMode.value = false;
+      });
       expect(view.container.textContent).toBe("light");
       expect(theme.peek()).toBe("light");
-      act(() => { darkMode.value = true; });
+      act(() => {
+        darkMode.value = true;
+      });
       expect(view.container.textContent).toBe("dark");
     });
   }
@@ -236,7 +266,9 @@ describe("a computed first read in a render after an unobserved source write", (
     source.value = "B";
     const value = computed(() => source.value);
     const seen: string[] = [];
-    const dispose = effect(() => { seen.push(value.value); });
+    const dispose = effect(() => {
+      seen.push(value.value);
+    });
     source.value = "A";
     expect(seen).toEqual(["B", "A"]);
     dispose();
@@ -256,7 +288,9 @@ function switchToPlain<T>(
   }
   const view = render(<App bound />);
   const node = view.container.firstElementChild as HTMLElement;
-  act(() => { source.value = written; });
+  act(() => {
+    source.value = written;
+  });
   view.rerender(<App bound={false} />);
   expect(view.container.firstElementChild).toBe(node);
   return { source, node };
@@ -264,7 +298,9 @@ function switchToPlain<T>(
 
 describe("a host prop switched from a signal binding back to a plain value", () => {
   it("re-enables a button whose plain value equals the render-time snapshot", () => {
-    const { node } = switchToPlain(false, true, false, (disabled) => <button disabled={disabled as boolean}>test</button>);
+    const { node } = switchToPlain(false, true, false, (disabled) => (
+      <button disabled={disabled as boolean}>test</button>
+    ));
     expect((node as HTMLButtonElement).disabled).toBe(false);
   });
 
@@ -284,16 +320,24 @@ describe("a host prop switched from a signal binding back to a plain value", () 
   });
 
   it("hands a text input's value to a plain value equal to the render-time snapshot", () => {
-    const { node } = switchToPlain("a", "b", "a", (value) => isSignal(value)
-      ? <input bindValue={value as ReturnType<typeof signal<string>>} />
-      : <input value={value as string} />);
+    const { node } = switchToPlain("a", "b", "a", (value) =>
+      isSignal(value) ? (
+        <input bindValue={value as ReturnType<typeof signal<string>>} />
+      ) : (
+        <input value={value as string} />
+      ),
+    );
     expect((node as HTMLInputElement).value).toBe("a");
   });
 
   it("hands a checkbox's checked state to a plain value equal to the render-time snapshot", () => {
-    const { node } = switchToPlain(false, true, false, (checked) => isSignal(checked)
-      ? <input type="checkbox" bindChecked={checked as ReturnType<typeof signal<boolean>>} />
-      : <input type="checkbox" checked={checked as boolean} />);
+    const { node } = switchToPlain(false, true, false, (checked) =>
+      isSignal(checked) ? (
+        <input type="checkbox" bindChecked={checked as ReturnType<typeof signal<boolean>>} />
+      ) : (
+        <input type="checkbox" checked={checked as boolean} />
+      ),
+    );
     expect((node as HTMLInputElement).checked).toBe(false);
   });
 
@@ -304,8 +348,12 @@ describe("a host prop switched from a signal binding back to a plain value", () 
 
   it("stops following the signal after the switch", async () => {
     const { node, source } = switchToPlain("x", "y", "x", (className) => <p className={className as string}>x</p>);
-    await act(async () => { await Promise.resolve(); });
-    act(() => { source.value = "ignored"; });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      source.value = "ignored";
+    });
     expect(node.className).toBe("x");
   });
 
@@ -319,11 +367,17 @@ describe("a host prop switched from a signal binding back to a plain value", () 
     }
     const view = render(<App bound />);
     const button = view.container.querySelector("button")!;
-    act(() => { disabled.value = true; });
+    act(() => {
+      disabled.value = true;
+    });
     // The owner re-renders with `true` as React's snapshot of the prop.
-    act(() => { bump.value++; });
+    act(() => {
+      bump.value++;
+    });
     expect(button.disabled).toBe(true);
-    act(() => { disabled.value = false; });
+    act(() => {
+      disabled.value = false;
+    });
     expect(button.disabled).toBe(false);
 
     view.rerender(<App bound={false} />);
@@ -335,18 +389,26 @@ describe("a host prop switched from a signal binding back to a plain value", () 
     const className = signal("x");
     const mounts: number[] = [];
     function Child() {
-      useLayoutEffect(() => { mounts.push(1); }, []);
+      useLayoutEffect(() => {
+        mounts.push(1);
+      }, []);
       return <input data-testid="field" />;
     }
     function App({ bound }: { bound: boolean }) {
-      return <div className={bound ? className : "x"}><Child /></div>;
+      return (
+        <div className={bound ? className : "x"}>
+          <Child />
+        </div>
+      );
     }
     const view = render(<App bound />);
     const host = view.container.firstElementChild as HTMLElement;
     const field = view.getByTestId("field") as HTMLInputElement;
     field.value = "typed";
     field.focus();
-    act(() => { className.value = "y"; });
+    act(() => {
+      className.value = "y";
+    });
 
     view.rerender(<App bound={false} />);
     expect(view.container.firstElementChild).toBe(host);
@@ -358,7 +420,9 @@ describe("a host prop switched from a signal binding back to a plain value", () 
 
     view.rerender(<App bound />);
     expect(host.className).toBe("y");
-    act(() => { className.value = "z"; });
+    act(() => {
+      className.value = "z";
+    });
     expect(host.className).toBe("z");
   });
 
@@ -370,23 +434,35 @@ describe("a host prop switched from a signal binding back to a plain value", () 
     }
     const view = render(<App useSecond={false} />);
     const node = view.container.firstElementChild as HTMLElement;
-    act(() => { first.value = "y"; });
+    act(() => {
+      first.value = "y";
+    });
     view.rerender(<App useSecond />);
     expect(node.className).toBe("x");
-    act(() => { second.value = "z"; });
+    act(() => {
+      second.value = "z";
+    });
     expect(node.className).toBe("z");
   });
 
   it("forwards a stable user ref once across the switch", () => {
     const className = signal("x");
     const attachments: (Element | null)[] = [];
-    const userRef = (node: Element | null) => { attachments.push(node); };
+    const userRef = (node: Element | null) => {
+      attachments.push(node);
+    };
     function App({ bound }: { bound: boolean }) {
-      return <p ref={userRef} className={bound ? className : "x"}>x</p>;
+      return (
+        <p ref={userRef} className={bound ? className : "x"}>
+          x
+        </p>
+      );
     }
     const view = render(<App bound />);
     const node = view.container.firstElementChild as HTMLElement;
-    act(() => { className.value = "y"; });
+    act(() => {
+      className.value = "y";
+    });
     view.rerender(<App bound={false} />);
     expect(node.className).toBe("x");
     expect(attachments).toEqual([node, null, node]);
@@ -403,9 +479,13 @@ describe("a host prop switched from a signal binding back to a plain value", () 
     }
     const view = render(<App mode="visible" bound />);
     const node = view.container.querySelector("p")!;
-    act(() => { className.value = "y"; });
+    act(() => {
+      className.value = "y";
+    });
     view.rerender(<App mode="hidden" bound />);
-    await act(async () => { await Promise.resolve(); });
+    await act(async () => {
+      await Promise.resolve();
+    });
     view.rerender(<App mode="hidden" bound={false} />);
     view.rerender(<App mode="visible" bound={false} />);
     expect(view.container.querySelector("p")).toBe(node);
@@ -423,13 +503,21 @@ describe("a host prop switched from a signal binding back to a plain value", () 
     }
     const view = render(<App mode="visible" />);
     const node = view.container.querySelector("p")!;
-    act(() => { className.value = "y"; });
+    act(() => {
+      className.value = "y";
+    });
     view.rerender(<App mode="hidden" />);
-    await act(async () => { await Promise.resolve(); });
-    act(() => { className.value = "z"; });
+    await act(async () => {
+      await Promise.resolve();
+    });
+    act(() => {
+      className.value = "z";
+    });
     view.rerender(<App mode="visible" />);
     expect(node.className).toBe("z");
-    act(() => { className.value = "w"; });
+    act(() => {
+      className.value = "w";
+    });
     expect(node.className).toBe("w");
   });
 });

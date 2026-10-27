@@ -10,18 +10,20 @@ const isObject = (value: unknown): value is object =>
  * Built-in `next` methods always return a fresh ordinary result object whose
  * `done`/`value` are data properties, so reading them can never run user code.
  */
-const NATIVE_ITERATOR_NEXT: ReadonlySet<unknown> = new Set<unknown>([
-  Object.getPrototypeOf([][Symbol.iterator]()).next,
-  Object.getPrototypeOf(new Map().entries()).next,
-  Object.getPrototypeOf(new Set().values()).next,
-  Object.getPrototypeOf(""[Symbol.iterator]()).next,
-  // Generators are not listed: `yield*` hands back the delegate's result
-  // object as is, which can be any custom result with getters.
-  // Iterator helpers (`values().map(...)`) where the engine provides them.
-  Object.getPrototypeOf(
-    (([].values() as unknown as { map?: (fn: (value: unknown) => unknown) => object }).map?.((value) => value)) ?? {},
-  ).next,
-].filter((next) => typeof next === "function"));
+const NATIVE_ITERATOR_NEXT: ReadonlySet<unknown> = new Set<unknown>(
+  [
+    Object.getPrototypeOf([][Symbol.iterator]()).next,
+    Object.getPrototypeOf(new Map().entries()).next,
+    Object.getPrototypeOf(new Set().values()).next,
+    Object.getPrototypeOf(""[Symbol.iterator]()).next,
+    // Generators are not listed: `yield*` hands back the delegate's result
+    // object as is, which can be any custom result with getters.
+    // Iterator helpers (`values().map(...)`) where the engine provides them.
+    Object.getPrototypeOf(
+      ([].values() as unknown as { map?: (fn: (value: unknown) => unknown) => object }).map?.((value) => value) ?? {},
+    ).next,
+  ].filter((next) => typeof next === "function"),
+);
 
 /**
  * Defers `done`/`value` to the moment the loop reads them, each in its own
@@ -35,8 +37,12 @@ class CapturedIteratorResult<T> {
     this.#result = result;
     this.#capture = capture;
   }
-  get done(): boolean | undefined { return this.#capture(() => this.#result.done); }
-  get value(): T { return this.#capture(() => this.#result.value); }
+  get done(): boolean | undefined {
+    return this.#capture(() => this.#result.done);
+  }
+  get value(): T {
+    return this.#capture(() => this.#result.value);
+  }
 }
 
 /**
@@ -76,7 +82,9 @@ export function captureIteration<T>(capture: Capture, getIterable: () => Iterabl
       if (close == null) return { done: true, value: undefined };
       return capture(() => Reflect.apply(close, iterator, []) as IteratorResult<T>);
     },
-    [Symbol.iterator]() { return forwarded; },
+    [Symbol.iterator]() {
+      return forwarded;
+    },
   };
   return forwarded;
 }
@@ -99,7 +107,9 @@ export function captureForIn(capture: Capture, getObject: () => unknown): Iterab
   const forwarded: Iterator<string> & Iterable<string> = {
     next: () => capture(() => keys.next()),
     return: () => capture(() => keys.return()),
-    [Symbol.iterator]() { return forwarded; },
+    [Symbol.iterator]() {
+      return forwarded;
+    },
   };
   return forwarded;
 }

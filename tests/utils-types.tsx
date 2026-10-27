@@ -23,11 +23,7 @@ const keyedMap = (
   </For>
 );
 
-const indexed = (
-  <Index each={users}>
-    {(user, index) => <p>{`${index}:${user().name}`}</p>}
-  </Index>
-);
+const indexed = <Index each={users}>{(user, index) => <p>{`${index}:${user().name}`}</p>}</Index>;
 
 const mode = signal<"list" | "details" | undefined>("list");
 const matched = (
@@ -54,44 +50,83 @@ const matched = (
 );
 
 const falsy = signal<false | 0 | "" | null | undefined>(false);
-const falsyMatch = <Match when={falsy} equals={false}>{(value) => {
-  const exact: false = value;
-  return <p>{String(exact)}</p>;
-}}</Match>;
-const zeroMatch = <Match when={signal<number>(0)} equals={0}>{(value) => {
-  return <p>{value}</p>;
-}}</Match>;
-const nullMatch = <Match when={signal<null | string>(null)} equals={null}>{(value) => {
-  const exact: null = value;
-  return <p>{String(exact)}</p>;
-}}</Match>;
-const emptyStringMatch = <Match when={signal<string>("")} equals="">{(value) => {
-  const exact: "" = value;
-  return <p>{exact}</p>;
-}}</Match>;
+const falsyMatch = (
+  <Match when={falsy} equals={false}>
+    {(value) => {
+      const exact: false = value;
+      return <p>{String(exact)}</p>;
+    }}
+  </Match>
+);
+const zeroMatch = (
+  <Match when={signal<number>(0)} equals={0}>
+    {(value) => {
+      return <p>{value}</p>;
+    }}
+  </Match>
+);
+const nullMatch = (
+  <Match when={signal<null | string>(null)} equals={null}>
+    {(value) => {
+      const exact: null = value;
+      return <p>{String(exact)}</p>;
+    }}
+  </Match>
+);
+const emptyStringMatch = (
+  <Match when={signal<string>("")} equals="">
+    {(value) => {
+      const exact: "" = value;
+      return <p>{exact}</p>;
+    }}
+  </Match>
+);
 
 // A broad primitive type still narrows to the equals literal for callback children.
-const broadStringMatch = <Match when={signal<string>("list")} equals="list">{(value) => {
-  const exact: "list" = value;
-  return <p>{exact.toUpperCase()}</p>;
-}}</Match>;
-const broadNumberMatch = <Match when={signal<number>(1)} equals={1}>{(value) => {
-  return <p>{value}</p>;
-}}</Match>;
+const broadStringMatch = (
+  <Match when={signal<string>("list")} equals="list">
+    {(value) => {
+      const exact: "list" = value;
+      return <p>{exact.toUpperCase()}</p>;
+    }}
+  </Match>
+);
+const broadNumberMatch = (
+  <Match when={signal<number>(1)} equals={1}>
+    {(value) => {
+      return <p>{value}</p>;
+    }}
+  </Match>
+);
 
 type View = "list" | "details";
-const unionMatch = <Match when={signal<View>("list")} equals="list">{(value) => {
-  const exact: "list" = value;
-  return <p>{exact}</p>;
-}}</Match>;
+const unionMatch = (
+  <Match when={signal<View>("list")} equals="list">
+    {(value) => {
+      const exact: "list" = value;
+      return <p>{exact}</p>;
+    }}
+  </Match>
+);
 
-const explicitUndefinedMatch = <Match when={mode} equals={undefined}>{(value) => {
-  const exact: undefined = value;
-  return <p>{String(exact)}</p>;
-}}</Match>;
+const explicitUndefinedMatch = (
+  <Match when={mode} equals={undefined}>
+    {(value) => {
+      const exact: undefined = value;
+      return <p>{String(exact)}</p>;
+    }}
+  </Match>
+);
 
-// @ts-expect-error equals must be assignable to the value type of when.
-const invalidEquals = <Match when={mode} equals={42}><p>invalid</p></Match>;
+const invalidEquals = (
+  <Match
+    when={mode}
+    // @ts-expect-error equals must be assignable to the value type of when.
+    equals={42}
+  >
+    <p>invalid</p>
+  </Match>
+);
 
 // @ts-expect-error For requires an identity key; use Index for positional lists.
 const missingKey = <For each={users}>{(user) => <p>{user.name}</p>}</For>;
@@ -143,7 +178,12 @@ const wideShow = (
       const n: number = value;
       // @ts-expect-error null is removed.
       const nil: null = value;
-      return <p>{n}{String(nil)}</p>;
+      return (
+        <p>
+          {n}
+          {String(nil)}
+        </p>
+      );
     }}
   </Show>
 );

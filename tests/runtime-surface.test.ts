@@ -1,13 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { coreRuntime } from "../src/core/core-runtime.js";
-import {
-  setActiveRenderCollector,
-  type RenderDependency,
-} from "../src/core/render-tracking.js";
+import { setActiveRenderCollector, type RenderDependency } from "../src/core/render-tracking.js";
 import { SIGNAL_BRAND } from "../src/core/signal-brand.js";
 import { computed, isSignal, signal } from "../src/index.js";
 
-const publicGraphNames = /^(?:deps|depsTail|subs|subsTail|runtimeToken|node|kind|flags|revision|renderListeners|protocolListeners)$/i;
+const publicGraphNames =
+  /^(?:deps|depsTail|subs|subsTail|runtimeToken|node|kind|flags|revision|renderListeners|protocolListeners)$/i;
 
 function ownReadableShape(value: object) {
   const prototype = Object.getPrototypeOf(value) as object;
@@ -43,9 +41,9 @@ describe("public runtime readable surface", () => {
       expect(new Set(shape.ownKeys)).toEqual(new Set([SIGNAL_BRAND]));
       expect(shape.prototypeNames).toEqual(expect.arrayContaining(["constructor", "value", "peek"]));
       expect(shape.prototypeNames.some((name) => publicGraphNames.test(name))).toBe(false);
-      expect(shape.prototypeNames).not.toEqual(expect.arrayContaining([
-        "getRenderVersion", "subscribeRender", "markWatched", "hasSubscribers",
-      ]));
+      expect(shape.prototypeNames).not.toEqual(
+        expect.arrayContaining(["getRenderVersion", "subscribeRender", "markWatched", "hasSubscribers"]),
+      );
       expect(shape.prototypeSymbols).toEqual([]);
       expect("getRenderVersion" in readable).toBe(false);
       expect("subscribeRender" in readable).toBe(false);
@@ -56,7 +54,9 @@ describe("public runtime readable surface", () => {
     const readable = signal(1);
     let dependency: RenderDependency | undefined;
     const previous = setActiveRenderCollector({
-      add(next) { dependency = next; },
+      add(next) {
+        dependency = next;
+      },
     });
     try {
       expect(readable.value).toBe(1);

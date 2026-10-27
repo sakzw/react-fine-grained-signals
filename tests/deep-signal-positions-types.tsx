@@ -30,7 +30,11 @@ function Positions() {
       <div style={deepStyle} />
       {/* @ts-expect-error A deep signal is not a supported child. */}
       <p>{deepList}</p>
-      <output>{value}{length}{first}</output>
+      <output>
+        {value}
+        {length}
+        {first}
+      </output>
     </>
   );
 }

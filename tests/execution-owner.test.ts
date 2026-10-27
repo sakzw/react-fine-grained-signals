@@ -42,31 +42,37 @@ describe("execution owner scopes", () => {
   it("restores synchronous and stacked owners, including out-of-order cleanup", () => {
     const parent: ExecutionOwner = graphOwner;
     const child: ExecutionOwner = renderOwner;
-    expect(withExecutionOwner(parent, () => {
-      expect(executionContext.owner).toBe(parent);
-      const restoreChild = pushExecutionOwner(child);
-      const restoreParent = pushExecutionOwner(parent);
-      restoreChild();
-      expect(executionContext.owner).toBe(parent);
-      restoreParent();
-      expect(executionContext.owner).toBe(parent);
-      return withSynchronousExecutionOwner(UNTRACKED_OWNER, () => {
-        expect(executionContext.owner).toBe(UNTRACKED_OWNER);
-        return 42;
-      });
-    })).toBe(42);
+    expect(
+      withExecutionOwner(parent, () => {
+        expect(executionContext.owner).toBe(parent);
+        const restoreChild = pushExecutionOwner(child);
+        const restoreParent = pushExecutionOwner(parent);
+        restoreChild();
+        expect(executionContext.owner).toBe(parent);
+        restoreParent();
+        expect(executionContext.owner).toBe(parent);
+        return withSynchronousExecutionOwner(UNTRACKED_OWNER, () => {
+          expect(executionContext.owner).toBe(UNTRACKED_OWNER);
+          return 42;
+        });
+      }),
+    ).toBe(42);
     expect(executionContext.owner).toBeUndefined();
     expect(executionContext.frames).toEqual([]);
   });
 
   it("restores ownership after synchronous callback errors", () => {
-    expect(() => withSynchronousExecutionOwner(graphOwner, () => {
-      throw new Error("owner callback");
-    })).toThrow("owner callback");
+    expect(() =>
+      withSynchronousExecutionOwner(graphOwner, () => {
+        throw new Error("owner callback");
+      }),
+    ).toThrow("owner callback");
     expect(executionContext.owner).toBeUndefined();
-    expect(() => withExecutionOwner(renderOwner, () => {
-      throw new Error("stacked callback");
-    })).toThrow("stacked callback");
+    expect(() =>
+      withExecutionOwner(renderOwner, () => {
+        throw new Error("stacked callback");
+      }),
+    ).toThrow("stacked callback");
     expect(executionContext.owner).toBeUndefined();
     expect(executionContext.frames).toEqual([]);
   });

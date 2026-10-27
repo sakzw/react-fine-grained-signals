@@ -132,9 +132,7 @@ describe("deepCollectionSignal", () => {
       enumerable: true,
     }) as { collection: Map<string, number> };
     const mapState = deepCollectionSignal(withMap);
-    expect(() => mapState.value.collection).toThrow(
-      /non-configurable, non-writable object property/,
-    );
+    expect(() => mapState.value.collection).toThrow(/non-configurable, non-writable object property/);
 
     const withSet = Object.defineProperty({}, "collection", {
       value: new Set([1]),
@@ -143,9 +141,7 @@ describe("deepCollectionSignal", () => {
       enumerable: true,
     }) as { collection: Set<number> };
     const setState = deepCollectionSignal(withSet);
-    expect(() => setState.value.collection).toThrow(
-      /non-configurable, non-writable object property/,
-    );
+    expect(() => setState.value.collection).toThrow(/non-configurable, non-writable object property/);
 
     // An opaque value needs no substitution, so it is still readable.
     const withDate = Object.defineProperty({}, "at", {

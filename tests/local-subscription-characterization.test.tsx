@@ -26,9 +26,11 @@ class Boundary extends Component<{ children: ReactNode }, { error: unknown }> {
     return { error };
   }
   render() {
-    return this.state.error === undefined
-      ? this.props.children
-      : <output data-testid="caught">{String((this.state.error as Error).message)}</output>;
+    return this.state.error === undefined ? (
+      this.props.children
+    ) : (
+      <output data-testid="caught">{String((this.state.error as Error).message)}</output>
+    );
   }
 }
 
@@ -42,12 +44,16 @@ describe("useSignalValue subscription", () => {
     }
     const view = render(<View />);
     expect(screen.getByText("1")).toBeTruthy();
-    act(() => { source.value = 2; });
+    act(() => {
+      source.value = 2;
+    });
     expect(screen.getByText("2")).toBeTruthy();
     const rendersBeforeUnmount = renders.mock.calls.length;
 
     view.unmount();
-    act(() => { source.value = 3; });
+    act(() => {
+      source.value = 3;
+    });
     expect(renders).toHaveBeenCalledTimes(rendersBeforeUnmount);
   });
 
@@ -72,9 +78,13 @@ describe("useSignalValue subscription", () => {
     }
     render(<View />);
     const initial = renders.mock.calls.length;
-    act(() => { source.value = 3; });
+    act(() => {
+      source.value = 3;
+    });
     expect(renders).toHaveBeenCalledTimes(initial);
-    act(() => { source.value = 4; });
+    act(() => {
+      source.value = 4;
+    });
     expect(screen.getByText("0")).toBeTruthy();
     expect(renders.mock.calls.length).toBeGreaterThan(initial);
   });
@@ -89,11 +99,17 @@ describe("useSignalValue subscription", () => {
     }
     render(<View />);
     expect(screen.getByText("left")).toBeTruthy();
-    act(() => { flag.value = false; });
+    act(() => {
+      flag.value = false;
+    });
     expect(screen.getByText("right")).toBeTruthy();
-    act(() => { left.value = "ignored"; });
+    act(() => {
+      left.value = "ignored";
+    });
     expect(screen.getByText("right")).toBeTruthy();
-    act(() => { right.value = "updated"; });
+    act(() => {
+      right.value = "updated";
+    });
     expect(screen.getByText("updated")).toBeTruthy();
   });
 
@@ -107,10 +123,18 @@ describe("useSignalValue subscription", () => {
     function View() {
       return <output>{useSignalValue(fragile)}</output>;
     }
-    render(<Boundary><View /></Boundary>);
+    render(
+      <Boundary>
+        <View />
+      </Boundary>,
+    );
     expect(screen.getByText("1")).toBeTruthy();
 
-    expect(() => act(() => { source.value = 2; })).not.toThrow();
+    expect(() =>
+      act(() => {
+        source.value = 2;
+      }),
+    ).not.toThrow();
     expect(screen.getByTestId("caught").textContent).toBe("computed failure");
   });
 });
@@ -122,11 +146,15 @@ describe("direct JSX binding subscription", () => {
     const field = screen.getByTestId("field") as HTMLInputElement;
     expect(field.value).toBe("a");
 
-    act(() => { text.value = "b"; });
+    act(() => {
+      text.value = "b";
+    });
     expect(field.value).toBe("b");
 
     view.unmount();
-    act(() => { text.value = "c"; });
+    act(() => {
+      text.value = "c";
+    });
     expect(field.value).toBe("b");
   });
 
@@ -136,9 +164,13 @@ describe("direct JSX binding subscription", () => {
     render(<input data-testid="field" bindValue={signal("")} data-label={label} />);
     const field = screen.getByTestId("field");
     expect(field.getAttribute("data-label")).toBe("n1");
-    act(() => { source.value = 3; });
+    act(() => {
+      source.value = 3;
+    });
     expect(field.getAttribute("data-label")).toBe("n1");
-    act(() => { source.value = 4; });
+    act(() => {
+      source.value = 4;
+    });
     expect(field.getAttribute("data-label")).toBe("n0");
   });
 });
@@ -159,7 +191,9 @@ describe("useSignalTracking subscription", () => {
     expect(coreRuntime.hasSubscribers(first)).toBe(false);
     expect(coreRuntime.hasSubscribers(second)).toBe(true);
 
-    act(() => { first.value = 2; });
+    act(() => {
+      first.value = 2;
+    });
     expect(screen.getByTestId("out").textContent).toBe("10");
 
     view.unmount();

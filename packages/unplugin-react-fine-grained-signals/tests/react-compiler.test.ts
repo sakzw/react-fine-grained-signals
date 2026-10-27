@@ -35,8 +35,7 @@ import {
   type ReactFineGrainedSignalsTransform,
 } from "../src/internal/transform.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const MODULES = "__modules";
 const EXPORTS = "__exports";
@@ -62,20 +61,13 @@ const moduleLinker: PluginObject = {
         if (!t.isImportSpecifier(specifier) || !t.isIdentifier(specifier.imported)) {
           throw path.buildCodeFrameError("fixtures only use named imports");
         }
-        return t.objectProperty(
-          t.identifier(specifier.imported.name),
-          t.cloneNode(specifier.local),
-        );
+        return t.objectProperty(t.identifier(specifier.imported.name), t.cloneNode(specifier.local));
       });
       path.replaceWith(
         t.variableDeclaration("const", [
           t.variableDeclarator(
             t.objectPattern(properties),
-            t.memberExpression(
-              t.identifier(MODULES),
-              t.stringLiteral(path.node.source.value),
-              true,
-            ),
+            t.memberExpression(t.identifier(MODULES), t.stringLiteral(path.node.source.value), true),
           ),
         ]),
       );
@@ -106,7 +98,7 @@ const moduleLinker: PluginObject = {
               t.memberExpression(t.identifier(EXPORTS), t.identifier(name)),
               t.identifier(name),
             ),
-          )
+          ),
         ),
       ]);
     },
@@ -168,21 +160,13 @@ function applyReactCompiler(
   return { code: result.code, events };
 }
 
-function compilePipeline(
-  source: string,
-  options: PipelineOptions = {},
-): { code: string; events: LoggerEvent[] } {
-  const transformed = options.signalsTransform === false
-    ? source
-    : applySignalsTransform(source, options);
+function compilePipeline(source: string, options: PipelineOptions = {}): { code: string; events: LoggerEvent[] } {
+  const transformed = options.signalsTransform === false ? source : applySignalsTransform(source, options);
   if (options.compile === false) return { code: transformed, events: [] };
   return applyReactCompiler(transformed);
 }
 
-async function loadModule(
-  source: string,
-  options: PipelineOptions = {},
-): Promise<Record<string, unknown>> {
+async function loadModule(source: string, options: PipelineOptions = {}): Promise<Record<string, unknown>> {
   const { code } = compilePipeline(source, options);
   const jsx = await transformWithOxc(code, "Fixture.jsx", {
     lang: "jsx",
@@ -392,9 +376,13 @@ export function Profile() {
     const container = mount(module.Profile);
     const state = module.state as Signal<{ user: { profile: { name: string } } }>;
     expect(container.textContent).toBe("Ada");
-    act(() => { state.value.user.profile.name = "Bea"; });
+    act(() => {
+      state.value.user.profile.name = "Bea";
+    });
     expect(container.textContent).toBe("Bea");
-    act(() => { state.value.user = { profile: { name: "Cleo" } }; });
+    act(() => {
+      state.value.user = { profile: { name: "Cleo" } };
+    });
     expect(container.textContent).toBe("Cleo");
   });
 
@@ -634,11 +622,13 @@ describe("React Compiler runtime behavior", () => {
     const root = createRoot(container);
     mounted.push({ root, container });
     act(() => {
-      root.render(createElement(
-        Suspense,
-        { fallback: createElement("i", null, "waiting") },
-        createElement(module.Counter as FunctionComponent),
-      ));
+      root.render(
+        createElement(
+          Suspense,
+          { fallback: createElement("i", null, "waiting") },
+          createElement(module.Counter as FunctionComponent),
+        ),
+      );
     });
     expect(container.textContent).toBe("waiting");
 

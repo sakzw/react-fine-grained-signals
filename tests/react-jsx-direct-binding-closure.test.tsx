@@ -73,12 +73,16 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
       expect(box.className).toBe("plain");
       expect(coreRuntime.hasSubscribers(cls)).toBe(false);
 
-      act(() => { cls.value = "late"; });
+      act(() => {
+        cls.value = "late";
+      });
       expect(box.className).toBe("plain");
 
       // The sibling style binding was kept and still follows its signal.
       expect(coreRuntime.hasSubscribers(style)).toBe(true);
-      act(() => { style.value = { color: "blue", width: 4 }; });
+      act(() => {
+        style.value = { color: "blue", width: 4 };
+      });
       expect(box.style.cssText).toBe("color: blue; width: 4px;");
       expect(box.className).toBe("plain");
     });
@@ -102,11 +106,15 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
       expect(box.style.cssText).toBe("color: blue;");
       expect(coreRuntime.hasSubscribers(style)).toBe(false);
 
-      act(() => { style.value = { color: "pink", height: 3 }; });
+      act(() => {
+        style.value = { color: "pink", height: 3 };
+      });
       expect(box.style.cssText).toBe("color: blue;");
 
       expect(coreRuntime.hasSubscribers(cls)).toBe(true);
-      act(() => { cls.value = "next"; });
+      act(() => {
+        cls.value = "next";
+      });
       expect(box.className).toBe("next");
       expect(box.style.cssText).toBe("color: blue;");
     });
@@ -127,12 +135,16 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
     const { container } = mount(<App />);
     const box = container.firstChild as HTMLElement;
 
-    act(() => { cls.value = "moved"; });
+    act(() => {
+      cls.value = "moved";
+    });
     expect(box.className).toBe("moved");
     act(() => setPlain(true));
     await settle();
     expect(box.className).toBe("snapshot");
-    act(() => { cls.value = "late"; });
+    act(() => {
+      cls.value = "late";
+    });
     expect(box.className).toBe("snapshot");
   });
 
@@ -148,7 +160,9 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
     const { container } = mount(<App />);
     const box = container.firstChild as HTMLElement;
 
-    act(() => { style.value = { color: "green", width: 2 }; });
+    act(() => {
+      style.value = { color: "green", width: 2 };
+    });
     act(() => setPlain(true));
     await settle();
     expect(box.style.cssText).toBe("color: red;");
@@ -175,11 +189,17 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
       expect(container.firstChild).toBe(box);
       expect(coreRuntime.hasSubscribers(a)).toBe(false);
 
-      act(() => { a.value = "late-a"; });
+      act(() => {
+        a.value = "late-a";
+      });
       expect(box.className).toBe("b");
-      act(() => { b.value = "b2"; });
+      act(() => {
+        b.value = "b2";
+      });
       expect(box.className).toBe("b2");
-      act(() => { style.value = { color: "blue" }; });
+      act(() => {
+        style.value = { color: "blue" };
+      });
       expect(box.style.cssText).toBe("color: blue;");
     });
   }
@@ -193,9 +213,11 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
     function App() {
       const [moved, setMoved] = useState(false);
       move = setMoved;
-      return moved
-        ? <div style={style as never} className="plain" title={value as never} />
-        : <div style={style as never} className={value as never} />;
+      return moved ? (
+        <div style={style as never} className="plain" title={value as never} />
+      ) : (
+        <div style={style as never} className={value as never} />
+      );
     }
     const { container } = mount(<App />);
     const box = container.firstChild as HTMLElement;
@@ -205,7 +227,9 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
     expect(container.firstChild).toBe(box);
     expect(box.className).toBe("plain");
     expect(box.title).toBe("v1");
-    act(() => { value.value = "v2"; });
+    act(() => {
+      value.value = "v2";
+    });
     expect(box.className).toBe("plain");
     expect(box.title).toBe("v2");
   });
@@ -239,16 +263,22 @@ describe("a binding removed or replaced while a sibling binding keeps the ref al
       const { container } = mount(<App />, strict);
       const box = container.firstChild as HTMLElement;
 
-      act(() => { style.value = { color: "red", width: 10 }; });
+      act(() => {
+        style.value = { color: "red", width: 10 };
+      });
       pending = { color: "red" };
       act(() => setPlain(true));
       await settle();
       expect(box.style.cssText).toBe("color: red;");
       expect(box.className).toBe("plain");
 
-      act(() => { style.value = { color: "blue", padding: 2 }; });
+      act(() => {
+        style.value = { color: "blue", padding: 2 };
+      });
       expect(box.style.cssText).toBe("color: blue; padding: 2px;");
-      act(() => { cls.value = "late"; });
+      act(() => {
+        cls.value = "late";
+      });
       expect(box.className).toBe("plain");
       expect(container.firstChild).toBe(box);
     });

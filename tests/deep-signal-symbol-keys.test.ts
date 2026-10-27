@@ -15,9 +15,21 @@ describe("deepCollectionSignal reactive symbol keys", () => {
     const values: Array<number | undefined> = [];
     const mapPresence: boolean[] = [];
     const setPresence: boolean[] = [];
-    disposers.push(effect(() => { values.push(map.value.get(key)); }));
-    disposers.push(effect(() => { mapPresence.push(map.value.has(key)); }));
-    disposers.push(effect(() => { setPresence.push(set.value.has(key)); }));
+    disposers.push(
+      effect(() => {
+        values.push(map.value.get(key));
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        mapPresence.push(map.value.has(key));
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        setPresence.push(set.value.has(key));
+      }),
+    );
 
     expect(values).toEqual([undefined]);
     expect(mapPresence).toEqual([false]);
@@ -86,12 +98,15 @@ describe("deepCollectionSignal reactive symbol keys", () => {
 
   it("treats opaque proxy objects as native weak collection keys", () => {
     let ownKeysCalls = 0;
-    const opaque = new Proxy({}, {
-      ownKeys() {
-        ownKeysCalls += 1;
-        throw new Error("weak collection keys must not be traversed");
+    const opaque = new Proxy(
+      {},
+      {
+        ownKeys() {
+          ownKeysCalls += 1;
+          throw new Error("weak collection keys must not be traversed");
+        },
       },
-    });
+    );
     const revocable = Proxy.revocable({}, {});
     revocable.revoke();
     const keys = [opaque, revocable.proxy];
@@ -104,10 +119,28 @@ describe("deepCollectionSignal reactive symbol keys", () => {
       expect(capture(() => reactiveMap.value.get(key))).toEqual(capture(() => nativeMap.get(key)));
       expect(capture(() => reactiveMap.value.has(key))).toEqual(capture(() => nativeMap.has(key)));
       expect(capture(() => reactiveSet.value.has(key))).toEqual(capture(() => nativeSet.has(key)));
-      expect(capture(() => { reactiveMap.value.set(key, 1); return "ok"; }))
-        .toEqual(capture(() => { nativeMap.set(key, 1); return "ok"; }));
-      expect(capture(() => { reactiveSet.value.add(key); return "ok"; }))
-        .toEqual(capture(() => { nativeSet.add(key); return "ok"; }));
+      expect(
+        capture(() => {
+          reactiveMap.value.set(key, 1);
+          return "ok";
+        }),
+      ).toEqual(
+        capture(() => {
+          nativeMap.set(key, 1);
+          return "ok";
+        }),
+      );
+      expect(
+        capture(() => {
+          reactiveSet.value.add(key);
+          return "ok";
+        }),
+      ).toEqual(
+        capture(() => {
+          nativeSet.add(key);
+          return "ok";
+        }),
+      );
       expect(reactiveMap.value.get(key)).toBe(1);
       expect(reactiveSet.value.has(key)).toBe(true);
     }
@@ -118,11 +151,24 @@ describe("deepCollectionSignal reactive symbol keys", () => {
   it("preserves reactive reads for local and well-known symbols", () => {
     const local = Symbol("local-map-key");
     const wellKnown = Symbol.iterator;
-    const map = deepCollectionSignal(new Map<symbol, number>([[local, 1], [wellKnown, 3]]));
+    const map = deepCollectionSignal(
+      new Map<symbol, number>([
+        [local, 1],
+        [wellKnown, 3],
+      ]),
+    );
     const localValues: Array<number | undefined> = [];
     const wellKnownValues: Array<number | undefined> = [];
-    disposers.push(effect(() => { localValues.push(map.value.get(local)); }));
-    disposers.push(effect(() => { wellKnownValues.push(map.value.get(wellKnown)); }));
+    disposers.push(
+      effect(() => {
+        localValues.push(map.value.get(local));
+      }),
+    );
+    disposers.push(
+      effect(() => {
+        wellKnownValues.push(map.value.get(wellKnown));
+      }),
+    );
 
     map.value.set(local, 2);
     map.value.set(wellKnown, 4);
@@ -142,8 +188,16 @@ describe("deepCollectionSignal reactive symbol keys", () => {
     const weakValues: Array<number | undefined> = [];
     const weakPresence: boolean[] = [];
     if (supportsWeakSymbolKeys) {
-      disposers.push(effect(() => { weakValues.push(weakMap.value.get(local as unknown as object)); }));
-      disposers.push(effect(() => { weakPresence.push(weakSet.value.has(wellKnown as unknown as object)); }));
+      disposers.push(
+        effect(() => {
+          weakValues.push(weakMap.value.get(local as unknown as object));
+        }),
+      );
+      disposers.push(
+        effect(() => {
+          weakPresence.push(weakSet.value.has(wellKnown as unknown as object));
+        }),
+      );
       weakMap.value.set(local as unknown as object, 8);
       weakSet.value.add(wellKnown as unknown as object);
     }
@@ -155,14 +209,20 @@ describe("deepCollectionSignal reactive symbol keys", () => {
     const key = {};
     const map = deepCollectionSignal(new Map<object, number>([[key, 1]]));
     const firstValues: Array<number | undefined> = [];
-    const disposeFirst = effect(() => { firstValues.push(map.value.get(key)); });
+    const disposeFirst = effect(() => {
+      firstValues.push(map.value.get(key));
+    });
     disposeFirst();
 
     map.value.set(key, 2);
     expect(firstValues).toEqual([1]);
 
     const nextValues: Array<number | undefined> = [];
-    disposers.push(effect(() => { nextValues.push(map.value.get(key)); }));
+    disposers.push(
+      effect(() => {
+        nextValues.push(map.value.get(key));
+      }),
+    );
     map.value.set(key, 3);
     expect(nextValues).toEqual([2, 3]);
     expect(firstValues).toEqual([1]);

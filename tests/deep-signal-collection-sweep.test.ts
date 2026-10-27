@@ -6,9 +6,15 @@ import type { DeepSignalRuntimeAdapter, DeepSignalSource } from "../src/core/dee
 const makeSource = <T>(initial: T): DeepSignalSource<T> => {
   let value = initial;
   return {
-    get value() { return value; },
-    set value(next) { value = next; },
-    peek() { return value; },
+    get value() {
+      return value;
+    },
+    set value(next) {
+      value = next;
+    },
+    peek() {
+      return value;
+    },
   };
 };
 
@@ -23,8 +29,13 @@ function makeHarness() {
       versions.push(source);
       return source;
     },
-    markWatched(source) { active.add(source); },
-    hasSubscribers(source) { checked.push(source); return active.has(source); },
+    markWatched(source) {
+      active.add(source);
+    },
+    hasSubscribers(source) {
+      checked.push(source);
+      return active.has(source);
+    },
     batch: (callback) => callback(),
     untracked: (callback) => callback(),
     isSignal: () => false,

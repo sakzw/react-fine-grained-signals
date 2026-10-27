@@ -10,23 +10,13 @@ import type { Task } from "../lib/task-store.js";
  * would have nothing here to notify, and reading it inside <For>'s own
  * render instead would make every row rerender together.
  */
-export function TaskRow({
-  task,
-  onToggle,
-}: {
-  task: Task;
-  onToggle: (id: string) => void;
-}) {
+export function TaskRow({ task, onToggle }: { task: Task; onToggle: (id: string) => void }) {
   useSignalTracking();
 
   return (
     <li className={task.done ? "task-row done" : "task-row"}>
       <label>
-        <input
-          type="checkbox"
-          checked={task.done}
-          onChange={() => onToggle(task.id)}
-        />
+        <input type="checkbox" checked={task.done} onChange={() => onToggle(task.id)} />
         {task.title}
       </label>
     </li>

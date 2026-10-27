@@ -96,12 +96,7 @@ const transformedMetadataKey = "reactFineGrainedSignalsTransformed";
 // transform made reactive out of memoization keeps those reads happening.
 // See development/design/react-compiler-compatibility.md for the measurements.
 const noMemoDirective = "use no memo";
-const memoizationDirectives = new Set([
-  "use memo",
-  "use forget",
-  "use no memo",
-  "use no forget",
-]);
+const memoizationDirectives = new Set(["use memo", "use forget", "use no memo", "use no forget"]);
 
 /** Adds the opt-out unless the author already stated a memoization choice. */
 function addNoMemoDirective(body: t.BlockStatement): boolean {
@@ -200,11 +195,7 @@ function isReactNamedImport(
 }
 
 /** Is `name` bound by `import * as React from "react"` or `import React from "react"`? */
-function isReactDefaultOrNamespaceImport(
-  path: NodePath,
-  name: string,
-  reactImportSource: string,
-): boolean {
+function isReactDefaultOrNamespaceImport(path: NodePath, name: string, reactImportSource: string): boolean {
   const resolved = resolveImportedBinding(path, name);
   return (
     resolved !== undefined &&
@@ -218,10 +209,7 @@ function isReactDefaultOrNamespaceImport(
 // Otherwise a same-named local helper (e.g. a homemade memoization cache)
 // could be mistaken for it and have a `useSignalTracking()` hook injected into a
 // function that is never actually rendered by React, which throws at runtime.
-function isKnownComponentWrapper(
-  path: NodePath<t.CallExpression>,
-  reactImportSource: string,
-): boolean {
+function isKnownComponentWrapper(path: NodePath<t.CallExpression>, reactImportSource: string): boolean {
   const callee = path.get("callee");
   if (callee.isIdentifier()) {
     const name = callee.node.name;
@@ -234,10 +222,7 @@ function isKnownComponentWrapper(
   const propertyName = getReadPropertyName(callee.node);
   if (propertyName !== "memo" && propertyName !== "forwardRef") return false;
   const object = callee.get("object");
-  return (
-    object.isIdentifier() &&
-    isReactDefaultOrNamespaceImport(path, object.node.name, reactImportSource)
-  );
+  return object.isIdentifier() && isReactDefaultOrNamespaceImport(path, object.node.name, reactImportSource);
 }
 
 /**
@@ -246,9 +231,7 @@ function isKnownComponentWrapper(
  * `getReadPropertyName` reads `items["map"]`; anything else is decided at
  * runtime and stays unnamed, which leaves the function untransformed.
  */
-function getPropertyKeyName(
-  node: t.ObjectProperty | t.ObjectMethod,
-): string | undefined {
+function getPropertyKeyName(node: t.ObjectProperty | t.ObjectMethod): string | undefined {
   const key = unwrapTransparent(node.key);
   if (node.computed) return t.isStringLiteral(key) ? key.value : undefined;
   if (t.isIdentifier(key)) return key.name;
@@ -724,18 +707,10 @@ function isNamespaceUseManagedSignalsImport(
   runtimeSource: string,
 ): boolean {
   const resolved = resolveImportedBinding(functionPath, name);
-  return (
-    resolved !== undefined &&
-    resolved.specifier.isImportNamespaceSpecifier() &&
-    resolved.source === runtimeSource
-  );
+  return resolved !== undefined && resolved.specifier.isImportNamespaceSpecifier() && resolved.source === runtimeSource;
 }
 
-function isNamedSignalTrackingImport(
-  functionPath: NodePath<t.Function>,
-  name: string,
-  importSource?: string,
-): boolean {
+function isNamedSignalTrackingImport(functionPath: NodePath<t.Function>, name: string, importSource?: string): boolean {
   const resolved = resolveImportedBinding(functionPath, name);
   if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return false;
   return (
@@ -766,22 +741,14 @@ function isSignalTrackingCallee(
   if (callee.isIdentifier()) {
     // A named re-export keeps the imported name, so this also recognizes
     // `useSignalTracking` aliases imported through application barrel modules.
-    return isNamedSignalTrackingImport(
-      functionPath,
-      callee.node.name,
-      allowBarrel ? undefined : importSource,
-    );
+    return isNamedSignalTrackingImport(functionPath, callee.node.name, allowBarrel ? undefined : importSource);
   }
   if (!callee.isMemberExpression()) return false;
   const object = callee.get("object");
   if (!object.isIdentifier()) return false;
   return (
     getReadPropertyName(callee.node) === "useSignalTracking" &&
-    isNamespaceSignalTrackingImport(
-      functionPath,
-      object.node.name,
-      allowBarrel ? undefined : importSource,
-    )
+    isNamespaceSignalTrackingImport(functionPath, object.node.name, allowBarrel ? undefined : importSource)
   );
 }
 
@@ -1024,9 +991,7 @@ function getOwnBindingName(path: NodePath<t.Function>): string | undefined {
  * the function and the slot at once, and it sits in its object literal exactly
  * where the equivalent `{ Row: ... }` property would, so the same climb applies.
  */
-function getKeyedAccessPath(
-  parent: NodePath,
-): { origin: NodePath; root: string; keys: string[] } | undefined {
+function getKeyedAccessPath(parent: NodePath): { origin: NodePath; root: string; keys: string[] } | undefined {
   if (parent.isAssignmentExpression()) {
     const left = parent.node.left;
     if (!t.isMemberExpression(left)) return undefined;
@@ -1039,7 +1004,7 @@ function getKeyedAccessPath(
   const keys = [key];
   // Climb out through however many object literals nest this property, until
   // the outermost one reaches a binding or a member-expression target.
-  for (let container = parent.parentPath; container.isObjectExpression(); ) {
+  for (let container = parent.parentPath; container.isObjectExpression();) {
     const holder = container.parentPath;
     if (holder === null) return undefined;
     if (holder.isVariableDeclarator() && t.isIdentifier(holder.node.id)) {
@@ -1047,9 +1012,7 @@ function getKeyedAccessPath(
     }
     if (holder.isAssignmentExpression() && t.isMemberExpression(holder.node.left)) {
       const path = getStaticMemberPath(holder.node.left);
-      return path === undefined
-        ? undefined
-        : { origin: parent, root: path.root, keys: [...path.keys, ...keys] };
+      return path === undefined ? undefined : { origin: parent, root: path.root, keys: [...path.keys, ...keys] };
     }
     if (!holder.isObjectProperty() || holder.node.value !== container.node) return undefined;
     const outerKey = getPropertyKeyName(holder.node);
@@ -1080,8 +1043,8 @@ function getKeyedAccessPath(
  * genuine compound component keeps its boundary.
  */
 function isKeyedRenderCallback(parent: NodePath): boolean {
-  return getKeyedSafetyUses(parent).some((slot) =>
-    slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node)
+  return getKeyedSafetyUses(parent).some(
+    (slot) => slot.parentPath !== null && isRenderCallbackInvocation(slot.parentPath.node, slot.node),
   );
 }
 
@@ -1122,12 +1085,7 @@ function getKeyedSlotUses(
  * `this` that stands for the object holding the slot -- and records the use it
  * reaches in `uses`. A chain that turns off the path records nothing.
  */
-function followKeyedChain(
-  start: NodePath,
-  keys: readonly string[],
-  includeDynamic: boolean,
-  uses: NodePath[],
-): void {
+function followKeyedChain(start: NodePath, keys: readonly string[], includeDynamic: boolean, uses: NodePath[]): void {
   let current = start;
   for (const [index, key] of keys.entries()) {
     const member = current.parentPath;
@@ -1180,7 +1138,7 @@ function getThisSlotUses(holder: NodePath): NodePath[] {
   if (key === undefined) return [];
   const keys = [key];
   const uses: NodePath[] = [];
-  for (let container: NodePath | null = holder.parentPath; container?.isObjectExpression(); ) {
+  for (let container: NodePath | null = holder.parentPath; container?.isObjectExpression();) {
     for (const reference of getObjectThisReferences(container)) {
       followKeyedChain(reference, keys, true, uses);
     }
@@ -1261,10 +1219,7 @@ function getObjectThisReferences(object: NodePath<t.ObjectExpression>): NodePath
  * `this` from a sibling member of the same object literal (`getThisSlotUses`).
  * Both safety exclusions -- per-item callback and plain call -- ask this list.
  */
-function getKeyedSafetyUses(
-  holder: NodePath,
-  access = getKeyedAccessPath(holder),
-): NodePath[] {
+function getKeyedSafetyUses(holder: NodePath, access = getKeyedAccessPath(holder)): NodePath[] {
   const uses = access === undefined ? [] : getKeyedSlotUses(access, true);
   uses.push(...getThisSlotUses(holder));
   return uses;
@@ -1299,12 +1254,7 @@ function getKeyedSafetyUses(
  * it costs a crash -- `{show && ns?.Home()}` is as much a conditional call
  * inside the caller as `{show && ns.Home()}` is.
  */
-function matchesKeyedLink(
-  member: NodePath,
-  object: NodePath,
-  key: string,
-  includeDynamic: boolean,
-): boolean {
+function matchesKeyedLink(member: NodePath, object: NodePath, key: string, includeDynamic: boolean): boolean {
   if (!member.isMemberExpression() && !member.isOptionalMemberExpression()) return false;
   if (member.node.object !== object.node) return false;
   const name = getReadPropertyName(member.node);
@@ -1392,14 +1342,16 @@ function isPlainCalledComponent(path: NodePath<t.Function>): boolean {
   const access = getKeyedAccessPath(holder);
   // An object-literal slot with no root binding (an array element, a call
   // argument) can still be reached through `this` by a sibling member.
-  const key = access?.keys.at(-1) ??
+  const key =
+    access?.keys.at(-1) ??
     (holder.isObjectProperty() || holder.isObjectMethod() ? getPropertyKeyName(holder.node) : undefined);
   if (key !== undefined) {
     return isComponentName(key) && getKeyedSafetyUses(holder, access).some(isPlainCallee);
   }
-  return getOwnBindingReferences(path, holder)?.some((reference) =>
-    isPlainCallee(climbTransparentWrappers(reference))
-  ) ?? false;
+  return (
+    getOwnBindingReferences(path, holder)?.some((reference) => isPlainCallee(climbTransparentWrappers(reference))) ??
+    false
+  );
 }
 
 /**
@@ -1408,10 +1360,7 @@ function isPlainCalledComponent(path: NodePath<t.Function>): boolean {
  * binding that belongs to some other function. `holder` is the climbed parent
  * the binding is looked up from, matching `isRenderCallback`'s own lookup.
  */
-function getOwnBindingReferences(
-  path: NodePath<t.Function>,
-  holder: NodePath,
-): NodePath[] | undefined {
+function getOwnBindingReferences(path: NodePath<t.Function>, holder: NodePath): NodePath[] | undefined {
   const name = getOwnBindingName(path);
   if (name === undefined || !isComponentName(name)) return undefined;
   const binding = holder.scope.getBinding(name);
@@ -1431,9 +1380,7 @@ function getOwnBindingReferences(
 function isAlsoMountedThroughJsx(path: NodePath<t.Function>): boolean {
   const holder = climbTransparentWrappers(path).parentPath;
   if (holder === null || path.isObjectMethod()) return false;
-  return getOwnBindingReferences(path, holder)?.some((reference) =>
-    reference.isJSXIdentifier()
-  ) ?? false;
+  return getOwnBindingReferences(path, holder)?.some((reference) => reference.isJSXIdentifier()) ?? false;
 }
 
 // A function handed to an array iteration method runs a variable number of
@@ -1526,10 +1473,7 @@ function renderCallbackCallers(path: NodePath<t.Function>): true | NodePath<t.Fu
 }
 
 /** The function `name`, referenced from `origin`'s scope, is bound to. */
-function resolveReferencedFunction(
-  origin: NodePath,
-  name: string,
-): NodePath<t.Function> | undefined {
+function resolveReferencedFunction(origin: NodePath, name: string): NodePath<t.Function> | undefined {
   const binding = origin.scope.getBinding(name);
   // A reassigned name (`let f = a; f = b;`) holds a function chosen at run time.
   if (binding === undefined || binding.constantViolations.length > 0) return undefined;
@@ -1592,7 +1536,11 @@ function resolveKeyedFunction(
     const found = resolveObjectLiteralSlot(unwrapTransparentPath(binding.path.get("init") as NodePath), access.keys);
     // ...and so is a literal's slot the module assigns again (`o.total = ext`).
     if (found !== undefined) {
-      return slotUses.some((slot) => slot.parentPath?.isAssignmentExpression() === true && (slot.parentPath.node as t.AssignmentExpression).left === slot.node)
+      return slotUses.some(
+        (slot) =>
+          slot.parentPath?.isAssignmentExpression() === true &&
+          (slot.parentPath.node as t.AssignmentExpression).left === slot.node,
+      )
         ? undefined
         : found;
     }
@@ -1603,11 +1551,7 @@ function resolveKeyedFunction(
   const assigned: NodePath<t.AssignmentExpression>[] = [];
   for (const slot of slotUses) {
     const parent = slot.parentPath;
-    if (
-      parent !== null &&
-      parent.isAssignmentExpression({ operator: "=" }) &&
-      parent.node.left === slot.node
-    ) {
+    if (parent !== null && parent.isAssignmentExpression({ operator: "=" }) && parent.node.left === slot.node) {
       assigned.push(parent);
     }
   }
@@ -1628,14 +1572,12 @@ function resolveObjectLiteralSlot(object: NodePath, keys: readonly string[]): No
     if (container === undefined || !container.isObjectExpression()) return undefined;
     const match: NodePath | undefined = container
       .get("properties")
-      .filter((property) =>
-        (property.isObjectProperty() || property.isObjectMethod()) &&
-        getPropertyKeyName(property.node) === key
+      .filter(
+        (property) =>
+          (property.isObjectProperty() || property.isObjectMethod()) && getPropertyKeyName(property.node) === key,
       )
       .at(-1);
-    container = match?.isObjectProperty()
-      ? unwrapTransparentPath(match.get("value") as NodePath)
-      : match;
+    container = match?.isObjectProperty() ? unwrapTransparentPath(match.get("value") as NodePath) : match;
   }
   if (container === undefined) return undefined;
   if (container.isObjectMethod()) return container;
@@ -1733,9 +1675,8 @@ function isAutomaticTransformCandidate(
   // the naming conventions still decide whether it is transformed.
   if (path.isFunctionDeclaration() || path.isObjectMethod()) return true;
 
-  const parent = climbedParent === undefined
-    ? climbComponentWrappers(path, reactImportSource).parentPath
-    : climbedParent;
+  const parent =
+    climbedParent === undefined ? climbComponentWrappers(path, reactImportSource).parentPath : climbedParent;
   return (
     parent !== null &&
     (parent.isVariableDeclarator() ||
@@ -1769,8 +1710,7 @@ function isAutomaticTransformCandidate(
       (parent.isAssignmentExpression() &&
         t.isMemberExpression(parent.node.left) &&
         getStaticMemberPath(parent.node.left) !== undefined) ||
-      (parent.isCallExpression() &&
-        isInlineNamedComponentArgument(path, parent, reactImportSource)))
+      (parent.isCallExpression() && isInlineNamedComponentArgument(path, parent, reactImportSource)))
   );
 }
 
@@ -1780,10 +1720,7 @@ function isAutomaticTransformCandidate(
 // position that is never a candidate, such as a bare call argument or a JSX
 // attribute value -- stays part of the current render owner, so its JSX and
 // `.value` reads still cause that owner to be transformed.
-function isNestedTrackingBoundary(
-  path: NodePath<t.Function>,
-  reactImportSource: string,
-): boolean {
+function isNestedTrackingBoundary(path: NodePath<t.Function>, reactImportSource: string): boolean {
   // Every nested `Function` node `inspectFunction` walks past is checked
   // against this predicate, and both the candidacy test and the identity
   // resolution would otherwise climb through memo()/forwardRef() wrappers on
@@ -1804,13 +1741,7 @@ function isNestedTrackingBoundary(
 // the boundary design (development/design/use-signals-boundary-design.md), so a
 // `.value` read confined to one of these is no evidence that the surrounding
 // component subscribes to anything.
-const deferredCallbackHooks = new Set([
-  "useEffect",
-  "useLayoutEffect",
-  "useInsertionEffect",
-  "useCallback",
-  "useMemo",
-]);
+const deferredCallbackHooks = new Set(["useEffect", "useLayoutEffect", "useInsertionEffect", "useCallback", "useMemo"]);
 
 /**
  * The property name a member expression reads, for the forms this file
@@ -1818,9 +1749,7 @@ const deferredCallbackHooks = new Set([
  * const](Row)` is a plain member expression whose property is the wrapped
  * node -- so a computed property still needs unwrapping to reach the name.
  */
-function getReadPropertyName(
-  node: t.MemberExpression | t.OptionalMemberExpression,
-): string | undefined {
+function getReadPropertyName(node: t.MemberExpression | t.OptionalMemberExpression): string | undefined {
   if (!node.computed) {
     return t.isIdentifier(node.property) ? node.property.name : undefined;
   }
@@ -1856,9 +1785,7 @@ function getTrackedReadPropertyName(
 // the inner read eligible: a signal may legitimately be stored under any key.
 const nonSignalValueReceivers = new Set(["target", "currentTarget", "current"]);
 
-function hasTrackedValuePrefix(
-  path: NodePath<t.MemberExpression | t.OptionalMemberExpression>,
-): boolean {
+function hasTrackedValuePrefix(path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): boolean {
   let object = path.get("object");
   while (object.isMemberExpression() || object.isOptionalMemberExpression()) {
     if (getTrackedReadPropertyName(object) === "value") return true;
@@ -1867,9 +1794,7 @@ function hasTrackedValuePrefix(
   return false;
 }
 
-function isNonSignalValueReceiver(
-  path: NodePath<t.MemberExpression | t.OptionalMemberExpression>,
-): boolean {
+function isNonSignalValueReceiver(path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): boolean {
   const object = path.get("object");
   if (!object.isMemberExpression() && !object.isOptionalMemberExpression()) return false;
   const name = getReadPropertyName(object.node);
@@ -1918,17 +1843,16 @@ function containsSyntacticValueRead(path: NodePath): boolean {
   path.traverse({
     // A function in a default (`onPick = () => count.value`) reads only when
     // called later, not while the parameter initializer runs.
-    Function(nested) { nested.skip(); },
+    Function(nested) {
+      nested.skip();
+    },
     MemberExpression: inspect,
     OptionalMemberExpression: inspect,
   });
   return found;
 }
 
-function warnUncapturedParameterRead(
-  functionPath: NodePath<t.Function>,
-  options: InternalTransformOptions,
-): void {
+function warnUncapturedParameterRead(functionPath: NodePath<t.Function>, options: InternalTransformOptions): void {
   reportWarning(
     options,
     "RFGS004",
@@ -2028,8 +1952,11 @@ function isReadModifyingTrackedTarget(
   }
   const operation = target.parentPath;
   if (operation?.isUpdateExpression() && operation.get("argument").node === target.node) return true;
-  return operation?.isUnaryExpression({ operator: "delete" }) &&
-    operation.get("argument").node === target.node && target.node !== member.node;
+  return (
+    operation?.isUnaryExpression({ operator: "delete" }) &&
+    operation.get("argument").node === target.node &&
+    target.node !== member.node
+  );
 }
 
 /**
@@ -2050,7 +1977,8 @@ function isPotentialDynamicMemberRead(
     t.isBigIntLiteral(property) ||
     t.isBooleanLiteral(property) ||
     t.isNullLiteral(property)
-  ) return false;
+  )
+    return false;
   if (isWriteTarget(path)) return false;
   return !isDeferredReadContext(path, functionPath);
 }
@@ -2124,12 +2052,17 @@ function inspectFunction(
       seen.add(target.node);
       parentOf.set(target.node, from);
       const known = memoizable ? readsReachable.get(target.node) : undefined;
-      const scan = known === undefined
-        ? synchronousScan(target, importSource, managedRuntimeSource, reactImportSource)
-        : undefined;
+      const scan =
+        known === undefined
+          ? synchronousScan(target, importSource, managedRuntimeSource, reactImportSource)
+          : undefined;
       if (known === true || scan?.own.readsValue === true) {
         if (memoizable) {
-          for (let node: t.Node | undefined = target.node; node !== undefined && node !== rootNode; node = parentOf.get(node)) {
+          for (
+            let node: t.Node | undefined = target.node;
+            node !== undefined && node !== rootNode;
+            node = parentOf.get(node)
+          ) {
             readsReachable.set(node, true);
           }
         }
@@ -2286,20 +2219,18 @@ function scanFunction(
   // when invoked directly. Unlike components and custom Hooks, a plain helper
   // cannot own a React tracking Hook of its own, so leaving its reads outside
   // the caller's inspection silently misses `mode: "auto"` transforms.
-  const foldDirectlyCalledHelpers = (
-    call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
-  ): void => {
+  const foldDirectlyCalledHelpers = (call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>): void => {
     if (isDeferredReadContext(call, functionPath)) return;
     const callee = unwrapTransparent(call.node.callee);
-    const member = t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
-      ? callee
-      : undefined;
+    const member = t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee) ? callee : undefined;
     const chain = member === undefined ? undefined : getStaticMemberChain(member);
     const name = t.isIdentifier(callee) ? callee.name : chain?.keys.at(-1);
     if (name === undefined || isComponentName(name) || isHookName(name)) return;
     const target = t.isIdentifier(callee)
       ? resolveReferencedFunction(call, name)
-      : member === undefined ? undefined : resolveKeyedFunction(call, member);
+      : member === undefined
+        ? undefined
+        : resolveKeyedFunction(call, member);
     // A helper called from many sites is checked once, not once per call by
     // `functionCallsHook`.
     if (target === undefined || edgeIndex.has(target.node) || checkedHelpers.has(target.node)) return;
@@ -2311,9 +2242,7 @@ function scanFunction(
   // `items.filter(isBig)`: a named synchronous function handed to a call
   // runs in this render just like an inline callback. Hook calls are skipped:
   // their callbacks belong to React, not to this render's reads.
-  const foldFunctionArguments = (
-    call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>,
-  ): void => {
+  const foldFunctionArguments = (call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>): void => {
     if (callNameIsHook(call.node.callee)) return;
     if (isDeferredReadContext(call, functionPath)) return;
     for (const argument of call.get("arguments") as NodePath[]) {
@@ -2326,10 +2255,7 @@ function scanFunction(
     }
   };
 
-  const recordValueRead = (
-    node: t.MemberExpression | t.OptionalMemberExpression,
-    path: NodePath,
-  ): void => {
+  const recordValueRead = (node: t.MemberExpression | t.OptionalMemberExpression, path: NodePath): void => {
     // Unknown computed members are capture candidates only after another
     // statically recognized read (or explicit transform mode) selects this
     // function. Treating every `items[index]` as an auto-detection signal
@@ -2343,11 +2269,8 @@ function scanFunction(
     // render callbacks into this inspection; unknown callbacks stay outside
     // the automatic guarantee instead of creating a stale captured closure.
     Function(path) {
-      if (
-        synchronousBodyOnly ||
-        isNestedTrackingBoundary(path, reactImportSource) ||
-        isRenderPropCallback(path)
-      ) path.skip();
+      if (synchronousBodyOnly || isNestedTrackingBoundary(path, reactImportSource) || isRenderPropCallback(path))
+        path.skip();
     },
     JSXElement(_path) {
       inspection.containsJSX = true;
@@ -2375,11 +2298,8 @@ function scanFunction(
         inspection.hasSignalTrackingCall = true;
       }
       if (
-        (callee.isIdentifier() && isNamedUseManagedSignalsImport(
-          functionPath,
-          callee.node.name,
-          managedRuntimeSource,
-        )) ||
+        (callee.isIdentifier() &&
+          isNamedUseManagedSignalsImport(functionPath, callee.node.name, managedRuntimeSource)) ||
         (callee.isMemberExpression() &&
           getReadPropertyName(callee.node) === "useSignalCapture" &&
           callee.get("object").isIdentifier() &&
@@ -2444,9 +2364,8 @@ function addRuntimeImport(
     t.stringLiteral(runtimeSource),
   );
   const imports = programPath.get("body").filter((path) => path.isImportDeclaration());
-  const insertedPaths = imports.length === 0
-    ? programPath.unshiftContainer("body", declaration)
-    : imports.at(-1)!.insertAfter(declaration);
+  const insertedPaths =
+    imports.length === 0 ? programPath.unshiftContainer("body", declaration) : imports.at(-1)!.insertAfter(declaration);
   const inserted = insertedPaths[0];
   if (inserted === undefined || !inserted.isImportDeclaration()) {
     throw new Error(`Failed to insert the ${importedName} import`);
@@ -2551,15 +2470,10 @@ const reportedWarnings = new WeakMap<t.Node, Set<string>>();
  * lets a bundler adapter match the warning against `diagnostics.errorOn`
  * without parsing its text.
  */
-function reportWarning(
-  options: InternalTransformOptions,
-  id: DiagnosticId,
-  path: NodePath,
-  text: string,
-): void {
+function reportWarning(options: InternalTransformOptions, id: DiagnosticId, path: NodePath, text: string): void {
   const message = `[react-fine-grained-signals] ${id}: ${text}`;
   let reported = reportedWarnings.get(path.node);
-  if (reported === undefined) reportedWarnings.set(path.node, reported = new Set());
+  if (reported === undefined) reportedWarnings.set(path.node, (reported = new Set()));
   if (reported.has(message)) return;
   reported.add(message);
   const warning = Object.assign(path.buildCodeFrameError(message), { diagnosticId: id }) as Error & {
@@ -2580,10 +2494,7 @@ function reportWarning(
   }
 }
 
-function warnUntrackedRenderPropRead(
-  attribute: NodePath<t.JSXAttribute>,
-  options: InternalTransformOptions,
-): void {
+function warnUntrackedRenderPropRead(attribute: NodePath<t.JSXAttribute>, options: InternalTransformOptions): void {
   reportWarning(
     options,
     "RFGS003",
@@ -2631,19 +2542,24 @@ function resolveSignalControlFlowImport(
   const bindingPath = binding.path;
   if (bindingPath.isImportNamespaceSpecifier()) {
     const declaration = bindingPath.parentPath;
-    return declaration.isImportDeclaration() && declaration.node.importKind !== "type" &&
-        declaration.node.source.value === `${importSource}/utils`
+    return declaration.isImportDeclaration() &&
+      declaration.node.importKind !== "type" &&
+      declaration.node.source.value === `${importSource}/utils`
       ? { kind: "namespace" }
       : undefined;
   }
   if (bindingPath.isImportSpecifier()) {
     const declaration = bindingPath.parentPath;
     if (
-      !declaration.isImportDeclaration() || declaration.node.importKind === "type" ||
-      bindingPath.node.importKind === "type" || declaration.node.source.value !== `${importSource}/utils`
-    ) return undefined;
+      !declaration.isImportDeclaration() ||
+      declaration.node.importKind === "type" ||
+      bindingPath.node.importKind === "type" ||
+      declaration.node.source.value !== `${importSource}/utils`
+    )
+      return undefined;
     const imported = bindingPath.node.imported;
-    if (!t.isIdentifier(imported) || !signalControlFlowNames.has(imported.name as SignalControlFlowName)) return undefined;
+    if (!t.isIdentifier(imported) || !signalControlFlowNames.has(imported.name as SignalControlFlowName))
+      return undefined;
     return { kind: "component", name: imported.name as SignalControlFlowName };
   }
   if (!bindingPath.isVariableDeclarator() || !binding.constant) return undefined;
@@ -2736,24 +2652,21 @@ function isOwnedBySignalControlFlow(
   const parent = element.parentPath;
   if (parent === null || !parent.isJSXElement()) return false;
   const parentName = parent.get("openingElement.name");
-  return (parentName.isJSXIdentifier() || parentName.isJSXMemberExpression()) &&
-    signalControlFlowTagName(parentName, importSource) === "Switch";
+  return (
+    (parentName.isJSXIdentifier() || parentName.isJSXMemberExpression()) &&
+    signalControlFlowTagName(parentName, importSource) === "Switch"
+  );
 }
 
 type StaticConstObjectPattern = {
-  properties: Array<
-    | { key: t.Identifier; id: t.Identifier }
-    | { key: t.Identifier; pattern: StaticConstObjectPattern }
-  >;
+  properties: Array<{ key: t.Identifier; id: t.Identifier } | { key: t.Identifier; pattern: StaticConstObjectPattern }>;
 };
 
 function getStaticConstDestructuredBindings(
   declarator: NodePath<t.VariableDeclarator>,
 ): StaticConstObjectPattern | undefined {
-  if (
-    !declarator.parentPath.isVariableDeclaration({ kind: "const" }) ||
-    !declarator.get("id").isObjectPattern()
-  ) return undefined;
+  if (!declarator.parentPath.isVariableDeclaration({ kind: "const" }) || !declarator.get("id").isObjectPattern())
+    return undefined;
   const buildPattern = (pattern: NodePath<t.ObjectPattern>): StaticConstObjectPattern | undefined => {
     if (pattern.node.typeAnnotation != null || pattern.node.properties.length === 0) return undefined;
     const properties: StaticConstObjectPattern["properties"] = [];
@@ -2872,10 +2785,7 @@ function warnUnverifiableBarrelSignalTracking(
 // inherit either, or a name that resolves but is neither PascalCase nor `useX`.
 // Left silent, such an annotation reads as an opt-in that simply never
 // happened. Warn instead, matching the barrel case above.
-function warnUnnamedSignalTrackingAnnotation(
-  path: NodePath<t.Function>,
-  options: InternalTransformOptions,
-): void {
+function warnUnnamedSignalTrackingAnnotation(path: NodePath<t.Function>, options: InternalTransformOptions): void {
   reportWarning(
     options,
     "RFGS006",
@@ -2924,21 +2834,18 @@ function warnPlainCalledComponentAlsoMounted(
 
 function hasModuleLevelUseServer(path: NodePath<t.Function>): boolean {
   const program = path.findParent((parent) => parent.isProgram());
-  return program?.isProgram() === true && program.node.directives.some(
-    (directive) => directive.value.value === "use server",
+  return (
+    program?.isProgram() === true && program.node.directives.some((directive) => directive.value.value === "use server")
   );
 }
 
-function warnServerDirectiveComponent(
-  path: NodePath<t.Function>,
-  options: InternalTransformOptions,
-): void {
+function warnServerDirectiveComponent(path: NodePath<t.Function>, options: InternalTransformOptions): void {
   reportWarning(
     options,
     "RFGS009",
     path,
     'This component is left untransformed because its module has a top-level "use server" directive. ' +
-      'A server-only module cannot receive the client tracking Hook. Move the component to a ' +
+      "A server-only module cannot receive the client tracking Hook. Move the component to a " +
       '"use client" module if it needs automatic signal tracking.',
   );
 }
@@ -3053,8 +2960,7 @@ function decideTransform(
   // the factory is asked directly.
   const factory = identity?.kind === "hoc-return" ? identity.factory : undefined;
   const ownsLeadingComment = (pattern: RegExp): boolean =>
-    hasOwnedLeadingComment(path, pattern) ||
-    (factory !== undefined && hasOwnedLeadingComment(factory, pattern));
+    hasOwnedLeadingComment(path, pattern) || (factory !== undefined && hasOwnedLeadingComment(factory, pattern));
 
   if (ownsLeadingComment(noSignalTrackingComment)) return { kind: "skip" };
 
@@ -3065,12 +2971,7 @@ function decideTransform(
     warnUnverifiableBarrelSignalTracking(path, options.importSource, options);
   }
   const managedRuntimeSource = `${options.importSource}/internal`;
-  const inspection = inspectFunction(
-    path,
-    options.importSource,
-    managedRuntimeSource,
-    reactImportSource,
-  );
+  const inspection = inspectFunction(path, options.importSource, managedRuntimeSource, reactImportSource);
   inspectKnownRenderPropReads(path, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
@@ -3090,8 +2991,7 @@ function decideTransform(
   // annotation dropped too (the annotation warning is gated on rendering JSX,
   // which a hook does not do).
   const isFactory = isHigherOrderComponentFactory(path) && !isHookIdentity(identity);
-  const annotated =
-    annotation && !isFactory && (isComponentIdentity(identity) || isHookIdentity(identity));
+  const annotated = annotation && !isFactory && (isComponentIdentity(identity) || isHookIdentity(identity));
   const candidate = isAutomaticTransformCandidate(path, reactImportSource, climbedParent);
   // The annotation was written for a function no boundary ended up attached to,
   // so it will be dropped. An opt-in that silently does nothing is the worst of
@@ -3157,8 +3057,7 @@ function decideTransform(
   ) {
     warnPlainCalledComponentAlsoMounted(path, identity?.name ?? "component", options);
   }
-  const automatic =
-    !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
+  const automatic = !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
   if (!explicit && (inspection.hasSignalTrackingCall || inspection.hasUseManagedSignalsCall)) {
     return { kind: "skip" };
@@ -3166,9 +3065,7 @@ function decideTransform(
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
   if (path.node.async || path.node.generator) {
     if (!explicit && !annotated) return { kind: "skip" };
-    throw path.buildCodeFrameError(
-      "useSignalTracking transform only supports synchronous, non-generator functions",
-    );
+    throw path.buildCodeFrameError("useSignalTracking transform only supports synchronous, non-generator functions");
   }
   // An explicit `useSignalTracking()` is a request for the runtime's ambient
   // render collector. Preserve that contract in managed mode: the per-read
@@ -3181,14 +3078,10 @@ function decideTransform(
     return { kind: "directive-only", body };
   }
 
-  const importSource = options.transform === "managed"
-    ? managedRuntimeSource
-    : options.importSource;
-  const imports = options.transform === "managed"
-    ? state.managedRuntimeImports
-    : state.directImports;
-  let runtimeImport = imports.find(({ identifier, bindingPath }) =>
-    path.scope.getBinding(identifier.name)?.path === bindingPath
+  const importSource = options.transform === "managed" ? managedRuntimeSource : options.importSource;
+  const imports = options.transform === "managed" ? state.managedRuntimeImports : state.directImports;
+  let runtimeImport = imports.find(
+    ({ identifier, bindingPath }) => path.scope.getBinding(identifier.name)?.path === bindingPath,
   );
   if (runtimeImport === undefined) {
     runtimeImport = addRuntimeImport(
@@ -3218,10 +3111,7 @@ function decideTransform(
  * (`format = () => count.value`) does not run during parameter binding, and if
  * the body calls it during render, it runs after the boundary is open anyway.
  */
-function parameterReadsTrackedValue(
-  param: NodePath,
-  functionPath: NodePath<t.Function>,
-): boolean {
+function parameterReadsTrackedValue(param: NodePath, functionPath: NodePath<t.Function>): boolean {
   // A bare identifier has no default to evaluate -- the overwhelmingly common
   // `(props)` case never needs the walk.
   if (param.isIdentifier()) return false;
@@ -3287,10 +3177,9 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
     for (const name of Object.keys(t.getBindingIdentifiers(param.node))) {
       const binding = path.scope.getOwnBinding(name);
       if (
-        binding?.constantViolations.some((violation) =>
-          violation.isVariableDeclarator() ||
-          violation.isFunctionDeclaration() ||
-          violation.isClassDeclaration()
+        binding?.constantViolations.some(
+          (violation) =>
+            violation.isVariableDeclarator() || violation.isFunctionDeclaration() || violation.isClassDeclaration(),
         )
       ) {
         return true;
@@ -3388,20 +3277,21 @@ function relocateTrackedParameters(path: NodePath<t.Function>, typeScript: boole
   let laterOptional = true;
   for (let index = plan.length - 1; index >= 0; index -= 1) {
     const { pattern, fallback, rest } = plan[index]!;
-    optional[index] = typeScript && rest === undefined
-      && (pattern.optional === true || (fallback !== undefined && laterOptional));
+    optional[index] =
+      typeScript && rest === undefined && (pattern.optional === true || (fallback !== undefined && laterOptional));
     laterOptional &&= rest !== undefined || optional[index]!;
   }
   const declarations: t.Statement[] = [];
   for (const [index, { param, pattern, fallback, rest }] of plan.entries()) {
     const local = path.scope.generateUidIdentifier("param");
-    const init = fallback === undefined
-      ? t.cloneNode(local)
-      : t.conditionalExpression(
-        t.binaryExpression("===", t.cloneNode(local), t.identifier("undefined")),
-        fallback,
-        t.cloneNode(local),
-      );
+    const init =
+      fallback === undefined
+        ? t.cloneNode(local)
+        : t.conditionalExpression(
+            t.binaryExpression("===", t.cloneNode(local), t.identifier("undefined")),
+            fallback,
+            t.cloneNode(local),
+          );
     let replacement: t.Identifier | t.RestElement = local;
     if (rest !== undefined) {
       // A rest parameter's annotation sits on the `RestElement` itself.
@@ -3434,21 +3324,13 @@ function applyInject(
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
-  const call = t.expressionStatement(
-    t.callExpression(t.cloneNode(runtimeImport.identifier), []),
-  );
+  const call = t.expressionStatement(t.callExpression(t.cloneNode(runtimeImport.identifier), []));
   // Bound again right after the call, so a default's read is collected too.
   const relocated = relocateTrackedParameters(path, state.typeScript);
   if (body.isBlockStatement()) {
     body.unshiftContainer("body", [call, ...relocated]);
   } else {
-    body.replaceWith(
-      t.blockStatement([
-        call,
-        ...relocated,
-        t.returnStatement(body.node as t.Expression),
-      ]),
-    );
+    body.replaceWith(t.blockStatement([call, ...relocated, t.returnStatement(body.node as t.Expression)]));
   }
   const injectedBody = path.node.body;
   if (options.reactCompiler === "opt-out" && t.isBlockStatement(injectedBody)) {
@@ -3469,7 +3351,8 @@ function hasTrackedReadInMemberChain(
     if (
       isTrackedValueRead(current.node, current, functionPath) ||
       isPotentialDynamicMemberRead(current.node, current, functionPath)
-    ) return true;
+    )
+      return true;
     const object = unwrapTransparentPath(current.get("object") as NodePath);
     if (object.isCallExpression() || object.isOptionalCallExpression()) {
       return hasTrackedReadInExpression(object, functionPath, trackedAliases);
@@ -3486,7 +3369,10 @@ function hasTrackedReadInMemberChain(
  * call once per enclosing link (exponential in the chain length). The alias set
  * only grows; a size change invalidates the cached answers for it.
  */
-const trackedReadCache = new WeakMap<Set<object>, { size: number; byFunction: WeakMap<t.Node, WeakMap<t.Node, boolean>> }>();
+const trackedReadCache = new WeakMap<
+  Set<object>,
+  { size: number; byFunction: WeakMap<t.Node, WeakMap<t.Node, boolean>> }
+>();
 
 function hasTrackedReadInExpression(
   path: NodePath,
@@ -3499,7 +3385,7 @@ function hasTrackedReadInExpression(
     trackedReadCache.set(trackedAliases, entry);
   }
   let results = entry.byFunction.get(functionPath.node);
-  if (results === undefined) entry.byFunction.set(functionPath.node, results = new WeakMap());
+  if (results === undefined) entry.byFunction.set(functionPath.node, (results = new WeakMap()));
   const cached = results.get(path.node);
   if (cached !== undefined) return cached;
   const result = computeTrackedReadInExpression(path, functionPath, trackedAliases);
@@ -3524,7 +3410,9 @@ function computeTrackedReadInExpression(
   if (isTracked(path)) return true;
   let found = false;
   path.traverse({
-    Function(nested) { nested.skip(); },
+    Function(nested) {
+      nested.skip();
+    },
     MemberExpression(candidate) {
       if (isTracked(candidate)) {
         found = true;
@@ -3560,8 +3448,10 @@ function isTrackedAliasReference(
   const parent = path.parentPath;
   if (
     (parent.isCallExpression() || parent.isOptionalCallExpression()) &&
-    parent.node.callee !== path.node && callNameIsHook(parent.node.callee)
-  ) return false;
+    parent.node.callee !== path.node &&
+    callNameIsHook(parent.node.callee)
+  )
+    return false;
   const binding = path.scope.getBinding(path.node.name);
   return binding !== undefined && trackedAliases.has(binding) && !isDeferredReadContext(path, functionPath);
 }
@@ -3581,7 +3471,9 @@ function functionCallsHook(functionPath: NodePath<t.Function>): boolean {
     }
   };
   functionPath.get("body").traverse({
-    Function(nested) { nested.skip(); },
+    Function(nested) {
+      nested.skip();
+    },
     CallExpression: inspectCall,
     OptionalCallExpression: inspectCall,
   });
@@ -3634,9 +3526,8 @@ function externalCallMayReadTrackedValue(
       importSpecifier.parentPath.node.source.value !== reactImportSource
     ) {
       const imported = importSpecifier.isImportSpecifier() ? importSpecifier.node.imported : undefined;
-      const importedName = imported === undefined
-        ? "default"
-        : t.isIdentifier(imported) ? imported.name : imported.value;
+      const importedName =
+        imported === undefined ? "default" : t.isIdentifier(imported) ? imported.name : imported.value;
       // The transform cannot inspect another module's implementation. Capture
       // the synchronous call itself so any signal reads it performs belong to
       // this render attempt. Hook-shaped imports stay as direct calls: wrapping
@@ -3651,8 +3542,7 @@ function externalCallMayReadTrackedValue(
     // when its concrete target depends on a runtime key. Capturing its direct
     // synchronous invocation preserves the owner without inserting a Hook in
     // the aliased function.
-    return init?.isMemberExpression() === true && init.node.computed &&
-      getReadPropertyName(init.node) === undefined;
+    return init?.isMemberExpression() === true && init.node.computed && getReadPropertyName(init.node) === undefined;
   }
   // Iterating a generator runs its body later, outside this call; the loop
   // that pulls from it captures those steps (see the `for...of` visitor).
@@ -3672,15 +3562,65 @@ interface ReadContext {
  * define `map` or `toString` itself.
  */
 const pureMethodNames = new Set([
-  "map", "filter", "reduce", "reduceRight", "forEach", "some", "every", "flatMap", "flat",
-  "find", "findIndex", "findLast", "findLastIndex", "at", "includes",
-  "slice", "concat", "join", "indexOf", "lastIndexOf", "sort", "reverse", "toSorted",
-  "toReversed", "push", "pop", "shift", "unshift", "splice",
-  "toString", "toUpperCase", "toLowerCase", "toLocaleUpperCase", "toLocaleLowerCase",
-  "trim", "trimStart", "trimEnd", "split", "replace", "replaceAll", "padStart", "padEnd",
-  "startsWith", "endsWith", "charAt", "charCodeAt", "codePointAt", "localeCompare",
-  "substring", "repeat", "normalize", "toFixed", "toPrecision", "toLocaleString",
-  "toLocaleDateString", "toLocaleTimeString", "toISOString", "toJSON", "valueOf",
+  "map",
+  "filter",
+  "reduce",
+  "reduceRight",
+  "forEach",
+  "some",
+  "every",
+  "flatMap",
+  "flat",
+  "find",
+  "findIndex",
+  "findLast",
+  "findLastIndex",
+  "at",
+  "includes",
+  "slice",
+  "concat",
+  "join",
+  "indexOf",
+  "lastIndexOf",
+  "sort",
+  "reverse",
+  "toSorted",
+  "toReversed",
+  "push",
+  "pop",
+  "shift",
+  "unshift",
+  "splice",
+  "toString",
+  "toUpperCase",
+  "toLowerCase",
+  "toLocaleUpperCase",
+  "toLocaleLowerCase",
+  "trim",
+  "trimStart",
+  "trimEnd",
+  "split",
+  "replace",
+  "replaceAll",
+  "padStart",
+  "padEnd",
+  "startsWith",
+  "endsWith",
+  "charAt",
+  "charCodeAt",
+  "codePointAt",
+  "localeCompare",
+  "substring",
+  "repeat",
+  "normalize",
+  "toFixed",
+  "toPrecision",
+  "toLocaleString",
+  "toLocaleDateString",
+  "toLocaleTimeString",
+  "toISOString",
+  "toJSON",
+  "valueOf",
 ]);
 
 /**
@@ -3689,12 +3629,54 @@ const pureMethodNames = new Set([
  * (`window.store`, a global a script defined) is unresolved module code.
  */
 const standardGlobals = new Set([
-  "Math", "JSON", "Object", "Array", "Number", "String", "Boolean", "Symbol", "BigInt", "Date",
-  "Reflect", "Intl", "Promise", "Map", "Set", "WeakMap", "WeakSet", "RegExp", "Error", "TypeError",
-  "RangeError", "parseInt", "parseFloat", "isNaN", "isFinite", "encodeURIComponent", "decodeURIComponent",
-  "encodeURI", "decodeURI", "console", "structuredClone", "URL", "URLSearchParams", "TextEncoder", "TextDecoder",
-  "ArrayBuffer", "DataView", "Int8Array", "Uint8Array", "Uint8ClampedArray", "Int16Array", "Uint16Array",
-  "Int32Array", "Uint32Array", "Float32Array", "Float64Array", "BigInt64Array", "BigUint64Array",
+  "Math",
+  "JSON",
+  "Object",
+  "Array",
+  "Number",
+  "String",
+  "Boolean",
+  "Symbol",
+  "BigInt",
+  "Date",
+  "Reflect",
+  "Intl",
+  "Promise",
+  "Map",
+  "Set",
+  "WeakMap",
+  "WeakSet",
+  "RegExp",
+  "Error",
+  "TypeError",
+  "RangeError",
+  "parseInt",
+  "parseFloat",
+  "isNaN",
+  "isFinite",
+  "encodeURIComponent",
+  "decodeURIComponent",
+  "encodeURI",
+  "decodeURI",
+  "console",
+  "structuredClone",
+  "URL",
+  "URLSearchParams",
+  "TextEncoder",
+  "TextDecoder",
+  "ArrayBuffer",
+  "DataView",
+  "Int8Array",
+  "Uint8Array",
+  "Uint8ClampedArray",
+  "Int16Array",
+  "Uint16Array",
+  "Int32Array",
+  "Uint32Array",
+  "Float32Array",
+  "Float64Array",
+  "BigInt64Array",
+  "BigUint64Array",
 ]);
 
 /**
@@ -3702,23 +3684,57 @@ const standardGlobals = new Set([
  * function. That function runs inside the call, so it must be proven too.
  */
 const builtinCallbackArguments: ReadonlyMap<string, number> = new Map([
-  ["map", 0], ["filter", 0], ["forEach", 0], ["some", 0], ["every", 0], ["flatMap", 0],
-  ["find", 0], ["findIndex", 0], ["findLast", 0], ["findLastIndex", 0],
-  ["reduce", 0], ["reduceRight", 0], ["sort", 0], ["toSorted", 0],
-  ["replace", 1], ["replaceAll", 1],
+  ["map", 0],
+  ["filter", 0],
+  ["forEach", 0],
+  ["some", 0],
+  ["every", 0],
+  ["flatMap", 0],
+  ["find", 0],
+  ["findIndex", 0],
+  ["findLast", 0],
+  ["findLastIndex", 0],
+  ["reduce", 0],
+  ["reduceRight", 0],
+  ["sort", 0],
+  ["toSorted", 0],
+  ["replace", 1],
+  ["replaceAll", 1],
 ]);
 const globalCallbackArguments: ReadonlyMap<string, number> = new Map([
-  ["Array.from", 1], ["JSON.stringify", 1], ["JSON.parse", 1], ["Object.groupBy", 1], ["Map.groupBy", 1],
+  ["Array.from", 1],
+  ["JSON.stringify", 1],
+  ["JSON.parse", 1],
+  ["Object.groupBy", 1],
+  ["Map.groupBy", 1],
 ]);
 /** Builtins whose callback receives receiver elements (and, for `reduce*`, an accumulator first). */
 const elementCallbackMethods = new Set([
-  "map", "filter", "forEach", "some", "every", "flatMap", "find", "findIndex", "findLast", "findLastIndex",
-  "reduce", "reduceRight", "sort", "toSorted",
+  "map",
+  "filter",
+  "forEach",
+  "some",
+  "every",
+  "flatMap",
+  "find",
+  "findIndex",
+  "findLast",
+  "findLastIndex",
+  "reduce",
+  "reduceRight",
+  "sort",
+  "toSorted",
 ]);
 
 /** React Hooks whose results are plain state the component owns. */
 const stateHookNames = new Set([
-  "useState", "useReducer", "useDeferredValue", "useTransition", "useOptimistic", "useActionState", "useId",
+  "useState",
+  "useReducer",
+  "useDeferredValue",
+  "useTransition",
+  "useOptimistic",
+  "useActionState",
+  "useId",
 ]);
 
 /** How much is known about a value's provenance; see `ownership`. */
@@ -3743,13 +3759,26 @@ const elementReturningMethods = new Set(["pop", "shift", "at", "find", "findLast
 const callbackResultMethods = new Set(["reduce", "reduceRight"]);
 /** Builtin methods whose result holds only the receiver's own elements, or is the receiver. */
 const elementPreservingMethods = new Set([
-  "filter", "slice", "sort", "reverse", "toSorted", "toReversed", "splice", "flat", "valueOf",
+  "filter",
+  "slice",
+  "sort",
+  "reverse",
+  "toSorted",
+  "toReversed",
+  "splice",
+  "flat",
+  "valueOf",
 ]);
 /** Builtin methods whose result is a new array of callback results or arguments. */
 const newCollectionMethods = new Set(["map", "flatMap", "concat"]);
 /** Builtin methods that put their arguments into the receiver. */
 const insertingMethods: ReadonlyMap<string, number> = new Map([
-  ["push", 0], ["unshift", 0], ["splice", 2], ["fill", 0], ["set", 1], ["add", 0],
+  ["push", 0],
+  ["unshift", 0],
+  ["splice", 2],
+  ["fill", 0],
+  ["set", 1],
+  ["add", 0],
 ]);
 
 /**
@@ -3791,7 +3820,9 @@ function calledBackIsKnown(
 /** `Math.max` / `JSON.stringify` / `String`: the dotted name of a standard global function, if it is one. */
 function standardGlobalCallee(call: NodePath, callee: t.Node): string | undefined {
   if (t.isIdentifier(callee)) {
-    return call.scope.getBinding(callee.name) === undefined && standardGlobals.has(callee.name) ? callee.name : undefined;
+    return call.scope.getBinding(callee.name) === undefined && standardGlobals.has(callee.name)
+      ? callee.name
+      : undefined;
   }
   if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return undefined;
   const chain = getStaticMemberChain(callee);
@@ -3835,7 +3866,11 @@ function memberWrite(path: NodePath): NodePath<t.AssignmentExpression> | boolean
     if (parent === null) return false;
     if (parent.isObjectProperty() && parent.node.value === current.node && parent.parentPath?.isObjectPattern()) {
       current = parent.parentPath;
-    } else if (parent.isArrayPattern() || parent.isRestElement() || (parent.isAssignmentPattern() && parent.node.left === current.node)) {
+    } else if (
+      parent.isArrayPattern() ||
+      parent.isRestElement() ||
+      (parent.isAssignmentPattern() && parent.node.left === current.node)
+    ) {
       current = parent;
     } else if (parent.isAssignmentExpression() && parent.node.left === current.node) {
       return current === path ? parent : true;
@@ -3849,8 +3884,13 @@ function memberWrite(path: NodePath): NodePath<t.AssignmentExpression> | boolean
 
 /** The standard functions that write their later arguments into their first. */
 const objectWriters = new Set([
-  "Object.assign", "Object.defineProperty", "Object.defineProperties", "Reflect.set", "Reflect.defineProperty",
-  "Object.setPrototypeOf", "Reflect.setPrototypeOf",
+  "Object.assign",
+  "Object.defineProperty",
+  "Object.defineProperties",
+  "Reflect.set",
+  "Reflect.defineProperty",
+  "Object.setPrototypeOf",
+  "Reflect.setPrototypeOf",
 ]);
 
 /**
@@ -3866,9 +3906,11 @@ function referenceAlias(reference: NodePath): Binding[] | "assigned" | undefined
     const parent = current.parentPath;
     if (parent === null) return undefined;
     if (
-      (parent.isConditionalExpression() && parent.node.test !== current.node) || parent.isLogicalExpression() ||
+      (parent.isConditionalExpression() && parent.node.test !== current.node) ||
+      parent.isLogicalExpression() ||
       (parent.isSequenceExpression() && parent.node.expressions.at(-1) === current.node) ||
-      parent.isParenthesizedExpression() || isTransparentWrapper(parent.node)
+      parent.isParenthesizedExpression() ||
+      isTransparentWrapper(parent.node)
     ) {
       current = parent;
       continue;
@@ -3876,7 +3918,7 @@ function referenceAlias(reference: NodePath): Binding[] | "assigned" | undefined
     if (parent.isVariableDeclarator() && parent.node.init === current.node) {
       const names = Object.keys(t.getBindingIdentifiers(parent.node.id));
       const bindings = names.map((name) => parent.scope.getBinding(name));
-      return bindings.every((binding) => binding !== undefined) ? bindings as Binding[] : "assigned";
+      return bindings.every((binding) => binding !== undefined) ? (bindings as Binding[]) : "assigned";
     }
     if (parent.isAssignmentExpression() && parent.node.right === current.node) {
       // `copy = value`: follow what is done through `copy`; a member target stores it out of reach.
@@ -3903,8 +3945,11 @@ function mutationLimit(binding: Binding, context: ReadContext, depth: number): O
 
 function computeMutationLimit(binding: Binding, context: ReadContext, depth: number): Ownership {
   let limit = Ownership.Deep;
-  const lower = (to: Ownership): void => { if (to < limit) limit = to; };
-  const isDeep = (path: NodePath, node: t.Node): boolean => ownership(path, node, depth + 1, context) === Ownership.Deep;
+  const lower = (to: Ownership): void => {
+    if (to < limit) limit = to;
+  };
+  const isDeep = (path: NodePath, node: t.Node): boolean =>
+    ownership(path, node, depth + 1, context) === Ownership.Deep;
   for (const reference of binding.referencePaths) {
     const top = climbMemberChain(reference);
     const parent = top.parentPath;
@@ -3937,7 +3982,11 @@ function computeMutationLimit(binding: Binding, context: ReadContext, depth: num
     // `Object.assign(list, extra)` writes the later arguments into the first.
     if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.arguments[0] === top.node) {
       const callee = standardGlobalCallee(parent, unwrapTransparent(parent.node.callee));
-      if (callee !== undefined && objectWriters.has(callee) && !parent.node.arguments.slice(1).every((argument) => isDeep(parent, argument))) {
+      if (
+        callee !== undefined &&
+        objectWriters.has(callee) &&
+        !parent.node.arguments.slice(1).every((argument) => isDeep(parent, argument))
+      ) {
         lower(Ownership.Unknown);
       }
       continue;
@@ -3978,10 +4027,13 @@ function objectMayBeRewritten(binding: Binding, seen: Set<Binding> = new Set()):
     for (const target of alias ?? []) {
       if (objectMayBeRewritten(target, seen)) return true;
       // Any member write through the alias counts: it is not the slot use the caller checks.
-      if (target.referencePaths.some((aliasReference) => {
-        const aliasTop = climbMemberChain(aliasReference);
-        return aliasTop !== aliasReference && memberWrite(aliasTop) !== false;
-      })) return true;
+      if (
+        target.referencePaths.some((aliasReference) => {
+          const aliasTop = climbMemberChain(aliasReference);
+          return aliasTop !== aliasReference && memberWrite(aliasTop) !== false;
+        })
+      )
+        return true;
     }
   }
   return false;
@@ -3999,8 +4051,9 @@ function parameterOwnership(binding: Binding, context: ReadContext, depth: numbe
   const owner = binding.scope.path;
   // `function h(v) { v = extStore; ... }`: the parameter no longer holds what was passed.
   if (!owner.isFunction() || binding.constantViolations.length > 0) return Ownership.Unknown;
-  const parameterPath = (owner.get("params") as NodePath[]).find((param) =>
-    param === binding.path || param.node === binding.path.node || binding.path.isDescendant(param));
+  const parameterPath = (owner.get("params") as NodePath[]).find(
+    (param) => param === binding.path || param.node === binding.path.node || binding.path.isDescendant(param),
+  );
   const parameter = parameterPath?.node;
   const index = parameterPath === undefined ? -1 : (owner.get("params") as NodePath[]).indexOf(parameterPath);
   let trust = Ownership.Unknown;
@@ -4008,7 +4061,8 @@ function parameterOwnership(binding: Binding, context: ReadContext, depth: numbe
     trust = Ownership.Deep;
   } else if (parameter !== undefined) {
     trust = elementCallbackOwnership(owner, index, context, depth);
-    if (trust === Ownership.Unknown && t.isIdentifier(parameter)) trust = helperArgumentOwnership(owner, index, context, depth);
+    if (trust === Ownership.Unknown && t.isIdentifier(parameter))
+      trust = helperArgumentOwnership(owner, index, context, depth);
   }
   if (trust === Ownership.Unknown || parameter === undefined) return Ownership.Unknown;
   // `{ store = extStore }`: a default value is visible code with its own provenance.
@@ -4019,7 +4073,8 @@ function parameterOwnership(binding: Binding, context: ReadContext, depth: numbe
       if (ownership(owner, node.right, depth + 1, context) !== Ownership.Deep) defaultsTrusted = false;
       checkDefaults(node.left);
     } else if (t.isObjectPattern(node)) {
-      for (const property of node.properties) checkDefaults(t.isRestElement(property) ? property.argument : property.value);
+      for (const property of node.properties)
+        checkDefaults(t.isRestElement(property) ? property.argument : property.value);
     } else if (t.isArrayPattern(node)) {
       for (const element of node.elements) if (element !== null) checkDefaults(element);
     } else if (t.isRestElement(node)) {
@@ -4037,13 +4092,21 @@ function parameterOwnership(binding: Binding, context: ReadContext, depth: numbe
 function elementCallbackOwnership(owner: NodePath, index: number, context: ReadContext, depth: number): Ownership {
   const slot = climbTransparentWrappers(owner);
   const call = slot.parentPath;
-  if (call === null || !(call.isCallExpression() || call.isOptionalCallExpression()) || call.node.arguments[0] !== slot.node) {
+  if (
+    call === null ||
+    !(call.isCallExpression() || call.isOptionalCallExpression()) ||
+    call.node.arguments[0] !== slot.node
+  ) {
     return Ownership.Unknown;
   }
   const callee = unwrapTransparent(call.node.callee);
   if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return Ownership.Unknown;
   const method = getStaticMemberChain(callee)?.keys.at(-1);
-  if (method === undefined || !elementCallbackMethods.has(method) || (callbackResultMethods.has(method) && index === 0)) {
+  if (
+    method === undefined ||
+    !elementCallbackMethods.has(method) ||
+    (callbackResultMethods.has(method) && index === 0)
+  ) {
     return Ownership.Unknown;
   }
   return ownership(call, callee.object, depth + 1, context) === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
@@ -4055,17 +4118,28 @@ function elementCallbackOwnership(owner: NodePath, index: number, context: ReadC
  * what the weakest of those calls passes. A function that is exported,
  * handed elsewhere, or reassigned can be called with anything.
  */
-function helperArgumentOwnership(owner: NodePath<t.Function>, index: number, context: ReadContext, depth: number): Ownership {
+function helperArgumentOwnership(
+  owner: NodePath<t.Function>,
+  index: number,
+  context: ReadContext,
+  depth: number,
+): Ownership {
   let binding: Binding | undefined;
   if (owner.isFunctionDeclaration() && owner.node.id) {
     binding = owner.parentPath.scope.getBinding(owner.node.id.name);
   } else {
     const slot = climbTransparentWrappers(owner).parentPath;
-    if (slot?.isVariableDeclarator() && t.isIdentifier(slot.node.id)) binding = slot.scope.getBinding(slot.node.id.name);
+    if (slot?.isVariableDeclarator() && t.isIdentifier(slot.node.id))
+      binding = slot.scope.getBinding(slot.node.id.name);
   }
-  if (binding === undefined || binding.constantViolations.length > 0 || binding.referencePaths.length === 0) return Ownership.Unknown;
-  if (binding.path.parentPath?.isExportNamedDeclaration() || binding.path.parentPath?.parentPath?.isExportNamedDeclaration() ||
-    binding.path.parentPath?.isExportDefaultDeclaration()) return Ownership.Unknown;
+  if (binding === undefined || binding.constantViolations.length > 0 || binding.referencePaths.length === 0)
+    return Ownership.Unknown;
+  if (
+    binding.path.parentPath?.isExportNamedDeclaration() ||
+    binding.path.parentPath?.parentPath?.isExportNamedDeclaration() ||
+    binding.path.parentPath?.isExportDefaultDeclaration()
+  )
+    return Ownership.Unknown;
   return weakestArgument(binding, index, context, depth);
 }
 
@@ -4116,10 +4190,17 @@ function weakestArgument(binding: Binding, index: number, context: ReadContext, 
 /** An expression whose value is always a primitive, whatever its operands are. */
 function isPrimitiveExpression(node: t.Node): boolean {
   const expression = unwrapTransparent(node);
-  return t.isStringLiteral(expression) || t.isNumericLiteral(expression) || t.isBooleanLiteral(expression) ||
-    t.isNullLiteral(expression) || t.isBigIntLiteral(expression) || t.isTemplateLiteral(expression) ||
-    t.isBinaryExpression(expression) || t.isUpdateExpression(expression) ||
-    (t.isUnaryExpression(expression) && expression.operator !== "delete");
+  return (
+    t.isStringLiteral(expression) ||
+    t.isNumericLiteral(expression) ||
+    t.isBooleanLiteral(expression) ||
+    t.isNullLiteral(expression) ||
+    t.isBigIntLiteral(expression) ||
+    t.isTemplateLiteral(expression) ||
+    t.isBinaryExpression(expression) ||
+    t.isUpdateExpression(expression) ||
+    (t.isUnaryExpression(expression) && expression.operator !== "delete")
+  );
 }
 
 /**
@@ -4166,13 +4247,23 @@ function ownership(path: NodePath, node: t.Node, depth: number, context: ReadCon
 function computeOwnership(path: NodePath, expression: t.Node, depth: number, context: ReadContext): Ownership {
   if (isPrimitiveExpression(expression)) return Ownership.Deep;
   if (t.isArrayExpression(expression) || t.isObjectExpression(expression)) {
-    return literalHoldsOnly(path, expression, depth, context) ? Ownership.Deep : t.isArrayExpression(expression) ? Ownership.Builtin : Ownership.Unknown;
+    return literalHoldsOnly(path, expression, depth, context)
+      ? Ownership.Deep
+      : t.isArrayExpression(expression)
+        ? Ownership.Builtin
+        : Ownership.Unknown;
   }
   if (t.isConditionalExpression(expression)) {
-    return Math.min(ownership(path, expression.consequent, depth + 1, context), ownership(path, expression.alternate, depth + 1, context));
+    return Math.min(
+      ownership(path, expression.consequent, depth + 1, context),
+      ownership(path, expression.alternate, depth + 1, context),
+    );
   }
   if (t.isLogicalExpression(expression)) {
-    return Math.min(ownership(path, expression.left, depth + 1, context), ownership(path, expression.right, depth + 1, context));
+    return Math.min(
+      ownership(path, expression.left, depth + 1, context),
+      ownership(path, expression.right, depth + 1, context),
+    );
   }
   if (t.isSequenceExpression(expression)) {
     const last = expression.expressions.at(-1);
@@ -4182,14 +4273,19 @@ function computeOwnership(path: NodePath, expression: t.Node, depth: number, con
     if (expression.operator === "=") return ownership(path, expression.right, depth + 1, context);
     // `x ??= extStore` is either the old value or the new one; `+=` and the like produce a primitive.
     if (expression.operator === "??=" || expression.operator === "||=" || expression.operator === "&&=") {
-      return Math.min(ownership(path, expression.left, depth + 1, context), ownership(path, expression.right, depth + 1, context));
+      return Math.min(
+        ownership(path, expression.left, depth + 1, context),
+        ownership(path, expression.right, depth + 1, context),
+      );
     }
     return Ownership.Deep;
   }
   if (t.isMemberExpression(expression) || t.isOptionalMemberExpression(expression)) {
     // Only a member of props, state, or a literal of primitives is known; an
     // element of another local array or a property of an object can be anything.
-    return ownership(path, expression.object, depth + 1, context) === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
+    return ownership(path, expression.object, depth + 1, context) === Ownership.Deep
+      ? Ownership.Deep
+      : Ownership.Unknown;
   }
   if (t.isCallExpression(expression) || t.isOptionalCallExpression(expression)) {
     const callee = unwrapTransparent(expression.callee);
@@ -4201,8 +4297,9 @@ function computeOwnership(path: NodePath, expression: t.Node, depth: number, con
     if (elementReturningMethods.has(method)) return receiver === Ownership.Deep ? Ownership.Deep : Ownership.Unknown;
     if (elementPreservingMethods.has(method)) return receiver;
     if (newCollectionMethods.has(method)) {
-      return method === "concat" && receiver === Ownership.Deep &&
-          expression.arguments.every((argument) => ownership(path, argument, depth + 1, context) === Ownership.Deep)
+      return method === "concat" &&
+        receiver === Ownership.Deep &&
+        expression.arguments.every((argument) => ownership(path, argument, depth + 1, context) === Ownership.Deep)
         ? Ownership.Deep
         : Ownership.Builtin;
     }
@@ -4223,32 +4320,42 @@ function computeOwnership(path: NodePath, expression: t.Node, depth: number, con
   let trust: Ownership;
   if (t.isIdentifier(declarator.id)) {
     trust = ownership(binding.path, init, depth + 1, context);
-  } else if (t.isArrayPattern(declarator.id) && (t.isCallExpression(init) || t.isOptionalCallExpression(init)) &&
-    t.isIdentifier(unwrapTransparent(init.callee)) && stateHookNames.has((unwrapTransparent(init.callee) as t.Identifier).name)) {
+  } else if (
+    t.isArrayPattern(declarator.id) &&
+    (t.isCallExpression(init) || t.isOptionalCallExpression(init)) &&
+    t.isIdentifier(unwrapTransparent(init.callee)) &&
+    stateHookNames.has((unwrapTransparent(init.callee) as t.Identifier).name)
+  ) {
     // `const [rows, setRows] = useState(...)`: React state, not an object with methods.
     trust = Ownership.Deep;
   } else {
     // `const { a, b: [c] } = props`: a part of trusted data is trusted, unless
     // a default value of other provenance can stand in for it.
-    trust = ownership(binding.path, init, depth + 1, context) === Ownership.Deep &&
-        patternDefaultsAreDeep(binding.path, declarator.id, depth, context)
-      ? Ownership.Deep
-      : Ownership.Unknown;
+    trust =
+      ownership(binding.path, init, depth + 1, context) === Ownership.Deep &&
+      patternDefaultsAreDeep(binding.path, declarator.id, depth, context)
+        ? Ownership.Deep
+        : Ownership.Unknown;
   }
   return trust === Ownership.Unknown ? trust : Math.min(trust, mutationLimit(binding, context, depth + 1));
 }
 
 function patternDefaultsAreDeep(path: NodePath, pattern: t.Node, depth: number, context: ReadContext): boolean {
   if (t.isAssignmentPattern(pattern)) {
-    return ownership(path, pattern.right, depth + 1, context) === Ownership.Deep &&
-      patternDefaultsAreDeep(path, pattern.left, depth, context);
+    return (
+      ownership(path, pattern.right, depth + 1, context) === Ownership.Deep &&
+      patternDefaultsAreDeep(path, pattern.left, depth, context)
+    );
   }
   if (t.isObjectPattern(pattern)) {
     return pattern.properties.every((property) =>
-      patternDefaultsAreDeep(path, t.isRestElement(property) ? property.argument : property.value, depth, context));
+      patternDefaultsAreDeep(path, t.isRestElement(property) ? property.argument : property.value, depth, context),
+    );
   }
   if (t.isArrayPattern(pattern)) {
-    return pattern.elements.every((element) => element === null || patternDefaultsAreDeep(path, element, depth, context));
+    return pattern.elements.every(
+      (element) => element === null || patternDefaultsAreDeep(path, element, depth, context),
+    );
   }
   if (t.isRestElement(pattern)) return patternDefaultsAreDeep(path, pattern.argument, depth, context);
   return true;
@@ -4262,13 +4369,18 @@ function literalHoldsOnly(
   context: ReadContext,
 ): boolean {
   if (t.isArrayExpression(node)) {
-    return node.elements.every((element) =>
-      element === null || (!t.isSpreadElement(element) && ownership(path, element, depth + 1, context) === Ownership.Deep));
+    return node.elements.every(
+      (element) =>
+        element === null ||
+        (!t.isSpreadElement(element) && ownership(path, element, depth + 1, context) === Ownership.Deep),
+    );
   }
-  return node.properties.every((property) =>
-    t.isObjectProperty(property) &&
-    (!property.computed || ownership(path, property.key, depth + 1, context) === Ownership.Deep) &&
-    ownership(path, property.value, depth + 1, context) === Ownership.Deep);
+  return node.properties.every(
+    (property) =>
+      t.isObjectProperty(property) &&
+      (!property.computed || ownership(path, property.key, depth + 1, context) === Ownership.Deep) &&
+      ownership(path, property.value, depth + 1, context) === Ownership.Deep,
+  );
 }
 
 /**
@@ -4310,7 +4422,11 @@ function unresolvedCallMayRead(
     const binding = call.scope.getBinding(callee.name);
     if (binding === undefined) return true;
     const specifier = binding.path;
-    if (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier()) {
+    if (
+      specifier.isImportSpecifier() ||
+      specifier.isImportDefaultSpecifier() ||
+      specifier.isImportNamespaceSpecifier()
+    ) {
       return importIsForeign(specifier, context);
     }
     return true;
@@ -4319,22 +4435,29 @@ function unresolvedCallMayRead(
     const name = getStaticMemberChain(callee)?.keys.at(-1);
     if (name !== undefined && isComponentName(name)) return false;
     if (
-      name !== undefined && pureMethodNames.has(name) && receiverIsLocalData(call, callee, context) &&
+      name !== undefined &&
+      pureMethodNames.has(name) &&
+      receiverIsLocalData(call, callee, context) &&
       calledBackIsKnown(call, builtinCallbackArguments.get(name))
-    ) return false;
+    )
+      return false;
     if (resolveKeyedFunction(call, callee) !== undefined) return false;
     // `new Intl.NumberFormat().format(n)`: a fresh instance of a standard class has only its methods.
     if (
-      name !== undefined && isStandardInstance(call, callee.object, context) &&
+      name !== undefined &&
+      isStandardInstance(call, callee.object, context) &&
       calledBackIsKnown(call, builtinCallbackArguments.get(name))
-    ) return false;
+    )
+      return false;
     // Namespace members of the library or React: `ns.signal(1)`.
     const root = unwrapTransparent(getStaticMemberChain(callee)?.root ?? callee);
     if (t.isIdentifier(root)) {
       const specifier = call.scope.getBinding(root.name)?.path;
       if (
         specifier !== undefined &&
-        (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier())
+        (specifier.isImportSpecifier() ||
+          specifier.isImportDefaultSpecifier() ||
+          specifier.isImportNamespaceSpecifier())
       ) {
         return importIsForeign(specifier, context);
       }
@@ -4359,12 +4482,19 @@ function isStandardInstance(path: NodePath, node: t.Node, context: ReadContext):
   if (!t.isIdentifier(expression)) return false;
   const binding = path.scope.getBinding(expression.name);
   if (
-    binding === undefined || binding.constantViolations.length > 0 || !binding.path.isVariableDeclarator() ||
-    !t.isIdentifier(binding.path.node.id) || binding.path.node.init == null
-  ) return false;
+    binding === undefined ||
+    binding.constantViolations.length > 0 ||
+    !binding.path.isVariableDeclarator() ||
+    !t.isIdentifier(binding.path.node.id) ||
+    binding.path.node.init == null
+  )
+    return false;
   const init = unwrapTransparent(binding.path.node.init);
-  return t.isNewExpression(init) && freshInstanceConstructor(binding.path, init) &&
-    mutationLimit(binding, context, 0) !== Ownership.Unknown;
+  return (
+    t.isNewExpression(init) &&
+    freshInstanceConstructor(binding.path, init) &&
+    mutationLimit(binding, context, 0) !== Ownership.Unknown
+  );
 }
 
 /**
@@ -4381,10 +4511,16 @@ function constructorMayRead(path: NodePath<t.NewExpression>): boolean {
 function templateTagMayRead(path: NodePath<t.TaggedTemplateExpression>, context: ReadContext): boolean {
   const tag = unwrapTransparent(path.node.tag);
   if (callNameIsHook(tag) || standardGlobalCallee(path, tag) !== undefined) return false;
-  const root = t.isMemberExpression(tag) || t.isOptionalMemberExpression(tag) ? unwrapTransparent(getStaticMemberChain(tag)?.root ?? tag) : tag;
+  const root =
+    t.isMemberExpression(tag) || t.isOptionalMemberExpression(tag)
+      ? unwrapTransparent(getStaticMemberChain(tag)?.root ?? tag)
+      : tag;
   if (t.isIdentifier(root)) {
     const specifier = path.scope.getBinding(root.name)?.path;
-    if (specifier !== undefined && (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier())) {
+    if (
+      specifier !== undefined &&
+      (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier())
+    ) {
       return importIsForeign(specifier, context);
     }
   }
@@ -4407,8 +4543,16 @@ function namedArgumentMayRead(
     const value = unwrapTransparentPath(argument);
     if (!value.isIdentifier()) return false;
     const target = resolveReferencedFunction(value, value.node.name);
-    return target !== undefined && functionTargetMayReadTrackedValue(
-      target, context.importSource, context.managedRuntimeSource, context.reactImportSource, true, trackedAliases,
+    return (
+      target !== undefined &&
+      functionTargetMayReadTrackedValue(
+        target,
+        context.importSource,
+        context.managedRuntimeSource,
+        context.reactImportSource,
+        true,
+        trackedAliases,
+      )
     );
   });
 }
@@ -4416,8 +4560,11 @@ function namedArgumentMayRead(
 /** Is an import from a module other than this library or React? */
 function importIsForeign(specifier: NodePath, context: ReadContext): boolean {
   const source = (specifier.parentPath as NodePath<t.ImportDeclaration>).node.source.value;
-  return source !== context.importSource && source !== context.managedRuntimeSource &&
-    !isReactSource(source, context.reactImportSource);
+  return (
+    source !== context.importSource &&
+    source !== context.managedRuntimeSource &&
+    !isReactSource(source, context.reactImportSource)
+  );
 }
 
 const targetMayReadTrackedValue = new WeakMap<t.Node, boolean>();
@@ -4436,7 +4583,8 @@ function functionTargetMayReadTrackedValue(
   trackedAliases: Set<object> = noAliases,
 ): boolean {
   if ((target.node.async && !allowAsync) || target.node.generator) return false;
-  if (targetAliasGraphMayRead(target, trackedAliases, importSource, managedRuntimeSource, reactImportSource)) return true;
+  if (targetAliasGraphMayRead(target, trackedAliases, importSource, managedRuntimeSource, reactImportSource))
+    return true;
   return cachedTargetMayRead(target, importSource, managedRuntimeSource, reactImportSource);
 }
 
@@ -4474,7 +4622,9 @@ function targetAliasGraphMayRead(
     if (functionCallsHook(current)) break;
     let readsAlias = false;
     (current.get("body") as NodePath).traverse({
-      Function(nested) { nested.skip(); },
+      Function(nested) {
+        nested.skip();
+      },
       Identifier(path) {
         if (!path.isReferencedIdentifier() || isDeferredReadContext(path, current)) return;
         const binding = path.scope.getBinding(path.node.name);
@@ -4511,12 +4661,15 @@ function resolvedCallMayReadTrackedValue(
   // This is the call-site-specific addition to the existing generic helper
   // analysis. The caller still runs its normal fallback when this returns
   // false; do not recursively re-run that context-free analysis here.
-  return target !== undefined && targetAliasGraphMayRead(
-    target,
-    trackedAliases,
-    context.importSource,
-    context.managedRuntimeSource,
-    context.reactImportSource,
+  return (
+    target !== undefined &&
+    targetAliasGraphMayRead(
+      target,
+      trackedAliases,
+      context.importSource,
+      context.managedRuntimeSource,
+      context.reactImportSource,
+    )
   );
 }
 
@@ -4576,14 +4729,7 @@ function targetFunctionMayReadTrackedValue(
     return false;
   }
   if (functionCallsHook(target)) return false;
-  const inspection = inspectFunction(
-    target,
-    importSource,
-    managedRuntimeSource,
-    reactImportSource,
-    undefined,
-    true,
-  );
+  const inspection = inspectFunction(target, importSource, managedRuntimeSource, reactImportSource, undefined, true);
   if (inspection.readsValue || hasDynamicCallTarget(target)) return true;
   // A call in the helper that this module cannot prove (`extStore.total()`,
   // a callback from its caller) may read signals just as a call written at
@@ -4596,12 +4742,15 @@ function targetFunctionMayReadTrackedValue(
 function hasDynamicCallTarget(functionPath: NodePath<t.Function>): boolean {
   let found = false;
   functionPath.traverse({
-    Function(nested) { nested.skip(); },
+    Function(nested) {
+      nested.skip();
+    },
     CallExpression(path) {
       const callee = unwrapTransparent(path.node.callee);
       if (
         (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
-        callee.computed && getReadPropertyName(callee) === undefined
+        callee.computed &&
+        getReadPropertyName(callee) === undefined
       ) {
         found = true;
         path.stop();
@@ -4611,7 +4760,8 @@ function hasDynamicCallTarget(functionPath: NodePath<t.Function>): boolean {
       const callee = unwrapTransparent(path.node.callee);
       if (
         (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
-        callee.computed && getReadPropertyName(callee) === undefined
+        callee.computed &&
+        getReadPropertyName(callee) === undefined
       ) {
         found = true;
         path.stop();
@@ -4625,8 +4775,9 @@ const noAliases: Set<object> = new Set();
 
 /** The bindings a declaration pattern introduces, as seen from `path`'s scope. */
 function patternBindings(path: NodePath, node: t.Node): object[] {
-  return Object.values(t.getBindingIdentifiers(node) as Record<string, t.Identifier>)
-    .map((identifier) => path.scope.getBinding(identifier.name)!);
+  return Object.values(t.getBindingIdentifiers(node) as Record<string, t.Identifier>).map((identifier) =>
+    path.scope.getBinding(identifier.name)!,
+  );
 }
 
 /**
@@ -4637,10 +4788,7 @@ function patternBindings(path: NodePath, node: t.Node): object[] {
  * worklist, so the cost stays linear in the function however the statements
  * are ordered.
  */
-function collectTrackedReadAliases(
-  functionPath: NodePath<t.Function>,
-  context: ReadContext,
-): Set<object> {
+function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: ReadContext): Set<object> {
   const trackedAliases = new Set<object>();
   // Per binding: the targets of every flow that mentions it.
   const dependents = new Map<object, object[][]>();
@@ -4651,8 +4799,11 @@ function collectTrackedReadAliases(
       pending.push(binding);
     }
   };
-  const isLocalVariable = (binding: ReturnType<NodePath["scope"]["getBinding"]>): binding is NonNullable<typeof binding> =>
-    binding !== undefined && (binding.kind === "const" || binding.kind === "let" || binding.kind === "var") &&
+  const isLocalVariable = (
+    binding: ReturnType<NodePath["scope"]["getBinding"]>,
+  ): binding is NonNullable<typeof binding> =>
+    binding !== undefined &&
+    (binding.kind === "const" || binding.kind === "let" || binding.kind === "var") &&
     binding.scope.getFunctionParent()?.path.node === functionPath.node;
   const resolvedCallReads = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): boolean => {
     if (resolvedCallMayReadTrackedValue(call, context, trackedAliases)) return true;
@@ -4663,11 +4814,14 @@ function collectTrackedReadAliases(
       : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
         ? resolveKeyedFunction(call, callee)
         : undefined;
-    return target !== undefined && functionTargetMayReadTrackedValue(
-      target,
-      context.importSource,
-      context.managedRuntimeSource,
-      context.reactImportSource,
+    return (
+      target !== undefined &&
+      functionTargetMayReadTrackedValue(
+        target,
+        context.importSource,
+        context.managedRuntimeSource,
+        context.reactImportSource,
+      )
     );
   };
   /**
@@ -4697,14 +4851,21 @@ function collectTrackedReadAliases(
         if (!property.isObjectMethod() || property.node.kind !== "get" || property.node.async) continue;
         const body = property.get("body");
         if (bodyReadsTrackedValue(body, property, noAliases, context)) return true;
-        body.traverse({ Function(nested) { nested.skip(); }, Identifier: reference });
+        body.traverse({
+          Function(nested) {
+            nested.skip();
+          },
+          Identifier: reference,
+        });
       }
     }
     if (source.isIdentifier()) reference(source);
     else if (source.isCallExpression() || source.isOptionalCallExpression()) call(source);
     if (seeded) return true;
     source.traverse({
-      Function(nested) { nested.skip(); },
+      Function(nested) {
+        nested.skip();
+      },
       Identifier: reference,
       CallExpression: call,
       OptionalCallExpression: call,
@@ -4744,8 +4905,12 @@ function collectTrackedReadAliases(
     if (method === undefined || !containerMethods.has(method)) return;
     const target = containerRoot(callee.get("object") as NodePath);
     if (target === undefined) return;
-    flow([target], (call.get("arguments") as NodePath[]).map((argument) =>
-      argument.isSpreadElement() ? argument.get("argument") as NodePath : argument));
+    flow(
+      [target],
+      (call.get("arguments") as NodePath[]).map((argument) =>
+        argument.isSpreadElement() ? (argument.get("argument") as NodePath) : argument,
+      ),
+    );
   };
   functionPath.traverse({
     Function(nested) {
@@ -4873,7 +5038,9 @@ function expressionCallsHook(path: NodePath): boolean {
     }
   };
   path.traverse({
-    Function(nested) { nested.skip(); },
+    Function(nested) {
+      nested.skip();
+    },
     CallExpression: inspectCall,
     OptionalCallExpression: inspectCall,
   });
@@ -4887,13 +5054,14 @@ function expressionCallsHook(path: NodePath): boolean {
  * matches(x))` reads through `matches`); async, generator, Hook-calling, and
  * event-handler functions are not synchronous render reads.
  */
-function inlineCallbackReadsTrackedValue(
-  path: NodePath,
-  trackedAliases: Set<object>,
-  context: ReadContext,
-): boolean {
+function inlineCallbackReadsTrackedValue(path: NodePath, trackedAliases: Set<object>, context: ReadContext): boolean {
   let target = path;
-  while (target.isTSAsExpression() || target.isTSSatisfiesExpression() || target.isTSNonNullExpression() || target.isParenthesizedExpression()) {
+  while (
+    target.isTSAsExpression() ||
+    target.isTSSatisfiesExpression() ||
+    target.isTSNonNullExpression() ||
+    target.isParenthesizedExpression()
+  ) {
     target = target.get("expression") as NodePath;
   }
   if (!target.isArrowFunctionExpression() && !target.isFunctionExpression()) return false;
@@ -4930,11 +5098,15 @@ function bodyReadsTrackedValue(
         context.importSource,
         context.managedRuntimeSource,
         context.reactImportSource,
-      ) || unresolvedCallMayRead(call, context))
-    ) return true;
-    return [call.get("callee") as NodePath, ...(call.get("arguments") as NodePath[])]
-      .some((argument) => inlineCallbackReadsTrackedValue(argument, trackedAliases, context)) ||
-      namedArgumentMayRead(call, context, trackedAliases);
+      ) ||
+        unresolvedCallMayRead(call, context))
+    )
+      return true;
+    return (
+      [call.get("callee") as NodePath, ...(call.get("arguments") as NodePath[])].some((argument) =>
+        inlineCallbackReadsTrackedValue(argument, trackedAliases, context),
+      ) || namedArgumentMayRead(call, context, trackedAliases)
+    );
   };
   // `traverse` does not visit its root, which is the call in an expression body.
   if ((body.isCallExpression() || body.isOptionalCallExpression() || body.isNewExpression()) && callReads(body)) {
@@ -4948,7 +5120,9 @@ function bodyReadsTrackedValue(
     }
   };
   body.traverse({
-    Function(nested) { nested.skip(); },
+    Function(nested) {
+      nested.skip();
+    },
     CallExpression: inspectCall,
     OptionalCallExpression: inspectCall,
     NewExpression: inspectCall,
@@ -4978,7 +5152,7 @@ function callReadsTrackedValue(
   const callee = call.get("callee") as NodePath;
   if (inlineCallbackReadsTrackedValue(callee, trackedAliases, context)) return true;
   for (const argument of call.get("arguments") as NodePath[]) {
-    const value = argument.isSpreadElement() ? argument.get("argument") as NodePath : argument;
+    const value = argument.isSpreadElement() ? (argument.get("argument") as NodePath) : argument;
     if (inlineCallbackReadsTrackedValue(value, trackedAliases, context)) return true;
     if (!value.isFunction() && hasTrackedReadInExpression(value, functionPath, trackedAliases)) return true;
   }
@@ -4992,9 +5166,10 @@ function spreadsTrackedValue(
   trackedAliases: Set<object>,
 ): boolean {
   const entries = (path.isObjectExpression() ? path.get("properties") : path.get("elements")) as NodePath[];
-  return entries.some((entry) =>
-    entry.isSpreadElement() &&
-    hasTrackedReadInExpression(entry.get("argument"), functionPath, trackedAliases));
+  return entries.some(
+    (entry) =>
+      entry.isSpreadElement() && hasTrackedReadInExpression(entry.get("argument"), functionPath, trackedAliases),
+  );
 }
 
 /**
@@ -5011,10 +5186,7 @@ function spreadsTrackedValue(
  */
 const generatedCaptureCallbacks = new WeakSet<t.Node>();
 
-function generatedCallback(
-  params: t.Identifier[],
-  body: t.Expression | t.BlockStatement,
-): t.ArrowFunctionExpression {
+function generatedCallback(params: t.Identifier[], body: t.Expression | t.BlockStatement): t.ArrowFunctionExpression {
   const callback = t.arrowFunctionExpression(params, body);
   generatedCaptureCallbacks.add(callback);
   return callback;
@@ -5022,11 +5194,39 @@ function generatedCallback(
 
 /** Operators that run ToPrimitive/ToNumeric on object operands. `===` and `!==` do not coerce. */
 const COERCING_BINARY_OPERATORS: ReadonlySet<string> = new Set([
-  "+", "-", "*", "/", "%", "**", "<", ">", "<=", ">=", "==", "!=",
-  "&", "|", "^", "<<", ">>", ">>>", "instanceof",
+  "+",
+  "-",
+  "*",
+  "/",
+  "%",
+  "**",
+  "<",
+  ">",
+  "<=",
+  ">=",
+  "==",
+  "!=",
+  "&",
+  "|",
+  "^",
+  "<<",
+  ">>",
+  ">>>",
+  "instanceof",
 ]);
 const COERCING_COMPOUND_ASSIGNMENTS: ReadonlySet<string> = new Set([
-  "+=", "-=", "*=", "/=", "%=", "**=", "&=", "|=", "^=", "<<=", ">>=", ">>>=",
+  "+=",
+  "-=",
+  "*=",
+  "/=",
+  "%=",
+  "**=",
+  "&=",
+  "|=",
+  "^=",
+  "<<=",
+  ">>=",
+  ">>>=",
 ]);
 
 const HOOK_IN_CAPTURED_CALL_WARNING =
@@ -5055,10 +5255,9 @@ function captureTrackedReadExpressions(
   const context: ReadContext = { importSource, managedRuntimeSource, reactImportSource };
   const wrap = (path: NodePath<t.Expression>): void => {
     path.replaceWith(
-      t.callExpression(
-        t.memberExpression(t.cloneNode(store), t.identifier("capture")),
-        [generatedCallback([], t.cloneNode(path.node, true))],
-      ),
+      t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
+        generatedCallback([], t.cloneNode(path.node, true)),
+      ]),
     );
     path.skip();
   };
@@ -5076,7 +5275,8 @@ function captureTrackedReadExpressions(
     if (target === undefined || target.node.async || target.node.generator) return;
     let reads = hookCallingReader.get(target.node);
     if (reads === undefined) {
-      reads = functionCallsHook(target) &&
+      reads =
+        functionCallsHook(target) &&
         inspectFunction(target, importSource, managedRuntimeSource, reactImportSource, undefined, true).readsValue;
       hookCallingReader.set(target.node, reads);
     }
@@ -5093,7 +5293,8 @@ function captureTrackedReadExpressions(
       !operands.some((operand) => hasTrackedReadInExpression(operand, functionPath, trackedAliases)) ||
       isDeferredReadContext(path, functionPath) ||
       expressionCallsHook(path)
-    ) return;
+    )
+      return;
     wrap(path);
   };
   /** Would `visitCall` capture this call, or does it produce an iterator that reads when pulled? */
@@ -5105,11 +5306,16 @@ function captureTrackedReadExpressions(
         ? resolveKeyedFunction(call, callee)
         : undefined;
     if (target !== undefined) {
-      return target.node.generator === true && !target.node.async &&
-        targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
+      return (
+        target.node.generator === true &&
+        !target.node.async &&
+        targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource)
+      );
     }
-    return unresolvedCallMayRead(call, context) ||
-      externalCallMayReadTrackedValue(call, functionPath, importSource, managedRuntimeSource, reactImportSource);
+    return (
+      unresolvedCallMayRead(call, context) ||
+      externalCallMayReadTrackedValue(call, functionPath, importSource, managedRuntimeSource, reactImportSource)
+    );
   };
   const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
     if (generated.has(path.node)) {
@@ -5130,8 +5336,13 @@ function captureTrackedReadExpressions(
       (callee.isIdentifier() && path.scope.getBinding(callee.node.name)?.kind === "param") ||
       resolvedCallMayReadTrackedValue(path, context, trackedAliases) ||
       externalCallMayReadTrackedValue(path, functionPath, importSource, managedRuntimeSource, reactImportSource) ||
-      [callee as NodePath, ...(path.get("arguments") as NodePath[])]
-        .some((part) => inlineCallbackReadsTrackedValue(part.isSpreadElement() ? part.get("argument") as NodePath : part, trackedAliases, context)) ||
+      [callee as NodePath, ...(path.get("arguments") as NodePath[])].some((part) =>
+        inlineCallbackReadsTrackedValue(
+          part.isSpreadElement() ? (part.get("argument") as NodePath) : part,
+          trackedAliases,
+          context,
+        ),
+      ) ||
       namedArgumentMayRead(path, context, trackedAliases);
     // A callee the module cannot see into (a method of an imported object, a
     // function held in a variable) is captured as a precaution. Unlike the
@@ -5162,15 +5373,18 @@ function captureTrackedReadExpressions(
       if (base.node.computed && expressionCallsHook(base.get("property") as NodePath)) return false;
       base = base.get("object") as NodePath;
     }
-    if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee)) return false;
+    if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee))
+      return false;
     const result = path.scope.generateUidIdentifier("hookResult");
     const hookCall = t.cloneNode(base.node, true);
     base.replaceWith(t.cloneNode(result));
     const read = t.callExpression(
-      generatedCallback([t.cloneNode(result)], t.callExpression(
-        t.memberExpression(t.cloneNode(store), t.identifier("capture")),
-        [generatedCallback([], t.cloneNode(path.node, true))],
-      )),
+      generatedCallback(
+        [t.cloneNode(result)],
+        t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
+          generatedCallback([], t.cloneNode(path.node, true)),
+        ]),
+      ),
       [hookCall],
     );
     generated.add(read);
@@ -5199,11 +5413,16 @@ function captureTrackedReadExpressions(
   ): { result: t.Identifier; hookCall: t.Expression; read: t.Expression } | undefined => {
     let base: NodePath = path;
     while (base.isMemberExpression() || base.isOptionalMemberExpression() || isTransparentWrapper(base.node)) {
-      if ((base.isMemberExpression() || base.isOptionalMemberExpression()) && base.node.computed &&
-        expressionCallsHook(base.get("property") as NodePath)) return undefined;
+      if (
+        (base.isMemberExpression() || base.isOptionalMemberExpression()) &&
+        base.node.computed &&
+        expressionCallsHook(base.get("property") as NodePath)
+      )
+        return undefined;
       base = (isTransparentWrapper(base.node) ? base.get("expression") : base.get("object")) as NodePath;
     }
-    if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee)) return undefined;
+    if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee))
+      return undefined;
     const result = scope.generateUidIdentifier("hookResult");
     const hookCall = t.cloneNode(base.node, true);
     base.replaceWith(t.cloneNode(result));
@@ -5223,15 +5442,24 @@ function captureTrackedReadExpressions(
     const names = Object.keys(t.getBindingIdentifiers(pattern));
     const handOut = (): t.ObjectExpression =>
       t.objectExpression(names.map((name) => t.objectProperty(t.identifier(name), t.identifier(name), false, true)));
-    const call = t.callExpression(
-      t.memberExpression(t.cloneNode(store), t.identifier("capture")),
-      [generatedCallback([], t.blockStatement([
-        t.variableDeclaration("const", [t.variableDeclarator(t.cloneNode(pattern, true) as t.ObjectPattern | t.ArrayPattern, t.cloneNode(init, true))]),
-        t.returnStatement(handOut()),
-      ]))],
-    );
+    const call = t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
+      generatedCallback(
+        [],
+        t.blockStatement([
+          t.variableDeclaration("const", [
+            t.variableDeclarator(
+              t.cloneNode(pattern, true) as t.ObjectPattern | t.ArrayPattern,
+              t.cloneNode(init, true),
+            ),
+          ]),
+          t.returnStatement(handOut()),
+        ]),
+      ),
+    ]);
     generated.add(call);
-    const outer = t.objectPattern(names.map((name) => t.objectProperty(t.identifier(name), t.identifier(name), false, true)));
+    const outer = t.objectPattern(
+      names.map((name) => t.objectProperty(t.identifier(name), t.identifier(name), false, true)),
+    );
     return t.variableDeclaration(kind, [t.variableDeclarator(outer, call)]);
   };
   const visitMember = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
@@ -5247,7 +5475,8 @@ function captureTrackedReadExpressions(
       (parent?.isTaggedTemplateExpression() && parent.node.tag === slot.node) ||
       isWriteTarget(path) ||
       !hasTrackedReadInMemberChain(path, functionPath, trackedAliases)
-    ) return;
+    )
+      return;
     wrapMemberRead(path);
   };
   const wrapMemberRead = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
@@ -5299,14 +5528,16 @@ function captureTrackedReadExpressions(
           const source = unwrapTransparentPath(right);
           if (
             !(source.isCallExpression() || source.isOptionalCallExpression()) ||
-            callNameIsHook(source.node.callee) || expressionCallsHook(source) ||
+            callNameIsHook(source.node.callee) ||
+            expressionCallsHook(source) ||
             !iteratedCallMayRead(source)
-          ) return;
+          )
+            return;
         }
-        const iterate = (source: t.Expression): t.CallExpression => t.callExpression(
-          t.memberExpression(t.cloneNode(store), t.identifier("iterate")),
-          [generatedCallback([], source)],
-        );
+        const iterate = (source: t.Expression): t.CallExpression =>
+          t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("iterate")), [
+            generatedCallback([], source),
+          ]);
         let captured: t.CallExpression;
         let hookSplit = false;
         if (expressionCallsHook(right)) {
@@ -5336,10 +5567,9 @@ function captureTrackedReadExpressions(
           // to a temporary and perform the authored assignment inside a
           // capture first thing in the body, in the same order as before.
           const item = path.scope.generateUidIdentifier("item");
-          const assignment = t.callExpression(
-            t.memberExpression(t.cloneNode(store), t.identifier("capture")),
-            [generatedCallback([], t.assignmentExpression("=", t.cloneNode(left.node, true), t.cloneNode(item)))],
-          );
+          const assignment = t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
+            generatedCallback([], t.assignmentExpression("=", t.cloneNode(left.node, true), t.cloneNode(item))),
+          ]);
           generated.add(assignment);
           left.replaceWith(t.variableDeclaration("const", [t.variableDeclarator(item)]));
           left.skip();
@@ -5379,11 +5609,15 @@ function captureTrackedReadExpressions(
         // one and hands the keys out lazily, skipping keys deleted before
         // their turn. It is a `for...of` over those keys from here on.
         const right = path.get("right");
-        if (!hasTrackedReadInExpression(right, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
-        const forIn = (source: t.Expression): t.CallExpression => t.callExpression(
-          t.memberExpression(t.cloneNode(store), t.identifier("forIn")),
-          [generatedCallback([], source)],
-        );
+        if (
+          !hasTrackedReadInExpression(right, functionPath, trackedAliases) ||
+          isDeferredReadContext(path, functionPath)
+        )
+          return;
+        const forIn = (source: t.Expression): t.CallExpression =>
+          t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("forIn")), [
+            generatedCallback([], source),
+          ]);
         let captured: t.CallExpression;
         let hookSplit = false;
         if (expressionCallsHook(right)) {
@@ -5412,7 +5646,11 @@ function captureTrackedReadExpressions(
         const id = path.get("id");
         const init = path.get("init");
         if ((!id.isObjectPattern() && !id.isArrayPattern()) || !init.node) return;
-        if (!hasTrackedReadInExpression(init, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
+        if (
+          !hasTrackedReadInExpression(init, functionPath, trackedAliases) ||
+          isDeferredReadContext(path, functionPath)
+        )
+          return;
         if (expressionCallsHook(init)) {
           const hookCall = unwrapTransparentPath(init);
           if (
@@ -5455,15 +5693,26 @@ function captureTrackedReadExpressions(
         // the generic read checks treat assignment targets as writes only.
         const targetReadsTrackedValue = (): boolean => {
           let current: NodePath = left;
-          while (current.isMemberExpression() || current.isOptionalMemberExpression() || isTransparentWrapper(current.node)) {
-            if ((current.isMemberExpression() || current.isOptionalMemberExpression()) &&
-              getTrackedReadPropertyName(current) === "value") return true;
-            current = (isTransparentWrapper(current.node) ? current.get("expression") : current.get("object")) as NodePath;
+          while (
+            current.isMemberExpression() ||
+            current.isOptionalMemberExpression() ||
+            isTransparentWrapper(current.node)
+          ) {
+            if (
+              (current.isMemberExpression() || current.isOptionalMemberExpression()) &&
+              getTrackedReadPropertyName(current) === "value"
+            )
+              return true;
+            current = (
+              isTransparentWrapper(current.node) ? current.get("expression") : current.get("object")
+            ) as NodePath;
           }
           return current.isIdentifier() && trackedAliases.has(current.scope.getBinding(current.node.name) as object);
         };
-        const readingWrite = path.node.operator !== "=" &&
-          (left.isMemberExpression() || left.isOptionalMemberExpression()) && targetReadsTrackedValue();
+        const readingWrite =
+          path.node.operator !== "=" &&
+          (left.isMemberExpression() || left.isOptionalMemberExpression()) &&
+          targetReadsTrackedValue();
         if (!destructuring && !readingWrite) return;
         if (destructuring && !hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
         if (isDeferredReadContext(path, functionPath)) return;
@@ -5483,7 +5732,8 @@ function captureTrackedReadExpressions(
           hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
           !isDeferredReadContext(path, functionPath) &&
           !expressionCallsHook(path)
-        ) wrap(path as NodePath<t.Expression>);
+        )
+          wrap(path as NodePath<t.Expression>);
       },
     },
     JSXSpreadAttribute: {
@@ -5491,15 +5741,18 @@ function captureTrackedReadExpressions(
         // `<p {...state.value.props} />` copies the props inside the JSX
         // runtime, after the source read. Copy them inside the capture.
         const argument = path.get("argument");
-        if (!hasTrackedReadInExpression(argument, functionPath, trackedAliases) || isDeferredReadContext(path, functionPath)) return;
+        if (
+          !hasTrackedReadInExpression(argument, functionPath, trackedAliases) ||
+          isDeferredReadContext(path, functionPath)
+        )
+          return;
         if (expressionCallsHook(argument)) {
           reportWarning(options, "RFGS001", argument, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
-        const copied = t.callExpression(
-          t.memberExpression(t.cloneNode(store), t.identifier("capture")),
-          [generatedCallback([], t.objectExpression([t.spreadElement(t.cloneNode(argument.node, true))]))],
-        );
+        const copied = t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
+          generatedCallback([], t.objectExpression([t.spreadElement(t.cloneNode(argument.node, true))])),
+        ]);
         generated.add(copied);
         argument.replaceWith(copied);
         argument.skip();
@@ -5536,7 +5789,8 @@ function captureTrackedReadExpressions(
             hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
             !isDeferredReadContext(path, functionPath) &&
             !expressionCallsHook(path)
-          ) wrap(path as NodePath<t.Expression>);
+          )
+            wrap(path as NodePath<t.Expression>);
         } else if (path.node.operator === "+" || path.node.operator === "-" || path.node.operator === "~") {
           wrapCoercion(path as NodePath<t.Expression>, [path.get("argument")]);
         }
@@ -5572,7 +5826,8 @@ function captureTrackedReadExpressions(
         if (
           !(hasTrackedReadInExpression(tag, functionPath, trackedAliases) || templateTagMayRead(path, context)) ||
           isDeferredReadContext(path, functionPath)
-        ) return;
+        )
+          return;
         if (expressionCallsHook(path)) {
           // The tag keeps its `this` only when the whole tagged template is
           // captured, which a Hook in the template forbids.
@@ -5601,13 +5856,12 @@ function captureTrackedReadExpressions(
  * and patterns with TS annotations stay untouched because rewriting them
  * needs additional proof to preserve their binding/evaluation semantics.
  */
-function expandTrackedObjectDestructuring(
-  functionPath: NodePath<t.Function>,
-  trackedAliases: Set<object>,
-): boolean {
+function expandTrackedObjectDestructuring(functionPath: NodePath<t.Function>, trackedAliases: Set<object>): boolean {
   const candidates: NodePath<t.VariableDeclarator>[] = [];
   functionPath.get("body").traverse({
-    Function(nested) { nested.skip(); },
+    Function(nested) {
+      nested.skip();
+    },
     VariableDeclarator(candidate) {
       candidates.push(candidate);
     },
@@ -5619,29 +5873,25 @@ function expandTrackedObjectDestructuring(
     const declaration = candidate.parentPath;
     const init = candidate.get("init");
     const bindings = getStaticConstDestructuredBindings(candidate);
-    if (
-      bindings === undefined ||
-      !init.node ||
-      !hasTrackedReadInExpression(init, functionPath, trackedAliases)
-    ) continue;
+    if (bindings === undefined || !init.node || !hasTrackedReadInExpression(init, functionPath, trackedAliases))
+      continue;
 
     const source = candidate.scope.generateUidIdentifier("trackedSource");
-    const expanded: t.VariableDeclarator[] = [
-      t.variableDeclarator(t.cloneNode(source), t.cloneNode(init.node, true)),
-    ];
+    const expanded: t.VariableDeclarator[] = [t.variableDeclarator(t.cloneNode(source), t.cloneNode(init.node, true))];
     const appendProperties = (pattern: StaticConstObjectPattern, base: t.Identifier): void => {
       for (const property of pattern.properties) {
         if ("id" in property) {
-          expanded.push(t.variableDeclarator(
-            t.cloneNode(property.id),
-            t.memberExpression(t.cloneNode(base), t.cloneNode(property.key)),
-          ));
+          expanded.push(
+            t.variableDeclarator(
+              t.cloneNode(property.id),
+              t.memberExpression(t.cloneNode(base), t.cloneNode(property.key)),
+            ),
+          );
         } else {
           const nested = candidate.scope.generateUidIdentifier("trackedNested");
-          expanded.push(t.variableDeclarator(
-            t.cloneNode(nested),
-            t.memberExpression(t.cloneNode(base), t.cloneNode(property.key)),
-          ));
+          expanded.push(
+            t.variableDeclarator(t.cloneNode(nested), t.memberExpression(t.cloneNode(base), t.cloneNode(property.key))),
+          );
           appendProperties(property.pattern, nested);
         }
       }
@@ -5662,8 +5912,8 @@ function expandTrackedObjectDestructuring(
   // each source and its extracted properties stay at the original declarator's
   // position among neighboring initializers.
   for (const [declaration, replacements] of expansions) {
-    declaration.declarations = declaration.declarations.flatMap((candidate) =>
-      replacements.get(candidate) ?? [candidate]
+    declaration.declarations = declaration.declarations.flatMap(
+      (candidate) => replacements.get(candidate) ?? [candidate],
     );
   }
   return expansions.size > 0;
@@ -5678,10 +5928,7 @@ function applyManaged(
 ): void {
   const store = path.scope.generateUidIdentifier("signals");
   const declaration = t.variableDeclaration("const", [
-    t.variableDeclarator(
-      t.cloneNode(store),
-      t.callExpression(t.cloneNode(runtimeImport.identifier), []),
-    ),
+    t.variableDeclarator(t.cloneNode(store), t.callExpression(t.cloneNode(runtimeImport.identifier), [])),
   ]);
   const first = statements[0];
   if (explicit && first !== undefined) t.inheritsComments(declaration, first.node);
@@ -5813,11 +6060,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
       Program: {
         enter(path, state) {
           state.programPath = path;
-          state.managedRuntimeImports = findRuntimeImports(
-            path,
-            managedRuntimeSource,
-            "useSignalCapture",
-          );
+          state.managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource, "useSignalCapture");
           state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
           state.absorbedImports = [];
           state.typeScript = state.file.opts.parserOpts?.plugins?.includes("typescript") === true;
@@ -5876,11 +6119,8 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
  * would have rejected anyway.
  */
 function mightTransform(code: string, mode: ReactFineGrainedSignalsMode): boolean {
-  if (
-    code.includes("useSignalTracking") ||
-    code.includes("@signalTracking") ||
-    code.includes("@noSignalTracking")
-  ) return true;
+  if (code.includes("useSignalTracking") || code.includes("@signalTracking") || code.includes("@noSignalTracking"))
+    return true;
   if (mode === "manual") return false;
   if (code.includes("value")) return true;
   return mode === "all" && code.includes("<");

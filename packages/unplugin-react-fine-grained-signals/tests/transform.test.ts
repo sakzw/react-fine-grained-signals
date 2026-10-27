@@ -86,42 +86,55 @@ describe("managed render transform", () => {
       /** @useSignals */
       export function Static() { return <p>static</p>; }
     `;
-    const oldOptOut = compile(`
+    const oldOptOut = compile(
+      `
       const count = { value: 1 };
       /** @noUseSignals */
       export function Counter() { return <p>{count.value}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(compile(oldOptIn)).toBe(oldOptIn);
     expect(oldOptOut).toContain("_signals.capture(() =>");
   });
 
   it("auto-detects named JSX components that read .value", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const Counter = () => <p>{count.value}</p>;
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toContain("const Counter = () => {");
     expect(output).toContain("_useSignalCapture()");
   });
 
   it("captures a direct .value read through a local signal alias", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const alias = count;
       export const Counter = () => <p>{alias.value}</p>;
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toContain("_signals.capture(() => alias.value)");
     expect(output).toContain("const alias = count;");
   });
 
   it("injects a bare useSignalTracking call without a managed render rewrite", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const Counter = () => <p>{count.value}</p>;
-    `, "auto", "inject");
+    `,
+      "auto",
+      "inject",
+    );
 
     expect(output).toContain('from "react-fine-grained-signals"');
     expect(output).not.toContain('from "react-fine-grained-signals/internal"');
@@ -133,11 +146,15 @@ describe("managed render transform", () => {
   });
 
   it("reuses a direct import and leaves an explicit bare useSignalTracking call untouched", () => {
-    const annotated = compile(`
+    const annotated = compile(
+      `
       import { useSignalTracking as track } from "react-fine-grained-signals";
       /** @signalTracking */
       export function Counter() { return <p>tracked</p>; }
-    `, "manual", "inject");
+    `,
+      "manual",
+      "inject",
+    );
     const explicit = `
       import { useSignalTracking } from "react-fine-grained-signals";
       export function Counter() { useSignalTracking(); return <p />; }
@@ -149,10 +166,15 @@ describe("managed render transform", () => {
   });
 
   it("supports custom import sources for the lightweight injection", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function Counter() { return <p>{count.value}</p>; }
-    `, "auto", "inject", "custom-signals");
+    `,
+      "auto",
+      "inject",
+      "custom-signals",
+    );
 
     expect(output).toContain('from "custom-signals"');
     expect(output).toContain("_useSignalTracking();");
@@ -160,12 +182,15 @@ describe("managed render transform", () => {
   });
 
   it("infers component names through memo and forwardRef wrappers", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import { forwardRef, memo } from "react";
       const count = { value: 1 };
       export const MemoCounter = memo(() => <p>{count.value}</p>);
       export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = memo(() => {");
@@ -173,18 +198,24 @@ describe("managed render transform", () => {
   });
 
   it("prefers the wrapper's assigned name over a wrapped function's own inner name", () => {
-    const memoOutput = compile(`
+    const memoOutput = compile(
+      `
       import { memo } from "react";
       const count = { value: 1 };
       export const Counter = memo(function inner() { return <p>{count.value}</p>; });
-    `, "auto");
-    const forwardRefOutput = compile(`
+    `,
+      "auto",
+    );
+    const forwardRefOutput = compile(
+      `
       import { forwardRef } from "react";
       const count = { value: 1 };
       export const Counter = forwardRef(function render(props, ref) {
         return <p ref={ref}>{count.value}</p>;
       });
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(memoOutput).toContain("memo(function inner() {");
     expect(memoOutput.match(/useSignalCapture\(\)/g)).toHaveLength(1);
@@ -197,14 +228,20 @@ describe("managed render transform", () => {
   it("prefers the assigned binding over an unwrapped function expression's own name", () => {
     // A function expression's own name is a stack-trace label, so the binding
     // decides in both directions, wrapper or not.
-    const component = compile(`
+    const component = compile(
+      `
       const s = { value: 1 };
       export const Counter = function render() { return <p>{s.value}</p>; };
-    `, "auto");
-    const helper = compile(`
+    `,
+      "auto",
+    );
+    const helper = compile(
+      `
       const s = { value: 1 };
       const helper = function Counter() { return <p>{s.value}</p>; };
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(component).toContain("export const Counter = function render() {");
     expect(component.match(/useSignalCapture\(\)/g)).toHaveLength(1);
@@ -226,7 +263,12 @@ describe("managed render transform", () => {
     `;
     const named = compile(namedSource, "auto", "managed", "react-fine-grained-signals", "opt-out", "./react-compat");
     const namespaced = compile(
-      namespaceSource, "auto", "managed", "react-fine-grained-signals", "opt-out", "./react-compat",
+      namespaceSource,
+      "auto",
+      "managed",
+      "react-fine-grained-signals",
+      "opt-out",
+      "./react-compat",
     );
 
     expect(named).toContain("const Counter = memo(() => {");
@@ -241,12 +283,19 @@ describe("managed render transform", () => {
   });
 
   it("keeps recognizing direct react imports when reactImportSource is configured", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import { forwardRef, memo } from "react";
       const count = { value: 1 };
       export const MemoCounter = memo(() => <p>{count.value}</p>);
       export const RefCounter = forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
-    `, "auto", "managed", "react-fine-grained-signals", "opt-out", "./react-compat");
+    `,
+      "auto",
+      "managed",
+      "react-fine-grained-signals",
+      "opt-out",
+      "./react-compat",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = memo(() => {");
@@ -254,17 +303,23 @@ describe("managed render transform", () => {
   });
 
   it("infers component names through memo and forwardRef reached via a React namespace or default import", () => {
-    const namespaceOutput = compile(`
+    const namespaceOutput = compile(
+      `
       import * as React from "react";
       const count = { value: 1 };
       export const MemoCounter = React.memo(() => <p>{count.value}</p>);
       export const RefCounter = React.forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
-    `, "auto");
-    const defaultOutput = compile(`
+    `,
+      "auto",
+    );
+    const defaultOutput = compile(
+      `
       import React from "react";
       const count = { value: 1 };
       export const MemoCounter = React.memo(() => <p>{count.value}</p>);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(namespaceOutput.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(namespaceOutput).toContain("const MemoCounter = React.memo(() => {");
@@ -274,7 +329,8 @@ describe("managed render transform", () => {
   });
 
   it("does not mistake a local memo helper or a memo from another package for React's wrapper", () => {
-    const localHelper = compile(`
+    const localHelper = compile(
+      `
       const state = { value: 1 };
       function memo(fn) {
         const cache = new Map();
@@ -285,17 +341,25 @@ describe("managed render transform", () => {
         };
       }
       export const useCachedValue = memo(() => state.value);
-    `, "auto");
-    const otherPackage = compile(`
+    `,
+      "auto",
+    );
+    const otherPackage = compile(
+      `
       import { memo } from "state-lib";
       const state = { value: 1 };
       export const useCachedValue = memo(() => state.value);
-    `, "auto");
-    const memberExpressionHelper = compile(`
+    `,
+      "auto",
+    );
+    const memberExpressionHelper = compile(
+      `
       import * as Utils from "state-lib";
       const state = { value: 1 };
       export const useCachedValue = Utils.memo(() => state.value);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     for (const output of [localHelper, otherPackage, memberExpressionHelper]) {
       expect(output).not.toContain("finally");
@@ -304,12 +368,15 @@ describe("managed render transform", () => {
   });
 
   it("infers component names through memo and forwardRef wrappers reached via an aliased React import", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import { memo as m, forwardRef as fr } from "react";
       const count = { value: 1 };
       export const MemoCounter = m(() => <p>{count.value}</p>);
       export const RefCounter = fr((props, ref) => <p ref={ref}>{count.value}</p>);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toContain("const MemoCounter = m(() => {");
@@ -317,11 +384,14 @@ describe("managed render transform", () => {
   });
 
   it("does not mistake an aliased memo import from another package for React's wrapper", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import { memo as m } from "state-lib";
       const state = { value: 1 };
       export const useCachedValue = m(() => state.value);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).not.toContain("finally");
     expect(output).not.toContain("react-fine-grained-signals/internal");
@@ -330,18 +400,24 @@ describe("managed render transform", () => {
   it.each(["auto", "all"] as const)(
     "transforms named default-export memo and forwardRef components in %s mode",
     (mode) => {
-      const memoOutput = compile(`
+      const memoOutput = compile(
+        `
           import { memo } from "react";
           const count = { value: 1 };
           export default memo(function Inner() { return <p>{count.value}</p>; });
-        `, mode);
-      const forwardRefOutput = compile(`
+        `,
+        mode,
+      );
+      const forwardRefOutput = compile(
+        `
           import { forwardRef } from "react";
           const count = { value: 1 };
           export default forwardRef(function Inner(props, ref) {
             return <p ref={ref}>{count.value}</p>;
           });
-        `, mode);
+        `,
+        mode,
+      );
 
       expect(memoOutput).toContain("memo(function Inner() {");
       expect(memoOutput).toContain("_useSignalCapture()");
@@ -350,31 +426,34 @@ describe("managed render transform", () => {
     },
   );
 
-  it.each(["auto", "all"] as const)(
-    "transforms anonymous default-export wrappers in %s mode",
-    (mode) => {
-      // These used to pass straight through: an anonymous default export has no
-      // binding, no key and no function `id`, so no identity resolved and the
-      // export was skipped without a word -- one line away from the named form
-      // above, which was transformed. The module's own file name is the name the
-      // rest of the codebase imports it by, so it supplies the identity.
-      const memoOutput = compile(`
+  it.each(["auto", "all"] as const)("transforms anonymous default-export wrappers in %s mode", (mode) => {
+    // These used to pass straight through: an anonymous default export has no
+    // binding, no key and no function `id`, so no identity resolved and the
+    // export was skipped without a word -- one line away from the named form
+    // above, which was transformed. The module's own file name is the name the
+    // rest of the codebase imports it by, so it supplies the identity.
+    const memoOutput = compile(
+      `
           import { memo } from "react";
           const count = { value: 1 };
           export default memo(() => <p>{count.value}</p>);
-        `, mode);
-      const forwardRefOutput = compile(`
+        `,
+      mode,
+    );
+    const forwardRefOutput = compile(
+      `
           import { forwardRef } from "react";
           const count = { value: 1 };
           export default forwardRef((props, ref) => <p ref={ref}>{count.value}</p>);
-        `, mode);
+        `,
+      mode,
+    );
 
-      expect(memoOutput).toContain("memo(() => {");
-      expect(memoOutput).toContain("_useSignalCapture()");
-      expect(forwardRefOutput).toContain("forwardRef((props, ref) => {");
-      expect(forwardRefOutput).toContain("_useSignalCapture()");
-    },
-  );
+    expect(memoOutput).toContain("memo(() => {");
+    expect(memoOutput).toContain("_useSignalCapture()");
+    expect(forwardRefOutput).toContain("forwardRef((props, ref) => {");
+    expect(forwardRefOutput).toContain("_useSignalCapture()");
+  });
 
   it("supports comment opt-in on a wrapped named component", () => {
     const output = compile(`
@@ -388,34 +467,43 @@ describe("managed render transform", () => {
   });
 
   it("does not auto-transform lowercase functions, JSX without .value, or non-JSX reads", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function render() { return <p>{count.value}</p>; }
       export function Plain() { return <p>plain</p>; }
       export function Value() { return count.value; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).not.toContain("react-fine-grained-signals/internal");
     expect(output).not.toContain("finally");
   });
 
   it("auto-detects custom hooks that own a .value read", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function useCount() { return count.value; }
       export function Counter() { return <p>{useCount()}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("function useCount");
   });
 
   it("recognizes bracket and optional .value reads", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function Bracket() { return <p>{count["value"]}</p>; }
       export function Optional() { return <p>{count?.value}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
   });
@@ -491,12 +579,15 @@ describe("managed render transform", () => {
     it("still tracks a genuine signal read alongside an event handler", () => {
       // The exclusions must stay narrow: a component that reads a signal in its
       // own body keeps its boundary even when it also reads `e.target.value`.
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         export function Form({ setV }) {
           return <input value={count.value} onChange={(e) => setV(e.target.value)} />;
         }
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/function Form\(\{[^}]*\}\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -506,21 +597,27 @@ describe("managed render transform", () => {
       // Only `target`/`currentTarget`/`current` receivers are ruled out; an
       // element of an array or a nested prop still counts, or a real signal
       // reached through one would silently lose its subscription.
-      const output = compile(`
+      const output = compile(
+        `
         const items = [{ value: 1 }];
         export function First() { return <p>{items[0].value}</p>; }
         export function Nested({ props }) { return <p>{props.count.value}</p>; }
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     });
   });
 
   it("all mode wraps named JSX components without a statically visible signal read", () => {
-    const output = compile(`
+    const output = compile(
+      `
       export function App() { return <main />; }
       export function useValue() { return 1; }
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("function App");
@@ -529,12 +626,15 @@ describe("managed render transform", () => {
   it.each(["auto", "all"] as const)(
     "%s mode tracks render callbacks through their owner without injecting a hook into the callback",
     (mode) => {
-      const output = compile(`
+      const output = compile(
+        `
         const items = [{ value: "one" }];
         export function List() {
           return <ul>{items.map(function Row(item) { return <li>{item.value}</li>; })}</ul>;
         }
-      `, mode);
+      `,
+        mode,
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -545,7 +645,8 @@ describe("managed render transform", () => {
   it.each(["auto", "all"] as const)(
     "%s mode tracks directly returned map callbacks through the outer component",
     (mode) => {
-      const output = compile(`
+      const output = compile(
+        `
         const items = [{ value: "one" }];
         export function ArrowList() {
           return items.map((item) => <li>{item.value}</li>);
@@ -553,7 +654,9 @@ describe("managed render transform", () => {
         export function NamedList() {
           return items.map(function Row(item) { return <li>{item.value}</li>; });
         }
-      `, mode);
+      `,
+        mode,
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
       expect(output).toMatch(/function ArrowList\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -565,13 +668,16 @@ describe("managed render transform", () => {
   it.each(["auto", "all"] as const)(
     "%s mode tracks a callback factored into a binding and passed by reference",
     (mode) => {
-      const output = compile(`
+      const output = compile(
+        `
         const items = [{ value: "one" }];
         export function List() {
           const Row = (item) => <li>{item.value}</li>;
           return <ul>{items.map(Row)}</ul>;
         }
-      `, mode);
+      `,
+        mode,
+      );
 
       // Row runs once per item inside List's single render, so a hook injected
       // into it would break hook order: List owns the read instead.
@@ -584,11 +690,14 @@ describe("managed render transform", () => {
   it.each(["auto", "all"] as const)(
     "%s mode tracks a function declaration passed by reference to an iteration method",
     (mode) => {
-      const output = compile(`
+      const output = compile(
+        `
         const items = [{ value: "one" }];
         function Row(item) { return <li>{item.value}</li>; }
         export function List() { return <ul>{items.map(Row)}</ul>; }
-      `, mode);
+      `,
+        mode,
+      );
 
       // Row runs once per item inside List's single render, so injecting a hook
       // into it breaks hook order even though it is a function declaration
@@ -603,11 +712,14 @@ describe("managed render transform", () => {
     // List's own body contains neither a `.value` read nor JSX: both live in
     // Row, which List invokes once per item. Without folding Row's inspection
     // into List's, nothing in the module would subscribe.
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: "one" }];
       const Row = (item) => <li>{item.value}</li>;
       export function List() { return items.map(Row); }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Row = item => <li>{item.value}</li>;");
@@ -615,12 +727,15 @@ describe("managed render transform", () => {
   });
 
   it("stops folding at a cycle between mutually referenced render callbacks", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: 1 }];
       function First(item) { return <li>{items.map(Second)}</li>; }
       function Second(item) { return <li>{items.map(First)}{item.value}</li>; }
       export function List() { return <ul>{items.map(First)}</ul>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function First\(item\) \{\s+return <li>/);
@@ -629,7 +744,8 @@ describe("managed render transform", () => {
   });
 
   it("recognizes optional-chained iteration calls", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const rows = [{ value: 1 }];
       function Row(item) { return <li>{item.value}</li>; }
       export function List() { return <ul>{rows?.map(Row)}</ul>; }
@@ -637,7 +753,9 @@ describe("managed render transform", () => {
         const Cell = (item) => <li>{item.value}</li>;
         return <ul>{items?.map(Cell)}</ul>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
@@ -647,12 +765,15 @@ describe("managed render transform", () => {
   });
 
   it("recognizes flatMap and forEach alongside map", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: 1 }];
       function Row(item) { return <li>{item.value}</li>; }
       export function Flat() { return <ul>{items.flatMap(Row)}</ul>; }
       export function Each() { const out = []; items.forEach(Row); return <ul>{out}</ul>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
@@ -660,24 +781,24 @@ describe("managed render transform", () => {
     expect(output).toMatch(/function Each\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
-  it.each(["map", "forEach"] as const)(
-    "treats only %s's first argument as its callback, not its thisArg",
-    (method) => {
-      // `map`/`flatMap`/`forEach` are all `(callbackFn, thisArg?)`, so the
-      // second argument is never invoked. A component parked there must keep
-      // its own subscription or it silently goes stale.
-      const output = compile(`
+  it.each(["map", "forEach"] as const)("treats only %s's first argument as its callback, not its thisArg", (method) => {
+    // `map`/`flatMap`/`forEach` are all `(callbackFn, thisArg?)`, so the
+    // second argument is never invoked. A component parked there must keep
+    // its own subscription or it silently goes stale.
+    const output = compile(
+      `
         const items = [{ value: 1 }];
         const Row = (item) => <li>{item.value}</li>;
         const Host = () => <li>{items[0].value}</li>;
         export const out = items.${method}(Row, Host);
-      `, "auto");
+      `,
+      "auto",
+    );
 
-      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-      expect(output).toMatch(/const Host = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
-      expect(output).toContain("const Row = item => <li>{item.value}</li>;");
-    },
-  );
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(output).toMatch(/const Host = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+  });
 
   it.each([
     ["a non-null assertion", "Row!"],
@@ -689,11 +810,14 @@ describe("managed render transform", () => {
     // The wrapper is erased at runtime, so `Row` is still the function `map`
     // calls once per item: it must not get a hook of its own, and its reads
     // still have to be folded into the component that runs it.
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: "one" }];
       const Row = (item) => <li>{item.value}</li>;
       export function List() { return items.map(${reference}); }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Row = item => <li>{item.value}</li>;");
@@ -703,17 +827,22 @@ describe("managed render transform", () => {
   it("looks through an angle-bracket type assertion in a non-JSX TypeScript module", () => {
     // `<Fn>Row` only parses where angle brackets are not JSX, so this case
     // needs a `.ts` fixture and a hook rather than a component.
-    const output = transformReactFineGrainedSignals(`
+    const output =
+      transformReactFineGrainedSignals(
+        `
       const items = [{ value: 1 }];
       const useRow = (item) => item.value;
       export function useTotal() { return items.map(<typeof useRow>useRow); }
-    `, "fixture.ts", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })?.code ?? "";
+    `,
+        "fixture.ts",
+        {
+          importSource: "react-fine-grained-signals",
+          mode: "auto",
+          transform: "managed",
+          reactCompiler: "opt-out",
+          reactImportSource: "react",
+        },
+      )?.code ?? "";
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const useRow = item => item.value;");
@@ -721,11 +850,14 @@ describe("managed render transform", () => {
   });
 
   it("looks through a non-null assertion on the iteration method itself", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: "one" }];
       const Row = (item) => <li>{item.value}</li>;
       export function List() { return items.map!(Row); }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Row = item => <li>{item.value}</li>;");
@@ -733,12 +865,15 @@ describe("managed render transform", () => {
   });
 
   it("keeps an inline render callback wrapped in a type assertion part of its owner", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: "one" }];
       export function List() {
         return <ul>{items.map(((item) => <li>{item.value}</li>) as any)}</ul>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -755,11 +890,14 @@ describe("managed render transform", () => {
     // runs per item (no hook of its own), and its reads still have to reach the
     // component that runs it -- which otherwise reads no signal at all and
     // would be left untransformed too, leaving nothing subscribed.
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: "one" }];
       const Row = ((item) => <li>{item.value}</li>)${wrapper};
       export function List() { return items.map(Row); }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain(`const Row = (item => <li>{item.value}</li>)${wrapper};`);
@@ -769,41 +907,45 @@ describe("managed render transform", () => {
   it("names a component through interleaved memo and type-assertion wrappers", () => {
     // The two wrapper families nest in either order, so the climb to the
     // binding that names the function has to alternate between them.
-    const output = compile(`
+    const output = compile(
+      `
       import { memo } from "react";
       const count = { value: 1 };
       export const Inner = memo(((props) => <p>{count.value}</p>) as any);
       export const Outer = (memo((props) => <p>{count.value}</p>)) as any;
       export const Both = (memo(((props) => <p>{count.value}</p>) as any))!;
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
     expect(output).toMatch(/memo\(\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/memo\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
-  it.each(["map", "flatMap"] as const)(
-    "looks through a type assertion on a computed %s property",
-    (method) => {
-      // Here the wrapper is around the key alone, so the callee is already a
-      // plain member expression and only the property node is wrapped.
-      const output = compile(`
+  it.each(["map", "flatMap"] as const)("looks through a type assertion on a computed %s property", (method) => {
+    // Here the wrapper is around the key alone, so the callee is already a
+    // plain member expression and only the property node is wrapped.
+    const output = compile(
+      `
         const items = [{ value: "one" }];
         const Row = (item) => <li>{item.value}</li>;
         export function List() { return items["${method}" as const](Row); }
-      `, "auto");
+      `,
+      "auto",
+    );
 
-      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-      expect(output).toContain("const Row = item => <li>{item.value}</li>;");
-      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
-    },
-  );
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(output).toContain("const Row = item => <li>{item.value}</li>;");
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
 
   it("keeps a wrapped memo or HOC reference from counting as a render callback", () => {
     // Unwrapping the transparent wrappers must not widen the exclusion: neither
     // `memo` nor a third-party HOC is an iteration method, so both keep their
     // wrapped component eligible for its own hook.
-    const output = compile(`
+    const output = compile(
+      `
       import { memo } from "react";
       const count = { value: 1 };
       function observer(Component) { return Component; }
@@ -811,7 +953,9 @@ describe("managed render transform", () => {
       const Cell = () => <li>{count.value}</li>;
       export const MemoRow = memo(Row!);
       export default observer(Cell as typeof Cell);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -823,11 +967,14 @@ describe("managed render transform", () => {
     // component-shaped callback handed to one is far likelier to be a call on
     // an unrelated user-defined method than a genuine render callback. Keeping
     // the set minimal avoids denying a real component its subscription.
-    const output = compile(`
+    const output = compile(
+      `
       const items = [{ value: 1 }];
       const Row = (item) => <li>{item.value}</li>;
       export const kept = items.filter(Row);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -836,7 +983,8 @@ describe("managed render transform", () => {
   it("keeps a component referenced by a third-party HOC eligible", () => {
     // `observer(Row)` / `connect(...)(Row)` register an independent component
     // that React instantiates as its own fiber, so Row must keep its own hook.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function observer(Component) { return Component; }
       function connect() { return (Component) => Component; }
@@ -844,7 +992,9 @@ describe("managed render transform", () => {
       const Cell = () => <li>{count.value}</li>;
       export default observer(Row);
       export const ConnectedCell = connect()(Cell);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -854,7 +1004,8 @@ describe("managed render transform", () => {
   });
 
   it("keeps forwardRef and namespaced memo references from counting as render callbacks", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import * as React from "react";
       import { forwardRef } from "react";
       const count = { value: 1 };
@@ -862,31 +1013,33 @@ describe("managed render transform", () => {
       const Ref = (props, ref) => <li ref={ref}>{count.value}</li>;
       export const MemoRow = React.memo(Row);
       export const RefRow = forwardRef(Ref);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/const Ref = \(props, ref\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
-  it.each(["auto", "all"] as const)(
-    "%s mode leaves memo's areEqual comparator alone",
-    (mode) => {
-      // React calls `areEqual` during reconciliation, outside any component's
-      // render, so a hook injected into it throws "Invalid hook call" on the
-      // first re-render. Only argument 0 of memo() is the component.
-      const output = compile(`
+  it.each(["auto", "all"] as const)("%s mode leaves memo's areEqual comparator alone", (mode) => {
+    // React calls `areEqual` during reconciliation, outside any component's
+    // render, so a hook injected into it throws "Invalid hook call" on the
+    // first re-render. Only argument 0 of memo() is the component.
+    const output = compile(
+      `
         import { memo } from "react";
         const count = { value: 1 };
         const Row = (props) => <li>{count.value}</li>;
         export const MemoRow = memo(Row, (a, b) => a.id === b.id);
-      `, mode);
+      `,
+      mode,
+    );
 
-      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-      expect(output).toMatch(/const Row = props => \{\s+(?:"use no memo";\s+)?const _signals/);
-      expect(output).toContain("memo(Row, (a, b) => a.id === b.id)");
-    },
-  );
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(output).toMatch(/const Row = props => \{\s+(?:"use no memo";\s+)?const _signals/);
+    expect(output).toContain("memo(Row, (a, b) => a.id === b.id)");
+  });
 
   it("leaves memo's comparator alone even under an explicit annotation", () => {
     // The annotation names the wrapped component, and the comparator must not
@@ -901,49 +1054,49 @@ describe("managed render transform", () => {
     expect(output).toContain("(a, b) => a.id === b.id");
   });
 
-  it.each(["auto", "all"] as const)(
-    "%s mode tracks a component called directly inside a render callback",
-    (mode) => {
-      // `items.map((i) => Row(i))` calls Row as a plain function once per item
-      // inside List's single render: React never mounts it, so hooks injected
-      // into it would run in a loop and crash with "Rendered more hooks than
-      // during the previous render". List owns the read instead.
-      const output = compile(`
+  it.each(["auto", "all"] as const)("%s mode tracks a component called directly inside a render callback", (mode) => {
+    // `items.map((i) => Row(i))` calls Row as a plain function once per item
+    // inside List's single render: React never mounts it, so hooks injected
+    // into it would run in a loop and crash with "Rendered more hooks than
+    // during the previous render". List owns the read instead.
+    const output = compile(
+      `
         const items = [{ value: 1 }];
         function Row(item) { return <li>{item.value}</li>; }
         export function List() { return <ul>{items.map((i) => Row(i))}</ul>; }
-      `, mode);
+      `,
+      mode,
+    );
 
-      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-      expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
-      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
-    },
-  );
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(output).toMatch(/function Row\(item\) \{\s+return <li>/);
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
 
-  it.each(["auto", "all"] as const)(
-    "%s mode tracks a hook called directly inside a render callback",
-    (mode) => {
-      // The render-callback exclusion demotes by position, never by name, so a
-      // `useX`-named helper called once per item loses the boundary its hook
-      // identity would otherwise have earned it -- exactly as the
-      // component-shaped callee above does. Folding its read into List is the
-      // only thing left that can subscribe: the by-reference twin
-      // (`items.map(useLabel)`) already does, and the direct-call form must not
-      // silently differ from it.
-      const output = compile(`
+  it.each(["auto", "all"] as const)("%s mode tracks a hook called directly inside a render callback", (mode) => {
+    // The render-callback exclusion demotes by position, never by name, so a
+    // `useX`-named helper called once per item loses the boundary its hook
+    // identity would otherwise have earned it -- exactly as the
+    // component-shaped callee above does. Folding its read into List is the
+    // only thing left that can subscribe: the by-reference twin
+    // (`items.map(useLabel)`) already does, and the direct-call form must not
+    // silently differ from it.
+    const output = compile(
+      `
         const count = { value: 1 };
         const items = [1];
         const useLabel = (item) => count.value + item;
         export function List() {
           return <ul>{items.map((item) => <li>{useLabel(item)}</li>)}</ul>;
         }
-      `, mode);
+      `,
+      mode,
+    );
 
-      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-      expect(output).toContain("const useLabel = item => count.value + item;");
-      expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
-    },
-  );
+    expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
+    expect(output).toContain("const useLabel = item => count.value + item;");
+    expect(output).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
+  });
 
   it("keeps a component called from an event handler off a boundary without folding its reads", () => {
     // This used to pin the opposite: the call sits in an onClick handler rather
@@ -955,14 +1108,17 @@ describe("managed render transform", () => {
     // Row off a boundary wherever it is called, and because the call runs after
     // render (`isDeferredReadContext`), its reads are not folded into List
     // either: nothing in this module reads a signal during a render.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const items = [1];
       const Row = (item) => <li>{count.value}</li>;
       export function List() {
         return <ul>{items.map((i) => <button onClick={() => Row(i)} />)}</ul>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).not.toContain("_signals");
     expect(output).toContain("const Row = (item) => <li>{count.value}</li>;");
@@ -970,23 +1126,30 @@ describe("managed render transform", () => {
 
   it("documents the JSX render-prop limitation and warns for inline callbacks", () => {
     const warnings: Error[] = [];
-    const referenced = compile(`
+    const referenced = compile(
+      `
       const count = { value: 1 };
       const Row = (item) => <li>{item.value}</li>;
       export function List() { return <Grid renderItem={Row} />; }
-    `, "auto");
-    const inline = transformReactFineGrainedSignals(`
+    `,
+      "auto",
+    );
+    const inline = transformReactFineGrainedSignals(
+      `
       export function List() {
         return <Grid renderItem={(item) => <li>{item.value}</li>} />;
       }
-    `, "RenderProp.tsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-      warn: (warning) => warnings.push(warning),
-    });
+    `,
+      "RenderProp.tsx",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+        warn: (warning) => warnings.push(warning),
+      },
+    );
 
     expect(referenced.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(referenced).toMatch(/const Row = item => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -996,12 +1159,15 @@ describe("managed render transform", () => {
   });
 
   it("still transforms a component referenced by name into memo", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import { memo } from "react";
       const count = { value: 1 };
       const Row = () => <li>{count.value}</li>;
       export const MemoRow = memo(Row);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -1009,13 +1175,16 @@ describe("managed render transform", () => {
   });
 
   it("still transforms a nested component referenced only through JSX", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function List() {
         const Row = () => <li>{count.value}</li>;
         return <ul><Row /></ul>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const Row = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -1023,14 +1192,17 @@ describe("managed render transform", () => {
   });
 
   it("transforms a named component returned from a HOC", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function withCount(Base) {
         return function Wrapped(props) {
           return <Base {...props} count={count.value} />;
         };
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function withCount\(Base\) \{\s+return function Wrapped/);
@@ -1048,15 +1220,16 @@ describe("managed render transform", () => {
       // candidate at all: no boundary, no warning, and a signal write that
       // silently stopped re-rendering it.
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         export const withCount = (Base) => (props) => <Base {...props} count={count.value} />;
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-      expect(output).toMatch(
-        /const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
-      );
+      expect(output).toMatch(/const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(warn).not.toHaveBeenCalled();
     });
 
@@ -1065,7 +1238,8 @@ describe("managed render transform", () => {
       // function can take: a block-bodied arrow, an explicit `return`, and an
       // anonymous function expression.
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         export const withBlock = (Base) => (props) => {
           return <Base {...props} count={count.value} />;
@@ -1078,7 +1252,9 @@ describe("managed render transform", () => {
             return <Base {...props} count={count.value} />;
           };
         }
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
       // Only the returned components are wrapped; the factories keep their
@@ -1093,12 +1269,15 @@ describe("managed render transform", () => {
       // The returned component is still reached through React's own wrappers,
       // and argument 0 is still the only one that may inherit an identity:
       // `areEqual` runs during reconciliation, outside any render.
-      const output = compile(`
+      const output = compile(
+        `
         import { memo } from "react";
         const count = { value: 1 };
         export const withCount = (Base) =>
           memo((props) => <Base {...props} count={count.value} />, (a, b) => a.id === b.id);
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
       expect(output).toMatch(/memo\(props => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -1152,21 +1331,22 @@ describe("managed render transform", () => {
       `);
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
-      expect(output).toMatch(
-        /const withConcise = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
-      );
+      expect(output).toMatch(/const withConcise = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
       expect(output).toMatch(/function withBlock\(Base\) \{\s+return props => \{/);
       expect(warn).not.toHaveBeenCalled();
     });
 
     it("honors a @noSignalTracking opt-out written on the factory", () => {
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         /** @noSignalTracking */
         export function withCount(Base) {
           return (props) => <Base {...props} count={count.value} />;
         }
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output).not.toContain("finally");
     });
@@ -1193,11 +1373,14 @@ describe("managed render transform", () => {
       // A function returned by a component or a hook is a render prop or a
       // callback that runs inside that owner's render, not an independently
       // mounted component, so the owner keeps the one boundary.
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         export function List() { return () => <li>{count.value}</li>; }
         export function useRow() { return () => <li>{count.value}</li>; }
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
       expect(output.match(/return \(\) => <li>\{count\.value\}<\/li>;/g)).toHaveLength(2);
@@ -1207,10 +1390,13 @@ describe("managed render transform", () => {
       // Derivation reaches exactly one level out, to a real binding. The middle
       // function has no name to inherit and renders nothing itself, so neither
       // it nor the component below it is transformed.
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         export const makeHoc = () => (Base) => (props) => <Base {...props} count={count.value} />;
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(output).not.toContain("finally");
     });
@@ -1236,13 +1422,19 @@ describe("managed render transform", () => {
   });
 
   it("skips automatic async and generator candidates", () => {
-    const auto = compile(`
+    const auto = compile(
+      `
       const count = { value: 1 };
       export async function AsyncPage() { return <p>{count.value}</p>; }
-    `, "auto");
-    const all = compile(`
+    `,
+      "auto",
+    );
+    const all = compile(
+      `
       export function* GeneratorPage() { yield <p>value</p>; }
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(auto).not.toContain("react-fine-grained-signals/internal");
     expect(auto).not.toContain("finally");
@@ -1251,23 +1443,30 @@ describe("managed render transform", () => {
   });
 
   it("rejects explicit or annotated async opt-in", () => {
-    expect(() => compile(`
+    expect(() =>
+      compile(`
       import { useSignalTracking } from "react-fine-grained-signals";
       export async function Explicit() { useSignalTracking(); return <p />; }
-    `)).toThrow("only supports synchronous, non-generator functions");
+    `),
+    ).toThrow("only supports synchronous, non-generator functions");
 
-    expect(() => compile(`
+    expect(() =>
+      compile(`
       /** @signalTracking */
       export async function Annotated() { return <p />; }
-    `)).toThrow("only supports synchronous, non-generator functions");
+    `),
+    ).toThrow("only supports synchronous, non-generator functions");
   });
 
   it("does not turn a late explicit useSignalTracking call into a second hook", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import { useSignalTracking } from "react-fine-grained-signals";
       const count = { value: 1 };
       export function App() { const prefix = "v"; useSignalTracking(); return <p>{prefix}{count.value}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).not.toContain("react-fine-grained-signals/internal");
     expect(output).toContain("useSignalTracking();");
@@ -1347,11 +1546,15 @@ describe("managed render transform", () => {
 
     it("does not warn when the barrel call is not the function's first statement", () => {
       const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-      compile(`
+      compile(
+        `
         import { useSignalTracking as track } from "./signals.js";
         const count = { value: 1 };
         export function App() { const prefix = "v"; track(); return <p>{prefix}{count.value}</p>; }
-      `, "auto", "managed");
+      `,
+        "auto",
+        "managed",
+      );
 
       expect(warn).not.toHaveBeenCalled();
     });
@@ -1481,8 +1684,7 @@ describe("managed render transform", () => {
     );
 
     expect(result?.map).toBeTruthy();
-    expect((result?.map as { sources: string[] } | undefined)?.sources)
-      .toEqual(["/project/src/App.tsx"]);
+    expect((result?.map as { sources: string[] } | undefined)?.sources).toEqual(["/project/src/App.tsx"]);
   });
 
   it("skips the parse entirely for files nothing can apply to", () => {
@@ -1496,15 +1698,9 @@ describe("managed render transform", () => {
     // would throw, so returning null proves the raw-text screen ran first.
     const unparsable = "const a = 1 +* 2;";
 
-    expect(
-      transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "manual" }),
-    ).toBeNull();
-    expect(
-      transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "auto" }),
-    ).toBeNull();
-    expect(
-      transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "all" }),
-    ).toBeNull();
+    expect(transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "manual" })).toBeNull();
+    expect(transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "auto" })).toBeNull();
+    expect(transformReactFineGrainedSignals(unparsable, "fixture.tsx", { ...options, mode: "all" })).toBeNull();
     // A file the screen lets through still parses and transforms as before.
     expect(
       transformReactFineGrainedSignals(
@@ -1546,9 +1742,7 @@ describe("managed render transform", () => {
       reactImportSource: "react",
     };
 
-    expect(
-      transformReactFineGrainedSignals("const value = <string>input;", "fixture.ts", options),
-    ).toBeNull();
+    expect(transformReactFineGrainedSignals("const value = <string>input;", "fixture.ts", options)).toBeNull();
     expect(transformReactFineGrainedSignals("@sealed class Store {}", "fixture.ts", options)).toBeNull();
     expect(
       transformReactFineGrainedSignals(
@@ -1590,16 +1784,19 @@ describe("React Compiler opt-out directive", () => {
       const output = compile(autoSource, "auto", transform);
 
       expect(output).toContain('"use no memo";');
-      expect(compile(autoSource, "auto", transform, "react-fine-grained-signals", "off"))
-        .not.toContain("use no memo");
+      expect(compile(autoSource, "auto", transform, "react-fine-grained-signals", "off")).not.toContain("use no memo");
     },
   );
 
   it("marks a custom hook it transforms", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function useTotal() { return count.value + 1; }
-    `, "auto", "inject");
+    `,
+      "auto",
+      "inject",
+    );
 
     expect(output).toContain('"use no memo";');
   });
@@ -1617,37 +1814,42 @@ describe("React Compiler opt-out directive", () => {
   });
 
   it("does not mark functions it leaves untransformed", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function Untouched() { return <p>{count.value}</p>; }
       /** @noSignalTracking */
       export function OptOut() { return <p>{count.value}</p>; }
       export function helper() { return count.value; }
-    `, "manual", "inject");
+    `,
+      "manual",
+      "inject",
+    );
 
     expect(output).not.toContain("use no memo");
   });
 
   it("respects an author's own memoization directive", () => {
-    const optIn = compile(`
+    const optIn = compile(
+      `
       const count = { value: 1 };
       export function Counter() { "use memo"; return <p>{count.value}</p>; }
-    `, "auto", "inject");
+    `,
+      "auto",
+      "inject",
+    );
 
     expect(optIn).toContain('"use memo";');
     expect(optIn).not.toContain("use no memo");
     expect(optIn).toContain("_useSignalTracking();");
   });
 
-  it.each(["inject", "managed"] as const)(
-    "stays idempotent with the %s transform",
-    (transform) => {
-      const once = compile(autoSource, "auto", transform);
+  it.each(["inject", "managed"] as const)("stays idempotent with the %s transform", (transform) => {
+    const once = compile(autoSource, "auto", transform);
 
-      expect(once.match(/use no memo/g)).toHaveLength(1);
-      expect(compile(once, "auto", transform)).toBe(once);
-    },
-  );
+    expect(once.match(/use no memo/g)).toHaveLength(1);
+    expect(compile(once, "auto", transform)).toBe(once);
+  });
 });
 
 describe("PascalCase higher-order component factories", () => {
@@ -1661,19 +1863,23 @@ describe("PascalCase higher-order component factories", () => {
     // were credited to the factory's own body and the boundary was injected
     // there. `WithCount(Foo)` is called at module scope, where there is no React
     // dispatcher, so that boundary threw at import time.
-    const concise = compile(`
+    const concise = compile(
+      `
       const count = { value: 1 };
       export const WithCount = (Base) => (props) => <Base n={count.value} />;
-    `, "auto");
-    const block = compile(`
+    `,
+      "auto",
+    );
+    const block = compile(
+      `
       const count = { value: 1 };
       export function WithCount(Base) { return (props) => <Base n={count.value} />; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(concise.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-    expect(concise).toMatch(
-      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(concise).toMatch(/const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(block.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(block).toMatch(/function WithCount\(Base\) \{\s+return props => \{/);
   });
@@ -1682,15 +1888,16 @@ describe("PascalCase higher-order component factories", () => {
     // `all` mode wraps every component-named function that contains JSX, so
     // before the factory was recognized as one, every PascalCase HOC in a
     // codebase broke at import time without reading a signal at all.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const WithCount = (Base) => (props) => <Base />;
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-    expect(output).toMatch(
-      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(output).toMatch(/const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
   it("recognizes the factory by its parameter, not by what the returned component renders", () => {
@@ -1699,15 +1906,16 @@ describe("PascalCase higher-order component factories", () => {
     // identifier parameter is a component being handed in, which only a factory
     // receives. That holds whether or not the returned component renders the
     // argument directly, which an alias or a spread would hide.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const WithCount = (Base) => (props) => <div>{count.value}</div>;
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-    expect(output).toMatch(
-      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(output).toMatch(/const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
   it("attributes an annotation on a PascalCase factory to the component it returns", () => {
@@ -1726,20 +1934,21 @@ describe("PascalCase higher-order component factories", () => {
     // Exactly one boundary each: the factory must not take the annotation for
     // itself now that the component it returns can honor it.
     expect(concise.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-    expect(concise).toMatch(
-      /const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(concise).toMatch(/const WithCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(block.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(block).toMatch(/function WithBlock\(Base\) \{\s+return props => \{/);
     expect(warn).not.toHaveBeenCalled();
   });
 
   it("honors a @noSignalTracking opt-out written on a PascalCase factory", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       /** @noSignalTracking */
       export const WithCount = (Base) => (props) => <Base n={count.value} />;
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(output).not.toContain("finally");
   });
@@ -1765,11 +1974,14 @@ describe("PascalCase higher-order component factories", () => {
     // A destructured prop is an ObjectPattern, not an identifier parameter, so
     // `<Icon />` coming in as a prop leaves `Card` a component; and a function
     // that renders JSX itself is a component whatever its parameters are named.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function Card({ Icon }) { return <Icon>{count.value}</Icon>; }
       export function Panel(Base) { return <p>{count.value}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
   });
@@ -1786,10 +1998,13 @@ describe("PascalCase higher-order component factories", () => {
     // during a render, which is exactly what React *does* do to a hook. So the
     // one boundary here goes on `useRow`, precisely as it did before the
     // PascalCase-factory policy existed.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const useRow = (Base) => (props) => <Base n={count.value} />;
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/const useRow = Base => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -1803,13 +2018,16 @@ describe("PascalCase higher-order component factories", () => {
     // reach it. Skipping it was silent in both directions: no boundary, and no
     // warning either, since the annotation report is gated on rendering JSX.
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const auto = compile(`
+    const auto = compile(
+      `
       const count = { value: 1 };
       export function useModal(Overlay) {
         const n = count.value;
         return { open: () => n, Overlay };
       }
-    `, "auto");
+    `,
+      "auto",
+    );
     const annotated = compile(`
       const count = { value: 1 };
       /** @signalTracking */
@@ -1830,11 +2048,14 @@ describe("PascalCase higher-order component factories", () => {
     // an identifier -- so matching only identifiers let a defaulted parameter
     // fall through and put the factory straight back in front of the
     // import-time crash the whole policy exists to prevent.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const Fallback = () => <p />;
       export const WithCount = (Base = Fallback) => (props) => <Base n={count.value} />;
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toMatch(
       /const WithCount = \(Base = Fallback\) => props => \{\s+(?:"use no memo";\s+)?const _signals/,
@@ -1866,28 +2087,30 @@ describe("PascalCase higher-order component factories", () => {
     // named by that factory) and commit 74b20e0 (a hook called directly inside a
     // render callback is demoted and its reads folded into the owner), which the
     // PascalCase policy above reaches into the very same code paths for.
-    const camelCaseFactory = compile(`
+    const camelCaseFactory = compile(
+      `
       const count = { value: 1 };
       export const withCount = (Base) => (props) => <Base {...props} count={count.value} />;
-    `, "auto");
-    const hookInRenderCallback = compile(`
+    `,
+      "auto",
+    );
+    const hookInRenderCallback = compile(
+      `
       const count = { value: 1 };
       const items = [1];
       const useLabel = (item) => count.value + item;
       export function List() {
         return <ul>{items.map((item) => <li>{useLabel(item)}</li>)}</ul>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(camelCaseFactory.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-    expect(camelCaseFactory).toMatch(
-      /const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(camelCaseFactory).toMatch(/const withCount = Base => props => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(hookInRenderCallback.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(hookInRenderCallback).toContain("const useLabel = item => count.value + item;");
-    expect(hookInRenderCallback).toMatch(
-      /function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(hookInRenderCallback).toMatch(/function List\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 });
 
@@ -1900,21 +2123,25 @@ describe("anonymous default exports", () => {
     // No binding, no key and no function `id`, so no identity resolved and both
     // modes skipped these in silence -- while the named `export default function
     // App()` one line away was transformed.
-    const arrow = compile(`
+    const arrow = compile(
+      `
       const count = { value: 1 };
       export default (props) => <p>{count.value}</p>;
-    `, mode);
-    const expression = compile(`
+    `,
+      mode,
+    );
+    const expression = compile(
+      `
       const count = { value: 1 };
       export default function () { return <p>{count.value}</p>; }
-    `, mode);
+    `,
+      mode,
+    );
 
     expect(arrow.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(arrow).toMatch(/export default props => \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(expression.match(/useSignalCapture\(\)/g)).toHaveLength(1);
-    expect(expression).toMatch(
-      /export default function \(\) \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(expression).toMatch(/export default function \(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
   it("derives the identity from the module's file name, punctuation and all", () => {
@@ -1970,13 +2197,15 @@ describe("anonymous default exports", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const source = "export default () => <p>static</p>;";
 
-    expect(transformReactFineGrainedSignals(source, "123.tsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })).toBeNull();
+    expect(
+      transformReactFineGrainedSignals(source, "123.tsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      }),
+    ).toBeNull();
     expect(warn).not.toHaveBeenCalled();
   });
 
@@ -1984,13 +2213,15 @@ describe("anonymous default exports", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const source = "export default () => <p>static</p>;";
 
-    expect(transformReactFineGrainedSignals(source, "123.tsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "all",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-    })).toBeNull();
+    expect(
+      transformReactFineGrainedSignals(source, "123.tsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "all",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+      }),
+    ).toBeNull();
     expect(warn).toHaveBeenCalledTimes(1);
   });
 });
@@ -2001,26 +2232,30 @@ describe("components held in keyed slots", () => {
   });
 
   it("names a compound component from its assignment target", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const Card = {};
       Card.Header = () => <p>{count.value}</p>;
       Card.Footer = function Footer() { return <p>{count.value}</p>; };
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
     expect(output).toMatch(/Card\.Header = \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
-    expect(output).toMatch(
-      /Card\.Footer = function Footer\(\) \{\s+(?:"use no memo";\s+)?const _signals/,
-    );
+    expect(output).toMatch(/Card\.Footer = function Footer\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
   it("names a component held in an object-literal namespace", () => {
-    const namespace = compile(`
+    const namespace = compile(
+      `
       const count = { value: 1 };
       export const ns = { Home: () => <p>{count.value}</p> };
       export function App() { return <ns.Home />; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(namespace.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(namespace).toMatch(/Home: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -2065,13 +2300,16 @@ describe("components held in keyed slots", () => {
   });
 
   it("keeps object, method and member-assignment slots transformed next to class fields", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const ns = { Home: () => <p>{count.value}</p>, Footer() { return <p>{count.value}</p>; } };
       export const Card = () => <div />;
       Card.Header = () => <h1>{count.value}</h1>;
       export class Holder { Row = () => <p>{count.value}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
     expect(output).toMatch(/Row = \(\) => <p>\{count\.value\}<\/p>;/);
@@ -2096,14 +2334,20 @@ describe("components held in keyed slots", () => {
     // A computed key is only readable when it is a string literal, exactly as
     // `items["map"]` is; anything decided at runtime leaves the slot unnamed,
     // which leaves the function untransformed rather than guessed at.
-    const literal = compile(`
+    const literal = compile(
+      `
       const count = { value: 1 };
       export const ns = { "Home": () => <p>{count.value}</p> };
-    `, "auto");
-    const computed = compile(`
+    `,
+      "auto",
+    );
+    const computed = compile(
+      `
       const count = { value: 1 };
       export const ns = { ["Home"]: () => <p>{count.value}</p> };
-    `, "auto");
+    `,
+      "auto",
+    );
     const runtime = `
       const count = { value: 1 };
       const key = "Home";
@@ -2127,16 +2371,22 @@ describe("components held in keyed slots", () => {
   it("names a nested compound target and an inline object property", () => {
     // Naming reads the key alone, so neither a deeper member target nor an
     // object literal that no binding holds needs a holder to resolve through.
-    const nested = compile(`
+    const nested = compile(
+      `
       const count = { value: 1 };
       const Card = { Sub: {} };
       Card.Sub.Header = () => <p>{count.value}</p>;
-    `, "auto");
-    const inline = compile(`
+    `,
+      "auto",
+    );
+    const inline = compile(
+      `
       const count = { value: 1 };
       function register(config) { return config; }
       export const registered = register({ Home: () => <p>{count.value}</p> });
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(nested.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(inline.match(/useSignalCapture\(\)/g)).toHaveLength(1);
@@ -2146,17 +2396,23 @@ describe("components held in keyed slots", () => {
     // The exclusion that has to come with naming keyed slots: these run once per
     // item inside the owner's single render, so a hook injected into one breaks
     // hook order the moment the array length changes.
-    const namespace = compile(`
+    const namespace = compile(
+      `
       const items = [{ value: 1 }];
       const handlers = { Row: (item) => <li>{item.value}</li> };
       export function List() { return <ul>{items.map(handlers.Row)}</ul>; }
-    `, "auto");
-    const compound = compile(`
+    `,
+      "auto",
+    );
+    const compound = compile(
+      `
       const items = [{ value: 1 }];
       const Card = {};
       Card.Row = (item) => <li>{item.value}</li>;
       export function List() { return <ul>{items.map(Card.Row)}</ul>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(namespace).not.toContain("finally");
     expect(compound).not.toContain("finally");
@@ -2191,11 +2447,14 @@ describe("components held in keyed slots", () => {
   it("still transforms a nested namespace component nothing iterates over", () => {
     // The chain walk only disqualifies a slot that is actually handed to an
     // iteration method; a genuine nested compound component keeps its boundary.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const a = { b: { Row: () => <li>{count.value}</li> } };
       export function List() { return <ul><a.b.Row /></ul>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/Row: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -2263,11 +2522,14 @@ describe("components defined inline as a call argument", () => {
     // The by-reference form (`observer(Row)`) was already eligible; this is the
     // same registration written in one expression, and it used to go both
     // untransformed and unreported.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function observer(C) { return C; }
       export default observer(function App() { return <p>{count.value}</p>; });
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/observer\(function App\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
@@ -2290,7 +2552,8 @@ describe("components defined inline as a call argument", () => {
   it("excludes an IIFE, a deferred hook callback, and a render callback", () => {
     // Each of these runs somewhere a hook call is invalid: module scope, a
     // memoized callback, and once per item inside the owner's render.
-    const output = compile(`
+    const output = compile(
+      `
       import { useMemo } from "react";
       const count = { value: 1 };
       const items = [1];
@@ -2302,7 +2565,9 @@ describe("components defined inline as a call argument", () => {
       export function List() {
         return <ul>{items.map(function Row(item) { return <li>{count.value}{item}</li>; })}</ul>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     // Only `List` is transformed, and only because the render callback's read is
     // folded into it -- none of `App`, `Rows` or `Row` gets a boundary.
@@ -2456,9 +2721,7 @@ describe("parse failures", () => {
 
 /** Does the generated `function <name>(...)` open with a managed boundary? */
 function hasBoundary(output: string, name: string): boolean {
-  return new RegExp(
-    `function ${name}\\([^)]*\\) \\{\\s+(?:"use no memo";\\s+)?const _signals`,
-  ).test(output);
+  return new RegExp(`function ${name}\\([^)]*\\) \\{\\s+(?:"use no memo";\\s+)?const _signals`).test(output);
 }
 
 describe("component-named functions called as plain functions", () => {
@@ -2472,11 +2735,14 @@ describe("component-named functions called as plain functions", () => {
     // conditionally *in Outer* ("Rendered more hooks than during the previous
     // render"); instead Title stays a plain function and Outer subscribes to
     // the read Title performs for it.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function Title() { return <h1>{count.value}</h1>; }
       export function Outer({ show }) { return <div>{show && Title()}</div>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/function Title\(\) \{\s+return <h1>\{count\.value\}<\/h1>;/);
@@ -2486,11 +2752,14 @@ describe("component-named functions called as plain functions", () => {
   it.each(["Title?.()", "Title!()", "(Title as () => JSX.Element)()"])(
     "recognizes the optional-chained or TypeScript-wrapped call %s",
     (call) => {
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         function Title() { return <h1>{count.value}</h1>; }
         export function Outer() { return <div>{${call}}</div>; }
-      `, "auto");
+      `,
+        "auto",
+      );
 
       expect(hasBoundary(output, "Title")).toBe(false);
       expect(hasBoundary(output, "Outer")).toBe(true);
@@ -2498,10 +2767,13 @@ describe("component-named functions called as plain functions", () => {
   );
 
   it("covers arrow-bound components and all mode alike", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const Title = () => <h1>static</h1>;
       export function Outer() { return <div>{Title()}</div>; }
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toContain("const Title = () => <h1>static</h1>;");
@@ -2509,11 +2781,14 @@ describe("component-named functions called as plain functions", () => {
   });
 
   it("keeps a component that is only mounted through JSX on its own boundary", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function Title() { return <h1>{count.value}</h1>; }
       export function Outer() { return <div><Title /></div>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(hasBoundary(output, "Title")).toBe(true);
     expect(hasBoundary(output, "Outer")).toBe(false);
@@ -2522,22 +2797,28 @@ describe("component-named functions called as plain functions", () => {
   it("leaves hooks called as functions exactly as they were", () => {
     // A hook is called as a function by definition, and its boundary is valid
     // because React runs it inside a render already in progress.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function useTotal() { return count.value + 1; }
       export function Counter() { return <p>{useTotal()}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(hasBoundary(output, "useTotal")).toBe(true);
     expect(hasBoundary(output, "Counter")).toBe(false);
   });
 
   it("folds a plain-called component's reads into a hook that calls it", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function Title() { return <h1>{count.value}</h1>; }
       export function useTitle() { return Title(); }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(hasBoundary(output, "Title")).toBe(false);
     expect(hasBoundary(output, "useTitle")).toBe(true);
@@ -2547,7 +2828,8 @@ describe("component-named functions called as plain functions", () => {
     // Those calls run after the render has finished collecting, so they are no
     // evidence that the caller subscribes -- and the callee, being called, is
     // still no component of its own.
-    const output = compile(`
+    const output = compile(
+      `
       import { useEffect } from "react";
       const count = { value: 1 };
       function Title() { return <h1>{count.value}</h1>; }
@@ -2555,19 +2837,24 @@ describe("component-named functions called as plain functions", () => {
         useEffect(() => { Title(); }, []);
         return <button onClick={() => Title()}>go</button>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).not.toContain("_signals");
   });
 
   it("treats a component defined and called inside its caller as part of that caller", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function Outer({ show }) {
         function Title() { return <h1>{count.value}</h1>; }
         return <div>{show ? Title() : null}</div>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(hasBoundary(output, "Outer")).toBe(true);
@@ -2577,24 +2864,30 @@ describe("component-named functions called as plain functions", () => {
   it("only lets the function's own binding disqualify it", () => {
     // The `Title()` call inside `helper` reaches its own parameter, not the
     // module-level component, which is only ever mounted through JSX.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function Title() { return <h1>{count.value}</h1>; }
       function helper(Title) { return Title(); }
       export function Outer() { return <div><Title />{helper(() => null)}</div>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(hasBoundary(output, "Title")).toBe(true);
   });
 
   it("keeps a keyed component that is called through its slot off a boundary", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const ns = { Home: () => <p>{count.value}</p> };
       export const Card = {};
       Card.Header = () => <h1>{count.value}</h1>;
       export function Page() { return <main>{ns.Home()}{Card.Header?.()}</main>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     // The called slots lose their own boundaries, and their reads are folded
     // into Page through the keyed definition (`resolveKeyedFunction`).
@@ -2607,24 +2900,30 @@ describe("component-named functions called as plain functions", () => {
   it("does not fold a keyed slot that is assigned more than one function", () => {
     // Which function `Card.Header` holds when Page renders is a runtime
     // decision, so neither assignment speaks for the call.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const Card = {};
       Card.Header = () => <h1>{count.value}</h1>;
       if (globalThis.alt) Card.Header = () => <h2>{count.value}</h2>;
       export function Page() { return <main>{Card.Header()}</main>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).not.toContain("_signals");
   });
 
   it("warns when a component is both called and mounted through JSX", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function Title() { return <h1>{count.value}</h1>; }
       export function Outer() { return <div><Title />{Title()}</div>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(hasBoundary(output, "Title")).toBe(false);
     expect(hasBoundary(output, "Outer")).toBe(true);
@@ -2636,10 +2935,13 @@ describe("component-named functions called as plain functions", () => {
 
   it("stays quiet about a called component that has nothing to subscribe to", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    compile(`
+    compile(
+      `
       function Title() { return <h1>static</h1>; }
       export function Outer() { return <div><Title />{Title()}</div>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(warn).not.toHaveBeenCalled();
   });
@@ -2663,10 +2965,13 @@ describe("signal reads in parameter defaults", () => {
   });
 
   it("keeps a plain default's undefined-only rule", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const C = (n = count.value) => <p>{n}</p>;
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toContain("let n = _param === undefined ? _signals.capture(() => count.value) : _param;");
     // A `.tsx` module: the generated parameter stays optional, like `n`.
@@ -2674,10 +2979,14 @@ describe("signal reads in parameter defaults", () => {
   });
 
   it("moves the parameter behind a bare injected useSignalTracking() call too", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function C({ v = count.value }) { return <p>{v}</p>; }
-    `, "auto", "inject");
+    `,
+      "auto",
+      "inject",
+    );
 
     expect(output).toMatch(
       /function C\(_param\) \{\s+"use no memo";\s+_useSignalTracking\(\);\s+let \{\s+v = count\.value\s+\} = _param;/,
@@ -2685,14 +2994,19 @@ describe("signal reads in parameter defaults", () => {
   });
 
   it("keeps forwardRef's two-parameter shape", () => {
-    const output = compile(`
+    const output = compile(
+      `
       import { forwardRef } from "react";
       const count = { value: 1 };
       export const Field = forwardRef(({ v = count.value }, ref) => <p ref={ref}>{v}</p>);
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toMatch(/forwardRef\(\(_param, _param2\) => \{/);
-    expect(output).toMatch(/let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;\s+let ref = _param2;/);
+    expect(output).toMatch(
+      /let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;\s+let ref = _param2;/,
+    );
   });
 
   it("moves every later parameter too, so defaults keep their evaluation order", () => {
@@ -2714,22 +3028,28 @@ describe("signal reads in parameter defaults", () => {
   });
 
   it("carries a type annotation over to the generated parameter", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       interface Props { v?: number }
       export function C({ v = count.value }: Props) { return <p>{v}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toContain("function C(_param: Props)");
     expect(output).toMatch(/let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;/);
   });
 
   it("leaves parameters alone when no default reads a signal", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function C({ v = 1 }, other) { return <p>{v}{count.value}</p>; }
       export function D({ format = () => count.value }) { return <p>{format()}</p>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toMatch(/function C\(\{\s+v = 1\s+\}, other\)/);
     // A closure created by a default runs inside the body, behind the boundary.
@@ -2781,12 +3101,18 @@ describe("signal reads in parameter defaults", () => {
     expect(injected).toMatch(/function C\(p, get = \(\) => x, v = count\.value, x = 1\)/);
     expect(managed).not.toContain("let x =");
     expect(injected).not.toContain("let x =");
-    expect(warnings.filter((warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS004")).toHaveLength(1);
+    expect(
+      warnings.filter((warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS004"),
+    ).toHaveLength(1);
 
-    const temporalDeadZone = compile(`
+    const temporalDeadZone = compile(
+      `
       const count = { value: 1 };
       export function C(first = second, second = count.value) { return <p>{first}</p>; }
-    `, "auto", "managed");
+    `,
+      "auto",
+      "managed",
+    );
     expect(temporalDeadZone).toMatch(/function C\(first = second, second = count\.value\)/);
   });
 
@@ -2804,23 +3130,35 @@ describe("signal reads in parameter defaults", () => {
 
 describe("capturing tracked update and delete operations", () => {
   it("captures the complete tracked update expression and preserves postfix result shape", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export function Counter() { const previous = count.value++; return <p>{previous}</p>; }
-    `, "auto", "managed");
+    `,
+      "auto",
+      "managed",
+    );
 
     expect(output).toMatch(/const previous = _signals\.capture\(\(\) => count\.value\+\+\)/);
   });
 
   it("captures nested delete but does not treat direct deletion of the value property as a read", () => {
-    const nested = compile(`
+    const nested = compile(
+      `
       const state = { value: { profile: { name: "Ada" } } };
       export function Remove() { const removed = delete state.value.profile.name; return <p>{removed}</p>; }
-    `, "auto", "managed");
-    const direct = compile(`
+    `,
+      "auto",
+      "managed",
+    );
+    const direct = compile(
+      `
       const state = { value: { profile: { name: "Ada" } } };
       export function Remove() { const removed = delete state.value; return <p>{removed}</p>; }
-    `, "auto", "managed");
+    `,
+      "auto",
+      "managed",
+    );
 
     expect(nested).toMatch(/const removed = _signals\.capture\(\(\) => delete state\.value\.profile\.name\)/);
     expect(direct).not.toContain("_useSignalCapture");
@@ -2850,19 +3188,29 @@ async function compileAndParse(
 describe("parameter optionality after a relocated default", () => {
   for (const transform of ["managed", "inject"] as const) {
     it(`keeps a relocated default optional after a \`?\` parameter (${transform})`, async () => {
-      const component = await compileAndParse(`
+      const component = await compileAndParse(
+        `
         const count = { value: 1 };
         export function C(optional?: string, value = count.value) { return <p>{optional}{value}</p>; }
-      `, "fixture.tsx", transform);
+      `,
+        "fixture.tsx",
+        transform,
+      );
       expect(component).toContain("function C(optional?: string, _param?)");
-      expect(component).toContain(transform === "managed"
-        ? "let value = _param === undefined ? _signals.capture(() => count.value) : _param;"
-        : "let value = _param === undefined ? count.value : _param;");
+      expect(component).toContain(
+        transform === "managed"
+          ? "let value = _param === undefined ? _signals.capture(() => count.value) : _param;"
+          : "let value = _param === undefined ? count.value : _param;",
+      );
 
-      const hook = await compileAndParse(`
+      const hook = await compileAndParse(
+        `
         const count = { value: 1 };
         export function useLabel(prefix?: string, value = count.value) { return \`\${prefix ?? ""}\${value}\`; }
-      `, "use-label.ts", transform);
+      `,
+        "use-label.ts",
+        transform,
+      );
       expect(hook).toContain("function useLabel(prefix?: string, _param?)");
     });
   }
@@ -2895,10 +3243,13 @@ describe("parameter optionality after a relocated default", () => {
   });
 
   it("emits no optional marker outside TypeScript", async () => {
-    const output = await compileAndParse(`
+    const output = await compileAndParse(
+      `
       const count = { value: 1 };
       export function C(label, value = count.value) { return <p>{label}{value}</p>; }
-    `, "fixture.jsx");
+    `,
+      "fixture.jsx",
+    );
 
     expect(output).toContain("function C(label, _param)");
   });
@@ -2906,14 +3257,17 @@ describe("parameter optionality after a relocated default", () => {
 
 describe("object-method shorthand components", () => {
   it("transforms a method exactly like the equivalent keyed property", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const ns = {
         Home() { return <p>{count.value}</p>; },
         ["Away"]() { return <p>{count.value}</p>; },
         useTotal() { return count.value + 1; },
       };
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(3);
     expect(output).toMatch(/Home\(\) \{\s+"use no memo";\s+const _signals/);
@@ -2939,22 +3293,28 @@ describe("object-method shorthand components", () => {
   });
 
   it("keeps a method handed to an iteration method off a boundary", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const ns = { Row(item) { return <li>{count.value}{item}</li>; } };
       export function List({ items }) { return <ul>{items.map(ns.Row)}</ul>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toMatch(/Row\(item\) \{\s+return <li>/);
   });
 
   it("keeps a method called through its slot off a boundary", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       export const ns = { Home() { return <p>{count.value}</p>; } };
       export const deep = { a: { Home() { return <p>{count.value}</p>; } } };
       export function Page() { return <main>{ns.Home()}{deep.a.Home?.()}</main>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(output).toMatch(/Home\(\) \{\s+return <p>/);
@@ -2964,11 +3324,14 @@ describe("object-method shorthand components", () => {
 
 describe("render callbacks reached through Array.from or a destructured keyed slot", () => {
   it("keeps Array.from's mapFn off a boundary of its own", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       function Star() { return <span>{count.value}</span>; }
       export function Rating() { return Array.from({ length: 5 }, Star); }
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(output).toMatch(/function Star\(\) \{\s+return <span>/);
     expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(1);
@@ -2977,35 +3340,47 @@ describe("render callbacks reached through Array.from or a destructured keyed sl
   it("only treats Array.from's second argument as the callback", () => {
     // \`other.from\` is not Array.from, and argument 0 of Array.from is the
     // array-like, not a callback, so both components keep their boundaries.
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const other = { from: (a, b) => b };
       function Star() { return <span>{count.value}</span>; }
       function Badge() { return <b>{count.value}</b>; }
       export function A() { return other.from([], Star); }
       export function B() { return Array.from(Badge); }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toMatch(/function Star\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
     expect(output).toMatch(/function Badge\(\) \{\s+(?:"use no memo";\s+)?const _signals/);
   });
 
   it("keeps a keyed function destructured and handed to map off a boundary", () => {
-    const shorthand = compile(`
+    const shorthand = compile(
+      `
       const count = { value: 1 };
       const parts = { Row: (item) => <li>{count.value}{item}</li> };
       export function List({ items }) { const { Row } = parts; return <ul>{items.map(Row)}</ul>; }
-    `, "all");
-    const renamed = compile(`
+    `,
+      "all",
+    );
+    const renamed = compile(
+      `
       const count = { value: 1 };
       const parts = { Row: (item) => <li>{count.value}{item}</li> };
       export function List({ items }) { const { Row: Item } = parts; return <ul>{items.map(Item)}</ul>; }
-    `, "all");
-    const called = compile(`
+    `,
+      "all",
+    );
+    const called = compile(
+      `
       const count = { value: 1 };
       const parts = { Row: () => <li>{count.value}</li> };
       export function List() { const { Row } = parts; return <ul>{Row()}</ul>; }
-    `, "all");
+    `,
+      "all",
+    );
 
     for (const output of [shorthand, renamed, called]) {
       expect(output).toMatch(/Row: \(?\w*\)? => <li>/);
@@ -3022,17 +3397,23 @@ describe("render callbacks reached through Array.from or a destructured keyed sl
     // auto mode does not credit a keyed callback's reads to its caller, so an
     // unannotated caller that reads nothing itself is left alone (documented).
     expect(compile(source, "auto")).toBe(source);
-    const annotated = compile(source.replace("export function List", "/* @signalTracking */ export function List"), "auto");
+    const annotated = compile(
+      source.replace("export function List", "/* @signalTracking */ export function List"),
+      "auto",
+    );
     expect(annotated.match(/useSignalCapture\(\)/g)).toHaveLength(1);
     expect(annotated).toMatch(/Row: \(?item\)? => <li>/);
   });
 
   it("keeps the boundary when the destructured keyed component is mounted as JSX", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const parts = { Row: () => <li>{count.value}</li> };
       export function List() { const { Row } = parts; return <ul><Row /></ul>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toMatch(/Row: \(\) => \{\s+(?:"use no memo";\s+)?const _signals/);
   });
@@ -3130,8 +3511,13 @@ ${badge}`,
           transform,
         );
         expect(output.startsWith("#!/usr/bin/env node")).toBe(true);
-        const order = ["Copyright header", "@jsxImportSource", "import ", "Renders the badge.", "export function Badge"]
-          .map((text) => output.indexOf(text));
+        const order = [
+          "Copyright header",
+          "@jsxImportSource",
+          "import ",
+          "Renders the badge.",
+          "export function Badge",
+        ].map((text) => output.indexOf(text));
         expect(order.every((position) => position !== -1)).toBe(true);
         expect(order.every((position, index) => index === 0 || order[index - 1]! < position)).toBe(true);
         expect(runtime).toBe(rfgsRuntime);
@@ -3148,7 +3534,7 @@ export function Badge() { return <p>{count.value}</p>; }
           transform,
         );
         expect(withImport.output.indexOf("@jsxImportSource")).toBeLessThan(
-          withImport.output.indexOf('import { signal }'),
+          withImport.output.indexOf("import { signal }"),
         );
         expect(withImport.runtime).toBe(rfgsRuntime);
 
@@ -3203,7 +3589,8 @@ describe("keyed slots reached through dynamic member dispatch", () => {
 
   forEachCombination((mode, transform) => {
     it(`keeps a method dispatched per item off a boundary (${mode}, ${transform})`, () => {
-      const output = compile(`
+      const output = compile(
+        `
         const suffix = { value: "!" };
         const renderers = {
           User(node) { return <li>{node.name}{suffix.value}</li>; },
@@ -3212,25 +3599,33 @@ describe("keyed slots reached through dynamic member dispatch", () => {
         export function Feed({ nodes }) {
           return <ul>{nodes.map((node) => renderers[node.__typename](node))}</ul>;
         }
-      `, mode, transform);
+      `,
+        mode,
+        transform,
+      );
 
       expect(slotHasBoundary(output, "User")).toBe(false);
       expect(slotHasBoundary(output, "Repo")).toBe(false);
     });
 
     it(`keeps a conditionally, dynamically called method off a boundary (${mode}, ${transform})`, () => {
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         const panels = { Details(arg) { return <p>{count.value}{arg}</p>; } };
         export function Panel({ show, kind }) { return <div>{show && panels[kind]("x")}</div>; }
-      `, mode, transform);
+      `,
+        mode,
+        transform,
+      );
 
       expect(slotHasBoundary(output, "Details")).toBe(false);
     });
   });
 
   it("recognizes optional, TypeScript-wrapped and arrow-property dispatch", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       type Fn = (arg: string) => unknown;
       const a = { One(arg: string) { return <p>{count.value}{arg}</p>; } };
@@ -3241,7 +3636,9 @@ describe("keyed slots reached through dynamic member dispatch", () => {
       export function P({ k }: { k: string }) {
         return <div>{a[k]?.("x")}{b?.[k]("x")}{c[k]!("x")}{(d[k] as Fn)("x")}{e[k]("x")}</div>;
       }
-    `, "all");
+    `,
+      "all",
+    );
 
     for (const key of ["One", "Two", "Three", "Four", "Five"]) {
       expect(slotHasBoundary(output, key)).toBe(false);
@@ -3249,17 +3646,21 @@ describe("keyed slots reached through dynamic member dispatch", () => {
   });
 
   it("keeps a method handed to an iteration method through a dynamic key off a boundary", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const renderers = { Row(item) { return <li>{count.value}{item}</li>; } };
       export function List({ items, kind }) { return <ul>{items.map(renderers[kind])}</ul>; }
-    `, "all");
+    `,
+      "all",
+    );
 
     expect(slotHasBoundary(output, "Row")).toBe(false);
   });
 
   it("only reaches slots at the depth and under the static prefix the dispatch names", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const registry = {
         users: { User() { return <p>{count.value}</p>; } },
@@ -3272,7 +3673,9 @@ describe("keyed slots reached through dynamic member dispatch", () => {
       export function P({ k }) {
         return <div>{registry.users[k]()}{renderers[k]()}</div>;
       }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(slotHasBoundary(output, "User")).toBe(false);
     expect(slotHasBoundary(output, "Flat")).toBe(false);
@@ -3284,7 +3687,8 @@ describe("keyed slots reached through dynamic member dispatch", () => {
 
   forEachCombination((mode, transform) => {
     it(`keeps the static keyed behaviors unchanged (${mode}, ${transform})`, () => {
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         const other = { Unrelated() { return null; } };
         const jsx = { User() { return <p>{count.value}</p>; } };
@@ -3302,7 +3706,10 @@ describe("keyed slots reached through dynamic member dispatch", () => {
             </div>
           );
         }
-      `, mode, transform);
+      `,
+        mode,
+        transform,
+      );
 
       // Mounted only through JSX (static paths, nested included): boundary kept,
       // and a dynamic call on an unrelated root does not reach them.
@@ -3318,12 +3725,13 @@ describe("keyed slots reached through dynamic member dispatch", () => {
 
 describe("keyed slots reached through a sibling's this or an optional static path", () => {
   const combinations = (["auto", "all"] as const).flatMap((mode) =>
-    (["managed", "inject"] as const).map((transform) => [mode, transform] as const)
+    (["managed", "inject"] as const).map((transform) => [mode, transform] as const),
   );
 
   for (const [mode, transform] of combinations) {
     it(`follows this only where it is the object literal itself (${mode}, ${transform})`, () => {
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         const a = {
           Destructured() { return <p>{count.value}</p>; },
@@ -3350,7 +3758,10 @@ describe("keyed slots reached through a sibling's this or an optional static pat
         export function P() {
           return <div>{a.Via()}{a.view}{b.Tree()}<b.Deep /><b.Shallow /><c.InClass /><c.InFunction /><c.InArrowProp />{c.Tree()}</div>;
         }
-      `, mode, transform);
+      `,
+        mode,
+        transform,
+      );
 
       // Destructured from `this` and called, or called from an accessor or a
       // `function` property value: each runs inline.
@@ -3367,7 +3778,8 @@ describe("keyed slots reached through a sibling's this or an optional static pat
     });
 
     it(`treats every optional spelling of a static path as that path (${mode}, ${transform})`, () => {
-      const output = compile(`
+      const output = compile(
+        `
         const count = { value: 1 };
         const ns = {
           One() { return <p>{count.value}</p>; },
@@ -3391,7 +3803,10 @@ describe("keyed slots reached through a sibling's this or an optional static pat
             </div>
           );
         }
-      `, mode, transform);
+      `,
+        mode,
+        transform,
+      );
 
       for (const key of ["One", "Two", "Three", "Four", "Five", "Six", "Seven"]) {
         expect(slotHasBoundary(output, key)).toBe(false);
@@ -3401,7 +3816,8 @@ describe("keyed slots reached through a sibling's this or an optional static pat
   }
 
   it("credits a caller that reads nothing itself with an optional call's reads", () => {
-    const output = compile(`
+    const output = compile(
+      `
       const count = { value: 1 };
       const ns = { Home() { return <p>{count.value}</p>; } };
       const tree = {
@@ -3410,7 +3826,9 @@ describe("keyed slots reached through a sibling's this or an optional static pat
       };
       export function Optional() { return <div>{ns?.Home()}</div>; }
       export function ViaThis() { return <div>{tree.Tree()}</div>; }
-    `, "auto");
+    `,
+      "auto",
+    );
 
     expect(output).toMatch(/function Optional\(\) \{\s+"use no memo";\s+const _signals/);
     expect(output).toMatch(/function ViaThis\(\) \{\s+"use no memo";\s+const _signals/);
@@ -3544,9 +3962,7 @@ export function App() {
         reactImportSource: "react",
         warn: (warning) => warnings.push(warning),
       });
-      return warnings.filter(
-        (warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS003",
-      );
+      return warnings.filter((warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS003");
     };
     const customPackage = `
 import { Show } from "@app/signals/utils";
@@ -3748,14 +4164,15 @@ export function App() {
   return <span>{state.value.profile.name}</span>;
 }
 `;
-    const output = transformReactFineGrainedSignals(source, "UnsupportedDestructuring.tsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-      warn: (warning) => warnings.push(warning),
-    })?.code ?? "";
+    const output =
+      transformReactFineGrainedSignals(source, "UnsupportedDestructuring.tsx", {
+        importSource: "react-fine-grained-signals",
+        mode: "auto",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+        warn: (warning) => warnings.push(warning),
+      })?.code ?? "";
 
     expect(output).toMatch(/= _signals\.capture\(\(\) => \{\s*const /);
     expect(warnings).toEqual([]);
@@ -3814,7 +4231,9 @@ export function App() {
 describe("M17.4 managed capture edge shapes", () => {
   const run = (body: string, extra = "") => {
     const warnings: string[] = [];
-    const code = transformReactFineGrainedSignals(`
+    const code =
+      transformReactFineGrainedSignals(
+        `
 import { deepSignal, signal } from "react-fine-grained-signals";
 import { useContext, useState } from "react";
 const state = deepSignal({ items: [{ a: 1 }], profile: { name: "n" }, count: 1, fn: (s) => s });
@@ -3826,14 +4245,17 @@ export function App() {
   ${body}
   return <p>{count.value}</p>;
 }
-`, "Edge.jsx", {
-      importSource: "react-fine-grained-signals",
-      mode: "auto",
-      transform: "managed",
-      reactCompiler: "opt-out",
-      reactImportSource: "react",
-      warn: (warning) => warnings.push(warning.message),
-    })?.code ?? "";
+`,
+        "Edge.jsx",
+        {
+          importSource: "react-fine-grained-signals",
+          mode: "auto",
+          transform: "managed",
+          reactCompiler: "opt-out",
+          reactImportSource: "react",
+          warn: (warning) => warnings.push(warning.message),
+        },
+      )?.code ?? "";
     return { code, warnings };
   };
   const hookRead = /Hook call is nested inside this signal read expression/;
@@ -3865,12 +4287,15 @@ export function App() {
   });
 
   it("keeps outer-scope assignments, plain writes, and non-getter objects untracked", () => {
-    const { code, warnings } = run(`
+    const { code, warnings } = run(
+      `
   outer = state.value.items;
   const view = { total: 1, method() { return count.value; } };
   state.value.count = 2;
   const total = view.total;
-`, "let outer;");
+`,
+      "let outer;",
+    );
     expect(warnings).toEqual([]);
     expect(code).toContain("state.value.count = 2;");
     expect(code).toContain("const total = view.total;");
@@ -3883,7 +4308,9 @@ export function App() {
 });
 
 describe("managed coercion, for-in, Hook arguments and loop-head scope output", () => {
-  const wrapIn = (body: string): string => compile(`
+  const wrapIn = (body: string): string =>
+    compile(
+      `
     import { deepSignal, signal } from "react-fine-grained-signals";
     const st = deepSignal({ tags: [], errors: {}, items: [] });
     const id = signal("a");
@@ -3892,19 +4319,24 @@ describe("managed coercion, for-in, Hook arguments and loop-head scope output", 
       ${body}
       return <p>{0}</p>;
     }
-  `, "auto");
+  `,
+      "auto",
+    );
 
   it("enumerates for...in keys inside a capture", () => {
     const output = wrapIn("const keys = []; for (const k in st.value.errors) keys.push(k);");
     expect(output).toContain("for (const k of _signals.forIn(() => st.value.errors))");
     expect(wrapIn("const o = st.value.errors; for (const k in o) {}")).toContain("_signals.forIn(() => o)");
-    expect(wrapIn("for (const k in useStore(id.value).value.errors) {}"))
-      .toContain("_hookResult => _signals.forIn(() => _hookResult.value.errors))(useStore(_signals.capture(() => id.value)))");
+    expect(wrapIn("for (const k in useStore(id.value).value.errors) {}")).toContain(
+      "_hookResult => _signals.forIn(() => _hookResult.value.errors))(useStore(_signals.capture(() => id.value)))",
+    );
   });
 
   it("captures reads in a split Hook's own arguments and keeps the Hook outside", () => {
     const output = wrapIn("const n = useStore(id.value).value.tags;");
-    expect(output).toContain("(_hookResult => _signals.capture(() => _hookResult.value.tags))(useStore(_signals.capture(() => id.value)))");
+    expect(output).toContain(
+      "(_hookResult => _signals.capture(() => _hookResult.value.tags))(useStore(_signals.capture(() => id.value)))",
+    );
     const loop = wrapIn("for (const r of useStore(id.value).value.items) {}");
     expect(loop).toContain("useStore(_signals.capture(() => id.value))");
   });
@@ -3919,8 +4351,12 @@ describe("managed coercion, for-in, Hook arguments and loop-head scope output", 
   });
 
   it("evaluates a destructuring loop head outside the body's block", () => {
-    const output = wrapIn("const label = 'n'; for (const { id: b, label: l = label } of st.value.items) { const label = 1; const b = 2; }");
-    expect(output).toMatch(/for \(const _item of _signals\.iterate\(\(\) => st\.value\.items\)\) \{\s*const \{\s*b,\s*l\s*\} = _signals\.capture\([^]*\n\s*\{\s*const label = 1;/);
+    const output = wrapIn(
+      "const label = 'n'; for (const { id: b, label: l = label } of st.value.items) { const label = 1; const b = 2; }",
+    );
+    expect(output).toMatch(
+      /for \(const _item of _signals\.iterate\(\(\) => st\.value\.items\)\) \{\s*const \{\s*b,\s*l\s*\} = _signals\.capture\([^]*\n\s*\{\s*const label = 1;/,
+    );
     const assign = wrapIn("let a; for ({ a } of st.value.items) { const x = 1; }");
     expect(assign).toMatch(/_signals\.capture\(\(\) => \(\{\s*a\s*\} = _item\)\);\s*\{\s*const x = 1;/);
   });

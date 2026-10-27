@@ -149,7 +149,9 @@ describe("Signal children, props, and refs", () => {
   });
 
   it("rejects two-way bindings and unsupported signal props on non-HTML hosts", () => {
-    expect(() => jsx("circle", { bindValue: signal("x") })).toThrow(/text-like, number, or range input\/textarea\/select only/);
+    expect(() => jsx("circle", { bindValue: signal("x") })).toThrow(
+      /text-like, number, or range input\/textarea\/select only/,
+    );
     expect(() => jsx("circle", { bindChecked: signal(true) })).toThrow(/checkbox only/);
     expect(() => jsx("circle", { r: signal(1) })).toThrow(/does not support Signal-valued r props on <circle>/);
   });
@@ -200,7 +202,11 @@ describe("Signal children, props, and refs", () => {
     const title = signal("attached");
 
     function Host() {
-      return <span aria-label="detached host" title={title}>host</span>;
+      return (
+        <span aria-label="detached host" title={title}>
+          host
+        </span>
+      );
     }
 
     const view = render(<Host />);
@@ -304,18 +310,12 @@ describe("Signal children, props, and refs", () => {
 
     const single = jsx(Child, { value: source, children: source }, "single-key");
     const many = jsxs(Child, { value: source, children: [source, "tail"] }, "many-key");
-    const dev = jsxDEV(
-      Child,
-      { value: source, children: source },
-      "dev-key",
-      false,
-      undefined,
-      undefined,
-    );
-    const readProps = (element: { props: unknown }) => element.props as {
-      value: typeof source;
-      children: unknown;
-    };
+    const dev = jsxDEV(Child, { value: source, children: source }, "dev-key", false, undefined, undefined);
+    const readProps = (element: { props: unknown }) =>
+      element.props as {
+        value: typeof source;
+        children: unknown;
+      };
     const singleProps = readProps(single);
     const manyProps = readProps(many);
     const devProps = readProps(dev);
@@ -344,13 +344,23 @@ describe("Signal children, props, and refs", () => {
 describe("JSX pragma: uncopied-props fast path", () => {
   it("passes a non-reactive custom component's props straight through, uncopied", () => {
     const original = { label: "hello", count: 1 };
-    const element = jsx(function Widget() { return null; }, original, undefined);
+    const element = jsx(
+      function Widget() {
+        return null;
+      },
+      original,
+      undefined,
+    );
     expect(element.props).toBe(original);
   });
 
   it("renders a non-reactive custom component with plain props unchanged", () => {
     function Label({ text, count }: { text: string; count: number }) {
-      return <span aria-label="plain label">{text}:{count}</span>;
+      return (
+        <span aria-label="plain label">
+          {text}:{count}
+        </span>
+      );
     }
 
     render(<Label text="score" count={5} />);

@@ -56,9 +56,12 @@ describe("A2 through a concurrent React render", () => {
         useSignalTracking();
         const value = scaled.value;
         mockScheduler.log(`parent:${value}`);
-        return React.createElement("div", null,
+        return React.createElement(
+          "div",
+          null,
           React.createElement("b", { id: "parent" }, String(value)),
-          React.createElement(Child));
+          React.createElement(Child),
+        );
       }
 
       const container = document.createElement("div");

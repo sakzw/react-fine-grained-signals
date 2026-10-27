@@ -9,10 +9,5 @@ export {
   type Signal,
   type WritableComputedOptions,
 } from "./base.js";
-export {
-  deepSignal,
-  type DeepCollectionSignal,
-  type DeepReadonly,
-  type DeepSignal,
-} from "./deep-signal.js";
+export { deepSignal, type DeepCollectionSignal, type DeepReadonly, type DeepSignal } from "./deep-signal.js";
 export { deepCollectionSignal } from "./deep-collection-signal.js";

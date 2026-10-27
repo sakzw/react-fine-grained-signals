@@ -13,14 +13,7 @@
 import { Activity, StrictMode, Suspense, startTransition, use, useLayoutEffect, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  computed,
-  deepSignal,
-  signal,
-  useDeepSignalValue,
-  useSignalTracking,
-  useSignalValue,
-} from "../src/index.js";
+import { computed, deepSignal, signal, useDeepSignalValue, useSignalTracking, useSignalValue } from "../src/index.js";
 import { useManagedSignals, useSignalCapture } from "../src/react/use-signals.js";
 
 type ActGlobal = typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean | undefined };
@@ -39,7 +32,9 @@ afterEach(() => {
 /** Spins past React's 5 ms frame so the work loop yields after this component. */
 function spin(ms: number): void {
   const end = performance.now() + ms;
-  while (performance.now() < end) { /* busy wait */ }
+  while (performance.now() < end) {
+    /* busy wait */
+  }
 }
 
 const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -107,7 +102,9 @@ function createHarness(): Harness {
     commits,
     screens,
     renders,
-    armWrite(write) { pendingWrite = write; },
+    armWrite(write) {
+      pendingWrite = write;
+    },
     useCommitRecord,
     mount(children) {
       container = document.createElement("div");
@@ -150,7 +147,9 @@ describe("transition mount with a signal written while React yields", () => {
       useSignalTracking();
       return harness.useCommitRecord(id, count.value);
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     harness.mount(() => IDS.map((id) => <Tracked key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "1111");
     expectWriteLandedMidRender(harness);
@@ -167,7 +166,9 @@ describe("transition mount with a signal written while React yields", () => {
       useSignalTracking();
       return harness.useCommitRecord(id, doubled.value / 2);
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     harness.mount(() => IDS.map((id) => <Tracked key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "1111");
     expectWriteLandedMidRender(harness);
@@ -183,7 +184,9 @@ describe("transition mount with a signal written while React yields", () => {
       const n = useDeepSignalValue(state, (value) => value.n);
       return harness.useCommitRecord(id, n);
     }
-    harness.armWrite(() => { state.value.n = 1; });
+    harness.armWrite(() => {
+      state.value.n = 1;
+    });
     harness.mount(() => IDS.map((id) => <Selected key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "1111");
     expectWriteLandedMidRender(harness);
@@ -199,7 +202,9 @@ describe("transition mount with a signal written while React yields", () => {
       const value = useSignalValue(count);
       return harness.useCommitRecord(id, value);
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     harness.mount(() => IDS.map((id) => <Leaf key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "1111");
     expectWriteLandedMidRender(harness);
@@ -224,7 +229,10 @@ describe("transition mount with a signal written while React yields", () => {
       const value = useSignalValue(count);
       return harness.useCommitRecord(id, value);
     }
-    harness.armWrite(() => { count.value = 1; state.value.n = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+      state.value.n = 1;
+    });
     harness.mount(() => [
       <Tracked key="A" id="A" />,
       <Selected key="B" id="B" />,
@@ -263,8 +271,19 @@ describe("transition update with a signal written while React yields", () => {
       harness.commits.length = 0;
       harness.screens.length = 0;
       harness.renders.length = 0;
-      harness.armWrite(() => { count.value = 1; state.value.n = 1; });
-      startTransition(() => root.render(<>{IDS.map((id) => <Item key={id} id={id} tick={1} />)}</>));
+      harness.armWrite(() => {
+        count.value = 1;
+        state.value.n = 1;
+      });
+      startTransition(() =>
+        root.render(
+          <>
+            {IDS.map((id) => (
+              <Item key={id} id={id} tick={1} />
+            ))}
+          </>,
+        ),
+      );
       await settle(() => harness.screens.at(-1) === "1111");
       expectWriteLandedMidRender(harness);
       expectConsistentCommits(harness, "1111");
@@ -300,7 +319,15 @@ describe("transition renders without a concurrent write", () => {
 
       harness.renders.length = 0;
       harness.commits.length = 0;
-      startTransition(() => root.render(<>{IDS.map((id) => <Item key={id} id={id} tick={1} />)}</>));
+      startTransition(() =>
+        root.render(
+          <>
+            {IDS.map((id) => (
+              <Item key={id} id={id} tick={1} />
+            ))}
+          </>,
+        ),
+      );
       await settle(() => harness.commits.length > 0);
       expect(harness.renders).toEqual(["A0", "B0", "C0", "D0"]);
       expect(harness.commits).toEqual([["A0", "B0", "C0", "D0"]]);
@@ -335,7 +362,9 @@ describe("subscriptions after concurrent commits", () => {
         return harness.useCommitRecord(id, value);
       }
       const Item = { tracking: TrackedItem, deep: DeepItem, leaf: LeafItem }[kind];
-      harness.armWrite(() => { count.value = 1; });
+      harness.armWrite(() => {
+        count.value = 1;
+      });
       const root = harness.mount(() => IDS.map((id) => <Item key={id} id={id} />));
       await settle(() => harness.screens.at(-1) === "1111");
       expectConsistentCommits(harness, "1111");
@@ -364,9 +393,14 @@ describe("other render boundaries with a signal written while React yields", () 
     const harness = createHarness();
     function Captured({ id }: { id: string }) {
       const scope = useSignalCapture();
-      return harness.useCommitRecord(id, scope.capture(() => count.value));
+      return harness.useCommitRecord(
+        id,
+        scope.capture(() => count.value),
+      );
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     harness.mount(() => IDS.map((id) => <Captured key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "1111");
     expectWriteLandedMidRender(harness);
@@ -381,10 +415,16 @@ describe("other render boundaries with a signal written while React yields", () 
     function Managed({ id }: { id: string }) {
       const scope = useManagedSignals();
       let value: number;
-      try { value = count.value; } finally { scope.finish(); }
+      try {
+        value = count.value;
+      } finally {
+        scope.finish();
+      }
       return harness.useCommitRecord(id, value);
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     harness.mount(() => IDS.map((id) => <Managed key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "1111");
     expectWriteLandedMidRender(harness);
@@ -403,21 +443,36 @@ describe("other render boundaries with a signal written while React yields", () 
       }
       function CapturedItem({ id }: { id: string }) {
         const scope = useSignalCapture();
-        return harness.useCommitRecord(id, scope.capture(() => count.value));
+        return harness.useCommitRecord(
+          id,
+          scope.capture(() => count.value),
+        );
       }
       function DeepItem({ id }: { id: string }) {
         const n = useDeepSignalValue(state, (value) => value.n);
         return harness.useCommitRecord(id, n);
       }
       const Item = { tracking: TrackedItem, capture: CapturedItem, deep: DeepItem }[kind];
-      harness.armWrite(() => { count.value = 1; state.value.n = 1; });
-      harness.mount(() => <StrictMode>{IDS.map((id) => <Item key={id} id={id} />)}</StrictMode>);
+      harness.armWrite(() => {
+        count.value = 1;
+        state.value.n = 1;
+      });
+      harness.mount(() => (
+        <StrictMode>
+          {IDS.map((id) => (
+            <Item key={id} id={id} />
+          ))}
+        </StrictMode>
+      ));
       await settle(() => harness.screens.at(-1) === "1111");
       expect(harness.renders.slice(0, 2)).toEqual(["A0", "A0"]);
       // Strict Mode replays layout effects once in development, so the one
       // commit is recorded twice; both must hold the corrected values.
       expectConsistentCommits(harness, "1111");
-      expect(harness.commits).toEqual([["A1", "B1", "C1", "D1"], ["A1", "B1", "C1", "D1"]]);
+      expect(harness.commits).toEqual([
+        ["A1", "B1", "C1", "D1"],
+        ["A1", "B1", "C1", "D1"],
+      ]);
     });
   }
 
@@ -426,7 +481,9 @@ describe("other render boundaries with a signal written while React yields", () 
       const count = signal(0);
       const harness = createHarness();
       let resolve!: (value: string) => void;
-      const pending = new Promise<string>((done) => { resolve = done; });
+      const pending = new Promise<string>((done) => {
+        resolve = done;
+      });
       let resolveScheduled = false;
       // C suspends on its first try; the promise settles in the same
       // microtask checkpoint, so React replays C within the same render.
@@ -451,8 +508,16 @@ describe("other render boundaries with a signal written while React yields", () 
         return harness.useCommitRecord(id, value);
       }
       const Item = { tracking: TrackedItem, capture: CapturedItem }[kind];
-      harness.armWrite(() => { count.value = 1; });
-      harness.mount(() => <Suspense fallback={<b>fallback</b>}>{IDS.map((id) => <Item key={id} id={id} />)}</Suspense>);
+      harness.armWrite(() => {
+        count.value = 1;
+      });
+      harness.mount(() => (
+        <Suspense fallback={<b>fallback</b>}>
+          {IDS.map((id) => (
+            <Item key={id} id={id} />
+          ))}
+        </Suspense>
+      ));
       await settle(() => harness.screens.at(-1) === "1111");
       expectWriteLandedMidRender(harness);
       expectConsistentCommits(harness, "1111");
@@ -471,22 +536,32 @@ describe("other render boundaries with a signal written while React yields", () 
       useSignalTracking();
       return <u>{count.value}</u>;
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     const root = harness.mount(() => [
       ...IDS.map((id) => <Tracked key={id} id={id} />),
-      <Activity key="hidden" mode="hidden"><HiddenTracked /></Activity>,
+      <Activity key="hidden" mode="hidden">
+        <HiddenTracked />
+      </Activity>,
     ]);
     await settle(() => harness.commits.length > 0);
     expectWriteLandedMidRender(harness);
     expectConsistentCommits(harness, "1111");
     expect(harness.commits).toEqual(CORRECTED_COMMITS);
 
-    startTransition(() => root.render(
-      <>
-        {IDS.map((id) => <Tracked key={id} id={id} />)}
-        <Activity key="hidden" mode="visible"><HiddenTracked /></Activity>
-      </>,
-    ));
+    startTransition(() =>
+      root.render(
+        <>
+          {IDS.map((id) => (
+            <Tracked key={id} id={id} />
+          ))}
+          <Activity key="hidden" mode="visible">
+            <HiddenTracked />
+          </Activity>
+        </>,
+      ),
+    );
     await settle(() => harness.screens.at(-1) === "11111");
     count.value = 2;
     await settle(() => harness.screens.at(-1) === "22222");
@@ -501,12 +576,16 @@ describe("other render boundaries with a signal written while React yields", () 
       const value = count.value;
       if (id === "C" && value === 1) {
         // A second yield with a second write, after C read the first one.
-        queueMicrotask(() => { if (count.value === 1) count.value = 2; });
+        queueMicrotask(() => {
+          if (count.value === 1) count.value = 2;
+        });
         spin(8);
       }
       return harness.useCommitRecord(id, value);
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     harness.mount(() => IDS.map((id) => <Tracked key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "2222");
     expect(harness.renders.slice(0, 4)).toEqual(["A0", "B1", "C1", "D2"]);
@@ -524,7 +603,9 @@ describe("other render boundaries with a signal written while React yields", () 
         useSignalTracking();
         return harness.useCommitRecord(id, parity.value);
       }
-      harness.armWrite(() => { count.value = 2; });
+      harness.armWrite(() => {
+        count.value = 2;
+      });
       harness.mount(() => IDS.map((id) => <Tracked key={id} id={id} />));
       await settle(() => harness.commits.length > 0);
       // The write changed a source but not what any component rendered. Telling
@@ -543,7 +624,9 @@ describe("other render boundaries with a signal written while React yields", () 
       useSignalTracking();
       return harness.useCommitRecord(id, parity.value);
     }
-    harness.armWrite(() => { count.value = 1; });
+    harness.armWrite(() => {
+      count.value = 1;
+    });
     harness.mount(() => IDS.map((id) => <Tracked key={id} id={id} />));
     await settle(() => harness.screens.at(-1) === "1111");
     expectConsistentCommits(harness, "1111");

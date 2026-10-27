@@ -16,14 +16,7 @@ import { act, startTransition, useTransition } from "react";
 import { createRoot } from "react-dom/client";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import {
-  batch,
-  computed,
-  effect,
-  signal,
-  useSignalValue,
-  useSignalTracking,
-} from "../src/index.js";
+import { batch, computed, effect, signal, useSignalValue, useSignalTracking } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -50,7 +43,11 @@ describe("concurrent rendering", () => {
           <output aria-label="heavy">{useSignalValue(heavy)}</output>
           <button
             type="button"
-            onClick={() => beginTransition(() => { heavy.value = 1; })}
+            onClick={() =>
+              beginTransition(() => {
+                heavy.value = 1;
+              })
+            }
           >
             go
           </button>
@@ -118,7 +115,11 @@ describe("concurrent rendering", () => {
           <output aria-label="urgent">{useSignalValue(urgent)}</output>
           <button
             type="button"
-            onClick={() => beginTransition(() => { heavy.value = 1; })}
+            onClick={() =>
+              beginTransition(() => {
+                heavy.value = 1;
+              })
+            }
           >
             go
           </button>
@@ -202,9 +203,7 @@ describe("concurrent rendering", () => {
     });
 
     const values = new Set(
-      Array.from({ length: SIBLING_COUNT }, (_, index) =>
-        screen.getByLabelText(`sibling-${index}`).textContent,
-      ),
+      Array.from({ length: SIBLING_COUNT }, (_, index) => screen.getByLabelText(`sibling-${index}`).textContent),
     );
     expect(values).toEqual(new Set(["2"]));
   });
@@ -263,7 +262,11 @@ describe("concurrent rendering", () => {
       return (
         <button
           type="button"
-          onClick={() => beginTransition(() => { shared.value = 99; })}
+          onClick={() =>
+            beginTransition(() => {
+              shared.value = 99;
+            })
+          }
         >
           go
         </button>

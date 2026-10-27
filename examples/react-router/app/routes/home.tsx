@@ -4,14 +4,7 @@ import { useComputed, useSignal, useSignalEffect } from "react-fine-grained-sign
 import { For, Show, Switch, Match } from "react-fine-grained-signals/utils";
 import { DevPanel } from "../components/DevPanel.js";
 import { TaskRow } from "../components/TaskRow.js";
-import {
-  addTask,
-  clearCompleted,
-  markAllDone,
-  toggleTask,
-  type Filter,
-  type TaskStore,
-} from "../lib/task-store.js";
+import { addTask, clearCompleted, markAllDone, toggleTask, type Filter, type TaskStore } from "../lib/task-store.js";
 
 export function meta() {
   return [{ title: "タスクボード — react-fine-grained-signals React Router PoC" }];
@@ -59,11 +52,7 @@ export default function Home() {
           newTitle.value = "";
         }}
       >
-        <input
-          type="text"
-          placeholder="新しいタスク"
-          bindValue={newTitle}
-        />
+        <input type="text" placeholder="新しいタスク" bindValue={newTitle} />
         <button type="submit">追加</button>
       </form>
 
@@ -103,11 +92,7 @@ export default function Home() {
         <button type="button" onClick={() => markAllDone(store)}>
           すべて完了にする
         </button>
-        <button
-          type="button"
-          onClick={() => clearCompleted(store)}
-          disabled={isClearDisabled}
-        >
+        <button type="button" onClick={() => clearCompleted(store)} disabled={isClearDisabled}>
           完了済みをクリア
         </button>
       </div>

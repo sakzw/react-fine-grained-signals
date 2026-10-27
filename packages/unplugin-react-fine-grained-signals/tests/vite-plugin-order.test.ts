@@ -41,8 +41,7 @@ import * as libraryRuntime from "../../../src/internal.js";
 import rollupAdapter from "../src/rollup.js";
 import viteAdapter from "../src/vite.js";
 
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const fixtureDir = mkdtempSync(join(tmpdir(), "signals-vite-order-"));
 const entry = join(fixtureDir, "app.jsx");
@@ -218,97 +217,126 @@ function drive(module: Record<string, unknown>): string[] {
 const BUILD_TIMEOUT = 60_000;
 
 describe("Vite plugin order against a pre-enforced React Compiler step", () => {
-  it("control: a transform without hook order loses to a compiler listed first", async () => {
-    // The Rollup entry's plugin is `enforce: "pre"` with a plain function
-    // transform -- exactly what the Vite entry used to be.
-    const code = await buildApp([emulatedReactCompiler(), rollupAdapter({ mode: "auto" }) as Plugin]);
+  it(
+    "control: a transform without hook order loses to a compiler listed first",
+    async () => {
+      // The Rollup entry's plugin is `enforce: "pre"` with a plain function
+      // transform -- exactly what the Vite entry used to be.
+      const code = await buildApp([emulatedReactCompiler(), rollupAdapter({ mode: "auto" }) as Plugin]);
 
-    expect(code).toContain("react/compiler-runtime");
-    expect(code).toContain("react.memo_cache_sentinel");
-    expect(code).not.toContain("use no memo");
-    expect(code).not.toContain("useSignalCapture");
-    expect(drive(linkModule(code))).toEqual(["0", "0", "0"]);
-  }, BUILD_TIMEOUT);
+      expect(code).toContain("react/compiler-runtime");
+      expect(code).toContain("react.memo_cache_sentinel");
+      expect(code).not.toContain("use no memo");
+      expect(code).not.toContain("useSignalCapture");
+      expect(drive(linkModule(code))).toEqual(["0", "0", "0"]);
+    },
+    BUILD_TIMEOUT,
+  );
 
   it.each([
     ["compiler first", (signals: Plugin) => [emulatedReactCompiler(), signals]],
     ["signals first", (signals: Plugin) => [signals, emulatedReactCompiler()]],
-  ] as const)("runs ahead of the compiler with %s", async (_label, order) => {
-    const code = await buildApp(order(viteAdapter({ mode: "auto" }) as Plugin));
+  ] as const)(
+    "runs ahead of the compiler with %s",
+    async (_label, order) => {
+      const code = await buildApp(order(viteAdapter({ mode: "auto" }) as Plugin));
 
-    expect(code).toContain('"use no memo"');
-    expect(code).toContain("useSignalCapture");
-    expect(code).not.toContain("react/compiler-runtime");
-    expect(drive(linkModule(code))).toEqual(["0", "1", "2"]);
-  }, BUILD_TIMEOUT);
+      expect(code).toContain('"use no memo"');
+      expect(code).toContain("useSignalCapture");
+      expect(code).not.toContain("react/compiler-runtime");
+      expect(drive(linkModule(code))).toEqual(["0", "1", "2"]);
+    },
+    BUILD_TIMEOUT,
+  );
 
   it.each([
-    ["Babel plugin first", (signals: Plugin) => [babel({ plugins: [[reactCompiler, { panicThreshold: "none" }]] }), signals]],
-    ["signals plugin first", (signals: Plugin) => [signals, babel({ plugins: [[reactCompiler, { panicThreshold: "none" }]] })]],
-  ] as const)("runs an actual React Compiler Vite/Babel build with %s", async (_label, order) => {
-    const code = await buildApp(order(viteAdapter({ mode: "auto" }) as Plugin));
+    [
+      "Babel plugin first",
+      (signals: Plugin) => [babel({ plugins: [[reactCompiler, { panicThreshold: "none" }]] }), signals],
+    ],
+    [
+      "signals plugin first",
+      (signals: Plugin) => [signals, babel({ plugins: [[reactCompiler, { panicThreshold: "none" }]] })],
+    ],
+  ] as const)(
+    "runs an actual React Compiler Vite/Babel build with %s",
+    async (_label, order) => {
+      const code = await buildApp(order(viteAdapter({ mode: "auto" }) as Plugin));
 
-    expect(code).toContain('"use no memo"');
-    expect(code).toContain("useSignalCapture");
-    expect(code).not.toContain("react/compiler-runtime");
-    expect(drive(linkModule(code))).toEqual(["0", "1", "2"]);
-  }, BUILD_TIMEOUT);
+      expect(code).toContain('"use no memo"');
+      expect(code).toContain("useSignalCapture");
+      expect(code).not.toContain("react/compiler-runtime");
+      expect(drive(linkModule(code))).toEqual(["0", "1", "2"]);
+    },
+    BUILD_TIMEOUT,
+  );
 
-  it("skips module-level use server, reports its source, and maps transformed client code", async () => {
-    const serverEntry = join(fixtureDir, "server.jsx");
-    const clientEntry = join(fixtureDir, "client.jsx");
-    writeFileSync(serverEntry, [
-      '"use server";',
-      'import { signal } from "react-fine-grained-signals";',
-      "const count = signal(0);",
-      "export function ServerAction() { return <output>{count.value}</output>; }",
-      "",
-    ].join("\n"));
-    writeFileSync(clientEntry, [
-      '"use client";',
-      'import { signal } from "react-fine-grained-signals";',
-      "const count = signal(0);",
-      "export function Client() { return <output>{count.value}</output>; }",
-      "",
-    ].join("\n"));
+  it(
+    "skips module-level use server, reports its source, and maps transformed client code",
+    async () => {
+      const serverEntry = join(fixtureDir, "server.jsx");
+      const clientEntry = join(fixtureDir, "client.jsx");
+      writeFileSync(
+        serverEntry,
+        [
+          '"use server";',
+          'import { signal } from "react-fine-grained-signals";',
+          "const count = signal(0);",
+          "export function ServerAction() { return <output>{count.value}</output>; }",
+          "",
+        ].join("\n"),
+      );
+      writeFileSync(
+        clientEntry,
+        [
+          '"use client";',
+          'import { signal } from "react-fine-grained-signals";',
+          "const count = signal(0);",
+          "export function Client() { return <output>{count.value}</output>; }",
+          "",
+        ].join("\n"),
+      );
 
-    const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
-    try {
-      const result = await build({
-        configFile: false,
-        envFile: false,
-        root: fixtureDir,
-        logLevel: "warn",
-        plugins: [viteAdapter({ mode: "auto" })],
-        build: {
-          write: false,
-          sourcemap: true,
-          minify: false,
-          lib: {
-            entry: { server: serverEntry, client: clientEntry },
-            formats: ["es"],
-            fileName: (name) => name,
+      const warnings = vi.spyOn(console, "warn").mockImplementation(() => {});
+      try {
+        const result = await build({
+          configFile: false,
+          envFile: false,
+          root: fixtureDir,
+          logLevel: "warn",
+          plugins: [viteAdapter({ mode: "auto" })],
+          build: {
+            write: false,
+            sourcemap: true,
+            minify: false,
+            lib: {
+              entry: { server: serverEntry, client: clientEntry },
+              formats: ["es"],
+              fileName: (name) => name,
+            },
+            rolldownOptions: {
+              external: [/^react(\/|$)/, /^react-dom(\/|$)/, /^react-fine-grained-signals(\/|$)/],
+            },
           },
-          rolldownOptions: {
-            external: [/^react(\/|$)/, /^react-dom(\/|$)/, /^react-fine-grained-signals(\/|$)/],
-          },
-        },
-      });
-      const warningText = warnings.mock.calls.flat().join(" ");
-      expect(warningText).toContain('top-level "use server" directive');
-      expect(warningText).toContain(`> 4 | export function ServerAction()`);
+        });
+        const warningText = warnings.mock.calls.flat().join(" ");
+        expect(warningText).toContain('top-level "use server" directive');
+        expect(warningText).toContain(`> 4 | export function ServerAction()`);
 
-      const outputs = Array.isArray(result) ? result : [result];
-      const chunks = outputs.flatMap((output) => "output" in output ? output.output : [])
-        .filter((item) => item.type === "chunk");
-      const serverChunk = chunks.find((chunk) => chunk.name === "server");
-      const clientChunk = chunks.find((chunk) => chunk.name === "client");
-      expect(serverChunk?.code).not.toContain("useSignalCapture");
-      expect(clientChunk?.code).toContain("useSignalCapture");
-      expect(serverChunk?.map?.sources.some((source) => source.endsWith(basename(serverEntry)))).toBe(true);
-      expect(clientChunk?.map?.sources.some((source) => source.endsWith(basename(clientEntry)))).toBe(true);
-    } finally {
-      warnings.mockRestore();
-    }
-  }, BUILD_TIMEOUT);
+        const outputs = Array.isArray(result) ? result : [result];
+        const chunks = outputs
+          .flatMap((output) => ("output" in output ? output.output : []))
+          .filter((item) => item.type === "chunk");
+        const serverChunk = chunks.find((chunk) => chunk.name === "server");
+        const clientChunk = chunks.find((chunk) => chunk.name === "client");
+        expect(serverChunk?.code).not.toContain("useSignalCapture");
+        expect(clientChunk?.code).toContain("useSignalCapture");
+        expect(serverChunk?.map?.sources.some((source) => source.endsWith(basename(serverEntry)))).toBe(true);
+        expect(clientChunk?.map?.sources.some((source) => source.endsWith(basename(clientEntry)))).toBe(true);
+      } finally {
+        warnings.mockRestore();
+      }
+    },
+    BUILD_TIMEOUT,
+  );
 });

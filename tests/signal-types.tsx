@@ -42,7 +42,11 @@ export const textBinding = <input bindValue={text} />;
 // @ts-expect-error a text binding writes any string, so a literal-union signal is rejected.
 export const narrowTextBinding = <input bindValue={choice} />;
 export const radioBinding = <input type="radio" name="n" value="x" bindValue={choice} />;
-export const selectBinding = <select bindValue={choice}><option value="x">x</option></select>;
+export const selectBinding = (
+  <select bindValue={choice}>
+    <option value="x">x</option>
+  </select>
+);
 export const groupBinding = <input type="checkbox" value="x" bindValue={choices} />;
 // @ts-expect-error a ReadonlySignal cannot be bound for writing.
 export const readonlyBinding = <input bindValue={computed(() => "a")} />;
