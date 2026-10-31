@@ -8,7 +8,9 @@ import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/util
 
 `react-fine-grained-signals/utils` provides small React components inspired by Solid's `Show`, `Switch`/`Match`, and `For`. They are optional and need neither the build plugin nor the custom JSX runtime.
 
-Every input marked `SignalInput<T>` below is `T | ReadonlySignal<T>`: pass a plain value or a signal. When a signal is passed, the utility itself forms the reactive boundary, so an update rerenders the utility and not its parent component.
+Every input marked `SignalInput<T>` below is a plain `T`, a `ReadonlySignal<T>`, or a `deepSignal` / `deepCollectionSignal` whose `.value` is a `T`. When a signal is passed, the utility itself forms the reactive boundary, so an update rerenders the utility and not its parent component.
+
+A deep signal can be passed directly, including to `each`, which also accepts a deep signal over a mutable array, `Set` or `Map` (`deepSignal([...])`, `deepCollectionSignal(new Set())`). The utility reads it inside its own scope, so in-place mutations such as `todos.value.push(todo)` or `tags.value.add(tag)` rerender it without replacing the root, as do the nested properties its render callback reads. The item type is the plain state type from `.value`, not the read-only type of `peek()`, so a row's event handler can write to its item (`item.done = true`). A nested array read through `.value` (`each={state.value.todos}`) works the same way.
 
 ## Show
 

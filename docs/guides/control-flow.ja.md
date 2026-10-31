@@ -8,7 +8,9 @@ import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/util
 
 `react-fine-grained-signals/utils` は、Solidの `Show`、`Switch` / `Match`、`For` に着想を得た小さなReactコンポーネントを提供します。任意のサブパスであり、build pluginも独自JSXランタイムも必要ありません。
 
-以下で `SignalInput<T>` と書かれている入力は `T | ReadonlySignal<T>` です。素の値でもsignalでも渡せます。signalを渡した場合、ユーティリティ自身がリアクティブ境界になるため、更新時に再レンダーされるのはユーティリティであって親コンポーネントではありません。
+以下で `SignalInput<T>` と書かれている入力は、素の `T`、`ReadonlySignal<T>`、または `.value` が `T` である `deepSignal` / `deepCollectionSignal` です。signalを渡した場合、ユーティリティ自身がリアクティブ境界になるため、更新時に再レンダーされるのはユーティリティであって親コンポーネントではありません。
+
+deep signalはそのまま渡せます。`each` には、mutableな配列・`Set`・`Map` のdeep signal(`deepSignal([...])`、`deepCollectionSignal(new Set())`)も渡せます。ユーティリティは自身のscopeの中で読むため、`todos.value.push(todo)` や `tags.value.add(tag)` のようなその場の変更でも、rootを置き換えずに再レンダーされます。render callbackが読んだネストしたpropertyの変更も同様です。itemの型は `peek()` の読み取り専用の型ではなく `.value` の素の型なので、行のevent handlerからitemに書き込めます(`item.done = true`)。`.value` 経由で読んだネストした配列(`each={state.value.todos}`)も同じように動きます。
 
 ## Show
 

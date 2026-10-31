@@ -167,7 +167,7 @@ deep proxyを含むplain object(carrier)をMapのkeyまたはSetのmemberにす�
 isSignal(value: unknown): value is ReadonlySignal<unknown>
 ```
 
-値が `signal`、`computed`、`deepSignal` のいずれかに由来するかを返します。カスタムJSXランタイムと制御フローコンポーネントはこの判定で分岐するため、偽陰性はエラーにならず、リアクティブなバインディングが通常のpropに劣化するという形で現れます。
+値が `signal`、`computed`、`deepSignal`、`deepCollectionSignal` のいずれかに由来するかを返します。deep signalも `ReadonlySignal<unknown>` に代入できるため、この型ガードに含まれます。unionを絞り込むと、deep signalは自身の型（`DeepSignal<T>`など）のまま残ります。カスタムJSXランタイムと制御フローコンポーネントはこの判定で分岐するため、偽陰性はエラーにならず、リアクティブなバインディングが通常のpropに劣化するという形で現れます。
 
 ### packageのcopyは1つだけにする
 

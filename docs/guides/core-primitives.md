@@ -167,7 +167,7 @@ A Map key or Set member that is a plain object containing a deep proxy (a "carri
 isSignal(value: unknown): value is ReadonlySignal<unknown>
 ```
 
-Reports whether a value came from `signal`, `computed`, or `deepSignal`. The custom JSX runtime and the control-flow components route on it, so a false negative degrades a reactive binding into a plain prop instead of raising an error.
+Reports whether a value came from `signal`, `computed`, `deepSignal`, or `deepCollectionSignal`. A deep signal is a `ReadonlySignal<unknown>`, so the guard covers it, and narrowing a union keeps its own type (`DeepSignal<T>` and so on). The custom JSX runtime and the control-flow components route on it, so a false negative degrades a reactive binding into a plain prop instead of raising an error.
 
 ### Only one copy of the package
 

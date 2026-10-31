@@ -52,9 +52,11 @@ export type DeepReadonly<T> = unknown extends T
  *
  * It is never a `Signal<T>`, so it cannot be bound for writing: `peek()` returns
  * the raw object without tracking, so writes through it would be lost, and its
- * type is `DeepReadonly<T>`. Change state through `.value`. It still counts as
- * a `ReadonlySignal` for reading (`For`, `Show`, `computed` inputs) when `T`
- * has no arrays or collections to make `DeepReadonly<T>` differ from `T`.
+ * type is `DeepReadonly<T>`. Change state through `.value`. It is always a
+ * `ReadonlySignal<unknown>` (so `isSignal` covers it), but a
+ * `ReadonlySignal<T>` only when `T` has no arrays or collections to make
+ * `DeepReadonly<T>` differ from `T`. The control-flow components (`For`,
+ * `Index`, `Show`, `Match`) accept it directly through `SignalInput`.
  */
 export interface DeepSignal<T extends object> extends Omit<ReadonlySignal<T>, "value" | "peek"> {
   value: T;

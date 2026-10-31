@@ -1,5 +1,5 @@
 import { Children, Fragment, isValidElement, type Key, type ReactElement, type ReactNode } from "react";
-import { isSignal, type ReadonlySignal } from "./core/index.js";
+import { isSignal, type DeepCollectionSignal, type DeepSignal, type ReadonlySignal } from "./core/index.js";
 import { useManagedSignals } from "./react/use-signals.js";
 
 /*
@@ -14,8 +14,28 @@ import { useManagedSignals } from "./react/use-signals.js";
  * development/design/use-signals-boundary-design.md.
  */
 
-/** A plain value or a value created by `signal`, `computed`, or `deepSignal`. */
-export type SignalInput<T> = T | ReadonlySignal<T>;
+/**
+ * A plain value, or a signal from `signal`, `computed`, `deepSignal` or
+ * `deepCollectionSignal` whose `.value` is a `T`.
+ *
+ * The components read a signal input inside their own tracking scope, so a
+ * deep signal also re-renders them on the nested mutations they read: pushing
+ * to a `deepSignal` array re-renders the `For` over it. For a deep signal,
+ * `T` is the type of `.value`, not the `DeepReadonly` type of `peek()`, so a
+ * row's event handler can write to its item.
+ */
+export type SignalInput<T> = T | ReadonlySignal<T> | DeepSignalInput<Extract<T, object>>;
+
+/**
+ * Either kind of deep signal over exactly `T`. Deep signals are invariant in
+ * `T`, so the list props below also accept the mutable array, `Set` and `Map`
+ * roots that `deepSignal([...])` and `deepCollectionSignal(new Set())` create,
+ * which a `readonly T[]` or `ReadonlySet<T>` root type would reject.
+ */
+type DeepSignalInput<T extends object> = DeepSignal<T> | DeepCollectionSignal<T>;
+
+/** A deep signal over an array of `T`. */
+type DeepArrayInput<T> = DeepSignalInput<T[]> | DeepSignalInput<readonly T[]>;
 
 /**
  * `T` without the values `Show` and `Match` treat as false: `null`,
@@ -110,7 +130,7 @@ export type ForCollection<T> = readonly T[] | ReadonlySet<T>;
 
 /** Renders an array or set whose items have stable identities. */
 export interface ForProps<T> {
-  each: SignalInput<ForCollection<T> | null | undefined>;
+  each: SignalInput<ForCollection<T> | null | undefined> | DeepArrayInput<T> | DeepCollectionSignal<Set<T>>;
   fallback?: ReactNode;
   /** Returns the stable React key for an item. It must be pure and data-derived. */
   by: (item: T, index: number) => Key;
@@ -119,7 +139,7 @@ export interface ForProps<T> {
 
 /** Renders a map whose entries have stable identities. */
 export interface ForMapProps<K, V> {
-  each: SignalInput<ReadonlyMap<K, V> | null | undefined>;
+  each: SignalInput<ReadonlyMap<K, V> | null | undefined> | DeepCollectionSignal<Map<K, V>>;
   fallback?: ReactNode;
   /** Returns the stable React key for an entry. It must be pure and data-derived. */
   by: (entry: readonly [K, V], index: number) => Key;
@@ -159,7 +179,7 @@ export function For({
 
 /** Renders an array whose row identity is intentionally its position. */
 export interface IndexProps<T> {
-  each: SignalInput<readonly T[] | null | undefined>;
+  each: SignalInput<readonly T[] | null | undefined> | DeepArrayInput<T>;
   fallback?: ReactNode;
   /** Receives a render-time accessor for the current value at this position. */
   children: (item: () => T, index: number) => ReactNode;
@@ -195,8 +215,8 @@ export function Index<T>({ each, fallback = null, children }: IndexProps<T>): Re
   }
 }
 
-function readSignalInput<T>(value: SignalInput<T>): T {
-  return isSignal(value) ? (value.value as T) : value;
+function readSignalInput<T>(value: T | { readonly value: T }): T {
+  return isSignal(value) ? (value.value as T) : (value as T);
 }
 
 function collectMatches(children: ReactNode): Array<ReactElement<MatchElementProps>> {

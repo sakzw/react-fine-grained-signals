@@ -3,13 +3,15 @@
 import { act, createContext, Fragment, StrictMode, Suspense, useContext, useState } from "react";
 import { cleanup, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { computed, deepSignal, signal, useComputed, useSignalTracking } from "../src/index.js";
+import { computed, deepCollectionSignal, deepSignal, signal, useComputed, useSignalTracking } from "../src/index.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
 import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 afterEach(cleanup);
+
+const texts = (id: string) => Array.from(screen.getByTestId(id).children).map((node) => node.textContent);
 
 describe("JSX control flow utilities", () => {
   it("keeps parent closures and context current and cleans up the collection subscription", async () => {
@@ -766,5 +768,105 @@ describe("JSX control flow utilities", () => {
     // an event handler; it must read back through `each`, not through the
     // array snapshot it was created with.
     expect(firstAccessor?.()).toBe("z");
+  });
+
+  // A deep signal passed straight to `each` or `when` is read inside the
+  // component's own managed scope, so in-place mutations re-render it without
+  // replacing the root. Only the component re-renders, not its parent.
+  describe("deep signal inputs", () => {
+    it("re-renders For on in-place array mutations", () => {
+      const list = deepSignal([{ id: "a", name: "Ada" }]);
+      const parentRenders = vi.fn();
+      function Parent() {
+        parentRenders();
+        return (
+          <ul data-testid="list">
+            <For each={list} by={(item) => item.id} fallback={<li>empty</li>}>
+              {(item) => <li>{item.name}</li>}
+            </For>
+          </ul>
+        );
+      }
+
+      render(<Parent />);
+      act(() => void list.value.push({ id: "b", name: "Bea" }));
+      expect(texts("list")).toEqual(["Ada", "Bea"]);
+      act(() => void list.value.splice(0, 1));
+      expect(texts("list")).toEqual(["Bea"]);
+      // Read by the row callback, which runs inside For's scope.
+      act(() => void (list.value[0]!.name = "Beatrice"));
+      expect(texts("list")).toEqual(["Beatrice"]);
+      act(() => void (list.value.length = 0));
+      expect(texts("list")).toEqual(["empty"]);
+      expect(parentRenders).toHaveBeenCalledTimes(1);
+    });
+
+    it("re-renders Index on in-place array mutations", () => {
+      const list = deepSignal(["a"]);
+      render(
+        <ul data-testid="list">
+          <Index each={list}>{(item) => <li>{item()}</li>}</Index>
+        </ul>,
+      );
+      act(() => void list.value.push("b"));
+      expect(texts("list")).toEqual(["a", "b"]);
+      act(() => void (list.value[0] = "z"));
+      expect(texts("list")).toEqual(["z", "b"]);
+    });
+
+    it("re-renders For on in-place Set and Map mutations of a deepCollectionSignal", () => {
+      const tags = deepCollectionSignal(new Set(["a"]));
+      const users = deepCollectionSignal(new Map([["a", { n: 1 }]]));
+      render(
+        <>
+          <ul data-testid="tags">
+            <For each={tags} by={(tag) => tag}>
+              {(tag) => <li>{tag}</li>}
+            </For>
+          </ul>
+          <ul data-testid="users">
+            <For each={users} by={([id]) => id}>
+              {([id, user]) => <li>{`${id}${user.n}`}</li>}
+            </For>
+          </ul>
+        </>,
+      );
+      act(() => {
+        tags.value.add("b");
+        users.value.set("b", { n: 2 });
+      });
+      expect(texts("tags")).toEqual(["a", "b"]);
+      expect(texts("users")).toEqual(["a1", "b2"]);
+      act(() => void (users.value.get("a")!.n = 5));
+      expect(texts("users")).toEqual(["a5", "b2"]);
+    });
+
+    it("re-renders For over a nested array read through .value", () => {
+      const state = deepSignal({ items: ["a"] });
+      render(
+        <ul data-testid="list">
+          <For each={state.value.items} by={(item) => item}>
+            {(item) => <li>{item}</li>}
+          </For>
+        </ul>,
+      );
+      act(() => void state.value.items.push("b"));
+      expect(texts("list")).toEqual(["a", "b"]);
+    });
+
+    it("re-renders Show and Match on nested reads of a deep object", () => {
+      const state = deepSignal({ name: "x" });
+      render(
+        <div data-testid="box">
+          <Show when={state}>{(value) => <p>{`show:${value.name}`}</p>}</Show>
+          <Switch>
+            <Match when={state}>{(value) => <p>{`match:${value.name}`}</p>}</Match>
+          </Switch>
+        </div>,
+      );
+      expect(texts("box")).toEqual(["show:x", "match:x"]);
+      act(() => void (state.value.name = "y"));
+      expect(texts("box")).toEqual(["show:y", "match:y"]);
+    });
   });
 });

@@ -69,8 +69,10 @@ export function registerSignal<T extends object>(value: T): T {
 }
 
 /**
- * Returns whether a value came from this package's signal APIs. A signal from
- * another loaded copy of the package cannot be read here, so it throws.
+ * Returns whether a value came from this package's signal APIs, deep signals
+ * included: a `DeepSignal` or `DeepCollectionSignal` is a
+ * `ReadonlySignal<unknown>`, and narrowing a union keeps its own type. A signal
+ * from another loaded copy of the package cannot be read here, so it throws.
  */
 export function isSignal(value: unknown): value is ReadonlySignal<unknown> {
   if (typeof value !== "object" || value === null) return false;
