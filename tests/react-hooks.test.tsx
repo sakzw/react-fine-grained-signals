@@ -1,13 +1,13 @@
 /** @jsxImportSource react-fine-grained-signals/jsx */
 // @vitest-environment jsdom
 
-import { Component, StrictMode, Suspense, act, startTransition, useLayoutEffect, useState } from "react";
-import type { ReactNode } from "react";
+import { StrictMode, Suspense, act, startTransition, useLayoutEffect, useState } from "react";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   batch,
   computed,
+  deepSignal,
   signal,
   useComputed,
   useWritableComputed,
@@ -49,54 +49,6 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(screen.getByText("after")).toBeTruthy();
     expect(parentRenders).toHaveBeenCalledTimes(1);
     expect(leafRenders).toHaveBeenCalledTimes(2);
-  });
-
-  it("forwards a structural readable's background evaluation error to an Error Boundary", () => {
-    const invalidation = signal(0);
-    let shouldThrow = false;
-    const structural = {
-      get value(): string {
-        void invalidation.value;
-        if (shouldThrow) throw new Error("structural read failed");
-        return "ready";
-      },
-    } as ReadonlySignal<string>;
-    const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
-
-    class ErrorBoundary extends Component<{ children: ReactNode }, { error: unknown }> {
-      state: { error: unknown } = { error: undefined };
-
-      static getDerivedStateFromError(error: unknown) {
-        return { error };
-      }
-
-      render() {
-        return this.state.error === undefined ? (
-          this.props.children
-        ) : (
-          <output aria-label="structural error">caught</output>
-        );
-      }
-    }
-
-    function Reader() {
-      return <output aria-label="structural value">{useSignalValue(structural)}</output>;
-    }
-
-    render(
-      <ErrorBoundary>
-        <Reader />
-      </ErrorBoundary>,
-    );
-    expect(screen.getByLabelText("structural value").textContent).toBe("ready");
-    expect(() => {
-      act(() => {
-        shouldThrow = true;
-        invalidation.value += 1;
-      });
-    }).not.toThrow();
-    expect(screen.getByLabelText("structural error").textContent).toBe("caught");
-    expect(reactError).toHaveBeenCalled();
   });
 
   it("does not add an explicit leaf subscription to an ancestor useSignalTracking scope", () => {
@@ -277,43 +229,63 @@ describe("React leaf hooks (useSignalValue, useComputed)", () => {
     expect(evaluate).toHaveBeenCalledTimes(2);
   });
 
-  it("keeps structural readables on the compatibility subscription and releases it on unmount", () => {
-    const backing = signal("before");
+  it.each([
+    ["a structural { value, peek } object", { value: "x", peek: () => "x" }],
+    ["a plain value", "x"],
+    ["null", null],
+  ])("throws a TypeError during render for %s", (_label, source) => {
     const reads = vi.fn();
-    // The type is nominal, so a structural object needs a cast; the runtime
-    // still accepts it through the effect-backed fallback.
-    const structural = {
-      get value() {
-        reads();
-        return backing.value;
-      },
-      peek() {
-        return backing.peek();
-      },
-    } as unknown as ReadonlySignal<string>;
+    const subscribes = vi.fn();
+    const guarded =
+      typeof source === "object" && source !== null
+        ? {
+            get value() {
+              reads();
+              return source.value;
+            },
+            peek: source.peek,
+          }
+        : source;
 
-    function Reader({ version }: { version: number }) {
-      return <output aria-label="structural readable">{`${version}:${useSignalValue(structural)}`}</output>;
+    function Reader() {
+      subscribes();
+      return <output>{useSignalValue(guarded as unknown as ReadonlySignal<string>)}</output>;
     }
 
-    const view = render(<Reader version={1} />);
-    expect(screen.getByLabelText("structural readable").textContent).toBe("1:before");
-    expect(reads).toHaveBeenCalled();
+    const reactError = vi.spyOn(console, "error").mockImplementation(() => {});
+    expect(() => render(<Reader />)).toThrow(
+      new TypeError("useSignalValue expects a signal or computed created by react-fine-grained-signals"),
+    );
+    expect(subscribes).toHaveBeenCalled();
+    // The check runs before any read, so the object's getter is never reached.
+    expect(reads).not.toHaveBeenCalled();
+    reactError.mockRestore();
+  });
 
+  it("follows a deepSignal root's replacement at runtime (nested writes are not tracked)", () => {
+    // Rejected at compile time by `NotDeepSignal`; plain JavaScript can still
+    // pass one. It is subscribed through the root's internal source, the same
+    // path a deep signal JSX child or bound prop takes.
+    const state = deepSignal({ count: 1 });
+    const renders = vi.fn();
+
+    function Reader() {
+      renders();
+      const value = useSignalValue(state as unknown as ReadonlySignal<{ count: number }>);
+      return <output aria-label="deep root">{value.count}</output>;
+    }
+
+    render(<Reader />);
+    expect(screen.getByLabelText("deep root").textContent).toBe("1");
     act(() => {
-      backing.value = "after";
+      state.value.count = 2;
     });
-    expect(screen.getByLabelText("structural readable").textContent).toBe("1:after");
-
-    view.rerender(<Reader version={2} />);
-    expect(screen.getByLabelText("structural readable").textContent).toBe("2:after");
-
-    view.unmount();
-    const readsAfterUnmount = reads.mock.calls.length;
+    expect(renders).toHaveBeenCalledTimes(1);
     act(() => {
-      backing.value = "ignored";
+      state.value = { count: 3 };
     });
-    expect(reads).toHaveBeenCalledTimes(readsAfterUnmount);
+    expect(screen.getByLabelText("deep root").textContent).toBe("3");
+    expect(renders).toHaveBeenCalledTimes(2);
   });
 
   it("exposes useComputed to an explicit leaf hook", () => {

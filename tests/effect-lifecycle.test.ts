@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createAlienDerivedRenderAdapter } from "../src/core/render-runtime.mjs";
 import { createReactiveRuntime } from "../src/core/reactive-runtime.js";
-import { computed, effect, signal } from "../src/index.js";
+import { computed, deepSignal, effect, signal } from "../src/index.js";
 import { subscribeLocalReadable } from "../src/core/readable-subscription.js";
 
 function createRenderRuntime() {
@@ -99,7 +99,7 @@ describe("local readable subscription", () => {
       return source.value;
     });
     const notify = vi.fn();
-    const unsubscribe = subscribeLocalReadable(value, notify)!;
+    const unsubscribe = subscribeLocalReadable(value, notify);
 
     expect(() => {
       source.value = 2;
@@ -122,7 +122,7 @@ describe("local readable subscription", () => {
   it("supports many independent listeners and releases each subscription", () => {
     const source = signal(0);
     const listeners = Array.from({ length: 64 }, () => vi.fn());
-    const unsubscribes = listeners.map((listener) => subscribeLocalReadable(source, listener)!);
+    const unsubscribes = listeners.map((listener) => subscribeLocalReadable(source, listener));
     source.value = 1;
     expect(listeners.every((listener) => listener.mock.calls.length === 1)).toBe(true);
     for (const unsubscribe of unsubscribes) unsubscribe();
@@ -136,7 +136,7 @@ describe("local readable subscription", () => {
     const right = signal("right");
     const selected = computed(() => (chooseLeft.value ? left.value : right.value));
     const notify = vi.fn();
-    const unsubscribe = subscribeLocalReadable(selected, notify)!;
+    const unsubscribe = subscribeLocalReadable(selected, notify);
 
     left.value = "left updated";
     chooseLeft.value = false;
@@ -146,8 +146,19 @@ describe("local readable subscription", () => {
     unsubscribe();
   });
 
-  it("returns undefined for a readable this package did not create", () => {
+  it("throws for a readable this package did not create", () => {
     const structural = { value: 1, peek: () => 1 };
-    expect(subscribeLocalReadable(structural, vi.fn())).toBeUndefined();
+    expect(() => subscribeLocalReadable(structural, vi.fn())).toThrow(TypeError);
+  });
+
+  it("subscribes a deep signal root through its internal source", () => {
+    const state = deepSignal({ count: 1 });
+    const notify = vi.fn();
+    const unsubscribe = subscribeLocalReadable(state, notify);
+    state.value.count = 2;
+    expect(notify).not.toHaveBeenCalled();
+    state.value = { count: 3 };
+    expect(notify).toHaveBeenCalledTimes(1);
+    unsubscribe();
   });
 });

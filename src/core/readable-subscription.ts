@@ -12,12 +12,15 @@ export function delegateSubscription(wrapper: object, target: object): void {
 
 /**
  * Subscribe to a signal or computed created by this package without a render
- * dependency, or return `undefined` for any other readable. The listener runs
- * on changes after the initial read; reads that throw stay subscribed.
+ * dependency. The listener runs on changes after the initial read; reads that
+ * throw stay subscribed. Callers accept only values `isSignal` recognizes, so
+ * any other readable is an internal error and throws.
  */
-export function subscribeLocalReadable(readable: object, listener: () => void): (() => void) | undefined {
+export function subscribeLocalReadable(readable: object, listener: () => void): () => void {
   const target = delegates.get(readable) ?? readable;
-  if (coreRuntime.getNodeForReadable(target as { value: unknown; peek(): unknown }) === undefined) return undefined;
+  if (coreRuntime.getNodeForReadable(target as { value: unknown; peek(): unknown }) === undefined) {
+    throw new TypeError("Only signals created by react-fine-grained-signals can be subscribed to");
+  }
   let initial = true;
   return coreRuntime.detachedEffect(() => {
     try {

@@ -124,6 +124,7 @@ useSignalValue<T>(source: ReadonlySignal<T>): T // a deepSignal is rejected at c
 Subscribes to a single signal and returns its current value. This is the low-level explicit leaf subscription, for when you want one named subscription instead of a component-wide `useSignalTracking()` window.
 
 - It follows replacement of the signal's value only. A `deepSignal` is rejected by its type, because nested mutations would never re-render; use [`useDeepSignalValue`](#usedeepsignalvalue) to select from deep state.
+- `source` must be a signal or computed created by this package. Any other value, such as a plain `{ value }` object, throws a `TypeError` during render.
 
 ## useDeepCollectionSignal
 

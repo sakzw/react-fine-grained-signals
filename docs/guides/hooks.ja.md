@@ -122,6 +122,7 @@ useSignalValue<T>(source: ReadonlySignal<T>): T // deepSignalはコンパイル�
 1つのsignalを購読し、現在の値を返します。コンポーネント全体の `useSignalTracking()` ウィンドウではなく、名前の付いた購読を1つだけ張りたい場合の低レベルAPIです。
 
 - 追うのはsignalの値の置き換えだけです。ネストした変更では再レンダーされないため、`deepSignal` は型でエラーになります。deepな状態から値を選ぶには [`useDeepSignalValue`](#usedeepsignalvalue) を使ってください。
+- `source` には本パッケージが作ったsignalかcomputedを渡します。素の `{ value }` オブジェクトなど、それ以外の値を渡すと、レンダー中に `TypeError` をthrowします。
 
 ## useDeepCollectionSignal
 

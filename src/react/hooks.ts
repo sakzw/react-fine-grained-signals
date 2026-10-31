@@ -51,15 +51,14 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
 }
 
 /**
- * Shared `useSyncExternalStore` wiring for effect-backed subscriptions only:
- * the dynamic deep-selector store and structural-readable compatibility
- * fallback. This package's own readables use a direct watcher.
+ * `useSyncExternalStore` subscription for the dynamic deep-selector store,
+ * whose dependencies are whatever its selector reads. (`useSignalValue`
+ * subscribes to one readable through `subscribeLocalReadable` instead.)
  * On `subscribe`, starts an `effect()` that reruns `onEvaluate` on relevant
  * writes and notifies React when it reports a change.
  *
- * `getSnapshot` is intentionally not this helper's concern — the caller
- * wires its own, whether that means recomputing fresh each call
- * (`useSignalValue`) or returning a cached result (the deep-selector store).
+ * `getSnapshot` is intentionally not this helper's concern: the store wires
+ * its own, cached one.
  *
  * An exception thrown by `onEvaluate` is swallowed here and treated as a
  * change worth notifying about. That leaves the next render-time snapshot
@@ -278,13 +277,15 @@ export function useSignalEffect(callback: () => void | (() => void), dependencie
 }
 
 /**
- * Reads a signal and subscribes the component to subsequent changes through
- * a direct watcher when it is one of this package's readables.
+ * Reads a signal or computed created by this package and subscribes the
+ * component to subsequent changes through a direct watcher.
  *
  * `useSyncExternalStore` owns the initial consistency check after subscribing.
  * A read that throws (a computed whose cached error `.value` rethrows) remains
- * for the render-time `getSnapshot` to surface to an Error Boundary; only the
- * structural-readable fallback needs an effect to contain background errors.
+ * for the render-time `getSnapshot` to surface to an Error Boundary.
+ *
+ * Any other value, such as a plain `{ value }` object, throws a `TypeError`
+ * during render.
  *
  * A `deepSignal` is rejected at compile time: this subscribes to root
  * replacement only, so nested mutations would never re-render. Read deep state
@@ -294,19 +295,10 @@ export function useSignalValue<T>(source: ReadonlySignal<T> & NotDeepSignal): T 
   // A signal another loaded copy of the package created cannot be subscribed to
   // from here. `isSignal` throws for it, so the mix fails now instead of
   // leaving the component on a value that never updates.
-  isSignal(source);
-  const subscribe = useCallback(
-    (notify: () => void) => {
-      const unsubscribe = subscribeLocalReadable(source, notify);
-      if (unsubscribe !== undefined) return unsubscribe;
-      // Structural readables from elsewhere need the effect bridge.
-      return createEffectBackedStoreSubscription(() => {
-        source.value;
-        return true;
-      })(notify);
-    },
-    [source],
-  );
+  if (!isSignal(source)) {
+    throw new TypeError("useSignalValue expects a signal or computed created by react-fine-grained-signals");
+  }
+  const subscribe = useCallback((notify: () => void) => subscribeLocalReadable(source, notify), [source]);
 
   // A leaf subscription owns this read. An unmanaged useSignalTracking() scope may
   // still be open for an ancestor or earlier sibling until React commits, so

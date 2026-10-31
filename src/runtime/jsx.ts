@@ -1,5 +1,5 @@
 import { isSignal, untracked } from "../core/index.js";
-import { detachedEffect, type NarrowableSignal } from "../core/base.js";
+import type { NarrowableSignal } from "../core/base.js";
 import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
 import type { ReadonlySignal, Signal } from "../core/index.js";
@@ -276,23 +276,24 @@ function resyncRejectedFormWrite(
 }
 
 /**
- * The common case built on `applyBoundSignal`: subscribe to a readable and
- * re-run `apply` whenever it changes. This package's own readables use a
- * direct subscription; structural readables retain the effect bridge. Centralizes
- * the pattern that used to be hand-rolled at each binding site — declare an
- * `episode`, then `effect(() => { const read = readBoundSignal(...); if
- * (!read.ok) return; <apply the value> })` — so the read-and-skip contract
- * can't drift between sites. An `episode` may be passed in to share a
- * failure latch with a sibling read site (see `bindSelectValue`); otherwise
- * each binding gets its own.
- */
-/**
  * A live binding subscription; `refresh` re-applies the current value. A
  * `"style"` binding also takes the render snapshot it is re-attached for (see
  * `subscribeBinding`); every other kind ignores it.
  */
 type BindingSubscription = { readonly dispose: () => void; readonly refresh: (snapshot?: unknown) => void };
 
+/**
+ * The common case built on `applyBoundSignal`: subscribe to a signal through
+ * `subscribeLocalReadable` and re-run `apply` whenever it changes. Every
+ * binding source has passed `isSignal`, so it is one of this package's own
+ * readables (a deep signal root subscribes through its internal source).
+ * Centralizes the pattern that used to be hand-rolled at each binding site —
+ * declare an `episode`, then `effect(() => { const read = readBoundSignal(...);
+ * if (!read.ok) return; <apply the value> })` — so the read-and-skip contract
+ * can't drift between sites. An `episode` may be passed in to share a
+ * failure latch with a sibling read site (see `bindSelectValue`); otherwise
+ * each binding gets its own.
+ */
 function createBindingSubscription<T>(
   source: ReadonlySignal<T>,
   apply: (value: T) => void,
@@ -301,12 +302,9 @@ function createBindingSubscription<T>(
   const update = () => applyBoundSignal(() => source.value, apply, episode);
   const refresh = () => untracked(update);
   const unsubscribe = subscribeLocalReadable(source, update);
-  if (unsubscribe !== undefined) {
-    // Subscribe before the initial read/apply so setup cannot miss an update.
-    untracked(() => notifyListener(update));
-    return { dispose: unsubscribe, refresh };
-  }
-  return { dispose: detachedEffect(update), refresh };
+  // Subscribe before the initial read/apply so setup cannot miss an update.
+  untracked(() => notifyListener(update));
+  return { dispose: unsubscribe, refresh };
 }
 
 function setAttribute(node: Element, name: string, value: unknown): void {
