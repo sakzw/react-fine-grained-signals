@@ -18,14 +18,17 @@ const EMPTY_DEPENDENCIES: DependencyList = [];
 
 /**
  * Throws when a dependency array changes length between renders of one call
- * site. Omitting the array counts as an empty one.
+ * site. Omitting the array counts as an empty one. Call it before the
+ * `useMemo` or `useEffect` that consumes the array: React itself only warns
+ * in development about a resized array, and the memo or effect would then
+ * silently misbehave.
  */
 function useFixedDependencyLength(hook: string, errorName: string, dependencies: DependencyList | undefined): void {
   const length = dependencies?.length ?? 0;
   const initialLengthRef = useRef(length);
   if (length !== initialLengthRef.current) {
     const error = new Error(
-      `${hook}: dependencies length changed from ${initialLengthRef.current} to ${length}; keep it fixed.`,
+      `${hook}: dependencies length changed from ${initialLengthRef.current} to ${length}; keep the array the same length on every render.`,
     );
     error.name = errorName;
     throw error;
@@ -213,22 +216,9 @@ export function useDeepSignalValue<T extends object, S extends SignalSnapshot>(
   selector: (value: T) => S,
   dependencies?: DependencyList,
 ): S {
-  // A variable-length `dependencies` would otherwise only surface as React's
-  // dev-mode "changed size between renders" warning on the `useMemo` call
-  // below, while silently recreating the store (and losing selector/error
-  // history) on every subsequent render. Omitting the array is the same as
-  // `[]`, so a violation is a loud, actionable error instead of a silently
-  // degraded memo.
-  const dependencyLength = dependencies?.length ?? 0;
-  const initialDependencyLengthRef = useRef(dependencyLength);
-  if (dependencyLength !== initialDependencyLengthRef.current) {
-    const error = new Error(
-      `useDeepSignalValue: the \`dependencies\` array length changed between renders (from ${initialDependencyLengthRef.current} to ${dependencyLength}) for this call site. Keep \`dependencies\` a fixed length across the component's lifetime, matching useMemo's rules.`,
-    );
-    error.name = "UseDeepSignalValueDependencyLengthChangeError";
-    throw error;
-  }
-
+  // A resized array would otherwise recreate the store (losing selector and
+  // error history) on every later render, with only React's dev warning.
+  useFixedDependencyLength("useDeepSignalValue", "UseDeepSignalValueDependencyLengthChangeError", dependencies);
   const store = useMemo(
     () => createDeepSelectorStore(source, selector),
     [source, ...(dependencies ?? EMPTY_DEPENDENCIES)],
@@ -283,15 +273,7 @@ export function useWritableComputed<T>(options: WritableComputedOptions<T>, depe
  * those dependencies change.
  */
 export function useSignalEffect(callback: () => void | (() => void), dependencies?: DependencyList): void {
-  const initialDependencyLengthRef = useRef(dependencies?.length ?? 0);
-  const dependencyLength = dependencies?.length ?? 0;
-  if (dependencyLength !== initialDependencyLengthRef.current) {
-    const error = new Error(
-      `useSignalEffect: dependencies length changed from ${initialDependencyLengthRef.current} to ${dependencyLength}; keep it fixed.`,
-    );
-    error.name = "UseSignalEffectDependencyLengthChangeError";
-    throw error;
-  }
+  useFixedDependencyLength("useSignalEffect", "UseSignalEffectDependencyLengthChangeError", dependencies);
   useReactEffect(() => detachedEffect(callback), dependencies ?? EMPTY_DEPENDENCIES);
 }
 

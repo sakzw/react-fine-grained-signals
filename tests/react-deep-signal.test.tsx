@@ -718,8 +718,16 @@ describe("Deep signal selection (useDeepSignal, useDeepSignalValue)", () => {
     const view = render(<Selected dependencies={[]} />);
     expect(screen.getByLabelText("dependency length guard").textContent).toBe("1");
 
-    expect(() => view.rerender(<Selected dependencies={[1]} />)).toThrow(
-      /`dependencies` array length changed between renders/,
+    let thrown: unknown;
+    try {
+      view.rerender(<Selected dependencies={[1]} />);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    expect((thrown as Error).name).toBe("UseDeepSignalValueDependencyLengthChangeError");
+    expect((thrown as Error).message).toBe(
+      "useDeepSignalValue: dependencies length changed from 0 to 1; keep the array the same length on every render.",
     );
     errorSpy.mockRestore();
   });
