@@ -1,6 +1,6 @@
 import { createBundlerPlugin } from "./unplugin.js";
 
-export * from "./unplugin.js";
+export * from "./public.js";
 
 /** The plugin contract consumed by esbuild. */
 export interface EsbuildPlugin {

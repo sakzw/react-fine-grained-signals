@@ -1,6 +1,6 @@
 import { createBundlerPlugin, type BundlerTransformOutput } from "./unplugin.js";
 
-export * from "./unplugin.js";
+export * from "./public.js";
 
 /**
  * The Vite plugin shape this entry returns. Unlike the Rollup entry, `transform`

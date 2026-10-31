@@ -1,6 +1,6 @@
 import { createBundlerPlugin, type BundlerTransformOutput } from "./unplugin.js";
 
-export * from "./unplugin.js";
+export * from "./public.js";
 
 /** A minimal Rollup-compatible plugin shape. */
 export interface RollupPlugin {

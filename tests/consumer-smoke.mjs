@@ -179,7 +179,8 @@ try {
     import { jsx } from "react-fine-grained-signals/jsx/jsx-runtime";
     import { useSignalCapture } from "react-fine-grained-signals/internal";
     import * as root from "react-fine-grained-signals";
-    import generic, { pluginName, reactFineGrainedSignals } from "unplugin-react-fine-grained-signals";
+    import * as pluginRoot from "unplugin-react-fine-grained-signals";
+    import generic, { reactFineGrainedSignals } from "unplugin-react-fine-grained-signals";
     import vite from "unplugin-react-fine-grained-signals/vite";
     import rollup from "unplugin-react-fine-grained-signals/rollup";
     import webpack from "unplugin-react-fine-grained-signals/webpack";
@@ -208,7 +209,25 @@ try {
       }
       throw new Error("The removed entry react-fine-grained-signals/" + removed + " must not resolve");
     }
-    if (generic !== reactFineGrainedSignals || pluginName !== "unplugin-react-fine-grained-signals") {
+    const pluginName = "unplugin-react-fine-grained-signals";
+    // Every plugin entry exports the same runtime values; the helpers that
+    // src/unplugin.ts exports for the adapters and the package's own tests
+    // (canTransform, resolveEsbuildLoader, createBundlerPlugin, pluginName, ...)
+    // must not leak out through an entry.
+    const expectedPluginExports = ["REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS", "default", "reactFineGrainedSignals"];
+    for (const entry of ["", "/vite", "/rollup", "/webpack", "/rspack", "/esbuild"]) {
+      const names = Object.keys(await import("unplugin-react-fine-grained-signals" + entry)).sort();
+      if (JSON.stringify(names) !== JSON.stringify(expectedPluginExports)) {
+        throw new Error("unplugin-react-fine-grained-signals" + entry + " exports " + names.join(", ") + "; expected " + expectedPluginExports.join(", "));
+      }
+    }
+    for (const internal of ["canTransform", "createModuleFilter", "resolveEsbuildLoader", "createBundlerPlugin", "pluginName"]) {
+      if (internal in pluginRoot) throw new Error("The plugin root must not export the internal " + internal);
+    }
+    if (!Array.isArray(pluginRoot.REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS) || !pluginRoot.REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS.includes("RFGS001")) {
+      throw new Error("The plugin root must export REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS");
+    }
+    if (generic !== reactFineGrainedSignals) {
       throw new Error("The generic unplugin entry must expose its named public plugin");
     }
     const raw = generic.raw({});
