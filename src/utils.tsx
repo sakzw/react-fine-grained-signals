@@ -10,9 +10,20 @@ import { useManagedSignals } from "./react/use-signals.js";
  * open past the return (until the next `useSignalTracking()` call, a layout effect, or
  * a microtask) and misattribute a *sibling's* render-time signal read to this
  * component's store, which then silently stops updating the sibling. Every
- * branch and early return must stay inside the `try`. See
+ * branch and early return must stay inside the callback passed to
+ * `useManagedRender`, which runs it inside that `try`. See
  * development/design/use-signals-boundary-design.md.
  */
+
+/** Runs a component's whole body inside the managed render scope. */
+function useManagedRender(render: () => ReactNode): ReactNode {
+  const store = useManagedSignals();
+  try {
+    return render();
+  } finally {
+    store.finish();
+  }
+}
 
 /**
  * A plain value, or a signal from `signal`, `computed`, `deepSignal` or
@@ -60,15 +71,12 @@ export interface ShowProps<T> {
  * only this component rerenders when a signal read from `when` changes.
  */
 export function Show<T>({ when, fallback = null, children }: ShowProps<T>): ReactNode {
-  const store = useManagedSignals();
-  try {
+  return useManagedRender(() => {
     const value = readSignalInput(when);
 
     if (!value) return fallback;
     return typeof children === "function" ? children(value as Truthy<T>) : children;
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 /** What `Switch` reads from a `Match` element; `Match`'s overloads are the typed API. */
@@ -107,8 +115,7 @@ export interface SwitchProps {
  * A small reactive multi-branch boundary inspired by Solid's `Switch`/`Match`.
  */
 export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
-  const store = useManagedSignals();
-  try {
+  return useManagedRender(() => {
     for (const match of collectMatches(children)) {
       const props = match.props as MatchElementProps;
       const value = readSignalInput(props.when);
@@ -120,9 +127,7 @@ export function Switch({ fallback = null, children }: SwitchProps): ReactNode {
     }
 
     return fallback;
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 /** A collection supported by `For` when each item has its own identity. */
@@ -160,8 +165,7 @@ export function For({
   by,
   children,
 }: ForProps<unknown> | ForMapProps<unknown, unknown>): ReactNode {
-  const store = useManagedSignals();
-  try {
+  return useManagedRender(() => {
     const collection = readSignalInput(each);
 
     if (collection === null || collection === undefined) {
@@ -172,9 +176,7 @@ export function For({
     if (items.length === 0) return fallback;
 
     return items.map((item, index) => <Fragment key={by(item, index)}>{children(item, index)}</Fragment>);
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 /** Renders an array whose row identity is intentionally its position. */
@@ -192,8 +194,7 @@ export interface IndexProps<T> {
  * `For` instead and provide `by`.
  */
 export function Index<T>({ each, fallback = null, children }: IndexProps<T>): ReactNode {
-  const store = useManagedSignals();
-  try {
+  return useManagedRender(() => {
     const items = readSignalInput(each);
 
     if (items === null || items === undefined || items.length === 0) {
@@ -210,9 +211,7 @@ export function Index<T>({ each, fallback = null, children }: IndexProps<T>): Re
     const readAt = (index: number): T => (readSignalInput(each) ?? items)[index] as T;
 
     return items.map((_item, index) => <Fragment key={index}>{children(() => readAt(index), index)}</Fragment>);
-  } finally {
-    store.finish();
-  }
+  });
 }
 
 function readSignalInput<T>(value: T | { readonly value: T }): T {
