@@ -169,7 +169,14 @@ export default {
   `forwardRef` をReact由来とみなすmodule specifierを追加します。置き換えでは
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり
   設定しても既存のdirect importの認識が外れることはありません。
-- `include` / `exclude`: source module IDを絞る関数です。
+- `include` / `exclude`: source module IDを絞ります。`RegExp`、述語関数
+  `(id) => boolean`、またはそれらの配列を受け取ります。配列はどれか1つが一致すれば
+  一致とみなすため、空の `include` 配列は何にも一致しません。判定にはbundlerが渡した
+  そのままのID（queryを含み、path区切りもbundlerのまま）を使います。`exclude` が
+  `include` より優先され、`node_modules` と `\0` で始まるvirtual moduleは常に対象外です。
+  文字列やglobは受け付けません。文字列を渡すとplugin作成時に `TypeError` になるので、
+  `"src/components/**"` ではなく `/\/src\/components\//` のように書いてください。
+  型は `ReactFineGrainedSignalsFilterPattern` としてexportされています。
 - `diagnostics.errorOn`: build errorに昇格させる診断ID（例: `["RFGS001", "RFGS003"]`）の配列です。
   それ以外の診断は従来どおりwarningのままです。transform出力は、どちらでも同じです。未知のIDは
   plugin作成時に例外になります。詳細は[診断](#診断)を参照してください。

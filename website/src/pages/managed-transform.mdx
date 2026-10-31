@@ -67,9 +67,12 @@ original order.
   every eligible JSX component.
 - **`transform`** — `"managed"` (default) for per-read capture, or `"inject"`
   to insert a bare `useSignalTracking()` call instead.
-- **`include` / `exclude`** — functions that filter module IDs.
+- **`include` / `exclude`** — filter module IDs with a `RegExp`, a
+  predicate, or an array of those (an array matches when any element does).
+  `exclude` wins. Strings and globs are not accepted and throw when the plugin
+  is created.
 - **`reactCompiler`** — how the plugin cooperates with React Compiler
-  (default `"auto"`).
+  (default `"opt-out"`).
 
 A `@noSignalTracking` comment opts a single function out.
 

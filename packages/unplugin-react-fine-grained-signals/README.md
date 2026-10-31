@@ -172,7 +172,15 @@ export default {
   wrapped function is a component. Recognition is additive, not a replacement:
   a direct import from `"react"` is always recognized, so setting this only
   widens detection and never turns off an existing direct import.
-- `include` / `exclude`: functions that filter source module IDs.
+- `include` / `exclude`: filter source module IDs. Each takes a `RegExp`, a
+  predicate `(id) => boolean`, or an array of those; an array matches when any
+  element matches, so an empty `include` array matches nothing. They see the raw
+  ID the bundler gave (query included, path separators as the bundler uses them).
+  `exclude` wins over `include`, and `node_modules` and `\0`-prefixed virtual
+  modules are always skipped. Strings and globs are not accepted: a string
+  throws a `TypeError` when the plugin is created, so write `/\/src\/components\//`
+  instead of `"src/components/**"`. The type is exported as
+  `ReactFineGrainedSignalsFilterPattern`.
 - `diagnostics.errorOn`: diagnostic IDs (such as `["RFGS001", "RFGS003"]`) to
   promote from warnings to build errors. Every other diagnostic stays a warning.
   The transform output is the same either way. An unknown ID throws when the

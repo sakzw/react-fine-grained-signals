@@ -13,6 +13,7 @@ import webpackAdapter from "../src/webpack.js";
 import { transformReactFineGrainedSignals } from "../src/internal/transform.js";
 import {
   canTransform,
+  createModuleFilter,
   reactFineGrainedSignals,
   resolveEsbuildLoader,
   type ReactFineGrainedSignalsOptions,
@@ -78,6 +79,84 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(canTransform("/project/node_modules/pkg/index.js", options)).toBe(false);
     expect(canTransform("/project/src/styles.css", options)).toBe(false);
     expect(canTransform("/project/test/App.tsx", options)).toBe(false);
+  });
+
+  it("accepts a RegExp, a predicate, or an array of those for include/exclude", () => {
+    expect(canTransform("/project/src/App.tsx", { include: /\/src\// })).toBe(true);
+    expect(canTransform("/project/test/App.tsx", { include: /\/src\// })).toBe(false);
+
+    const include = [/\/src\//, (id: string) => id.includes("/lib/")] as const;
+    expect(canTransform("/project/src/App.tsx", { include })).toBe(true);
+    expect(canTransform("/project/lib/App.tsx", { include })).toBe(true);
+    expect(canTransform("/project/test/App.tsx", { include })).toBe(false);
+    // "Any element matches" taken literally: an empty allow-list allows nothing.
+    expect(canTransform("/project/src/App.tsx", { include: [] })).toBe(false);
+    expect(canTransform("/project/src/App.tsx", { exclude: [] })).toBe(true);
+
+    const exclude = [/\.stories\.tsx$/, (id: string) => id.includes("/server/")];
+    expect(canTransform("/project/src/App.stories.tsx", { include, exclude })).toBe(false);
+    expect(canTransform("/project/src/server/App.tsx", { include, exclude })).toBe(false);
+    expect(canTransform("/project/src/App.tsx", { include, exclude })).toBe(true);
+  });
+
+  it("lets exclude win over include and keeps node_modules and \\0 ids out", () => {
+    const options = { include: /./, exclude: /\/generated\// };
+    expect(canTransform("/project/src/generated/App.tsx", options)).toBe(false);
+    expect(canTransform("/project/node_modules/pkg/App.tsx", { include: /./ })).toBe(false);
+    expect(canTransform("C:\\project\\node_modules\\pkg\\App.tsx", { include: [/./] })).toBe(false);
+    expect(canTransform("\0virtual:App.tsx", { include: () => true })).toBe(false);
+    // Still an ESM script module that decides, whatever include says.
+    expect(canTransform("/project/src/styles.css", { include: /./ })).toBe(false);
+  });
+
+  it("matches patterns against the raw id, query included", () => {
+    expect(canTransform("/project/src/App.tsx?t=1", { exclude: /\?t=/ })).toBe(false);
+    expect(canTransform("/project/src/App.tsx", { exclude: /\?t=/ })).toBe(true);
+  });
+
+  it("does not let a global or sticky RegExp's lastIndex leak between ids", () => {
+    const global = /src/g;
+    const sticky = /\/project\//y;
+    const shouldTransform = createModuleFilter({ include: [global], exclude: sticky });
+    const included = createModuleFilter({ include: global });
+
+    // A shared stateful `test` would alternate true/false on the same id.
+    expect([1, 2, 3].map(() => included("/a/src/App.tsx"))).toEqual([true, true, true]);
+    expect([1, 2, 3].map(() => shouldTransform("/other/src/App.tsx"))).toEqual([true, true, true]);
+    expect([1, 2, 3].map(() => shouldTransform("/project/src/App.tsx"))).toEqual([false, false, false]);
+    // The caller's own RegExp objects are not mutated.
+    expect(global.lastIndex).toBe(0);
+    expect(sticky.lastIndex).toBe(0);
+  });
+
+  it("rejects strings and other unsupported include/exclude values when the plugin is created", () => {
+    expect(() => reactFineGrainedSignals.vite({ include: "src/**/*.tsx" as never })).toThrow(TypeError);
+    expect(() => reactFineGrainedSignals.vite({ include: "src/**/*.tsx" as never })).toThrow(
+      /include must be a RegExp, a function, or an array of those, got the string "src\/\*\*\/\*\.tsx"; string and glob patterns are not supported/,
+    );
+    expect(() => reactFineGrainedSignals.rollup({ exclude: [/x/, "**/server/**"] as never })).toThrow(
+      /exclude must be .* got the string/,
+    );
+    expect(() => reactFineGrainedSignals.esbuild({ include: null as never })).toThrow(/include must be .* got null/);
+    // webpack/rspack run unplugin's factory lazily, in `apply()`, so those two
+    // reach the same check when the compiler applies the plugin.
+    expect(() => reactFineGrainedSignals.vite({ include: [[/x/]] as never })).toThrow(
+      /include must be .* got a nested array/,
+    );
+    expect(() => reactFineGrainedSignals.rollup({ exclude: 42 as never })).toThrow(/exclude must be .* got number/);
+  });
+
+  it("applies RegExp and array filters in the bundler hooks", () => {
+    const plugin = reactFineGrainedSignals.vite({ include: [/\/src\//], exclude: /\/excluded\// }) as unknown as {
+      transformInclude(id: string): boolean;
+      transform: { handler(code: string, id: string): { code: string } | null };
+    };
+
+    expect(plugin.transformInclude("/project/src/App.tsx")).toBe(true);
+    expect(plugin.transformInclude("/project/test/App.tsx")).toBe(false);
+    expect(plugin.transform.handler(counterSource, "/project/src/excluded/App.tsx")).toBeNull();
+    expect(plugin.transform.handler(counterSource, "/project/test/App.tsx")).toBeNull();
+    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain("_useSignalCapture()");
   });
 
   it("leaves declared-CommonJS modules alone", () => {

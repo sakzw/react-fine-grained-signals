@@ -65,10 +65,72 @@ export interface ReactFineGrainedSignalsOptions {
    * relative barrel paths that differ per importing file.
    */
   reactImportSource?: string;
-  /** Restrict transformation to matching source module identifiers. */
-  include?: (id: string) => boolean;
-  /** Exclude matching source module identifiers from transformation. */
-  exclude?: (id: string) => boolean;
+  /**
+   * Restrict transformation to matching source module identifiers: a
+   * `RegExp`, a predicate, or an array of those (an array matches when any
+   * element does, so an empty array matches nothing). Matched against the raw
+   * id the bundler gave. Strings and globs are not accepted and throw when the
+   * plugin is created.
+   */
+  include?: ReactFineGrainedSignalsFilterPattern;
+  /**
+   * Exclude matching source module identifiers from transformation. Accepts
+   * the same values as `include`, and wins over it.
+   */
+  exclude?: ReactFineGrainedSignalsFilterPattern;
+}
+
+/** One `include`/`exclude` matcher, tested against the raw id the bundler gave. */
+type ReactFineGrainedSignalsFilter = RegExp | ((id: string) => boolean);
+
+/**
+ * What `include`/`exclude` accept: one matcher, or an array of them that
+ * matches when any element does. Unlike many unplugin/Vite plugins, string
+ * globs are deliberately not accepted -- a correct glob matcher would need a
+ * dependency -- so a string throws a `TypeError` when the plugin is created
+ * instead of silently matching nothing.
+ */
+export type ReactFineGrainedSignalsFilterPattern =
+  | ReactFineGrainedSignalsFilter
+  | readonly ReactFineGrainedSignalsFilter[];
+
+type ModuleIdMatcher = (id: string) => boolean;
+
+function describeInvalidFilter(filter: unknown): string {
+  if (typeof filter === "string") {
+    return `the string ${JSON.stringify(filter)}; string and glob patterns are not supported, use a RegExp or a function`;
+  }
+  if (filter === null) return "null";
+  if (Array.isArray(filter)) return "a nested array";
+  return typeof filter;
+}
+
+function toMatcher(filter: unknown, option: "include" | "exclude"): ModuleIdMatcher {
+  if (typeof filter === "function") {
+    const predicate = filter as (id: string) => unknown;
+    return (id) => Boolean(predicate(id));
+  }
+  if (filter instanceof RegExp) {
+    // A private copy whose `lastIndex` is reset before every test: a `g`/`y`
+    // pattern's `test` is stateful, and sharing the caller's object would make
+    // the answer for one id depend on which id was tested before it.
+    const pattern = new RegExp(filter);
+    return (id) => {
+      pattern.lastIndex = 0;
+      return pattern.test(id);
+    };
+  }
+  throw new TypeError(
+    `[${pluginName}] ${option} must be a RegExp, a function, or an array of those, got ${describeInvalidFilter(filter)}`,
+  );
+}
+
+/** Compiles `include`/`exclude` once, so an invalid value fails when the plugin is created. */
+function toModuleIdMatcher(pattern: unknown, option: "include" | "exclude"): ModuleIdMatcher | undefined {
+  if (pattern === undefined) return undefined;
+  if (!Array.isArray(pattern)) return toMatcher(pattern, option);
+  const matchers = pattern.map((filter: unknown) => toMatcher(filter, option));
+  return (id) => matchers.some((matches) => matches(id));
 }
 
 // `.cjs`/`.cts` are declared-CommonJS by extension, and the transform's only
@@ -105,7 +167,26 @@ function cleanModuleId(id: string): string {
   return id.replace(/[?#].*$/, "");
 }
 
+/**
+ * The `transformInclude` decision for `options`, with `include`/`exclude`
+ * validated and compiled up front. Exported for the package's own tests; the
+ * public entries do not re-export it.
+ */
+export function createModuleFilter(options: ReactFineGrainedSignalsOptions): (id: string) => boolean {
+  const include = toModuleIdMatcher(options.include, "include");
+  const exclude = toModuleIdMatcher(options.exclude, "exclude");
+  // `include`/`exclude` still see the id the bundler actually gave, so a
+  // pattern written against a query (Vite's `?t=` HMR stamp, say) keeps
+  // working.
+  return (id) => isTransformCandidate(id) && !exclude?.(id) && (include?.(id) ?? true);
+}
+
+/** `createModuleFilter(options)(id)`, for the package's own tests. */
 export function canTransform(id: string, options: ReactFineGrainedSignalsOptions): boolean {
+  return createModuleFilter(options)(id);
+}
+
+function isTransformCandidate(id: string): boolean {
   // Rollup's convention for a module another plugin generated and owns. The id
   // is not a path, its text belongs to that plugin rather than to the author,
   // and the only binding this transform introduces is a bare `import` that
@@ -115,12 +196,7 @@ export function canTransform(id: string, options: ReactFineGrainedSignalsOptions
   if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
     return false;
   }
-  // `include`/`exclude` still see the id the bundler actually gave, so a
-  // predicate written against a query (Vite's `?t=` HMR stamp, say) keeps
-  // working.
-  if (!SCRIPT_MODULE.test(cleanModuleId(id))) return false;
-  if (options.exclude?.(id)) return false;
-  return options.include?.(id) ?? true;
+  return SCRIPT_MODULE.test(cleanModuleId(id));
 }
 
 /**
@@ -317,6 +393,7 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
         (reactCompiler === ("auto" as string) ? '; "auto" was renamed to "opt-out" in 0.4.0' : ""),
     );
   }
+  const shouldTransform = createModuleFilter(options);
   // esbuild hands a plugin its resolved build options through the `config`
   // hook, which is the only place a project's own `loader` map can be read.
   let configuredLoaders: Record<string, string> | undefined;
@@ -360,7 +437,7 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
     name: pluginName,
     enforce: "pre",
     transformInclude(id) {
-      return canTransform(id, options);
+      return shouldTransform(id);
     },
     transform,
     // `enforce: "pre"` alone does not put this transform ahead of React
@@ -387,12 +464,12 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
     // would survive only by accident of how its Vite adapter copies the hook.
     // The override is merged onto the Vite plugin *after* unplugin wraps the
     // shared hook, so it replaces that wrapper -- including the
-    // `transformInclude` check -- and has to apply `canTransform` itself.
+    // `transformInclude` check -- and has to apply the module filter itself.
     vite: {
       transform: {
         order: "pre",
         handler(this: { warn?: (warning: never) => void }, code: string, id: string) {
-          return canTransform(id, options) ? transform.call(this, code, id) : null;
+          return shouldTransform(id) ? transform.call(this, code, id) : null;
         },
       },
     },
