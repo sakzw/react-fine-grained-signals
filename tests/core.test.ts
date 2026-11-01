@@ -1023,7 +1023,8 @@ describe("subscriptions that are not render dependencies isolate their listeners
       expect(errorSpy.mock.calls[0]?.[0]).toBe(
         "react-fine-grained-signals: a render-subscription listener threw; continuing with the remaining listeners.",
       );
-      expect((errorSpy.mock.calls[0]?.[1] as { cause: Error }).cause.message).toBe("listener boom");
+      const reported = errorSpy.mock.calls[0]?.[1] as { cause: Error } | undefined;
+      expect(reported?.cause.message).toBe("listener boom");
     } finally {
       stopFailing();
       stopFollowing();
