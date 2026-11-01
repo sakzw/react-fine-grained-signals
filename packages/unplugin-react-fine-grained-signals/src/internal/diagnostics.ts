@@ -25,6 +25,14 @@
  * - RFGS009 Server-directive component: a component in a module with a
  *   top-level `"use server"` directive, which is left untransformed.
  */
+/** The package name every message this plugin raises starts with, in brackets. */
+export const PLUGIN_NAME = "unplugin-react-fine-grained-signals";
+
+/** `[unplugin-react-fine-grained-signals] <text>`: the one message format. */
+export function pluginMessage(text: string): string {
+  return `[${PLUGIN_NAME}] ${text}`;
+}
+
 export const DIAGNOSTIC_IDS = [
   "RFGS001",
   "RFGS002",

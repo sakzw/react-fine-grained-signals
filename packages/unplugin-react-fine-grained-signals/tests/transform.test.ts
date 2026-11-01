@@ -2678,7 +2678,7 @@ describe("parse failures", () => {
     // string, and the exact parser configuration the parse ran under -- none of
     // which the raw Babel error carries.
     expect(message).toMatch(
-      /^unplugin-react-fine-grained-signals could not parse \/project\/src\/App\.tsx \(Babel parser plugins: jsx, typescript, decorators-legacy, decoratorAutoAccessors\):/,
+      /^\[unplugin-react-fine-grained-signals\] could not parse \/project\/src\/App\.tsx \(Babel parser plugins: jsx, typescript, decorators-legacy, decoratorAutoAccessors\):/,
     );
     // The original Babel error, and its code frame, stay reachable.
     expect(message).toContain("Unexpected token");
@@ -2712,7 +2712,7 @@ describe("parse failures", () => {
 
     expect(thrown).toBeInstanceOf(Error);
     const message = (thrown as Error).message;
-    expect(message).toMatch(/^unplugin-react-fine-grained-signals could not analyze \/project\/src\/Comp\.jsx:/);
+    expect(message).toMatch(/^\[unplugin-react-fine-grained-signals\] could not analyze \/project\/src\/Comp\.jsx:/);
     expect(message).toContain("chain of several hundred same-module helper functions");
     expect(message).not.toContain("could not parse");
     expect((thrown as Error).cause).toBeInstanceOf(RangeError);

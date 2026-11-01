@@ -198,7 +198,7 @@ silently changing what is transformed.
 
 Each warning carries a stable ID, so you can tell categories apart and match
 them in tooling. The ID is the start of the warning text
-(`[react-fine-grained-signals] RFGS003: ...`) and is also set on the bundler
+(`[unplugin-react-fine-grained-signals] RFGS003: ...`) and is also set on the bundler
 warning as `diagnosticId`. The shared `code: "RFGS"` is unchanged. Existing
 warnings keep their text apart from that ID prefix, and the Hook warnings now
 include a code frame like the others.

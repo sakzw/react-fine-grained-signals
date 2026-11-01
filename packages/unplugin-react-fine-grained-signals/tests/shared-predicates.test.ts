@@ -260,3 +260,45 @@ describe("RFGS003 callback targets", () => {
     expect(diagnostics).not.toContain("RFGS003");
   });
 });
+
+describe("React state reached through a namespace import", () => {
+  it.each([
+    ['import { useState } from "react";', "useState"],
+    ['import * as React from "react";', "React.useState"],
+    ['import React from "react";', "React.useState"],
+  ])("treats %s state as owned data", (reactImport, hook) => {
+    const { code } = run(
+      `${reactImport}\n${header}export function A() { const [rows] = ${hook}([]); return <ul>{s.value}{rows.map((r) => <li>{r.name.trim()}</li>)}</ul>; }`,
+    );
+    expect(code).toContain("{rows.map(r => <li>{r.name.trim()}</li>)}");
+  });
+
+  it("does not trust a same-named method of an arbitrary object", () => {
+    const { code } = run(
+      `${header}export function A({ store }) { const [rows] = store.useState([]); return <ul>{s.value}{rows.map((r) => <li>{r}</li>)}</ul>; }`,
+    );
+    expect(code).toContain("_signals.capture(() => rows.map(");
+  });
+});
+
+describe("message prefix", () => {
+  it("starts diagnostics and parse failures with the plugin's own name", () => {
+    const messages: string[] = [];
+    transformReactFineGrainedSignals(
+      `${header}export function A({ v = s.value }) { const s = 1; return <p>{v}{s}</p>; }`,
+      "A.tsx",
+      {
+        importSource: "react-fine-grained-signals",
+        mode: "all",
+        transform: "managed",
+        reactCompiler: "opt-out",
+        reactImportSource: "react",
+        warn: (warning) => messages.push(warning.message),
+      },
+    );
+    expect(messages[0]).toMatch(/^[^\n]*\[unplugin-react-fine-grained-signals\] RFGS004: /);
+    expect(() => run("const value = <p>{</p>;", { filename: "Broken.tsx" })).toThrow(
+      /^\[unplugin-react-fine-grained-signals\] could not parse Broken\.tsx /,
+    );
+  });
+});

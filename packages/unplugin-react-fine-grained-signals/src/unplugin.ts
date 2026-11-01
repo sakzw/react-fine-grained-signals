@@ -11,7 +11,8 @@ import {
   type ReactFineGrainedSignalsTransform,
   type InternalTransformResult,
 } from "./internal/transform.js";
-import { isDiagnosticId, type DiagnosticId } from "./internal/diagnostics.js";
+import { isDiagnosticId, PLUGIN_NAME, type DiagnosticId } from "./internal/diagnostics.js";
+import { SCRIPT_MODULE_EXTENSION, stripModuleIdQuery } from "./internal/module-id.js";
 
 export type {
   ReactFineGrainedSignalsMode,
@@ -24,8 +25,8 @@ export { DIAGNOSTIC_IDS as REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS } from "./i
 /** Build-time diagnostic settings. Every diagnostic is a warning unless `errorOn` names its ID. */
 export interface ReactFineGrainedSignalsDiagnosticsOptions {
   /**
-   * Diagnostic IDs (`RFGS001`-`RFGS009`) that fail the build instead of
-   * warning. Each one keeps its source location and code frame. The
+   * Diagnostic IDs (any of `REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS`) that
+   * fail the build instead of warning. Each one keeps its source location and code frame. The
    * transform's output does not change: a promoted diagnostic only decides
    * whether the build reports an error. Unknown IDs throw when the plugin is
    * created, so a typo cannot silently leave a diagnostic as a warning.
@@ -150,9 +151,9 @@ function toModuleIdMatcher(pattern: unknown, option: "include" | "exclude"): Mod
 // case-sensitive claim here was the one step that silently passed over
 // `App.JSX`/`App.TSX` -- the files a case-insensitive file system makes
 // perfectly ordinary. `.CJS`/`.CTS` stay excluded: the class cannot match a `c`.
-const SCRIPT_MODULE = /\.m?[jt]sx?$/i;
+// The pattern lives in `internal/module-id.ts`, next to the transform's own.
 
-export const pluginName = "unplugin-react-fine-grained-signals";
+export const pluginName = PLUGIN_NAME;
 
 /**
  * `id` with the `?query`/`#fragment` a bundler appends taken off, which is
@@ -168,7 +169,7 @@ export const pluginName = "unplugin-react-fine-grained-signals";
  * looking at the same name.
  */
 function cleanModuleId(id: string): string {
-  return id.replace(/[?#].*$/, "");
+  return stripModuleIdQuery(id);
 }
 
 /**
@@ -200,7 +201,7 @@ function isTransformCandidate(id: string): boolean {
   if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
     return false;
   }
-  return SCRIPT_MODULE.test(cleanModuleId(id));
+  return SCRIPT_MODULE_EXTENSION.test(cleanModuleId(id));
 }
 
 /**

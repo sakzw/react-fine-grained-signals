@@ -189,7 +189,7 @@ export default {
 
 ## 診断
 
-各warningには安定したIDが付きます。IDはwarning本文の先頭（`[react-fine-grained-signals] RFGS003: ...`）と、
+各warningには安定したIDが付きます。IDはwarning本文の先頭（`[unplugin-react-fine-grained-signals] RFGS003: ...`）と、
 bundlerへ渡すwarningの `diagnosticId` に入ります。共通の `code: "RFGS"` は変わりません。既存のwarningは
 このIDの接頭辞を除けば本文を保ち、Hook系のwarningも他と同じくcode frameを含むようになりました。
 

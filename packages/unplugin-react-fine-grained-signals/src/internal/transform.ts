@@ -9,7 +9,8 @@ import {
   type Visitor,
 } from "@babel/core";
 import * as t from "@babel/types";
-import type { DiagnosticId } from "./diagnostics.js";
+import { PLUGIN_NAME, pluginMessage, type DiagnosticId } from "./diagnostics.js";
+import { JSX_EXTENSION, stripModuleIdQuery, TYPESCRIPT_EXTENSION } from "./module-id.js";
 
 // Each closed option set is written once, as a list the plugin validates
 // against, and its type is derived from that list.
@@ -127,6 +128,16 @@ function hasOwnedLeadingComment(path: NodePath, pattern: RegExp): boolean {
 }
 
 const reactPackageSource = "react";
+
+/** The entry generated code imports `useSignalCapture` from. */
+function managedRuntimeSourceOf(importSource: string): string {
+  return `${importSource}/internal`;
+}
+
+/** The entry the RFSG control-flow components (`Show`, `For`, ...) come from. */
+function controlFlowSourceOf(importSource: string): string {
+  return `${importSource}/utils`;
+}
 
 // A single-file transform cannot follow a re-export chain, so a codebase that
 // imports React's wrappers through an internal barrel names that module with
@@ -665,7 +676,7 @@ function isHookIdentity(identity: ComponentIdentity | undefined): boolean {
  */
 function deriveModuleIdentityName(filename: string | undefined): string | undefined {
   if (filename === undefined) return undefined;
-  const base = filename.replace(/[?#].*$/, "").replace(/\\/g, "/");
+  const base = stripModuleIdQuery(filename).replace(/\\/g, "/");
   const stem = base.slice(base.lastIndexOf("/") + 1).replace(/\.[^.]*$/, "");
   const name = stem
     .split(/[^A-Za-z0-9]+/)
@@ -2456,7 +2467,7 @@ const reportedWarnings = new WeakMap<t.Node, Set<string>>();
  * without parsing its text.
  */
 function reportWarning(options: InternalTransformOptions, id: DiagnosticId, path: NodePath, text: string): void {
-  const message = `[react-fine-grained-signals] ${id}: ${text}`;
+  const message = pluginMessage(`${id}: ${text}`);
   let reported = reportedWarnings.get(path.node);
   if (reported === undefined) reportedWarnings.set(path.node, (reported = new Set()));
   if (reported.has(message)) return;
@@ -2538,7 +2549,7 @@ function resolveSignalControlFlowImport(
   seen.add(binding);
   const imported = resolveImportedBinding(origin, name);
   if (imported !== undefined) {
-    if (imported.source !== `${importSource}/utils`) return undefined;
+    if (imported.source !== controlFlowSourceOf(importSource)) return undefined;
     const { specifier } = imported;
     if (specifier.isImportNamespaceSpecifier()) return { kind: "namespace" };
     if (!specifier.isImportSpecifier()) return undefined;
@@ -2735,7 +2746,7 @@ function inspectKnownRenderPropReads(
     inspectFunction(
       target,
       options.importSource,
-      `${options.importSource}/internal`,
+      managedRuntimeSourceOf(options.importSource),
       reactImportSource,
       new Set([functionPath.node]),
       true,
@@ -2971,7 +2982,7 @@ function decideTransform(
   if (isUnverifiableBarrelSignalTracking(path, statements, options.importSource, explicit)) {
     warnUnverifiableBarrelSignalTracking(path, options.importSource, options);
   }
-  const managedRuntimeSource = `${options.importSource}/internal`;
+  const managedRuntimeSource = managedRuntimeSourceOf(options.importSource);
   const inspection = inspectFunction(path, options.importSource, managedRuntimeSource, reactImportSource);
   inspectKnownRenderPropReads(path, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);
@@ -3658,35 +3669,6 @@ const standardGlobals = new Set([
   "BigUint64Array",
 ]);
 
-/**
- * Builtins that call a function they are handed: the argument index of that
- * function. That function runs inside the call, so it must be proven too.
- */
-const builtinCallbackArguments: ReadonlyMap<string, number> = new Map([
-  ["map", 0],
-  ["filter", 0],
-  ["forEach", 0],
-  ["some", 0],
-  ["every", 0],
-  ["flatMap", 0],
-  ["find", 0],
-  ["findIndex", 0],
-  ["findLast", 0],
-  ["findLastIndex", 0],
-  ["reduce", 0],
-  ["reduceRight", 0],
-  ["sort", 0],
-  ["toSorted", 0],
-  ["replace", 1],
-  ["replaceAll", 1],
-]);
-const globalCallbackArguments: ReadonlyMap<string, number> = new Map([
-  ["Array.from", 1],
-  ["JSON.stringify", 1],
-  ["JSON.parse", 1],
-  ["Object.groupBy", 1],
-  ["Map.groupBy", 1],
-]);
 /** Builtins whose callback receives receiver elements (and, for `reduce*`, an accumulator first). */
 const elementCallbackMethods = new Set([
   "map",
@@ -3705,6 +3687,24 @@ const elementCallbackMethods = new Set([
   "toSorted",
 ]);
 
+/**
+ * Builtins that call a function they are handed: the argument index of that
+ * function. That function runs inside the call, so it must be proven too.
+ * Every element-callback method takes it first; `replace`/`replaceAll` take a
+ * replacer second.
+ */
+const builtinCallbackArguments: ReadonlyMap<string, number> = new Map([
+  ...[...elementCallbackMethods].map((method) => [method, 0] as const),
+  ["replace", 1],
+  ["replaceAll", 1],
+]);
+const globalCallbackArguments: ReadonlyMap<string, number> = new Map([
+  ["Array.from", 1],
+  ["JSON.stringify", 1],
+  ["JSON.parse", 1],
+  ["Object.groupBy", 1],
+  ["Map.groupBy", 1],
+]);
 /** React Hooks whose results are plain state the component owns. */
 const stateHookNames = new Set([
   "useState",
@@ -3715,6 +3715,26 @@ const stateHookNames = new Set([
   "useActionState",
   "useId",
 ]);
+
+/**
+ * Does `callee` call one of `stateHookNames`? A bare name counts by
+ * convention, as it always has, and `React.useState` -- the same Hook reached
+ * through a default or namespace React import -- counts the same way, read by
+ * the static member-chain reader every other callee name in this file uses.
+ */
+function isStateHookCallee(path: NodePath, callee: t.Node, reactImportSource: string): boolean {
+  const node = unwrapTransparent(callee);
+  if (t.isIdentifier(node)) return stateHookNames.has(node.name);
+  if (!t.isMemberExpression(node) && !t.isOptionalMemberExpression(node)) return false;
+  const chain = getStaticMemberChain(node);
+  return (
+    chain !== undefined &&
+    chain.keys.length === 1 &&
+    stateHookNames.has(chain.keys[0]!) &&
+    t.isIdentifier(chain.root) &&
+    isReactDefaultOrNamespaceImport(path, chain.root.name, reactImportSource)
+  );
+}
 
 /** How much is known about a value's provenance; see `ownership`. */
 const enum Ownership {
@@ -4302,8 +4322,7 @@ function computeOwnership(path: NodePath, expression: t.Node, depth: number, con
   } else if (
     t.isArrayPattern(declarator.id) &&
     (t.isCallExpression(init) || t.isOptionalCallExpression(init)) &&
-    t.isIdentifier(unwrapTransparent(init.callee)) &&
-    stateHookNames.has((unwrapTransparent(init.callee) as t.Identifier).name)
+    isStateHookCallee(binding.path, init.callee, context.reactImportSource)
   ) {
     // `const [rows, setRows] = useState(...)`: React state, not an object with methods.
     trust = Ownership.Deep;
@@ -5931,7 +5950,7 @@ function applyManaged(
   body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
   const readContext: ReadContext = {
     importSource: options.importSource,
-    managedRuntimeSource: `${options.importSource}/internal`,
+    managedRuntimeSource: managedRuntimeSourceOf(options.importSource),
     reactImportSource: options.reactImportSource,
   };
   let trackedAliases = collectTrackedReadAliases(path, readContext);
@@ -5943,7 +5962,7 @@ function applyManaged(
     path,
     store,
     options.importSource,
-    `${options.importSource}/internal`,
+    managedRuntimeSourceOf(options.importSource),
     options.reactImportSource,
     trackedAliases,
     options,
@@ -6010,11 +6029,11 @@ function keepJsxPragmasFirst(programPath: NodePath<t.Program>, state: PluginStat
 
 const babelTransform = declare<PluginState, InternalTransformOptions>((api, options) => {
   api.assertVersion(8);
-  const managedRuntimeSource = `${options.importSource}/internal`;
+  const managedRuntimeSource = managedRuntimeSourceOf(options.importSource);
   const reactImportSource = options.reactImportSource;
 
   const plugin: PluginObject<PluginState> = {
-    name: "unplugin-react-fine-grained-signals",
+    name: PLUGIN_NAME,
     visitor: {
       Program: {
         enter(path, state) {
@@ -6090,11 +6109,9 @@ export function transformReactFineGrainedSignals(
   options: InternalTransformOptions,
 ): InternalTransformResult | null {
   if (!mightTransform(code, options.mode)) return null;
-  const cleanId = id.replace(/[?#].*$/, "");
-  const isTypeScript = /\.[cm]?tsx?$/i.test(cleanId);
-  // JavaScript commonly carries JSX without using a .jsx suffix, while
-  // TypeScript's angle-bracket assertions make JSX parsing unsafe for .ts.
-  const supportsJsx = /\.[cm]?(?:jsx?|tsx)$/i.test(cleanId);
+  const cleanId = stripModuleIdQuery(id);
+  const isTypeScript = TYPESCRIPT_EXTENSION.test(cleanId);
+  const supportsJsx = JSX_EXTENSION.test(cleanId);
   const parserPlugins: NonNullable<NonNullable<InputOptions["parserOpts"]>["plugins"]> = [];
   if (supportsJsx) parserPlugins.push("jsx");
   if (isTypeScript) parserPlugins.push("typescript");
@@ -6138,16 +6155,19 @@ export function transformReactFineGrainedSignals(
     // Saying "could not parse" would send the author looking for a syntax error.
     if (error instanceof RangeError && /call stack/i.test(detail)) {
       throw new Error(
-        `unplugin-react-fine-grained-signals could not analyze ${cleanId}: ` +
-          `its function calls nest deeper than the JavaScript call stack allows (${detail}). ` +
-          "This usually means a chain of several hundred same-module helper functions that " +
-          "call each other; split the chain up or move part of it to another module.",
+        pluginMessage(
+          `could not analyze ${cleanId}: ` +
+            `its function calls nest deeper than the JavaScript call stack allows (${detail}). ` +
+            "This usually means a chain of several hundred same-module helper functions that " +
+            "call each other; split the chain up or move part of it to another module.",
+        ),
         { cause: error },
       );
     }
     throw new Error(
-      `unplugin-react-fine-grained-signals could not parse ${cleanId} ` +
-        `(Babel parser plugins: ${parserPlugins.join(", ") || "none"}): ${detail}`,
+      pluginMessage(
+        `could not parse ${cleanId} (Babel parser plugins: ${parserPlugins.join(", ") || "none"}): ${detail}`,
+      ),
       { cause: error },
     );
   }

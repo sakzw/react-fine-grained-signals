@@ -159,7 +159,7 @@ describe("diagnostic IDs", () => {
     expect(warnings).toHaveLength(1);
     const [warning] = warnings;
     expect(warning?.code).toBe("RFGS");
-    expect(warning?.message).toMatch(new RegExp(`^\\[react-fine-grained-signals\\] ${id}: `));
+    expect(warning?.message).toMatch(new RegExp(`^\\[unplugin-react-fine-grained-signals\\] ${id}: `));
     expect(warning?.message).toMatch(/> \d+ \|/);
     expect(warning?.loc).toEqual(expect.objectContaining({ line: expect.any(Number), column: expect.any(Number) }));
   });
@@ -257,7 +257,7 @@ export function App() {
       return undefined;
     })();
 
-    expect(failure?.message).toContain("[react-fine-grained-signals] RFGS007: ");
+    expect(failure?.message).toContain("[unplugin-react-fine-grained-signals] RFGS007: ");
     expect(failure?.message).toMatch(/> \d+ \|/);
     expect(failure?.code).toBe("RFGS");
     expect(failure?.diagnosticId).toBe("RFGS007");
@@ -383,7 +383,7 @@ export function Counter() { return <button>{count.value}</button>; }
       loader.call(context as never, source, map);
     });
 
-    expect(run.error?.message).toContain("[react-fine-grained-signals] RFGS003: ");
+    expect(run.error?.message).toContain("[unplugin-react-fine-grained-signals] RFGS003: ");
     expect(run.error?.message).toMatch(/> \d+ \|/);
     expect(run.error?.code).toBe("RFGS");
     expect(run.error?.diagnosticId).toBe("RFGS003");
