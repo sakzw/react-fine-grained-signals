@@ -1031,3 +1031,34 @@ describe("reactCompiler option", () => {
     expect(() => rollupAdapter({ reactCompiler: "off" })).not.toThrow();
   });
 });
+
+describe("option validation", () => {
+  it.each([
+    [{ mode: "Auto" }, /mode must be "manual", "auto", or "all", got "Auto"; did you mean "auto"\?$/],
+    [{ mode: "hooks" }, /mode must be "manual", "auto", or "all", got "hooks"$/],
+    [{ transform: "manged" }, /transform must be "inject" or "managed", got "manged"$/],
+    [{ transform: 1 }, /transform must be "inject" or "managed", got number$/],
+    [{ importSource: "" }, /importSource must be a non-empty module specifier, got ""$/],
+    [{ importSource: null }, /importSource must be a non-empty module specifier, got null$/],
+    [{ reactImportSource: 42 }, /reactImportSource must be a non-empty module specifier, got number$/],
+    [
+      { diagnostics: { errorOn: "RFGS001" } },
+      /diagnostics\.errorOn must be an array of diagnostic IDs, got "RFGS001"$/,
+    ],
+  ])("rejects %o with a TypeError when the plugin is created", (options, message) => {
+    for (const create of [rollupAdapter, viteAdapter, esbuildAdapter]) {
+      expect(() => create(options as never)).toThrow(TypeError);
+      expect(() => create(options as never)).toThrow(message);
+    }
+  });
+
+  it("accepts every documented value and leaves omitted options to their defaults", () => {
+    for (const mode of ["manual", "auto", "all"] as const) {
+      for (const transform of ["inject", "managed"] as const) {
+        expect(() => rollupAdapter({ mode, transform })).not.toThrow();
+      }
+    }
+    expect(() => rollupAdapter({ importSource: "@app/signals", reactImportSource: "@app/react" })).not.toThrow();
+    expect(() => rollupAdapter()).not.toThrow();
+  });
+});

@@ -131,6 +131,14 @@ export default {
 
 ## Options
 
+Every option is checked when the plugin is created (for webpack and rspack,
+when the plugin is applied to the compiler). A value outside the documented set
+for `mode`, `transform` or `reactCompiler` (they are case-sensitive), an
+`importSource` or `reactImportSource` that is not a non-empty string, a
+`diagnostics.errorOn` that is not an array of known IDs, and an invalid
+`include` / `exclude` throw a `TypeError` naming the option, rather than
+silently changing what is transformed.
+
 - `mode`:
   - `"manual"`: only explicit opt-ins select a function: a `@signalTracking`
     comment on a supported named component/custom Hook, or a recognized

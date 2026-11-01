@@ -11,9 +11,15 @@ import {
 import * as t from "@babel/types";
 import type { DiagnosticId } from "./diagnostics.js";
 
-export type ReactFineGrainedSignalsMode = "manual" | "auto" | "all";
-export type ReactFineGrainedSignalsTransform = "inject" | "managed";
-export type ReactFineGrainedSignalsReactCompiler = "opt-out" | "off";
+// Each closed option set is written once, as a list the plugin validates
+// against, and its type is derived from that list.
+export const MODES = ["manual", "auto", "all"] as const;
+export const TRANSFORMS = ["inject", "managed"] as const;
+export const REACT_COMPILER_MODES = ["opt-out", "off"] as const;
+
+export type ReactFineGrainedSignalsMode = (typeof MODES)[number];
+export type ReactFineGrainedSignalsTransform = (typeof TRANSFORMS)[number];
+export type ReactFineGrainedSignalsReactCompiler = (typeof REACT_COMPILER_MODES)[number];
 
 export interface InternalTransformOptions {
   importSource: string;

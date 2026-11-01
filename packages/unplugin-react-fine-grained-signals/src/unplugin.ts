@@ -1,7 +1,11 @@
 import { fileURLToPath } from "node:url";
 import { createUnplugin, type TransformResult } from "unplugin";
 import {
+  MODES,
+  REACT_COMPILER_MODES,
+  TRANSFORMS,
   transformReactFineGrainedSignals,
+  type InternalTransformOptions,
   type ReactFineGrainedSignalsMode,
   type ReactFineGrainedSignalsReactCompiler,
   type ReactFineGrainedSignalsTransform,
@@ -238,6 +242,108 @@ export function resolveEsbuildLoader(id: string, configuredLoaders?: Record<stri
   return configuredLoaders?.[extension] ?? ESBUILD_LOADERS[extension] ?? "js";
 }
 
+/** The value every option takes when it is left out: the one place a default is written. */
+const DEFAULT_OPTIONS = {
+  mode: "auto",
+  transform: "managed",
+  reactCompiler: "opt-out",
+  importSource: "react-fine-grained-signals",
+  reactImportSource: "react",
+} as const satisfies Omit<InternalTransformOptions, "warn">;
+
+/** `"a" or "b"`, `"a", "b", or "c"`. */
+function describeChoices(choices: readonly string[]): string {
+  const quoted = choices.map((choice) => JSON.stringify(choice));
+  if (quoted.length <= 2) return quoted.join(" or ");
+  return `${quoted.slice(0, -1).join(", ")}, or ${quoted.at(-1)}`;
+}
+
+/**
+ * `value` if it is one of `choices`, the default if it was left out, and a
+ * `TypeError` otherwise. A value outside a closed set would otherwise compare
+ * unequal to every branch that reads it and quietly change behaviour --
+ * `mode: "Auto"` transformed custom Hooks only, `transform: "manged"`
+ * transformed nothing -- so it fails when the plugin is created.
+ */
+function validateChoice<T extends string>(
+  option: string,
+  value: unknown,
+  choices: readonly T[],
+  fallback: T,
+  hint?: (value: unknown) => string | undefined,
+): T {
+  if (value === undefined) return fallback;
+  if ((choices as readonly unknown[]).includes(value)) return value as T;
+  const caseMatch =
+    typeof value === "string" ? choices.find((choice) => choice.toLowerCase() === value.toLowerCase()) : undefined;
+  const extra = hint?.(value) ?? (caseMatch === undefined ? undefined : `did you mean ${JSON.stringify(caseMatch)}?`);
+  throw new TypeError(
+    `[${pluginName}] ${option} must be ${describeChoices(choices)}, got ${describeValue(value)}` +
+      (extra === undefined ? "" : `; ${extra}`),
+  );
+}
+
+/** A module specifier option: a non-empty string, or the default when left out. */
+function validateSpecifier(option: string, value: unknown, fallback: string): string {
+  if (value === undefined) return fallback;
+  if (typeof value === "string" && value.length > 0) return value;
+  throw new TypeError(`[${pluginName}] ${option} must be a non-empty module specifier, got ${describeValue(value)}`);
+}
+
+function describeValue(value: unknown): string {
+  return typeof value === "string" ? JSON.stringify(value) : value === null ? "null" : typeof value;
+}
+
+/** Every option, validated once and with its default applied, when the plugin is created. */
+interface ResolvedOptions {
+  transform: Omit<InternalTransformOptions, "warn">;
+  errorOn: readonly DiagnosticId[];
+  shouldTransform: (id: string) => boolean;
+}
+
+/**
+ * Validates every option and fills in its default. Called once per plugin
+ * instance, so a typo fails at startup with a `TypeError` naming the option,
+ * instead of silently changing what is transformed. Exported for the
+ * package's own tests; the public entries do not re-export it.
+ */
+export function resolveOptions(options: ReactFineGrainedSignalsOptions): ResolvedOptions {
+  const errorOn = options.diagnostics?.errorOn ?? [];
+  if (!Array.isArray(errorOn)) {
+    throw new TypeError(
+      `[${pluginName}] diagnostics.errorOn must be an array of diagnostic IDs, got ${describeValue(errorOn)}`,
+    );
+  }
+  for (const diagnosticId of errorOn) {
+    if (!isDiagnosticId(diagnosticId)) {
+      throw new TypeError(
+        `[${pluginName}] diagnostics.errorOn names an unknown diagnostic ID: ${String(diagnosticId)}`,
+      );
+    }
+  }
+  return {
+    transform: {
+      mode: validateChoice("mode", options.mode, MODES, DEFAULT_OPTIONS.mode),
+      transform: validateChoice("transform", options.transform, TRANSFORMS, DEFAULT_OPTIONS.transform),
+      reactCompiler: validateChoice(
+        "reactCompiler",
+        options.reactCompiler,
+        REACT_COMPILER_MODES,
+        DEFAULT_OPTIONS.reactCompiler,
+        (value) => (value === "auto" ? '"auto" was renamed to "opt-out" in 0.4.0' : undefined),
+      ),
+      importSource: validateSpecifier("importSource", options.importSource, DEFAULT_OPTIONS.importSource),
+      reactImportSource: validateSpecifier(
+        "reactImportSource",
+        options.reactImportSource,
+        DEFAULT_OPTIONS.reactImportSource,
+      ),
+    },
+    errorOn,
+    shouldTransform: createModuleFilter(options),
+  };
+}
+
 let transformLoaderPath: string | null | undefined;
 
 /** The absolute path of this package's own webpack/rspack loader, if reachable. */
@@ -374,26 +480,7 @@ function useOwnTransformLoader(compiler: unknown): void {
 }
 
 export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOptions>((options = {}) => {
-  // Checked here, once, so a misspelled ID fails at startup instead of
-  // quietly leaving that diagnostic as a warning.
-  const errorOn = options.diagnostics?.errorOn ?? [];
-  for (const diagnosticId of errorOn) {
-    if (!isDiagnosticId(diagnosticId)) {
-      throw new TypeError(
-        `[${pluginName}] diagnostics.errorOn names an unknown diagnostic ID: ${String(diagnosticId)}`,
-      );
-    }
-  }
-  // Any other value would compare unequal to "opt-out" and silently drop the
-  // directive, so a compiled component would stop updating.
-  const reactCompiler = options.reactCompiler ?? "opt-out";
-  if (reactCompiler !== "opt-out" && reactCompiler !== "off") {
-    throw new TypeError(
-      `[${pluginName}] reactCompiler must be "opt-out" or "off", got ${JSON.stringify(reactCompiler)}` +
-        (reactCompiler === ("auto" as string) ? '; "auto" was renamed to "opt-out" in 0.4.0' : ""),
-    );
-  }
-  const shouldTransform = createModuleFilter(options);
+  const { transform: transformOptions, errorOn, shouldTransform } = resolveOptions(options);
   // esbuild hands a plugin its resolved build options through the `config`
   // hook, which is the only place a project's own `loader` map can be read.
   let configuredLoaders: Record<string, string> | undefined;
@@ -409,11 +496,7 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
     // parse failure, which would hide the diagnostic behind a misleading one.
     const promoted: Error[] = [];
     const result = transformReactFineGrainedSignals(code, id, {
-      importSource: options.importSource ?? "react-fine-grained-signals",
-      reactImportSource: options.reactImportSource ?? "react",
-      mode: options.mode ?? "auto",
-      transform: options.transform ?? "managed",
-      reactCompiler,
+      ...transformOptions,
       warn: (warning: Error) => {
         const { diagnosticId } = warning as Error & { diagnosticId?: DiagnosticId };
         if (diagnosticId !== undefined && errorOn.includes(diagnosticId)) {

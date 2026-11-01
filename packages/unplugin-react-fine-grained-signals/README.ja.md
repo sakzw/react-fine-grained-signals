@@ -131,6 +131,12 @@ export default {
 
 ## オプション
 
+すべてのオプションはplugin作成時（webpackとrspackではcompilerへのapply時）に検査します。
+`mode`、`transform`、`reactCompiler` に記載外の値（大文字小文字も区別します）、
+`importSource` や `reactImportSource` に空文字列や文字列以外、
+`diagnostics.errorOn` に既知IDの配列以外、または不正な `include` / `exclude` を渡すと、
+変換対象が黙って変わるのではなく、そのオプション名を示す `TypeError` を投げます。
+
 - `mode`
   - `"manual"`: 先頭文にあるimport済みの `useSignalTracking()`、または
     `@signalTracking` を付けた名前付きcomponent/custom hookだけを変換します。
