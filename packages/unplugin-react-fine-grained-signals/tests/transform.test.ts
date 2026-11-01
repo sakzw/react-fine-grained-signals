@@ -4017,9 +4017,10 @@ export function App() {
     const controlFlowWarnings = warnings.filter(
       (warning) => (warning as Error & { diagnosticId?: string }).diagnosticId === "RFGS003",
     );
-    expect(controlFlowWarnings).toHaveLength(2);
+    // Only the Match outside any Switch: a string-literal computed key names
+    // `Show` as statically as a plain key does.
+    expect(controlFlowWarnings).toHaveLength(1);
     expect(controlFlowWarnings.map((warning) => warning.message)).toEqual([
-      expect.stringContaining("JSX children callback"),
       expect.stringContaining("JSX children callback"),
     ]);
   });

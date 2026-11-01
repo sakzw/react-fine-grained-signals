@@ -94,3 +94,74 @@ describe("TypeScript wrappers around an assignment or update target", () => {
     expect(code).toContain("_signals.capture(() => items.filter(");
   });
 });
+
+describe("RFSG control-flow ownership of a Match callback", () => {
+  const controlFlow = `import { Match, Switch, Show } from "react-fine-grained-signals/utils";\n${header}`;
+
+  it("follows the runtime through a fragment between Switch and Match", () => {
+    const { diagnostics } = run(
+      `${controlFlow}export function A() { return <Switch><><Match when={s}>{(v) => v + s.value}</Match></></Switch>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it("follows the runtime through React's Fragment element", () => {
+    const { diagnostics } = run(
+      `import { Fragment } from "react";\n${controlFlow}export function A() { return <Switch><Fragment><Match when={s}>{() => s.value}</Match></Fragment></Switch>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it("requires an enclosing Switch for the children-attribute form too", () => {
+    const owned = run(
+      `${controlFlow}export function A() { return <Switch><Match when={s} children={() => s.value} /></Switch>; }`,
+    );
+    const orphan = run(
+      `${controlFlow}export function A() { return <div><Match when={s} children={() => s.value} /></div>; }`,
+    );
+    expect(owned.diagnostics).not.toContain("RFGS003");
+    expect(orphan.diagnostics).toContain("RFGS003");
+  });
+
+  it("follows the runtime through a conditional child and an array", () => {
+    const { diagnostics } = run(
+      `${controlFlow}export function A({ flag }) { return <Switch>{flag && <Match when={s}>{() => s.value}</Match>}{[<Match key="b" when={s}>{() => s.value}</Match>]}</Switch>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it("does not treat a Match in a Switch attribute as a branch", () => {
+    const { diagnostics } = run(
+      `${controlFlow}export function A() { return <Switch fallback={<Match when={s}>{() => s.value}</Match>} />; }`,
+    );
+    expect(diagnostics).toContain("RFGS003");
+  });
+
+  it("does not let an unrelated element between Switch and Match pass as a fragment", () => {
+    const { diagnostics } = run(
+      `${controlFlow}export function A() { return <Switch><div><Match when={s}>{() => s.value}</Match></div></Switch>; }`,
+    );
+    expect(diagnostics).toContain("RFGS003");
+  });
+
+  it("resolves a control-flow component read through a computed string key", () => {
+    const { diagnostics } = run(
+      `import * as U from "react-fine-grained-signals/utils";\n${header}const S = U["Show"];\nexport function A() { return <S when={s}>{() => s.value}</S>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it("resolves a string-named import specifier", () => {
+    const { diagnostics } = run(
+      `import { "Show" as When } from "react-fine-grained-signals/utils";\n${header}export function A() { return <When when={s}>{() => s.value}</When>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it("keeps rejecting a Show from another module", () => {
+    const { diagnostics } = run(
+      `import { Show } from "some-ui/utils";\n${header}export function A() { return <Show when={s}>{() => s.value}</Show>; }`,
+    );
+    expect(diagnostics).toContain("RFGS003");
+  });
+});

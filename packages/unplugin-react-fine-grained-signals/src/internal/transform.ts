@@ -183,7 +183,7 @@ function resolveImportedBinding(path: NodePath, name: string): ResolvedImportBin
 function isReactNamedImport(
   path: NodePath,
   name: string,
-  importedName: "memo" | "forwardRef",
+  importedName: "memo" | "forwardRef" | "Fragment",
   reactImportSource: string,
 ): boolean {
   const resolved = resolveImportedBinding(path, name);
@@ -2521,11 +2521,23 @@ type SignalControlFlowImport = { kind: "namespace" } | { kind: "component"; name
 
 const signalControlFlowNames = new Set<SignalControlFlowName>(["For", "Index", "Match", "Show", "Switch"]);
 
+/** `name` as an RFSG control-flow export, if it is one. */
+function asSignalControlFlowComponent(name: string): SignalControlFlowImport | undefined {
+  return signalControlFlowNames.has(name as SignalControlFlowName)
+    ? { kind: "component", name: name as SignalControlFlowName }
+    : undefined;
+}
+
 /**
  * Resolve an RFSG control-flow export from a value binding, rather than from
  * the JSX spelling. This deliberately follows only immutable local aliases and
  * statically named namespace members; a same-named local component or dynamic
  * member must keep the ordinary callback warning.
+ *
+ * Imports go through `resolveImportedBinding` and keys through the same
+ * readers every other static name in this file uses, so `U["Show"]`,
+ * `import { "Show" as When }` and `const { ["Show"]: If } = U` resolve exactly
+ * like their dotted and identifier spellings.
  */
 function resolveSignalControlFlowImport(
   origin: NodePath,
@@ -2536,29 +2548,16 @@ function resolveSignalControlFlowImport(
   const binding = origin.scope.getBinding(name);
   if (binding === undefined || seen.has(binding) || binding.constantViolations.length > 0) return undefined;
   seen.add(binding);
+  const imported = resolveImportedBinding(origin, name);
+  if (imported !== undefined) {
+    if (imported.source !== `${importSource}/utils`) return undefined;
+    const { specifier } = imported;
+    if (specifier.isImportNamespaceSpecifier()) return { kind: "namespace" };
+    if (!specifier.isImportSpecifier()) return undefined;
+    const importedName = specifier.node.imported;
+    return asSignalControlFlowComponent(t.isIdentifier(importedName) ? importedName.name : importedName.value);
+  }
   const bindingPath = binding.path;
-  if (bindingPath.isImportNamespaceSpecifier()) {
-    const declaration = bindingPath.parentPath;
-    return declaration.isImportDeclaration() &&
-      declaration.node.importKind !== "type" &&
-      declaration.node.source.value === `${importSource}/utils`
-      ? { kind: "namespace" }
-      : undefined;
-  }
-  if (bindingPath.isImportSpecifier()) {
-    const declaration = bindingPath.parentPath;
-    if (
-      !declaration.isImportDeclaration() ||
-      declaration.node.importKind === "type" ||
-      bindingPath.node.importKind === "type" ||
-      declaration.node.source.value !== `${importSource}/utils`
-    )
-      return undefined;
-    const imported = bindingPath.node.imported;
-    if (!t.isIdentifier(imported) || !signalControlFlowNames.has(imported.name as SignalControlFlowName))
-      return undefined;
-    return { kind: "component", name: imported.name as SignalControlFlowName };
-  }
   if (!bindingPath.isVariableDeclarator() || !binding.constant) return undefined;
   const init = bindingPath.get("init");
   if (!init.isExpression()) return undefined;
@@ -2571,26 +2570,21 @@ function resolveSignalControlFlowImport(
     // `const { Show: If } = utils` is a value alias too. Resolve only a simple
     // static property binding from the verified RFSG utils namespace.
     for (const propertyPath of id.get("properties")) {
-      if (!propertyPath.isObjectProperty() || propertyPath.node.computed) continue;
+      if (!propertyPath.isObjectProperty()) continue;
       const propertyValue = propertyPath.get("value");
       if (!propertyValue.isIdentifier() || propertyValue.node.name !== name) continue;
-      const key = propertyPath.get("key");
-      const property = key.isIdentifier() ? key.node.name : key.isStringLiteral() ? key.node.value : undefined;
-      return property !== undefined && signalControlFlowNames.has(property as SignalControlFlowName)
-        ? { kind: "component", name: property as SignalControlFlowName }
-        : undefined;
+      const key = getPropertyKeyName(propertyPath.node);
+      return key === undefined ? undefined : asSignalControlFlowComponent(key);
     }
     return undefined;
   }
-  if (value.isMemberExpression() && !value.node.computed && value.get("property").isIdentifier()) {
-    const base = value.get("object");
+  if (value.isMemberExpression() || value.isOptionalMemberExpression()) {
+    const base = unwrapTransparentPath(value.get("object") as NodePath);
     if (!base.isIdentifier()) return undefined;
     const namespace = resolveSignalControlFlowImport(base, base.node.name, importSource, seen);
-    const propertyPath = value.get("property");
-    if (!propertyPath.isIdentifier()) return undefined;
-    const property = propertyPath.node.name;
-    return namespace?.kind === "namespace" && signalControlFlowNames.has(property as SignalControlFlowName)
-      ? { kind: "component", name: property as SignalControlFlowName }
+    const property = getReadPropertyName(value.node);
+    return namespace?.kind === "namespace" && property !== undefined
+      ? asSignalControlFlowComponent(property)
       : undefined;
   }
   return undefined;
@@ -2619,10 +2613,68 @@ function signalControlFlowTagName(
   return parts[0] as SignalControlFlowName;
 }
 
+/** Does this JSX tag name React's own `Fragment` (`<Fragment>`, `<React.Fragment>`)? */
+function isReactFragmentTag(tag: NodePath, reactImportSource: string): boolean {
+  if (tag.isJSXIdentifier()) return isReactNamedImport(tag, tag.node.name, "Fragment", reactImportSource);
+  if (!tag.isJSXMemberExpression() || tag.node.property.name !== "Fragment") return false;
+  const object = tag.get("object");
+  return object.isJSXIdentifier() && isReactDefaultOrNamespaceImport(tag, object.node.name, reactImportSource);
+}
+
+/**
+ * Does the `Match` element at `match` reach an RFSG `Switch`'s branch list?
+ *
+ * `Switch` finds its branches with `collectMatches` (src/utils.tsx), which
+ * walks its children with `Children.forEach` -- so arrays and `false`/`null`
+ * holes flatten away -- and descends into every `Fragment`. The climb mirrors
+ * exactly that: it passes fragments (`<>` and React's `<Fragment>`), arrays,
+ * the result operands of a conditional or a logical operator, parentheses and
+ * TypeScript wrappers, and stops at the first other element, at an attribute,
+ * or at a function boundary. Match itself never calls its branch callback, so
+ * a Match that does not reach a Switch has no proven owner.
+ */
+function isMatchCollectedBySwitch(
+  match: NodePath<t.JSXElement>,
+  importSource: string,
+  reactImportSource: string,
+): boolean {
+  let child: NodePath = match;
+  let parent: NodePath | null = match.parentPath;
+  for (; parent !== null; child = parent, parent = child.parentPath) {
+    if (parent.isJSXElement()) {
+      const name = parent.get("openingElement").get("name");
+      if (!name.isJSXIdentifier() && !name.isJSXMemberExpression()) return false;
+      if (signalControlFlowTagName(name, importSource) === "Switch") return true;
+      if (isReactFragmentTag(name, reactImportSource)) continue;
+      return false;
+    }
+    if (
+      parent.isJSXFragment() ||
+      parent.isJSXExpressionContainer() ||
+      parent.isArrayExpression() ||
+      parent.isParenthesizedExpression() ||
+      (isTransparentWrapper(parent.node) && parent.node.expression === child.node) ||
+      (parent.isConditionalExpression() && parent.node.test !== child.node) ||
+      (parent.isLogicalExpression() && parent.node.right === child.node)
+    ) {
+      continue;
+    }
+    return false;
+  }
+  return false;
+}
+
+/**
+ * Is the callback at `callbackSite` -- a JSX child expression, or the
+ * attribute `propName` -- invoked by an RFSG control-flow component? The child
+ * form and the `children={...}` attribute form are one prop at runtime, so
+ * they get one answer.
+ */
 function isOwnedBySignalControlFlow(
   callbackSite: NodePath,
   propName: string | undefined,
   importSource: string,
+  reactImportSource: string,
 ): boolean {
   let element: NodePath<t.JSXElement> | undefined;
   if (callbackSite.parentPath?.isJSXElement()) {
@@ -2633,26 +2685,15 @@ function isOwnedBySignalControlFlow(
     if (opening?.isJSXOpeningElement() && opening.parentPath?.isJSXElement()) element = opening.parentPath;
   }
   if (element === undefined) return false;
-  const opening = element.get("openingElement");
-  const namePath = opening.get("name");
+  const namePath = element.get("openingElement").get("name");
   if (!namePath.isJSXIdentifier() && !namePath.isJSXMemberExpression()) return false;
   const owner = signalControlFlowTagName(namePath, importSource);
   if (owner === undefined) return false;
-  if (propName !== undefined) {
-    if (propName === "children") return owner === "Show" || owner === "For" || owner === "Index" || owner === "Match";
-    return owner === "For" && propName === "by";
-  }
+  if (propName !== undefined && propName !== "children") return owner === "For" && propName === "by";
   if (owner === "Show" || owner === "For" || owner === "Index") return true;
-  if (owner !== "Match") return false;
   // Match is declarative; its branch callback is invoked by its nearest
   // enclosing RFSG Switch, not by Match itself.
-  const parent = element.parentPath;
-  if (parent === null || !parent.isJSXElement()) return false;
-  const parentName = parent.get("openingElement.name");
-  return (
-    (parentName.isJSXIdentifier() || parentName.isJSXMemberExpression()) &&
-    signalControlFlowTagName(parentName, importSource) === "Switch"
-  );
+  return owner === "Match" && isMatchCollectedBySwitch(element, importSource, reactImportSource);
 }
 
 type StaticConstObjectPattern = {
@@ -2708,7 +2749,11 @@ function inspectKnownRenderPropReads(
       } else if (callback.isIdentifier()) {
         target = resolveReferencedFunction(expression, callback.node.name);
       }
-      if (target === undefined || isOwnedBySignalControlFlow(expression, undefined, options.importSource)) return;
+      if (
+        target === undefined ||
+        isOwnedBySignalControlFlow(expression, undefined, options.importSource, reactImportSource)
+      )
+        return;
       const reads = inspectFunction(
         target,
         options.importSource,
@@ -2726,7 +2771,7 @@ function inspectKnownRenderPropReads(
       if (!value.isJSXExpressionContainer()) return;
       const expression = value.get("expression");
       const propName = name.node.name;
-      if (isOwnedBySignalControlFlow(attribute, propName, options.importSource)) return;
+      if (isOwnedBySignalControlFlow(attribute, propName, options.importSource, reactImportSource)) return;
       let target: NodePath<t.Function> | undefined;
       if (expression.isArrowFunctionExpression() || expression.isFunctionExpression()) {
         target = expression;
