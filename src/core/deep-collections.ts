@@ -5,10 +5,13 @@
 // owns the shared proxy cache and metadata; this module adds the collection
 // proxies on top of it through the context the engine hands over.
 import { plainResultIteratorNext } from "./plain-result-iterators.js";
-import { isObjectLike } from "./deep-signal-engine.js";
+import { deepError, isObjectLike, PROTOTYPE_MUTATION } from "./deep-signal-engine.js";
 import type { CollectionContext, CollectionSupport, DeepSignalSource } from "./deep-signal-engine.js";
 
 type VersionSignal = DeepSignalSource<number>;
+
+const collectionError = (text: string): TypeError => deepError("collection", text);
+const OWN_PROPERTIES = "reactive collections do not support own properties";
 
 const ITERATOR_PROTOTYPE: object = /* @__PURE__ */ Object.getPrototypeOf(Object.getPrototypeOf([][Symbol.iterator]()));
 
@@ -190,10 +193,8 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
   }
 
   function assertReactiveCollection(value: object): void {
-    if (!Object.isExtensible(value)) throw new TypeError("deepSignal() cannot proxy a non-extensible collection");
-    if (Reflect.ownKeys(value).length !== 0) {
-      throw new TypeError("deepSignal() reactive collections do not support own properties");
-    }
+    if (!Object.isExtensible(value)) throw collectionError("cannot proxy a non-extensible collection");
+    if (Reflect.ownKeys(value).length !== 0) throw collectionError(OWN_PROPERTIES);
   }
 
   const collectionVersion = (
@@ -871,26 +872,24 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
           });
         if ((kind === "Map" || kind === "WeakMap") && key === "emplace")
           return memoMethod(key, () => () => {
-            throw new TypeError(
-              "deepSignal() reactive collections do not support emplace; use getOrInsert or has/get/set",
-            );
+            throw collectionError("reactive collections do not support emplace; use getOrInsert or has/get/set");
           });
         return Reflect.get(target, key, target);
       },
       set() {
-        throw new TypeError("deepSignal() reactive collections do not support own properties");
+        throw collectionError(OWN_PROPERTIES);
       },
       deleteProperty() {
-        throw new TypeError("deepSignal() reactive collections do not support own properties");
+        throw collectionError(OWN_PROPERTIES);
       },
       defineProperty() {
-        throw new TypeError("deepSignal() does not support collection property descriptors");
+        throw collectionError("does not support collection property descriptors");
       },
       preventExtensions() {
-        throw new TypeError("deepSignal() reactive collections must remain extensible");
+        throw collectionError("reactive collections must remain extensible");
       },
       setPrototypeOf() {
-        throw new TypeError("deepSignal() does not support prototype mutation");
+        throw collectionError(PROTOTYPE_MUTATION);
       },
     });
     metadata.proxy = proxy;

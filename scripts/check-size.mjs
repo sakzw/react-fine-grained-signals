@@ -100,7 +100,7 @@ export default [Show, Switch, Match, For, Index];`,
 // reliable probe for whether a module made it into the bundle.
 const DEEP_SIGNAL_MARKER = "deepSignal() only accepts plain objects and arrays";
 // Only the collection module contains this one, so it proves that module was bundled.
-const DEEP_COLLECTION_MARKER = "deepSignal() reactive collections do not support own properties";
+const DEEP_COLLECTION_MARKER = "reactive collections do not support own properties";
 // The collection module's weak-key probe must not run (or ship) without it.
 const WEAK_KEY_PROBE_MARKER = "weak-key-probe";
 const REACT_STORE_MARKER = "useSyncExternalStore";

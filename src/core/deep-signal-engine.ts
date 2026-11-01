@@ -86,22 +86,32 @@ interface PropertyMetadata {
 
 type VersionSignal = DeepSignalSource<number>;
 
+/**
+ * A deep-state error, named after the API the state belongs to: `undefined`
+ * is plain `deepSignal`, anything else (the collection mode's support, or
+ * `"collection"` inside the collection module) is `deepCollectionSignal`.
+ */
+export function deepError(support: CollectionSupport | undefined | "collection", text: string): TypeError {
+  return new TypeError(`${support === undefined ? "deepSignal()" : "deepCollectionSignal()"} ${text}`);
+}
+
+/** Message texts both the plain and the collection proxies throw. */
+export const PROTOTYPE_MUTATION = "does not support prototype mutation";
+
 export function isObjectLike(value: unknown): value is object {
   return (typeof value === "object" && value !== null) || typeof value === "function";
 }
 
-function assertExtensible(value: object): void {
-  if (!Object.isExtensible(value)) {
-    throw new TypeError("deepSignal() cannot proxy a non-extensible object or array");
-  }
+const ACCESSOR_PROPERTIES = "does not support accessor properties";
+
+function assertExtensible(value: object, support: CollectionSupport | undefined): void {
+  if (!Object.isExtensible(value)) throw deepError(support, "cannot proxy a non-extensible object or array");
 }
 
-function assertDataProperties(value: object): void {
+function assertDataProperties(value: object, support: CollectionSupport | undefined): void {
   for (const key of Reflect.ownKeys(value)) {
     const descriptor = Reflect.getOwnPropertyDescriptor(value, key);
-    if (descriptor !== undefined && !("value" in descriptor)) {
-      throw new TypeError("deepSignal() does not support accessor properties");
-    }
+    if (descriptor !== undefined && !("value" in descriptor)) throw deepError(support, ACCESSOR_PROPERTIES);
   }
 }
 
@@ -266,7 +276,9 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         "deepCollectionSignal() only accepts plain objects, arrays, or same-realm standard collections",
       );
     }
-    if (value instanceof Map || value instanceof Set || value instanceof WeakMap || value instanceof WeakSet) {
+    // The collection module (and its brand probe) is not loaded here, so read
+    // the tag: a collection from another realm gets the same hint.
+    if (/^\[object (?:Weak)?(?:Map|Set)\]$/.test(Object.prototype.toString.call(value))) {
       throw new TypeError(
         "deepSignal() does not track Map, Set, WeakMap or WeakSet; use deepCollectionSignal() for a collection root",
       );
@@ -297,10 +309,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       const wrapperRaw = toRaw(current);
       if (wrapperRaw !== undefined) {
         if (insideOpaque) {
-          throw new TypeError(
+          throw deepError(
+            support,
             proxyToRaw.has(current)
-              ? "deepSignal() cannot store a deep proxy inside an opaque value"
-              : "deepSignal() cannot store a deep collection view inside an opaque value",
+              ? "cannot store a deep proxy inside an opaque value"
+              : "cannot store a deep collection view inside an opaque value",
           );
         }
         // A proxy that is only a carrier's member is not caught by the check in
@@ -327,11 +340,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       // *through* an opaque one are exempt: they are never proxied and never
       // written to, and `{ ctor: Array }` reaches `Array.prototype` that way.
       if (!insideOpaque && isIntrinsicPrototype(raw)) {
-        throw new TypeError("deepSignal() cannot store a built-in prototype object in deep state");
+        throw deepError(support, "cannot store a built-in prototype object in deep state");
       }
 
       if (support !== undefined && !insideOpaque && support.kindOf(raw) !== undefined && !support.isStandard(raw)) {
-        throw new TypeError("deepSignal() collections require same-realm standard collections");
+        throw deepError(support, "collections require same-realm standard collections");
       }
 
       // Without collection support a Map or Set is an opaque value like a
@@ -382,8 +395,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         // handed out by `peek()`) cannot be adopted here either.
         const existing = rawToMetadata.get(raw);
         if (existing !== undefined && existing.support !== support) throw modeError();
-        assertExtensible(raw);
-        assertDataProperties(raw);
+        assertExtensible(raw, support);
+        assertDataProperties(raw, support);
       }
       for (const key of Reflect.ownKeys(raw)) {
         const descriptor = Reflect.getOwnPropertyDescriptor(raw, key);
@@ -557,14 +570,13 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       if (source instanceof Map && target instanceof Map) {
         for (const [key, entry] of source) {
           const normalizedKey = resolveCollectionEntry(key);
-          if (target.has(normalizedKey))
-            throw new TypeError("deepSignal() collection keys collide after proxy normalization");
+          if (target.has(normalizedKey)) throw deepError(support, "collection keys collide after proxy normalization");
           target.set(normalizedKey, resolveCollectionEntry(entry));
         }
       } else if (source instanceof Set && target instanceof Set) {
         for (const entry of source) {
           const normalized = resolveCollectionEntry(entry);
-          if (target.has(normalized)) throw new TypeError("deepSignal() Set members collide after proxy normalization");
+          if (target.has(normalized)) throw deepError(support, "Set members collide after proxy normalization");
           target.add(normalized);
         }
       } else {
@@ -572,7 +584,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           if (Array.isArray(source) && key === "length") continue;
           const descriptor = Reflect.getOwnPropertyDescriptor(source, key);
           if (descriptor === undefined) continue;
-          if (!("value" in descriptor)) throw new TypeError("deepSignal() does not support accessor properties");
+          if (!("value" in descriptor)) throw deepError(support, ACCESSOR_PROPERTIES);
           descriptor.value = resolve(descriptor.value);
           Reflect.defineProperty(target, key, descriptor);
         }
@@ -858,14 +870,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       if (support === undefined || !support.isStandardPrototype(rawValue)) return rawValue;
       return support.proxyFor(rawValue) as T;
     }
-    assertExtensible(rawValue);
+    assertExtensible(rawValue, support);
 
     const cached = rawToMetadata.get(rawValue);
     if (cached !== undefined) {
       if (cached.support !== support) throw modeError();
       return cached.proxy as T;
     }
-    assertDataProperties(rawValue);
+    assertDataProperties(rawValue, support);
 
     const metadata: PropertyMetadata = {
       support,
@@ -947,7 +959,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
             descriptor.configurable === false &&
             descriptor.writable === false
           ) {
-            throw new TypeError("deepSignal() cannot wrap a non-configurable, non-writable object property");
+            throw deepError(support, "cannot wrap a non-configurable, non-writable object property");
           }
         }
 
@@ -960,12 +972,12 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         // ordinary [[Set]] would; it changes nothing in this deep state.
         if (receiver !== metadata.proxy) return Reflect.set(target, key, nextValue, receiver);
         if (key === "__proto__") {
-          throw new TypeError("deepSignal() does not support prototype mutation");
+          throw deepError(support, PROTOTYPE_MUTATION);
         }
         // Storing the brand would make this subtree answer `isSignal()`, which
         // silently stops it from being wrapped and kills its reactivity.
         if (key === SIGNAL_BRAND) {
-          throw new TypeError("deepSignal() does not support branding state as a signal");
+          throw deepError(support, "does not support branding state as a signal");
         }
         const oldValue = Reflect.get(target, key, target);
         const existed = Reflect.has(target, key);
@@ -1073,15 +1085,15 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       },
 
       defineProperty() {
-        throw new TypeError("deepSignal() does not support property descriptors");
+        throw deepError(support, "does not support property descriptors");
       },
 
       preventExtensions() {
-        throw new TypeError("deepSignal() state must remain extensible");
+        throw deepError(support, "state must remain extensible");
       },
 
       setPrototypeOf() {
-        throw new TypeError("deepSignal() does not support prototype mutation");
+        throw deepError(support, PROTOTYPE_MUTATION);
       },
     });
 

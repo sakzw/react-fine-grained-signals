@@ -95,3 +95,34 @@ Lite版は、Full版と同じprop名の一覧と判定を持つようになっ�
 `tests/react-deep-signal-value-source.test.tsx`: 素のobjectと`null`がrender中に`TypeError`になり、selectorが呼ばれないこと。effectの中から`flushSync`で描画しても、deep stateへの書き込みでそのeffectが再実行されないこと。3件とも変更前のhooksでは失敗することを確認した。
 
 docs: `docs/guides/hooks.md`（英日）の`useDeepSignalValue`に、引数の条件を書いた。
+
+## deep signalのエラー文のAPI名（メッセージ文のみのbreaking change）
+
+### 変更前
+
+`deepCollectionSignal`のstateで起きたエラーも、`assertRootValue`の1つを除いて、すべて`deepSignal() ...`と書いていた。collection module（`deep-collections.ts`）のエラーも同じだった。同じ文面（accessor property、prototype mutation、own properties）が、engineとcollection moduleに別々に書かれていた。
+
+`deepSignal()`のrootの検査は`instanceof Map`などで行っていたため、別realmのMapには「`deepCollectionSignal()`を使う」という案内が出ず、汎用の「plain objectとarrayだけ」のエラーになっていた。
+
+### 変更後
+
+- `deepError(support, text)`（`deep-signal-engine.ts`）が、modeに応じて`deepSignal()`か`deepCollectionSignal()`を付ける。collection-modeのstateの中にあるplain objectも`deepCollectionSignal()`になる。collection moduleは`deepError("collection", text)`を使う。
+- 繰り返していた文面は定数にした（`PROTOTYPE_MUTATION`、`ACCESSOR_PROPERTIES`、`OWN_PROPERTIES`）。
+- 「`deepSignal()`と`deepCollectionSignal()`は同じobjectを共有できない」と、plain mode専用のrootのエラーは変えていない。
+- plain modeのrootの検査は`Object.prototype.toString`のtagで行う。collection moduleはplain modeでは読み込まれないため、brandの確認は使えない。別realmのMapにも同じ案内が出る。
+
+### テスト
+
+`tests/deep-signal-messages.test.ts`: plain modeとcollection mode（plain objectとMap）でAPI名が正しいこと、別realmのMapにも案内が出ること。
+
+`scripts/check-size.mjs`: collection moduleの目印を、prefixを除いた`reactive collections do not support own properties`にした。文面を組み立てるようになり、prefix付きの文字列はbundleに残らないため。
+
+### サイズ（gzip）
+
+| entry | 変更前 | 変更後 |
+| --- | --- | --- |
+| deep | 9.83 kB | 9.98 kB |
+| deep-collections | 13.15 kB | 13.33 kB |
+| index-full | 15.76 kB | 15.92 kB |
+
+rawは変わらないか減った。同じprefixが続く文字列はgzipでよく縮むが、組み立てた文字列は縮みにくいため、gzipでは増えた。
