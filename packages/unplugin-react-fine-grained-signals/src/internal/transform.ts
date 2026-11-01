@@ -1941,10 +1941,7 @@ function isReadModifyingTrackedTarget(
       target = parent;
       continue;
     }
-    if (
-      (parent.isTSAsExpression() || parent.isTSTypeAssertion() || parent.isTSNonNullExpression()) &&
-      parent.get("expression").node === target.node
-    ) {
+    if (isTransparentWrapper(parent.node) && parent.node.expression === target.node) {
       target = parent;
       continue;
     }
@@ -4970,10 +4967,7 @@ function isWriteTarget(path: NodePath): boolean {
       target = parent;
       continue;
     }
-    if (
-      (parent.isTSAsExpression() || parent.isTSTypeAssertion() || parent.isTSNonNullExpression()) &&
-      parent.get("expression").node === target.node
-    ) {
+    if (isTransparentWrapper(parent.node) && parent.node.expression === target.node) {
       target = parent;
       continue;
     }
@@ -5056,12 +5050,7 @@ function expressionCallsHook(path: NodePath): boolean {
  */
 function inlineCallbackReadsTrackedValue(path: NodePath, trackedAliases: Set<object>, context: ReadContext): boolean {
   let target = path;
-  while (
-    target.isTSAsExpression() ||
-    target.isTSSatisfiesExpression() ||
-    target.isTSNonNullExpression() ||
-    target.isParenthesizedExpression()
-  ) {
+  while (isTransparentWrapper(target.node) || target.isParenthesizedExpression()) {
     target = target.get("expression") as NodePath;
   }
   if (!target.isArrowFunctionExpression() && !target.isFunctionExpression()) return false;
@@ -5184,6 +5173,21 @@ function spreadsTrackedValue(
  * `Function` visitor skips them: they are never components or Hooks, and
  * deciding on each one re-inspected every helper once per captured call.
  */
+/**
+ * `node` with a TypeScript wrapper around its update or assignment target
+ * held in explicit parentheses. Babel's generator prints the target of
+ * `(count.value as number)++` without them once the operation is moved into a
+ * capture callback, and `count.value as number++` does not parse.
+ */
+function parenthesizeWrappedTarget(node: t.Expression): t.Expression {
+  if (t.isUpdateExpression(node) && isTransparentWrapper(node.argument) && !t.isTSNonNullExpression(node.argument)) {
+    node.argument = t.parenthesizedExpression(node.argument) as unknown as t.UpdateExpression["argument"];
+  } else if (t.isAssignmentExpression(node) && isTransparentWrapper(node.left) && !t.isTSNonNullExpression(node.left)) {
+    node.left = t.parenthesizedExpression(node.left) as unknown as t.AssignmentExpression["left"];
+  }
+  return node;
+}
+
 const generatedCaptureCallbacks = new WeakSet<t.Node>();
 
 function generatedCallback(params: t.Identifier[], body: t.Expression | t.BlockStatement): t.ArrowFunctionExpression {
@@ -5256,7 +5260,7 @@ function captureTrackedReadExpressions(
   const wrap = (path: NodePath<t.Expression>): void => {
     path.replaceWith(
       t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
-        generatedCallback([], t.cloneNode(path.node, true)),
+        generatedCallback([], parenthesizeWrappedTarget(t.cloneNode(path.node, true))),
       ]),
     );
     path.skip();
@@ -5677,10 +5681,13 @@ function captureTrackedReadExpressions(
         // `({ a } = state.value)` and `state.value.count ??= 1` read before
         // they write; capture the whole assignment.
         const left = path.get("left");
+        // `(state.value as number) += 1` assigns to the very same target as
+        // `state.value += 1`: the wrapper erases, so it is looked through.
+        const target = unwrapTransparentPath(left);
         // `text += state.value.tags` coerces the right operand after the read.
         if (
           COERCING_COMPOUND_ASSIGNMENTS.has(path.node.operator) &&
-          (left.isIdentifier() || left.isMemberExpression()) &&
+          (target.isIdentifier() || target.isMemberExpression()) &&
           hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases) &&
           !isDeferredReadContext(path, functionPath) &&
           !expressionCallsHook(path)
@@ -5692,7 +5699,7 @@ function captureTrackedReadExpressions(
         // The target chain of `state.value.count ??= 1` is read, although
         // the generic read checks treat assignment targets as writes only.
         const targetReadsTrackedValue = (): boolean => {
-          let current: NodePath = left;
+          let current: NodePath = target;
           while (
             current.isMemberExpression() ||
             current.isOptionalMemberExpression() ||
@@ -5711,7 +5718,7 @@ function captureTrackedReadExpressions(
         };
         const readingWrite =
           path.node.operator !== "=" &&
-          (left.isMemberExpression() || left.isOptionalMemberExpression()) &&
+          (target.isMemberExpression() || target.isOptionalMemberExpression()) &&
           targetReadsTrackedValue();
         if (!destructuring && !readingWrite) return;
         if (destructuring && !hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
