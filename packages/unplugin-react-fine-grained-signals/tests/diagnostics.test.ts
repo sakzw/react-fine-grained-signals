@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
@@ -142,6 +142,15 @@ describe("diagnostic IDs", () => {
     expect(REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS).toBe(DIAGNOSTIC_IDS);
     expect(Object.keys(FIXTURES)).toHaveLength(DIAGNOSTIC_IDS.length);
     expect(Object.keys(FIXTURES)).toEqual(expect.arrayContaining([...DIAGNOSTIC_IDS]));
+  });
+
+  it.each(["README.md", "README.ja.md"])("%s documents exactly these IDs, one table row each in order", (readme) => {
+    const text = readFileSync(new URL(`../${readme}`, import.meta.url), "utf8");
+    const mentioned = [...new Set(text.match(/RFGS\d{3}/g))].sort();
+    const tableRows = [...text.matchAll(/^\| `(RFGS\d{3})` \|/gm)].map((match) => match[1]);
+
+    expect(mentioned).toEqual([...DIAGNOSTIC_IDS]);
+    expect(tableRows).toEqual([...DIAGNOSTIC_IDS]);
   });
 
   it.each(DIAGNOSTIC_IDS)("%s is recognised by isDiagnosticId", (id) => {
