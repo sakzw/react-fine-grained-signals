@@ -6,7 +6,13 @@
 // proxies on top of it through the context the engine hands over.
 import { plainResultIteratorNext } from "./plain-result-iterators.js";
 import { deepError, isObjectLike, PROTOTYPE_MUTATION } from "./deep-signal-engine.js";
-import type { CollectionContext, CollectionSupport, DeepSignalSource } from "./deep-signal-engine.js";
+import type {
+  CollectionContext,
+  CollectionSupport,
+  DeepSignalSource,
+  SweepPlan,
+  SweepState,
+} from "./deep-signal-engine.js";
 
 type VersionSignal = DeepSignalSource<number>;
 
@@ -47,7 +53,7 @@ function setUpReactiveCollectionIterator(): void {
   plainResultIteratorNext.add(ReactiveCollectionIterator.prototype.next);
 }
 
-interface CollectionMetadata {
+interface CollectionMetadata extends SweepState {
   values: Map<unknown, VersionSignal>;
   existence: Map<unknown, VersionSignal>;
   members: Map<unknown, VersionSignal>;
@@ -61,13 +67,7 @@ interface CollectionMetadata {
   keysIteration?: VersionSignal;
   entriesIteration?: VersionSignal;
   prunable: Map<unknown, number>;
-  prunableSweepIterator?: Iterator<[unknown, number]> | undefined;
   prunableRevision: number;
-  prunableSweepRevision?: number | undefined;
-  /** Whether the current sweep iteration began in a settled (later-task) pass. */
-  prunableSweepSettled?: boolean | undefined;
-  /** An unsettled pass of the current iteration kept read-only candidates for a settled one. */
-  prunableSweepDeferred?: boolean | undefined;
   onUnwatched?: (() => void) | undefined;
   methods: Map<PropertyKey, Function>;
   proxy: object;
@@ -107,9 +107,6 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
   setUpReactiveCollectionIterator();
   const { adapter, shouldTrackDeepRead, toRaw, proxyToRaw, lookupIdentity, isPlainObjectOrArray } = ctx;
   const reactiveCollections = new WeakMap<object, CollectionMetadata>();
-  const scheduledCollectionSweeps = new WeakSet<CollectionMetadata>();
-  const hasLinkedSubscribers = (version: VersionSignal): boolean =>
-    (adapter.hasLinkedSubscribers ?? adapter.hasSubscribers)(version);
   let support: CollectionSupport;
   const unwrap = <T>(value: T): T => ctx.prepareDeepValue(value, support);
   const wrap = <T>(value: T): T => ctx.wrap(value, support);
@@ -303,112 +300,36 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
 
   // Collection keys are often only looked up (search, cache, existence checks)
   // and never written, so the write-cleared watched flag would retain them
-  // forever. A settled sweep (a later task) drops them by actual graph links
-  // instead and advances each dropped version once more: a render attempt that
-  // read it but has not subscribed yet sees the revision change at commit and
-  // re-renders onto a fresh version. The synchronous sweep that follows a
-  // mutation drops only versions nothing has read since their last write, so
-  // an unrelated write never invalidates a render that is still in progress.
-  const retireCollectionVersion = (version: VersionSignal | undefined): void => {
-    if (version !== undefined)
-      adapter.untracked(() => {
-        version.value = version.peek() + 1;
-      });
-  };
-
-  const sweepCollectionKeys = (metadata: CollectionMetadata, settled = false): void => {
-    // Primitive-key versions are the only strong metadata retained here. Avoid
-    // creating an empty iterator after collection writes with no subscribers.
-    if (metadata.prunable.size === 0) return;
-    if (adapter.getBatchDepth() !== 0) {
-      scheduleCollectionSweep(metadata, false);
-      return;
-    }
-    // Revisit only primitive candidates and only the categories with versions.
-    // Keep subscribed categories for another mutation-driven cleanup after a
-    // later effect run/disposal; drop each unsubscribed category independently.
-    let iterator = metadata.prunableSweepIterator;
-    if (iterator === undefined) {
-      iterator = metadata.prunable.entries();
-      metadata.prunableSweepIterator = iterator;
-      metadata.prunableSweepRevision = metadata.prunableRevision;
-      metadata.prunableSweepSettled = settled;
-      metadata.prunableSweepDeferred = false;
-    }
-    const release = (version: VersionSignal | undefined): boolean => {
-      if (version === undefined) return true;
-      if (settled) {
-        if (hasLinkedSubscribers(version)) return false;
-        retireCollectionVersion(version);
-        return true;
-      }
-      if (!adapter.hasSubscribers(version)) return true;
-      // Read since its last write but not linked yet: a render in progress
-      // or a reader already gone. Leave it to the settled sweep.
-      if (adapter.hasLinkedSubscribers !== undefined && !adapter.hasLinkedSubscribers(version))
-        metadata.prunableSweepDeferred = true;
-      return false;
-    };
-    let processed = 0;
-    while (processed < 128) {
-      const next = iterator.next();
-      if (next.done) {
-        metadata.prunableSweepIterator = undefined;
-        const revised = metadata.prunableSweepRevision !== metadata.prunableRevision;
-        // Candidates an unsettled pass kept may sit before the point a later
-        // settled pass resumed from; revisit them all in a fresh settled pass.
-        const deferred = metadata.prunableSweepDeferred === true && metadata.prunableSweepSettled !== true;
-        metadata.prunableSweepRevision = undefined;
-        metadata.prunableSweepSettled = undefined;
-        metadata.prunableSweepDeferred = undefined;
-        if (revised || deferred) scheduleCollectionSweep(metadata, true);
-        return;
-      }
-      // Avoid spelling this as `.value`: the managed transform treats static
-      // `.value` reads as signal reads and would capture this iterator result.
-      const [key, candidates] = Reflect.get(next, "value") as [unknown, number];
-      processed += 1;
+  // forever; the engine's `runSweep` drops them (see there). Primitive-key
+  // versions are the only strong metadata retained here, and each candidate
+  // records which categories have a version.
+  const collectionSweep: SweepPlan<CollectionMetadata> = {
+    size: (metadata) => metadata.prunable.size,
+    begin: (metadata) => metadata.prunable.entries(),
+    visit(metadata, candidate, release) {
+      // Keep subscribed categories for another mutation-driven cleanup after a
+      // later effect run/disposal; drop each unsubscribed category independently.
+      const [key, candidates] = candidate as [unknown, number];
       let remaining = candidates;
-      if ((candidates & 1) !== 0) {
-        const version = metadata.values.get(key);
-        if (release(version)) {
-          metadata.values.delete(key);
-          remaining &= ~1;
-        }
+      if ((candidates & 1) !== 0 && release(metadata.values.get(key))) {
+        metadata.values.delete(key);
+        remaining &= ~1;
       }
-      if ((candidates & 2) !== 0) {
-        const version = metadata.existence.get(key);
-        if (release(version)) {
-          metadata.existence.delete(key);
-          remaining &= ~2;
-        }
+      if ((candidates & 2) !== 0 && release(metadata.existence.get(key))) {
+        metadata.existence.delete(key);
+        remaining &= ~2;
       }
-      if ((candidates & 4) !== 0) {
-        const version = metadata.members.get(key);
-        if (release(version)) {
-          metadata.members.delete(key);
-          remaining &= ~4;
-        }
+      if ((candidates & 4) !== 0 && release(metadata.members.get(key))) {
+        metadata.members.delete(key);
+        remaining &= ~4;
       }
       if (remaining === 0) metadata.prunable.delete(key);
       else if (remaining !== candidates) metadata.prunable.set(key, remaining);
-    }
-    // Large candidate sets are drained over timer turns so each collection
-    // mutation pays a fixed synchronous budget and the browser can paint
-    // between cleanup chunks. The live Map iterator also sees appended keys.
-    scheduleCollectionSweep(metadata, true);
+    },
   };
-
-  const scheduleCollectionSweep = (metadata: CollectionMetadata, yieldToTask: boolean): void => {
-    if (scheduledCollectionSweeps.has(metadata)) return;
-    scheduledCollectionSweeps.add(metadata);
-    const resume = () => {
-      scheduledCollectionSweeps.delete(metadata);
-      sweepCollectionKeys(metadata, yieldToTask);
-    };
-    if (yieldToTask) setTimeout(resume, 0);
-    else queueMicrotask(resume);
-  };
+  const sweepCollectionKeys = (metadata: CollectionMetadata): void => ctx.runSweep(metadata, collectionSweep);
+  const scheduleCollectionSweep = (metadata: CollectionMetadata, yieldToTask: boolean): void =>
+    ctx.scheduleSweep(metadata, collectionSweep, yieldToTask);
 
   function reactiveCollectionProxy(raw: object, kind: "Map" | "Set" | "WeakMap" | "WeakSet"): object {
     const found = reactiveCollections.get(raw);

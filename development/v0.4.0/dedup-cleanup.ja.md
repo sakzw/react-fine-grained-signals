@@ -144,3 +144,35 @@ engineの`lookupIdentity(value, support)`（proxyならraw、このmodeで保存
 ### テスト
 
 `tests/deep-signal-consistency.test.ts`（前節の`deep-signal-messages.test.ts`を改名した）: collection modeとplain modeで、配列に保存したcarrierを`includes`/`indexOf`/`lastIndexOf`で見つけられること。変更前のengineでは失敗することを確認した。
+
+## metadataの掃除（sweep）を1つにまとめた（不具合の修正）
+
+### 変更前
+
+読まれたが存在しないkeyのversion signalを捨てる処理が、engine（`sweepPrunedKeys`/`schedulePropertySweep`）とcollection module（`sweepCollectionKeys`/`scheduleCollectionSweep`）に1つずつあった。128件ずつ処理する仕組み、状態のfield、`hasLinkedSubscribers`と`retire...Version`は同じだったが、次の点がずれていた。
+
+- batchの中で呼ばれたとき、engineは何もせずに戻り、collectionはmicrotaskで予約し直していた。
+- 途中で次のtaskへ持ち越すとき、engineは`prunableSweepSettled`を`true`に書き換えていた。そのため、最初の同期のchunk（書き込みの直後、settledでない）で保留した候補（読まれたがcommitされていないrenderのkeyなど）は、最後に見直されなかった。候補が128件を超えると、次にそのobjectへ書き込むまで残った。collectionはこの見直しを意図して行っていた（コメントあり）。
+- `prunableRevision`の初期値の扱い（`?? 0`の有無）。
+
+### 変更後
+
+engineの`runSweep(metadata, plan, settled)`と`scheduleSweep(metadata, plan, yieldToTask)`が1つの実装を持ち、`CollectionContext`でcollection moduleへ渡す。種類ごとの違いは`SweepPlan`（候補の数、iterator、1件の処理、空になったときの後始末）だけにした。状態のfieldは`SweepState`にまとめた。
+
+- batchの中ではmicrotaskで予約し直す（collectionの挙動）。
+- settledでないchunkで保留した候補は、最後に新しいsettled passで見直す（collectionの挙動）。
+- engineのplanは、keyのtargetを`proxyToRaw.get(metadata.proxy)`で引く。呼び出し側からtargetを渡さなくなった。
+
+### テスト
+
+`tests/deep-signal-property-sweep.test.ts`: 300件の存在しないkeyを、commitされたreaderが外れたあと、commitされないrenderがもう一度読んだ状態で書き込むと、最初のchunkの候補も最終的に捨てられること。変更前のengineでは失敗することを確認した。既存の`tests/deep-signal-collection-sweep.test.ts`はそのまま通る。
+
+### サイズ（gzip）
+
+| entry | 変更前 | 変更後 |
+| --- | --- | --- |
+| deep | 9.98 kB | 10.13 kB |
+| deep-collections | 13.33 kB | 13.26 kB |
+| index-full | 15.92 kB | 15.83 kB |
+
+plain modeだけのbundle（deep）は、collectionと共有する汎用の実装（microtaskでの予約など）を持つようになった分だけ増えた。
