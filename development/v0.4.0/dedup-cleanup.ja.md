@@ -60,3 +60,20 @@ Full版（`src/runtime/jsx.ts`）とLite版（`src/runtime/lite-jsx.ts`）が、
 | lite-jsx-child | 5.21 kB | 5.37 kB |
 
 Lite版は、Full版と同じprop名の一覧と判定を持つようになった分だけ増えた。
+
+## form bindingの検証とクリック処理の共有（挙動は変わらない）
+
+### 変更前
+
+- `bindChecked`（`subscribeBinding`の中にinlineで約70行）が、radio/checkbox groupの`bindInputValueGroup`のクリック後の処理（次のtaskでの取り消しと再描画、`flushCorrection`/`scheduleCorrection`）を写していた。写しは`applyBoundSignal`を使わず、読み取りと適用を手で書いていた。クリック中の書き込みを止めるguardもなかった（booleanは必ず反転するため、今は表に出ない）。
+- `case "checked"`には、`bindChecked`以外の名前のための分岐があったが、`"checked"`のkindは`bindChecked`にしか付かないため使われていなかった。
+- input typeの正規化`String(props.type ?? "text").toLowerCase()`が4箇所にあった。`resolveBindingKind`は同じpropに2回呼ばれていた。
+- textとして扱うinput typeの一覧が3つあった（render時の検査で毎回作る`Set`、`BoundInputProps`の型のunion、`resolveBindingKind`の暗黙の分岐）。
+- 値の形のエラー（`Invalid select bindValue.`、`Radio bindValue requires a string.`、`Checkbox group bindValue requires an array of strings.`）が、render時の検査とその後の読み取りに別々に書かれていた。selectの`multiple`は、render時は`props.multiple === true`、DOMでは`select.multiple`で判定していた。
+
+### 変更後
+
+- `createClickSettler()`（取り消しと再描画の予約・実行、クリック開始時の処理）と`syncClickedDefault()`を、`bindCheckedValue`と`bindInputValueGroup`が共有する。`bindCheckedValue`はクリック中の書き込みを止め、group bindingと同じく`defaultChecked`だけを更新する。
+- `getInputType()`を1回だけ呼ぶ。textとして扱うinput typeは`TEXT_BINDABLE_INPUT_TYPES`の1つにまとめ、型のunionもそこから作る。
+- 値の形の検査は`assertSelectValue`、`assertCheckboxGroupValue`、`assertInputValueGroupValue`にまとめ、render時の検査とその後の読み取りが同じ関数を呼ぶ。render時の`multiple`は`Boolean(props.multiple)`にした（ReactがDOMへ書くときと同じ変換）。
+- 小さな共通化: 配列の浅い比較（`areArraysShallowEqual`）、文字列の配列の判定（`isStringArray`）、style objectの判定（`isStyleObject`、5箇所）、`bindTextValue`でIME変換中の補正を保留する処理（2箇所）。

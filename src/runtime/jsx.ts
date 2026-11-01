@@ -38,14 +38,21 @@ type BindingKind =
   | "checked"
   | "prop";
 
-function resolveBindingKind(tagName: string, name: string, props?: HostProps): BindingKind {
+/** The `type` of an `<input>`, as the DOM normalizes it; `undefined` for any other tag. */
+function getInputType(tagName: string, props: HostProps): string | undefined {
+  return tagName === "input" ? String(props.type ?? "text").toLowerCase() : undefined;
+}
+
+/** The input types `bindValue` binds as text. Also the `type` union of the text form in `BoundInputProps`. */
+const TEXT_BINDABLE_INPUT_TYPES = ["text", "search", "tel", "url", "password", "email", "number", "range"] as const;
+type TextBindableInputType = (typeof TEXT_BINDABLE_INPUT_TYPES)[number];
+const textBindableInputTypes = new Set<string>(TEXT_BINDABLE_INPUT_TYPES);
+
+function resolveBindingKind(tagName: string, name: string, inputType: string | undefined): BindingKind {
   if (name === "bindValue") {
     if (tagName === "select") return "select-value";
-    if (tagName === "input") {
-      const inputType = String(props?.type ?? "text").toLowerCase();
-      if (inputType === "radio") return "radio-value";
-      if (inputType === "checkbox") return "checkbox-group";
-    }
+    if (inputType === "radio") return "radio-value";
+    if (inputType === "checkbox") return "checkbox-group";
     return "text-value";
   }
   if (name === "bindChecked") return "checked";
@@ -181,7 +188,7 @@ function readInitialValue(source: ReadonlySignal<unknown>, kind: BindingKind): u
   // React DOM freezes the style object it is given in development. The signal
   // keeps owning its object (a `deepSignal`'s raw state, for one), so React gets
   // a shallow copy rather than a reference it would freeze out from under it.
-  if (kind === "style" && typeof value === "object" && value !== null && !Array.isArray(value)) {
+  if (kind === "style" && isStyleObject(value)) {
     return { ...value };
   }
   return value;
@@ -261,9 +268,17 @@ function rethrowLater(error: unknown): void {
   }, 0);
 }
 
+function areArraysShallowEqual(left: readonly unknown[], right: readonly unknown[]): boolean {
+  return left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+}
+
 function areFormValuesEqual(left: unknown, right: unknown): boolean {
   if (!Array.isArray(left) || !Array.isArray(right)) return Object.is(left, right);
-  return left.length === right.length && left.every((value, index) => Object.is(value, right[index]));
+  return areArraysShallowEqual(left, right);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 /**
@@ -459,12 +474,16 @@ function bindFormReset(
  * typing for a multi-select) is applied that way instead.
  */
 function isSelectValue(value: unknown, multiple: boolean): boolean {
-  return multiple ? Array.isArray(value) && value.every((item) => typeof item === "string") : typeof value === "string";
+  return multiple ? isStringArray(value) : typeof value === "string";
+}
+
+function assertSelectValue(value: unknown, multiple: boolean): void {
+  if (!isSelectValue(value, multiple)) throw new TypeError("Invalid select bindValue.");
 }
 
 function setSelectValue(select: HTMLSelectElement, value: unknown): void {
   const multiple = select.multiple;
-  if (!isSelectValue(value, multiple)) throw new TypeError("Invalid select bindValue.");
+  assertSelectValue(value, multiple);
   const values = new Set(multiple ? (value as string[]) : [value as string]);
   // A single select keeps going through `.value`, which also handles a value
   // no option matches (nothing selected).
@@ -556,6 +575,113 @@ function bindSelectValue(
   };
 }
 
+/**
+ * The settle a checkbox or radio click leaves for the next task. React 19
+ * synthesizes their onChange from the bubbling click, so a binding writes the
+ * signal at the click target and settles afterwards: it reverts a canceled
+ * click (`preventDefault()`; the browser restores the checked state only after
+ * dispatch) and shows a rejected, normalized or throwing write. Before the
+ * next click only the signal revert runs (`revertOnly`): the DOM already holds
+ * that click's native state, which a refresh would undo.
+ */
+type ClickSettle = (revertOnly: boolean) => void;
+
+function createClickSettler() {
+  let pending: ClickSettle | undefined;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const flush = (revertOnly = false) => {
+    if (timer !== undefined) clearTimeout(timer);
+    timer = undefined;
+    const settle = pending;
+    pending = undefined;
+    settle?.(revertOnly);
+  };
+  return {
+    flush,
+    schedule(settle: ClickSettle) {
+      pending = settle;
+      timer = setTimeout(() => flush(), 0);
+    },
+    /**
+     * The start of every click: runs a settle still waiting from a canceled
+     * earlier click in the same task without letting it undo this click, which
+     * the browser has already applied. Returns that native checked state.
+     */
+    beginClick(input: HTMLInputElement): boolean {
+      const native = input.checked;
+      try {
+        flush(true);
+      } catch (error) {
+        rethrowLater(error);
+      }
+      if (input.checked !== native) input.checked = native;
+      return native;
+    },
+  };
+}
+
+/**
+ * A click's own write skips the clicked input (React's delegated handlers
+ * still compare its checked state; the settle shows the result), so keep the
+ * browser reset default current here without touching `checked`.
+ */
+function syncClickedDefault(input: HTMLInputElement, writtenChecked: boolean): void {
+  if (writtenChecked === input.checked && input.defaultChecked !== input.checked) {
+    input.defaultChecked = input.checked;
+  }
+}
+
+/** Binds one checkbox's `checked` to a boolean signal. */
+function bindCheckedValue(
+  input: HTMLInputElement,
+  source: Signal<unknown>,
+  write: (value: unknown) => void,
+): BindingSubscription {
+  const episode: FailureEpisode = { hasReported: false };
+  let active = true;
+  let clicking = false;
+  const settler = createClickSettler();
+  const apply = (value: unknown) => {
+    if (!clicking) write(value);
+  };
+  const subscription = createBindingSubscription(source, apply, episode);
+  const onClick = (event: MouseEvent) => {
+    if (!active || input.disabled) return;
+    const attempted = settler.beginClick(input);
+    const previous = source.peek();
+    let written: unknown = previous;
+    clicking = true;
+    try {
+      source.value = attempted;
+      written = source.peek();
+    } finally {
+      clicking = false;
+      // The signal revert runs even if the control unmounted meanwhile
+      // (`write` skips a detached node).
+      settler.schedule((revertOnly) => {
+        try {
+          if (event.defaultPrevented && areFormValuesEqual(source.peek(), written)) source.value = previous;
+        } finally {
+          // Not after dispose: the node may now show another source.
+          if (active && !revertOnly) applyBoundSignal(() => source.peek(), write, episode);
+        }
+      });
+    }
+    syncClickedDefault(input, Boolean(written));
+  };
+  input.addEventListener("click", onClick);
+  const disposeReset = bindFormReset(input, subscription.refresh);
+  return {
+    refresh: subscription.refresh,
+    dispose() {
+      active = false;
+      subscription.dispose();
+      disposeReset();
+      input.removeEventListener("click", onClick);
+    },
+  };
+}
+
 type InputValueGroupKind = "radio-value" | "checkbox-group";
 type InputValueGroupMember = () => void;
 const inputValueGroupMembers = new WeakMap<object, Set<InputValueGroupMember>>();
@@ -613,17 +739,19 @@ function assertRadioGroupSource(input: HTMLInputElement, source: Signal<unknown>
   }
 }
 
-function isCheckboxGroupValue(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((item) => typeof item === "string");
+/** The shape check for a value-group signal, shared by render-time validation and every later read. */
+function assertCheckboxGroupValue(value: unknown): asserts value is string[] {
+  if (!isStringArray(value)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
+}
+
+function assertInputValueGroupValue(value: unknown, kind: InputValueGroupKind): asserts value is string | string[] {
+  if (kind === "checkbox-group") assertCheckboxGroupValue(value);
+  else if (typeof value !== "string") throw new TypeError("Radio bindValue requires a string.");
 }
 
 function isInputValueGroupChecked(value: unknown, kind: InputValueGroupKind, optionValue: string): boolean {
-  if (kind === "radio-value") {
-    if (typeof value !== "string") throw new TypeError("Radio bindValue requires a string.");
-    return value === optionValue;
-  }
-  if (!isCheckboxGroupValue(value)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
-  return value.includes(optionValue);
+  assertInputValueGroupValue(value, kind);
+  return typeof value === "string" ? value === optionValue : value.includes(optionValue);
 }
 
 function registerInputValueGroupMember(source: Signal<unknown>, member: InputValueGroupMember): () => void {
@@ -683,37 +811,12 @@ function bindInputValueGroup(
   };
   const subscription = createBindingSubscription(source, apply, episode);
   let active = true;
-  let pendingCorrection: ((revertOnly: boolean) => void) | undefined;
-  let correctionTimer: ReturnType<typeof setTimeout> | undefined;
-  /**
-   * Runs a correction still waiting for its task. Before the next click only
-   * its signal revert runs (`revertOnly`): the DOM already holds that click's
-   * native state, which a refresh would undo.
-   */
-  const flushCorrection = (revertOnly = false) => {
-    if (correctionTimer !== undefined) clearTimeout(correctionTimer);
-    correctionTimer = undefined;
-    const correction = pendingCorrection;
-    pendingCorrection = undefined;
-    correction?.(revertOnly);
-  };
-  const scheduleCorrection = (correction: (revertOnly: boolean) => void) => {
-    pendingCorrection = correction;
-    correctionTimer = setTimeout(() => flushCorrection(), 0);
-  };
+  const settler = createClickSettler();
   const refreshGroup = () => applyBoundSignal(() => source.peek(), apply, episode);
   const unregisterMember = registerInputValueGroupMember(source, refreshGroup);
   const onClick = (event: MouseEvent) => {
     if (!active || input.disabled) return;
-    // The browser has already applied this click; a settle still waiting from
-    // a canceled earlier click in the same task must not undo it.
-    const native = input.checked;
-    try {
-      flushCorrection(true);
-    } catch (error) {
-      rethrowLater(error);
-    }
-    if (input.checked !== native) input.checked = native;
+    const native = settler.beginClick(input);
     if (kind === "radio-value") assertRadioGroupSource(input, source);
     let attempted: unknown;
     if (kind === "radio-value") {
@@ -721,7 +824,7 @@ function bindInputValueGroup(
       attempted = input.value;
     } else {
       const current = source.peek();
-      if (!isCheckboxGroupValue(current)) throw new TypeError("Checkbox group bindValue requires an array of strings.");
+      assertCheckboxGroupValue(current);
       attempted = native
         ? current.includes(optionValue)
           ? current
@@ -737,14 +840,11 @@ function bindInputValueGroup(
       written = source.peek();
     } finally {
       groupClickTargets.delete(source);
-      // Let React's delegated click/change handlers observe the native user
-      // selection, then settle in the next task: revert a canceled click
-      // (`preventDefault()`; the browser restores the checked state only
-      // after dispatch) and synchronize every member to a rejected,
-      // normalized, thrown-away, or cross-root group value. The settle also
-      // runs if the control unmounts in the meantime, so a canceled click
-      // that hides its control still leaves the signal unchanged.
-      scheduleCorrection((revertOnly) => {
+      // The settle (see `ClickSettle`) synchronizes every member, including
+      // one in another root. It also runs if the control unmounts in the
+      // meantime, so a canceled click that hides its control still leaves the
+      // signal unchanged.
+      settler.schedule((revertOnly) => {
         // Even a throwing revert setter must leave the members showing the
         // signal's actual value.
         try {
@@ -752,7 +852,7 @@ function bindInputValueGroup(
             const current = source.peek();
             if (kind === "radio-value") {
               if (areFormValuesEqual(current, written)) source.value = previous;
-            } else if (isCheckboxGroupValue(current) && isCheckboxGroupValue(previous)) {
+            } else if (isStringArray(current) && isStringArray(previous)) {
               if (areFormValuesEqual(current, written)) {
                 // Nothing else touched the group: restore exactly.
                 source.value = previous;
@@ -777,14 +877,7 @@ function bindInputValueGroup(
         }
       });
     }
-    if (
-      isInputValueGroupChecked(written, kind, optionValue) === input.checked &&
-      input.defaultChecked !== input.checked
-    ) {
-      // The target's write was deferred above to preserve React's click
-      // tracker. Keep the browser reset default current without touching it.
-      input.defaultChecked = input.checked;
-    }
+    syncClickedDefault(input, isInputValueGroupChecked(written, kind, optionValue));
   };
   // React 19 synthesizes checkbox/radio onChange from the bubbling click
   // path. Updating at the target keeps the shared signal current before that
@@ -841,6 +934,14 @@ function bindTextValue(
       write(pending);
     }
   };
+  /** A correction during composition waits for `compositionend`, like any other write. */
+  const holdCorrectionUntilCompositionEnd = (attempted: string) => {
+    const result = readBoundSignal(() => source.peek(), episode);
+    if (result.ok && !areFormValuesEqual(result.value, attempted)) {
+      hasPending = true;
+      pending = result.value;
+    }
+  };
   const onInput = () => {
     const attempted = node.value;
     const version = ++inputVersion;
@@ -859,11 +960,7 @@ function bindTextValue(
     }
     if (setterError === undefined) {
       if (composing) {
-        const result = readBoundSignal(() => source.peek(), episode);
-        if (result.ok && !areFormValuesEqual(result.value, attempted)) {
-          hasPending = true;
-          pending = result.value;
-        }
+        holdCorrectionUntilCompositionEnd(attempted);
         return;
       }
       const current = readBoundSignal(() => source.peek(), episode);
@@ -877,11 +974,7 @@ function bindTextValue(
       if (correctionTimer === timer) correctionTimer = undefined;
       if (!active || version !== inputVersion || !Object.is(node.value, attempted)) return;
       if (composing) {
-        const result = readBoundSignal(() => source.peek(), episode);
-        if (result.ok && !areFormValuesEqual(result.value, attempted)) {
-          hasPending = true;
-          pending = result.value;
-        }
+        holdCorrectionUntilCompositionEnd(attempted);
         return;
       }
       resyncRejectedFormWrite(source, attempted, write, episode);
@@ -964,10 +1057,7 @@ function applyStyle(node: HTMLElement, value: unknown, previousKeys: readonly st
   // a string, for instance) would make `Object.keys` walk string indices
   // instead of CSS property names; treat anything that is not a plain object
   // as empty rather than writing garbage keys to the node's style.
-  const nextStyle = (typeof value === "object" && value !== null && !Array.isArray(value) ? value : {}) as Record<
-    string,
-    unknown
-  >;
+  const nextStyle = isStyleObject(value) ? value : {};
   const nextKeys = Object.keys(nextStyle);
   const nextKeySet = new Set(nextKeys);
 
@@ -988,7 +1078,7 @@ function subscribeStylePropertyEntries(
   binder: NodeBinder,
 ): Subscription {
   let previousKeys: readonly string[] = initialStyleKeys ?? getInitialStyleKeys(undefined, snapshot);
-  let applied = typeof snapshot === "object" && snapshot !== null ? { ...(snapshot as HostProps) } : {};
+  let applied: HostProps = isStyleObject(snapshot) ? { ...snapshot } : {};
   const whileAttached = (write: (value: unknown) => void) => (value: unknown) => {
     if (binder.attached) write(value);
   };
@@ -1013,7 +1103,7 @@ function subscribeStylePropertyEntries(
     restore(nextSnapshot) {
       if (!isSameStyle(applied, nextSnapshot)) {
         previousKeys = applyStyle(node as HTMLElement, nextSnapshot, previousKeys);
-        applied = typeof nextSnapshot === "object" && nextSnapshot !== null ? { ...(nextSnapshot as HostProps) } : {};
+        applied = isStyleObject(nextSnapshot) ? { ...nextSnapshot } : {};
       }
     },
   };
@@ -1056,12 +1146,7 @@ function isSameBinding(a: Binding, b: Binding | undefined): b is Binding {
 
 function sameBindingConfig(left: readonly unknown[] | undefined, right: readonly unknown[] | undefined): boolean {
   if (left === right) return true;
-  return (
-    left !== undefined &&
-    right !== undefined &&
-    left.length === right.length &&
-    left.every((value, index) => Object.is(value, right[index]))
-  );
+  return left !== undefined && right !== undefined && areArraysShallowEqual(left, right);
 }
 
 /** Whether two style values set the same properties to the same values. */
@@ -1188,81 +1273,11 @@ function subscribeBinding(
       };
     }
     case "checked":
-      if (name === "bindChecked") {
-        const input = node as HTMLInputElement;
-        const writableSource = source as Signal<unknown>;
-        const episode: FailureEpisode = { hasReported: false };
-        const apply = whileAttached((value: unknown) => setControlledProp(node, "checked", value));
-        let active = true;
-        let settleTimer: ReturnType<typeof setTimeout> | undefined;
-        let pendingSettle: ((revertOnly: boolean) => void) | undefined;
-        /** Before the next click only the signal revert runs: see `flushCorrection`. */
-        const flushSettle = (revertOnly = false) => {
-          if (settleTimer !== undefined) clearTimeout(settleTimer);
-          settleTimer = undefined;
-          const settle = pendingSettle;
-          pendingSettle = undefined;
-          settle?.(revertOnly);
-        };
-        // React 19 synthesizes checkbox onChange from the bubbling click, before
-        // the native `change` event. Writing at the click target keeps the
-        // signal current for React's handlers, like the group bindings do.
-        const onClick = (event: MouseEvent) => {
-          if (input.disabled) return;
-          const attempted = input.checked;
-          try {
-            flushSettle(true);
-          } catch (error) {
-            rethrowLater(error);
-          }
-          if (input.checked !== attempted) input.checked = attempted;
-          const previous = writableSource.peek();
-          let written: unknown = previous;
-          try {
-            writableSource.value = attempted;
-            written = writableSource.peek();
-          } finally {
-            // A canceled click (`preventDefault()`) is reverted by the browser
-            // only after dispatch, and a rejected or throwing write must not
-            // touch the DOM while React still compares the click's checked
-            // state. Settle both once the event has finished; the signal
-            // revert runs even if the control unmounted meanwhile (`apply`
-            // skips a detached node).
-            pendingSettle = (revertOnly) => {
-              try {
-                if (event.defaultPrevented && areFormValuesEqual(writableSource.peek(), written)) {
-                  writableSource.value = previous;
-                }
-              } finally {
-                // Not after dispose: the node may now show another source.
-                if (active && !revertOnly) {
-                  const current = readBoundSignal(() => writableSource.peek(), episode);
-                  if (current.ok) apply(current.value);
-                }
-              }
-            };
-            settleTimer = setTimeout(() => flushSettle(), 0);
-          }
-        };
-        input.addEventListener("click", onClick);
-        const subscription = createBindingSubscription(source as ReadonlySignal<unknown>, apply, episode);
-        const disposeReset = bindFormReset(input, subscription.refresh);
-        return {
-          ...subscription,
-          dispose() {
-            active = false;
-            subscription.dispose();
-            disposeReset();
-            input.removeEventListener("click", onClick);
-          },
-          getStyleKeys: undefined,
-          restore: undefined,
-        };
-      }
       return {
-        ...createBindingSubscription(
-          source as ReadonlySignal<unknown>,
-          whileAttached((value: unknown) => setControlledProp(node, name, value)),
+        ...bindCheckedValue(
+          node as HTMLInputElement,
+          source as Signal<unknown>,
+          whileAttached((value: unknown) => setControlledProp(node, "checked", value)),
         ),
         getStyleKeys: undefined,
         restore: undefined,
@@ -1293,8 +1308,7 @@ function subscribeBinding(
  * binding re-attached for a newer render widens its own keys the same way.
  */
 function getInitialStyleKeys(staleKeys: readonly string[] | undefined, snapshot: unknown): readonly string[] {
-  const keys =
-    typeof snapshot === "object" && snapshot !== null && !Array.isArray(snapshot) ? Object.keys(snapshot) : [];
+  const keys = isStyleObject(snapshot) ? Object.keys(snapshot) : [];
   if (staleKeys === undefined) return keys;
   for (const key of staleKeys) if (!keys.includes(key)) keys.push(key);
   return keys;
@@ -1635,7 +1649,7 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
   // `bindValue={cond ? field : undefined}` and `value={undefined}` next to a
   // binding must not count as a binding or a conflict.
   const has = (name: string) => hasDefinedProp(props, name);
-  const inputType = tagName === "input" ? String(props.type ?? "text").toLowerCase() : undefined;
+  const inputType = getInputType(tagName, props);
   const isInputValueGroup = inputType === "radio" || inputType === "checkbox";
   if (has("bindValue") && has("bindChecked")) {
     throw new TypeError("bindValue and bindChecked cannot be combined on one input.");
@@ -1658,45 +1672,41 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
       if (!isWritableSignal(value)) {
         throw new TypeError(`${name} requires writable signal.`);
       }
-      if (name === "bindValue") {
-        const resolvedInputType = String(props.type ?? "text").toLowerCase();
-        const textInputTypes = new Set(["text", "search", "tel", "url", "password", "email", "number", "range"]);
-        const kind = resolveBindingKind(tagName, name, props);
-        if (tagName === "select") {
-          const multiple = props.multiple === true;
-          const initial = readInitialValue(value, "select-value");
-          if (!isSelectValue(initial, multiple)) throw new TypeError("Invalid select bindValue.");
-        } else if (kind === "radio-value") {
-          const initial = readInitialValue(value, kind);
-          if (typeof initial !== "string") throw new TypeError("Radio bindValue requires a string.");
-          if (typeof props.value !== "string") throw new TypeError("Radio bindValue requires a string value option.");
-          if (typeof props.name !== "string" || props.name.length === 0)
-            throw new TypeError("Radio bindValue requires a non-empty name.");
-        } else if (kind === "checkbox-group") {
-          const initial = readInitialValue(value, kind);
-          if (!isCheckboxGroupValue(initial))
-            throw new TypeError("Checkbox group bindValue requires an array of strings.");
+      const kind = resolveBindingKind(tagName, name, inputType);
+      const initial = readInitialValue(value, kind);
+      switch (kind) {
+        case "select-value":
+          // The DOM coerces `multiple` the same way when React writes it.
+          assertSelectValue(initial, Boolean(props.multiple));
+          break;
+        case "radio-value":
+        case "checkbox-group": {
+          const label = kind === "radio-value" ? "Radio" : "Checkbox group";
+          // The signal's shape first, as every later read checks it.
+          assertInputValueGroupValue(initial, kind);
           if (typeof props.value !== "string")
-            throw new TypeError("Checkbox group bindValue requires a string value option.");
-        } else if (tagName !== "textarea" && (tagName !== "input" || !textInputTypes.has(resolvedInputType))) {
-          throw new TypeError("bindValue: text-like, number, or range input/textarea/select only.");
+            throw new TypeError(`${label} bindValue requires a string value option.`);
+          if (kind === "radio-value" && (typeof props.name !== "string" || props.name.length === 0)) {
+            throw new TypeError("Radio bindValue requires a non-empty name.");
+          }
+          const optionValue = props.value;
+          const selected = isInputValueGroupChecked(initial, kind, optionValue);
+          bindings.push([name, value, kind, selected, [optionValue, props.name, props.form]]);
+          continue;
         }
-      } else if (tagName !== "input" || String(props.type ?? "text").toLowerCase() !== "checkbox") {
-        throw new TypeError("bindChecked: checkbox only.");
+        case "text-value":
+          if (tagName !== "textarea" && (inputType === undefined || !textBindableInputTypes.has(inputType))) {
+            throw new TypeError("bindValue: text-like, number, or range input/textarea/select only.");
+          }
+          break;
+        default:
+          if (inputType !== "checkbox") throw new TypeError("bindChecked: checkbox only.");
       }
-      const kind = resolveBindingKind(tagName, name, props);
-      if (kind === "radio-value" || kind === "checkbox-group") {
-        const optionValue = props.value as string;
-        const groupConfig = [optionValue, props.name, props.form];
-        const selected = isInputValueGroupChecked(readInitialValue(value, kind), kind, optionValue);
-        bindings.push([name, value, kind, selected, groupConfig]);
-      } else {
-        bindings.push([name, value, kind, readInitialValue(value, kind)]);
-      }
+      bindings.push([name, value, kind, initial]);
       continue;
     }
     if (isReactiveHostProp(name, value)) {
-      const kind = resolveBindingKind(tagName, name, props);
+      const kind = resolveBindingKind(tagName, name, inputType);
       bindings.push([name, value, kind, readInitialValue(value, kind)]);
       continue;
     }
@@ -1839,7 +1849,7 @@ type BoundInputProps<P extends React.JSX.IntrinsicElements["input"]> = Omit<
         bindChecked?: never | undefined;
       })
     | {
-        type?: "text" | "search" | "tel" | "url" | "password" | "email" | "number" | "range";
+        type?: TextBindableInputType;
         name?: P["name"];
         value?: never | undefined;
         defaultValue?: never | undefined;
