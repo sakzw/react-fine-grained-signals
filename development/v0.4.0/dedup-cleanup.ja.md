@@ -77,3 +77,21 @@ Lite版は、Full版と同じprop名の一覧と判定を持つようになっ�
 - `getInputType()`を1回だけ呼ぶ。textとして扱うinput typeは`TEXT_BINDABLE_INPUT_TYPES`の1つにまとめ、型のunionもそこから作る。
 - 値の形の検査は`assertSelectValue`、`assertCheckboxGroupValue`、`assertInputValueGroupValue`にまとめ、render時の検査とその後の読み取りが同じ関数を呼ぶ。render時の`multiple`は`Boolean(props.multiple)`にした（ReactがDOMへ書くときと同じ変換）。
 - 小さな共通化: 配列の浅い比較（`areArraysShallowEqual`）、文字列の配列の判定（`isStringArray`）、style objectの判定（`isStyleObject`、5箇所）、`bindTextValue`でIME変換中の補正を保留する処理（2箇所）。
+
+## `useDeepSignalValue`の引数の検査と読み取りを`useSignalValue`にそろえた（実行時のbreaking change、不具合の修正）
+
+### 変更前
+
+- `useSignalValue`はsignalでない値をrender中に`TypeError`にしていた。`useDeepSignalValue`は検査せず、素のobjectを渡すと1回だけ描画して、その後は更新されなかった。
+- `useSignalValue`の`getSnapshot`は、RFSGのeffectやcomputedの実行中に読まれても依存が付かないよう`untracked()`で包んでいた。`useDeepSignalValue`は、storeを作るときと、購読前の`getSnapshot`での再評価を`untrackedRender()`だけで包んでいた。そのため、`useSignalEffect`などの中から`flushSync`で描画すると、selectorの読み取りが実行中のeffectに付き、deep stateへの書き込みでそのeffectが再実行されていた。
+
+### 変更後
+
+- `assertHookSource(hook, expected, source)`を両方のhookが使う。`useDeepSignalValue`は`"useDeepSignalValue expects a deep signal created by react-fine-grained-signals"`をrender中にthrowし、selectorは実行しない。
+- `useDeepSignalValue`のeffect外での評価（storeの作成時と購読前の`getSnapshot`）は`untracked()`で包む。effectの中での評価は、これまでどおり依存を追う。
+
+### テスト
+
+`tests/react-deep-signal-value-source.test.tsx`: 素のobjectと`null`がrender中に`TypeError`になり、selectorが呼ばれないこと。effectの中から`flushSync`で描画しても、deep stateへの書き込みでそのeffectが再実行されないこと。3件とも変更前のhooksでは失敗することを確認した。
+
+docs: `docs/guides/hooks.md`（英日）の`useDeepSignalValue`に、引数の条件を書いた。

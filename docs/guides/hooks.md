@@ -159,5 +159,6 @@ const label = useDeepSignalValue(
 - To capture a non-signal value, list every captured value (for example `[prefix]`) so the selector updates with it.
 - The dependency array must keep a constant length and order. A length change between renders, including switching between omitted (or `[]`) and a non-empty list, throws.
 - The selector must return a primitive snapshot. Object, Proxy, and function results are rejected at runtime with a `TypeError` because mutable results do not provide stable snapshot identity.
+- `source` must be a deep signal created by this package. A plain object or any other non-signal value throws a `TypeError` during render, before the selector runs, as in `useSignalValue`.
 
 See also: [core primitives](./core-primitives.md), [rendering optimization](./rendering-optimization.md).

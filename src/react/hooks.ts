@@ -17,6 +17,17 @@ export { useSignalTracking } from "./use-signals.js";
 const EMPTY_DEPENDENCIES: DependencyList = [];
 
 /**
+ * The render-time check of a hook's signal argument. Throwing in render (not
+ * in `subscribe`) lets an Error Boundary catch it and fails the same way in
+ * SSR. A signal another loaded copy of the package created cannot be
+ * subscribed to from here; `isSignal` throws for it, so the mix fails now
+ * instead of leaving the component on a value that never updates.
+ */
+function assertHookSource(hook: string, expected: string, source: unknown): void {
+  if (!isSignal(source)) throw new TypeError(`${hook} expects ${expected} created by react-fine-grained-signals`);
+}
+
+/**
  * Throws when a dependency array changes length between renders of one call
  * site. Omitting the array counts as an empty one. Call it before the
  * `useMemo` or `useEffect` that consumes the array: React itself only warns
@@ -105,7 +116,11 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
     }
   };
 
-  let result = evaluate();
+  // Outside the effect below, the selector's reads must not attach to an RFSG
+  // effect or computed that is running while React renders (a `flushSync`
+  // inside `useSignalEffect`, say), as in `useSignalValue`'s `getSnapshot`.
+  const evaluateUntracked = () => untracked(evaluate);
+  let result = evaluateUntracked();
   // The store is built in render right before its first `getSnapshot`, so
   // that call can reuse the result just evaluated.
   let fresh = true;
@@ -146,7 +161,7 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
     getSnapshot(): S {
       if (fresh) fresh = false;
       else if (subscribers === 0) {
-        const next = evaluate();
+        const next = evaluateUntracked();
         if (hasChanged(next)) result = next;
       }
       if (result.kind === "error") throw result.error;
@@ -215,6 +230,7 @@ export function useDeepSignalValue<T extends object, S extends SignalSnapshot>(
   selector: (value: T) => S,
   dependencies?: DependencyList,
 ): S {
+  assertHookSource("useDeepSignalValue", "a deep signal", source);
   // A resized array would otherwise recreate the store (losing selector and
   // error history) on every later render, with only React's dev warning.
   useFixedDependencyLength("useDeepSignalValue", "UseDeepSignalValueDependencyLengthChangeError", dependencies);
@@ -292,12 +308,7 @@ export function useSignalEffect(callback: () => void | (() => void), dependencie
  * with `useDeepSignalValue` or inside a tracked component instead.
  */
 export function useSignalValue<T>(source: ReadonlySignal<T> & NotDeepSignal): T {
-  // A signal another loaded copy of the package created cannot be subscribed to
-  // from here. `isSignal` throws for it, so the mix fails now instead of
-  // leaving the component on a value that never updates.
-  if (!isSignal(source)) {
-    throw new TypeError("useSignalValue expects a signal or computed created by react-fine-grained-signals");
-  }
+  assertHookSource("useSignalValue", "a signal or computed", source);
   const subscribe = useCallback((notify: () => void) => subscribeLocalReadable(source, notify), [source]);
 
   // A leaf subscription owns this read. An unmanaged useSignalTracking() scope may

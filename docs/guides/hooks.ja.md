@@ -157,5 +157,6 @@ const label = useDeepSignalValue(
 - signal以外の捕捉値を使う場合は、`[prefix]` のようにすべて列挙すると、その値の変更時にselectorが更新されます。
 - 依存配列は長さと順序を一定に保ってください。省略（または `[]`）と空でない配列との切り替えを含め、レンダー間で長さが変わると例外を投げます。
 - selectorはプリミティブなsnapshotを返す必要があります。object、Proxy、functionを返すと、runtimeで `TypeError` になります。mutableな値は安定したsnapshot identityを保証できないためです。
+- `source` には本パッケージが作ったdeep signalを渡します。素のobjectなどsignalでない値を渡すと、`useSignalValue` と同じく、selectorを実行する前にレンダー中に `TypeError` をthrowします。
 
 関連: [コアプリミティブ](./core-primitives.ja.md)、[描画最適化](./rendering-optimization.ja.md)。
