@@ -59,7 +59,12 @@ export interface ReactFineGrainedSignalsOptions {
    * when its memoization has been verified against this library's tracking.
    */
   reactCompiler?: ReactFineGrainedSignalsReactCompiler;
-  /** Package whose root exports bare `useSignalTracking` and whose `/internal` entry exports `useSignalCapture`. */
+  /**
+   * Package whose root exports bare `useSignalTracking`, whose `/internal`
+   * entry exports `useSignalCapture`, and whose `/utils` entry exports the
+   * control-flow components (`Show`, `For`, `Index`, `Switch`, `Match`) the
+   * transform recognizes as callback owners.
+   */
   importSource?: string;
   /**
    * Extra module specifier whose `memo`/`forwardRef` exports are treated as

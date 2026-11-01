@@ -175,6 +175,10 @@ silently changing what is transformed.
 - `importSource`: overrides `react-fine-grained-signals` for a compatible wrapper.
   The wrapper must re-export the runtime's root `useSignalTracking` and its
   `/internal` entry's `useSignalCapture`, which the generated code imports. `/internal` is for generated code only and is outside semver.
+  It must also re-export the runtime's `/utils` control-flow components
+  (`Show`, `For`, `Index`, `Switch`, `Match`) under `${importSource}/utils`:
+  the transform recognizes them only from that entry, and a callback they
+  receive from anywhere else gets the `RFGS003` warning.
 - `reactImportSource`: an additional module specifier whose `memo` and
   `forwardRef` exports count as React's own when the plugin decides whether a
   wrapped function is a component. Recognition is additive, not a replacement:
@@ -207,7 +211,7 @@ include a code frame like the others.
 | --- | --- |
 | `RFGS001` | A Hook sits in a signal read expression, or shares a call with reads only that call performs. |
 | `RFGS002` | A call runs a function that calls a Hook and reads signals inside the caller's render. |
-| `RFGS003` | A JSX render-prop or `children` callback reads a signal, and its owner cannot be proven. |
+| `RFGS003` | A JSX render-prop or `children` callback reads a signal, and its owner cannot be proven. Callbacks the `/utils` control-flow components run in their own tracked render are exempt (see below). |
 | `RFGS004` | A `.value` read remains in a function parameter initializer. |
 | `RFGS005` | `useSignalTracking()` resolves only through a barrel/re-export module. |
 | `RFGS006` | A `@signalTracking` annotation has no component or hook identity to attach to. |
@@ -242,7 +246,7 @@ In `transform: "managed"`, generated functions call `useSignalCapture()` as a to
 | Named functions, JSX spread, getters, and reading assignments | A named local or module function passed to a call (`items.filter(isVisible)`) is captured with the call like an inline callback. `<p {...state.value.props} />` copies the props inside a capture. A local object literal getter that reads a signal, a `let` alias assigned later, and reading assignments such as `state.value.count ??= 1` or `+=` are captured. A plain-called function that calls a Hook and reads signals (`{Title()}`) cannot be captured and gets a warning. |
 | Hook calls in a read expression | Hooks are never moved into a capture closure. When a Hook shares a call with tracked arguments (`format(useContext(Ctx), count.value)`), the call stays direct and each argument read is captured on its own; reads the callee performs internally are then not tracked and a source-located warning says so. A read on a Hook's result (`useStore().value.name`) calls the Hook in place and captures only the reads after it. Other Hook-containing read expressions are left uncaptured with a warning; call the Hook in its own statement. |
 | Runtime key or alias | A runtime-key read can be captured after the function is selected, but the dynamic read alone does not select a function in `auto`. Static aliases created by the supported simple `const` destructuring form are followed; dynamic destructuring is not. |
-| JSX render prop or `children` callback | Capture is not guaranteed because the transform cannot know when or how often the receiver invokes it. Statically visible cases emit a source-located warning. |
+| JSX render prop or `children` callback | Capture is not guaranteed because the transform cannot know when or how often the receiver invokes it. Statically visible cases emit a source-located warning (`RFGS003`). The control-flow components imported from `${importSource}/utils` are the exception: `Show`, `For` and `Index` call their `children` callback, `For` calls `by`, and a `Switch` calls the `children` callback of a `Match` it collects, all inside their own tracked render, so those callbacks get no warning. The components are recognized through imports, aliases and namespace members, not by JSX name, and a `Match` outside a `Switch` still warns. |
 
 An explicit, directly imported first-statement `useSignalTracking()` remains an ambient runtime boundary even when `transform: "managed"` is configured. The plugin preserves the call instead of replacing it with `useSignalCapture()`. This is needed for deep-proxy reads such as `task.done`, which have no `.value` expression for the per-read transform to wrap. Async and generator functions remain ineligible.
 

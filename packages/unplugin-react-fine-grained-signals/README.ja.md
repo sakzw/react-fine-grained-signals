@@ -171,6 +171,10 @@ export default {
 - `importSource`: `react-fine-grained-signals` 互換wrapperへの置き換えです。
   wrapperは、生成されたコードがimportするruntimeのrootの `useSignalTracking` と、
   `/internal` entryの `useSignalCapture` をre-exportしている必要があります。`/internal` は生成コード専用で、semverの対象外です。
+  また、runtimeの `/utils` のcontrol-flow component（`Show`、`For`、`Index`、`Switch`、`Match`）を
+  `${importSource}/utils` からre-exportしている必要があります。transformはこのentryから
+  importしたものだけをcontrol-flow componentと認識し、それ以外から来たcomponentに渡したcallbackには
+  `RFGS003` の警告を出します。
 - `reactImportSource`: wrapされた関数をcomponentと判定する際に、`memo` /
   `forwardRef` をReact由来とみなすmodule specifierを追加します。置き換えでは
   なく追加であり、`"react"` からのdirect importは常に認識されます。つまり
@@ -197,7 +201,7 @@ bundlerへ渡すwarningの `diagnosticId` に入ります。共通の `code: "RF
 | --- | --- |
 | `RFGS001` | Hookが、signal readを含む式の中にあるか、readだけを行う呼び出しと同じ呼び出しを共有しています。 |
 | `RFGS002` | 呼び出された関数がHookを呼び、render内でsignalを読んでいます。 |
-| `RFGS003` | JSX render propや `children` callbackがsignalを読み、所有者を証明できません。 |
+| `RFGS003` | JSX render propや `children` callbackがsignalを読み、所有者を証明できません。`/utils` のcontrol-flow componentが自身のtracked renderの中で呼ぶcallbackは対象外です（後述）。 |
 | `RFGS004` | 関数の引数初期化子に、まだ `.value` の読み取りが残っています。 |
 | `RFGS005` | `useSignalTracking()` が、barrel/re-export moduleを経由してしか解決できません。 |
 | `RFGS006` | `@signalTracking` の付いた関数に、boundaryを付けるcomponent/hook identityがありません。 |
@@ -230,7 +234,7 @@ signals({
 | 名前付き関数、JSX spread、getter、読み取りを伴う代入 | callに渡した名前付きの局所またはmodule関数(`items.filter(isVisible)`)はinline callbackと同じくcallごとcaptureします。`<p {...state.value.props} />`はcapture内でpropsをcopyします。signalを読む局所object literalのgetter、後から代入する`let` alias、`state.value.count ??= 1`や`+=`のような読み取りを伴う代入もcaptureします。Hookを呼びつつsignalを読む関数をplain call(`{Title()}`)するとcaptureできないため、警告を出します。 |
 | read式の中のHook呼び出し | Hookをcapture closureへ移動しません。Hookとtracked引数が同じcallにある場合 (`format(useContext(Ctx), count.value)`)、callは直接呼び出しのまま各引数のreadを個別にcaptureします。callee内部のreadは追跡されないため、source位置付きの警告を出します。Hookの戻り値に対するread (`useStore().value.name`) はHookをその位置で呼び、後続のreadだけをcaptureします。その他のHookを含むread式は警告付きでcapture対象外になります。Hookは別の文で呼び出してください。 |
 | runtime key / alias | 関数が別の条件で選択されていればruntime-key readをcaptureできますが、dynamic readだけでは`auto`選択されません。対応する単純な`const` destructuringで作るstatic aliasは追跡しますが、dynamic destructuringは追跡しません。 |
-| JSX render prop / `children` callback | receiverがいつ、何回呼ぶかを証明できず、captureは保証されません。静的に見える場合は位置付きwarningを出します。 |
+| JSX render prop / `children` callback | receiverがいつ、何回呼ぶかを証明できず、captureは保証されません。静的に見える場合は位置付きwarning (`RFGS003`) を出します。例外は `${importSource}/utils` からimportしたcontrol-flow componentです。`Show`・`For`・`Index` は `children` callbackを、`For` は `by` を、`Switch` は自分が集めた `Match` の `children` callbackを、いずれも自身のtracked renderの中で呼ぶため、これらのcallbackには警告を出しません。componentはJSX上の名前ではなくimport・alias・namespace memberをたどって認識し、`Switch` の外にある `Match` は引き続き警告の対象です。 |
 
 先頭文に直接importした明示的な`useSignalTracking()`は、`transform: "managed"`でもambient runtime boundaryとして残ります。pluginはこれを`useSignalCapture()`へ置き換えません。per-read transformでwrapできる`.value`式がない`task.done`のようなdeep-proxy readに必要です。async関数とgenerator関数は引き続き対象外です。
 

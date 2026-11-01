@@ -11,7 +11,10 @@
  * - RFGS002 Hook-calling helper read: a call runs a function that calls a Hook
  *   and reads signals inside the caller's render.
  * - RFGS003 Untracked callback read: a JSX render-prop or children callback
- *   reads a signal, and its execution owner cannot be proven.
+ *   reads a signal, and its execution owner cannot be proven. The callbacks
+ *   the `/utils` control-flow components run in their own tracked render
+ *   (`Show`/`For`/`Index` children, `For` `by`, a `Match` a `Switch`
+ *   collects) are exempt.
  * - RFGS004 Uncaptured parameter read: a `.value` read sits in a function
  *   parameter initializer, which runs before the capture Hook.
  * - RFGS005 Unverifiable barrel: `useSignalTracking()` resolves only through a
