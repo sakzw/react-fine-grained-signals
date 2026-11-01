@@ -27,6 +27,7 @@ import { useManagedSignals } from "../../../src/react/use-signals.js";
 import * as libraryUtils from "../../../src/utils.js";
 import {
   transformReactFineGrainedSignals,
+  SIGNAL_CONTROL_FLOW_COMPONENTS,
   type ReactFineGrainedSignalsMode,
   type ReactFineGrainedSignalsTransform,
 } from "../src/internal/transform.js";
@@ -676,6 +677,106 @@ function View(next: number) {
     expect(transformed).toContain("state.value.nested.value as number");
     expect(transformed).not.toContain(".capture(() => state.value.nested.value!");
     expect(transformed).not.toContain(".capture(() => state.value.nested.value as number");
+  });
+});
+
+// RFGS003 stays silent for the callbacks these components invoke themselves
+// (see `isOwnedBySignalControlFlow`). That is only safe if each callback really
+// runs inside the component's own managed render scope, so each case reads a
+// signal *only* inside the exempted callback -- never in the calling component
+// -- and checks that a write still reaches the DOM.
+describe("callbacks owned by the runtime's control-flow components", () => {
+  it("names exactly the components the runtime's /utils entry exports", () => {
+    const components = Object.entries(libraryUtils)
+      .filter(([, value]) => typeof value === "function")
+      .map(([name]) => name)
+      .sort();
+    expect(components).toEqual([...SIGNAL_CONTROL_FLOW_COMPONENTS].sort());
+  });
+
+  it("tracks a signal read in Show's children callback", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+import { Show } from "react-fine-grained-signals/utils";
+export const visible = signal(true);
+export const label = signal("a");
+export function App() {
+  return <Show when={visible} fallback="hidden">{() => <b>{label.value}</b>}</Show>;
+}
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("a");
+    write(module, "label", "b");
+    expect(container.textContent).toBe("b");
+    write(module, "visible", false);
+    expect(container.textContent).toBe("hidden");
+  });
+
+  it("tracks a signal read in Index's children callback", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+import { Index } from "react-fine-grained-signals/utils";
+export const suffix = signal("!");
+const rows = ["x", "y"];
+export function App() {
+  return <ul><Index each={rows}>{(row) => <li>{row() + suffix.value}</li>}</Index></ul>;
+}
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("x!y!");
+    write(module, "suffix", "?");
+    expect(container.textContent).toBe("x?y?");
+  });
+
+  it("tracks a signal read in a Match callback collected by Switch", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+import { Match, Switch } from "react-fine-grained-signals/utils";
+export const mode = signal("list");
+export const label = signal("a");
+export function App() {
+  return <Switch fallback="none">
+    <Match when={mode} equals="list">{() => <b>{"list:" + label.value}</b>}</Match>
+    <Match when={mode} equals="grid">{() => <i>{"grid:" + label.value}</i>}</Match>
+  </Switch>;
+}
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("list:a");
+    write(module, "label", "b");
+    expect(container.textContent).toBe("list:b");
+    write(module, "mode", "grid");
+    expect(container.textContent).toBe("grid:b");
+    write(module, "label", "c");
+    expect(container.textContent).toBe("grid:c");
+  });
+
+  it("tracks a signal read in For's children and by callbacks", async () => {
+    const module = await loadModule(`
+import { useState } from "react";
+import { signal } from "react-fine-grained-signals";
+import { For } from "react-fine-grained-signals/utils";
+export const generation = signal(0);
+export const suffix = signal("!");
+let mounts = 0;
+function Row({ id, text }) {
+  const [mount] = useState(() => ++mounts);
+  return <li>{id + ":" + mount + text}</li>;
+}
+const rows = [{ id: "x" }, { id: "y" }];
+export function App() {
+  return <ul><For each={rows} by={(row) => row.id + generation.value}>
+    {(row) => <Row id={row.id} text={suffix.value} />}
+  </For></ul>;
+}
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("x:1!y:2!");
+    write(module, "suffix", "?");
+    expect(container.textContent).toBe("x:1?y:2?");
+    // Only the key changes: the rows remount, so their mount counters move on.
+    write(module, "generation", 1);
+    expect(container.textContent).toBe("x:3?y:4?");
   });
 });
 
