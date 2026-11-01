@@ -11,6 +11,8 @@ const execFileAsync = promisify(execFile);
 const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const pluginRoot = join(repositoryRoot, "packages", "unplugin-react-fine-grained-signals");
 const fixtureRoot = join(repositoryRoot, "tests", "fixtures", "consumer-vite");
+// The plugin's public surface, shared with its own build smoke.
+const pluginPublicApi = await import(pathToFileURL(join(pluginRoot, "tests", "public-api.mjs")).href);
 
 function resolvePnpmInvocation() {
   const packageManagerScript = process.env.npm_execpath;
@@ -169,6 +171,12 @@ try {
   // fixture's TS file covers declaration resolution; this runtime check covers
   // actual package export maps and the minimum usable shape of every adapter.
   const entryContractPath = join(consumerRoot, "entry-contract.mjs");
+  // The entries come from the packed manifest's own export map, so a subpath
+  // added there is checked here without editing this list.
+  const pluginEntries = [
+    "",
+    ...pluginPublicApi.adapterEntriesOf(installedPluginManifest.exports).map((entry) => "/" + entry),
+  ];
   await writeFile(
     entryContractPath,
     `
@@ -214,15 +222,17 @@ try {
     // src/unplugin.ts exports for the adapters and the package's own tests
     // (canTransform, resolveEsbuildLoader, createBundlerPlugin, pluginName, ...)
     // must not leak out through an entry.
-    const expectedPluginExports = ["REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS", "default", "reactFineGrainedSignals"];
-    for (const entry of ["", "/vite", "/rollup", "/webpack", "/rspack", "/esbuild"]) {
+    const expectedPluginExports = ${JSON.stringify(pluginPublicApi.expectedRuntimeExports)};
+    for (const entry of ${JSON.stringify(pluginEntries)}) {
       const names = Object.keys(await import("unplugin-react-fine-grained-signals" + entry)).sort();
+      for (const internal of ${JSON.stringify(pluginPublicApi.internalNames)}) {
+        if (names.includes(internal)) {
+          throw new Error("unplugin-react-fine-grained-signals" + entry + " must not export the internal " + internal);
+        }
+      }
       if (JSON.stringify(names) !== JSON.stringify(expectedPluginExports)) {
         throw new Error("unplugin-react-fine-grained-signals" + entry + " exports " + names.join(", ") + "; expected " + expectedPluginExports.join(", "));
       }
-    }
-    for (const internal of ["canTransform", "createModuleFilter", "resolveEsbuildLoader", "createBundlerPlugin", "pluginName"]) {
-      if (internal in pluginRoot) throw new Error("The plugin root must not export the internal " + internal);
     }
     if (!Array.isArray(pluginRoot.REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS) || !pluginRoot.REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS.includes("RFGS001")) {
       throw new Error("The plugin root must export REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS");

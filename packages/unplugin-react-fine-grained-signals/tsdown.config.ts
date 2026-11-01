@@ -1,13 +1,17 @@
+import { readFileSync } from "node:fs";
 import { defineConfig } from "tsdown";
+import { adapterEntriesOf } from "./tests/public-api.mjs";
+
+// One bundle per bundler adapter, named after its subpath in package.json
+// `exports`, so the export map and the emitted files cannot drift apart.
+const adapterEntries = adapterEntriesOf(
+  JSON.parse(readFileSync(new URL("package.json", import.meta.url), "utf8")).exports,
+);
 
 export default defineConfig({
   entry: {
     index: "src/index.ts",
-    vite: "src/vite.ts",
-    rollup: "src/rollup.ts",
-    webpack: "src/webpack.ts",
-    rspack: "src/rspack.ts",
-    esbuild: "src/esbuild.ts",
+    ...Object.fromEntries(adapterEntries.map((entry) => [entry, `src/${entry}.ts`])),
     // Not a public entry point: the webpack/rspack adapters hand this file's
     // path to the compiler as a loader module, so it has to be emitted next to
     // them under exactly this name (`src/unplugin.ts` resolves `./loader.js`

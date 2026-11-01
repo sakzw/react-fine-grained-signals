@@ -1,4 +1,19 @@
-const entries = ["vite", "rollup", "webpack", "rspack", "esbuild"];
+import { readdir, readFile } from "node:fs/promises";
+import {
+  adapterEntriesOf,
+  adapterTypeExports,
+  expectedRuntimeExports,
+  expectedTypeExports,
+  internalNames,
+} from "./public-api.mjs";
+
+const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
+const entries = adapterEntriesOf(manifest.exports);
+if (JSON.stringify(Object.keys(adapterTypeExports)) !== JSON.stringify(["index", ...entries])) {
+  throw new TypeError(
+    `public-api.mjs lists adapter types for ${Object.keys(adapterTypeExports).join(", ")}; package.json exports index, ${entries.join(", ")}`,
+  );
+}
 
 for (const entry of entries) {
   const esm = await import(`../dist/${entry}.js`);
@@ -17,38 +32,9 @@ for (const entry of entries) {
   }
 }
 
-// Every public entry exports exactly these runtime values. `src/unplugin.ts`
-// also exports helpers for the adapters and the package's own tests
-// (`canTransform`, `resolveEsbuildLoader`, `createBundlerPlugin`, `pluginName`,
-// ...); a stray `export *` would quietly turn them into public API.
-const expectedRuntimeExports = ["REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS", "default", "reactFineGrainedSignals"];
-const expectedTypeExports = [
-  "ReactFineGrainedSignalsDiagnosticId",
-  "ReactFineGrainedSignalsDiagnosticsOptions",
-  "ReactFineGrainedSignalsFilterPattern",
-  "ReactFineGrainedSignalsMode",
-  "ReactFineGrainedSignalsOptions",
-  "ReactFineGrainedSignalsReactCompiler",
-  "ReactFineGrainedSignalsTransform",
-];
-const adapterTypeExports = {
-  index: [],
-  vite: ["VitePlugin"],
-  rollup: ["RollupPlugin"],
-  webpack: ["WebpackPlugin"],
-  rspack: ["RspackPlugin"],
-  esbuild: ["EsbuildPlugin"],
-};
-const internalNames = [
-  "canTransform",
-  "createModuleFilter",
-  "resolveEsbuildLoader",
-  "createBundlerPlugin",
-  "pluginName",
-  "EsbuildLoaderName",
-  "BundlerTransformOutput",
-];
-const { readFile: readDistFile } = await import("node:fs/promises");
+// Every public entry exports exactly the runtime values and types in
+// `public-api.mjs`, and none of the helpers `src/unplugin.ts` exports for the
+// adapters and the package's own tests.
 for (const [entry, adapterTypes] of Object.entries(adapterTypeExports)) {
   const runtimeExports = Object.keys(await import(`../dist/${entry}.js`)).toSorted();
   if (JSON.stringify(runtimeExports) !== JSON.stringify(expectedRuntimeExports)) {
@@ -56,7 +42,7 @@ for (const [entry, adapterTypes] of Object.entries(adapterTypeExports)) {
       `${entry}.js exports ${runtimeExports.join(", ")}; expected ${expectedRuntimeExports.join(", ")}`,
     );
   }
-  const declaration = await readDistFile(new URL(`../dist/${entry}.d.ts`, import.meta.url), "utf8");
+  const declaration = await readFile(new URL(`../dist/${entry}.d.ts`, import.meta.url), "utf8");
   if (/^export\s*\*/m.test(declaration)) {
     throw new TypeError(`${entry}.d.ts must not re-export a whole module`);
   }
@@ -90,15 +76,13 @@ if (typeof loaderModule.default !== "function") {
 }
 
 for (const entry of ["webpack", "rspack"]) {
-  const declaration = await import("node:fs/promises").then(({ readFile }) =>
-    readFile(new URL(`../dist/${entry}.d.ts`, import.meta.url), "utf8"),
-  );
+  const declaration = await readFile(new URL(`../dist/${entry}.d.ts`, import.meta.url), "utf8");
   if (/\b(?:Webpack|Rspack)PluginInstance\b/.test(declaration)) {
     throw new TypeError(`${entry} declaration leaks an unresolved compiler-plugin type`);
   }
 }
 
-const artifacts = await import("node:fs/promises").then(({ readdir }) => readdir(new URL("../dist/", import.meta.url)));
+const artifacts = await readdir(new URL("../dist/", import.meta.url));
 if (artifacts.some((artifact) => artifact.endsWith(".cjs") || artifact.endsWith(".d.cts"))) {
   throw new TypeError("The ESM-only package must not emit CommonJS artifacts");
 }
