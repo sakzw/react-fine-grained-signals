@@ -9,7 +9,6 @@ import {
   activeRenderCollector,
   hasActiveRenderCollector,
   notifyListener,
-  RenderSubscription,
   setActiveRenderCollector,
   trackRenderDependency,
   untrackedRender,
@@ -82,73 +81,6 @@ describe("render tracking internals", () => {
     }
     expect(add).not.toHaveBeenCalled();
     expect(executionContext.owner).toBeUndefined();
-  });
-
-  it("versions subscriptions, notifies a stable listener snapshot, and releases hooks", () => {
-    const firstSubscriber = vi.fn();
-    const lastSubscriber = vi.fn();
-    const subscription = new RenderSubscription(firstSubscriber, lastSubscriber);
-    expect(subscription.getRenderVersion()).toBe(0);
-    expect(subscription.hasListeners()).toBe(false);
-
-    let unsubscribeSecond: () => void = () => undefined;
-    let unsubscribeThird: () => void = () => undefined;
-    const third = vi.fn();
-    const second = vi.fn();
-    const first = vi.fn(() => {
-      unsubscribeSecond();
-      unsubscribeThird = subscription.subscribeRender(third);
-    });
-    const unsubscribeFirst = subscription.subscribeRender(first);
-    unsubscribeSecond = subscription.subscribeRender(second);
-    expect(firstSubscriber).toHaveBeenCalledTimes(1);
-    expect(subscription.hasListeners()).toBe(true);
-    expect(subscription.track()).toBe(false);
-    subscription.bumpVersion();
-    expect(subscription.getRenderVersion()).toBe(1);
-    subscription.notify();
-    expect(subscription.getRenderVersion()).toBe(2);
-    expect(second).toHaveBeenCalledTimes(1);
-    expect(third).not.toHaveBeenCalled();
-    subscription.notify();
-    expect(third).toHaveBeenCalledTimes(1);
-    unsubscribeFirst();
-    unsubscribeSecond();
-    unsubscribeThird();
-    expect(firstSubscriber).toHaveBeenCalledTimes(1);
-    expect(lastSubscriber).toHaveBeenCalledTimes(1);
-    expect(subscription.hasListeners()).toBe(false);
-    expect(subscription.notify()).toBeUndefined();
-  });
-
-  it("contains listener errors and makes duplicate unsubscribe safe", () => {
-    const log = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const subscription = new RenderSubscription();
-    const failing = vi.fn(() => {
-      throw new Error("subscriber");
-    });
-    const following = vi.fn();
-    const stopFailing = subscription.subscribeRender(failing);
-    subscription.subscribeRender(following);
-    subscription.notify();
-    expect(following).toHaveBeenCalledTimes(1);
-    expect(log).toHaveBeenCalledWith(
-      "react-fine-grained-signals: a render-subscription listener threw; continuing with the remaining listeners.",
-      { cause: expect.any(Error) },
-    );
-    stopFailing();
-    stopFailing();
-  });
-
-  it("returns false from tracking without a collector", () => {
-    const dependency = new RenderSubscription();
-    expect(dependency.track()).toBe(false);
-    const previous = setActiveRenderCollector({ add: vi.fn() });
-    try {
-      expect(dependency.track()).toBe(true);
-    } finally {
-      setActiveRenderCollector(previous);
-    }
   });
 
   it("contains a failing notification listener and still calls the next one", () => {

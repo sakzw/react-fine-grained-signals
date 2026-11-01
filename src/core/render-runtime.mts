@@ -1,11 +1,5 @@
 /* Attempt-local render and speculative adapter for the production graph. */
-import {
-  executionContext,
-  isGraphExecutionOwner,
-  isRenderExecutionOwner,
-  pushExecutionOwner,
-  UNTRACKED_OWNER,
-} from "./execution-owner.js";
+import { executionContext, isRenderExecutionOwner, pushExecutionOwner } from "./execution-owner.js";
 import type { RenderExecutionOwner } from "./execution-owner.js";
 import { activeRenderCollector, setActiveRenderCollector, subscribeToReads } from "./render-tracking.js";
 import type { RenderCollector } from "./render-tracking.js";
@@ -90,16 +84,13 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
     return entry.value;
   }
 
-  // Sources bump their revision on every value-changing write. A computed's
-  // revision only moves when it re-evaluates, so it also has to be clean (a
-  // write upstream marks even an unwatched computed dirty or pending, since
-  // computeds stay linked to their sources).
+  // See `isNodeCurrent`; `promoteComputed` applies the same test.
   function isEntryCurrent(entry: SpeculativeComputedEntry): boolean {
     for (const [dependency, revision] of entry.dependencies) {
       const node = core.getNodeForReadable(dependency);
       if (node === undefined) {
         if (getRenderVersion(dependency) !== revision) return false;
-      } else if (node.renderRevision !== revision || (node.kind === "computed" && !core.isComputedClean(node))) {
+      } else if (!core.isNodeCurrent(node, revision)) {
         return false;
       }
     }
@@ -130,13 +121,9 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
       kind: "render" as const,
       scopePolicy,
       runtimeToken: core.runtimeToken,
-      isSpeculative() {
-        return activeSpeculativeComputed !== undefined;
-      },
       markSpeculativeDeepRead() {
         attempt.markSpeculativeDeepRead();
       },
-      own: core.adopt,
     };
   }
 
@@ -258,12 +245,10 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
   function hasActiveRenderOwner(): boolean {
     return isRenderExecutionOwner(executionContext.owner);
   }
+  // Only this copy's render owner can be speculative: another copy's owner
+  // throws on the first read, and graph and untracked owners never are.
   function isSpeculative() {
-    const owner = executionContext.owner;
-    if (isGraphExecutionOwner(owner) || owner === UNTRACKED_OWNER) return false;
-    return (
-      isRenderExecutionOwner(owner) && (owner.isSpeculative?.() === true || activeSpeculativeComputed !== undefined)
-    );
+    return isRenderExecutionOwner(executionContext.owner) && activeSpeculativeComputed !== undefined;
   }
   function markSpeculativeDeepRead(): void {
     const attempt = core.getActiveRenderAttempt();

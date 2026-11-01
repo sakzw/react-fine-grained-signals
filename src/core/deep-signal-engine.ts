@@ -26,6 +26,8 @@ export interface DeepSignalRuntimeAdapter {
   batch<T>(callback: () => T): T;
   /** Runs a callback without collecting dependencies, as the public `untracked`. */
   untracked<T>(callback: () => T): T;
+  /** `batch(() => untracked(callback))` in one frame; defaults to exactly that. */
+  batchUntracked?<T>(callback: () => T): T;
   isSignal(value: unknown): boolean;
   hasActiveSubscriber(): boolean;
   getBatchDepth(): number;
@@ -83,6 +85,8 @@ export interface SweepPlan<M extends SweepState> {
 /** Engine internals the collection module builds on. */
 export interface CollectionContext {
   readonly adapter: DeepSignalRuntimeAdapter;
+  /** How every deep write notifies: batched, and without subscribing the running effect. */
+  batchUntracked<T>(callback: () => T): T;
   shouldTrackDeepRead(): boolean;
   toRaw(value: unknown): object | undefined;
   readonly proxyToRaw: WeakMap<object, object>;
@@ -195,6 +199,8 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   const carrierSupports = new WeakMap<object, CollectionSupport | null>();
   let collectionSupport: CollectionSupport | undefined;
   const isSpeculative = adapter.isSpeculative ?? (() => false);
+  const batchUntracked: <T>(callback: () => T) => T =
+    adapter.batchUntracked ?? ((callback) => adapter.batch(() => adapter.untracked(callback)));
   const markSpeculativeDeepRead = adapter.markSpeculativeDeepRead ?? (() => {});
 
   function shouldTrackDeepRead(): boolean {
@@ -1029,7 +1035,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           // still go through the proxy (`this`), so they notify as usual.
           const wrapper = function (this: unknown, ...args: unknown[]) {
             try {
-              return adapter.batch(() => adapter.untracked(() => Reflect.apply(method, this, args)));
+              return batchUntracked(() => Reflect.apply(method, this, args));
             } finally {
               sweepPrunedKeys(metadata);
             }
@@ -1110,29 +1116,27 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           metadata.prunableRevision = (metadata.prunableRevision ?? 0) + 1;
         }
 
-        adapter.batch(() =>
-          adapter.untracked(() => {
-            if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
-              notify(metadata.properties, key);
-            }
-            // Existence versions back both `in` (any key in the chain) and own-key
-            // checks such as `Object.hasOwn` (see `getOwnPropertyDescriptor`), so
-            // either kind of change notifies them.
-            if (existed !== existsNow || owned !== ownedNow) notify(metadata.existence, key);
-            if (owned !== ownedNow) notifyIteration(metadata);
+        batchUntracked(() => {
+          if (!Object.is(oldValue, currentValue) || owned !== ownedNow) {
+            notify(metadata.properties, key);
+          }
+          // Existence versions back both `in` (any key in the chain) and own-key
+          // checks such as `Object.hasOwn` (see `getOwnPropertyDescriptor`), so
+          // either kind of change notifies them.
+          if (existed !== existsNow || owned !== ownedNow) notify(metadata.existence, key);
+          if (owned !== ownedNow) notifyIteration(metadata);
 
-            if (Array.isArray(target) && oldLength !== undefined) {
-              const currentLength = target.length;
-              if (key !== "length" && oldLength !== currentLength) {
-                notify(metadata.properties, "length");
-              }
-              if (key === "length" && currentLength < oldLength) {
-                notifyTruncatedIndices(metadata, currentLength, oldLength);
-                notifyIteration(metadata);
-              }
+          if (Array.isArray(target) && oldLength !== undefined) {
+            const currentLength = target.length;
+            if (key !== "length" && oldLength !== currentLength) {
+              notify(metadata.properties, "length");
             }
-          }),
-        );
+            if (key === "length" && currentLength < oldLength) {
+              notifyTruncatedIndices(metadata, currentLength, oldLength);
+              notifyIteration(metadata);
+            }
+          }
+        });
         sweepPrunedKeys(metadata);
 
         return true;
@@ -1143,16 +1147,14 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         const succeeded = Reflect.deleteProperty(target, key);
         if (!succeeded || !owned) return succeeded;
 
-        adapter.batch(() =>
-          adapter.untracked(() => {
-            notify(metadata.properties, key);
-            // An own key was removed, which own-key existence checks observe even
-            // when `in` still finds the key on the prototype.
-            notify(metadata.existence, key);
-            notifyIteration(metadata);
-            markPrunable(metadata, key);
-          }),
-        );
+        batchUntracked(() => {
+          notify(metadata.properties, key);
+          // An own key was removed, which own-key existence checks observe even
+          // when `in` still finds the key on the prototype.
+          notify(metadata.existence, key);
+          notifyIteration(metadata);
+          markPrunable(metadata, key);
+        });
         sweepPrunedKeys(metadata);
         return true;
       },
@@ -1268,6 +1270,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
 
   const collectionContext: CollectionContext = {
     adapter,
+    batchUntracked,
     shouldTrackDeepRead,
     toRaw,
     proxyToRaw,

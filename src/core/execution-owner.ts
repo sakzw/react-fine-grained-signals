@@ -16,10 +16,7 @@ export interface RenderExecutionOwner {
   readonly scopePolicy?: "managed" | "bare";
   readonly runtimeToken: object;
   closeScope?(): void;
-  isSpeculative?(): boolean;
   markSpeculativeDeepRead?(): void;
-  /** Adopts an effect created by a speculative getter. */
-  own?(dispose: () => void): void;
 }
 
 /**

@@ -36,6 +36,33 @@ describe("effect lifecycle", () => {
     expect(runs).toBe(2);
   });
 
+  it("settles a child disposed during its first run the way a re-run does", () => {
+    const runtime = createRenderRuntime();
+    const trigger = runtime.signal(0);
+    const other = runtime.signal(0);
+    const cleanups: string[] = [];
+    let childRuns = 0;
+    let stopParent: (() => void) | undefined;
+    stopParent = runtime.effect(() => {
+      if (trigger.value === 0) return;
+      runtime.effect(() => {
+        childRuns += 1;
+        // Disposing the owner disposes this child while its first run is on the stack.
+        stopParent!();
+        void other.value;
+        return () => cleanups.push(`cleanup${childRuns}`);
+      });
+    });
+    trigger.value = 1;
+    expect(childRuns).toBe(1);
+    // Nothing will dispose the child again: its cleanup runs now and its later
+    // reads do not keep it subscribed.
+    expect(cleanups).toEqual(["cleanup1"]);
+    expect(runtime.hasSubscribers(other)).toBe(false);
+    other.value = 1;
+    expect(childRuns).toBe(1);
+  });
+
   it("reports an indirect computed cycle instead of returning a stale value", () => {
     const runtime = createRenderRuntime();
     const input = runtime.signal(1);

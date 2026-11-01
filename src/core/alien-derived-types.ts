@@ -109,15 +109,17 @@ export interface AlienDerivedGraphRuntime {
   /** An effect that is never owned by the effect/computed running when it is created. */
   readonly detachedEffect: (callback: () => unknown) => () => void;
   readonly batch: <T>(callback: () => T) => T;
+  readonly batchUntracked: <T>(callback: () => T) => T;
   readonly untracked: <T>(callback: () => T) => T;
   readonly getNodeForReadable: (readable: object) => RuntimeNode | undefined;
   readonly getReadableRevision: (readable: object) => number;
   readonly isComputedClean: (node: RuntimeNode) => boolean;
+  /** A recorded dependency is unchanged: same revision, and a computed is still clean. */
+  readonly isNodeCurrent: (node: RuntimeNode, revision: number) => boolean;
   readonly promoteComputed: (readable: object, node: RuntimeNode, entry: SpeculativeComputedEntry) => boolean;
   /** Runs a computed's getter for a render attempt; true when it created effects. */
   readonly evaluateSpeculatively: (node: RuntimeComputed, entry: SpeculativeComputedEntry) => boolean;
   /** Owns an effect for the running subscriber or speculative getter. */
-  readonly adopt: (dispose: () => void) => void;
   readonly hasSubscribers: (readable: object) => boolean;
   readonly hasActiveSubscriber: () => boolean;
   readonly getBatchDepth: () => number;

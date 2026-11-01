@@ -906,7 +906,7 @@ describe("deepSignal", () => {
 
     // This subscriber keeps reading index 2 even after it is truncated away,
     // so its version signal must survive — dropping it would strand the
-    // effect on a `RenderSubscription` the property map no longer reaches.
+    // effect on a version signal the property map no longer reaches.
     disposers.push(
       effect(() => {
         seen.push(state.value.list[2]);

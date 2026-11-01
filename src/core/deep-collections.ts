@@ -410,7 +410,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     const trackAggregate = (name: "size" | "keysIteration" | "entriesIteration"): void => {
       if (shouldTrackDeepRead()) trackCollectionVersion(collectionAggregate(metadata, name));
     };
-    const batchWrite = <T>(callback: () => T): T => adapter.batch(() => adapter.untracked(callback));
+    const batchWrite = ctx.batchUntracked;
     const memoMethod = <T extends Function>(key: PropertyKey, create: () => T): T => {
       let method = metadata.methods.get(key);
       if (method === undefined) metadata.methods.set(key, (method = create()));

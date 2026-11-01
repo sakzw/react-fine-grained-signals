@@ -170,16 +170,13 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   }
 
   function readSource(source: RuntimeNode): unknown {
-    if (source.flags & Dirty && updateSource(source)) {
-      if (source.subs !== undefined) shallowPropagate(source.subs);
-    }
+    const value = readSourceUntracked(source);
     if (activeSub !== undefined) linkNode(source, activeSub, cycle);
-    return source.currentValue;
+    return value;
   }
 
-  // The read half of `readSource` without linking. Another copy's `untracked()`
-  // clears only its own subscriber, so a read under the shared UNTRACKED_OWNER
-  // must not link to whichever subscriber this copy happens to be running.
+  // The read half of `readSource` without linking: a read under
+  // UNTRACKED_OWNER must not link to whichever subscriber is running.
   function readSourceUntracked(source: RuntimeNode): unknown {
     if (source.flags & Dirty && updateSource(source)) {
       if (source.subs !== undefined) shallowPropagate(source.subs);
@@ -229,8 +226,24 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   function getActiveRenderAttempt() {
     return activeRenderAttempt;
   }
+  /** A value change a render that read `node` must see (see `isNodeCurrent`). */
+  function bumpRevision(node: RuntimeNode): void {
+    node.renderRevision = (node.renderRevision + 1) | 0;
+  }
+
   function isComputedClean(node: RuntimeNode): boolean {
     return node.initialized === true && !(node.flags & (Dirty | Pending));
+  }
+
+  /**
+   * Whether a dependency a render or speculative read recorded at `revision`
+   * is still what it read. Sources bump their revision on every value-changing
+   * write. A computed's revision only moves when it re-evaluates, so it also
+   * has to be clean (a write upstream marks even an unwatched computed dirty or
+   * pending, since computeds stay linked to their sources).
+   */
+  function isNodeCurrent(node: RuntimeNode, revision: number): boolean {
+    return node.renderRevision === revision && (node.kind !== "computed" || isComputedClean(node));
   }
 
   function promoteComputed(readable: object, node: RuntimeNode, entry: SpeculativeComputedEntry): boolean {
@@ -241,12 +254,11 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     const computed = node as RuntimeComputed;
     const dependencies: RuntimeNode[] = [];
     for (const [dependency, revision] of entry.dependencies) {
-      if (getReadableRevision(dependency) !== revision) return false;
-      const dependencyNode = readableNodes.get(dependency)!;
-      // Link a dependency only in the state the speculative read observed. A
-      // computed's revision moves only when it re-evaluates, so one a later
-      // write left Dirty or Pending fails here, as it does on cache reuse.
-      if (dependencyNode.kind === "computed" && !isComputedClean(dependencyNode)) return false;
+      const dependencyNode = readableNodes.get(dependency);
+      if (dependencyNode === undefined) throw new TypeError("Unknown candidate readable");
+      // Link a dependency only in the state the speculative read observed, the
+      // same test as cache reuse (`isEntryCurrent`).
+      if (!isNodeCurrent(dependencyNode, revision)) return false;
       // The render read a source's pending value without settling it. Settle it
       // before linking, as Alien's own signal read does, or a later write back
       // to the stale committed value compares equal and never reaches us.
@@ -270,7 +282,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     computed.flags = Mutable;
     // Initialization is a value change, as in `updateComputed`, so any other
     // attempt that read this computed before it existed re-checks its value.
-    computed.renderRevision = (computed.renderRevision + 1) | 0;
+    bumpRevision(computed);
     return true;
   }
 
@@ -335,7 +347,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       }
       computed.initialized = true;
       changed = changed || hadError || computed.hasError || !Object.is(previousValue, computed.value);
-      if (changed && computed.renderRevision !== undefined) computed.renderRevision = (computed.renderRevision + 1) | 0;
+      if (changed) bumpRevision(computed);
       return changed;
     } finally {
       activeSub = previous;
@@ -373,22 +385,33 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       }
       effect.depsTail = undefined;
       effect.flags = Watching | RecursedCheck;
-      const previous = activeSub;
-      activeSub = effect;
-      try {
-        cycle += 1;
-        runDepth += 1;
-        const cleanup: unknown = withGraphOwner(effect.fn);
-        effect.cleanup = typeof cleanup === "function" ? (cleanup as () => unknown) : undefined;
-        if (!effect.flags && effect.cleanup !== undefined) runCleanup(effect);
-      } finally {
-        runDepth -= 1;
-        activeSub = previous;
-        effect.flags &= ~RecursedCheck;
-        settleDeps(effect);
-      }
+      runEffectBody(effect);
     } else if (effect.deps !== undefined) {
       effect.flags = Watching | (flags & HasChildEffect);
+    }
+  }
+
+  /**
+   * One run of an effect's body, the first (`effect()`) and every later one
+   * (`runEffect`) alike: the body is this effect's subscriber scope, its
+   * returned cleanup is kept, and the dependencies settle afterwards. An
+   * effect the body disposed (its own disposer, or an owner's) runs that
+   * cleanup now, since nothing will dispose it again.
+   */
+  function runEffectBody(effect: RuntimeEffect): void {
+    const previous = activeSub;
+    activeSub = effect;
+    try {
+      cycle += 1;
+      runDepth += 1;
+      const cleanup: unknown = withGraphOwner(effect.fn);
+      effect.cleanup = typeof cleanup === "function" ? (cleanup as () => unknown) : undefined;
+      if (!effect.flags && effect.cleanup !== undefined) runCleanup(effect);
+    } finally {
+      runDepth -= 1;
+      activeSub = previous;
+      effect.flags &= ~RecursedCheck;
+      settleDeps(effect);
     }
   }
 
@@ -458,15 +481,9 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   }
 
   function runCleanup(effect: RuntimeEffect): unknown {
-    const cleanup = effect.cleanup;
+    const cleanup = effect.cleanup!;
     effect.cleanup = undefined;
-    const previous = activeSub;
-    activeSub = undefined;
-    try {
-      return withSynchronousExecutionOwner(UNTRACKED_OWNER, cleanup!);
-    } finally {
-      activeSub = previous;
-    }
+    return untracked(cleanup);
   }
 
   function disposeEffect(effect: RuntimeEffect): void {
@@ -496,29 +513,17 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     node.fn = fn;
     node.cleanup = undefined;
     const dispose = () => disposeEffect(node as RuntimeEffect);
-    const previous = activeSub;
     // As in Alien 3.2.1 (and v0.1.x, which used it), an effect created while
     // another effect or computed runs (the only kinds that become `activeSub`)
     // is owned by it: the owner's next run or its disposal disposes the child.
     // A speculative getter has no owner (see `adopt`).
     if (!detached) adopt(dispose, node);
     try {
-      activeSub = node;
-      runDepth += 1;
-      try {
-        const cleanup: unknown = withGraphOwner(fn);
-        node.cleanup = typeof cleanup === "function" ? (cleanup as () => unknown) : undefined;
-      } catch (error) {
-        node.cleanup = undefined;
-        reportFailure(error);
-      } finally {
-        runDepth -= 1;
-        activeSub = previous;
-        node.flags &= ~RecursedCheck;
-        purgeDeps(node);
-      }
+      runEffectBody(node as RuntimeEffect);
     } catch (error) {
-      // Keep setup failures from escaping even if bookkeeping itself fails.
+      // A throwing first run is reported here, not by a flush; the effect
+      // stays subscribed to what it read before throwing.
+      node.cleanup = undefined;
       reportFailure(error);
     }
     if (!runDepth && !batchDepth) {
@@ -578,6 +583,21 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     }
   }
 
+  /**
+   * `batch(() => untracked(fn))` in one frame: a write made on the caller's
+   * behalf (a writable computed's setter, a deep-signal mutation) that must
+   * neither subscribe the running effect nor flush before it is complete.
+   */
+  function batchUntracked<T>(fn: () => T): T {
+    batchDepth += 1;
+    try {
+      return untracked(fn);
+    } finally {
+      batchDepth -= 1;
+      if (!batchDepth) flush();
+    }
+  }
+
   function untracked<T>(fn: () => T): T {
     const previous = activeSub;
     const previousAttempt = activeRenderAttempt;
@@ -597,7 +617,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
 
   function inlineWrite(node: RuntimeSource, value: unknown): void {
     if (!Object.is(node.pendingValue, (node.pendingValue = value))) {
-      if (node.renderRevision !== undefined) node.renderRevision = (node.renderRevision + 1) | 0;
+      bumpRevision(node);
       node.flags = Mutable | Dirty;
       const subscribers = node.subs;
       if (subscribers !== undefined) {
@@ -733,7 +753,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       return super.value;
     }
     set value(value: T) {
-      batch(() => untracked(() => this.#setter!(value)));
+      batchUntracked(() => this.#setter!(value));
     }
   }
   function createBrandedComputed<T>(getter: () => T, setter?: (value: T) => void): RuntimeReadable<T> {
@@ -782,9 +802,9 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     getNodeForReadable,
     getReadableRevision,
     isComputedClean,
+    isNodeCurrent,
     promoteComputed,
     evaluateSpeculatively,
-    adopt,
     hasSubscribers,
     hasActiveSubscriber,
     getBatchDepth,
@@ -793,6 +813,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     effect,
     detachedEffect,
     batch,
+    batchUntracked,
     untracked,
     createDeepSignal,
     createDeepSignalVersion: createDeepSignal,

@@ -137,6 +137,7 @@ export function getProductionDeepSignals(): NonNullable<typeof productionDeepSig
     },
     batch,
     untracked,
+    batchUntracked: (callback) => coreRuntime.batchUntracked(callback),
     isSignal,
     hasActiveSubscriber: () => {
       const owner = executionContext.owner;

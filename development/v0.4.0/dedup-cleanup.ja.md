@@ -254,3 +254,52 @@ render依存でない購読（signalを読み、最初の実行のあとの変�
 - 挙動は変わらない。
 
 計測に使ったscriptは一時的なもので、repoには入れていない。上の手順（buildごとに別moduleで読み込む、ケースの関数もbuildごとに分ける、ABBA、processごとに読み込み順を入れ替える）で再現できる。
+
+## 2回目の監査で見つかった重複
+
+1回目で対象外にした項目（「意図的」とした根拠のないもの）と、読んでいなかった範囲を、もう一度調べた。pluginの分は[plugin-dedup.ja.md](./plugin-dedup.ja.md)の追補。
+
+### effectの初回実行と再実行（不具合の修正）
+
+`effect()`（初回）と`runEffect`（再実行）が、本体を実行する処理を別々に持っていた。「実行中に自分が破棄されたeffectの後始末」の修正（`0cf09a1`）は`runEffect`にだけ入っていた。そのため、子effectが初回実行の途中で親を破棄し、そのあと別のsignalを読むと、cleanupが呼ばれず、そのsignalへの購読が残った（親がいないので、二度と破棄されない）。同じことを再実行で起こすと、cleanupは呼ばれ、購読も外れた。
+
+`runEffectBody(effect)`を両方が使う。初回のthrowは、これまでどおり`effect()`が`reportFailure`で報告する。`runCleanup`は`untracked()`を呼ぶようにした（同じことを手で書いていた）。
+
+テスト: `tests/effect-lifecycle.test.ts`に、初回実行中に破棄された子effectのcleanupが呼ばれ、購読が残らないことを追加した。変更前は失敗することを確認した。
+
+### deep selector storeの購読（4つ目の写し）
+
+`useDeepSignalValue`のstoreの`createEffectBackedStoreSubscription`（`src/react/hooks.ts`）が、`subscribeToReads`の4つ目の写しだった。前の節で「render依存でない購読はすべて`subscribeToReads`を通る」と書いたが、ここを見落としていた。Reactのlistenerを直接呼んでいたため、listenerのthrowが「an effect() callback threw」として報告されていた。`subscribeToReads`を使うようにした。
+
+### 依存がまだ最新かの判定
+
+「revisionが同じで、computedならcleanのまま」の判定が、`promoteComputed`（core）と`isEntryCurrent`（render runtime）に別々にあった。`isNodeCurrent(node, revision)`（core）を両方が使う。render attempt全体の判定（`isRenderAttemptCurrent`）は、computedごとにspeculative entryを見る別の処理なので残した。
+
+### direct bindingのprop名
+
+runtimeの`Set`（`jsx-shared.ts`）と型のunion（`jsx.ts`の`DirectSignalPropName`）に2回書いていた。型を`DIRECT_SIGNAL_PROP_NAMES`から作るようにした（`TEXT_BINDABLE_INPUT_TYPES`と同じ形）。
+
+### 使われていないコードと小さな重複
+
+- render ownerの`own`（`core.adopt`）と`isSpeculative()`は、copy間の相互運用の名残で、どこからも呼ばれていなかった。`RenderExecutionOwner`の型からも消した。render runtimeの`isSpeculative()`は、`isRenderExecutionOwner(owner) && activeSpeculativeComputed !== undefined`だけになった。
+- `RenderSubscription`クラス（`render-tracking.ts`）はtestからしか使われていなかった。クラスと、そのクラスだけを対象にしたtest 3件を消した（listenerの隔離は`notifyListener`のtestと、前の節で足したtestが確かめている）。
+- revisionを上げる処理（3箇所）を`bumpRevision`にした。2箇所にあった`renderRevision !== undefined`の確認は、型の上で常に真だった。
+- `batch(() => untracked(...))`（5箇所: writable computedのsetter、deep engineの配列のmutator・`set`・`deleteProperty`、collectionの書き込み）を、coreの`batchUntracked`（1つのframeで行う）にした。deep engineはadapterの`batchUntracked`（ないときは`batch(() => untracked(...))`）を使い、collection moduleへは`CollectionContext`で渡す。
+- `readSource`が`readSourceUntracked`の前半を写していた。`readSource`は`readSourceUntracked`を呼んでからlinkする。
+- `useSignal`だけfactoryの形がない理由（signalは関数も値として持てる）を、JSDocと`docs/guides/hooks.md`（英日）に書いた。
+
+### 速度
+
+前の節と同じ方法（buildごとに別module、ケースの関数もbuildごとに分ける、ABBA、processごとに読み込み順を入れ替える、12 process）で、変更前のbuildと比べた。A/Aの差は最大±4%。
+
+| ケース | 候補/base |
+| --- | --- |
+| signal、ownerなし / effectの中 / `untracked` | 1.01 / 1.00 / 1.00 |
+| computed、ownerなし / effectの中 | 1.02 / 1.04 |
+| 書き込みと読み取り | 1.00 |
+| effectの再実行 | 1.00 |
+| effectの作成と破棄 | 1.00 |
+| deep signalへの代入 | 0.94 |
+| deep signalの配列のpush/pop | 0.96 |
+
+どれも誤差の範囲か、速くなった。deep signalの書き込みは、`batchUntracked`で関数の呼び出しが1段減った分だけ速い。
