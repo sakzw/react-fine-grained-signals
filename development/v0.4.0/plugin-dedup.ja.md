@@ -150,3 +150,25 @@ RFGS003の変化。wrapperで包んだrender prop・children callbackも警告�
 - `isHookName`（identity）と`isHookCallName`（呼び出し）。`use`は呼び出しとしてはHookだが、custom Hookの名前ではない。
 - 拡張子のregex3つ（上記）。
 - injectとmanagedでの、明示的な呼び出しがasync関数にある場合の扱い（項目7）。
+
+## 追補: 監査で見つかった食い違いの修正
+
+### 1. 外部helper呼び出しのcaptureでのimport元の判定
+
+- 変更前: `externalCallMayReadTrackedValue`だけが、import元を`importSource`と`reactImportSource`の2つと手書きで比べていた。共通の`importIsForeign`はmanaged runtime（`${importSource}/internal`）と、常に`"react"`を受け付ける`isReactSource`も見る。このため`reactImportSource: "@app/react"`を設定すると、`"react"`から直接importした`cloneElement`が外部helperとみなされ、`{cloneElement(el)}`が`{_signals.capture(() => cloneElement(el))}`になっていた。READMEの「`"react"`からのdirect importは常に認識される」と矛盾する。
+- 変更後: `importIsForeign`を、`ReadContext`全体ではなく3つのsourceだけを受け取る形にし、ここからも呼ぶ。transform内のほかのimport元の比較（`findRuntimeImports`、`isNamedUseManagedSignalsImport`、`controlFlowSourceOf`との比較など）は「特定のentryからのimportか」を見る肯定の一致で、「libraryとReact以外か」の判定ではないため、そのままにした。
+- 利用者から見える変化: `reactImportSource`を設定したとき、`"react"`から直接importした関数（`cloneElement`など）の呼び出しをcaptureしなくなる。
+
+### 2. control-flow componentの名前
+
+- 変更前: `For`/`Index`/`Match`/`Show`/`Switch`を型とSetに2回書き、どのpropのcallbackを所有するかは`if`の分岐に埋め込んでいた。
+- 変更後: `SIGNAL_CONTROL_FLOW_COMPONENTS`（`as const`）に1回だけ書き、型とSetはそこから導く。所有するcallback propは、その型をkeyにした表（`For`は`children`と`by`、`Index`/`Show`/`Match`は`children`、`Switch`はなし）にした。`Match`は従来どおり、囲む`Switch`に集められる場合だけ所有とする。
+- テスト: `tests/react-execution.test.ts`で、この一覧がruntimeの`src/utils.tsx`の関数exportと一致することを確かめる。さらに`Show`/`Index`の`children`、`Switch`/`Match`、`For`の`children`と`by`について、callbackの中だけでsignalを読むcomponentをmountし、書き込みがDOMに届くことを確かめる。RFGS003を出さないcallbackが、実際にcontrol-flow component自身のtracked renderで読まれていることの裏付けになる。
+- 利用者から見える変化: なし。
+
+### 3. 文書とテストの一致
+
+- `importSource`のJSDocとREADME（en/ja）: 互換wrapperは、rootと`/internal`に加えて`${importSource}/utils`のcontrol-flow componentもre-exportする必要があることを書いた。transformはこのentryからのimportだけをcontrol-flow componentと認識する。
+- README（en/ja）のRFGS003: 診断表と「JSX render prop / `children` callback」の行に、control-flow componentの例外（`Show`/`For`/`Index`の`children`、`For`の`by`、`Switch`が集める`Match`の`children`）を書いた。`src/internal/diagnostics.ts`の説明にも同じことを書いた。
+- `tests/diagnostics.test.ts`: 両READMEに出てくる`RFGS\d{3}`の集合と診断表の行が、`DIAGNOSTIC_IDS`と一致することを確かめる。
+- adapterのentry一覧: `tests/build-smoke.mjs`、ルートの`tests/consumer-smoke.mjs`、`tsdown.config.ts`の3か所に同じ一覧があった。いずれも`package.json`の`exports`から導く（consumer smokeはinstallしたtarballのmanifestから）。期待するexport名と漏れてはいけない内部名は、`tests/public-api.mjs`（新規）に1回だけ書き、2つのsmokeがimportする。consumer smokeは、従来rootだけで見ていた内部名の漏れを全entryで見る。
