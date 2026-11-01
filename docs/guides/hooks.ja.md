@@ -27,6 +27,7 @@ useSignal<T>(initialValue: T): Signal<T>
 コンポーネントの生存期間中、同じsignalを1つ保持します。
 
 - `initialValue` が使われるのは初回レンダーのみで、以降は同じsignalが返ります。
+- `useDeepSignal` と違い、factoryの形はありません。signalは関数も値として持てるため、`useSignal(() => x)` はその関数を値として保持します。重い初期値は `useState(() => ...)` や `useMemo` で計算し、その結果を渡してください。
 - レンダー中に `.value` を読むには、そのコンポーネント自身で [`useSignalTracking()`](#usesignaltracking)（またはplugin）が必要です。
 - `useSignal()` は書き込み可能な `Signal<T>` を返し、`bindValue` / `bindChecked` にそのまま渡せます。`Signal<T>` は `T` について不変なので、広い型ではなく正確な値の型で注釈してください。
 

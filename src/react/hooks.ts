@@ -9,7 +9,7 @@ import type {
   WritableComputedOptions,
 } from "../core/index.js";
 import type { NotDeepSignal, PlainRoot } from "../core/deep-signal.js";
-import { untrackedRender } from "../core/render-tracking.js";
+import { subscribeToReads, untrackedRender } from "../core/render-tracking.js";
 import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import type { DependencyList } from "react";
 export { useSignalTracking } from "./use-signals.js";
@@ -78,20 +78,18 @@ function assertSignalSnapshot(value: unknown): asserts value is SignalSnapshot {
  */
 function createEffectBackedStoreSubscription(onEvaluate: () => boolean): (notify: () => void) => () => void {
   return (notify: () => void): (() => void) => {
-    let isInitialRun = true;
-    return detachedEffect(() => {
-      let changed: boolean;
-      try {
-        changed = onEvaluate();
-      } catch {
+    // A throw counts as a change; `subscribeToReads` keeps the read subscribed.
+    let changed = true;
+    return subscribeToReads(
+      detachedEffect,
+      () => {
         changed = true;
-      }
-      if (isInitialRun) {
-        isInitialRun = false;
-        return;
-      }
-      if (changed) notify();
-    });
+        changed = onEvaluate();
+      },
+      () => {
+        if (changed) notify();
+      },
+    );
   };
 }
 
@@ -170,7 +168,11 @@ function createDeepSelectorStore<T extends object, S extends SignalSnapshot>(
   };
 }
 
-/** Creates a signal whose identity is stable for the lifetime of this component. */
+/**
+ * Creates a signal whose identity is stable for the lifetime of this component.
+ * Unlike the deep hooks it takes no factory: a signal may hold a function, so a
+ * function argument is the value itself.
+ */
 export function useSignal<T>(initialValue: T): Signal<T> {
   const signalRef = useRef<Signal<T> | undefined>(undefined);
 

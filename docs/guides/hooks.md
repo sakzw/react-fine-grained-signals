@@ -27,6 +27,7 @@ useSignal<T>(initialValue: T): Signal<T>
 Keeps one signal for the component lifetime.
 
 - `initialValue` is used on the first render only; later renders return the same signal.
+- Unlike `useDeepSignal`, there is no factory form: a signal may hold a function, so `useSignal(() => x)` stores that function as the value. Compute an expensive initial value with `useState(() => ...)` or `useMemo` and pass the result.
 - Reading `.value` during render requires [`useSignalTracking()`](#usesignaltracking) (or the plugin) in that same component.
 - `useSignal()` returns a writable `Signal<T>`, which works directly with `bindValue` and `bindChecked`. `Signal<T>` is invariant in `T`, so annotate it with the exact value type rather than a wider one.
 
