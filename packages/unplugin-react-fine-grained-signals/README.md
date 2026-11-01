@@ -360,10 +360,12 @@ function Outer({ show }) { return <div>{show && Title()}</div>; }
 
 A boundary inside `Title` would add hooks to `Outer` that run only while `show`
 is true — a conditional hook call that React rejects ("Rendered more hooks than
-during the previous render"). A call made from an event handler, from the
-callback of `useEffect` / `useLayoutEffect` / `useInsertionEffect` /
-`useCallback` / `useMemo`, or from an async function runs outside the render,
-so its reads are not collected. Custom hooks (`useX`) are called as functions
+during the previous render"). A call made from an event handler, from a
+function handed to any Hook call (`useEffect`, `useMemo`, `useCallback`,
+`useSignalEffect`, `use`, any `useX`), or from an async function runs outside
+the render, so its reads are not collected. The same rule decides `auto` mode:
+a `.value` read that only appears inside such a function does not select the
+component. Custom hooks (`useX`) are called as functions
 by design and keep their own boundary exactly as before.
 
 Known limitations:

@@ -342,9 +342,11 @@ function Outer({ show }) { return <div>{show && Title()}</div>; }
 `Title` の中にboundaryを置くと、`show` がtrueの間だけ実行されるhookが
 `Outer` に加わります。これはReactが拒否する条件付きのhook呼び出しです
 （"Rendered more hooks than during the previous render"）。event handler、
-`useEffect` / `useLayoutEffect` / `useInsertionEffect` / `useCallback` /
-`useMemo` のcallback、またはasync関数からの呼び出しはrenderの外で実行される
-ため、その読み取りは収集しません。custom hook（`useX`）はもともと関数として
+Hook呼び出しに渡した関数（`useEffect`、`useMemo`、`useCallback`、
+`useSignalEffect`、`use`、任意の `useX`）、またはasync関数からの呼び出しは
+renderの外で実行されるため、その読み取りは収集しません。`auto` modeの選択も
+同じ規則に従い、そうした関数の中にしかない `.value` の読み取りではcomponentを
+選択しません。custom hook（`useX`）はもともと関数として
 呼び出すものなので、従来どおり独自のboundaryを持ちます。
 
 既知の制約は次のとおりです。
