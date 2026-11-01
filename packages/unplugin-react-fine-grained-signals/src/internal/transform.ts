@@ -59,14 +59,6 @@ interface PluginState extends PluginPass {
   programPath: NodePath<t.Program>;
   managedRuntimeImports: RuntimeImport[];
   directImports: RuntimeImport[];
-  /**
-   * Import specifiers whose only use was an explicit `useSignalTracking()` call the
-   * managed transform absorbed into its own store declaration. They are
-   * re-checked in `Program.exit` and dropped if nothing else references them,
-   * so absorbing the call does not leave a dead import pulling the non-runtime
-   * entry point into the bundle graph.
-   */
-  absorbedImports: NodePath<t.ImportSpecifier>[];
   /** Whether the file was parsed as TypeScript, so generated code may use its syntax. */
   typeScript: boolean;
   /**
@@ -692,8 +684,9 @@ function getDefaultExportIdentity(
   return name === undefined ? undefined : { kind: "binding", name };
 }
 
-// The root `useSignalTracking` import is the bare, best-effort hook. Its direct import
-// remains recognizable as an explicit opt-in that managed mode can absorb.
+// The root `useSignalTracking` import is the bare, best-effort hook. Its direct
+// import is recognized as an explicit opt-in, which either transform keeps as
+// the function's ambient boundary (see `decideTransform`).
 function isVerifiedSignalTrackingSource(source: string, importSource: string): boolean {
   return source === importSource;
 }
@@ -2417,29 +2410,6 @@ function isExplicitSignalTracking(
   return isFirstStatementSignalTrackingCall(functionPath, statements, importSource, false);
 }
 
-/**
- * The named import specifier the absorbed explicit `useSignalTracking()` call resolves
- * to, when the call is a bare identifier bound by one. `applyManaged` replaces
- * that call with its own store declaration, which can leave the import behind
- * with nothing referencing it -- so `Program.exit` needs the specifier to check
- * and drop. A namespace import is deliberately not returned: the namespace
- * object may be used for other exports of the same module.
- */
-function getAbsorbedSignalTrackingImport(
-  functionPath: NodePath<t.Function>,
-  statements: NodePath<t.Statement>[],
-): NodePath<t.ImportSpecifier> | undefined {
-  const first = statements[0];
-  if (first === undefined || !first.isExpressionStatement()) return undefined;
-  const expression = first.get("expression");
-  if (!expression.isCallExpression()) return undefined;
-  const callee = expression.get("callee");
-  if (!callee.isIdentifier()) return undefined;
-  const resolved = resolveImportedBinding(functionPath, callee.node.name);
-  if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return undefined;
-  return resolved.specifier;
-}
-
 // A call the transform cannot verify as this library's own `useSignalTracking` --
 // because a single-file transform cannot follow the re-export chain to
 // confirm the barrel target -- can still be written in exactly the shape of a
@@ -2915,19 +2885,13 @@ type FunctionBody = ReturnType<typeof getFunctionBody>;
 // The shared fields `applyInject` and `applyManaged` both need once
 // `decideTransform` has settled on a codegen strategy: the body slot to
 // rewrite, the original statement list it came from (empty for a concise
-// arrow body), whether the author's own call is being absorbed, and the
-// runtime hook binding to call.
+// arrow body), and the runtime hook binding to call. A function with the
+// author's own explicit `useSignalTracking()` never reaches codegen: it is
+// `"directive-only"` in either transform.
 interface TransformCodegenInput {
   body: FunctionBody;
   statements: NodePath<t.Statement>[];
-  explicit: boolean;
   runtimeImport: RuntimeImport;
-  /**
-   * The import specifier the absorbed explicit call resolved to, when there is
-   * one -- see `getAbsorbedSignalTrackingImport`. Only `applyManaged` absorbs, so
-   * only it records this.
-   */
-  absorbedImport?: NodePath<t.ImportSpecifier> | undefined;
 }
 
 /**
@@ -2936,9 +2900,10 @@ interface TransformCodegenInput {
  * re-derive eligibility themselves:
  * - `"skip"`: opted out, ineligible, or already covered by an unverifiable or
  *   late `useSignalTracking()` call the component keeps on its own.
- * - `"directive-only"`: `transform: "inject"` with the author's own explicit
- *   call already in place -- nothing to inject, but the memoization opt-out
- *   directive may still need adding.
+ * - `"directive-only"`: the author's own explicit `useSignalTracking()` call is
+ *   already in place (either transform keeps it as the ambient boundary) --
+ *   nothing to inject, but the memoization opt-out directive may still need
+ *   adding.
  * - `"inject"` / `"managed"`: apply the corresponding codegen strategy.
  */
 type TransformDecision =
@@ -3123,14 +3088,7 @@ function decideTransform(
     imports.push(runtimeImport);
   }
 
-  return {
-    kind: options.transform,
-    body,
-    statements,
-    explicit,
-    runtimeImport,
-    absorbedImport: explicit ? getAbsorbedSignalTrackingImport(path, statements) : undefined,
-  };
+  return { kind: options.transform, body, statements, runtimeImport };
 }
 
 /**
@@ -5946,7 +5904,7 @@ function expandTrackedObjectDestructuring(functionPath: NodePath<t.Function>, tr
 /** Codegen: add a top-level capture hook and wrap proven synchronous reads. */
 function applyManaged(
   path: NodePath<t.Function>,
-  { body, statements, explicit, runtimeImport, absorbedImport }: TransformCodegenInput,
+  { body, statements, runtimeImport }: TransformCodegenInput,
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
@@ -5954,8 +5912,6 @@ function applyManaged(
   const declaration = t.variableDeclaration("const", [
     t.variableDeclarator(t.cloneNode(store), t.callExpression(t.cloneNode(runtimeImport.identifier), [])),
   ]);
-  const first = statements[0];
-  if (explicit && first !== undefined) t.inheritsComments(declaration, first.node);
   const relocated = relocateTrackedParameters(path, state.typeScript);
   // The same rule that decided what to relocate: what is still left in the
   // parameter list is exactly what could not be moved.
@@ -5963,7 +5919,7 @@ function applyManaged(
     warnUncapturedParameterRead(path, options);
   }
   const originalStatements = body.isBlockStatement()
-    ? statements.slice(explicit ? 1 : 0).map((statement) => statement.node)
+    ? statements.map((statement) => statement.node)
     : [t.returnStatement(body.node as t.Expression)];
   const directives = body.isBlockStatement() ? body.node.directives : [];
   body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
@@ -5992,36 +5948,7 @@ function applyManaged(
   body.replaceWith(transformedBody);
   path.scope.crawl();
   invalidateThisReferences(path);
-  // The author's own call is gone; whether its import is now dead can only be
-  // answered once every function in the file has been visited, so record it and
-  // let `Program.exit` decide.
-  if (absorbedImport !== undefined) state.absorbedImports.push(absorbedImport);
   markTransformed(state);
-}
-
-/**
- * Drops an `import { useSignalTracking } from "<importSource>"` the managed transform
- * absorbed and nothing else refers to any more, along with the whole
- * declaration once its last specifier goes. A reused `/internal` import survives
- * this untouched: the emitted store declaration still calls it, so the binding
- * is still referenced.
- */
-function removeAbsorbedImports(programPath: NodePath<t.Program>, state: PluginState): void {
-  if (state.absorbedImports.length === 0) return;
-  programPath.scope.crawl();
-  for (const specifier of state.absorbedImports) {
-    if (specifier.removed) continue;
-    const binding = programPath.scope.getBinding(specifier.node.local.name);
-    if (binding === undefined || binding.path.node !== specifier.node || binding.referenced) {
-      continue;
-    }
-    const declaration = specifier.parentPath;
-    specifier.remove();
-    if (declaration.isImportDeclaration() && declaration.node.specifiers.length === 0) {
-      declaration.remove();
-    }
-  }
-  state.absorbedImports = [];
 }
 
 // The per-file JSX pragmas every JSX compiler reads from a comment:
@@ -6088,13 +6015,11 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
           state.programPath = path;
           state.managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource, "useSignalCapture");
           state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
-          state.absorbedImports = [];
           state.typeScript = state.file.opts.parserOpts?.plugins?.includes("typescript") === true;
           state.importFree = !path.node.body.some((statement) => t.isImportDeclaration(statement));
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
         exit(path, state) {
-          removeAbsorbedImports(path, state);
           keepJsxPragmasFirst(path, state);
         },
       },
