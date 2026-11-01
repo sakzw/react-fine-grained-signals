@@ -1,0 +1,62 @@
+# v0.4.0 重複ロジックの共通化（runtime・core）
+
+v0.4.0の公開前に、同じ処理が複数の場所に書かれ、写しごとに仕様がずれていた箇所をまとめた記録。pluginの分は[plugin-dedup.ja.md](./plugin-dedup.ja.md)。
+
+- 基準: `cb94d38`
+- 監査: `src/core`、`src/runtime`・`src/jsx`・`src/react`・`src/utils.tsx`、pluginの3領域を読み取りだけで調べ、見つかった項目を順に直した。高速化のために意図して同じ処理を2つ書いている箇所（`HelperBrandSignal`と`HelperBrandComputed`のgetter）と、見た目は似ていても意味が違うもの（`For`/`Index`と`captureIteration`）は対象外とした。
+
+## Full版とLite版のSignal prop判定の共有（実行時のbreaking change）
+
+### 変更前
+
+Full版（`src/runtime/jsx.ts`）とLite版（`src/runtime/lite-jsx.ts`）が、Signal値のhost propを別々に検査していた。
+
+| 入力 | Full | Lite |
+| --- | --- | --- |
+| カスタム要素の、bindingしないprop（`<x-el config={sig}>`） | Signalをそのまま渡す | throw |
+| カスタム要素の`value={sig}`/`checked={sig}` | throw（「`bindValue`を使う」） | throw |
+| `bindValue={undefined}` | なしと同じ。DOMへは渡さない | throw |
+| Fragmentとcomponentのprops | 検査しない | Fragmentは検査する |
+| エラー文のtag名 | あり | なし |
+
+`development/v0.3.0/m19-opus-review-resolution.ja.md`では、Full版は「Liteと同種の明確な診断」を出す意図だった。
+
+`REACTIVE_PROP_NAMES`には`value`と`checked`が残っていたが、その前の検査がSignalの`value`/`checked`を必ずthrowしていたため、使われていなかった。
+
+### 変更後
+
+`src/runtime/jsx-shared.ts`に、両runtimeの共通部分をまとめた。
+
+- `isDirectSignalPropName`: Full版がSignalを直接bindingするprop名（`title`、`id`、`className`、`hidden`、`disabled`、`style`、`data-*`、`aria-*`）。
+- `passesSignalThrough(name, tag)`: bindingしないSignalを、そのままReactへ渡すかどうか。`children`と、カスタム要素の上記以外のprop。
+- `hasDefinedProp`、`hasBindingPropKey`、`isStyleObject`、`findSignalStyleEntry`、`needsChildNormalization`、`normalizeChildrenProp`。
+- `createJsxPropsTransform`（host・Fragment・その他の振り分け）、`createJsxFactory`、`createClassicElement`（classicの`createElement`）。`createJsxDEV`は`react/jsx-dev-runtime`を本番entryへ持ち込まないよう、`src/runtime/jsx-dev.ts`に分けた。
+
+規則は「Full版がbindingするSignalはLite版ではthrowし、Full版がそのまま渡すSignalはLite版もそのまま渡す」。
+
+- カスタム要素では、`value`/`checked`も含め、bindingしないpropのSignalをそのまま渡す（Full版は制限が緩くなる。Lite版はFull版に合わせて緩くなる）。
+- Lite版は`bindValue={undefined}`を「なし」として扱い、DOMへ渡さない。
+- Lite版はFragmentとcomponentのpropsを検査しない。
+- Lite版のエラー文に`on <tag>`を足した。
+
+各entry（`jsx/jsx-runtime`、`jsx/jsx-dev-runtime`、Lite版の2つ、classicの`createElement`）は、共有のfactoryに自分のhost prop変換を渡すだけになった。`jsxDEV`は呼び出しごとにwrapperを作っていたが、作らなくなった。
+
+### テスト
+
+- `tests/lite-jsx-runtime.test.tsx`: カスタム要素のpass-throughとbinding対象propの拒否、`bindValue={undefined}`の除去、Fragmentとcomponentを検査しないこと。
+- `tests/react-review-regressions.test.tsx`: カスタム要素の`value`/`checked`をそのまま渡し、`<input value={sig}>`は従来どおりthrowすること。
+
+### その他
+
+- `scripts/check-size.mjs`: Full版のbindingが入っていないことの目印から`className`を外し、`until-found`（`setDomProp`だけにある文字列）に替えた。prop名の一覧は両runtimeが共有するため。
+- `docs/guides/jsx-bindings.md`（英日）: カスタム要素の規則、Lite版がFull版と同じ規則に従うこと、`jsxImportSource`の名前（`react-fine-grained-signals/jsx`）を書いた。日本語版に残っていた「`value`/`checked`をsignalと素の値で切り替えられる」という記述（migration errorになると書いた直前の段落と矛盾していた）を、英語版と同じ内容に直した。
+
+### サイズ（gzip）
+
+| entry | 変更前 | 変更後 |
+| --- | --- | --- |
+| jsx-runtime | 11.27 kB | 11.27 kB |
+| full-jsx-child | 11.18 kB | 11.15 kB |
+| lite-jsx-child | 5.21 kB | 5.37 kB |
+
+Lite版は、Full版と同じprop名の一覧と判定を持つようになった分だけ増えた。

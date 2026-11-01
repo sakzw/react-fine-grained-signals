@@ -29,3 +29,6 @@ function normalizeArrayItem(value: unknown, index: number): React.ReactNode {
   }
   return normalizeChild(value);
 }
+
+/** Props `P` with `children` widened to accept Signal children. */
+export type AddSignalChildren<P> = Omit<P, "children"> & { children?: SignalChild };

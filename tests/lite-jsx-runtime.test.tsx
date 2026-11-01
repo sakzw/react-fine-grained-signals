@@ -1,7 +1,7 @@
 /** @jsxImportSource react-fine-grained-signals/jsx/lite */
 // @vitest-environment jsdom
 
-import { act, StrictMode, Suspense, createElement, type ReactNode } from "react";
+import { act, Fragment, StrictMode, Suspense, createElement, type ReactNode } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -96,6 +96,38 @@ describe("lite JSX runtime", () => {
     );
     expect(() => liteJsx("div", { title: source }, undefined)).toThrow(/Signal-valued title props/);
     expect(() => liteJsx("div", { style: { color: source } }, undefined)).toThrow(/Signal-valued style\.color/);
+  });
+
+  it("applies the full runtime's Signal-prop policy: binds become errors, pass-throughs stay", () => {
+    const source = signal("value");
+    // Custom elements receive a Signal they are not bound to, as in the full runtime.
+    const element = liteJsx("x-widget" as never, { config: source }, undefined) as { props: { config: unknown } };
+    expect(element.props.config).toBe(source);
+    expect(liteCreateElement("x-widget" as never, { value: source }).props).toMatchObject({ value: source });
+    // The full runtime binds these on custom elements too, so Lite rejects them there.
+    expect(() => liteJsx("x-widget" as never, { title: source }, undefined)).toThrow(
+      /Signal-valued title props on <x-widget>/,
+    );
+    expect(() => liteJsx("x-widget" as never, { style: { color: source } }, undefined)).toThrow(
+      /Signal-valued style\.color on <x-widget>/,
+    );
+    expect(() => liteJsx("x-widget" as never, { bindValue: source }, undefined)).toThrow(/form bindings/);
+  });
+
+  it("treats a binding prop set to undefined as absent and keeps it off the DOM", () => {
+    const element = liteJsx("input", { bindValue: undefined, bindChecked: undefined, id: "a" }, undefined) as {
+      props: Record<string, unknown>;
+    };
+    expect(element.props).toEqual({ id: "a" });
+    const classic = liteCreateElement("input", { bindValue: undefined, id: "b" });
+    expect(classic.props).toEqual({ id: "b" });
+  });
+
+  it("does not inspect Fragment or component props, like the full runtime", () => {
+    const source = signal("value");
+    expect(() => liteJsx(Label as never, { title: source, children: "x" }, undefined)).not.toThrow();
+    const fragment = liteCreateElement(Fragment, null, source) as { props: { children: unknown } };
+    expect(fragment.props.children).not.toBe(source);
   });
 
   it("supports the classic createElement fallback for Signal children", () => {

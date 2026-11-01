@@ -34,7 +34,7 @@
 }
 ```
 
-`bindValue`、`bindChecked`、Signal値のhost propsが必要な場合は、既定の `react-fine-grained-signals` を使ってください。LiteはこれらをTypeScriptで拒否し、JavaScriptやspread経由で渡された場合もruntimeで診断します。選択はproject単位またはfile単位のopt-inで、既定runtimeとその動作は変わりません。
+`bindValue`、`bindChecked`、Signal値のhost propsが必要な場合は、既定の `react-fine-grained-signals/jsx` を使ってください。LiteはこれらをTypeScriptで拒否し、JavaScriptやspread経由で渡された場合もruntimeで診断します。runtimeでは、Full runtimeがbindingするSignal propをLiteは拒否し、Fullがそのまま渡すもの（後述のカスタム要素）はLiteもそのまま渡します。そのため、fileをruntime間で移しても、要素が受け取る値が黙って変わることはありません。選択はproject単位またはfile単位のopt-inで、既定runtimeとその動作は変わりません。
 
 Liteの転送量削減は、同じ初回読み込みchunkにFull Runtimeが含まれない場合に限られます。リポジトリの`pnpm size`では、Signalの子を持つFull JSX Runtimeがgzip 11.31 kB、同等のLiteが5.32 kBで、Liteが約6.0 kB小さい結果でした。FullとLiteを同期importするとFullも読み込まれるため削減効果はなくなり、Fullを遅延importすれば初回requestからFull実装を外せます。これらは測定fixture固有の値で、パッケージ全体に共通する保証値ではありません。
 
@@ -192,8 +192,9 @@ SSRではsignalの初期値を対応するdefault valueとして出力します�
 ## 制約
 
 - allowlistにないevent handlerやその他のhost props（SVGの`r`や`viewBox`など）はdirect bindingされません。allowlistのpropsはSVGやMathMLの要素でも使え、属性として書き込まれます。
+- カスタム要素（tag名に`-`を含む要素）では、allowlist外のpropへ渡したSignalは、`value`と`checked`も含めてそのまま要素へ渡ります。要素はSignalをpropertyとして読めます。allowlistのpropsはほかのhostと同じくbindingされます。それ以外のhostでは、このようなSignalはruntime errorになります。
 - direct bindingの書き込みはReactのschedulerの外で行われ、実験的な最適化のままです。
-- host propはレンダーごとに素の値とsignalを切り替えられます。要素の型は変わらず、子のstateも保たれます。切り替わるのはbindingの付け外しだけです(ただし `value`/`checked` をsignalと素の値で切り替えると、inputはReactのuncontrolled/controlledの間で切り替わり、React標準の警告が出ます)。
+- binding propはレンダーごとに別のwritable signalへ切り替えられます。要素の型は変わらず、子のstateも保たれます。切り替わるのはbindingの付け外しだけです。通常のReact controlledの挙動には`value`/`checked`を使ってください。
 - bindingはhost要素自身のrefを通じて付けられます。渡したrefは、Reactが直接呼ぶ場合とまったく同じように要素を受け取ります。refが安定していれば、bindingが変わらない限り再レンダーで呼び直されることはありません。bindingが変わるのは、bindingが別のsignalや素の値に切り替わったときと、bindingしたpropや `style` が前回のレンダーと異なる値でレンダーされたとき(2回のレンダーの間に書き込みがあった場合)です。このときrefは同じcommitの中で一度外れ、再び付けられます。
 - `deepSignal` はsignal childやbindingするpropには使えません。これらの位置はrootの置き換えしか追わないため、ネストした変更は表示に反映されません。TypeScriptはこれをエラーにします。deepな状態は追跡されたコンポーネント内で読むか、[`useDeepSignalValue`](./hooks.ja.md#usedeepsignalvalue) でprimitiveを選択してください。
 - `computed({ get, set })` とwritable `useWritableComputed({ get, set })` は、値の型がfieldと合えばbindingできます。ユーザー入力はsetterを呼び、依存signalの更新はgetterを通してDOMに反映されます。setterが入力を拒否または正規化した場合はgetterを正本としてReact handlerの後にDOMを補正します。getterのみのcomputedは読み取り専用です。

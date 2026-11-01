@@ -112,7 +112,8 @@ const FORM_BINDING_MARKERS = [
   "Checkbox group bindValue requires an array of strings.",
   "Invalid select bindValue.",
 ];
-const FULL_ATTRIBUTE_BINDING_MARKERS = ["className", "style-properties", "signal props."];
+// `className` is not a marker: both runtimes share the list of directly bound prop names.
+const FULL_ATTRIBUTE_BINDING_MARKERS = ["until-found", "style-properties", "signal props."];
 const LITE_BINDING_DIAGNOSTIC_MARKER =
   "The lite JSX runtime supports Signal children only; form bindings require the default JSX runtime.";
 

@@ -34,7 +34,7 @@ For apps that need **Signal children only**, the package also provides an explic
 }
 ```
 
-Use the default `react-fine-grained-signals` source when you need `bindValue`, `bindChecked`, or Signal-valued host props. Lite rejects those props in TypeScript and reports them at runtime when passed through JavaScript or a spread. The choice is explicit per project or file; the default runtime and its behavior are unchanged.
+Use the default `react-fine-grained-signals/jsx` source when you need `bindValue`, `bindChecked`, or Signal-valued host props. Lite rejects those props in TypeScript and reports them at runtime when passed through JavaScript or a spread. At runtime Lite rejects exactly the Signal props the Full runtime would bind, and passes through the ones Full passes through (see custom elements below), so moving a file between the two runtimes never changes what an element receives silently. The choice is explicit per project or file; the default runtime and its behavior are unchanged.
 
 Lite reduces transfer size only when the Full runtime is absent from the same eagerly loaded chunks. In the repository's `pnpm size` scenarios, the Full JSX runtime with a Signal child is 11.31 kB gzip and the Lite equivalent is 5.32 kB, about 6.0 kB smaller. Importing both runtimes synchronously loads Full as well, so the saving disappears; a lazily imported Full keeps its implementation out of the initial request. These are fixture-specific measurements, not fixed package-size guarantees.
 
@@ -196,6 +196,7 @@ These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "reac
 ## Constraints
 
 - No event handlers or other host props outside the allowlist above are direct-bound, SVG geometry attributes such as `r` or `viewBox` included. The allowlisted props work on SVG and MathML hosts too, written as attributes.
+- On a custom element (a tag name containing `-`), a Signal passed to a prop outside the allowlist, `value` and `checked` included, reaches the element unchanged, so the element can read the Signal as a property. Allowlisted props are bound as on any other host. On every other host such a Signal is a runtime error.
 - Direct-binding writes happen outside the React scheduler and remain an experimental optimization.
 - Binding props can switch between writable signals across renders. The element keeps its type and children keep their state; only the binding is attached or detached. Keep `value`/`checked` for ordinary React-controlled behavior.
 - Bindings are attached through a ref on the host element itself. A ref you pass is still called with the element exactly as React would call it. As long as it is stable, a re-render does not re-invoke it unless the bindings changed: a binding switched to another signal or to a plain value, or a bound prop or `style` now renders a different value than the previous render did (after a write between the two renders). Then the ref is detached and attached again within the same commit.

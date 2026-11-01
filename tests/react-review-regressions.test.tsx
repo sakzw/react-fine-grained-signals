@@ -210,6 +210,13 @@ describe("classic createElement fallback (B1)", () => {
       }),
     ).not.toThrow();
     expect(() => createElement("x-widget" as never, { href })).not.toThrow();
+    // `value`/`checked` follow the same custom-element rule as every other unbound prop.
+    const value = signal("v");
+    expect(createElement("x-widget" as never, { value, checked: value }).props).toMatchObject({
+      value,
+      checked: value,
+    });
+    expect(() => createElement("input", { value })).toThrow(/Use bindValue or value\.value/);
 
     const html = renderToString(createElement("a", { href: "/server", title: signal("server title") }));
     expect(html).toContain('href="/server"');

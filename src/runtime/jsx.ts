@@ -4,12 +4,19 @@ import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import { notifyListener } from "../core/render-tracking.js";
 import type { ReadonlySignal, Signal } from "../core/index.js";
 import type { NotDeepSignal } from "../core/deep-signal.js";
-import { normalizeChild, SignalValue, type SignalChild } from "./jsx-children.js";
-import { createElement, Fragment } from "react";
+import { normalizeChild, SignalValue, type AddSignalChildren } from "./jsx-children.js";
+import {
+  createClassicElement,
+  createJsxPropsTransform,
+  hasBindingPropKey,
+  hasDefinedProp,
+  isDirectSignalPropName,
+  isStyleObject,
+  needsChildNormalization,
+  passesSignalThrough,
+  type HostProps,
+} from "./jsx-shared.js";
 import type * as React from "react";
-
-/** The small set of DOM properties that support direct signal bindings. */
-const REACTIVE_PROP_NAMES = new Set(["title", "id", "className", "hidden", "disabled", "style", "value", "checked"]);
 
 /**
  * The concrete strategy a direct binding is mounted with. Resolved once, in
@@ -120,16 +127,18 @@ const UNITLESS_CSS_PROPERTIES = new Set([
   "zoom",
 ]);
 
-type HostProps = Record<string, unknown>;
 type StylePropertyBinding = { readonly entries: readonly (readonly [string, unknown])[] };
 type BindingSource = ReadonlySignal<unknown> | StylePropertyBinding;
 
+/** Throws for a Signal-valued prop that is neither bound nor passed through (see `passesSignalThrough`). */
 function assertSupportedSignalHostProp(name: string, value: unknown, tagName: string): void {
-  if (name !== "children" && !tagName.includes("-") && isSignal(value)) {
-    throw new TypeError(
-      `The full JSX runtime does not support Signal-valued ${name} props on <${tagName}>; use a supported Signal binding or pass ${name}.value.`,
-    );
+  if (!isSignal(value) || passesSignalThrough(name, tagName)) return;
+  if (name === "value" || name === "checked") {
+    throw new TypeError(`Use ${name === "value" ? "bindValue" : "bindChecked"} or ${name}.value for signal props.`);
   }
+  throw new TypeError(
+    `The full JSX runtime does not support Signal-valued ${name} props on <${tagName}>; use a supported Signal binding or pass ${name}.value.`,
+  );
 }
 // `snapshot` is the value React itself was handed for the prop at render (see
 // `transformHostProps`); a binding hands the node back to it on detach.
@@ -145,8 +154,7 @@ const HTML_NAMESPACE = "http://www.w3.org/1999/xhtml";
 export { SignalValue };
 
 function isReactiveHostProp(name: string, value: unknown): value is ReadonlySignal<unknown> {
-  if (!isSignal(value)) return false;
-  return REACTIVE_PROP_NAMES.has(name) || name.startsWith("data-") || name.startsWith("aria-");
+  return isSignal(value) && isDirectSignalPropName(name);
 }
 
 function isWritableSignal(value: unknown): value is Signal<unknown> {
@@ -160,8 +168,8 @@ function isWritableSignal(value: unknown): value is Signal<unknown> {
 function getStylePropertyBinding(
   value: unknown,
 ): { source: StylePropertyBinding; snapshot: Record<string, unknown> } | undefined {
-  if (typeof value !== "object" || value === null || Array.isArray(value) || isSignal(value)) return undefined;
-  const entries = Object.entries(value as Record<string, unknown>);
+  if (!isStyleObject(value)) return undefined;
+  const entries = Object.entries(value);
   if (!entries.some(([, entry]) => isSignal(entry))) return undefined;
   const snapshot: Record<string, unknown> = {};
   for (const [key, entry] of entries) snapshot[key] = isSignal(entry) ? entry.peek() : entry;
@@ -1615,8 +1623,6 @@ function getBindingRef(bindings: readonly Binding[], userRef: SupportedRef): (no
   return entry.ref;
 }
 
-type CreateElement = (type: React.ElementType, props: unknown, key?: React.Key) => React.ReactElement;
-
 /**
  * Scans a native host element's props for anything reactive (see
  * `isReactiveHostProp`). Kept separate from building the transformed props
@@ -1628,7 +1634,7 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
   // A prop explicitly set to `undefined` is absent, as React treats it:
   // `bindValue={cond ? field : undefined}` and `value={undefined}` next to a
   // binding must not count as a binding or a conflict.
-  const has = (name: string) => Object.prototype.hasOwnProperty.call(props, name) && props[name] !== undefined;
+  const has = (name: string) => hasDefinedProp(props, name);
   const inputType = tagName === "input" ? String(props.type ?? "text").toLowerCase() : undefined;
   const isInputValueGroup = inputType === "radio" || inputType === "checkbox";
   if (has("bindValue") && has("bindChecked")) {
@@ -1689,17 +1695,11 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
       }
       continue;
     }
-    if ((name === "value" || name === "checked") && isSignal(value)) {
-      throw new TypeError(`Use ${name === "value" ? "bindValue" : "bindChecked"} or ${name}.value for signal props.`);
-    }
     if (isReactiveHostProp(name, value)) {
       const kind = resolveBindingKind(tagName, name, props);
       bindings.push([name, value, kind, readInitialValue(value, kind)]);
       continue;
     }
-    // Custom elements own their property contract, so leave Signal objects
-    // intact there. On ordinary HTML hosts, an unrecognized Signal would be
-    // handed to React/DOM rather than subscribed to and must be explicit.
     assertSupportedSignalHostProp(name, value, tagName);
   }
   return bindings;
@@ -1709,7 +1709,7 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
  * Transforms a native host element's (`<div>`, `<svg>`, ...) props: replaces
  * any directly-bound prop with its initial, non-reactive value (`bindings`
  * carries the reactive ones for the binding ref to mount later — see
- * `createJsxWrapper`) and normalizes a signal/array `children` the same way
+ * `transformFullHostProps`) and normalizes a signal/array `children` the same way
  * `Fragment` does.
  *
  * The overwhelmingly common host element has neither. Scanning first and only
@@ -1717,25 +1717,20 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
  * `<div className="card">…</div>` costs one prop walk and zero extra
  * allocations — the original props object is returned as-is (see the
  * `bindings.length === 0 && !childrenNeedNormalization` branch below), and
- * `createJsxWrapper` passes it straight to `factory` unchanged.
+ * React receives it unchanged.
  */
-function transformHostProps(type: string, input: unknown): { props: HostProps; bindings: Binding[] } {
-  const inputProps = (input ?? {}) as HostProps;
+function transformHostProps(type: string, inputProps: HostProps): { props: HostProps; bindings: Binding[] } {
   const styleProperties = getStylePropertyBinding(inputProps.style);
   const normalizedProps =
     styleProperties === undefined ? inputProps : { ...inputProps, style: styleProperties.snapshot };
   const bindings = findHostBindings(normalizedProps, type);
   // Binding props never reach the DOM, including ones left `undefined`.
-  const strayBindingProps =
-    Object.prototype.hasOwnProperty.call(normalizedProps, "bindValue") ||
-    Object.prototype.hasOwnProperty.call(normalizedProps, "bindChecked");
+  const strayBindingProps = hasBindingPropKey(normalizedProps);
   if (styleProperties !== undefined) {
     bindings.push(["style", styleProperties.source, "style-properties", styleProperties.snapshot]);
   }
 
-  const rawChildren = normalizedProps.children;
-  const childrenNeedNormalization =
-    "children" in normalizedProps && (isSignal(rawChildren) || Array.isArray(rawChildren));
+  const childrenNeedNormalization = needsChildNormalization(normalizedProps);
 
   if (bindings.length === 0 && !childrenNeedNormalization && !strayBindingProps) {
     return { props: normalizedProps, bindings };
@@ -1746,7 +1741,7 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
   // passed as `input`) is never mutated.
   const props: HostProps = { ...normalizedProps };
   if (childrenNeedNormalization) {
-    props.children = normalizeChild(rawChildren);
+    props.children = normalizeChild(normalizedProps.children);
   }
   if (strayBindingProps) {
     delete props.bindValue;
@@ -1780,54 +1775,23 @@ function transformHostProps(type: string, input: unknown): { props: HostProps; b
 }
 
 /**
- * `Fragment`'s only prop worth transforming is `children`, and only when it
- * is itself a signal or array — `normalizeChild` is the identity for
- * anything else (see its definition) — so a plain `<>...</>` with ordinary
- * children is passed straight through, uncopied, the same way a custom
- * component is below.
- */
-function transformFragmentProps(input: unknown): unknown {
-  const props = input as HostProps | null;
-  if (props == null || !("children" in props) || (!isSignal(props.children) && !Array.isArray(props.children))) {
-    return input;
-  }
-  return { ...props, children: normalizeChild(props.children) };
-}
-
-/**
  * A host element's final props: the transformed copy with the binding ref in
  * place of the user's own ref, which the binding ref forwards to. `props` is
  * always a fresh copy whenever there are bindings (see `transformHostProps`).
  */
-function withBindingRef(props: HostProps, bindings: readonly Binding[]): HostProps {
+function transformFullHostProps(type: string, input: HostProps): HostProps {
+  const { props, bindings } = transformHostProps(type, input);
   if (bindings.length > 0) props.ref = getBindingRef(bindings, props.ref as SupportedRef);
   return props;
 }
 
-/** Creates a JSX wrapper while letting each module supply React's JSX factory. */
-export function createJsxWrapper(factory: CreateElement): CreateElement {
-  return (type, input, key) => {
-    if (typeof type === "string") {
-      // The element keeps its own host type whether or not any prop is a
-      // signal, and its key is passed straight through, so React reconciles it
-      // exactly as it would the plain element.
-      const { props, bindings } = transformHostProps(type, input);
-      return factory(type, withBindingRef(props, bindings), key);
-    }
-
-    if (type === Fragment) {
-      return factory(type, transformFragmentProps(input), key);
-    }
-
-    // Every other type — function/class components, `memo`, `forwardRef`,
-    // Context.Provider/Consumer, Suspense, lazy, ... — receives its props
-    // exactly as its caller passed them. None of these were ever touched by
-    // children normalization or the reactive-prop scan above, even before
-    // this fast path existed, so skipping the copy here changes nothing
-    // observable and removes an allocation nothing downstream ever read.
-    return factory(type, input, key);
-  };
-}
+/**
+ * The props one element of the full runtime hands React. The element keeps
+ * its own host type whether or not any prop is a signal, and its key is
+ * passed straight through, so React reconciles it as it would the plain
+ * element.
+ */
+export const transformJsxProps = createJsxPropsTransform(transformFullHostProps);
 
 /**
  * The classic-runtime `createElement` that the automatic runtime falls back to
@@ -1841,17 +1805,7 @@ export function createSignalAwareElement(
   config?: Record<string, unknown> | null,
   ...children: unknown[]
 ): React.ReactElement {
-  if (typeof type !== "string" && type !== Fragment) {
-    return createElement(type, config, ...(children as React.ReactNode[]));
-  }
-  const normalizedChildren = children.map((child) => normalizeChild(child)) as React.ReactNode[];
-  if (typeof type !== "string") {
-    const normalizedConfig =
-      children.length === 0 ? (transformFragmentProps(config) as Record<string, unknown> | null | undefined) : config;
-    return createElement(type, normalizedConfig, ...normalizedChildren);
-  }
-  const { props, bindings } = transformHostProps(type, config ?? {});
-  return createElement(type, withBindingRef(props, bindings), ...normalizedChildren);
+  return createClassicElement(transformFullHostProps, type, config, children);
 }
 
 type Signalable<T> = T | (ReadonlySignal<T> & NotDeepSignal);
@@ -1863,9 +1817,6 @@ type AriaPropName = `aria-${string}`;
 type SignalableHtmlProp<Name extends PropertyKey, Value> =
   | Signalable<Value | (Name extends "title" | "id" ? null : never)>
   | (Name extends "style" ? SignalableStyleObject<NonNullable<Value>> : never);
-type AddSignalChildren<P> = Omit<P, "children"> & {
-  children?: SignalChild;
-};
 type SignalizeKnownHtmlProps<P> = {
   [Name in keyof P as Name extends DirectSignalPropName | AriaPropName ? Name : never]: SignalableHtmlProp<
     Name,
