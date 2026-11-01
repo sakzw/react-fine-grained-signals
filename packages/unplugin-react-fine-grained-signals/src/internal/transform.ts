@@ -3512,8 +3512,7 @@ function externalCallMayReadTrackedValue(
       (importSpecifier.isImportSpecifier() || importSpecifier.isImportDefaultSpecifier()) &&
       importSpecifier.parentPath.isImportDeclaration() &&
       importSpecifier.parentPath.node.importKind !== "type" &&
-      importSpecifier.parentPath.node.source.value !== importSource &&
-      importSpecifier.parentPath.node.source.value !== reactImportSource
+      importIsForeign(importSpecifier, { importSource, managedRuntimeSource, reactImportSource })
     ) {
       const imported = importSpecifier.isImportSpecifier() ? importSpecifier.node.imported : undefined;
       const importedName =
@@ -4555,13 +4554,21 @@ function namedArgumentMayRead(
   });
 }
 
-/** Is an import from a module other than this library or React? */
-function importIsForeign(specifier: NodePath, context: ReadContext): boolean {
+/**
+ * Is an import from a module other than this library or React? The one place
+ * that decides which import sources are "ours": this library's root and
+ * managed runtime entries, and React itself -- a direct `"react"` import
+ * always, plus a configured `reactImportSource` barrel (see `isReactSource`).
+ */
+function importIsForeign(
+  specifier: NodePath,
+  sources: Pick<ReadContext, "importSource" | "managedRuntimeSource" | "reactImportSource">,
+): boolean {
   const source = (specifier.parentPath as NodePath<t.ImportDeclaration>).node.source.value;
   return (
-    source !== context.importSource &&
-    source !== context.managedRuntimeSource &&
-    !isReactSource(source, context.reactImportSource)
+    source !== sources.importSource &&
+    source !== sources.managedRuntimeSource &&
+    !isReactSource(source, sources.reactImportSource)
   );
 }
 

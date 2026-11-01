@@ -54,6 +54,28 @@ describe("managed render transform", () => {
     expect(output).not.toMatch(/\btry\s*\{/);
   });
 
+  it("does not capture React or runtime calls when reactImportSource names a barrel", () => {
+    // A direct "react" import stays React's, and the managed runtime entry is
+    // this package's own, however `reactImportSource` is configured: neither
+    // is an opaque foreign helper that has to be captured.
+    const source = `
+      import { cloneElement } from "react";
+      import { cloneElement as barrelClone } from "@app/react";
+      import { readCount } from "./counter-store";
+      /** @signalTracking */
+      export function Counter({ el }) {
+        return <output>{cloneElement(el)}{barrelClone(el)}{readCount()}</output>;
+      }
+    `;
+    const output = compile(source, "manual", "managed", "react-fine-grained-signals", "opt-out", "@app/react");
+
+    expect(output).toContain("{cloneElement(el)}");
+    expect(output).toContain("{barrelClone(el)}");
+    expect(output).not.toContain("capture(() => cloneElement");
+    expect(output).not.toContain("capture(() => barrelClone");
+    expect(output).toContain("_signals.capture(() => readCount())");
+  });
+
   it("keeps the default manual mode and supports comment opt-in/out", () => {
     const output = compile(`
       const count = { value: 1 };
