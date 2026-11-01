@@ -106,60 +106,11 @@ function isWeakCollectionKey(value: unknown): value is object | symbol {
 export function createCollectionSupport(ctx: CollectionContext): CollectionSupport {
   setUpReactiveCollectionIterator();
   const { adapter, shouldTrackDeepRead, toRaw, proxyToRaw, lookupIdentity, isPlainObjectOrArray } = ctx;
+  const getNativeCollectionKind = ctx.collectionKindOf;
   const reactiveCollections = new WeakMap<object, CollectionMetadata>();
   let support: CollectionSupport;
   const unwrap = <T>(value: T): T => ctx.prepareDeepValue(value, support);
   const wrap = <T>(value: T): T => ctx.wrap(value, support);
-
-  function getNativeCollectionKind(value: unknown): "Map" | "Set" | "WeakMap" | "WeakSet" | undefined {
-    if (!isObjectLike(value)) return undefined;
-    // Ordinary deep-state nodes are overwhelmingly plain objects and arrays.
-    // Avoid four native internal-slot probes (each of the wrong collection
-    // brand throws) for every node in those graphs.
-    if (isPlainObjectOrArray(value)) return undefined;
-    if ((value as object) instanceof Map) return "Map";
-    if ((value as object) instanceof Set) return "Set";
-    if ((value as object) instanceof WeakMap) return "WeakMap";
-    if ((value as object) instanceof WeakSet) return "WeakSet";
-    // What remains for the throwing brand probes is a collection from another
-    // realm or one whose prototype was replaced. A chain that reaches this
-    // realm's Object.prototype without passing a collection prototype (Dates,
-    // class instances: every opaque value in stored state) is neither, so the
-    // store path does not pay four exceptions per opaque value.
-    for (
-      let prototype = Object.getPrototypeOf(value);
-      prototype !== null;
-      prototype = Object.getPrototypeOf(prototype)
-    ) {
-      if (prototype === Object.prototype) return undefined;
-    }
-    const probe = {};
-    try {
-      Map.prototype.has.call(value, probe);
-      return "Map";
-    } catch {
-      /* try next brand */
-    }
-    try {
-      Set.prototype.has.call(value, probe);
-      return "Set";
-    } catch {
-      /* try next brand */
-    }
-    try {
-      WeakMap.prototype.has.call(value, probe);
-      return "WeakMap";
-    } catch {
-      /* try next brand */
-    }
-    try {
-      WeakSet.prototype.has.call(value, probe);
-      return "WeakSet";
-    } catch {
-      /* not a collection */
-    }
-    return undefined;
-  }
 
   function isStandardCollection(
     value: unknown,

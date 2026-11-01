@@ -62,3 +62,40 @@ describe("array searches and collection lookups share one identity rule", () => 
     expect(state.value.list.indexOf(carrier)).toBe(0);
   });
 });
+
+describe("one collection test for both modes", () => {
+  const nullPrototypeMap = () => Object.setPrototypeOf(new Map([["a", 1]]), null) as object;
+
+  it("rejects a collection whose prototype is null instead of proxying it as a plain object", () => {
+    expect(() => deepSignal({ map: nullPrototypeMap() })).toThrow(
+      /^deepSignal\(\) cannot store a collection with a null prototype$/,
+    );
+    expect(() => deepCollectionSignal({ map: nullPrototypeMap() })).toThrow(
+      /^deepCollectionSignal\(\) cannot store a collection with a null prototype$/,
+    );
+    expect(() => deepSignal(nullPrototypeMap() as never)).toThrow(/null prototype/);
+    const state = deepSignal({ slot: {} as object });
+    expect(() => {
+      state.value.slot = nullPrototypeMap();
+    }).toThrow(/null prototype/);
+  });
+
+  it("still accepts empty null-prototype dictionaries", () => {
+    const state = deepSignal({ dict: Object.create(null) as Record<string, number> });
+    state.value.dict.a = 1;
+    expect(state.value.dict.a).toBe(1);
+  });
+
+  it("finds a deep proxy inside a Map from another realm in plain mode", () => {
+    const state = deepSignal({ inner: { id: 1 }, opaque: undefined as unknown });
+    const foreign = runInNewContext("new Map()") as Map<string, unknown>;
+    Map.prototype.set.call(foreign, "inner", state.value.inner);
+    expect(() => {
+      state.value.opaque = foreign;
+    }).toThrow(/^deepSignal\(\) cannot store a deep proxy inside an opaque value$/);
+    const local = new Map<string, unknown>([["inner", state.value.inner]]);
+    expect(() => {
+      state.value.opaque = local;
+    }).toThrow(/cannot store a deep proxy inside an opaque value/);
+  });
+});

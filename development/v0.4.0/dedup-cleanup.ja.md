@@ -176,3 +176,32 @@ engineの`runSweep(metadata, plan, settled)`と`scheduleSweep(metadata, plan, yi
 | index-full | 15.92 kB | 15.83 kB |
 
 plain modeだけのbundle（deep）は、collectionと共有する汎用の実装（microtaskでの予約など）を持つようになった分だけ増えた。
+
+## collectionの種類の判定を1つにした（不具合の修正、実行時のbreaking change）
+
+### 変更前
+
+collectionかどうかの判定が4通りあった。engineの`instanceof`の連鎖（保存時の検査、複製、比較など）、collection moduleの`proxyFor`の`instanceof`、collection moduleの`getNativeCollectionKind`（prototypeをたどり、最後にbrandを確かめる）、`isStandardCollectionPrototype`。
+
+- `getNativeCollectionKind`は、plain objectなら最初に`undefined`を返していた。prototypeが`null`のobjectもplain objectとみなすため、`Object.setPrototypeOf(new Map(), null)`はplain objectと判定され、両modeでplain objectとしてproxyされていた（中身のentryは見えない）。`CollectionSupport.kindOf`のdocには「prototypeを置き換えたcollectionも含む」とあった。
+- plain modeの保存時の検査は`instanceof`だけを見ていたため、別realmのMapの中にあるdeep proxyを見つけられなかった（「opaqueな値の中にproxyは保存できない」の検査を通り抜けた）。
+
+### 変更後
+
+- 判定を`collectionKindOf`としてengineへ移した。collection moduleは`CollectionContext`経由でこれを`kindOf`に使う。空のnull-prototype objectだけはbrandを確かめる（ほかのplain objectとarrayは、これまでどおりすぐ`undefined`）。
+- 保存時の検査は`collectionKindOf`で分岐し、entryは`Map.prototype.forEach.call`/`Set.prototype.forEach.call`で読む。別realmのcollectionも検査できる。
+- prototypeが`null`のcollectionは、両modeで`cannot store a collection with a null prototype`をthrowする。読み取り側はこれをplain objectとみなすため、保存させない。
+- engineの残りの`instanceof`（複製、比較、`isWrappedByValue`）と`proxyFor`は変えていない。collection modeでは、保存時に同じrealmの標準のcollection以外を拒否しているため、`instanceof`と結果が変わらない。
+
+### テスト
+
+`tests/deep-signal-consistency.test.ts`: null-prototypeのMapを両modeで拒否すること（root、property、書き込み）、空のnull-prototype dictionaryは使えること、plain modeで別realmのMapの中のdeep proxyを拒否すること。変更前は2件が失敗することを確認した。
+
+### サイズ（gzip）
+
+| entry | 変更前 | 変更後 |
+| --- | --- | --- |
+| deep | 10.13 kB | 10.30 kB |
+| deep-collections | 13.26 kB | 13.33 kB |
+
+plain modeのbundleが種類の判定（brandの確認）を持つようになった分だけ増えた。予算は10.50 kB。

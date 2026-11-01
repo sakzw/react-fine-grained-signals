@@ -42,9 +42,11 @@ export interface DeepSignalRuntimeAdapter {
  * is the mode: a plain object or array carries the one it was first wrapped
  * with, and reaching it through the other mode throws.
  */
+export type CollectionKind = "Map" | "Set" | "WeakMap" | "WeakSet";
+
 export interface CollectionSupport {
   /** The brand of a standard collection, including one from another realm or with a replaced prototype. */
-  kindOf(value: unknown): "Map" | "Set" | "WeakMap" | "WeakSet" | undefined;
+  kindOf(value: unknown): CollectionKind | undefined;
   isStandard(value: unknown): boolean;
   /** `isStandard` for a value already known not to be plain data. */
   isStandardPrototype(value: object): boolean;
@@ -85,6 +87,7 @@ export interface CollectionContext {
   toRaw(value: unknown): object | undefined;
   readonly proxyToRaw: WeakMap<object, object>;
   lookupIdentity(value: object, support: CollectionSupport | undefined): unknown;
+  collectionKindOf(value: unknown): CollectionKind | undefined;
   runSweep<M extends SweepState>(metadata: M, plan: SweepPlan<M>, settled?: boolean): void;
   scheduleSweep<M extends SweepState>(metadata: M, plan: SweepPlan<M>, yieldToTask: boolean): void;
   isPlainObjectOrArray(value: unknown): value is object;
@@ -277,6 +280,66 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   }
 
   /**
+   * The brand of a standard collection, including one from another realm or
+   * with a replaced prototype. The one collection test of both modes: plain
+   * `deepSignal` inspects a collection's entries as an opaque value, and the
+   * collection mode decides which collections it proxies.
+   */
+  function collectionKindOf(value: unknown): CollectionKind | undefined {
+    if (!isObjectLike(value)) return undefined;
+    // Ordinary deep-state nodes are overwhelmingly plain objects and arrays.
+    // Avoid four native internal-slot probes (each of the wrong collection
+    // brand throws) for every node in those graphs. Only an empty
+    // null-prototype object can still be a collection whose prototype was
+    // set to `null`.
+    if (isPlainObjectOrArray(value) && (Object.getPrototypeOf(value) !== null || Reflect.ownKeys(value).length > 0)) {
+      return undefined;
+    }
+    if ((value as object) instanceof Map) return "Map";
+    if ((value as object) instanceof Set) return "Set";
+    if ((value as object) instanceof WeakMap) return "WeakMap";
+    if ((value as object) instanceof WeakSet) return "WeakSet";
+    // What remains for the throwing brand probes is a collection from another
+    // realm or one whose prototype was replaced. A chain that reaches this
+    // realm's Object.prototype without passing a collection prototype (Dates,
+    // class instances: every opaque value in stored state) is neither, so the
+    // store path does not pay four exceptions per opaque value.
+    for (
+      let prototype = Object.getPrototypeOf(value);
+      prototype !== null;
+      prototype = Object.getPrototypeOf(prototype)
+    ) {
+      if (prototype === Object.prototype) return undefined;
+    }
+    const probe = {};
+    try {
+      Map.prototype.has.call(value, probe);
+      return "Map";
+    } catch {
+      /* try next brand */
+    }
+    try {
+      Set.prototype.has.call(value, probe);
+      return "Set";
+    } catch {
+      /* try next brand */
+    }
+    try {
+      WeakMap.prototype.has.call(value, probe);
+      return "WeakMap";
+    } catch {
+      /* try next brand */
+    }
+    try {
+      WeakSet.prototype.has.call(value, probe);
+      return "WeakSet";
+    } catch {
+      /* not a collection */
+    }
+    return undefined;
+  }
+
+  /**
    * Resolves a value that may be one of our proxies back to the raw object it
    * wraps. Returns `undefined` when
    * `value` is not object-like or is not a value this module has wrapped, so
@@ -365,37 +428,32 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         throw deepError(support, "cannot store a built-in prototype object in deep state");
       }
 
-      if (support !== undefined && !insideOpaque && support.kindOf(raw) !== undefined && !support.isStandard(raw)) {
-        throw deepError(support, "collections require same-realm standard collections");
+      const kind = collectionKindOf(raw);
+      if (kind !== undefined && !insideOpaque) {
+        // Reads would take a null-prototype collection for a plain object.
+        if (Object.getPrototypeOf(raw) === null)
+          throw deepError(support, "cannot store a collection with a null prototype");
+        if (support !== undefined && !support.isStandard(raw)) {
+          throw deepError(support, "collections require same-realm standard collections");
+        }
       }
 
       // Without collection support a Map or Set is an opaque value like a
       // Date: its entries are only inspected so a deep proxy cannot slip into
-      // the raw graph through one.
-      if (raw instanceof Map) {
+      // the raw graph through one. The intrinsic methods read the entries of a
+      // collection from another realm too.
+      if (kind === "Map" || kind === "Set") {
         const opaque = insideOpaque || support === undefined;
         if (!opaque) support.assertReactive(raw);
-        for (const [key, entry] of raw) {
-          if (isObjectLike(key)) {
-            pending.push({ value: key, insideOpaque: opaque });
-          }
-          if (isObjectLike(entry)) {
-            pending.push({ value: entry, insideOpaque: opaque });
-          }
-        }
+        const inspect = (entry: unknown, key: unknown) => {
+          if (kind === "Map" && isObjectLike(key)) pending.push({ value: key, insideOpaque: opaque });
+          if (isObjectLike(entry)) pending.push({ value: entry, insideOpaque: opaque });
+        };
+        if (kind === "Map") Map.prototype.forEach.call(raw, inspect);
+        else Set.prototype.forEach.call(raw, inspect);
         continue;
       }
-      if (raw instanceof Set) {
-        const opaque = insideOpaque || support === undefined;
-        if (!opaque) support.assertReactive(raw);
-        for (const entry of raw) {
-          if (isObjectLike(entry)) {
-            pending.push({ value: entry, insideOpaque: opaque });
-          }
-        }
-        continue;
-      }
-      if (raw instanceof WeakMap || raw instanceof WeakSet) {
+      if (kind !== undefined) {
         if (!insideOpaque && support !== undefined) support.assertReactive(raw);
         continue;
       }
@@ -1214,6 +1272,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     toRaw,
     proxyToRaw,
     lookupIdentity,
+    collectionKindOf,
     runSweep,
     scheduleSweep,
     isPlainObjectOrArray,
