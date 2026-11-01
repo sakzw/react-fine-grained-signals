@@ -225,3 +225,32 @@ render依存でない購読（signalを読み、最初の実行のあとの変�
 - `trackWeakCollectionKey`/`notifyWeakCollectionKey`の、weak keyでない場合の分岐は届かなかった（WeakMap/WeakSetの呼び出し側は、その前にほかのkeyを除いている）。分岐を消し、`weakCollectionVersion`を直接呼ぶ。
 - ownerの種類の確認（`deep-signal.ts`と`render-tracking.ts`のinline）を、`isGraphExecutionOwner`/`isRenderExecutionOwner`にした。
 - brandの付与（`base.ts`の`registerSignal`と、coreのhelper signal）を`stampSignalBrand`（`signal-brand.ts`）にまとめ、descriptorの理由のコメントもそこへ移した。
+
+## signalとcomputedの`.value` getterの振り分けを共有した（速度は同等、computedの読み取りは速くなった）
+
+### 変更前
+
+`HelperBrandSignal`と`HelperBrandComputed`の`get value()`は、読んでいるのが誰か（ownerなし、このcopyのeffect/computed、Reactのrender attempt、`untracked()`、別copy）で振り分ける処理を、それぞれ持っていた。読み取り関数（`readSource`/`readComputed`）と、computedがthrowしてもrender依存を登録する点（`finally`）のほかは同じだが、確認の順序と別copyの確認位置が違っていた（結果は同じ）。最初の監査では「速度のために意図して2つ書いている」と判断して対象外にしたが、根拠になる計測はなかった（`development/phases/phase9/source-hot-path-recovery.md`の実験は、helperへ切り出しても速さが変わらなかったという記録で、共通化すると遅くなるという記録ではない）。
+
+### 計測した案
+
+同じプロセスにbase（変更前の`dist/`）と候補を別moduleとして読み込み、ABBAの順で交互に測った。ケースの関数もbuildごとに別moduleにした（同じ関数から両方を読むと、V8のinline cacheが混ざり、A/Aで最大45%の偏りが出たため）。読み込み順をprocessごとに入れ替え、両順のmedianの比の幾何平均をとった。1回の計測は100万回の読み取り。A/A（同じbuildどうし）の差は±2.5%以内。
+
+| ケース（候補/base） | 案1: getterの本体を1つの関数に | 案2: 案1でsignalだけ`try`の外 | 案3: 案2で自copyの確認を先頭に | 案4: 頻繁な2分岐はgetter、残りを共有（採用、12 process） |
+| --- | --- | --- | --- | --- |
+| signal、ownerなし | 1.13 | 1.00 | 1.04 | 0.99 |
+| signal、effectの中 | 0.96 | 0.92 | 1.17 | 0.96 |
+| signal、`untracked` | 0.90 | 0.93 | 0.94 | 0.95 |
+| computed、ownerなし | 0.73 | 0.71 | 0.68 | 0.66 |
+| computed、effectの中 | 1.18 | 1.22 | 1.20 | 0.93 |
+| 書き込みと読み取り | 0.93 | 0.94 | 0.90 | 0.99 |
+
+案1〜3は、getterの本体が大きくなってinline化されにくくなり、どこかの頻繁なケースが15〜20%遅くなった。
+
+### 変更後（案4）
+
+- 各getterは、頻繁な2つの分岐（ownerなし、このcopyのeffect/computed）だけを持つ。computedは、ownerなしの確認を先頭に移した（これまでは最後で、`try/finally`を常に通っていた）。computedのownerなしの読み取りが約34%速くなったのはこのため。
+- 残りの分岐（render attempt、`untracked()`、別copy、その他）は`readOwned(readable, node, owner, computed)`が持ち、両方のgetterが使う。render依存の登録は`collectRenderRead`にした。
+- 挙動は変わらない。
+
+計測に使ったscriptは一時的なもので、repoには入れていない。上の手順（buildごとに別moduleで読み込む、ケースの関数もbuildごとに分ける、ABBA、processごとに読み込み順を入れ替える）で再現できる。

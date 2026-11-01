@@ -607,6 +607,48 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     }
   }
 
+  function collectRenderRead(readable: object, node: RuntimeNode): void {
+    trackRenderDependency(
+      getRenderDependency(
+        readable as { value: unknown },
+        node,
+      ) as import("./alien-derived-types.js").RenderReadableDependency,
+    );
+  }
+
+  /**
+   * The `.value` read of a public signal or computed by any reader other than
+   * the two hot cases each getter handles itself (no owner, and this copy's
+   * own effects and computeds). Both getters share it, so the render-attempt,
+   * untracked and other-copy rules cannot drift between them; only the read
+   * itself (`readSource` or `readComputed`) differs. Kept out of the getters
+   * so they stay small enough to inline: one shared getter body measured up
+   * to 20% slower on the hot cases.
+   */
+  function readOwned(
+    readable: object,
+    node: RuntimeSource | RuntimeComputed,
+    currentOwner: ExecutionContextOwner,
+    computed: boolean,
+  ): unknown {
+    const attempt = activeRenderAttempt;
+    if (
+      attempt !== undefined &&
+      isRenderExecutionOwner(currentOwner) &&
+      currentOwner.runtimeToken === runtimeToken &&
+      renderAdapter !== undefined
+    ) {
+      return computed
+        ? renderAdapter.readComputed(readable as never, node as RuntimeComputed, attempt)
+        : renderAdapter.readSource(readable as never, node as RuntimeSource, attempt);
+    }
+    if (currentOwner === UNTRACKED_OWNER) {
+      return computed ? readComputed(node as RuntimeComputed, false) : readSourceUntracked(node);
+    }
+    if (isForeignOwner(currentOwner)) throw multipleCopiesError();
+    return computed ? readComputed(node as RuntimeComputed) : readSource(node);
+  }
+
   class HelperBrandSignal<T = unknown> {
     #node: RuntimeSource;
     // A deep-signal source is unbranded, and every write first clears its
@@ -625,29 +667,13 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       // reads can skip speculative-render dispatch while preserving collection.
       if (currentOwner === undefined) {
         const value = readSource(node);
-        const collector = activeRenderCollector;
-        if (collector !== undefined) {
-          trackRenderDependency(
-            getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency,
-          );
-        }
+        if (activeRenderCollector !== undefined) collectRenderRead(this, node);
         return value as T;
       }
       // Reads inside this copy's own effects and computeds: no render attempt is
       // installed (`withGraphOwner` clears it), nothing is untracked or foreign.
       if (currentOwner === graphOwner) return readSource(node) as T;
-      const attempt = activeRenderAttempt;
-      if (
-        attempt !== undefined &&
-        isRenderExecutionOwner(currentOwner) &&
-        currentOwner.runtimeToken === runtimeToken &&
-        renderAdapter !== undefined
-      ) {
-        return renderAdapter.readSource(this, node, attempt) as T;
-      }
-      if (currentOwner === UNTRACKED_OWNER) return readSourceUntracked(node) as T;
-      if (isForeignOwner(currentOwner)) throw multipleCopiesError();
-      return readSource(node) as T;
+      return readOwned(this, node, currentOwner, false) as T;
     }
     set value(value: T) {
       if (this.#deep) deepWatchedNodes.delete(this.#node);
@@ -680,28 +706,17 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     get value(): T {
       const node = this.#node;
       const currentOwner = executionContext.owner;
-      // See the source getter: this copy's own graph scope needs no other check.
-      if (currentOwner === graphOwner) return readComputed(node) as T;
-      const attempt = activeRenderAttempt;
-      if (
-        attempt !== undefined &&
-        isRenderExecutionOwner(currentOwner) &&
-        currentOwner.runtimeToken === runtimeToken &&
-        renderAdapter !== undefined
-      ) {
-        return renderAdapter.readComputed(this, node, attempt) as T;
-      }
-      const owner = currentOwner;
-      if (owner !== undefined && isForeignOwner(owner)) throw multipleCopiesError();
-      try {
-        return readComputed(node, owner !== UNTRACKED_OWNER) as T;
-      } finally {
-        if (owner === undefined && activeRenderCollector !== undefined) {
-          trackRenderDependency(
-            getRenderDependency(this, node) as import("./alien-derived-types.js").RenderReadableDependency,
-          );
+      // See the source getter. A computed that throws is still collected, so
+      // its component re-renders when it recovers.
+      if (currentOwner === undefined) {
+        try {
+          return readComputed(node) as T;
+        } finally {
+          if (activeRenderCollector !== undefined) collectRenderRead(this, node);
         }
       }
+      if (currentOwner === graphOwner) return readComputed(node) as T;
+      return readOwned(this, node, currentOwner, true) as T;
     }
     peek(): T {
       return untracked(() => readComputed(this.#node) as T);
