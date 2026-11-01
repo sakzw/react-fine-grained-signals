@@ -17,10 +17,13 @@ export type HostProps = Record<string, unknown>;
  * as a whole Signal; Signal entries inside a plain style object are bound
  * too). The lite runtime rejects exactly these, because it has no bindings.
  */
-const DIRECT_SIGNAL_PROP_NAMES = new Set(["title", "id", "className", "hidden", "disabled", "style"]);
+export const DIRECT_SIGNAL_PROP_NAMES = ["title", "id", "className", "hidden", "disabled", "style"] as const;
+/** The `DIRECT_SIGNAL_PROP_NAMES` the JSX types accept a Signal for; `aria-*`/`data-*` are typed by prefix. */
+export type DirectSignalPropName = (typeof DIRECT_SIGNAL_PROP_NAMES)[number];
+const directSignalPropNames = new Set<string>(DIRECT_SIGNAL_PROP_NAMES);
 
 export function isDirectSignalPropName(name: string): boolean {
-  return DIRECT_SIGNAL_PROP_NAMES.has(name) || name.startsWith("data-") || name.startsWith("aria-");
+  return directSignalPropNames.has(name) || name.startsWith("data-") || name.startsWith("aria-");
 }
 
 /**

@@ -14,6 +14,7 @@ import {
   isStyleObject,
   needsChildNormalization,
   passesSignalThrough,
+  type DirectSignalPropName,
   type HostProps,
 } from "./jsx-shared.js";
 import type * as React from "react";
@@ -1822,7 +1823,6 @@ type Signalable<T> = T | (ReadonlySignal<T> & NotDeepSignal);
 type SignalableStyleObject<T> = {
   [Name in keyof T]: T[Name] | (ReadonlySignal<T[Name]> & NotDeepSignal);
 };
-type DirectSignalPropName = "title" | "id" | "className" | "hidden" | "disabled" | "style";
 type AriaPropName = `aria-${string}`;
 type SignalableHtmlProp<Name extends PropertyKey, Value> =
   | Signalable<Value | (Name extends "title" | "id" ? null : never)>
