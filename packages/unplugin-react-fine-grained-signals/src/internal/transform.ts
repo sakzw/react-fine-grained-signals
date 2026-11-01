@@ -1836,24 +1836,6 @@ function isRenderPropCallback(path: NodePath): boolean {
   return name.isJSXIdentifier() && !/^on[A-Z]/.test(name.node.name);
 }
 
-function containsSyntacticValueRead(path: NodePath): boolean {
-  let found = false;
-  const inspect = (member: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
-    if (getTrackedReadPropertyName(member) === "value") found = true;
-  };
-  if (path.isMemberExpression() || path.isOptionalMemberExpression()) inspect(path);
-  path.traverse({
-    // A function in a default (`onPick = () => count.value`) reads only when
-    // called later, not while the parameter initializer runs.
-    Function(nested) {
-      nested.skip();
-    },
-    MemberExpression: inspect,
-    OptionalMemberExpression: inspect,
-  });
-  return found;
-}
-
 function warnUncapturedParameterRead(functionPath: NodePath<t.Function>, options: InternalTransformOptions): void {
   reportWarning(
     options,
@@ -5983,7 +5965,9 @@ function applyManaged(
   const first = statements[0];
   if (explicit && first !== undefined) t.inheritsComments(declaration, first.node);
   const relocated = relocateTrackedParameters(path, state.typeScript);
-  if (path.get("params").some(containsSyntacticValueRead)) {
+  // The same rule that decided what to relocate: what is still left in the
+  // parameter list is exactly what could not be moved.
+  if (path.get("params").some((param) => parameterReadsTrackedValue(param, path))) {
     warnUncapturedParameterRead(path, options);
   }
   const originalStatements = body.isBlockStatement()

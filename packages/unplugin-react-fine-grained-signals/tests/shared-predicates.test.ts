@@ -212,3 +212,20 @@ export function A() { return <p>{read()}{s.value}</p>; }`,
     expect(code).toContain("{read()}");
   });
 });
+
+describe("RFGS004 and parameter-default reads", () => {
+  it("does not report a ref's .current.value read in a parameter default", () => {
+    const { code, diagnostics } = run(
+      `${header}export function A({ ref, v = ref.current.value }) { return <p>{v}{s.value}</p>; }`,
+    );
+    expect(code).toContain("_signals.capture(() => s.value)");
+    expect(diagnostics).not.toContain("RFGS004");
+  });
+
+  it("still reports a signal read the relocation had to leave in place", () => {
+    const { diagnostics } = run(`${header}export function A({ v = s.value }) { const s = 1; return <p>{v}{s}</p>; }`, {
+      mode: "all",
+    });
+    expect(diagnostics).toContain("RFGS004");
+  });
+});
