@@ -229,3 +229,34 @@ describe("RFGS004 and parameter-default reads", () => {
     expect(diagnostics).toContain("RFGS004");
   });
 });
+
+describe("RFGS003 callback targets", () => {
+  it("sees a render prop through a TypeScript wrapper", () => {
+    const { diagnostics } = run(`${header}export function A() { return <List render={(() => s.value) as Fn} />; }`);
+    expect(diagnostics).toContain("RFGS003");
+  });
+
+  it("sees a children callback through a TypeScript wrapper", () => {
+    const { diagnostics } = run(`${header}export function A() { return <List>{(() => s.value) as Fn}</List>; }`);
+    expect(diagnostics).toContain("RFGS003");
+  });
+
+  it("holds async callbacks in both slots to the same read test", () => {
+    const reading = run(
+      `${header}export function A() { return <><List>{async () => s.value}</List><List render={async () => s.value} /></>; }`,
+      { mode: "all" },
+    );
+    expect(reading.diagnostics.filter((id) => id === "RFGS003")).toHaveLength(2);
+    const action = run(
+      `${header}export function A() { return <form action={async (data) => { await save(data); }}>{s.value}</form>; }`,
+    );
+    expect(action.diagnostics).not.toContain("RFGS003");
+  });
+
+  it("leaves an event handler alone", () => {
+    const { diagnostics } = run(
+      `${header}export function A() { return <button onClick={(() => s.value) as Fn}>{s.value}</button>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+});

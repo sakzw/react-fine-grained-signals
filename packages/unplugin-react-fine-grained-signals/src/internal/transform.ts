@@ -1821,7 +1821,23 @@ function isJsxEventHandlerValue(path: NodePath): boolean {
   const attribute = container.parentPath;
   if (attribute === null || !attribute.isJSXAttribute()) return false;
   const name = attribute.node.name;
-  return t.isJSXIdentifier(name) && /^on[A-Z]/.test(name.name);
+  return t.isJSXIdentifier(name) && isEventHandlerPropName(name.name);
+}
+
+/** The `on[A-Z]` convention that names a JSX event-handler prop. */
+function isEventHandlerPropName(name: string): boolean {
+  return /^on[A-Z]/.test(name);
+}
+
+/**
+ * The function a JSX callback slot holds: an inline function -- seen through
+ * TypeScript wrappers, as `isRenderPropCallback` sees it -- or a same-module
+ * function a plain identifier names. Anything else has no visible body.
+ */
+function getJsxCallbackTarget(expression: NodePath): NodePath<t.Function> | undefined {
+  const value = unwrapTransparentPath(expression);
+  if (value.isArrowFunctionExpression() || value.isFunctionExpression()) return value;
+  return value.isIdentifier() ? resolveReferencedFunction(value, value.node.name) : undefined;
 }
 
 /** A JSX callback's execution is owned and scheduled by another component. */
@@ -1833,7 +1849,7 @@ function isRenderPropCallback(path: NodePath): boolean {
   if (parent.isJSXElement() || parent.isJSXFragment()) return true;
   if (!parent.isJSXAttribute()) return false;
   const name = parent.get("name");
-  return name.isJSXIdentifier() && !/^on[A-Z]/.test(name.node.name);
+  return name.isJSXIdentifier() && !isEventHandlerPropName(name.node.name);
 }
 
 function warnUncapturedParameterRead(functionPath: NodePath<t.Function>, options: InternalTransformOptions): void {
@@ -2735,60 +2751,36 @@ function inspectKnownRenderPropReads(
   reactImportSource: string,
 ): void {
   if (options.mode === "manual" && !hasOwnedLeadingComment(functionPath, useSignalTrackingComment)) return;
+  // One rule for both callback slots. An async or generator callback is held
+  // to the same test as a synchronous one -- it is reported when its body (or
+  // a same-module helper it calls) reads a signal -- so an async form
+  // `action` that never touches a signal is not reported as reading one.
+  const readsSignal = (target: NodePath<t.Function>): boolean =>
+    inspectFunction(
+      target,
+      options.importSource,
+      `${options.importSource}/internal`,
+      reactImportSource,
+      new Set([functionPath.node]),
+      true,
+    ).readsValue;
   functionPath.traverse({
     JSXExpressionContainer(expression) {
       if (!expression.parentPath.isJSXElement() && !expression.parentPath.isJSXFragment()) return;
-      const callback = expression.get("expression");
-      let target: NodePath<t.Function> | undefined;
-      if (callback.isArrowFunctionExpression() || callback.isFunctionExpression()) {
-        target = callback;
-      } else if (callback.isIdentifier()) {
-        target = resolveReferencedFunction(expression, callback.node.name);
-      }
-      if (
-        target === undefined ||
-        isOwnedBySignalControlFlow(expression, undefined, options.importSource, reactImportSource)
-      )
-        return;
-      const reads = inspectFunction(
-        target,
-        options.importSource,
-        `${options.importSource}/internal`,
-        reactImportSource,
-        new Set([functionPath.node]),
-        true,
-      ).readsValue;
-      if (reads) warnUntrackedChildrenCallbackRead(expression, options);
+      const target = getJsxCallbackTarget(expression.get("expression"));
+      if (target === undefined) return;
+      if (isOwnedBySignalControlFlow(expression, undefined, options.importSource, reactImportSource)) return;
+      if (readsSignal(target)) warnUntrackedChildrenCallbackRead(expression, options);
     },
     JSXAttribute(attribute) {
       const name = attribute.get("name");
-      if (!name.isJSXIdentifier() || /^on[A-Z]/.test(name.node.name)) return;
+      if (!name.isJSXIdentifier() || isEventHandlerPropName(name.node.name)) return;
       const value = attribute.get("value");
       if (!value.isJSXExpressionContainer()) return;
-      const expression = value.get("expression");
-      const propName = name.node.name;
-      if (isOwnedBySignalControlFlow(attribute, propName, options.importSource, reactImportSource)) return;
-      let target: NodePath<t.Function> | undefined;
-      if (expression.isArrowFunctionExpression() || expression.isFunctionExpression()) {
-        target = expression;
-      } else if (expression.isIdentifier()) {
-        target = resolveReferencedFunction(attribute, expression.node.name);
-      }
-      if (target === undefined || target.node.async || target.node.generator) {
-        // Deferred callbacks are outside this transform's proven ownership
-        // model, whether or not their signal reads are syntactically visible.
-        if (target !== undefined) warnUntrackedRenderPropRead(attribute, options);
-        return;
-      }
-      const reads = inspectFunction(
-        target,
-        options.importSource,
-        `${options.importSource}/internal`,
-        reactImportSource,
-        new Set([functionPath.node]),
-        true,
-      ).readsValue;
-      if (reads) warnUntrackedRenderPropRead(attribute, options);
+      const target = getJsxCallbackTarget(value.get("expression"));
+      if (target === undefined) return;
+      if (isOwnedBySignalControlFlow(attribute, name.node.name, options.importSource, reactImportSource)) return;
+      if (readsSignal(target)) warnUntrackedRenderPropRead(attribute, options);
     },
     // Destructuring from a tracked source is captured by the managed pass
     // (static expansion or a captured pattern), so it needs no warning here;
