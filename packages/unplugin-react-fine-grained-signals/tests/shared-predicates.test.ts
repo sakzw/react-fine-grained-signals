@@ -165,3 +165,50 @@ describe("RFSG control-flow ownership of a Match callback", () => {
     expect(diagnostics).toContain("RFGS003");
   });
 });
+
+describe("reads inside a Hook's callback", () => {
+  it.each(["managed", "inject"] as const)(
+    "does not select a component whose only read is in a custom Hook's callback (%s)",
+    (transform) => {
+      const { code } = run(
+        `import { useSignalEffect } from "react-fine-grained-signals";\n${header}export function A() { useSignalEffect(() => { console.log(s.value); }); return <p />; }`,
+        { transform },
+      );
+      expect(code).toBeUndefined();
+    },
+  );
+
+  it("does not select a component whose only read is in a later Hook argument", () => {
+    const { code } = run(
+      `import { useSyncExternalStore } from "react";\n${header}export function A() { const v = useSyncExternalStore(subscribe, () => s.value); return <p>{v}</p>; }`,
+    );
+    expect(code).toBeUndefined();
+  });
+
+  it("still selects a component that also reads in its own render", () => {
+    const { code } = run(
+      `import { useSignalEffect } from "react-fine-grained-signals";\n${header}export function A() { useSignalEffect(() => s.value); return <p>{s.value}</p>; }`,
+    );
+    expect(code).toContain("_signals.capture(() => s.value)");
+    expect(code).toContain("useSignalEffect(() => s.value)");
+  });
+});
+
+describe("Hook calls inside a helper", () => {
+  it("never folds a helper that calls use() into a capture closure", () => {
+    const { code } = run(
+      `import { use } from "react";\n${header}function title() { use(Ctx); return s.value; }\nexport function A() { return <p>{title()}{s.value}</p>; }`,
+    );
+    expect(code).not.toContain("capture(() => title())");
+    expect(code).toContain("{title()}");
+  });
+
+  it("sees a Hook call that is a concise arrow's whole body", () => {
+    const { code } = run(
+      `${header}const read = () => useLabel(s.value);
+export function A() { return <p>{read()}{s.value}</p>; }`,
+    );
+    expect(code).not.toContain("capture(() => read())");
+    expect(code).toContain("{read()}");
+  });
+});

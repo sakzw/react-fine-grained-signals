@@ -409,6 +409,18 @@ function isHookName(name: string): boolean {
 }
 
 /**
+ * Does calling something by this name call a Hook? `isHookName` plus React
+ * 19's `use`, which follows the same no-closure rule for this transform's
+ * purposes: it must not move into a capture callback, and a function handed
+ * to it belongs to React rather than to the caller's render. `isHookName`
+ * alone stays the rule for a function's own *identity* (`use` names no custom
+ * Hook), this is the rule for a *call*.
+ */
+function isHookCallName(name: string): boolean {
+  return isHookName(name) || name === "use";
+}
+
+/**
  * Does `path` render JSX *itself*, rather than merely containing some?
  *
  * Nested functions are skipped, because their JSX is their own output and not
@@ -1633,7 +1645,7 @@ function getThisObject(origin: NodePath): NodePath<t.ObjectExpression> | undefin
  * - it sits in an *argument* slot, never the callee, so the IIFE
  *   `(function App() { ... })()` -- which runs once at module scope, outside any
  *   render, exactly where a hook call throws -- is excluded.
- * - it is not the callback of a deferred hook (`useMemo(function Rows() {...},
+ * - it is not handed to a Hook (`useMemo(function Rows() {...},
  *   [])`), which runs inside the caller's render and must carry no hook of its
  *   own. The render-callback form (`items.map(function Row() {...})`) is
  *   excluded before this is ever reached, by `isRenderCallback`.
@@ -1648,7 +1660,7 @@ function isInlineNamedComponentArgument(
   if (id === null || id === undefined || !isComponentName(id.name)) return false;
   const slot = climbComponentWrappers(path, reactImportSource);
   if (!call.node.arguments.some((argument) => argument === slot.node)) return false;
-  if (isDeferredCallbackArgument(path)) return false;
+  if (isHookCallbackArgument(path)) return false;
   return rendersJsx(path);
 }
 
@@ -1732,16 +1744,6 @@ function isNestedTrackingBoundary(path: NodePath<t.Function>, reactImportSource:
   const identity = resolveComponentIdentity(path, reactImportSource, climbedParent);
   return isComponentIdentity(identity) || isHookIdentity(identity);
 }
-
-// React hooks whose callback argument is deliberately *not* part of the read
-// set of the render that declares it: an effect body runs after the commit, and
-// `useCallback`/`useMemo` hand back a value reused across renders rather than
-// re-evaluated on each one. Making reads in effects, event handlers and
-// asynchronous callbacks into render dependencies is an explicit non-goal of
-// the boundary design (development/design/use-signals-boundary-design.md), so a
-// `.value` read confined to one of these is no evidence that the surrounding
-// component subscribes to anything.
-const deferredCallbackHooks = new Set(["useEffect", "useLayoutEffect", "useInsertionEffect", "useCallback", "useMemo"]);
 
 /**
  * The property name a member expression reads, for the forms this file
@@ -1862,26 +1864,38 @@ function warnUncapturedParameterRead(functionPath: NodePath<t.Function>, options
   );
 }
 
-/** Is `path` the callback argument of `useEffect`/`useMemo`/one of their kin? */
-function isDeferredCallbackArgument(path: NodePath): boolean {
+/**
+ * Is `path` a function handed straight to a Hook call, in any argument
+ * position -- `useEffect(() => ...)`, `useMemo(() => ...)`,
+ * `useSyncExternalStore(subscribe, () => ...)`, `useSignalEffect(() => ...)`?
+ *
+ * Such a function belongs to React or to the Hook, not to the render that
+ * declares it: an effect body runs after the commit, `useMemo`/`useCallback`
+ * hand back a value reused across renders, and what a custom Hook does with
+ * its callback cannot be seen from here. Making reads in effects, event
+ * handlers and asynchronous callbacks into render dependencies is an explicit
+ * non-goal of the boundary design
+ * (development/design/use-signals-boundary-design.md), so a `.value` read
+ * confined to one of these is no evidence that the component subscribes to
+ * anything.
+ *
+ * This is the same rule the capture pass applies -- it never moves a Hook call
+ * into a capture and never captures inside its arguments -- so selection and
+ * capture cannot disagree: a component whose only read sits in such a
+ * callback would otherwise receive `useSignalCapture()` and `"use no memo"`
+ * with nothing to capture.
+ */
+function isHookCallbackArgument(path: NodePath): boolean {
   const slot = climbTransparentWrappers(path);
   const call = slot.parentPath;
   if (call === null) return false;
   const parts = getCallParts(call.node);
-  // All of these hooks take the callback first; a dependency array parked in
-  // any later position is not a callback at all.
-  if (parts === undefined || parts.arguments[0] !== slot.node) return false;
-  const callee = unwrapTransparent(parts.callee);
-  if (t.isIdentifier(callee)) return deferredCallbackHooks.has(callee.name);
-  // `React.useEffect(...)` / `React["useEffect"](...)` reach the same hook.
-  if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return false;
-  const property = getReadPropertyName(callee);
-  return property !== undefined && deferredCallbackHooks.has(property);
+  return parts !== undefined && parts.arguments.includes(slot.node) && callNameIsHook(parts.callee);
 }
 
 /**
  * Does a read at `path` sit inside a nested function that `functionPath`'s
- * render never runs -- an event handler, a deferred hook callback, or an async
+ * render never runs -- an event handler, a Hook's callback, or an async
  * body? Only the functions between the read and `functionPath` are examined:
  * the enclosing component is already known to be synchronous by the time any of
  * this matters, and anything further out owns its own inspection.
@@ -1894,7 +1908,7 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
   ) {
     if (current.node.async) return true;
     if (isJsxEventHandlerValue(current)) return true;
-    if (isDeferredCallbackArgument(current)) return true;
+    if (isHookCallbackArgument(current)) return true;
   }
   return false;
 }
@@ -3498,28 +3512,13 @@ function isTrackedAliasReference(
   return binding !== undefined && trackedAliases.has(binding) && !isDeferredReadContext(path, functionPath);
 }
 
+/**
+ * Does `functionPath`'s own body call a Hook (nested functions excluded)? The
+ * body itself is checked too, so a concise arrow whose whole body is the call
+ * (`() => useLabel(count.value)`) counts.
+ */
 function functionCallsHook(functionPath: NodePath<t.Function>): boolean {
-  let found = false;
-  const inspectCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
-    const callee = unwrapTransparent(path.node.callee);
-    const name = t.isIdentifier(callee)
-      ? callee.name
-      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
-        ? getStaticMemberChain(callee)?.keys.at(-1)
-        : undefined;
-    if (name !== undefined && isHookName(name)) {
-      found = true;
-      path.stop();
-    }
-  };
-  functionPath.get("body").traverse({
-    Function(nested) {
-      nested.skip();
-    },
-    CallExpression: inspectCall,
-    OptionalCallExpression: inspectCall,
-  });
-  return found;
+  return expressionCallsHook(functionPath.get("body") as NodePath);
 }
 
 function externalCallMayReadTrackedValue(
@@ -3545,12 +3544,12 @@ function externalCallMayReadTrackedValue(
   if (target === undefined) {
     const callee = unwrapTransparent(call.node.callee);
     if (t.isIdentifier(callee)) {
-      if (isHookName(callee.name)) return false;
+      if (isHookCallName(callee.name)) return false;
       target = resolveReferencedFunction(call, callee.name);
     } else if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
       const chain = getStaticMemberChain(callee);
       const name = chain?.keys.at(-1);
-      if (name === undefined || isHookName(name)) return false;
+      if (name === undefined || isHookCallName(name)) return false;
       target = resolveKeyedFunction(call, callee);
     }
   }
@@ -3574,7 +3573,7 @@ function externalCallMayReadTrackedValue(
       // the synchronous call itself so any signal reads it performs belong to
       // this render attempt. Hook-shaped imports stay as direct calls: wrapping
       // them in a callback would violate the Rules of Hooks.
-      if (!isHookName(importedName) && !isComponentName(importedName) && !isComponentName(callee.name)) {
+      if (!isHookCallName(importedName) && !isComponentName(importedName) && !isComponentName(callee.name)) {
         return true;
       }
     }
@@ -5062,8 +5061,7 @@ function callNameIsHook(node: t.Node): boolean {
     : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
       ? getStaticMemberChain(callee)?.keys.at(-1)
       : undefined;
-  // React 19's `use` follows the same no-closure rule for this purpose.
-  return name !== undefined && (isHookName(name) || name === "use");
+  return name !== undefined && isHookCallName(name);
 }
 
 /** Does evaluating this expression call a Hook outside nested functions? */
