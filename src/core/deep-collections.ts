@@ -105,7 +105,7 @@ function isWeakCollectionKey(value: unknown): value is object | symbol {
 /** Builds the collection support for one engine; called once, on first use. */
 export function createCollectionSupport(ctx: CollectionContext): CollectionSupport {
   setUpReactiveCollectionIterator();
-  const { adapter, shouldTrackDeepRead, toRaw, proxyToRaw, normalizedProxyCarriers, isPlainObjectOrArray } = ctx;
+  const { adapter, shouldTrackDeepRead, toRaw, proxyToRaw, lookupIdentity, isPlainObjectOrArray } = ctx;
   const reactiveCollections = new WeakMap<object, CollectionMetadata>();
   const scheduledCollectionSweeps = new WeakSet<CollectionMetadata>();
   const hasLinkedSubscribers = (version: VersionSignal): boolean =>
@@ -430,11 +430,11 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     };
     const normalize = (value: unknown): unknown => unwrap(value);
     // Lookups (`get`/`has`/`delete`) only need the identity a stored key would
-    // have. Validating the key's whole reachable graph like a write would make
-    // every lookup O(graph) and throw for values that are merely absent.
+    // have (see `lookupIdentity`). A carrier first answers with the entry it
+    // was stored as in this collection.
     const normalizeLookupKey = (value: unknown): unknown => {
       if (!isObjectLike(value)) return value;
-      return toRaw(value) ?? storedCarrierKey(value) ?? normalizedProxyCarriers.get(value) ?? value;
+      return toRaw(value) ?? storedCarrierKey(value) ?? lookupIdentity(value, support);
     };
     // A key/member that is a carrier (a plain object holding a deep proxy) is
     // stored as a normalized clone. Its entry identity is fixed by the first

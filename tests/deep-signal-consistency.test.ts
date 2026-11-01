@@ -42,3 +42,23 @@ describe("deep signal errors name the API the state belongs to", () => {
     expect(() => deepSignal(foreign as never)).toThrow(/use deepCollectionSignal\(\) for a collection root/);
   });
 });
+
+describe("array searches and collection lookups share one identity rule", () => {
+  it("finds a stored carrier again with includes/indexOf, as Set.has does", () => {
+    const state = deepCollectionSignal({ inner: { id: 1 }, list: [] as object[], set: new Set<object>() });
+    const carrier = { inner: state.value.inner };
+    state.value.list.push(carrier);
+    state.value.set.add(carrier);
+    expect(state.value.set.has(carrier)).toBe(true);
+    expect(state.value.list.includes(carrier)).toBe(true);
+    expect(state.value.list.indexOf(carrier)).toBe(0);
+    expect(state.value.list.lastIndexOf(carrier)).toBe(0);
+  });
+
+  it("does the same in plain deepSignal state", () => {
+    const state = deepSignal({ inner: { id: 1 }, list: [] as object[] });
+    const carrier = { inner: state.value.inner };
+    state.value.list.push(carrier);
+    expect(state.value.list.indexOf(carrier)).toBe(0);
+  });
+});

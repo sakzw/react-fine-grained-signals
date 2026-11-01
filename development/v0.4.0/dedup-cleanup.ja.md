@@ -126,3 +126,21 @@ docs: `docs/guides/hooks.md`（英日）の`useDeepSignalValue`に、引数の�
 | index-full | 15.76 kB | 15.92 kB |
 
 rawは変わらないか減った。同じprefixが続く文字列はgzipでよく縮むが、組み立てた文字列は縮みにくいため、gzipでは増えた。
+
+## 配列の検索とcollectionの検索で同一性の規則をそろえた（不具合の修正）
+
+### 変更前
+
+deep proxyを含むplain object（carrier、例: `{ inner: state.value.inner }`）は、保存するときに正規化した複製になる。同じcarrierをもう一度渡すと同じ複製を使う（`normalizedProxyCarriers`）。
+
+- collectionの`has`/`get`/`delete`は、carrierを複製に読み替えていた。`set.add(c); set.has(c)`は`true`。
+- 配列の`includes`/`indexOf`/`lastIndexOf`は、proxyをrawに戻すだけで、carrierを読み替えなかった。`list.push(c); list.indexOf(c)`は`-1`。
+- collection側は、複製がどのmodeで作られたかを確認していなかった（書き込み側の`prepareDeepValue`は確認する）。
+
+### 変更後
+
+engineの`lookupIdentity(value, support)`（proxyならraw、このmodeで保存したcarrierならその複製、それ以外はそのまま）を、配列の検索とcollectionの検索の両方が使う。collectionは、そのcollectionに保存したentry（`storedCarrierKey`）を先に確認する。書き込みと違い、carrierのgraphは検査し直さない（検索がgraphの大きさに比例し、存在しないだけの値でthrowするのを避けるため。これまでのcollection側と同じ）。`CollectionContext`は`normalizedProxyCarriers`の代わりに`lookupIdentity`を渡す。
+
+### テスト
+
+`tests/deep-signal-consistency.test.ts`（前節の`deep-signal-messages.test.ts`を改名した）: collection modeとplain modeで、配列に保存したcarrierを`includes`/`indexOf`/`lastIndexOf`で見つけられること。変更前のengineでは失敗することを確認した。

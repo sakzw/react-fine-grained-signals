@@ -59,7 +59,7 @@ export interface CollectionContext {
   shouldTrackDeepRead(): boolean;
   toRaw(value: unknown): object | undefined;
   readonly proxyToRaw: WeakMap<object, object>;
-  readonly normalizedProxyCarriers: WeakMap<object, object>;
+  lookupIdentity(value: object, support: CollectionSupport | undefined): unknown;
   isPlainObjectOrArray(value: unknown): value is object;
   prepareDeepValue<T>(value: T, support: CollectionSupport | undefined): T;
   wrap<T>(value: T, support: CollectionSupport | undefined): T;
@@ -597,6 +597,20 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     return root;
   }
 
+  /**
+   * The identity a lookup (`includes`/`indexOf`, a collection's `has`/`get`/
+   * `delete`) compares against stored raw data: a proxy's raw target, or the
+   * copy a carrier was normalized into for this mode when it was stored. Unlike
+   * a write (`prepareDeepValue`), it does not re-validate the carrier's graph:
+   * that would make every lookup O(graph) and throw for values merely absent.
+   */
+  function lookupIdentity(value: object, support: CollectionSupport | undefined): unknown {
+    const raw = toRaw(value);
+    if (raw !== undefined) return raw;
+    const carrier = normalizedProxyCarriers.get(value);
+    return carrier !== undefined && carrierSupports.get(value) === (support ?? null) ? carrier : value;
+  }
+
   function prepareDeepValue<T>(value: T, support: CollectionSupport | undefined): T {
     // Reassigning a value obtained from this deep signal is already known-good.
     // Avoid validating its entire graph again on this common O(1) path.
@@ -938,7 +952,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
           const wrapper = function (this: unknown, ...args: unknown[]) {
             const found = Reflect.apply(method, this, args);
             if ((found !== -1 && found !== false) || !isObjectLike(args[0])) return found;
-            args[0] = toRaw(args[0]) ?? args[0];
+            args[0] = lookupIdentity(args[0], support);
             return Reflect.apply(method, toRaw(this) ?? this, args);
           };
           metadata.arrayMethods.set(key, { method, wrapper });
@@ -1157,7 +1171,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     shouldTrackDeepRead,
     toRaw,
     proxyToRaw,
-    normalizedProxyCarriers,
+    lookupIdentity,
     isPlainObjectOrArray,
     prepareDeepValue,
     wrap,
