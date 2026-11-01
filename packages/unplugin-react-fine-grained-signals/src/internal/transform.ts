@@ -2515,16 +2515,36 @@ function warnUntrackedChildrenCallbackRead(
   );
 }
 
-type SignalControlFlowName = "For" | "Index" | "Match" | "Show" | "Switch";
+/**
+ * The control-flow components `${importSource}/utils` exports. Written once;
+ * the type, the lookup set and the callback-prop table below derive from it,
+ * and a test pins it to the runtime's actual `/utils` exports.
+ */
+export const SIGNAL_CONTROL_FLOW_COMPONENTS = ["For", "Index", "Match", "Show", "Switch"] as const;
+
+type SignalControlFlowName = (typeof SIGNAL_CONTROL_FLOW_COMPONENTS)[number];
 type SignalControlFlowImport = { kind: "namespace" } | { kind: "component"; name: SignalControlFlowName };
 
-const signalControlFlowNames = new Set<SignalControlFlowName>(["For", "Index", "Match", "Show", "Switch"]);
+const signalControlFlowNames: ReadonlySet<string> = new Set(SIGNAL_CONTROL_FLOW_COMPONENTS);
+
+/**
+ * The props of each control-flow component whose callback the component
+ * itself invokes inside its own managed render scope, so a read there is
+ * tracked and RFGS003 does not apply. A `Match` callback is invoked by its
+ * enclosing `Switch` rather than by `Match`, so it also needs that `Switch`
+ * (see `isOwnedBySignalControlFlow`); `Switch` takes no callback of its own.
+ */
+const signalControlFlowCallbackProps: Record<SignalControlFlowName, readonly string[]> = {
+  For: ["children", "by"],
+  Index: ["children"],
+  Match: ["children"],
+  Show: ["children"],
+  Switch: [],
+};
 
 /** `name` as an RFSG control-flow export, if it is one. */
 function asSignalControlFlowComponent(name: string): SignalControlFlowImport | undefined {
-  return signalControlFlowNames.has(name as SignalControlFlowName)
-    ? { kind: "component", name: name as SignalControlFlowName }
-    : undefined;
+  return signalControlFlowNames.has(name) ? { kind: "component", name: name as SignalControlFlowName } : undefined;
 }
 
 /**
@@ -2608,7 +2628,7 @@ function signalControlFlowTagName(
   if (!current.isJSXIdentifier()) return undefined;
   const resolved = resolveSignalControlFlowImport(current, current.node.name, importSource);
   if (resolved?.kind !== "namespace") return undefined;
-  if (parts.length !== 1 || !signalControlFlowNames.has(parts[0] as SignalControlFlowName)) return undefined;
+  if (parts.length !== 1 || !signalControlFlowNames.has(parts[0]!)) return undefined;
   return parts[0] as SignalControlFlowName;
 }
 
@@ -2688,11 +2708,11 @@ function isOwnedBySignalControlFlow(
   if (!namePath.isJSXIdentifier() && !namePath.isJSXMemberExpression()) return false;
   const owner = signalControlFlowTagName(namePath, importSource);
   if (owner === undefined) return false;
-  if (propName !== undefined && propName !== "children") return owner === "For" && propName === "by";
-  if (owner === "Show" || owner === "For" || owner === "Index") return true;
+  // A JSX child expression is the `children` prop.
+  if (!signalControlFlowCallbackProps[owner].includes(propName ?? "children")) return false;
   // Match is declarative; its branch callback is invoked by its nearest
   // enclosing RFSG Switch, not by Match itself.
-  return owner === "Match" && isMatchCollectedBySwitch(element, importSource, reactImportSource);
+  return owner !== "Match" || isMatchCollectedBySwitch(element, importSource, reactImportSource);
 }
 
 type StaticConstObjectPattern = {
