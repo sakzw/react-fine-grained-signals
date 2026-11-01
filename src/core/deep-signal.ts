@@ -1,5 +1,5 @@
 import { coreRuntime } from "./core-runtime.js";
-import { executionContext, UNTRACKED_OWNER } from "./execution-owner.js";
+import { executionContext, isGraphExecutionOwner, isRenderExecutionOwner, UNTRACKED_OWNER } from "./execution-owner.js";
 import { createDeepSignalFactory } from "./deep-signal-engine.js";
 import { batch, isSignal, registerSignal, untracked } from "./base.js";
 import type { ReadonlySignal } from "./base.js";
@@ -143,10 +143,7 @@ export function getProductionDeepSignals(): NonNullable<typeof productionDeepSig
       // Another copy's `untracked()` only clears that copy's subscriber; the
       // shared owner is what says this read must not be tracked by anyone.
       if (owner === UNTRACKED_OWNER) return false;
-      return (
-        coreRuntime.hasActiveSubscriber() ||
-        (owner !== undefined && typeof owner !== "symbol" && (owner.kind === "graph" || owner.kind === "render"))
-      );
+      return coreRuntime.hasActiveSubscriber() || isGraphExecutionOwner(owner) || isRenderExecutionOwner(owner);
     },
     getBatchDepth: () => coreRuntime.getBatchDepth(),
     isSpeculative: () => coreRuntime.isSpeculative(),

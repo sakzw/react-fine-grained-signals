@@ -1,4 +1,9 @@
-import { UNTRACKED_OWNER, executionContext, withSynchronousExecutionOwner } from "./execution-owner.js";
+import {
+  UNTRACKED_OWNER,
+  executionContext,
+  isGraphExecutionOwner,
+  withSynchronousExecutionOwner,
+} from "./execution-owner.js";
 
 /** Internal dependency contract used by the React render collector. */
 export interface RenderDependency {
@@ -35,11 +40,8 @@ export function trackRenderDependency(dependency: RenderDependency, observedVers
 export function untrackedRender<T>(callback: () => T): T {
   const previous = setActiveRenderCollector();
   try {
-    const owner = executionContext.owner;
     // A render-only pause must keep an enclosing graph subscriber active.
-    if (owner !== undefined && typeof owner !== "symbol" && owner.kind === "graph") {
-      return callback();
-    }
+    if (isGraphExecutionOwner(executionContext.owner)) return callback();
     return withSynchronousExecutionOwner(UNTRACKED_OWNER, callback);
   } finally {
     setActiveRenderCollector(previous);
@@ -129,4 +131,28 @@ export function notifyListener(listener: () => void): void {
       { cause: error },
     );
   }
+}
+
+/**
+ * A detached effect that subscribes to what `read` reads and calls `onChange`
+ * after every run but the first. A read that throws keeps its errored computed
+ * observed, and `onChange` is isolated like any other listener. Shared by
+ * every subscription that is not itself a render dependency: hooks, direct
+ * JSX bindings, the render store and graph nodes.
+ */
+export function subscribeToReads(
+  detachedEffect: (fn: () => void) => () => void,
+  read: () => void,
+  onChange: () => void,
+): () => void {
+  let initial = true;
+  return detachedEffect(() => {
+    try {
+      read();
+    } catch {
+      /* Keep errored computed boundaries observed. */
+    }
+    if (initial) initial = false;
+    else notifyListener(onChange);
+  });
 }

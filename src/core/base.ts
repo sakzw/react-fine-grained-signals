@@ -1,6 +1,6 @@
 import { coreRuntime } from "./core-runtime.js";
 import { multipleCopiesError } from "./execution-owner.js";
-import { SIGNAL_BRAND } from "./signal-brand.js";
+import { SIGNAL_BRAND, stampSignalBrand } from "./signal-brand.js";
 
 declare const readonlySignalBrand: unique symbol;
 declare const signalWriteType: unique symbol;
@@ -51,20 +51,7 @@ const signalInstances = new WeakSet<object>();
 /** Marks an internal signal implementation for the public identity guard. */
 export function registerSignal<T extends object>(value: T): T {
   signalInstances.add(value);
-  // Non-enumerable keeps the brand out of JSON, `Object.keys`, spread, and
-  // React's prop diffing; non-writable and non-configurable keep it from being
-  // retargeted or stripped once the value is public. The hardening is free:
-  // measured against a writable/configurable descriptor the cost is identical,
-  // because it is the `defineProperty` call itself, and V8 keeps the instance
-  // in fast properties either way (checked with `%HasFastProperties`). Stamping
-  // the prototype instead would be worse — that pushes the prototype into
-  // dictionary mode, which every lookup through it then pays for.
-  Object.defineProperty(value, SIGNAL_BRAND, {
-    value: true,
-    enumerable: false,
-    writable: false,
-    configurable: false,
-  });
+  stampSignalBrand(value);
   return value;
 }
 

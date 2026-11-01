@@ -2,6 +2,7 @@
 import { useEffect, useInsertionEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import type { AlienDerivedRenderAdapter, RenderAttempt } from "../core/alien-derived-types.js";
 import { executionContext, isRenderExecutionOwner } from "../core/execution-owner.js";
+import { notifyListener } from "../core/render-tracking.js";
 
 type ScopePolicy = "managed" | "bare";
 interface ManagedScope {
@@ -109,7 +110,7 @@ export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDeri
     }
     #notify = (): void => {
       this.#version = (this.#version + 1) | 0;
-      for (const listener of this.#listeners) listener();
+      for (const listener of this.#listeners) notifyListener(listener);
     };
     dispose(): void {
       this.#unsubscribe?.();

@@ -1,5 +1,5 @@
 import { coreRuntime } from "./core-runtime.js";
-import { notifyListener } from "./render-tracking.js";
+import { subscribeToReads } from "./render-tracking.js";
 
 // A wrapper whose reads are delegated to another readable (a deep signal root
 // over its internal source) is subscribed through that readable.
@@ -21,14 +21,11 @@ export function subscribeLocalReadable(readable: object, listener: () => void): 
   if (coreRuntime.getNodeForReadable(target as { value: unknown; peek(): unknown }) === undefined) {
     throw new TypeError("Only signals created by react-fine-grained-signals can be subscribed to");
   }
-  let initial = true;
-  return coreRuntime.detachedEffect(() => {
-    try {
+  return subscribeToReads(
+    coreRuntime.detachedEffect,
+    () => {
       (target as { value: unknown }).value;
-    } catch {
-      /* Keep errored computed boundaries observed. */
-    }
-    if (initial) initial = false;
-    else notifyListener(listener);
-  });
+    },
+    listener,
+  );
 }

@@ -205,3 +205,23 @@ collectionかどうかの判定が4通りあった。engineの`instanceof`の連
 | deep-collections | 13.26 kB | 13.33 kB |
 
 plain modeのbundleが種類の判定（brandの確認）を持つようになった分だけ増えた。予算は10.50 kB。
+
+## 購読effectの共有と、coreの小さな重複（ほぼ挙動は変わらない）
+
+### 購読effect
+
+render依存でない購読（signalを読み、最初の実行のあとの変化ごとにlistenerを呼ぶdetached effect）が3箇所にあった。listenerがthrowしたときの扱いが違っていた。
+
+- `subscribeLocalReadable`（hookとJSX binding）: `notifyListener`で包み、「render-subscription listener threw」として報告し、ほかのlistenerへの通知を続ける。
+- `subscribeReadables`（`useSignalTracking`のrender store）とgraph nodeの`subscribeRender`: listenerを直接呼んでいた。throwはeffectの失敗として「an effect() callback threw」と報告されていた。render storeの`#notify`も、listenerごとに包んでいなかった。
+
+`subscribeToReads(detachedEffect, read, onChange)`（`render-tracking.ts`）を3箇所が使い、`onChange`は`notifyListener`で包む。render storeの`#notify`もlistenerごとに`notifyListener`で包む。`subscribeRender`のrevisionの確認は`read`の中に移した。
+
+テスト: `tests/core.test.ts`に、graph nodeのrender listenerがthrowしても「render-subscription listener」として報告し、次のlistenerへ通知することを追加した。変更前のcoreでは失敗することを確認した。
+
+### 小さな重複
+
+- `deepCollectionSignal`の、size・keyの順序・entryの順序のversionを上げる処理（5箇所）を`notifyStructure`にした。Map/Setのobject keyのversionの置き場所の選択（2箇所）を`objectKeyedVersions`にした。
+- `trackWeakCollectionKey`/`notifyWeakCollectionKey`の、weak keyでない場合の分岐は届かなかった（WeakMap/WeakSetの呼び出し側は、その前にほかのkeyを除いている）。分岐を消し、`weakCollectionVersion`を直接呼ぶ。
+- ownerの種類の確認（`deep-signal.ts`と`render-tracking.ts`のinline）を、`isGraphExecutionOwner`/`isRenderExecutionOwner`にした。
+- brandの付与（`base.ts`の`registerSignal`と、coreのhelper signal）を`stampSignalBrand`（`signal-brand.ts`）にまとめ、descriptorの理由のコメントもそこへ移した。

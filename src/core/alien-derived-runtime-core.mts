@@ -14,8 +14,8 @@ import {
   withSynchronousExecutionOwner,
 } from "./execution-owner.js";
 import type { ExecutionContextOwner, ExecutionOwner, GraphExecutionOwner } from "./execution-owner.js";
-import { activeRenderCollector, trackRenderDependency } from "./render-tracking.js";
-import { SIGNAL_BRAND } from "./signal-brand.js";
+import { activeRenderCollector, subscribeToReads, trackRenderDependency } from "./render-tracking.js";
+import { stampSignalBrand } from "./signal-brand.js";
 import type {
   AlienDerivedGraphRuntime,
   RenderAdapterForCore,
@@ -147,19 +147,22 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     if (!renderDependencies.has(readable)) {
       node.getRenderVersion = () => node.renderRevision;
       node.subscribeRender = (listener: () => void) => {
-        let initial = true;
         let version = node.renderRevision;
-        return detachedEffect(() => {
-          try {
-            readable.value;
-          } catch {
-            /* Keep erroring boundaries subscribed. */
-          }
-          const nextVersion = node.renderRevision;
-          if (initial) initial = false;
-          else if (nextVersion !== version) listener();
-          version = nextVersion;
-        });
+        let changed = false;
+        return subscribeToReads(
+          detachedEffect,
+          () => {
+            try {
+              readable.value;
+            } finally {
+              changed = node.renderRevision !== version;
+              version = node.renderRevision;
+            }
+          },
+          () => {
+            if (changed) listener();
+          },
+        );
       };
       renderDependencies.set(readable, node);
     }
@@ -590,10 +593,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
 
   // Public API/brand candidates. Each public object is the readable class
   // instance itself; no outer wrapper or per-instance methods.
-  const brandDescriptor = () => ({ value: true, enumerable: false, writable: false, configurable: false });
-  function registerHelperBrand(value: object): void {
-    Object.defineProperty(value, SIGNAL_BRAND, brandDescriptor());
-  }
+  const registerHelperBrand = stampSignalBrand;
 
   function inlineWrite(node: RuntimeSource, value: unknown): void {
     if (!Object.is(node.pendingValue, (node.pendingValue = value))) {

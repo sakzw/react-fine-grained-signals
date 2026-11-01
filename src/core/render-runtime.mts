@@ -7,7 +7,7 @@ import {
   UNTRACKED_OWNER,
 } from "./execution-owner.js";
 import type { RenderExecutionOwner } from "./execution-owner.js";
-import { activeRenderCollector, setActiveRenderCollector } from "./render-tracking.js";
+import { activeRenderCollector, setActiveRenderCollector, subscribeToReads } from "./render-tracking.js";
 import type { RenderCollector } from "./render-tracking.js";
 import type {
   AlienDerivedGraphRuntime,
@@ -272,18 +272,21 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
   }
 
   function subscribeReadables(readables: readonly RuntimeReadable[], notify: () => void): () => void {
-    let initial = true;
-    return core.detachedEffect(() => {
-      for (const readable of readables) {
-        try {
-          readable.value;
-        } catch {
-          /* Keep errored computed boundaries observed. */
+    // One effect for all of them, each read on its own so one that throws
+    // still lets the rest subscribe.
+    return subscribeToReads(
+      core.detachedEffect,
+      () => {
+        for (const readable of readables) {
+          try {
+            readable.value;
+          } catch {
+            /* Keep errored computed boundaries observed. */
+          }
         }
-      }
-      if (initial) initial = false;
-      else notify();
-    });
+      },
+      notify,
+    );
   }
 
   function getExecutionOwner() {

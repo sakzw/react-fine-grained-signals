@@ -145,18 +145,24 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     if (Reflect.ownKeys(value).length !== 0) throw collectionError(OWN_PROPERTIES);
   }
 
+  /** Where a Map/Set keeps the versions of object keys of `kind`, held weakly. */
+  const objectKeyedVersions = (
+    metadata: CollectionMetadata,
+    kind: "values" | "existence" | "members",
+  ): WeakMap<object, VersionSignal> =>
+    kind === "values"
+      ? metadata.objectValues
+      : kind === "existence"
+        ? metadata.objectExistence
+        : metadata.objectMembers;
+
   const collectionVersion = (
     metadata: CollectionMetadata,
     kind: "values" | "existence" | "members",
     key: unknown,
   ): VersionSignal => {
     const weakKey = isWeakCollectionKey(key);
-    const weakVersions =
-      kind === "values"
-        ? metadata.objectValues
-        : kind === "existence"
-          ? metadata.objectExistence
-          : metadata.objectMembers;
+    const weakVersions = objectKeyedVersions(metadata, kind);
     let version = weakKey ? weakVersions.get(key as object) : metadata[kind].get(key);
     if (version === undefined) {
       version = adapter.createVersionSignal(0);
@@ -199,24 +205,22 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     return version;
   };
 
-  const trackWeakCollectionKey = (
-    metadata: CollectionMetadata,
-    weakKind: "weakValues" | "weakExistence" | "weakMembers",
-    strongKind: "values" | "existence" | "members",
-    key: object | symbol,
-  ): VersionSignal =>
-    isWeakCollectionKey(key)
-      ? weakCollectionVersion(metadata, weakKind, key as object)
-      : collectionVersion(metadata, strongKind, key);
-
+  // A WeakMap/WeakSet only ever holds weak keys: every caller has rejected
+  // any other key before it gets here, as the native collection would.
   const notifyWeakCollectionKey = (
     metadata: CollectionMetadata,
     weakKind: "weakValues" | "weakExistence" | "weakMembers",
-    strongKind: "values" | "existence" | "members",
-    key: object | symbol,
+    key: unknown,
   ): void => {
-    const version = isWeakCollectionKey(key) ? metadata[weakKind].get(key as object) : metadata[strongKind].get(key);
+    const version = metadata[weakKind].get(key as object);
     if (version !== undefined) version.value += 1;
+  };
+
+  /** A change to which keys or members exist: size and both iteration orders. */
+  const notifyStructure = (metadata: CollectionMetadata): void => {
+    if (metadata.size !== undefined) metadata.size.value += 1;
+    if (metadata.keysIteration !== undefined) metadata.keysIteration.value += 1;
+    if (metadata.entriesIteration !== undefined) metadata.entriesIteration.value += 1;
   };
 
   const trackCollectionVersion = (version: VersionSignal): void => {
@@ -239,12 +243,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
     key: unknown,
   ): void => {
     const weakKey = isWeakCollectionKey(key);
-    const weakVersions =
-      kind === "values"
-        ? metadata.objectValues
-        : kind === "existence"
-          ? metadata.objectExistence
-          : metadata.objectMembers;
+    const weakVersions = objectKeyedVersions(metadata, kind);
     const version = weakKey ? weakVersions.get(key as object) : metadata[kind].get(key);
     if (version !== undefined) version.value += 1;
   };
@@ -445,7 +444,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
             if (kind === "WeakMap") {
               if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.get, target, [normalized]);
               if (shouldTrackDeepRead())
-                trackCollectionVersion(trackWeakCollectionKey(metadata, "weakValues", "values", normalized));
+                trackCollectionVersion(weakCollectionVersion(metadata, "weakValues", normalized as object));
               return wrapRead(Reflect.apply(WeakMap.prototype.get, target, [normalized]));
             }
             if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "values", normalized));
@@ -457,7 +456,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
             if (kind === "WeakMap") {
               if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
               if (shouldTrackDeepRead())
-                trackCollectionVersion(trackWeakCollectionKey(metadata, "weakExistence", "existence", normalized));
+                trackCollectionVersion(weakCollectionVersion(metadata, "weakExistence", normalized as object));
               return Reflect.apply(WeakMap.prototype.has, target, [normalized]);
             }
             if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "existence", normalized));
@@ -486,15 +485,10 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
                 if (kind === "Map") {
                   notifyCollectionKey(metadata, "values", normalizedKey);
                   notifyCollectionKey(metadata, "existence", normalizedKey);
-                  const size = metadata.size;
-                  if (size !== undefined) size.value += 1;
-                  const keys = metadata.keysIteration;
-                  if (keys !== undefined) keys.value += 1;
-                  const entries = metadata.entriesIteration;
-                  if (entries !== undefined) entries.value += 1;
+                  notifyStructure(metadata);
                 } else {
-                  notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
-                  notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalizedKey as object | symbol);
+                  notifyWeakCollectionKey(metadata, "weakValues", normalizedKey);
+                  notifyWeakCollectionKey(metadata, "weakExistence", normalizedKey);
                 }
               } else if (!Object.is(oldValue, normalizedValue)) {
                 if (kind === "Map") {
@@ -502,7 +496,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
                   const entries = metadata.entriesIteration;
                   if (entries !== undefined) entries.value += 1;
                 } else {
-                  notifyWeakCollectionKey(metadata, "weakValues", "values", normalizedKey as object | symbol);
+                  notifyWeakCollectionKey(metadata, "weakValues", normalizedKey);
                 }
               }
             });
@@ -523,15 +517,10 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
               if (kind === "Map") {
                 notifyCollectionKey(metadata, "values", normalized);
                 notifyCollectionKey(metadata, "existence", normalized);
-                const size = metadata.size;
-                if (size !== undefined) size.value += 1;
-                const keys = metadata.keysIteration;
-                if (keys !== undefined) keys.value += 1;
-                const entries = metadata.entriesIteration;
-                if (entries !== undefined) entries.value += 1;
+                notifyStructure(metadata);
               } else {
-                notifyWeakCollectionKey(metadata, "weakValues", "values", normalized as object | symbol);
-                notifyWeakCollectionKey(metadata, "weakExistence", "existence", normalized as object | symbol);
+                notifyWeakCollectionKey(metadata, "weakValues", normalized);
+                notifyWeakCollectionKey(metadata, "weakExistence", normalized);
               }
             });
             sweepCollectionKeys(metadata);
@@ -554,12 +543,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
                 }
                 Set.prototype.clear.call(target);
               }
-              const size = metadata.size;
-              if (size !== undefined) size.value += 1;
-              const keys = metadata.keysIteration;
-              if (keys !== undefined) keys.value += 1;
-              const entries = metadata.entriesIteration;
-              if (entries !== undefined) entries.value += 1;
+              notifyStructure(metadata);
             });
             sweepCollectionKeys(metadata);
             return undefined;
@@ -570,7 +554,7 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
             if (kind === "WeakSet") {
               if (!isWeakCollectionKey(normalized)) return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
               if (shouldTrackDeepRead())
-                trackCollectionVersion(trackWeakCollectionKey(metadata, "weakMembers", "members", normalized));
+                trackCollectionVersion(weakCollectionVersion(metadata, "weakMembers", normalized as object));
               return Reflect.apply(WeakSet.prototype.has, target, [normalized]);
             }
             if (shouldTrackDeepRead()) trackCollectionVersion(collectionVersion(metadata, "members", normalized));
@@ -591,14 +575,9 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
               if (!had) {
                 if (kind === "Set") {
                   notifyCollectionKey(metadata, "members", normalized);
-                  const size = metadata.size;
-                  if (size !== undefined) size.value += 1;
-                  const keys = metadata.keysIteration;
-                  if (keys !== undefined) keys.value += 1;
-                  const entries = metadata.entriesIteration;
-                  if (entries !== undefined) entries.value += 1;
+                  notifyStructure(metadata);
                 } else {
-                  notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
+                  notifyWeakCollectionKey(metadata, "weakMembers", normalized);
                 }
               }
             });
@@ -618,14 +597,9 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
               else WeakSet.prototype.delete.call(target, normalized as object);
               if (kind === "Set") {
                 notifyCollectionKey(metadata, "members", normalized);
-                const size = metadata.size;
-                if (size !== undefined) size.value += 1;
-                const keys = metadata.keysIteration;
-                if (keys !== undefined) keys.value += 1;
-                const entries = metadata.entriesIteration;
-                if (entries !== undefined) entries.value += 1;
+                notifyStructure(metadata);
               } else {
-                notifyWeakCollectionKey(metadata, "weakMembers", "members", normalized as object | symbol);
+                notifyWeakCollectionKey(metadata, "weakMembers", normalized);
               }
             });
             sweepCollectionKeys(metadata);

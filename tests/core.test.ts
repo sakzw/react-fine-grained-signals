@@ -999,3 +999,35 @@ describe("computed error propagation", () => {
     expect(reported?.cause).toBeInstanceOf(Error);
   });
 });
+
+describe("subscriptions that are not render dependencies isolate their listeners alike", () => {
+  it("reports a throwing graph-node render listener as a listener failure and keeps notifying", () => {
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const source = signal(0);
+    const [dependency] = collectRenderDependencies(() => {
+      source.value;
+    });
+    const seen: number[] = [];
+    const stopFailing = dependency!.subscribeRender(() => {
+      throw new Error("listener boom");
+    });
+    const stopFollowing = dependency!.subscribeRender(() => {
+      seen.push(source.peek());
+    });
+    try {
+      expect(() => {
+        source.value = 1;
+      }).not.toThrow();
+      expect(seen).toEqual([1]);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(errorSpy.mock.calls[0]?.[0]).toBe(
+        "react-fine-grained-signals: a render-subscription listener threw; continuing with the remaining listeners.",
+      );
+      expect((errorSpy.mock.calls[0]?.[1] as { cause: Error }).cause.message).toBe("listener boom");
+    } finally {
+      stopFailing();
+      stopFollowing();
+      errorSpy.mockRestore();
+    }
+  });
+});
