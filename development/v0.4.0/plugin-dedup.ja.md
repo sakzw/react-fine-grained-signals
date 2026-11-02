@@ -178,3 +178,52 @@ RFGS003の変化。wrapperで包んだrender prop・children callbackも警告�
 - **包んだ`++`/代入の括弧（構文エラー）:** `parenthesizeWrappedTarget`は、captureする式の一番外側の`++`/代入にしか括弧を足していなかった。`f((count.value as number)++)`のように式の中にあると、`capture(() => f(count.value as number++))`となり、parseできなかった。clone全体を`t.traverseFast`でたどり、どの深さでも括弧を足す。`tests/shared-predicates.test.ts`に、呼び出しの引数とtemplate literalの中のケースを足した（修正前は失敗）。
 - **`Switch`の中の`Match`の判定:** `isMatchCollectedBySwitch`は、論理演算子の右側と、子の式だけをたどっていた。runtimeの`collectMatches`は、`||`と`??`の左側（結果になるため）と、`<Switch children={...}>`で渡した`Match`も拾う。両方をたどるようにした。`&&`の左側は結果にならないため、これまでどおりたどらない。testを足した（修正前は3件が失敗）。
 - **build設定がtestのファイルをimportしていた:** `tsdown.config.ts`が`tests/public-api.mjs`をimportしていたため、`tests/`を含まない環境ではbuildできなかった。`scripts/public-api.mjs`へ移した。build smoke（`tests/build-smoke.mjs`）とrepoのconsumer smokeもそこから読む。`scripts/`は公開packageの`files`に含まれない。
+
+## 2回目のレビューの指摘への対応
+
+### 1. 引数のdefault値: 選択と移動の食い違い
+
+- 変更前: 引数の移動とRFGS004は`parameterReadsTrackedValue`で判定し、静的な`.value`の読み取りしか見なかった。一方、componentの選択とbodyのcaptureは、同じmoduleのhelperの呼び出しも数える。このため`const read = () => count.value; export function C({ label = read() })`は選択されて`useSignalCapture()`と`"use no memo"`を受け取るが、`label = read()`はHookより前に残り、RFGS004も出なかった。Cは再renderされず、警告もない。
+- 変更後: `parameterMayReadTrackedValue`（`bodyReadsTrackedValue`をそのまま使う）で判定する。これはcaptureがbodyに使う規則そのもので、直接の`.value`、読み取るhelperやinline callback、moduleから中身が見えない呼び出しを含む。移動とRFGS004はもともと「移動できるなら移動し、移動できない（`hasRelocationConflict`など）ときだけRFGS004」という設計なので、判定を広げるだけで両方がそろう。移動を選んだ理由: 移動は意味を変えない書き換えとしてすでに実装・テスト済みで、移動後のdefaultはcapture passがbodyと同じ規則でcaptureする。警告だけにすると、選択された正常なcomponentに毎回警告が出る。
+- 利用者から見える変化: helperや外部の関数を呼ぶdefault（`{ label = read() }`、`{ id = ext() }`）を持つ変換対象の関数は、引数が`_param`に置き換わり、bodyの先頭で束縛し直される（injectでも同じ）。RFGS004の文言を「A signal read (a .value read, or a call that may make one) remains ...」に変えた（README en/jaの診断表も）。
+- テスト: `tests/shared-predicates.test.ts`のRFGS004のdescribeに、helper経由（managed/inject）、inline callback、移動できない場合のRFGS004、読み取りのない呼び出しは移動しないことを足した（修正前は4件が失敗）。
+
+### 2. esbuildのloader表
+
+- 変更前: 対象の拡張子は`SCRIPT_MODULE_EXTENSION`（`/\.m?[jt]sx?$/i`）、loaderは`src/unplugin.ts`の手書きの`ESBUILD_LOADERS`で、別々だった。`.mjsx`/`.mtsx`は対象になり、parserは`jsx`/`typescript`を有効にするが、loaderは`"js"`になってesbuildが失敗した。
+- 変更後: `.mjsx`/`.mtsx`を対象から外した。Node、TypeScript（`.mts`と`.tsx`はあるが`.mtsx`はない）、esbuild（既定のloaderがない）のどれもこの拡張子に意味を与えないため、loaderを足して対象を広げる理由がない。`src/internal/module-id.ts`に拡張子とloaderの表を1つだけ置き、`transformInclude`と`resolveEsbuildLoader`の両方がそこを引く。transformのparser選択（`JSX_EXTENSION`/`TYPESCRIPT_EXTENSION`）は、APIを直接呼ぶ場合のためそのままにした。
+- 利用者から見える変化（破壊的）: `.mjsx`/`.mtsx`のファイルを変換しなくなる。READMEに対象の拡張子の一覧を書いた。
+- テスト: `tests/unplugin.test.ts`に、`.mjsx`/`.mtsx`を対象にしないことと、対象の拡張子すべてに`"js"`以外のloaderがあることを足した（修正前は失敗）。
+
+### 3. async callback: 選択とcaptureの食い違い（破壊的）
+
+- 変更前: 選択（`isDeferredReadContext`、`scanFunction`のfold）はasync関数の中の読み取りを数えない。captureは`inlineCallbackReadsTrackedValue`、`allowAsync`付きの`functionTargetMayReadTrackedValue`、async IIFEを本体で判定する`unresolvedCallMayRead`で、最初の`await`までをrender中として扱っていた。`targetFunctionMayReadTrackedValue`（render callbackや名前で呼ぶhelper）と`targetAliasGraphMayRead`もasyncを除いていなかった。このため、ほかの読み取りで選択されたcomponentでは、`items.forEach(async (i) => { log(count.value); })`の呼び出し全体がcaptureされ、countを購読していた。
+- 変更後: 判断どおり、async関数はcaptureでもrenderの外とする。`isDeferredFunction`（async、JSXのevent handler、Hookのcallback）を1つだけ置き、`isDeferredReadContext`、選択のfold、captureの上記の関数すべてがこれを使う。generatorは反復の場所で決まるため、この述語には入れず、従来どおり各呼び出し側で扱う。
+- 利用者から見える変化（破壊的）: async関数（その場で呼ぶ、名前で呼ぶ、callへ渡す、render callbackにする）の中の読み取りは、最初の`await`より前でもrender dependencyにならず、それを理由にcallをcaptureしない。README（en/ja）の「同期helper call」の行が「最初の`await`までは本体で判定」と書き、後の段落が「async関数からの呼び出しはrenderの外」と書いていた矛盾を、後者に合わせて直した。
+- テスト:
+  - `tests/shared-predicates.test.ts`に「reads in async functions」を足した。inline/名前付きのasync callback、async IIFE、その場で呼ぶasync関数（宣言とconst arrow）、asyncのrender callback、Promise executorの中のasync IIFEについて、それだけでは選択されず、ほかの読み取りで選択されてもcaptureしないことを確かめる。同期callbackは従来どおりcaptureする（修正前は7件が失敗）。
+  - `tests/react-execution.test.ts`の「M17.7.1: synchronous execution boundaries」: 最初の`await`より前の読み取りをcaptureすることを固定していた6件（名前付きasync関数、const async arrow、async IIFE、async forEach callback、`some`へ渡すasync callback、名前付きasync callback）を、書き込みが再renderを起こさない（表示が`0:1`のまま）ことを確かめる形に変えた。読み取り自体は実行される（`seen`が1）。Promise executorの4件はそのまま「captureする」。
+  - 同じsuiteの「does not subscribe to reads after the first await」は、最初の`await`より前の`s`の変更で再renderすることも確かめていた。前後どちらの読み取りでも再renderしないことを確かめる形に変え、名前も変えた。
+  - 「M17.7: callee resolution and value provenance」の、async IIFEの中の外部method呼び出しをcaptureするケース（`map`/`total`の2件）を外した。上記と同じ理由で、もう成り立たない。
+
+### 4. 文字列のimport名
+
+- 変更前: `isReactNamedImport`は`t.isIdentifier(imported, { name })`だけを見ていたため、`import { "Fragment" as F } from "react"`や`import { "memo" as m }`を認識しなかった。control-flow componentのimportは文字列名も扱っていた。
+- 変更後: `getImportedName`（名前付きは識別子・文字列のどちらでも名前、defaultは`"default"`、namespaceは`undefined`）を置き、`isReactNamedImport`、`isNamedUseManagedSignalsImport`、`isNamedSignalTrackingImport`、`findRuntimeImports`、`resolveSignalControlFlowImport`、`externalCallMayReadTrackedValue`がすべてこれで読む。
+- 利用者から見える変化: 文字列名でimportしたReactの`Fragment`は`Switch`と`Match`の間でfragmentとして通り（RFGS003を出さない）、`memo`/`forwardRef`はwrapperとして扱われる。
+- テスト: `tests/shared-predicates.test.ts`の「string import names」（修正前は2件が失敗）。
+
+### 5. import specifierの手書きの判定
+
+- 変更前: `externalCallMayReadTrackedValue`、`unresolvedCallMayRead`（2か所）、`templateTagMayRead`が、それぞれ手書きでspecifierの種類を見ていた。前者はnamespaceを含まず、宣言の`import type`は除くがspecifierの`import { type X }`は除かなかった。後の3か所はnamespaceを含み、type-onlyをまったく除かなかった。
+- 変更後: すべて`resolveImportedBinding`を通す（後の3か所は`importedNameMayRead`経由）。`importIsForeign`はspecifierではなくsource文字列を受け取る。規則: 名前付き・default・namespaceの値のimportは、import元で判定する（namespaceのmemberはimport元のexportなので、`ns.load()`は`load()`と同じく判定する）。type-only（宣言の`import type`もspecifierの`import { type X }`も）は消えるため、実行時にその名前はimport元を指さない。importとしては扱わず、正体の分からない名前としてcaptureする。
+- 利用者から見える変化: type-onlyでimportした名前を値として呼ぶ・tagに使うコード（型検査を通らないコード）で、import元がReactやlibraryでもcaptureするようになった。正しいコードの出力は変わらない。
+- テスト: `tests/shared-predicates.test.ts`の「which bindings count as imports」。type-onlyの宣言・specifier・namespace・tagをcaptureすること（修正前は4件が失敗）、Reactからのnamespace・default・名前付き・tagをcaptureしないこと、外部moduleからの名前付き・default・namespaceのmemberをcaptureすることを確かめる。
+
+### 6. optionの検証エラーとloaderの警告
+
+- optionの検証エラー（filter、選択肢、module specifier、`diagnostics.errorOn`の2つ）とsource mapのloaderの警告を、手書きの`[${pluginName}] ...`から`pluginMessage()`に変えた。文言は変わらない。既存のテストはそのまま通る。
+
+### 7. `cleanModuleId`
+
+- `stripModuleIdQuery`を呼ぶだけだったため削除し、直接呼ぶ。queryを外す理由の説明は`stripModuleIdQuery`（`src/internal/module-id.ts`）へ移した。
