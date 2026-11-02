@@ -288,17 +288,18 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
    * with a replaced prototype. The one collection test of both modes: plain
    * `deepSignal` inspects a collection's entries as an opaque value, and the
    * collection mode decides which collections it proxies.
+   *
+   * Plain objects and arrays answer `undefined` without the four throwing
+   * internal-slot probes, so a collection whose prototype was set to `null`
+   * counts as a plain object: telling it from an empty `Object.create(null)`
+   * dictionary would cost those probes on every such dictionary stored.
    */
   function collectionKindOf(value: unknown): CollectionKind | undefined {
-    if (!isObjectLike(value)) return undefined;
-    // Ordinary deep-state nodes are overwhelmingly plain objects and arrays.
-    // Avoid four native internal-slot probes (each of the wrong collection
-    // brand throws) for every node in those graphs. Only an empty
-    // null-prototype object can still be a collection whose prototype was
-    // set to `null`.
-    if (isPlainObjectOrArray(value) && (Object.getPrototypeOf(value) !== null || Reflect.ownKeys(value).length > 0)) {
-      return undefined;
-    }
+    return isObjectLike(value) && !isPlainObjectOrArray(value) ? nonPlainCollectionKind(value) : undefined;
+  }
+
+  /** `collectionKindOf` for a value already known not to be plain data. */
+  function nonPlainCollectionKind(value: object): CollectionKind | undefined {
     if ((value as object) instanceof Map) return "Map";
     if ((value as object) instanceof Set) return "Set";
     if ((value as object) instanceof WeakMap) return "WeakMap";
@@ -432,14 +433,10 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         throw deepError(support, "cannot store a built-in prototype object in deep state");
       }
 
-      const kind = collectionKindOf(raw);
-      if (kind !== undefined && !insideOpaque) {
-        // Reads would take a null-prototype collection for a plain object.
-        if (Object.getPrototypeOf(raw) === null)
-          throw deepError(support, "cannot store a collection with a null prototype");
-        if (support !== undefined && !support.isStandard(raw)) {
-          throw deepError(support, "collections require same-realm standard collections");
-        }
+      const plain = isPlainObjectOrArray(raw);
+      const kind = plain ? undefined : nonPlainCollectionKind(raw);
+      if (kind !== undefined && !insideOpaque && support !== undefined && !support.isStandard(raw)) {
+        throw deepError(support, "collections require same-realm standard collections");
       }
 
       // Without collection support a Map or Set is an opaque value like a
@@ -461,7 +458,7 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         if (!insideOpaque && support !== undefined) support.assertReactive(raw);
         continue;
       }
-      if (!isPlainObjectOrArray(raw)) {
+      if (!plain) {
         // Class instances, Date, functions, and other opaque values retain their
         // identity. Inspect their own data descriptors without invoking getters
         // so a contained deep proxy cannot enter the raw graph.

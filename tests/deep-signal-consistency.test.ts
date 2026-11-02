@@ -1,5 +1,5 @@
 import { runInNewContext } from "node:vm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { deepCollectionSignal, deepSignal } from "../src/index.js";
 
 describe("deep signal errors name the API the state belongs to", () => {
@@ -64,26 +64,19 @@ describe("array searches and collection lookups share one identity rule", () => 
 });
 
 describe("one collection test for both modes", () => {
-  const nullPrototypeMap = () => Object.setPrototypeOf(new Map([["a", 1]]), null) as object;
-
-  it("rejects a collection whose prototype is null instead of proxying it as a plain object", () => {
-    expect(() => deepSignal({ map: nullPrototypeMap() })).toThrow(
-      /^deepSignal\(\) cannot store a collection with a null prototype$/,
-    );
-    expect(() => deepCollectionSignal({ map: nullPrototypeMap() })).toThrow(
-      /^deepCollectionSignal\(\) cannot store a collection with a null prototype$/,
-    );
-    expect(() => deepSignal(nullPrototypeMap() as never)).toThrow(/null prototype/);
-    const state = deepSignal({ slot: {} as object });
-    expect(() => {
-      state.value.slot = nullPrototypeMap();
-    }).toThrow(/null prototype/);
-  });
-
-  it("still accepts empty null-prototype dictionaries", () => {
-    const state = deepSignal({ dict: Object.create(null) as Record<string, number> });
-    state.value.dict.a = 1;
-    expect(state.value.dict.a).toBe(1);
+  it("stores empty null-prototype dictionaries without probing collection brands", () => {
+    // Telling one from a Map whose prototype was set to null would take four
+    // throwing internal-slot probes per dictionary; plain objects skip them.
+    const probes = vi.spyOn(Map.prototype, "has");
+    try {
+      const state = deepSignal({ dicts: [] as Record<string, number>[] });
+      state.value.dicts = Array.from({ length: 100 }, () => Object.create(null) as Record<string, number>);
+      state.value.dicts[0]!.a = 1;
+      expect(state.value.dicts[0]!.a).toBe(1);
+      expect(probes).not.toHaveBeenCalled();
+    } finally {
+      probes.mockRestore();
+    }
   });
 
   it("finds a deep proxy inside a Map from another realm in plain mode", () => {
