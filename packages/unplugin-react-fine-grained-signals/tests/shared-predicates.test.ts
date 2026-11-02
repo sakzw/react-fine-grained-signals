@@ -241,7 +241,10 @@ describe("reads in async functions", () => {
     ["a named async function called in place", "async function load() { log(s.value); }\n  load();"],
     ["a const async arrow called in place", "const load = async () => { log(s.value); };\n  load();"],
     ["an async render callback", "const pending = items.map(async (i) => s.value);"],
-    ["a Promise executor that starts an async function", "new Promise((resolve) => { (async () => resolve(s.value))(); });"],
+    [
+      "a Promise executor that starts an async function",
+      "new Promise((resolve) => { (async () => resolve(s.value))(); });",
+    ],
   ])("does not select or capture %s", (_shape, statement) => {
     const alone = run(`${header}export function A({ items }) {\n  ${statement}\n  return <p />;\n}`);
     expect(alone.code).toBeUndefined();
@@ -251,7 +254,9 @@ describe("reads in async functions", () => {
   });
 
   it("still captures the same callback when it is synchronous", () => {
-    const { code } = run(`${withOther}export function A({ items }) { items.forEach((i) => { log(s.value); }); return <p>{o.value}</p>; }`);
+    const { code } = run(
+      `${withOther}export function A({ items }) { items.forEach((i) => { log(s.value); }); return <p>{o.value}</p>; }`,
+    );
     expect(code).toContain("_signals.capture(() => items.forEach(");
   });
 });
@@ -356,9 +361,12 @@ describe("RFGS004 and parameter-default reads", () => {
   );
 
   it("relocates a default whose inline callback reads", () => {
-    const { code } = run(`${header}export function C({ items, n = items.filter((i) => i > s.value).length }) { return <p>{n}</p>; }`, {
-      mode: "all",
-    });
+    const { code } = run(
+      `${header}export function C({ items, n = items.filter((i) => i > s.value).length }) { return <p>{n}</p>; }`,
+      {
+        mode: "all",
+      },
+    );
     expect(code).toContain("export function C(_param)");
   });
 
@@ -371,7 +379,9 @@ describe("RFGS004 and parameter-default reads", () => {
   });
 
   it("leaves a default with no possible read in the parameter list", () => {
-    const { code } = run(`${header}const id = (x) => x;\nexport function C({ label = id(1) }) { return <p>{label}{s.value}</p>; }`);
+    const { code } = run(
+      `${header}const id = (x) => x;\nexport function C({ label = id(1) }) { return <p>{label}{s.value}</p>; }`,
+    );
     expect(code).toContain("label = id(1)\n}) {");
   });
 });
