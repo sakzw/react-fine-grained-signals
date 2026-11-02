@@ -415,6 +415,18 @@ describe("RFGS003 callback targets", () => {
     );
     expect(diagnostics).not.toContain("RFGS003");
   });
+
+  // A capture clones the callback that holds the JSX, and the clone is
+  // inspected again; a diagnostic is reported once per source location.
+  it.each([
+    ["an arrow", "() => s.value"],
+    ["a function expression", "function () { return s.value; }"],
+  ])("reports a render prop in %s inside a captured map callback once", (_kind, callback) => {
+    const { diagnostics } = run(
+      `${header}const o = signal(1);\nconst items = [1];\nexport function A() { return <p>{o.value}{items.map((i) => <List key={i} render={${callback}} />)}</p>; }`,
+    );
+    expect(diagnostics.filter((id) => id === "RFGS003")).toHaveLength(1);
+  });
 });
 
 describe("React state reached through a namespace import", () => {

@@ -2775,10 +2775,13 @@ function isUnverifiableBarrelSignalTracking(
 // below).
 /**
  * A nested function is inspected once on its own and again as part of each
- * enclosing function, so the same site can be reached more than once in a
- * single transform. Report each message once per node.
+ * enclosing function, and a capture clones the code it wraps (a JSX callback
+ * included) and the clone is inspected again, so the same site can be reached
+ * more than once in a single transform, through more than one node. Report
+ * each message once per source location in the file (the clone keeps its
+ * original's), or once per node for a node with no location.
  */
-const reportedWarnings = new WeakMap<t.Node, Set<string>>();
+const reportedWarnings = new WeakMap<object, Set<string>>();
 
 /**
  * Builds the diagnostic only once it is known to be reported. The message
@@ -2788,15 +2791,19 @@ const reportedWarnings = new WeakMap<t.Node, Set<string>>();
  */
 function reportWarning(options: InternalTransformOptions, id: DiagnosticId, path: NodePath, text: string): void {
   const message = pluginMessage(`${id}: ${text}`);
-  let reported = reportedWarnings.get(path.node);
-  if (reported === undefined) reportedWarnings.set(path.node, (reported = new Set()));
-  if (reported.has(message)) return;
-  reported.add(message);
+  const start = path.node.loc?.start;
+  const file = path.hub as object | undefined;
+  const located = start !== undefined && file !== undefined;
+  const owner = located ? file : path.node;
+  const key = located ? `${start.line}:${start.column} ${message}` : message;
+  let reported = reportedWarnings.get(owner);
+  if (reported === undefined) reportedWarnings.set(owner, (reported = new Set()));
+  if (reported.has(key)) return;
+  reported.add(key);
   const warning = Object.assign(path.buildCodeFrameError(message), { diagnosticId: id }) as Error & {
     diagnosticId: DiagnosticId;
     loc?: { filename?: string; line: number; column: number };
   };
-  const start = path.node.loc?.start;
   if (start !== undefined) {
     warning.loc = {
       line: start.line,
