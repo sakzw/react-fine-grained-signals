@@ -715,7 +715,13 @@ export const cases: readonly Case[] = [
     name: "a property write on a signal value",
     body: "st.value.a = 2;",
     token: "st.value",
-    run: { write: "st.value = { a: 3 };" },
+    run: {
+      write: "st.value = { a: 3 };",
+      exception: {
+        rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
+        why: "README.md:246: a write during render is a side effect React rules out, so the read before it is not tracked; inject tracks it like the oracle once selected",
+      },
+    },
   },
   // A JSX member tag reads `theme.value`.
   {
