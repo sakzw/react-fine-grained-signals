@@ -6933,10 +6933,13 @@ export function mightTransform(code: string, mode: ReactFineGrainedSignalsMode):
 
 const valueWord = /(?<![\w$])value(?![\w$])/g;
 const quotes = new Set(['"', "'", "`"]);
-/** `nonSignalValueReceivers`, at the end of the text before a `.value`. */
-const nonSignalReceiverName = /(?<![\w$])(?:target|currentTarget|current)$/;
-/** An escape that can spell a name or a string without the text `value`. */
-const spellingEscape = /\\(?:u[0-9a-fA-F{]|x[0-9a-fA-F]|\r|\n)/;
+const lineTerminator = /[\n\r\u2028\u2029]/;
+/**
+ * An escape that can spell a name or a string without the text `value`: a
+ * unicode or hex escape, a line continuation, or an identity escape of a
+ * letter of the word that has no meaning of its own (`"v\alue"`).
+ */
+const spellingEscape = /\\(?:u[0-9a-fA-F{]|x[0-9a-fA-F]|[ale\n\r\u2028\u2029])/;
 
 /** The index of the last non-whitespace character before `index`, or -1. */
 function skipSpaceBack(code: string, index: number): number {
@@ -6945,14 +6948,21 @@ function skipSpaceBack(code: string, index: number): number {
   return at;
 }
 
+/** The text of the line that holds `index`, up to and including it. */
+function lineUpTo(code: string, index: number): string {
+  let start = index;
+  while (start > 0 && !lineTerminator.test(code[start - 1]!)) start--;
+  return code.slice(start, index + 1);
+}
+
 /**
  * Could the code read a property named `value`? Every word `value` counts
  * unless it plainly cannot be one: an object key or shorthand, a binding, a JSX
  * attribute (anything not after a `.`), a string that is not exactly `"value"`
- * (a constant key `const k = "value"; s[k]` is exactly that), a private
- * `#value`, or the DOM and ref fields `.target.value`, `.currentTarget.value`
- * and `.current.value`, which the transform never treats as a signal read on
- * their own (`isNonSignalValueReceiver`). A comment before the word, an escape
+ * (a constant key `const k = "value"; s[k]` is exactly that), or a private
+ * `#value`. The receiver is not judged here, not even `e.target.value`: text
+ * cannot tell the member `.target` from a spread `...target`, or from a name
+ * after a comment that ends in a period. A comment before the word, an escape
  * that could spell it (`value`), and anything else unusual count as a read.
  */
 function mentionsValueRead(code: string): boolean {
@@ -6960,25 +6970,11 @@ function mentionsValueRead(code: string): boolean {
   for (const match of code.matchAll(valueWord)) {
     const start = match.index;
     const before = skipSpaceBack(code, start);
-    // `x. // note` + newline + `value`: the dot hides behind a line comment.
-    const lineStart = code.lastIndexOf("\n", before) + 1;
-    if (code.slice(before + 1, start).includes("\n") && code.slice(lineStart, before + 1).includes("//")) return true;
+    // `x. // note`, a line break, `value`: the dot hides behind a line comment.
+    if (lineTerminator.test(code.slice(before + 1, start)) && lineUpTo(code, before).includes("//")) return true;
     const previous = code[before];
-    if (previous === "/" || previous === "*") return true;
-    if (previous !== undefined && quotes.has(previous)) {
-      if (code[start + "value".length] === previous) return true;
-      continue;
-    }
-    if (previous !== ".") continue;
-    // The receiver of `.value` (`?.value` too) is a member named `target`,
-    // `currentTarget` or `current`.
-    const receiverEnd = skipSpaceBack(code, code[before - 1] === "?" ? before - 1 : before);
-    const receiver = nonSignalReceiverName.exec(code.slice(Math.max(0, receiverEnd - 15), receiverEnd + 1));
-    if (receiver !== null) {
-      const dot = skipSpaceBack(code, receiverEnd + 1 - receiver[0].length);
-      if (code[dot] === ".") continue;
-    }
-    return true;
+    if (previous === "." || previous === "/" || previous === "*") return true;
+    if (previous !== undefined && quotes.has(previous) && code[start + "value".length] === previous) return true;
   }
   return false;
 }

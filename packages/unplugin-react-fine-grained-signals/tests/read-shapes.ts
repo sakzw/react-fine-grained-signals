@@ -709,6 +709,44 @@ export const cases: readonly Case[] = [
   // alias can re-render.
   ...deepCases(),
 
+  // A file whose only `.value` follows a name like a DOM or ref field: the raw
+  // text cannot tell these from `e.target.value`, so the pre-filter must pass them.
+  {
+    name: "a spread of a signal named like a DOM field",
+    module: "const target = signal([1]);",
+    body: "const x = [...target.value].length;",
+    jsx: "{x}",
+    token: "target.value",
+    run: { write: "target.value = [1, 2];" },
+  },
+  {
+    name: "a JSX spread of a signal named like a ref",
+    module: "const current = signal({ title: 'x' });",
+    jsx: "<b {...current.value} />",
+    token: "current.value",
+    run: { write: 'current.value = { title: "y" };' },
+  },
+  {
+    name: "a read after a comment that ends in a period",
+    module: "const current = signal(1);",
+    body: "const x = // the one.\n current.value;",
+    jsx: "{x}",
+    token: "current.value",
+    run: { write: "current.value = 5;" },
+  },
+  {
+    name: "a read after a line comment ending in a carriage return",
+    body: "const x = s. // note\r value;",
+    jsx: "{x}",
+    token: "value",
+  },
+  {
+    name: "a read after a line comment ending in U+2028",
+    body: "const x = s. // note\u2028 value;",
+    jsx: "{x}",
+    token: "value",
+  },
+
   // Syntax that reads where it seems not to.
   // A write through a read: `st.value` is read before `.a` is written.
   {
