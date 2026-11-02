@@ -776,6 +776,20 @@ export const cases: readonly Case[] = [
       },
     },
   },
+  // A compound assignment reads its target before it writes, as an update does.
+  // Each writes a value the runtime treats as unchanged, or no value at all.
+  { name: "a compound assignment to a signal", body: "s.value += 0;", token: "s.value += 0" },
+  { name: "a nullish assignment to a signal", body: "s.value ??= 9;", token: "s.value ??= 9" },
+  { name: "a logical assignment to a signal", body: "s.value ||= 9;", token: "s.value ||= 9" },
+  { name: "a compound assignment through a wrapper", body: "(s.value as number) += 0;", token: "s.value as number" },
+  {
+    name: "a logical assignment to a property of a signal value",
+    body: "st.value.a ||= 9;",
+    token: "st.value.a ||= 9",
+    run: { write: "st.value = { a: 3 };" },
+  },
+  // A plain write reads no target value.
+  { name: "a plain assignment to a signal", body: "s.value = 1;", token: "s.value = 1" },
   // A JSX member tag reads `theme.value`, which is not tracked there.
   {
     name: "a JSX member tag",
@@ -1083,6 +1097,13 @@ function deepCases(): Case[] {
       name: "an instance field reading a caller's alias",
       body: "const user = state.value.user; class Model { name = user.name; } const x = new Model().name;",
       token: "new Model(",
+    }),
+    // A logical assignment reads through the proxy before it writes.
+    deep({
+      name: "a logical assignment to a nested property",
+      body: 'state.value.user.name ||= "x";',
+      jsx: "",
+      token: 'state.value.user.name ||= "x"',
     }),
     // A computed key runs at class evaluation, with a nested read.
     deep({

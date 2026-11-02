@@ -2257,9 +2257,9 @@ function isTrackedValueRead(
 }
 
 /**
- * An update reads its old target value, and deleting a nested proxy property
- * reads the proxy base even though both expressions are syntactically write
- * targets. The codegen captures the complete operation so accessors, computed
+ * An update or a compound assignment reads its old target value, and deleting
+ * a nested proxy property reads the proxy base, even though all of them are
+ * syntactically write targets. A plain `=` reads no target value. The codegen captures the complete operation so accessors, computed
  * keys, Proxy traps, and the operator's result keep their native evaluation.
  */
 function isReadModifyingTrackedTarget(
@@ -2285,6 +2285,9 @@ function isReadModifyingTrackedTarget(
   }
   const operation = target.parentPath;
   if (operation?.isUpdateExpression() && operation.get("argument").node === target.node) return true;
+  if (operation?.isAssignmentExpression() && operation.node.operator !== "=" && operation.node.left === target.node) {
+    return true;
+  }
   return (
     operation?.isUnaryExpression({ operator: "delete" }) &&
     operation.get("argument").node === target.node &&
