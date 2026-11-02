@@ -852,6 +852,19 @@ describe("what a helper reads is answered for the authored code", () => {
   });
 });
 
+describe("a render prop that is rewritten itself", () => {
+  // The diagnostic asks what the callback reads, which must not depend on
+  // whether the callback was rewritten before the question.
+  const row = "const Row = (item) => <li>{item.value}</li>;";
+  const list = "export function List() { return <Grid renderItem={Row} />; }";
+  it.each([
+    ["the callback first", `${row}\n${list}`],
+    ["the callback last", `${list}\n${row}`],
+  ])("reports RFGS003 with %s", (_order, source) => {
+    expect(run(source).diagnostics).toEqual(["RFGS003"]);
+  });
+});
+
 describe("RFGS009 and an explicit annotation", () => {
   it.each(["auto", "all", "manual"] as const)(
     "reports an annotated function without an identity in %s mode",
