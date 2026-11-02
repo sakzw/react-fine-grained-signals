@@ -11,7 +11,7 @@ import {
   type ReactFineGrainedSignalsTransform,
   type InternalTransformResult,
 } from "./internal/transform.js";
-import { isDiagnosticId, PLUGIN_NAME, type DiagnosticId } from "./internal/diagnostics.js";
+import { isDiagnosticId, PLUGIN_NAME, pluginMessage, type DiagnosticId } from "./internal/diagnostics.js";
 import {
   type EsbuildLoaderName,
   moduleIdExtension,
@@ -136,7 +136,7 @@ function toMatcher(filter: unknown, option: "include" | "exclude"): ModuleIdMatc
     };
   }
   throw new TypeError(
-    `[${pluginName}] ${option} must be a RegExp, a function, or an array of those, got ${describeInvalidFilter(filter)}`,
+    pluginMessage(`${option} must be a RegExp, a function, or an array of those, got ${describeInvalidFilter(filter)}`),
   );
 }
 
@@ -252,8 +252,10 @@ function validateChoice<T extends string>(
     typeof value === "string" ? choices.find((choice) => choice.toLowerCase() === value.toLowerCase()) : undefined;
   const extra = hint?.(value) ?? (caseMatch === undefined ? undefined : `did you mean ${JSON.stringify(caseMatch)}?`);
   throw new TypeError(
-    `[${pluginName}] ${option} must be ${describeChoices(choices)}, got ${describeValue(value)}` +
-      (extra === undefined ? "" : `; ${extra}`),
+    pluginMessage(
+      `${option} must be ${describeChoices(choices)}, got ${describeValue(value)}` +
+        (extra === undefined ? "" : `; ${extra}`),
+    ),
   );
 }
 
@@ -261,7 +263,7 @@ function validateChoice<T extends string>(
 function validateSpecifier(option: string, value: unknown, fallback: string): string {
   if (value === undefined) return fallback;
   if (typeof value === "string" && value.length > 0) return value;
-  throw new TypeError(`[${pluginName}] ${option} must be a non-empty module specifier, got ${describeValue(value)}`);
+  throw new TypeError(pluginMessage(`${option} must be a non-empty module specifier, got ${describeValue(value)}`));
 }
 
 function describeValue(value: unknown): string {
@@ -285,14 +287,12 @@ export function resolveOptions(options: ReactFineGrainedSignalsOptions): Resolve
   const errorOn = options.diagnostics?.errorOn ?? [];
   if (!Array.isArray(errorOn)) {
     throw new TypeError(
-      `[${pluginName}] diagnostics.errorOn must be an array of diagnostic IDs, got ${describeValue(errorOn)}`,
+      pluginMessage(`diagnostics.errorOn must be an array of diagnostic IDs, got ${describeValue(errorOn)}`),
     );
   }
   for (const diagnosticId of errorOn) {
     if (!isDiagnosticId(diagnosticId)) {
-      throw new TypeError(
-        `[${pluginName}] diagnostics.errorOn names an unknown diagnostic ID: ${String(diagnosticId)}`,
-      );
+      throw new TypeError(pluginMessage(`diagnostics.errorOn names an unknown diagnostic ID: ${String(diagnosticId)}`));
     }
   }
   return {
@@ -393,9 +393,11 @@ function reportLoaderPatchSkipped(reason: string): void {
   if (loaderPatchReported) return;
   loaderPatchReported = true;
   console.warn(
-    `[${pluginName}] Source map fix not applied: ${reason}. ` +
-      "Falling back to unplugin's own transform loader, whose output maps point " +
-      "at pre-transform line numbers.",
+    pluginMessage(
+      `Source map fix not applied: ${reason}. ` +
+        "Falling back to unplugin's own transform loader, whose output maps point " +
+        "at pre-transform line numbers.",
+    ),
   );
 }
 
