@@ -386,3 +386,12 @@ oracleとの食い違いと対応:
 - 本体で宣言したclassのinstance fieldだけを読むcomponentは選択されない（`!`付き）。effectだけで`new`する場合の余分な選択がなくなる。
 - 分割代入、代入形のloop head、式を通したaliasの読み取りがcaptureされる（READMEの記述どおりになった）。
 - README（英日）の「Named functions, JSX spread, getters, and reading assignments」の行に、書き込みの基底、JSXのmember tag、class fieldを足した（行は増やしていない。read-shapesが行番号を引くため）。
+
+## JSXのtag名とrender中の書き込みを方針に合わせて戻した
+
+メンテナの判断で、保留のうち2件の直し方を、ライブラリの方針に合わせて変えた。runtimeは追跡の境界をはっきり保ち、境界の外のものは利用者に先に計算してもらう。まれな書き方のたびに仕組みを足すことはしない。
+
+- **render中の書き込み（8324647、2040b92を戻した）**: `st.value.a = 2`の前の`st.value`の読み取りは、以前どおり数えない（captureせず、選択もしない）。警告も出さない。render中にsignalの状態へ書き込むのは、Reactが禁じる副作用だから（renderは純粋でなければならず、StrictModeでは2回実行される）。追跡のために出力を変える理由がない。READMEのmanagedの契約（英日、README.md:247）に書き、read-shapesのcaseはruntime differentialの例外にした（injectは選択されればoracleと同じく追跡するので、managedの2つとinject単独だけが食い違う）。既存テスト4件の期待は元に戻した。`wrap`の出力を`generated`に入れる変更も戻した。訪問中でないnodeを包むのはこの修正だけで、ほかには要らない。
+- **JSXのtag名（0387eed、b237847の出力をやめた）**: `(_Tag = capture(...), <_Tag />)`と`var _Tag`の生成をやめ、tag名での`.value`の読み取りはcaptureも選択もしない。代わりに新しい診断RFGS010をtagの位置に出し、先にcomponentを変数に入れるよう求める（`const Icon = theme.value.Icon; <Icon />`）。報告はRFGS003と同じく、pluginが関数を調べるたびに行う（選択されていなくても出す。`manual`ではopt-inがあるときだけ）。選択されていない関数にも出すのは、選択されないこと自体が、追跡されないことの原因だから。`DIAGNOSTIC_IDS`、`diagnostics.ts`の表、README（英日）の診断表と契約、診断の一覧テストに足した。read-shapesのcaseは例外（stale）にした。READMEの表に1行増えたので、read-shapesが引くREADMEの行番号を1つずつずらした。
+
+分割代入、代入形のloop head、式を通したalias、class fieldの直しはそのまま残す。
