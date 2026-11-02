@@ -465,7 +465,7 @@ describe("message prefix", () => {
       },
     );
     expect(messages[0]).toMatch(/^[^\n]*\[unplugin-react-fine-grained-signals\] RFGS004: /);
-    expect(() => run("const value = <p>{</p>;", { filename: "Broken.tsx" })).toThrow(
+    expect(() => run("const value = s.value; const x = <p>{</p>;", { filename: "Broken.tsx" })).toThrow(
       /^\[unplugin-react-fine-grained-signals\] could not parse Broken\.tsx /,
     );
   });

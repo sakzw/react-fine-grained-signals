@@ -2689,7 +2689,7 @@ describe("parse failures", () => {
     let thrown: unknown;
     try {
       transformReactFineGrainedSignals(
-        "const count = { value: 1 }; export function App( { return <p/>; }",
+        "const count = { value: 1 }; const n = count.value; export function App( { return <p/>; }",
         "/project/src/App.tsx?t=1730000000",
         options,
       );

@@ -6843,27 +6843,82 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
 });
 
 /**
- * A raw-text screen run before the file is parsed at all. Parsing, walking,
- * printing and generating a source map is the whole cost of this transform, and
- * it is discarded outright for every file none of the three opt-in routes can
- * possibly apply to:
+ * A raw-text screen run before the file is parsed at all. Parsing, walking and
+ * printing is the whole cost of this transform, and it is wasted on every file
+ * none of its routes can apply to:
  *
  * - explicit opt-in needs `useSignalTracking`; annotation opt-in and opt-out
  *   need `@signalTracking` or `@noSignalTracking`;
- * - `auto` needs a `.value` read, so it needs the text `value`;
+ * - a module-level `"use server"` directive is reported (RFGS009) for each
+ *   component in it, whatever it reads;
+ * - everything else -- selection in `auto`, every capture, and RFGS001-004,
+ *   007, 008 and 010 -- starts from a read of a property named `value`
+ *   (`mentionsValueRead`);
  * - `all` additionally wraps JSX components, so it needs a `<` -- but its
- *   custom-hook rule still needs a `.value` read.
+ *   custom-hook rule still needs a `value` read.
  *
- * Each test is a plain substring scan and each one is deliberately wider than
- * what the AST check accepts, so this can only ever bail out on files the walk
- * would have rejected anyway.
+ * Each test is deliberately wider than what the AST check accepts, so this can
+ * only ever bail out on files the walk would have rejected anyway.
+ * `tests/prefilter-guard.ts` checks that against every transform the tests run.
  */
-function mightTransform(code: string, mode: ReactFineGrainedSignalsMode): boolean {
+export function mightTransform(code: string, mode: ReactFineGrainedSignalsMode): boolean {
   if (code.includes("useSignalTracking") || code.includes("@signalTracking") || code.includes("@noSignalTracking"))
     return true;
   if (mode === "manual") return false;
-  if (code.includes("value")) return true;
+  if (code.includes("use server") || mentionsValueRead(code)) return true;
   return mode === "all" && code.includes("<");
+}
+
+const valueWord = /(?<![\w$])value(?![\w$])/g;
+const quotes = new Set(['"', "'", "`"]);
+/** `nonSignalValueReceivers`, at the end of the text before a `.value`. */
+const nonSignalReceiverName = /(?<![\w$])(?:target|currentTarget|current)$/;
+/** An escape that can spell a name or a string without the text `value`. */
+const spellingEscape = /\\(?:u[0-9a-fA-F{]|x[0-9a-fA-F]|\r|\n)/;
+
+/** The index of the last non-whitespace character before `index`, or -1. */
+function skipSpaceBack(code: string, index: number): number {
+  let at = index - 1;
+  while (at >= 0 && /\s/.test(code[at]!)) at--;
+  return at;
+}
+
+/**
+ * Could the code read a property named `value`? Every word `value` counts
+ * unless it plainly cannot be one: an object key or shorthand, a binding, a JSX
+ * attribute (anything not after a `.`), a string that is not exactly `"value"`
+ * (a constant key `const k = "value"; s[k]` is exactly that), a private
+ * `#value`, or the DOM and ref fields `.target.value`, `.currentTarget.value`
+ * and `.current.value`, which the transform never treats as a signal read on
+ * their own (`isNonSignalValueReceiver`). A comment before the word, an escape
+ * that could spell it (`value`), and anything else unusual count as a read.
+ */
+function mentionsValueRead(code: string): boolean {
+  if (spellingEscape.test(code)) return true;
+  for (const match of code.matchAll(valueWord)) {
+    const start = match.index;
+    const before = skipSpaceBack(code, start);
+    // `x. // note` + newline + `value`: the dot hides behind a line comment.
+    const lineStart = code.lastIndexOf("\n", before) + 1;
+    if (code.slice(before + 1, start).includes("\n") && code.slice(lineStart, before + 1).includes("//")) return true;
+    const previous = code[before];
+    if (previous === "/" || previous === "*") return true;
+    if (previous !== undefined && quotes.has(previous)) {
+      if (code[start + "value".length] === previous) return true;
+      continue;
+    }
+    if (previous !== ".") continue;
+    // The receiver of `.value` (`?.value` too) is a member named `target`,
+    // `currentTarget` or `current`.
+    const receiverEnd = skipSpaceBack(code, code[before - 1] === "?" ? before - 1 : before);
+    const receiver = nonSignalReceiverName.exec(code.slice(Math.max(0, receiverEnd - 15), receiverEnd + 1));
+    if (receiver !== null) {
+      const dot = skipSpaceBack(code, receiverEnd + 1 - receiver[0].length);
+      if (code[dot] === ".") continue;
+    }
+    return true;
+  }
+  return false;
 }
 
 /** Runs the private Babel transform for the universal bundler adapter. */
@@ -6872,7 +6927,19 @@ export function transformReactFineGrainedSignals(
   id: string,
   options: InternalTransformOptions,
 ): InternalTransformResult | null {
-  if (!mightTransform(code, options.mode)) return null;
+  return mightTransform(code, options.mode) ? transformWithoutPrefilter(code, id, options) : null;
+}
+
+/**
+ * The transform itself, without the `mightTransform` screen. Exported for the
+ * test setup that checks the screen never drops a file this would change or
+ * report on; the adapters call `transformReactFineGrainedSignals`.
+ */
+export function transformWithoutPrefilter(
+  code: string,
+  id: string,
+  options: InternalTransformOptions,
+): InternalTransformResult | null {
   const cleanId = stripModuleIdQuery(id);
   const isTypeScript = TYPESCRIPT_EXTENSION.test(cleanId);
   const supportsJsx = JSX_EXTENSION.test(cleanId);

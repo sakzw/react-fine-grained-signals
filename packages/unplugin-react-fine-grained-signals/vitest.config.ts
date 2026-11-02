@@ -4,6 +4,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["tests/**/*.test.ts"],
+    // Checks the raw-text screen against every transform the tests run.
+    setupFiles: ["tests/prefilter-guard.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "html", "lcov"],
