@@ -458,3 +458,22 @@ describe("message prefix", () => {
     );
   });
 });
+
+describe("Hook calls anywhere in a destructuring declaration", () => {
+  // The same `expressionCallsHook` check over the whole declarator that an
+  // assignment gets: a Hook in a pattern default must not move into the
+  // capture that evaluates the pattern.
+  it.each([
+    ["an array pattern default", "const [a = useX()] = list.value;"],
+    ["an object pattern default", "const { a = useX() } = st.value;"],
+    ["a computed key", "const { [useX()]: a } = st.value;"],
+  ])("keeps a Hook in %s out of the capture and reports RFGS001", (_kind, declaration) => {
+    const { code, diagnostics } = run(
+      `import { useX } from "./x";\n${header}const list = signal([1]);\nconst st = signal({ a: 1 });\nexport function A() { ${declaration} return <p>{a}</p>; }`,
+    );
+    expect(code).not.toMatch(/capture\(\(\) => \{[^}]*useX\(\)/);
+    expect(code).toContain("useX()");
+    expect(diagnostics).toContain("RFGS001");
+    reparse(code!, "A.tsx");
+  });
+});

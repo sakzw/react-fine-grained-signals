@@ -6243,7 +6243,10 @@ function captureTrackedReadExpressions(
           isDeferredReadContext(path, functionPath)
         )
           return;
-        if (expressionCallsHook(init)) {
+        // The whole declarator, as for an assignment: a Hook in a pattern
+        // default or computed key (`const [a = useX()] = list.value`) would
+        // move into the capture as surely as one in the initializer.
+        if (expressionCallsHook(path)) {
           const hookCall = unwrapTransparentPath(init);
           if (
             (hookCall.isCallExpression() || hookCall.isOptionalCallExpression()) &&
@@ -6254,7 +6257,7 @@ function captureTrackedReadExpressions(
             // this common `useState(signal.value)` form does not lose tracking.
             return;
           }
-          warn("RFGS001", init, HOOK_IN_CAPTURED_READ_WARNING);
+          warn("RFGS001", expressionCallsHook(init) ? init : path, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
         const declaration = path.parentPath;
