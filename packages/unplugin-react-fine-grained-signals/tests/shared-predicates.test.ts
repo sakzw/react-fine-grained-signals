@@ -735,7 +735,7 @@ export function A() { return <ul>{items.map((i) => <theme.value.Icon key={i} />)
   ])("does not report a DOM or ref field as a tag, %s", (_kind, extra) => {
     for (const tag of ["ref.current.value", "e.target.value", "e.currentTarget.value.Icon"]) {
       const { diagnostics } = run(`${header}${extra}export function A({ ref, e }: any) { return <${tag} />; }`);
-      expect(diagnostics, tag).toEqual([]);
+      expect(diagnostics).toEqual([]);
     }
   });
 

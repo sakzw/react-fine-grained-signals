@@ -5984,6 +5984,18 @@ function optionalChainCalls(top: NodePath): NodePath<t.OptionalCallExpression>[]
   return calls;
 }
 
+/** The local function an iterated call resolves to, if any. */
+function iteratedCallTarget(
+  call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+): NodePath<t.Function> | undefined {
+  const callee = unwrapTransparent(call.node.callee);
+  return t.isIdentifier(callee)
+    ? resolveReferencedFunction(call, callee.name)
+    : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+      ? resolveKeyedFunction(call, callee)
+      : undefined;
+}
+
 function captureTrackedReadExpressions(
   functionPath: NodePath<t.Function>,
   store: t.Identifier,
@@ -6107,13 +6119,14 @@ function captureTrackedReadExpressions(
     warn("RFGS001", at, text);
     return true;
   };
+  /** Is this node itself a tracked read, not counting what is below it? */
+  const isRead = (candidate: NodePath): boolean =>
+    ((candidate.isMemberExpression() || candidate.isOptionalMemberExpression()) &&
+      (isTrackedValueRead(candidate.node, candidate, functionPath) ||
+        isPotentialDynamicMemberRead(candidate.node, candidate, functionPath))) ||
+    (candidate.isIdentifier() && isTrackedAliasReference(candidate, functionPath, trackedAliases));
   /** Is a tracked value read in `operand` other than in a Hook's arguments? */
   const readsOutsideHookCalls = (operand: NodePath): boolean => {
-    const isRead = (candidate: NodePath): boolean =>
-      ((candidate.isMemberExpression() || candidate.isOptionalMemberExpression()) &&
-        (isTrackedValueRead(candidate.node, candidate, functionPath) ||
-          isPotentialDynamicMemberRead(candidate.node, candidate, functionPath))) ||
-      (candidate.isIdentifier() && isTrackedAliasReference(candidate, functionPath, trackedAliases));
     const root = unwrapTransparentPath(operand);
     if ((root.isCallExpression() || root.isOptionalCallExpression()) && callNameIsHook(root.node.callee)) return false;
     if (isRead(root)) return true;
@@ -6195,16 +6208,6 @@ function captureTrackedReadExpressions(
       unresolvedCallMayRead(call, context) ||
       externalCallMayReadTrackedValue(call, functionPath, importSource, managedRuntimeSource, reactImportSource)
     );
-  };
-  const iteratedCallTarget = (
-    call: NodePath<t.CallExpression | t.OptionalCallExpression>,
-  ): NodePath<t.Function> | undefined => {
-    const callee = unwrapTransparent(call.node.callee);
-    return t.isIdentifier(callee)
-      ? resolveReferencedFunction(call, callee.name)
-      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
-        ? resolveKeyedFunction(call, callee)
-        : undefined;
   };
   const iteratedTargetReads = (target: NodePath<t.Function>): boolean =>
     target.node.generator === true &&
