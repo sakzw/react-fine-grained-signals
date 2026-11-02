@@ -2182,15 +2182,57 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
  * Does a JSX member tag name read a signal (`<theme.value.Icon />`)? The tag
  * is evaluated when the element is created, but a read there is not tracked
  * (RFGS010): a tag name cannot hold a call, and the library asks for the
- * component in a variable first rather than rewriting the element.
+ * component in a variable first rather than rewriting the element. The receiver
+ * rule is the one for a member read: `isNonSignalValueReceiver`, unless an
+ * earlier `.value` in the chain says a signal is already involved
+ * (`hasTrackedValuePrefix`).
  */
 function jsxTagReadsValue(name: t.JSXMemberExpression): boolean {
-  let current: t.JSXMemberExpression | t.JSXIdentifier = name;
-  while (t.isJSXMemberExpression(current)) {
-    if (current.property.name === "value") return true;
+  const links: t.JSXMemberExpression[] = [];
+  for (let current: t.JSXMemberExpression | t.JSXIdentifier = name; t.isJSXMemberExpression(current);) {
+    links.unshift(current);
     current = current.object;
   }
+  let seenValue = false;
+  for (const link of links) {
+    if (link.property.name !== "value") continue;
+    const receiver = link.object;
+    if (seenValue || !t.isJSXMemberExpression(receiver) || !nonSignalValueReceivers.has(receiver.property.name)) {
+      return true;
+    }
+    seenValue = true;
+  }
   return false;
+}
+
+/** The functions `applyInject` gave a boundary: everything their render reads is tracked. */
+const injectedFunctions = new WeakSet<t.Node>();
+
+/**
+ * Is a read in this JSX tag a render read nothing tracks? One the render never
+ * runs (`isDeferredFunction`, the rule for every other read) is not, and neither
+ * is one under an ambient `useSignalTracking()` or a `@noSignalTracking` opt-out.
+ * Every enclosing function is asked, because each one is a part of the render
+ * the read may be in; a capture callback is one of those and answers no to all.
+ */
+function isUntrackedJsxTagRead(name: NodePath, options: InternalTransformOptions): boolean {
+  const managedRuntimeSource = managedRuntimeSourceOf(options.importSource);
+  let inFunction = false;
+  let annotated = false;
+  for (let fn = name.getFunctionParent(); fn !== null; fn = fn.getFunctionParent()) {
+    inFunction = true;
+    if (isDeferredFunction(fn) || injectedFunctions.has(fn.node)) return false;
+    if (hasOwnedLeadingComment(fn, noSignalTrackingComment)) return false;
+    const body = fn.get("body");
+    const statements = body.isBlockStatement() ? body.get("body") : [];
+    if (
+      isFirstStatementSignalTrackingCall(fn, statements, options.importSource, true) ||
+      inspectFunction(fn, options.importSource, managedRuntimeSource, options.reactImportSource).hasSignalTrackingCall
+    )
+      return false;
+    if (hasOwnedLeadingComment(fn, useSignalTrackingComment)) annotated = true;
+  }
+  return inFunction && (options.mode !== "manual" || annotated);
 }
 
 /**
@@ -3269,10 +3311,6 @@ function inspectKnownRenderPropReads(
       if (isOwnedBySignalControlFlow(attribute, name.node.name, options.importSource, reactImportSource)) return;
       if (readsSignal(target)) warnUntrackedRenderPropRead(attribute, options);
     },
-    JSXOpeningElement(opening) {
-      const name = opening.node.name;
-      if (t.isJSXMemberExpression(name) && jsxTagReadsValue(name)) warnSignalReadInJsxTag(opening.get("name"), options);
-    },
     // Destructuring from a tracked source is captured by the managed pass
     // (static expansion or a captured pattern), so it needs no warning here;
     // a pattern whose initializer calls a Hook is reported by that pass.
@@ -3891,6 +3929,7 @@ function applyInject(
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
+  injectedFunctions.add(path.node);
   const call = t.expressionStatement(t.callExpression(t.cloneNode(runtimeImport.identifier), []));
   // Bound again right after the call, so a default's read is collected too.
   const relocated = relocateTrackedParameters(path, state.typeScript, readContextOf(options), analysis);
@@ -6986,6 +7025,15 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
         exit(path, state) {
           keepJsxPragmasFirst(path, state);
         },
+      },
+      // Here rather than in `decideTransform`, so that every enclosing function
+      // has been decided by the time a tag asks about them.
+      JSXOpeningElement(path) {
+        const name = path.node.name;
+        if (!t.isJSXMemberExpression(name) || !jsxTagReadsValue(name)) return;
+        const fn = path.getFunctionParent();
+        if (fn === null || hasModuleLevelUseServer(fn)) return;
+        if (isUntrackedJsxTagRead(path.get("name"), options)) warnSignalReadInJsxTag(path.get("name"), options);
       },
       Function(path, state) {
         if (generatedCaptureCallbacks.has(path.node)) return;

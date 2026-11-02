@@ -685,6 +685,70 @@ export function A() { return <ul>{items.map((i) => <theme.value.Icon key={i} />)
     expect(diagnostics).toEqual(["RFGS010"]);
   });
 
+  // Only a read that runs in a render nothing else tracks: the same rule read
+  // detection applies (`isDeferredFunction`), plus what already tracks it.
+  const theming = `import { useEffect, useMemo } from "react";\nimport { useSignalTracking } from "react-fine-grained-signals";\n${theme}`;
+  it.each([
+    ["an event handler", "return <button onClick={() => <theme.value.Icon />} />;"],
+    ["a useEffect callback", "useEffect(() => { void (<theme.value.Icon />); }, []); return <p />;"],
+    ["a useMemo callback", "const el = useMemo(() => <theme.value.Icon />, []); return el;"],
+    ["a timer", "setTimeout(() => <theme.value.Icon />, 0); return <p />;"],
+    ["an async function", "const later = async () => <theme.value.Icon />; void later; return <p />;"],
+    ["a function with an ambient first-statement boundary", "useSignalTracking(); return <theme.value.Icon />;"],
+    ["a function with a late boundary", "const n = 1; useSignalTracking(); return <theme.value.Icon a={n} />;"],
+    [
+      "a callback under an ambient boundary",
+      "useSignalTracking(); return <ul>{[1].map((i) => <theme.value.Icon key={i} />)}</ul>;",
+    ],
+  ])("does not report a tag in %s", (_kind, body) => {
+    const { diagnostics } = run(`${theming}export function A() { ${body} }`);
+    expect(diagnostics.filter((id) => id === "RFGS010")).toEqual([]);
+  });
+
+  it.each([
+    ["itself", "/** @noSignalTracking */ export function A() { return <theme.value.Icon />; }"],
+    [
+      "around a callback",
+      "/** @noSignalTracking */ export function A() { return <ul>{[1].map((i) => <theme.value.Icon key={i} />)}</ul>; }",
+    ],
+  ])("does not report a tag in a @noSignalTracking function, %s", (_kind, source) => {
+    expect(run(`${theming}${source}`).diagnostics).toEqual([]);
+  });
+
+  it("does not report a tag in a function inject tracks, and does in one it does not select", () => {
+    const selected = `${theming}const s = signal(0);\nexport function A() { return <p><theme.value.Icon />{s.value}</p>; }`;
+    expect(run(selected, { transform: "inject" }).diagnostics).toEqual([]);
+    const unselected = `${theming}export function A() { return <theme.value.Icon />; }`;
+    expect(run(unselected, { transform: "inject" }).diagnostics).toEqual(["RFGS010"]);
+  });
+
+  it("reports in manual mode under an opt-in", () => {
+    const source = `${theme}/** @signalTracking */ export function A() { return <theme.value.Icon />; }`;
+    expect(run(source, { mode: "manual" }).diagnostics).toEqual(["RFGS010"]);
+  });
+
+  // `isNonSignalValueReceiver`: the same rule whatever else the file reads, so
+  // the raw-text screen cannot make the diagnostic come and go.
+  it.each([
+    ["alone", ""],
+    ["next to an unrelated read", "const u = signal(0);\nexport const B = () => <p>{u.value}</p>;\n"],
+  ])("does not report a DOM or ref field as a tag, %s", (_kind, extra) => {
+    for (const tag of ["ref.current.value", "e.target.value", "e.currentTarget.value.Icon"]) {
+      const { diagnostics } = run(`${header}${extra}export function A({ ref, e }: any) { return <${tag} />; }`);
+      expect(diagnostics, tag).toEqual([]);
+    }
+  });
+
+  it.each(["current.value", "target.value.Icon", "holder.value.current.value", "ref.current.value.value"])(
+    "reports <%s />",
+    (tag) => {
+      const { diagnostics } = run(
+        `${header}export function A({ current, target, holder, ref }: any) { return <${tag} />; }`,
+      );
+      expect(diagnostics).toEqual(["RFGS010"]);
+    },
+  );
+
   it("does not report an ordinary member tag, or in manual mode without an opt-in", () => {
     expect(
       run(`${header}const ui = { Icon: () => <b /> };
