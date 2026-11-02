@@ -47,7 +47,11 @@ export interface DeepSignalRuntimeAdapter {
 export type CollectionKind = "Map" | "Set" | "WeakMap" | "WeakSet";
 
 export interface CollectionSupport {
-  /** The brand of a standard collection, including one from another realm or with a replaced prototype. */
+  /**
+   * The brand of a standard collection, including one from another realm or
+   * one whose prototype chain still reaches a collection prototype. See
+   * `collectionKindOf` for the replaced-prototype cases it does not detect.
+   */
   kindOf(value: unknown): CollectionKind | undefined;
   isStandard(value: unknown): boolean;
   /** `isStandard` for a value already known not to be plain data. */
@@ -284,15 +288,21 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   }
 
   /**
-   * The brand of a standard collection, including one from another realm or
-   * with a replaced prototype. The one collection test of both modes: plain
-   * `deepSignal` inspects a collection's entries as an opaque value, and the
-   * collection mode decides which collections it proxies.
+   * The brand of a standard collection, including one from another realm. The
+   * one collection test of both modes: plain `deepSignal` inspects a
+   * collection's entries as an opaque value, and the collection mode decides
+   * which collections it proxies.
    *
-   * Plain objects and arrays answer `undefined` without the four throwing
-   * internal-slot probes, so a collection whose prototype was set to `null`
-   * counts as a plain object: telling it from an empty `Object.create(null)`
-   * dictionary would cost those probes on every such dictionary stored.
+   * It does not detect a collection whose prototype was replaced so that it no
+   * longer reaches a collection prototype. Telling those apart costs four
+   * throwing internal-slot probes per value, so they are skipped where the
+   * value is far more likely something else:
+   * - prototype `null` or `Object.prototype`: counts as a plain object, as an
+   *   empty `Object.create(null)` dictionary is;
+   * - any other chain that reaches this realm's `Object.prototype`: counts as
+   *   an opaque value, as a Date or a class instance is, and its entries are
+   *   not inspected.
+   * The guides tell users not to store such a collection.
    */
   function collectionKindOf(value: unknown): CollectionKind | undefined {
     return isObjectLike(value) && !isPlainObjectOrArray(value) ? nonPlainCollectionKind(value) : undefined;
@@ -908,15 +918,19 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
         metadata.prunable!.delete(key);
         return;
       }
-      if (!release(metadata.properties.get(key)) || !release(metadata.existence.get(key))) return;
-      metadata.properties.delete(key);
-      metadata.existence.delete(key);
-      if (isArrayIndex(key)) {
-        const index = Number(key);
-        metadata.propertyIndices.delete(index);
-        metadata.existenceIndices.delete(index);
+      // Each version is dropped on its own, as the collection sweep does: a
+      // settled release retires a version, so one kept only because its sibling
+      // is still linked would be retired again on every later sweep.
+      const index = isArrayIndex(key) ? Number(key) : undefined;
+      if (metadata.properties.has(key) && release(metadata.properties.get(key))) {
+        metadata.properties.delete(key);
+        if (index !== undefined) metadata.propertyIndices.delete(index);
       }
-      metadata.prunable!.delete(key);
+      if (metadata.existence.has(key) && release(metadata.existence.get(key))) {
+        metadata.existence.delete(key);
+        if (index !== undefined) metadata.existenceIndices.delete(index);
+      }
+      if (!metadata.properties.has(key) && !metadata.existence.has(key)) metadata.prunable!.delete(key);
     },
     finish(metadata) {
       metadata.prunable = undefined;

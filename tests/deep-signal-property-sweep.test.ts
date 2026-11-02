@@ -52,6 +52,26 @@ describe("deep property metadata sweeps", () => {
     vi.useRealTimers();
   });
 
+  it("drops a key's unlinked version even while its other version stays linked", () => {
+    vi.useFakeTimers();
+    const harness = makeHarness();
+    const state = harness.deepSignal({} as Record<string, number | undefined>);
+    state.value.k; // the property version
+    const [property] = harness.versions as [DeepSignalSource<number>];
+    void ("k" in state.value); // the existence version, which a reader keeps linked
+    harness.linked.add(harness.versions[1]!);
+    vi.runAllTimers();
+    const retired = property.peek();
+    // Only the property version goes; reading the property again makes a new one.
+    const allocated = harness.versions.length;
+    state.value.k;
+    expect(harness.versions.length).toBe(allocated + 1);
+    // The dropped version is not retired again by later sweeps.
+    state.value.other;
+    vi.runAllTimers();
+    expect(property.peek()).toBe(retired);
+  });
+
   it("revisits candidates a write deferred in the middle of a settled sweep", () => {
     vi.useFakeTimers();
     const harness = makeHarness();
