@@ -1674,6 +1674,15 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
         throw new TypeError(`${name} requires writable signal.`);
       }
       const kind = resolveBindingKind(tagName, name, inputType);
+      // Where the binding may go is checked before its signal is read, so a
+      // read that throws cannot hide a misplaced binding.
+      if (kind === "text-value") {
+        if (tagName !== "textarea" && (inputType === undefined || !textBindableInputTypes.has(inputType))) {
+          throw new TypeError("bindValue: text-like, number, or range input/textarea/select only.");
+        }
+      } else if (kind === "checked" && inputType !== "checkbox") {
+        throw new TypeError("bindChecked: checkbox only.");
+      }
       const initial = readInitialValue(value, kind);
       switch (kind) {
         case "select-value":
@@ -1695,13 +1704,6 @@ function findHostBindings(props: HostProps, tagName: string): Binding[] {
           bindings.push([name, value, kind, selected, [optionValue, props.name, props.form]]);
           continue;
         }
-        case "text-value":
-          if (tagName !== "textarea" && (inputType === undefined || !textBindableInputTypes.has(inputType))) {
-            throw new TypeError("bindValue: text-like, number, or range input/textarea/select only.");
-          }
-          break;
-        default:
-          if (inputType !== "checkbox") throw new TypeError("bindChecked: checkbox only.");
       }
       bindings.push([name, value, kind, initial]);
       continue;

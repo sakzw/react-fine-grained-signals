@@ -766,6 +766,19 @@ describe("Direct DOM binding", () => {
     expect(() => createSignalAwareElement("input", { type: "date", bindValue: text })).toThrow(
       /text-like, number, or range input\/textarea\/select only/,
     );
+    // A misplaced binding is reported before its signal is read, so a failing read cannot hide it.
+    const failing = computed({
+      get: (): string => {
+        throw new Error("read failed");
+      },
+      set: () => {},
+    });
+    expect(() => createSignalAwareElement("div", { bindValue: failing })).toThrow(
+      /text-like, number, or range input\/textarea\/select only/,
+    );
+    expect(() => createSignalAwareElement("input", { type: "radio", bindChecked: failing })).toThrow(
+      /bindChecked: checkbox only/,
+    );
     expect(() => createSignalAwareElement("input", { type: "radio", value: "a", bindValue: text })).toThrow(
       /requires a non-empty name/,
     );
