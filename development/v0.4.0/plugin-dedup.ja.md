@@ -461,3 +461,61 @@ A/B（A=変更前、B=変更後）:
 
 4. **選択とcaptureを1回の走査にする**: 候補のあるfileで、decideTransformが約26%、そのうちwouldCaptureRenderReadのdry runが約15%。dry runはcapture passと同じvisitorをもう一度回している。選択の判定をcapture passの結果から取れば、この分の大半が減る。ただし選択とcaptureの構造の変更なので、別に判断する。
 5. **再走査を減らす**: applyManagedが約32%で、ほとんどが`@babel/traverse`。`hasTrackedReadInExpression`の部分木走査、`inspectFunction`のsubtree走査、`path.scope.crawl()`などが同じnodeを何度も歩く。cacheか、走査の統合で減らせる見込み。
+
+## 変換の速さの改善（設計メモの1〜3）
+
+`transform-performance-design.ja.md`の推奨1〜3を、この順に入れた。記録と再生、巻き戻し、走査の統合、ほかの項目は行っていない。
+
+1. **`decideTransform`の`inspectFunction`を遅延にした（30ec5da）**: componentでもHookでもない関数（callback、handler）では読まれないので、最初に読まれたときに計算する。`inspectFunction`はmemoへの書き込み以外に副作用がない。
+2. **visitorの`explode`を1回にした（cbb4a18）**: `traverseHandlers`が、handlerのkeyの組ごとに1つの振り分けvisitorをmodule内で作って使い回し、handlerは走査のstateとして渡す。handlerは今までどおりclosureを持ち、同じ`path`を受け取るので、`skip`と`stop`の意味は変わらない。`rendersJsx`、`hasDynamicCallTarget`、`expressionCallsHook`は`t.traverseFast`にした。`traverseFast`は根も訪れるので、根自身は入れ子の関数として飛ばさない（`expressionCallsHook`の根が関数のとき、`path.traverse`はその中へ入っていた。同じにした）。realisticのprofileで`explode`は5.0%から0.1%になった（1で走査が減った後の値）。
+3. **dry runの別名と、paramの判定を共有した（f6dfe7e）**: 判定1回分の`SelectionAnalysis`に、paramのnodeごとの`parameterMayReadTrackedValue`の答えと、別名の集合を入れる。別名は、paramを移動しておらず、分割代入を展開する前だけ使う（メモの条件どおり）。移動したparamは新しいnodeになるので、古い答えは読まれない。`addRuntimeImport`は`registerDeclaration`で新しい名前を1つ足すだけで、関数のBindingは変わらない。
+   - メモとの違い: 実際のpassには、集合そのものではなく写しを渡す。`trackedReadCache`は集合のidentityをkeyにしており、dry runで入れた答えは作者が書いたままのASTについてのものである。実際のpassは途中でnodeを変える（読み取りを生成したarrowの中へ移すと、その部分木の判定は変わる）ので、dry runの答えをそのまま使うと、今は新しく計算している判定と違う答えになりうる。写しにすれば、別名の収集1回分は削れ、cacheは共有しない。メモが見込んだ`trackedReadCache`のhitの分は取っていない。
+
+同一性: 各段で、前のcommitのdistと比べて、`examples/`の全source、120 componentの合成file、realisticの30 componentのfileを、mode 3つ×transform 2つ×reactCompiler 2つで変換し（384件、うち変換80件）、code、map、警告がbyte単位で同じだった。全suite（selection-capture-consistency、runtime-differential、事前判定のsetupを含む）は変更なしで通った。
+
+### 計測（in-process interleave、ABBA、順序ごとの中央値の幾何平均）
+
+realisticは、メモの説明（30 component、各componentに`useEffect`、`useCallback`、`setTimeout`、`map`のcallback、event handler、外部の`format`、`memo`したcomponent）から作り直した。
+
+A/A（変更前と、その写し。6 process）:
+
+| case | A ms | B ms | B/A |
+| --- | ---: | ---: | ---: |
+| managed / browser App.tsx | 47.37 | 46.56 | 1.013 |
+| managed / react-router app (8 files) | 42.08 | 43.75 | 1.036 |
+| managed / synthetic 120 components | 184.17 | 190.61 | 1.021 |
+| managed / realistic 30 components | 259.77 | 263.54 | 1.032 |
+| inject / browser App.tsx | 34.56 | 34.26 | 1.010 |
+| inject / react-router app (8 files) | 32.60 | 32.07 | 0.970 |
+| inject / synthetic 120 components | 107.34 | 109.14 | 0.965 |
+| inject / realistic 30 components | 192.91 | 196.95 | 1.013 |
+
+A/B（A=変更前の3b8a021、B=3つの後。6 process）:
+
+| case | A ms | B ms | B/A |
+| --- | ---: | ---: | ---: |
+| managed / browser App.tsx | 40.97 | 35.37 | 0.895 |
+| managed / react-router app (8 files) | 32.03 | 28.57 | 0.940 |
+| managed / synthetic 120 components | 136.65 | 108.53 | 0.802 |
+| managed / realistic 30 components | 234.27 | 188.88 | 0.810 |
+| inject / browser App.tsx | 28.87 | 27.16 | 0.909 |
+| inject / react-router app (8 files) | 29.48 | 27.37 | 0.920 |
+| inject / synthetic 120 components | 96.91 | 79.64 | 0.856 |
+| inject / realistic 30 components | 190.34 | 166.01 | 0.862 |
+
+段ごと（各4 process。比だけを見る）:
+
+| case | 1（遅延） | 2（visitor） | 3（共有） |
+| --- | ---: | ---: | ---: |
+| managed / browser App.tsx | 0.959 | 0.993 | 0.977 |
+| managed / react-router app (8 files) | 0.958 | 1.000 | 0.987 |
+| managed / synthetic 120 components | 0.975 | 0.832 | 0.941 |
+| managed / realistic 30 components | 0.916 | 0.922 | 0.918 |
+| inject / browser App.tsx | 0.909 | 0.922 | 1.046 |
+| inject / react-router app (8 files) | 0.875 | 0.955 | 1.008 |
+| inject / synthetic 120 components | 0.959 | 0.828 | 0.990 |
+| inject / realistic 30 components | 0.864 | 0.943 | 1.016 |
+
+- A/Aの幅は±4%程度。
+- 3つ合わせて、managedはrealisticで−19%、合成120で−20%、Appで−11%、react-routerで−6%。injectはrealisticで−14%、合成120で−14%、Appで−9%、react-routerで−8%。
+- 1はcallbackの多いinput（realistic、react-router、inject）で効き、メモの見込み（realistic −9〜11%）に近い。2は合成120（関数ごとの走査が多い）で−17%。3はmanagedだけに効き（injectはdry runの別名を使わない）、realisticで−8%、合成120で−6%。injectの3は雑音の幅の中。
