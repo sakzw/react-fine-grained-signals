@@ -5774,6 +5774,15 @@ function optionalChainCalls(top: NodePath): NodePath<t.OptionalCallExpression>[]
   return calls;
 }
 
+/**
+ * The capture pass skips an instance field's initializer, which runs when the
+ * class is instantiated, like a method body; a static one runs when the class
+ * is evaluated.
+ */
+function skipInstanceField(path: NodePath<t.ClassProperty | t.ClassPrivateProperty | t.ClassAccessorProperty>): void {
+  if (!path.node.static) path.skip();
+}
+
 function captureTrackedReadExpressions(
   functionPath: NodePath<t.Function>,
   store: t.Identifier,
@@ -6172,11 +6181,6 @@ function captureTrackedReadExpressions(
       return;
     }
     if (!wrapAfterHookBase(path)) giveUpForHook(path, HOOK_IN_CAPTURED_READ_WARNING);
-  };
-  const skipInstanceField = (
-    path: NodePath<t.ClassProperty | t.ClassPrivateProperty | t.ClassAccessorProperty>,
-  ): void => {
-    if (!path.node.static) path.skip();
   };
   const visitor: Visitor = {
     Function(path) {
