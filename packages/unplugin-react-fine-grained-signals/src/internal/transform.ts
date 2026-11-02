@@ -3528,13 +3528,18 @@ function decideTransform(
     // Only a function the transform would treat as a component is left
     // without tracking it would otherwise get. A server action that returns
     // JSX (`export async function submit(form) { ... }`) or a callback inside
-    // a component has no component identity, so it is not reported.
-    if (
-      isComponentIdentity(identity) &&
-      rendersJsx(path) &&
-      (options.mode !== "manual" || hasOwnedLeadingComment(path, useSignalTrackingComment))
-    ) {
-      warnServerDirectiveComponent(path, options);
+    // a component has no component identity, so it is not reported. An explicit
+    // annotation asks for tracking whatever the name is, so it always is; the
+    // enclosing check is the one for an annotation attached to nothing, since
+    // the comment reaches a nested concise arrow too.
+    if (rendersJsx(path)) {
+      const enclosing = path.getFunctionParent();
+      const annotated =
+        hasOwnedLeadingComment(path, useSignalTrackingComment) &&
+        (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalTrackingComment));
+      if (annotated || (options.mode !== "manual" && isComponentIdentity(identity))) {
+        warnServerDirectiveComponent(path, options);
+      }
     }
     return { kind: "skip" };
   }
@@ -5814,6 +5819,11 @@ function callReadsTrackedValue(
 }
 
 /** `{ ...state.value.profile }` / `[...state.value.list]` read the source while spreading. */
+function spreadArguments(path: NodePath<t.ObjectExpression | t.ArrayExpression>): NodePath[] {
+  const entries = (path.isObjectExpression() ? path.get("properties") : path.get("elements")) as NodePath[];
+  return entries.flatMap((entry) => (entry.isSpreadElement() ? [entry.get("argument") as NodePath] : []));
+}
+
 function spreadsTrackedValue(
   path: NodePath<t.ObjectExpression | t.ArrayExpression>,
   functionPath: NodePath<t.Function>,
@@ -5956,8 +5966,9 @@ function optionalChainCalls(top: NodePath): NodePath<t.OptionalCallExpression>[]
   const calls: NodePath<t.OptionalCallExpression>[] = [];
   let current = unwrapTransparentPath(top);
   for (;;) {
-    const child =
-      current.isMemberExpression() || current.isOptionalMemberExpression()
+    const child = current.isUnaryExpression({ operator: "delete" })
+      ? (current.get("argument") as NodePath)
+      : current.isMemberExpression() || current.isOptionalMemberExpression()
         ? (current.get("object") as NodePath)
         : current.isCallExpression() || current.isOptionalCallExpression()
           ? (current.get("callee") as NodePath)
@@ -6096,6 +6107,50 @@ function captureTrackedReadExpressions(
     warn("RFGS001", at, text);
     return true;
   };
+  /** Is a tracked value read in `operand` other than in a Hook's arguments? */
+  const readsOutsideHookCalls = (operand: NodePath): boolean => {
+    const isRead = (candidate: NodePath): boolean =>
+      ((candidate.isMemberExpression() || candidate.isOptionalMemberExpression()) &&
+        (isTrackedValueRead(candidate.node, candidate, functionPath) ||
+          isPotentialDynamicMemberRead(candidate.node, candidate, functionPath))) ||
+      (candidate.isIdentifier() && isTrackedAliasReference(candidate, functionPath, trackedAliases));
+    const root = unwrapTransparentPath(operand);
+    if ((root.isCallExpression() || root.isOptionalCallExpression()) && callNameIsHook(root.node.callee)) return false;
+    if (isRead(root)) return true;
+    let found = false;
+    const check = (candidate: NodePath): void => {
+      if (isRead(candidate)) {
+        found = true;
+        candidate.stop();
+      }
+    };
+    const skipHookCall = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
+      if (callNameIsHook(call.node.callee)) call.skip();
+    };
+    traverseHandlers(root, {
+      Function(nested) {
+        nested.skip();
+      },
+      CallExpression: skipHookCall,
+      OptionalCallExpression: skipHookCall,
+      MemberExpression: check,
+      OptionalMemberExpression: check,
+      Identifier: check,
+    });
+    return found;
+  };
+  /**
+   * `giveUpForHook` for an operation on its operands (a spread, `in`, a
+   * coercion, an update, a delete), whose own reads a Hook keeps out of a
+   * capture. It reports only if one of the operands is a read other than in a
+   * Hook's arguments: those are captured one by one, and a Hook's result is not
+   * a signal, so `useT(sig.value) + "x"` loses nothing.
+   */
+  const giveUpForOperation = (path: NodePath, operands: NodePath[]): boolean => {
+    if (!expressionCallsHook(path)) return false;
+    if (operands.some(readsOutsideHookCalls)) warn("RFGS001", path, HOOK_IN_CAPTURED_OPERATION_WARNING);
+    return true;
+  };
   /**
    * `{Title()}` where `Title` calls a Hook and reads signals: its body runs in
    * this render but cannot be captured without moving the Hook into a closure.
@@ -6127,30 +6182,53 @@ function captureTrackedReadExpressions(
     if (
       !operands.some((operand) => hasTrackedReadInExpression(operand, functionPath, trackedAliases)) ||
       isDeferredReadContext(path, functionPath) ||
-      giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+      giveUpForOperation(path, operands)
     )
       return;
     wrap(path);
   };
   /** Would `visitCall` capture this call, or does it produce an iterator that reads when pulled? */
   const iteratedCallMayRead = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): boolean => {
-    const callee = unwrapTransparent(call.node.callee);
-    const target = t.isIdentifier(callee)
-      ? resolveReferencedFunction(call, callee.name)
-      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
-        ? resolveKeyedFunction(call, callee)
-        : undefined;
-    if (target !== undefined) {
-      return (
-        target.node.generator === true &&
-        !target.node.async &&
-        targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource)
-      );
-    }
+    const target = iteratedCallTarget(call);
+    if (target !== undefined) return iteratedTargetReads(target);
     return (
       unresolvedCallMayRead(call, context) ||
       externalCallMayReadTrackedValue(call, functionPath, importSource, managedRuntimeSource, reactImportSource)
     );
+  };
+  const iteratedCallTarget = (
+    call: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  ): NodePath<t.Function> | undefined => {
+    const callee = unwrapTransparent(call.node.callee);
+    return t.isIdentifier(callee)
+      ? resolveReferencedFunction(call, callee.name)
+      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+        ? resolveKeyedFunction(call, callee)
+        : undefined;
+  };
+  const iteratedTargetReads = (target: NodePath<t.Function>): boolean =>
+    target.node.generator === true &&
+    !target.node.async &&
+    targetFunctionMayReadTrackedValue(target, importSource, managedRuntimeSource, reactImportSource);
+  /**
+   * A loop's iterable with a Hook in it, other than at the base of a chain that
+   * can be split. The same rule as a call (`wrapCallChain`): the site reports
+   * once, so a call `visitCall` will report for is left to it, and a precaution
+   * reports nothing. Only a read this proves is reported: one in the iterable
+   * itself, or a local generator's that runs when the loop pulls from it.
+   */
+  const giveUpForLoopSource = (right: NodePath): boolean => {
+    if (hookBaseOf(right) !== undefined || !expressionCallsHook(right)) return false;
+    const source = unwrapTransparentPath(right);
+    if (source.isCallExpression() || source.isOptionalCallExpression()) {
+      if (callCaptureReason(source) === "reads") return true;
+      const target = iteratedCallTarget(source);
+      const proven =
+        hasTrackedReadInExpression(right, functionPath, trackedAliases) ||
+        (target !== undefined && iteratedTargetReads(target));
+      if (!proven) return true;
+    }
+    return giveUpForHook(right, HOOK_IN_CAPTURED_READ_WARNING);
   };
   /**
    * Why `visitCall` would capture this call, if it would:
@@ -6201,7 +6279,8 @@ function captureTrackedReadExpressions(
     const reasons = [own];
     for (const link of optionalChainCalls(top)) {
       const reason = callCaptureReason(link);
-      if (reason === undefined) warnHookCallingHelperRead(link);
+      // A Hook link is a Hook call like any other: it is no helper to warn about.
+      if (reason === undefined && !callNameIsHook(link.node.callee)) warnHookCallingHelperRead(link);
       reasons.push(reason);
     }
     if (reasons.every((reason) => reason === undefined)) return false;
@@ -6413,7 +6492,7 @@ function captureTrackedReadExpressions(
           )
             return;
         }
-        if (hookBaseOf(right) === undefined && giveUpForHook(right, HOOK_IN_CAPTURED_READ_WARNING)) return;
+        if (giveUpForLoopSource(right)) return;
         if (!emit(right)) return;
         const iterate = (source: t.Expression): t.CallExpression =>
           t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("iterate")), [
@@ -6492,7 +6571,7 @@ function captureTrackedReadExpressions(
           isDeferredReadContext(path, functionPath)
         )
           return;
-        if (hookBaseOf(right) === undefined && giveUpForHook(right, HOOK_IN_CAPTURED_READ_WARNING)) return;
+        if (giveUpForLoopSource(right)) return;
         if (!emit(right)) return;
         const forIn = (source: t.Expression): t.CallExpression =>
           t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("forIn")), [
@@ -6568,7 +6647,7 @@ function captureTrackedReadExpressions(
           hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases) &&
           !isDeferredReadContext(path, functionPath)
         ) {
-          if (!giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)) wrap(path as NodePath<t.Expression>);
+          if (!giveUpForOperation(path, [path.get("right")])) wrap(path as NodePath<t.Expression>);
           return;
         }
         const destructuring = path.node.operator === "=" && (left.isObjectPattern() || left.isArrayPattern());
@@ -6611,7 +6690,7 @@ function captureTrackedReadExpressions(
         if (
           hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
           !isDeferredReadContext(path, functionPath) &&
-          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+          !giveUpForOperation(path, [path.get("argument")])
         )
           wrap(path as NodePath<t.Expression>);
       },
@@ -6643,7 +6722,7 @@ function captureTrackedReadExpressions(
         if (
           path.node.operator === "in" &&
           hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases) &&
-          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+          !giveUpForOperation(path, [path.get("right") as NodePath])
         ) {
           wrap(path as NodePath<t.Expression>);
           return;
@@ -6666,9 +6745,12 @@ function captureTrackedReadExpressions(
           if (
             hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
             !isDeferredReadContext(path, functionPath) &&
-            !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+            !giveUpForOperation(path, [path.get("argument")])
           )
             wrap(path as NodePath<t.Expression>);
+          // `delete a?.b().c`: a link of the chain cannot be replaced alone, and
+          // the target is no read for `visitMember` to climb from.
+          else if (!isDeferredReadContext(path, functionPath)) wrapCallChain(path as NodePath<t.Expression>, undefined);
         } else if (path.node.operator === "+" || path.node.operator === "-" || path.node.operator === "~") {
           wrapCoercion(path as NodePath<t.Expression>, [path.get("argument")]);
         }
@@ -6688,7 +6770,7 @@ function captureTrackedReadExpressions(
       enter(path) {
         if (
           spreadsTrackedValue(path, functionPath, trackedAliases) &&
-          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+          !giveUpForOperation(path, spreadArguments(path))
         ) {
           wrap(path as NodePath<t.Expression>);
         }
@@ -6698,7 +6780,7 @@ function captureTrackedReadExpressions(
       enter(path) {
         if (
           spreadsTrackedValue(path, functionPath, trackedAliases) &&
-          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+          !giveUpForOperation(path, spreadArguments(path))
         ) {
           wrap(path as NodePath<t.Expression>);
         }

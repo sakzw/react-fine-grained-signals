@@ -851,3 +851,105 @@ describe("what a helper reads is answered for the authored code", () => {
     expect(injected).toMatch(/function App\(\) \{\s+"use no memo";\s+_useSignalTracking\(\);/);
   });
 });
+
+describe("RFGS009 and an explicit annotation", () => {
+  it.each(["auto", "all", "manual"] as const)(
+    "reports an annotated function without an identity in %s mode",
+    (mode) => {
+      const { diagnostics } = run('"use server";\n/** @signalTracking */ export const row = () => <p />;', { mode });
+      expect(diagnostics).toEqual(["RFGS009"]);
+    },
+  );
+
+  it("reports once for an annotated function and a callback inside it", () => {
+    const { diagnostics } = run(
+      '"use server";\n/** @signalTracking */ export const row = () => <ul>{[1].map((i) => <li key={i} />)}</ul>;',
+    );
+    expect(diagnostics).toEqual(["RFGS009"]);
+  });
+
+  it("stays quiet for a server action with no annotation", () => {
+    const { diagnostics } = run('"use server";\nexport const row = () => <p />;');
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+describe("a Hook in a loop's iterable", () => {
+  // As for a call (`wrapCallChain`): a precaution reports nothing, and a site
+  // reports once.
+  const prelude = `import { useX } from "./x";\nimport { ext } from "./ext";\n${header}function readS(_: unknown) { return [s.value]; }\nfunction* gen(_: unknown) { yield s.value; }\nconst list = signal([1]);\n`;
+  const count = (statement: string): string[] =>
+    run(`${prelude}export function A() { let n = 0; ${statement} return <p>{n}{s.value}</p>; }`).diagnostics;
+  it.each([
+    ["a method of a Hook's result", "for (const v of useX().items()) n += v;"],
+    ["a method of an imported object", "for (const v of ext.items(useX())) n += v;"],
+  ])("does not report a precaution: %s", (_kind, statement) => {
+    expect(count(statement)).toEqual([]);
+  });
+
+  it.each([
+    ["a helper that reads", "for (const v of readS(useX())) n += v;"],
+    ["an imported function, as in a plain call", "for (const v of ext(useX())) n += v;"],
+    ["a helper with a tracked argument", "for (const v of readS((useX(), list.value))) n += v;"],
+    ["a generator that reads", "for (const v of gen(useX())) n += v;"],
+    ["a helper that reads, in for...in", "for (const k in readS(useX())) n += k.length;"],
+  ])("reports once: %s", (_kind, statement) => {
+    expect(count(statement)).toEqual(["RFGS001"]);
+  });
+});
+
+describe("a Hook link of an optional chain", () => {
+  it.each([
+    ["a plain call", "useThing().length"],
+    ["an optional call", "useThing?.().length"],
+  ])("does not report a Hook as a helper: %s", (_kind, read) => {
+    const { diagnostics } = run(
+      `import { useState } from "react";\n${header}function useThing() { useState(0); return [s.value]; }\nexport function A() { const n = ${read}; return <p>{n}{s.value}</p>; }`,
+    );
+    expect(diagnostics).toEqual([]);
+  });
+});
+
+describe("delete through an optional chain", () => {
+  it("captures the whole delete for a call link", () => {
+    const { code } = run(
+      `import { ext } from "./ext";\n${header}export function A(props: any) { delete props.a?.b().c; delete ext?.(1).d; return <p>{s.value}</p>; }`,
+    );
+    expect(code).toContain("_signals.capture(() => delete props.a?.b().c)");
+    expect(code).toContain("_signals.capture(() => delete ext?.(1).d)");
+  });
+
+  it("does not capture one with no call", () => {
+    const { code } = run(`${header}export function A(props: any) { delete props.a?.b.c; return <p>{s.value}</p>; }`);
+    expect(code).toContain("delete props.a?.b.c;");
+    expect(code).not.toContain("capture(() => delete");
+  });
+});
+
+describe("a Hook's result in an operation", () => {
+  // Reads in a Hook's arguments are captured one by one, and a Hook's result
+  // is not a signal: nothing the operation does is lost.
+  const prelude = `import { useT } from "./t";\n${header}const list = signal([1]);\n`;
+  it.each([
+    ["a coercion", 'const r = useT(s.value) + "x";'],
+    ["a template literal", "const r = `${useT(s.value)}`;"],
+    ["a coercion of a member", "const r = useT(s.value).x + 1;"],
+    ["an in check", 'const r = "a" in useT(s.value);'],
+    ["an object spread", "const r = { ...useT(s.value) };"],
+    ["an array spread", "const r = [...useT(list.value)];"],
+    ["a compound assignment", 'let r = ""; r += useT(s.value);'],
+  ])("does not report %s", (_kind, statement) => {
+    const { code, diagnostics } = run(`${prelude}export function A() { ${statement} return <p>{String(r)}</p>; }`);
+    expect(diagnostics).toEqual([]);
+    expect(code).toMatch(/useT\(_signals\.capture\(\(\) => (s|list)\.value\)\)/);
+  });
+
+  it.each([
+    ["a read next to a Hook", "const r = s.value + useT(1);"],
+    ["a read on a Hook's result", "const r = useT(1).value + 1;"],
+    ["an array spread of a read next to a Hook", "const r = [...list.value, useT(1)];"],
+  ])("still reports %s", (_kind, statement) => {
+    const { diagnostics } = run(`${prelude}export function A() { ${statement} return <p>{String(r)}{s.value}</p>; }`);
+    expect(diagnostics).toEqual(["RFGS001"]);
+  });
+});
