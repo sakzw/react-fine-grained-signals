@@ -694,6 +694,25 @@ describe("class fields", () => {
     expect(code).toContain("_signals.capture(() => new Model())");
   });
 
+  it.each([
+    ["never instantiated", "function setup() { class Model { x = s.value; } void Model; }", "{setup()}"],
+    [
+      "instantiated by a helper only in an effect",
+      "function setup() { class Model { x = s.value; } setTimeout(() => new Model(), 0); }",
+      "{setup()}",
+    ],
+  ])("does not count a field of a class in a helper, %s", (_kind, helper, jsx) => {
+    const { code } = run(`${header}${helper}\nexport function A() { return <p>${jsx}</p>; }`);
+    expect(code).toBeUndefined();
+  });
+
+  it("counts a field of a class a helper instantiates", () => {
+    const { code } = run(
+      `${header}function make() { class Model { x = s.value; } return new Model().x; }\nexport function A() { return <p>{make()}</p>; }`,
+    );
+    expect(code).toContain("_signals.capture(() => make())");
+  });
+
   // Only the initializer waits for `new`. A computed key and a decorator's
   // arguments run when the class is evaluated, which here is the render.
   it.each([

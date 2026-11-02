@@ -2312,6 +2312,57 @@ function synchronousScan(
   return scan;
 }
 
+/**
+ * The class `reference` names, if it is declared inside a function and never
+ * reassigned. A module-level class stays an unproven callee: what `new` runs is
+ * only followed for a class the render itself declares.
+ */
+function localClassOf(reference: NodePath): NodePath<t.Class> | undefined {
+  const source = unwrapTransparentPath(reference);
+  if (source.isClassExpression()) return source;
+  if (!source.isIdentifier()) return undefined;
+  const binding = source.scope.getBinding(source.node.name);
+  if (binding === undefined || !binding.constant || binding.scope.getFunctionParent() === null) return undefined;
+  if (binding.path.isClassDeclaration()) return binding.path;
+  if (!binding.path.isVariableDeclarator()) return undefined;
+  const init = unwrapTransparentPath(binding.path.get("init") as NodePath);
+  return init.isClassExpression() ? init : undefined;
+}
+
+/**
+ * The instance field initializers `new` runs, inherited ones included, for a
+ * local class (`localClassOf`). A function held in a field runs when it is
+ * called, not here, so it is left out.
+ */
+function instantiatedFieldValues(call: NodePath<t.NewExpression>): NodePath[] {
+  const values: NodePath[] = [];
+  const seen = new Set<t.Node>();
+  let current = localClassOf(call.get("callee") as NodePath);
+  while (current !== undefined && !seen.has(current.node)) {
+    seen.add(current.node);
+    for (const member of current.get("body").get("body") as NodePath[]) {
+      if (!member.isClassProperty() && !member.isClassPrivateProperty() && !member.isClassAccessorProperty()) continue;
+      if (member.node.static || !member.node.value) continue;
+      const value = member.get("value") as NodePath;
+      if (!unwrapTransparentPath(value).isFunction()) values.push(value);
+    }
+    const parent = current.get("superClass") as NodePath;
+    current = parent.node ? localClassOf(parent) : undefined;
+  }
+  return values;
+}
+
+/**
+ * Skips an instance field's initializer in a walk of render code: it runs when
+ * the class is instantiated, like a method body. Its computed key and
+ * decorators run when the class is evaluated, and so does all of a static field.
+ */
+function skipInstanceFieldValue(
+  path: NodePath<t.ClassProperty | t.ClassPrivateProperty | t.ClassAccessorProperty>,
+): void {
+  if (!path.node.static) path.skipKey("value");
+}
+
 function inspectFunction(
   functionPath: NodePath<t.Function>,
   importSource: string,
@@ -2631,6 +2682,24 @@ function scanFunction(
     if (isTrackedValueRead(node, path, functionPath)) inspection.readsValue = true;
   };
 
+  // `new Model()` runs the field initializers of a local class right there, so
+  // their reads are made wherever the `new` is.
+  const foldedFields = new Set<t.Node>();
+  const foldInstantiatedFields = (call: NodePath<t.NewExpression>): void => {
+    if (isDeferredReadContext(call, functionPath)) return;
+    for (const value of instantiatedFieldValues(call)) {
+      if (foldedFields.has(value.node)) continue;
+      foldedFields.add(value.node);
+      visitOwnNode(value);
+      traverseHandlers(value, fieldVisitor);
+    }
+  };
+  // `traverse` does not visit its root, so a root's own node goes through the
+  // same handlers first.
+  const visitOwnNode = (root: NodePath): void => {
+    const own = (visitor as Record<string, ((path: NodePath) => void) | undefined>)[root.type];
+    if (typeof own === "function") own(root);
+  };
   const visitor: Visitor = {
     // A nested function is not a render read until a known synchronous call
     // site runs it. The call-site visitors below fold recognized helpers and
@@ -2691,7 +2760,11 @@ function scanFunction(
     // `new Promise(executor)` runs a named executor right away.
     NewExpression(path) {
       foldFunctionArguments(path);
+      foldInstantiatedFields(path);
     },
+    ClassProperty: skipInstanceFieldValue,
+    ClassPrivateProperty: skipInstanceFieldValue,
+    ClassAccessorProperty: skipInstanceFieldValue,
     TaggedTemplateExpression(path) {
       foldTemplateTag(path);
     },
@@ -2699,14 +2772,19 @@ function scanFunction(
       foldIteratedGenerator(path);
     },
   };
+  // A field initializer runs inside the `new`, but a function in one does not.
+  const fieldVisitor: Visitor = {
+    ...visitor,
+    Function(nested) {
+      nested.skip();
+    },
+  };
   if (subtree === undefined) {
     traverseHandlers(functionPath, visitor);
   } else {
-    // `traverse` does not visit its root, so the subtree's own node is
-    // visited first, by the same handlers. The iterable of a `for...of` is
-    // judged with its loop, which is what iterates it.
-    const own = (visitor as Record<string, ((path: NodePath) => void) | undefined>)[subtree.type];
-    if (typeof own === "function") own(subtree);
+    // The iterable of a `for...of` is judged with its loop, which is what
+    // iterates it.
+    visitOwnNode(subtree);
     const loop = subtree.parentPath;
     if (loop?.isForOfStatement() && loop.node.right === subtree.node) foldIteratedGenerator(loop);
     if (!subtree.isFunction()) traverseHandlers(subtree, visitor);
@@ -5337,6 +5415,7 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
    * not, which bindings does it mention (so the flow fires when one becomes an
    * alias)?
    */
+  const fieldsInProgress = new Set<t.Node>();
   const scanSource = (source: NodePath, deps: Set<object>): boolean => {
     if (hasTrackedReadInExpression(source, functionPath, noAliases)) return true;
     let seeded = false;
@@ -5349,6 +5428,20 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
       if (resolvedCallReads(candidate)) {
         seeded = true;
         candidate.stop();
+      }
+    };
+    // `new Model()` holds what its field initializers read.
+    const instantiation = (candidate: NodePath<t.NewExpression>): void => {
+      for (const value of instantiatedFieldValues(candidate)) {
+        if (fieldsInProgress.has(value.node)) continue;
+        fieldsInProgress.add(value.node);
+        const reads = scanSource(value, deps);
+        fieldsInProgress.delete(value.node);
+        if (reads) {
+          seeded = true;
+          candidate.stop();
+          return;
+        }
       }
     };
     // `{ get total() { return count.value * 2 } }`: reading the getter is a
@@ -5369,6 +5462,7 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
     }
     if (source.isIdentifier()) reference(source);
     else if (source.isCallExpression() || source.isOptionalCallExpression()) call(source);
+    else if (source.isNewExpression()) instantiation(source);
     if (seeded) return true;
     traverseHandlers(source, {
       Function(nested) {
@@ -5377,6 +5471,7 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
       Identifier: reference,
       CallExpression: call,
       OptionalCallExpression: call,
+      NewExpression: instantiation,
     });
     return seeded;
   };
@@ -5823,17 +5918,6 @@ function optionalChainCalls(top: NodePath): NodePath<t.OptionalCallExpression>[]
     current = link;
   }
   return calls;
-}
-
-/**
- * The capture pass skips an instance field's initializer, which runs when the
- * class is instantiated, like a method body. Its computed key and decorators
- * run when the class is evaluated, and so does all of a static field.
- */
-function skipInstanceFieldValue(
-  path: NodePath<t.ClassProperty | t.ClassPrivateProperty | t.ClassAccessorProperty>,
-): void {
-  if (!path.node.static) path.skipKey("value");
 }
 
 function captureTrackedReadExpressions(

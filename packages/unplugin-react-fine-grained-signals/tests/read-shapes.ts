@@ -802,14 +802,32 @@ export const cases: readonly Case[] = [
     body: "class Model { snapshot = s.value; } const x = new Model().snapshot;",
     jsx: "{x}",
     token: "new Model(",
-    expected: { ...precaution, why: "only a standard constructor is proven (`new C()`)" },
-    run: {
-      exception: {
-        rerenders: { "managed alone": false, "inject alone": false },
-        stale: true,
-        why: 'README.md:256: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
-      },
-    },
+  },
+  {
+    name: "an instance field of a class expression instantiated in render",
+    body: "const Model = class { snapshot = s.value; }; const x = new Model().snapshot;",
+    jsx: "{x}",
+    token: "new Model(",
+  },
+  {
+    name: "an inherited instance field instantiated in render",
+    body: "class Base { snapshot = s.value; } class Model extends Base {} const x = new Model().snapshot;",
+    jsx: "{x}",
+    token: "new Model(",
+  },
+  {
+    name: "an instance field through a helper instantiated in render",
+    body: "class Model { snapshot = readS(); } const x = new Model().snapshot;",
+    jsx: "{x}",
+    token: "new Model(",
+  },
+  {
+    // A function in a field runs when it is called, not on `new`.
+    name: "an instance field holding a function",
+    body: "class Model { read = () => s.value; } const x = new Model().read.name;",
+    jsx: "{x}",
+    token: "new Model(",
+    expected: { ...precaution, why: "`new` of a class whose fields do not read is only a precaution" },
   },
   {
     name: "a computed key of an instance field",
@@ -1006,6 +1024,23 @@ function deepCases(): Case[] {
       name: "an alias handed to a Hook",
       body: "const user = state.value.user; const [held] = useState(user); const x = held.name;",
       token: "held.name",
+    }),
+    // A nested object held by an instance.
+    deep({
+      name: "an instance field holding a nested object",
+      body: "class Model { user = state.value.user; } const m = new Model(); const x = m.user.name;",
+      token: "m.user.name",
+    }),
+    deep({
+      name: "an instance field reading a caller's alias",
+      body: "const user = state.value.user; class Model { name = user.name; } const x = new Model().name;",
+      token: "new Model(",
+    }),
+    // A computed key runs at class evaluation, with a nested read.
+    deep({
+      name: "a computed key of an instance field",
+      body: "const user = state.value.user; class Model { [user.name] = 1; } const x = Object.keys(new Model())[0];",
+      token: "user.name",
     }),
     // A collection signal.
     deep(
