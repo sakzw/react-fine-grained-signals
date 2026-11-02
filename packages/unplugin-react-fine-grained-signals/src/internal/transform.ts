@@ -5649,6 +5649,50 @@ const HOOK_IN_CAPTURED_READ_WARNING =
   "The managed transform keeps Hooks out of capture closures, so this read is not tracked. " +
   "Call the Hook in its own statement and read the signal from its result.";
 
+/**
+ * Is `path` a link below the outermost expression of an optional chain? In
+ * `a?.b().length` the call `a?.b()` is: when `a` is nullish the whole chain
+ * short-circuits to `undefined`, so a capture of the link alone
+ * (`capture(() => a?.b()).length`) would read `.length` of `undefined`. A
+ * link is never replaced on its own; the chain's outermost expression
+ * decides for all of its links (`optionalChainCalls`).
+ */
+function continuesOptionalChain(path: NodePath): boolean {
+  if (!path.isOptionalMemberExpression() && !path.isOptionalCallExpression()) return false;
+  const slot = climbTransparentWrappers(path);
+  const parent = slot.parentPath;
+  return (
+    (parent?.isOptionalMemberExpression() === true && parent.node.object === slot.node) ||
+    (parent?.isOptionalCallExpression() === true && parent.node.callee === slot.node)
+  );
+}
+
+/**
+ * The calls inside the optional chain below `top`, which `visitCall` leaves
+ * to `top` (`continuesOptionalChain`): `a?.b()` for `a?.b().c`, and for
+ * `(a?.b().c)()`, whose callee is such a chain.
+ */
+function optionalChainCalls(top: NodePath): NodePath<t.OptionalCallExpression>[] {
+  const calls: NodePath<t.OptionalCallExpression>[] = [];
+  let current = unwrapTransparentPath(top);
+  for (;;) {
+    const child =
+      current.isMemberExpression() || current.isOptionalMemberExpression()
+        ? (current.get("object") as NodePath)
+        : current.isCallExpression() || current.isOptionalCallExpression()
+          ? (current.get("callee") as NodePath)
+          : undefined;
+    if (child === undefined) break;
+    // Babel types every node from the first `?.` up to the outermost one as
+    // optional; the plain base below it is evaluated either way.
+    const link = unwrapTransparentPath(child);
+    if (!link.isOptionalMemberExpression() && !link.isOptionalCallExpression()) break;
+    if (link.isOptionalCallExpression()) calls.push(link);
+    current = link;
+  }
+  return calls;
+}
+
 function captureTrackedReadExpressions(
   functionPath: NodePath<t.Function>,
   store: t.Identifier,
@@ -5817,16 +5861,20 @@ function captureTrackedReadExpressions(
       externalCallMayReadTrackedValue(call, functionPath, importSource, managedRuntimeSource, reactImportSource)
     );
   };
-  const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
-    if (generated.has(path.node)) {
-      path.skip();
-      return;
-    }
-    if (isDeferredReadContext(path, functionPath)) return;
+  /**
+   * Why `visitCall` would capture this call, if it would:
+   * - `"reads"`: reads only the call itself performs (a tracked callee, a
+   *   parameter or helper invoked synchronously, an inline callback it runs);
+   * - `"precaution"`: a callee the module cannot see into;
+   * - `"arguments"`: reads in its own arguments only.
+   */
+  const callCaptureReason = (
+    path: NodePath<t.CallExpression | t.OptionalCallExpression>,
+  ): "reads" | "precaution" | "arguments" | undefined => {
     // A Hook call itself (`useEffect(() => ...)`, `useMemo(...)`) is never
     // captured and its callbacks belong to React, so there is nothing to warn
     // about here; reads in its arguments are still visited one by one.
-    if (callNameIsHook(path.node.callee)) return;
+    if (callNameIsHook(path.node.callee)) return undefined;
     const callee = unwrapTransparentPath(path.get("callee") as NodePath);
     // Reads only the call itself performs: a tracked callee, a parameter or
     // helper invoked synchronously, or an inline callback it runs.
@@ -5848,19 +5896,45 @@ function captureTrackedReadExpressions(
     // function held in a variable) is captured as a precaution. Unlike the
     // reads above this is not proof, so a Hook sharing the call is left alone
     // without a warning.
-    const unresolved = !readsInsideCall && unresolvedCallMayRead(path, context);
-    if (!readsInsideCall && !unresolved && !callReadsTrackedValue(path, functionPath, trackedAliases, context)) {
-      warnHookCallingHelperRead(path);
-      return;
+    if (readsInsideCall) return "reads";
+    if (unresolvedCallMayRead(path, context)) return "precaution";
+    if (callReadsTrackedValue(path, functionPath, trackedAliases, context)) return "arguments";
+    return undefined;
+  };
+  /**
+   * Captures `top` as a whole when it, or a call link of the optional chain
+   * it is the outermost expression of, is to be captured. Returns whether
+   * anything was to be captured.
+   */
+  const wrapCallChain = (top: NodePath<t.Expression>, own: ReturnType<typeof callCaptureReason>): boolean => {
+    const reasons = [own];
+    for (const link of optionalChainCalls(top)) {
+      const reason = callCaptureReason(link);
+      if (reason === undefined) warnHookCallingHelperRead(link);
+      reasons.push(reason);
     }
-    if (expressionCallsHook(path)) {
+    if (reasons.every((reason) => reason === undefined)) return false;
+    if (expressionCallsHook(top)) {
       // Never move a Hook call into a capture closure. Reads in the arguments
       // are still captured one by one as the traversal continues; reads the
       // call performs internally cannot be, so say so.
-      if (readsInsideCall) warn("RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
+      if (reasons.includes("reads")) warn("RFGS001", top, HOOK_IN_CAPTURED_CALL_WARNING);
+      return true;
+    }
+    wrap(top);
+    return true;
+  };
+  const visitCall = (path: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
+    if (generated.has(path.node)) {
+      path.skip();
       return;
     }
-    wrap(path as NodePath<t.Expression>);
+    if (isDeferredReadContext(path, functionPath)) return;
+    if (callNameIsHook(path.node.callee)) return;
+    if (continuesOptionalChain(path)) return;
+    const own = callCaptureReason(path);
+    if (own === undefined) warnHookCallingHelperRead(path);
+    wrapCallChain(path as NodePath<t.Expression>, own);
   };
   /**
    * `useStore().value.name`: evaluate the Hook in place, as authored, and
@@ -5974,17 +6048,24 @@ function captureTrackedReadExpressions(
     // whether this member is the object of a longer chain, a call's callee
     // (whose `this` must stay attached), or a tagged template's tag is the
     // one above those wrappers.
+    // This also covers every link of an optional chain (`continuesOptionalChain`):
+    // only the outermost expression is ever replaced.
     const slot = climbTransparentWrappers(path);
     const parent = slot.parentPath;
     if (
       ((parent?.isMemberExpression() || parent?.isOptionalMemberExpression()) && parent.node.object === slot.node) ||
       ((parent?.isCallExpression() || parent?.isOptionalCallExpression()) && parent.node.callee === slot.node) ||
       (parent?.isTaggedTemplateExpression() && parent.node.tag === slot.node) ||
-      isWriteTarget(path) ||
-      !hasTrackedReadInMemberChain(path, functionPath, trackedAliases)
+      isWriteTarget(path)
     )
       return;
-    wrapMemberRead(path);
+    if (hasTrackedReadInMemberChain(path, functionPath, trackedAliases)) {
+      wrapMemberRead(path);
+      return;
+    }
+    // `props.todos?.filter(cb).length`: a call link of this chain that
+    // `visitCall` would capture is captured with the whole chain.
+    if (!isDeferredReadContext(path, functionPath)) wrapCallChain(path as NodePath<t.Expression>, undefined);
   };
   const wrapMemberRead = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
     if (!expressionCallsHook(path)) {

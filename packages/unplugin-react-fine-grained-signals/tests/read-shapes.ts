@@ -428,6 +428,48 @@ export const cases: readonly Case[] = [
     jsx: "{x}",
     token: "api?.read(",
   },
+  // A call in the middle of an optional chain is captured with the rest of
+  // the chain: `capture(() => a?.b()).length` would throw when `a` is nullish.
+  {
+    name: "a reading call in the middle of an optional chain",
+    params: "props: { todos?: number[] }",
+    body: "const x = props.todos?.filter(() => s.value > 0).length;",
+    jsx: "{String(x)}",
+    token: "s.value > 0).length",
+    run: { props: {} },
+  },
+  {
+    name: "a reading call in the middle of an optional chain, base present",
+    params: "props: { todos?: number[] }",
+    body: "const x = props.todos?.filter(() => s.value > 0).length;",
+    jsx: "{String(x)}",
+    token: "s.value > 0).length",
+    run: { props: { todos: [1] } },
+  },
+  {
+    name: "an optional call in the middle of a chain",
+    params: "props: { f?: () => number[] }",
+    body: "const x = props.f?.().length;",
+    jsx: "{String(x)}",
+    token: "props.f?.().length",
+    expected: { ...precaution, why: "a parameter called as a function is not a proven callee" },
+  },
+  {
+    name: "an imported optional call in the middle of a chain",
+    body: "const x = ext?.(1).length;",
+    jsx: "{String(x)}",
+    token: "ext?.(1).length",
+    expected: { ...precaution, why: "an imported helper body is not inspected to select" },
+  },
+  {
+    name: "a method of a nullish prop in the middle of an optional chain",
+    params: "props: { api?: { load(): number[] } }",
+    body: "const x = props.api?.load().length;",
+    jsx: "{String(x)}",
+    token: "props.api?.load().length",
+    expected: { ...precaution, why: "a method of a prop is not a proven callee" },
+    run: { props: {} },
+  },
   {
     name: "a tagged template whose tag reads",
     module: "const tag = (strings: TemplateStringsArray) => s.value + strings.length;",
