@@ -709,6 +709,21 @@ export const cases: readonly Case[] = [
   // alias can re-render.
   ...deepCases(),
 
+  // What a helper reads does not depend on when it was first asked: `Label` is
+  // rewritten when visited, in either order relative to `helper`.
+  {
+    name: "a helper calling an annotated function declared after it",
+    module: "function helper() { return Label(); }\n/** @signalTracking */ function Label() { return s.value; }",
+    jsx: "{helper()}",
+    token: "helper(",
+  },
+  {
+    name: "a helper calling an annotated function declared before it",
+    module: "/** @signalTracking */ function Label() { return s.value; }\nfunction helper() { return Label(); }",
+    jsx: "{helper()}",
+    token: "helper(",
+  },
+
   // A file whose only `.value` follows a name like a DOM or ref field: the raw
   // text cannot tell these from `e.target.value`, so the pre-filter must pass them.
   {

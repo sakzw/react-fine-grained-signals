@@ -704,3 +704,22 @@ describe("class fields", () => {
     expect(code).toContain(output);
   });
 });
+
+describe("what a helper reads is answered for the authored code", () => {
+  // `Label` is transformed when it is visited: its read moves into a generated
+  // capture callback. What `helper` reads must not depend on whether anyone
+  // asked before or after that.
+  const helper = "function helper() { return Label(); }";
+  const label = "/** @signalTracking */ function Label() { return s.value; }";
+  const app = "export function App() { return <p>{helper()}</p>; }";
+  it.each([
+    ["the helper first", [helper, label, app]],
+    ["the annotated function first", [label, helper, app]],
+    ["the caller first", [app, helper, label]],
+  ])("selects the caller with %s", (_order, parts) => {
+    const managed = run(`${header}${parts.join("\n")}`).code!;
+    expect(managed).toMatch(/_signals\d*\.capture\(\(\) => helper\(\)\)/);
+    const injected = run(`${header}${parts.join("\n")}`, { transform: "inject" }).code!;
+    expect(injected).toMatch(/function App\(\) \{\s+"use no memo";\s+_useSignalTracking\(\);/);
+  });
+});

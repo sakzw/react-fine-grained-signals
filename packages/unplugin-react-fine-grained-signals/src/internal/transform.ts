@@ -6842,6 +6842,18 @@ function keepJsxPragmasFirst(programPath: NodePath<t.Program>, state: PluginStat
   }
 }
 
+/**
+ * Records what `path` reads before it is rewritten. A later `synchronousScan`
+ * of it (a caller folding it in as a helper) must answer for the authored code:
+ * after the rewrite its reads sit inside generated capture callbacks, which a
+ * synchronous scan skips. Only rewritten functions pay for this; the scan of a
+ * function nobody rewrites can wait until somebody asks, because its body
+ * stays as written.
+ */
+function scanBeforeRewrite(path: NodePath<t.Function>, options: InternalTransformOptions): void {
+  synchronousScan(path, options.importSource, managedRuntimeSourceOf(options.importSource), options.reactImportSource);
+}
+
 const babelTransform = declare<PluginState, InternalTransformOptions>((api, options) => {
   api.assertVersion(8);
   const managedRuntimeSource = managedRuntimeSourceOf(options.importSource);
@@ -6892,9 +6904,11 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
             }
             return;
           case "inject":
+            scanBeforeRewrite(path, options);
             applyInject(path, decision, options, state);
             return;
           case "managed":
+            scanBeforeRewrite(path, options);
             applyManaged(path, decision, options, state);
             return;
         }
