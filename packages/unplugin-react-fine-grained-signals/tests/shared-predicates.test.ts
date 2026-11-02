@@ -594,6 +594,54 @@ describe("aliases bound by an assignment pattern", () => {
   });
 });
 
+describe("aliases bound by a pattern's default", () => {
+  it.each([
+    ["a parameter", "{ user = state.value.user }: any", ""],
+    ["a renamed parameter", "{ u: user = state.value.user }: any", ""],
+    ["a nested parameter", "{ a: { user = state.value.user } = {} as any }: any", ""],
+    ["a declaration", "p: any", "const { user = state.value.user } = p;"],
+    ["a let declaration", "p: any", "let { user = state.value.user } = p;"],
+    ["a rest neighbour", "p: any", "const { user = state.value.user, ...rest } = p; void rest;"],
+    ["an object assignment", "", "let user: any; ({ user = state.value.user } = {} as any);"],
+    ["an array declaration", "", "const [user = state.value.user] = [] as any[];"],
+    ["an array assignment", "", "let user: any; [user = state.value.user] = [] as any[];"],
+    ["a wrapped assignment target", "", "let user: any; ({ user: (user as any) = state.value.user } = {} as any);"],
+    ["a default that is an alias", "p: any", "const fb = state.value.user; const { user = fb } = p;"],
+    [
+      "a default through an alias chain",
+      "p: any",
+      "const fb = state.value.user; const { a = fb } = p; const { user = a } = p;",
+    ],
+  ])("makes the name in %s an alias", (_kind, params, statement) => {
+    const { code } = run(
+      `${deepHeader}export function A(${params}) { ${statement} const y = user.name; return <p>{y}</p>; }`,
+    );
+    expect(code).toContain("const y = _signals.capture(() => user.name);");
+  });
+
+  it.each([
+    ["a declaration", "const { user = state.value.user } of [{}] as any[]"],
+    ["an array declaration", "const [user = state.value.user] of [[]] as any[]"],
+  ])("makes the name in a loop head's %s an alias", (_kind, head) => {
+    const { code } = run(`${deepHeader}export function A() { for (${head}) { void user.name; } return <p />; }`);
+    expect(code).toContain("_signals.capture(() => user.name)");
+  });
+
+  it("leaves a default that reads nothing alone", () => {
+    const { code } = run(
+      `${deepHeader}export function A({ user = { name: "n" } }: any) { const y = user.name; return <p>{y}{state.value.user.name}</p>; }`,
+    );
+    expect(code).toContain("const y = user.name;");
+  });
+
+  it("does not take a default from a nested function's own parameter", () => {
+    const { code } = run(
+      `${deepHeader}export function A({ user = { name: "n" } }: any) { const f = ({ user: u = state.value.user }: any) => u; void f; const y = user.name; return <p>{y}{state.value.user.name}</p>; }`,
+    );
+    expect(code).toContain("const y = user.name;");
+  });
+});
+
 describe("aliases through a parameter or a TypeScript wrapper", () => {
   // The same as assigning an identifier: only that the target is a binding of
   // this function matters, not its kind or a wrapper the types add.

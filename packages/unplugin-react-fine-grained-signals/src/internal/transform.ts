@@ -5630,6 +5630,11 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
         flow(assignedBindings(path, left.node), [path.get("right")]);
       }
     },
+    // `const { user = state.value.user } = p`, `({ user = fb } = {})`: a default
+    // is a source of what its target binds, in a pattern of any form.
+    AssignmentPattern(path) {
+      flow(assignedBindings(path, path.node.left), [path.get("right")]);
+    },
     CallExpression: container,
     OptionalCallExpression: container,
   });

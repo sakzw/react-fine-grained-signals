@@ -1098,6 +1098,46 @@ function deepCases(): Case[] {
       body: "const user = state.value.user; class Model { name = user.name; } const x = new Model().name;",
       token: "new Model(",
     }),
+    // A default is a source of what its pattern binds.
+    deep({
+      name: "a pattern default in a parameter",
+      params: "{ user = state.value.user }: { user?: { name: string } }",
+      body: "const x = user.name;",
+      token: "user.name",
+      run: {
+        oracle: {
+          params: "props: { user?: { name: string } }",
+          body: "const { user = state.value.user } = props; const x = user.name;",
+        },
+      },
+    }),
+    deep({
+      name: "a pattern default in a declaration",
+      params: "props: { user?: { name: string } }",
+      body: "const { user = state.value.user } = props; const x = user.name;",
+      token: "user.name",
+    }),
+    deep({
+      name: "a pattern default in an assignment",
+      body: "let user: any; ({ user = state.value.user } = {} as any); const x = user.name;",
+      token: "user.name",
+    }),
+    deep({
+      name: "an array pattern default",
+      body: "const [user = state.value.user] = [] as any[]; const x = user.name;",
+      token: "user.name",
+    }),
+    deep({
+      name: "a pattern default in a loop head",
+      body: 'let x = ""; for (const { user = state.value.user } of [{}] as any[]) { x += user.name; }',
+      token: "user.name",
+    }),
+    deep({
+      name: "a pattern default that is itself an alias",
+      params: "props: { user?: { name: string } }",
+      body: "const fb = state.value.user; const { user = fb } = props; const x = user.name;",
+      token: "user.name",
+    }),
     // A logical assignment reads through the proxy before it writes.
     deep({
       name: "a logical assignment to a nested property",
