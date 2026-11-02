@@ -359,3 +359,30 @@ oracle側の限界:
 - `for (const [a = useX()] of list.value)`のように、loopの宣言patternのdefaultにあるHookは直していない。loopの中のHookはそもそもRules of Hooksに反する。
 
 利用者から見える変化: optional chainのcaptureの形（chain全体を包む）、Hookの名前の規則（`use`の後に数字も含む）、RFGS001が出る場面が増えたこと、RFGS009が出る場面が減ったこと、同じ診断が1回だけ出ること。
+
+## deep signalのalias caseと保留5件
+
+managed-scope-options.ja.mdの判断（v0.4.0は今の契約で出す）に沿って、保留の5件を今の契約の中で直し、deep signalのalias caseを`read-shapes.ts`に加えた。
+
+### deep signalのcase（e966683）
+
+preludeに`deepSignal`（`state`）と`deepCollectionSignal`（`store`）を足し、29件のcaseを加えた。どれもnestedなobjectを局所に取り出してあとで読み、書き込みはnestedなproperty（`state.value.user.name = "Grace"`など）だけを変える。aliasを通した読み取りが追跡されないと再renderしない。在庫表のA1〜A13を覆う（A2は5件、A4は4件、A8は4件、A9は代入形を含めて4件、Map entryの`deepCollectionSignal`が1件）。A14（dry runでのaliasの判定）は全caseの選択で通る。ほかに、保留のうちalias以外の3件のcase（書き込みの基底、JSXのmember tag、class fieldの4件）を足した。
+
+oracleとの食い違いと対応:
+
+- **式を通したalias（63bfac1、不具合）**: `(flag ? user : d).name`、`(user ?? d).name`、`[user][0]!.name`、`[...box][0]!.name`（Setに入れたaliasのspread）の4件。member chainの判定が、memberでも呼び出しでもない基底（条件式、論理式、配列など）で止まり、`.name`をcaptureの外で読んでいた。値を受け渡す式（条件、論理、sequence、配列、object、代入）が基底なら、式として判定する。
+- **分割代入（a67873c、保留1）**: `({ user } = state.value)`の`user`をaliasにした。代入のpatternが書く局所変数を、宣言のpatternと同じくflowに足す。
+- **代入形のloop head（a307566、保留2）**: `for ({ meta } of state.value.items)`のpatternが書く変数をaliasにした。`for (item of …)`（既存の識別子）はもともと動いていたので、テストで固定した。
+- **書き込みの基底（2040b92、保留3）**: `st.value.a = 2`。`isWriteTarget`はmember chainを上へたどって全体を書き込みとみなしていた。書き込みは代入先そのものだけにし、そのobjectはreadとして数えてcaptureする（`capture(() => st.value).a = 2`）。選択もされる。既存テスト4件（`state.value.count = 2`を素通しと固定していたものなど）の期待を新しい出力に直した。あわせて、`wrap`の出力を`generated`に入れた（訪問中でないnodeを包むと二重に包んでいた）。
+- **JSXのmember tag（b237847、保留4）**: `<theme.value.Icon />`。tagは呼び出しにできないので、要素を評価する位置でtagを局所に取る（`(_Tag = capture(() => theme.value.Icon), <_Tag />)`、`var _Tag`を関数の先頭に置く）。評価順（tagが先）と遅延評価（`f && <…>`）を保ち、属性と子はその場に残る。選択の走査（`scanFunction`）もこのtagを読み取りと数える。
+- **class field（347c682、保留5）**: instance fieldの初期化式は`new`のときに実行されるので、capture passではmethod本体と同じく飛ばす。static fieldとstatic blockはclassの評価時に実行され、本体で宣言したclassではrender中なので、これまでどおりcaptureする（runtimeでもoracleと一致した）。
+  - その結果、「本体で宣言したclassをrender中に`new`し、読み取りはそのinstance fieldだけ」というcaseは選択されなくなった。`new Model()`は予防のcaptureで、moduleのclass（既存の「a new expression whose class reads」）と同じ扱いになる。README.md:255の例外として書いた（`expected`と`run.exception`）。以前はfieldの読み取りが書いた場所でcaptureされていたので、偶然選択されていた。localのclassを証明済みの呼び出し先にする案はあるが、class bodyの走査を選択に足す必要があり、今回は入れていない。
+- 「Hookに渡したalias」（A13、`useState(user)`の結果を読む）は食い違わなかった。
+
+### 利用者から見える変化
+
+- 書き込みの基底のcapture: `st.value.a = 2`だけを持つcomponentが`auto`で選択され、`st`を購読する（commitは`!`付き）。
+- JSXのmember tagの出力の形（`_Tag`）。
+- 本体で宣言したclassのinstance fieldだけを読むcomponentは選択されない（`!`付き）。effectだけで`new`する場合の余分な選択がなくなる。
+- 分割代入、代入形のloop head、式を通したaliasの読み取りがcaptureされる（READMEの記述どおりになった）。
+- README（英日）の「Named functions, JSX spread, getters, and reading assignments」の行に、書き込みの基底、JSXのmember tag、class fieldを足した（行は増やしていない。read-shapesが行番号を引くため）。
