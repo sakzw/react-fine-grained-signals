@@ -28,6 +28,8 @@
  *   as a plain function and rendered as `<Component />`.
  * - RFGS009 Server-directive component: a component in a module with a
  *   top-level `"use server"` directive, which is left untransformed.
+ * - RFGS010 Signal read in a JSX tag name: a member tag such as
+ *   `<theme.value.Icon />` reads a signal, which is not tracked there.
  */
 /** The package name every message this plugin raises starts with, in brackets. */
 export const PLUGIN_NAME = "unplugin-react-fine-grained-signals";
@@ -47,6 +49,7 @@ export const DIAGNOSTIC_IDS = [
   "RFGS007",
   "RFGS008",
   "RFGS009",
+  "RFGS010",
 ] as const;
 
 export type DiagnosticId = (typeof DIAGNOSTIC_IDS)[number];

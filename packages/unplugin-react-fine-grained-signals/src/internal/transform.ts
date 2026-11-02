@@ -2141,28 +2141,18 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
 }
 
 /**
- * Does a JSX member tag read a tracked value? `<theme.value.Icon />` evaluates
- * `theme.value.Icon` when the element is created, but as a
- * `JSXMemberExpression` it never matches the member-expression rules. Any
- * `.value` link counts, and so does a base that is a tracked alias.
+ * Does a JSX member tag name read a signal (`<theme.value.Icon />`)? The tag
+ * is evaluated when the element is created, but a read there is not tracked
+ * (RFGS010): a tag name cannot hold a call, and the library asks for the
+ * component in a variable first rather than rewriting the element.
  */
-function jsxTagReadsTrackedValue(name: NodePath, trackedAliases: ReadonlySet<object>): boolean {
-  let current = name.node;
+function jsxTagReadsValue(name: t.JSXMemberExpression): boolean {
+  let current: t.JSXMemberExpression | t.JSXIdentifier = name;
   while (t.isJSXMemberExpression(current)) {
     if (current.property.name === "value") return true;
     current = current.object;
   }
-  return (
-    t.isJSXIdentifier(current) &&
-    trackedAliases.size > 0 &&
-    trackedAliases.has(name.scope.getBinding(current.name) as object)
-  );
-}
-
-/** The value expression a JSX tag name stands for: `theme.value.Icon`. */
-function jsxTagExpression(node: t.JSXMemberExpression | t.JSXIdentifier): t.Expression {
-  if (t.isJSXIdentifier(node)) return node.name === "this" ? t.thisExpression() : t.identifier(node.name);
-  return t.memberExpression(jsxTagExpression(node.object), t.identifier(node.property.name));
+  return false;
 }
 
 /**
@@ -2612,15 +2602,8 @@ function scanFunction(
       if (synchronousBodyOnly || isNestedTrackingBoundary(path, reactImportSource) || isRenderPropCallback(path))
         path.skip();
     },
-    JSXElement(path) {
+    JSXElement(_path) {
       inspection.containsJSX = true;
-      const name = path.get("openingElement").get("name");
-      if (
-        name.isJSXMemberExpression() &&
-        jsxTagReadsTrackedValue(name, noAliases) &&
-        !isDeferredReadContext(path, functionPath)
-      )
-        inspection.readsValue = true;
     },
     JSXFragment(_path) {
       inspection.containsJSX = true;
@@ -2847,6 +2830,16 @@ function reportWarning(options: InternalTransformOptions, id: DiagnosticId, path
   } else {
     console.warn(warning.message);
   }
+}
+
+function warnSignalReadInJsxTag(name: NodePath, options: InternalTransformOptions): void {
+  reportWarning(
+    options,
+    "RFGS010",
+    name,
+    "This JSX tag name reads a signal, and a signal read in a JSX tag name is not tracked. " +
+      "Assign the component to a variable first (`const Icon = theme.value.Icon; <Icon />`).",
+  );
 }
 
 function warnUntrackedRenderPropRead(attribute: NodePath<t.JSXAttribute>, options: InternalTransformOptions): void {
@@ -3159,6 +3152,10 @@ function inspectKnownRenderPropReads(
       if (target === undefined) return;
       if (isOwnedBySignalControlFlow(attribute, name.node.name, options.importSource, reactImportSource)) return;
       if (readsSignal(target)) warnUntrackedRenderPropRead(attribute, options);
+    },
+    JSXOpeningElement(opening) {
+      const name = opening.node.name;
+      if (t.isJSXMemberExpression(name) && jsxTagReadsValue(name)) warnSignalReadInJsxTag(opening.get("name"), options);
     },
     // Destructuring from a tracked source is captured by the managed pass
     // (static expansion or a captured pattern), so it needs no warning here;
@@ -6527,41 +6524,6 @@ function captureTrackedReadExpressions(
         // captured, which a Hook in the template forbids.
         if (giveUpForHook(path, HOOK_IN_CAPTURED_CALL_WARNING)) return;
         wrap(path as NodePath<t.Expression>);
-      },
-    },
-    JSXElement: {
-      enter(path) {
-        // `<theme.value.Icon />`: a JSX tag cannot be a call, so the tag is
-        // captured into a local right where the element is evaluated, and the
-        // element renders that local: `(_Tag = capture(() => theme.value.Icon),
-        // <_Tag />)`. The tag is still evaluated first, and only when the
-        // element is; its attributes and children stay in place.
-        const opening = path.get("openingElement");
-        const name = opening.get("name");
-        if (
-          !name.isJSXMemberExpression() ||
-          !jsxTagReadsTrackedValue(name, trackedAliases) ||
-          isDeferredReadContext(path, functionPath)
-        )
-          return;
-        if (!emit(path)) return;
-        const local = functionPath.scope.generateUidIdentifier("Tag");
-        functionPath.scope.push({ id: t.cloneNode(local) });
-        const captured = t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
-          generatedCallback([], jsxTagExpression(name.node)),
-        ]);
-        generated.add(captured);
-        name.replaceWith(t.jsxIdentifier(local.name));
-        const closing = path.get("closingElement");
-        if (closing.node)
-          (closing as NodePath<t.JSXClosingElement>).get("name").replaceWith(t.jsxIdentifier(local.name));
-        const sequence = t.sequenceExpression([t.assignmentExpression("=", t.cloneNode(local), captured), path.node]);
-        const parent = path.parentPath;
-        path.replaceWith(
-          parent.isJSXElement() || parent.isJSXFragment() || parent.isJSXAttribute()
-            ? t.jsxExpressionContainer(sequence)
-            : sequence,
-        );
       },
     },
     MemberExpression: { enter: visitMember },

@@ -630,30 +630,44 @@ export function A() { ${statement} return <p>x</p>; }`,
 });
 
 describe("a JSX member tag that reads a signal", () => {
-  const theme = `import { signal } from "react-fine-grained-signals";\nconst theme = signal({ Icon: () => <b /> });\n`;
-  it("captures the tag where the element is evaluated and selects the component", () => {
-    const { code } = run(
-      `${theme}export function A() { return <p><theme.value.Icon size={1}>x</theme.value.Icon></p>; }`,
+  // README "Managed tracking contract": a read in a JSX tag name is not
+  // tracked; RFGS010 asks for the component in a variable first.
+  const theme = `import { signal } from "react-fine-grained-signals";
+const theme = signal({ Icon: () => <b /> });
+`;
+  it("reports RFGS010 and neither captures the tag nor selects the component", () => {
+    const { code, diagnostics } = run(
+      `${theme}export function A() { return <p><theme.value.Icon>x</theme.value.Icon></p>; }`,
     );
-    expect(code).toMatch(
-      /<p>\{\(_Tag = _signals\.capture\(\(\) => theme\.value\.Icon\), <_Tag size=\{1\}>x<\/_Tag>\)\}<\/p>/,
-    );
-    expect(code).toMatch(/var _Tag;/);
-    reparse(code!, "A.tsx");
+    expect(code).toBeUndefined();
+    expect(diagnostics).toEqual(["RFGS010"]);
   });
 
-  it("keeps a conditional element lazy", () => {
-    const { code } = run(
-      `${theme}export function A(props: { f?: boolean }) { return props.f && <theme.value.Icon />; }`,
+  it("leaves the tag as written in a component selected for another read", () => {
+    const { code, diagnostics } = run(
+      `${theme}const s = signal(0);
+export function A() { return <p><theme.value.Icon />{s.value}</p>; }`,
     );
-    expect(code).toContain("props.f && (_Tag = _signals.capture(() => theme.value.Icon), <_Tag />)");
+    expect(code).toContain("<theme.value.Icon />");
+    expect(diagnostics).toEqual(["RFGS010"]);
   });
 
-  it("leaves an ordinary member tag alone", () => {
-    const { code } = run(
-      `${header}const ui = { Icon: () => <b /> };\nexport function A() { return <p><ui.Icon />{s.value}</p>; }`,
+  it("reports a tag inside a render callback once", () => {
+    const { diagnostics } = run(
+      `${theme}const items = [1];
+export function A() { return <ul>{items.map((i) => <theme.value.Icon key={i} />)}</ul>; }`,
     );
-    expect(code).toContain("<ui.Icon />");
+    expect(diagnostics).toEqual(["RFGS010"]);
+  });
+
+  it("does not report an ordinary member tag, or in manual mode without an opt-in", () => {
+    expect(
+      run(`${header}const ui = { Icon: () => <b /> };
+export function A() { return <p><ui.Icon />{s.value}</p>; }`).diagnostics,
+    ).toEqual([]);
+    expect(run(`${theme}export function A() { return <theme.value.Icon />; }`, { mode: "manual" }).diagnostics).toEqual(
+      [],
+    );
   });
 });
 

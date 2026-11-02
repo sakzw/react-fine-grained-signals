@@ -133,7 +133,7 @@ export const cases: readonly Case[] = [
     params: "{ label = s.value }: { label?: number }",
     jsx: "{label}",
     run: {
-      // README.md:544-546: a default runs before the body, so a hand-written
+      // README.md:545-547: a default runs before the body, so a hand-written
       // first-statement call misses it; the plugin moves it behind the boundary.
       oracle: { params: "props: { label?: number }", body: "const { label = s.value } = props;" },
     },
@@ -156,7 +156,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:379-384: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:380-385: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -168,7 +168,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:379-384: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:380-385: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -197,7 +197,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:243: in an async function, its "reads never become render dependencies, even the ones before its first `await`"',
+        why: 'README.md:244: in an async function, its "reads never become render dependencies, even the ones before its first `await`"',
       },
     },
   },
@@ -214,13 +214,13 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "inject alone": false },
-        why: 'README.md:243: in an async function, its "reads never become render dependencies, even the ones before its first `await`"',
+        why: 'README.md:244: in an async function, its "reads never become render dependencies, even the ones before its first `await`"',
       },
-      // README.md:257, pinned like `knownLimitation` above: the captured
+      // README.md:258, pinned like `knownLimitation` above: the captured
       // forEach runs the callback's synchronous prefix inside the capture.
       knownLimitation: {
         rerenders: { "managed companion": true },
-        why: "README.md:257: an async callback inside a captured call subscribes its synchronous prefix",
+        why: "README.md:258: an async callback inside a captured call subscribes its synchronous prefix",
       },
     },
   },
@@ -231,7 +231,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:243: in an async function, its "reads never become render dependencies, even the ones before its first `await`"',
+        why: 'README.md:244: in an async function, its "reads never become render dependencies, even the ones before its first `await`"',
       },
     },
   },
@@ -245,7 +245,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
         stale: true,
-        why: 'README.md:249: for a render prop, "Capture is not guaranteed" (RFGS003)',
+        why: 'README.md:250: for a render prop, "Capture is not guaranteed" (RFGS003)',
       },
     },
   },
@@ -263,7 +263,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "inject alone": false },
         stale: true,
-        why: 'README.md:255: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
+        why: 'README.md:256: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
       },
     },
   },
@@ -277,7 +277,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
         stale: true,
-        why: 'README.md:243: "a getter or setter" that an operator runs implicitly "is not tracked"',
+        why: 'README.md:244: "a getter or setter" that an operator runs implicitly "is not tracked"',
       },
     },
   },
@@ -292,7 +292,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "inject alone": false },
         stale: true,
-        why: 'README.md:255: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
+        why: 'README.md:256: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
       },
     },
   },
@@ -328,7 +328,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "inject alone": false },
         stale: true,
-        why: 'README.md:255: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
+        why: 'README.md:256: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
       },
     },
   },
@@ -413,7 +413,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "inject alone": false },
         stale: true,
-        why: 'README.md:255: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
+        why: 'README.md:256: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
       },
     },
   },
@@ -491,7 +491,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "inject alone": false },
         stale: true,
-        why: 'README.md:255: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
+        why: 'README.md:256: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
       },
     },
   },
@@ -530,7 +530,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:379-384: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:380-385: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -565,7 +565,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
         stale: true,
-        why: 'README.md:242: "Destructured signal accessors are not tracked"',
+        why: 'README.md:243: "Destructured signal accessors are not tracked"',
       },
     },
   },
@@ -696,7 +696,7 @@ export const cases: readonly Case[] = [
     body: "await null; const x = s.value;",
     jsx: "{x}",
     run: {
-      skip: "a client root cannot render an async component (README.md:537-541: hooks need a synchronous function)",
+      skip: "a client root cannot render an async component (README.md:538-542: hooks need a synchronous function)",
     },
   },
 
@@ -719,17 +719,24 @@ export const cases: readonly Case[] = [
       write: "st.value = { a: 3 };",
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: "README.md:246: a write during render is a side effect React rules out, so the read before it is not tracked; inject tracks it like the oracle once selected",
+        why: "README.md:247: a write during render is a side effect React rules out, so the read before it is not tracked; inject tracks it like the oracle once selected",
       },
     },
   },
-  // A JSX member tag reads `theme.value`.
+  // A JSX member tag reads `theme.value`, which is not tracked there.
   {
     name: "a JSX member tag",
     module: "const theme = signal({ Icon: () => <b>a</b> });",
     jsx: "<theme.value.Icon />",
     token: "theme.value",
-    run: { write: "theme.value = { Icon: () => <b>b</b> };" },
+    run: {
+      write: "theme.value = { Icon: () => <b>b</b> };",
+      exception: {
+        rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
+        stale: true,
+        why: "README.md:247: a signal read in a JSX tag name is not tracked (RFGS010); inject tracks it like the oracle once selected",
+      },
+    },
   },
   // A class field runs when the class is instantiated (instance fields) or
   // evaluated (static fields and blocks), not where it is written.
@@ -747,7 +754,7 @@ export const cases: readonly Case[] = [
       exception: {
         rerenders: { "managed alone": false, "inject alone": false },
         stale: true,
-        why: 'README.md:255: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
+        why: 'README.md:256: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
       },
     },
   },

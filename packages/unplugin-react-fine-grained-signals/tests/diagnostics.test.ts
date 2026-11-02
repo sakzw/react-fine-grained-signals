@@ -118,6 +118,13 @@ const count = signal(0);
 export function ServerBadge() { return <output>{count.value}</output>; }
 `,
   },
+  RFGS010: {
+    id: "Themed.tsx",
+    code: `import { signal } from "react-fine-grained-signals";
+const theme = signal({ Icon: () => <b /> });
+export function Themed() { return <theme.value.Icon />; }
+`,
+  },
 };
 
 function collect(id: string, code: string): Warning[] {
@@ -127,7 +134,7 @@ function collect(id: string, code: string): Warning[] {
 }
 
 describe("diagnostic IDs", () => {
-  it("assigns one stable ID to each of the nine warning categories", () => {
+  it("assigns one stable ID to each of the ten warning categories", () => {
     expect(DIAGNOSTIC_IDS).toEqual([
       "RFGS001",
       "RFGS002",
@@ -138,6 +145,7 @@ describe("diagnostic IDs", () => {
       "RFGS007",
       "RFGS008",
       "RFGS009",
+      "RFGS010",
     ]);
     expect(REACT_FINE_GRAINED_SIGNALS_DIAGNOSTIC_IDS).toBe(DIAGNOSTIC_IDS);
     expect(Object.keys(FIXTURES)).toHaveLength(DIAGNOSTIC_IDS.length);
@@ -157,7 +165,7 @@ describe("diagnostic IDs", () => {
     expect(isDiagnosticId(id)).toBe(true);
   });
 
-  it.each(["RFGS000", "RFGS010", "rfgs001", "RFGS", "", 1, null])("rejects %j", (value) => {
+  it.each(["RFGS000", "RFGS011", "rfgs001", "RFGS", "", 1, null])("rejects %j", (value) => {
     expect(isDiagnosticId(value)).toBe(false);
   });
 
