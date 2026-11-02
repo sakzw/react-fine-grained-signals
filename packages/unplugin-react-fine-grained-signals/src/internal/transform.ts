@@ -453,9 +453,14 @@ function isComponentName(name: string): boolean {
   return /^[A-Z]/.test(name);
 }
 
-/** Does a name read as a custom hook -- `useX` -- by convention? */
+/**
+ * Does a name read as a custom hook -- `useX`, `use3D` -- by convention? The
+ * same rule React's own tools apply (eslint-plugin-react-hooks, and
+ * babel-plugin-react-compiler's `isHookName`): `use` followed by an uppercase
+ * letter or a digit.
+ */
 function isHookName(name: string): boolean {
-  return /^use[A-Z]/.test(name);
+  return /^use[A-Z0-9]/.test(name);
 }
 
 /**

@@ -2409,7 +2409,7 @@ export function App() {
             : t.isMemberExpression(callee) && t.isIdentifier(callee.property)
               ? callee.property.name
               : "";
-          if (!/^use(?:[A-Z]|$)/.test(name) || name === "useSignalCapture") return;
+          if (!/^use(?:[A-Z0-9]|$)/.test(name) || name === "useSignalCapture") return;
           for (let fn = path.getFunctionParent(); fn !== null; fn = fn.getFunctionParent()) {
             const call = fn.parentPath;
             if (

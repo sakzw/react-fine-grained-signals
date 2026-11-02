@@ -477,3 +477,27 @@ describe("Hook calls anywhere in a destructuring declaration", () => {
     reparse(code!, "A.tsx");
   });
 });
+
+describe("Hook names", () => {
+  // React's own rule (eslint-plugin-react-hooks, babel-plugin-react-compiler's
+  // `isHookName`): `use` followed by an uppercase letter or a digit.
+  it("never moves a call named use + digit into a capture", () => {
+    const { code } = run(
+      `import { use3D } from "./x";\n${header}function join(a: unknown, b: unknown) { return String(a) + String(b); }\nexport function A() { const n = join(use3D(), s.value); return <p>{n}</p>; }`,
+    );
+    expect(code).not.toMatch(/capture\(\(\) => [^;]*use3D\(\)/);
+    expect(code).toContain("join(use3D(), _signals.capture(() => s.value))");
+  });
+
+  it("gives a function named use + digit a Hook's identity", () => {
+    const { code } = run(`${header}export function use3D() { return s.value; }`);
+    expect(code).toMatch(/function use3D\(\) \{\s+(?:"use no memo";\s+)?const _signals = _useSignalCapture\(\);/);
+  });
+
+  it.each(["user", "useless", "use_x"])("treats %s() as an ordinary call", (name) => {
+    const { code } = run(
+      `import { ${name} } from "./x";\n${header}export function A() { const n = ${name}(); return <p>{n}{s.value}</p>; }`,
+    );
+    expect(code).toContain(`_signals.capture(() => ${name}())`);
+  });
+});
