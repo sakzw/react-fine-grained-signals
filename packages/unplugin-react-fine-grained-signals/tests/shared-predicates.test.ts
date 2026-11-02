@@ -593,3 +593,21 @@ describe("aliases bound by an assignment pattern", () => {
     expect(code).toContain(`const x = _signals.capture(() => ${read});`);
   });
 });
+
+describe("aliases bound by an assignment-form loop head", () => {
+  it.each([
+    ["an object pattern", "let meta: { tag: string };", "for ({ meta } of state.value.items)", "meta.tag"],
+    [
+      "an array pattern",
+      "let pair: { tag: string };",
+      "for ([pair] of state.value.items.map((i) => [i.meta]))",
+      "pair.tag",
+    ],
+    ["an existing binding", "let item: { title: string };", "for (item of state.value.items)", "item.title"],
+  ])("makes the loop variables of %s aliases, as the declaration form does", (_kind, declaration, head, read) => {
+    const { code } = run(
+      `${deepHeader}export function A() { ${declaration} let x = ""; ${head} { x += ${read}; } return <p>{x}</p>; }`,
+    );
+    expect(code).toContain(`_signals.capture(() => x += ${read})`);
+  });
+});

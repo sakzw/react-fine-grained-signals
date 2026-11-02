@@ -5376,6 +5376,9 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
       } else if (left.isIdentifier()) {
         const binding = path.scope.getBinding(left.node.name);
         if (isLocalVariable(binding)) flow([binding], [path.get("right")]);
+      } else if (left.isObjectPattern() || left.isArrayPattern()) {
+        // `for ({ row } of rows.value)` assigns existing variables.
+        flow(assignedBindings(path, left.node), [path.get("right")]);
       }
     },
     CallExpression: container,
