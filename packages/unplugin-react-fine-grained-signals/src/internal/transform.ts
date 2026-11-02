@@ -87,6 +87,11 @@ interface FunctionInspection {
 const useSignalTrackingComment = /(^|\s)@signalTracking(\s|$)/;
 const noSignalTrackingComment = /(^|\s)@noSignalTracking(\s|$)/;
 const transformedMetadataKey = "reactFineGrainedSignalsTransformed";
+/**
+ * The files (`state.file.ast`) this run changed, for `generatorOverride`: the
+ * same fact as the metadata flag, keyed by what the generator is handed.
+ */
+const transformedFiles = new WeakSet<object>();
 
 // React Compiler caches a component's JSX in its memo cache, and a signal read
 // it classifies as non-reactive (a module-scope binding) is then evaluated once
@@ -3277,6 +3282,7 @@ function shouldAutomaticallyTransform(
 /** Marks the current file as having produced at least one real change. */
 function markTransformed(state: PluginState): void {
   (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = true;
+  transformedFiles.add(state.file.ast);
 }
 
 // A standalone function purely to pin down, once, the exact NodePath union
@@ -6781,6 +6787,16 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
 
   const plugin: PluginObject<PluginState> = {
     name: PLUGIN_NAME,
+    // Printing the code and building its source map is wasted on a file this
+    // plugin did not change: `transformReactFineGrainedSignals` returns null
+    // for it. A changed file is printed by Babel's own `generate` with the
+    // options Babel normalized, exactly as it would print it without this.
+    generatorOverride(ast, generatorOpts, code, generate) {
+      if (transformedFiles.has(ast)) return generate(ast, generatorOpts, code);
+      return { code: "", map: null, decodedMap: undefined, rawMappings: undefined } as unknown as ReturnType<
+        typeof generate
+      >;
+    },
     visitor: {
       Program: {
         enter(path, state) {
