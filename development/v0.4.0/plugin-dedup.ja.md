@@ -395,3 +395,69 @@ oracleとの食い違いと対応:
 - **JSXのtag名（0387eed、b237847の出力をやめた）**: `(_Tag = capture(...), <_Tag />)`と`var _Tag`の生成をやめ、tag名での`.value`の読み取りはcaptureも選択もしない。代わりに新しい診断RFGS010をtagの位置に出し、先にcomponentを変数に入れるよう求める（`const Icon = theme.value.Icon; <Icon />`）。報告はRFGS003と同じく、pluginが関数を調べるたびに行う（選択されていなくても出す。`manual`ではopt-inがあるときだけ）。選択されていない関数にも出すのは、選択されないこと自体が、追跡されないことの原因だから。`DIAGNOSTIC_IDS`、`diagnostics.ts`の表、README（英日）の診断表と契約、診断の一覧テストに足した。read-shapesのcaseは例外（stale）にした。READMEの表に1行増えたので、read-shapesが引くREADMEの行番号を1つずつずらした。
 
 分割代入、代入形のloop head、式を通したalias、class fieldの直しはそのまま残す。
+
+## 変換の速さの改善（1〜3）
+
+### profile
+
+warmな1 process、HEAD（9737f65の前）のdistで計測した（コーディネーターの計測と、こちらの`--cpu-prof`の両方）。
+
+- 候補のないfileでも、Babelの処理を全部通っていた。
+  - 生成とsource mapは作ってから捨てていた（generatorが約8.5%）。
+  - `mightTransform`の`value`は、`{ value: ... }`や`e.target.value`があるとほぼすべてのfileで通っていた。
+  - Babelが毎回compilation targetsを解決し、browserslistの設定fileを親directoryごとに探していた（`getTargets`が約0.9%。`lstat`等の残りはmoduleの読み込み時だけ）。
+- 候補のあるfileでは、applyManagedが約32%、decideTransformが約26%（うちwouldCaptureRenderReadのdry runが約15%）、parserが約7%、generatorが約6%。ほとんどが`@babel/traverse`。
+
+### 変更
+
+1. **browserslistの探索をやめた（bf3d82f）**: `browserslistConfigFile: false`。このpluginはtargetsを読まない。profileで`getTargets`/`findConfigFile`の分が0になった。
+2. **変えていないfileは生成しない（9737f65）**: pluginの`generatorOverride`が、変えたfile（metadataの印と同じ事実）のときだけBabel自身の`generate`を、Babelが正規化した同じoptionで呼ぶ。Babelの`generateCode`が上書きなしで行うことと同じなので、変えたfileのcodeとmapはbyte単位で同じ。`@babel/generator`を直接の依存に足さずに済む（足すとrootのlockfileが変わる）。候補のないfileのprofileからgeneratorの分（8.5%）が消えた。
+3. **事前の文字列判定を絞った（84355bf）**: 通すのは次のとき。
+   - `useSignalTracking`、`@signalTracking`、`@noSignalTracking`（今までどおり）。
+   - module-levelの`"use server"`（RFGS009は読み取りに関係なく出るため。今までは`value`がないと漏れていた）。
+   - `value`という語が、名前が`value`のpropertyの読み取りでありうるとき。`.`/`?.`の後（空白やcommentを挟んでもよい）、またはちょうど`"value"`の文字列（computed keyと定数key）。
+   - 語を作れるescape（`\u`、`\x`、行継続）があるとき（今までは漏れていた）。
+   - `all`での`<`（今までどおり）。
+   
+   落とすのは、object key、束縛、JSX属性、ほかの文字列、`#value`と、`.target.value`、`.currentTarget.value`、`.current.value`（変換がそれだけではsignalの読み取りとみなさないもの）。
+   
+   証明: test setup（`tests/prefilter-guard.ts`）がすべてのtest fileで変換の入口を包み、判定が落としたmoduleは判定なしで変換して、変更も診断もないことを確かめる。test全体、`examples/`の追跡されているsource全部、read-shapesの全case（mode 3つ×transform 2つ）がこれを通る。判定をわざと常にfalseにすると、直接の呼び出しとadapter経由の呼び出しの両方で失敗することも確かめた。既存のparse失敗のtest 2件は、入力に本物の`.value`を入れた（変換しないfileの構文errorはbundler自身のparserに任せる）。
+
+出力の同一性: 変更前（HEAD）と変更後のdistで、`examples/`の全source×mode 3つ×transform 2つ×reactCompiler 2つ（360件、うち変換64件）のcode、map、警告がbyte単位で同じ。
+
+### 計測（in-process interleave、ABBA、6 process、load順を交互、順序ごとの中央値の幾何平均）
+
+A/A（旧と旧の写し、雑音の幅）:
+
+| case | A ms | B ms | B/A |
+| --- | ---: | ---: | ---: |
+| managed / browser App.tsx | 75.58 | 75.28 | 1.000 |
+| managed / react-router app (8 files) | 65.36 | 64.92 | 1.057 |
+| managed / synthetic 120 components | 247.47 | 247.99 | 1.017 |
+| managed / no-candidate (value keys) | 61.45 | 59.78 | 0.982 |
+| inject / browser App.tsx | 59.05 | 58.83 | 1.001 |
+| inject / react-router app (8 files) | 55.05 | 56.78 | 1.017 |
+| inject / synthetic 120 components | 157.57 | 158.68 | 0.995 |
+| inject / no-candidate (value keys) | 64.04 | 64.16 | 1.010 |
+
+A/B（A=変更前、B=変更後）:
+
+| case | A ms | B ms | B/A |
+| --- | ---: | ---: | ---: |
+| managed / browser App.tsx | 41.52 | 41.15 | 0.986 |
+| managed / react-router app (8 files) | 31.95 | 31.03 | 0.951 |
+| managed / synthetic 120 components | 124.24 | 126.95 | 1.032 |
+| managed / no-candidate (value keys) | 28.13 | 0.15 | 0.006 |
+| inject / browser App.tsx | 26.55 | 26.00 | 0.999 |
+| inject / react-router app (8 files) | 28.10 | 26.79 | 0.878 |
+| inject / synthetic 120 components | 80.24 | 79.07 | 1.007 |
+| inject / no-candidate (value keys) | 27.99 | 0.16 | 0.005 |
+
+- A/Aの幅は±6%程度（react-router managedが1.057）。A/Aと A/Bは別の時間に回したので、msの絶対値は比べられない（比だけを見る）。
+- 候補のないfile（`{ value: n }`と`e.target.value`だけ）は判定で落ちるので、約28msが約0.15msになった。
+- 変換するfile（App、120 componentの合成file）は雑音の幅の中。react-routerの8 fileはinjectで0.878、managedで0.951。8 fileには候補のないfileが含まれ、そこで判定と生成の省略が効く。
+
+### 残した課題
+
+4. **選択とcaptureを1回の走査にする**: 候補のあるfileで、decideTransformが約26%、そのうちwouldCaptureRenderReadのdry runが約15%。dry runはcapture passと同じvisitorをもう一度回している。選択の判定をcapture passの結果から取れば、この分の大半が減る。ただし選択とcaptureの構造の変更なので、別に判断する。
+5. **再走査を減らす**: applyManagedが約32%で、ほとんどが`@babel/traverse`。`hasTrackedReadInExpression`の部分木走査、`inspectFunction`のsubtree走査、`path.scope.crawl()`などが同じnodeを何度も歩く。cacheか、走査の統合で減らせる見込み。
