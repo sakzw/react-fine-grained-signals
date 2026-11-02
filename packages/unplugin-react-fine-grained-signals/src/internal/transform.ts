@@ -188,6 +188,21 @@ function resolveImportedBinding(path: NodePath, name: string): ResolvedImportBin
   return { specifier, source: declaration.node.source.value };
 }
 
+/**
+ * The export a specifier imports: its name for a named specifier, whether
+ * written as an identifier or as a string (`import { "Fragment" as F }`),
+ * `"default"` for a default specifier, and `undefined` for a namespace, which
+ * imports the whole module. Every check of what an import names reads it here,
+ * so no check can miss the string spelling.
+ */
+function getImportedName(
+  specifier: t.ImportSpecifier | t.ImportDefaultSpecifier | t.ImportNamespaceSpecifier,
+): string | undefined {
+  if (t.isImportDefaultSpecifier(specifier)) return "default";
+  if (t.isImportNamespaceSpecifier(specifier)) return undefined;
+  return t.isIdentifier(specifier.imported) ? specifier.imported.name : specifier.imported.value;
+}
+
 /** Is `name` bound by `import { memo } from "react"` (or `forwardRef`, possibly aliased)? */
 function isReactNamedImport(
   path: NodePath,
@@ -197,10 +212,7 @@ function isReactNamedImport(
 ): boolean {
   const resolved = resolveImportedBinding(path, name);
   if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return false;
-  return (
-    t.isIdentifier(resolved.specifier.node.imported, { name: importedName }) &&
-    isReactSource(resolved.source, reactImportSource)
-  );
+  return getImportedName(resolved.specifier.node) === importedName && isReactSource(resolved.source, reactImportSource);
 }
 
 /** Is `name` bound by `import * as React from "react"` or `import React from "react"`? */
@@ -718,8 +730,7 @@ function isNamedUseManagedSignalsImport(
     resolved !== undefined &&
     resolved.specifier.isImportSpecifier() &&
     resolved.source === runtimeSource &&
-    t.isIdentifier(resolved.specifier.node.imported) &&
-    resolved.specifier.node.imported.name === "useSignalCapture"
+    getImportedName(resolved.specifier.node) === "useSignalCapture"
   );
 }
 
@@ -736,7 +747,7 @@ function isNamedSignalTrackingImport(functionPath: NodePath<t.Function>, name: s
   const resolved = resolveImportedBinding(functionPath, name);
   if (resolved === undefined || !resolved.specifier.isImportSpecifier()) return false;
   return (
-    t.isIdentifier(resolved.specifier.node.imported, { name: "useSignalTracking" }) &&
+    getImportedName(resolved.specifier.node) === "useSignalTracking" &&
     (importSource === undefined || isVerifiedSignalTrackingSource(resolved.source, importSource))
   );
 }
@@ -2381,7 +2392,7 @@ function findRuntimeImports(
       if (
         specifier.isImportSpecifier() &&
         specifier.node.importKind !== "type" &&
-        t.isIdentifier(specifier.node.imported, { name: importedName })
+        getImportedName(specifier.node) === importedName
       ) {
         imports.push({
           identifier: t.cloneNode(specifier.node.local),
@@ -2595,8 +2606,7 @@ function resolveSignalControlFlowImport(
     const { specifier } = imported;
     if (specifier.isImportNamespaceSpecifier()) return { kind: "namespace" };
     if (!specifier.isImportSpecifier()) return undefined;
-    const importedName = specifier.node.imported;
-    return asSignalControlFlowComponent(t.isIdentifier(importedName) ? importedName.name : importedName.value);
+    return asSignalControlFlowComponent(getImportedName(specifier.node)!);
   }
   const bindingPath = binding.path;
   if (!bindingPath.isVariableDeclarator() || !binding.constant) return undefined;
@@ -3566,17 +3576,13 @@ function externalCallMayReadTrackedValue(
     const callee = unwrapTransparent(call.node.callee);
     if (!t.isIdentifier(callee)) return false;
     const binding = call.scope.getBinding(callee.name);
-    const importSpecifier = binding?.path;
+    const imported = resolveImportedBinding(call, callee.name);
     if (
-      importSpecifier !== undefined &&
-      (importSpecifier.isImportSpecifier() || importSpecifier.isImportDefaultSpecifier()) &&
-      importSpecifier.parentPath.isImportDeclaration() &&
-      importSpecifier.parentPath.node.importKind !== "type" &&
-      importIsForeign(importSpecifier, { importSource, managedRuntimeSource, reactImportSource })
+      imported !== undefined &&
+      importIsForeign(imported.source, { importSource, managedRuntimeSource, reactImportSource })
     ) {
-      const imported = importSpecifier.isImportSpecifier() ? importSpecifier.node.imported : undefined;
-      const importedName =
-        imported === undefined ? "default" : t.isIdentifier(imported) ? imported.name : imported.value;
+      // A namespace has no export name of its own; calling one throws anyway.
+      const importedName = getImportedName(imported.specifier.node) ?? callee.name;
       // The transform cannot inspect another module's implementation. Capture
       // the synchronous call itself so any signal reads it performs belong to
       // this render attempt. Hook-shaped imports stay as direct calls: wrapping
@@ -4484,17 +4490,7 @@ function unresolvedCallMayRead(
   if (global !== undefined) return !calledBackIsKnown(call, globalCallbackArguments.get(global));
   if (t.isIdentifier(callee)) {
     if (isComponentName(callee.name) || resolveReferencedFunction(call, callee.name) !== undefined) return false;
-    const binding = call.scope.getBinding(callee.name);
-    if (binding === undefined) return true;
-    const specifier = binding.path;
-    if (
-      specifier.isImportSpecifier() ||
-      specifier.isImportDefaultSpecifier() ||
-      specifier.isImportNamespaceSpecifier()
-    ) {
-      return importIsForeign(specifier, context);
-    }
-    return true;
+    return importedNameMayRead(call, callee.name, context) ?? true;
   }
   if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
     const name = getStaticMemberChain(callee)?.keys.at(-1);
@@ -4516,18 +4512,7 @@ function unresolvedCallMayRead(
       return false;
     // Namespace members of the library or React: `ns.signal(1)`.
     const root = unwrapTransparent(getStaticMemberChain(callee)?.root ?? callee);
-    if (t.isIdentifier(root)) {
-      const specifier = call.scope.getBinding(root.name)?.path;
-      if (
-        specifier !== undefined &&
-        (specifier.isImportSpecifier() ||
-          specifier.isImportDefaultSpecifier() ||
-          specifier.isImportNamespaceSpecifier())
-      ) {
-        return importIsForeign(specifier, context);
-      }
-    }
-    return true;
+    return (t.isIdentifier(root) ? importedNameMayRead(call, root.name, context) : undefined) ?? true;
   }
   // Any other callee expression -- a conditional, a sequence, a call result --
   // selects its function at run time.
@@ -4580,16 +4565,7 @@ function templateTagMayRead(path: NodePath<t.TaggedTemplateExpression>, context:
     t.isMemberExpression(tag) || t.isOptionalMemberExpression(tag)
       ? unwrapTransparent(getStaticMemberChain(tag)?.root ?? tag)
       : tag;
-  if (t.isIdentifier(root)) {
-    const specifier = path.scope.getBinding(root.name)?.path;
-    if (
-      specifier !== undefined &&
-      (specifier.isImportSpecifier() || specifier.isImportDefaultSpecifier() || specifier.isImportNamespaceSpecifier())
-    ) {
-      return importIsForeign(specifier, context);
-    }
-  }
-  return true;
+  return (t.isIdentifier(root) ? importedNameMayRead(path, root.name, context) : undefined) ?? true;
 }
 
 /**
@@ -4622,16 +4598,32 @@ function namedArgumentMayRead(
 }
 
 /**
+ * May code reached through `name` -- a call of it, a member of it, a tag --
+ * read signals, as far as its import says? `undefined` when `name` is not a
+ * value import at all (`resolveImportedBinding`), so the caller applies its
+ * own rule for an unknown name; otherwise whether the import is foreign.
+ *
+ * Named, default and namespace specifiers are all value imports: a namespace's
+ * members are the source module's exports, so `ns.load()` is trusted or not by
+ * that module exactly as `load()` is. A type-only import (`import type`, or a
+ * specifier-level `import { type X }`) is not: it is erased, so the name does
+ * not refer to that module at run time and proves nothing about the call.
+ */
+function importedNameMayRead(path: NodePath, name: string, context: ReadContext): boolean | undefined {
+  const imported = resolveImportedBinding(path, name);
+  return imported === undefined ? undefined : importIsForeign(imported.source, context);
+}
+
+/**
  * Is an import from a module other than this library or React? The one place
  * that decides which import sources are "ours": this library's root and
  * managed runtime entries, and React itself -- a direct `"react"` import
  * always, plus a configured `reactImportSource` barrel (see `isReactSource`).
  */
 function importIsForeign(
-  specifier: NodePath,
+  source: string,
   sources: Pick<ReadContext, "importSource" | "managedRuntimeSource" | "reactImportSource">,
 ): boolean {
-  const source = (specifier.parentPath as NodePath<t.ImportDeclaration>).node.source.value;
   return (
     source !== sources.importSource &&
     source !== sources.managedRuntimeSource &&

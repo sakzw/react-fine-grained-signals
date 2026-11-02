@@ -256,6 +256,55 @@ describe("reads in async functions", () => {
   });
 });
 
+describe("string import names", () => {
+  it("follows the runtime through Fragment imported by its string name", () => {
+    const { diagnostics } = run(
+      `import { "Fragment" as F } from "react";\nimport { Match, Switch } from "react-fine-grained-signals/utils";\n${header}export function A() { return <Switch><F><Match when={s}>{() => s.value}</Match></F></Switch>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it("treats memo imported by its string name as a component wrapper", () => {
+    const { code } = run(`import { "memo" as m } from "react";\n${header}export const C = m(() => <p>{s.value}</p>);`);
+    expect(code).toContain("_useSignalCapture()");
+    expect(code).toContain("_signals.capture(() => s.value)");
+  });
+});
+
+// A type-only import is erased, so at run time its name is not the imported
+// module's export: a call through it is as unproven as any unknown name.
+// Namespace, default and named value imports all resolve to their source.
+describe("which bindings count as imports", () => {
+  it.each([
+    ["a type-only declaration", 'import type { helper } from "react";', "helper()"],
+    ["a type-only specifier", 'import { type helper } from "react";', "helper()"],
+    ["a type-only namespace", 'import type * as R from "react";', "R.helper()"],
+    ["a type-only tag", 'import { type helper } from "react";', "helper`x`"],
+  ])("captures a call through %s", (_kind, declaration, call) => {
+    const { code } = run(`${declaration}\n${header}export function A() { return <p>{${call}}{s.value}</p>; }`);
+    expect(code).toContain(`_signals.capture(() => ${call})`);
+  });
+
+  it.each([
+    ["a namespace", 'import * as R from "react";', "R.helper()"],
+    ["a default", 'import R from "react";', "R.helper()"],
+    ["a named", 'import { helper } from "react";', "helper()"],
+    ["a tag through a named", 'import { helper } from "react";', "helper`x`"],
+  ])("trusts a call through %s React import", (_kind, declaration, call) => {
+    const { code } = run(`${declaration}\n${header}export function A() { return <p>{${call}}{s.value}</p>; }`);
+    expect(code).not.toContain(`_signals.capture(() => ${call})`);
+  });
+
+  it.each([
+    ["a named", 'import { load } from "./ext";', "load()"],
+    ["a default", 'import load from "./ext";', "load()"],
+    ["a namespace member", 'import * as ext from "./ext";', "ext.load()"],
+  ])("captures a call through %s foreign import", (_kind, declaration, call) => {
+    const { code } = run(`${declaration}\n${header}export function A() { return <p>{${call}}{s.value}</p>; }`);
+    expect(code).toContain(`_signals.capture(() => ${call})`);
+  });
+});
+
 describe("Hook calls inside a helper", () => {
   it("never folds a helper that calls use() into a capture closure", () => {
     const { code } = run(
