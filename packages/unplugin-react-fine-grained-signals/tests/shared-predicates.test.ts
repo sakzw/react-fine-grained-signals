@@ -594,6 +594,31 @@ describe("aliases bound by an assignment pattern", () => {
   });
 });
 
+describe("aliases through a parameter or a TypeScript wrapper", () => {
+  // The same as assigning an identifier: only that the target is a binding of
+  // this function matters, not its kind or a wrapper the types add.
+  it.each([
+    ["a parameter in a pattern", "row", "({ row } = state.value);", "row.name"],
+    ["a wrapped array element", "x", "let row: any; [(row as any)] = state.value.items;", "row.title"],
+    ["a wrapped object value", "x", "let row: any; ({ user: (row as any) } = state.value);", "row.name"],
+    ["a non-null target", "x", "let row: any; [row!] = state.value.items;", "row.title"],
+    ["a wrapped identifier target", "x", "let row: any; (row as any) = state.value.user;", "row.name"],
+    ["a parameter in an identifier target", "row", "row = state.value.user;", "row.name"],
+  ])("makes %s an alias", (_kind, param, statement, read) => {
+    const { code } = run(
+      `${deepHeader}export function A({ ${param} }: any) { ${statement} const y = ${read}; return <p>{y}</p>; }`,
+    );
+    expect(code).toContain(`const y = _signals.capture(() => ${read});`);
+  });
+
+  it("leaves a name from outside the function alone", () => {
+    const { code } = run(
+      `${deepHeader}let outer: any;\nexport function A() { ({ user: outer } = state.value); const y = outer.name; return <p>{y}</p>; }`,
+    );
+    expect(code).toContain("const y = outer.name;");
+  });
+});
+
 describe("aliases bound by an assignment-form loop head", () => {
   it.each([
     ["an object pattern", "let meta: { tag: string };", "for ({ meta } of state.value.items)", "meta.tag"],

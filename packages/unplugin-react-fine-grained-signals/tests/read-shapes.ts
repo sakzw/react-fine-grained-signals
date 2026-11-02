@@ -925,6 +925,34 @@ function deepCases(): Case[] {
       body: "let user: { name: string }; ({ user } = state.value); const x = user.name;",
       token: "user.name",
     }),
+    // A5: a parameter, a wrapped target, a default and a rest are aliases too.
+    deep({
+      name: "a destructuring assignment to a parameter",
+      params: "{ user }: { user?: { name: string } }",
+      body: "({ user } = state.value); const x = user!.name;",
+      token: "user!.name",
+      run: { props: {} },
+    }),
+    deep({
+      name: "a destructuring assignment to a wrapped target",
+      body: "let user: unknown; [(user as unknown)] = [state.value.user]; const x = (user as { name: string }).name;",
+      token: "user as {",
+    }),
+    deep({
+      name: "a destructuring assignment with a default",
+      body: 'let user: { name: string }; ({ user = { name: "-" } } = state.value); const x = user.name;',
+      token: "user.name",
+    }),
+    deep({
+      name: "a destructuring assignment with a rest",
+      body: "let rest: { user: { name: string } }; ({ ...rest } = state.value); const x = rest.user.name;",
+      token: "rest.user.name",
+    }),
+    deep({
+      name: "a wrapped assignment target",
+      body: "let user: unknown; (user as unknown) = state.value.user; const x = (user as { name: string }).name;",
+      token: "user as {",
+    }),
     // A6
     deep({
       name: "a let alias assigned later",
@@ -999,6 +1027,26 @@ function deepCases(): Case[] {
         token: "item.title",
       },
       title,
+    ),
+    deep(
+      {
+        name: "a for...of loop head assigning a parameter",
+        params: "{ item }: { item?: { title: string } }",
+        body: 'let x = ""; for (item of state.value.items) x += item!.title;',
+        token: "item!.title",
+        run: { props: {} },
+      },
+      title,
+    ),
+    deep(
+      {
+        name: "a for...of loop head assigning a pattern onto a parameter",
+        params: "{ meta }: { meta?: { tag: string } }",
+        body: 'let x = ""; for ({ meta } of state.value.items) x += meta!.tag;',
+        token: "meta!.tag",
+        run: { props: {} },
+      },
+      tag,
     ),
     // A10
     deep({

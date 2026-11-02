@@ -5500,13 +5500,33 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
     const binding = current.scope.getBinding(current.node.name);
     return isLocalVariable(binding) ? binding : undefined;
   };
-  // `({ user } = state.value)`, `for ({ row } of rows.value)`: the local
-  // variables an assignment pattern writes, as `patternBindings` gives a
-  // declaration's. A member target (`({ a: box[0] } = ...)`) is not a binding.
-  const assignedBindings = (path: NodePath, pattern: t.Node): object[] =>
-    Object.values(t.getBindingIdentifiers(pattern) as Record<string, t.Identifier>)
-      .map((identifier) => path.scope.getBinding(identifier.name))
-      .filter(isLocalVariable);
+  // `({ user } = state.value)`, `for ({ row } of rows.value)`: the bindings of
+  // this function an assignment target writes, parameters included. A member
+  // target (`({ a: box[0] } = ...)`) is not a binding. `t.getBindingIdentifiers`
+  // does not see through a TypeScript wrapper (`[(row as T)] = ...`), so the
+  // target is walked by hand.
+  const assignedBindings = (path: NodePath, target: t.Node): object[] => {
+    const found: object[] = [];
+    const visit = (node: t.Node | null): void => {
+      const inner = node === null ? null : unwrapTransparent(node);
+      if (t.isIdentifier(inner)) {
+        const binding = path.scope.getBinding(inner.name);
+        if (binding !== undefined && binding.scope.getFunctionParent()?.path.node === functionPath.node) {
+          found.push(binding);
+        }
+      } else if (t.isObjectPattern(inner)) {
+        for (const property of inner.properties) visit(t.isRestElement(property) ? property : property.value);
+      } else if (t.isArrayPattern(inner)) {
+        for (const element of inner.elements) visit(element);
+      } else if (t.isAssignmentPattern(inner)) {
+        visit(inner.left);
+      } else if (t.isRestElement(inner)) {
+        visit(inner.argument);
+      }
+    };
+    visit(target);
+    return found;
+  };
   const containerMethods = new Set(["push", "unshift", "add", "set"]);
   const container = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
     const callee = unwrapTransparentPath(call.get("callee") as NodePath);
@@ -5537,15 +5557,11 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
       // `let items; items = state.value.items;` aliases as a declaration would.
       const operator = path.node.operator;
       if (operator !== "=" && operator !== "||=" && operator !== "&&=" && operator !== "??=") return;
-      const left = path.get("left");
-      if (left.isIdentifier()) {
-        const binding = path.scope.getBinding(left.node.name);
-        if (binding === undefined || binding.scope.getFunctionParent()?.path.node !== functionPath.node) return;
-        flow([binding], [path.get("right")]);
-      } else if (left.isMemberExpression() || left.isOptionalMemberExpression()) {
+      const left = unwrapTransparentPath(path.get("left"));
+      if (left.isMemberExpression() || left.isOptionalMemberExpression()) {
         const target = containerRoot(left);
         if (target !== undefined) flow([target], [path.get("right")]);
-      } else if (operator === "=" && (left.isObjectPattern() || left.isArrayPattern())) {
+      } else if (left.isIdentifier() || operator === "=") {
         flow(assignedBindings(path, left.node), [path.get("right")]);
       }
     },
@@ -5555,11 +5571,9 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
       const left = path.get("left");
       if (left.isVariableDeclaration()) {
         flow(patternBindings(path, left.node.declarations[0]!.id), [path.get("right")]);
-      } else if (left.isIdentifier()) {
-        const binding = path.scope.getBinding(left.node.name);
-        if (isLocalVariable(binding)) flow([binding], [path.get("right")]);
-      } else if (left.isObjectPattern() || left.isArrayPattern()) {
-        // `for ({ row } of rows.value)` assigns existing variables.
+      } else {
+        // `for (row of rows.value)`, `for ({ row } of rows.value)` assign
+        // existing variables.
         flow(assignedBindings(path, left.node), [path.get("right")]);
       }
     },
