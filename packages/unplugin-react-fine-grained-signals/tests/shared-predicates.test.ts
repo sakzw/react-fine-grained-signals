@@ -261,6 +261,41 @@ describe("RFGS004 and parameter-default reads", () => {
     });
     expect(diagnostics).toContain("RFGS004");
   });
+
+  // Selection folds a same-module helper's reads into the component, so the
+  // default that calls it has to move behind the boundary as well.
+  it.each(["managed", "inject"] as const)(
+    "relocates a default that reads through a same-module helper (%s)",
+    (transform) => {
+      const { code, diagnostics } = run(
+        `${header}const read = () => s.value;\nexport function C({ label = read() }) { return <p>{label}</p>; }`,
+        { transform },
+      );
+      expect(code).toContain("export function C(_param)");
+      expect(code).toContain(transform === "managed" ? "label = _signals.capture(() => read())" : "label = read()");
+      expect(diagnostics).not.toContain("RFGS004");
+    },
+  );
+
+  it("relocates a default whose inline callback reads", () => {
+    const { code } = run(`${header}export function C({ items, n = items.filter((i) => i > s.value).length }) { return <p>{n}</p>; }`, {
+      mode: "all",
+    });
+    expect(code).toContain("export function C(_param)");
+  });
+
+  it("reports a helper-reading default the relocation had to leave in place", () => {
+    const { code, diagnostics } = run(
+      `${header}const read = () => s.value;\nexport function C({ label = read() }) { var label; return <p>{label}</p>; }`,
+    );
+    expect(code).toContain("label = read()");
+    expect(diagnostics).toContain("RFGS004");
+  });
+
+  it("leaves a default with no possible read in the parameter list", () => {
+    const { code } = run(`${header}const id = (x) => x;\nexport function C({ label = id(1) }) { return <p>{label}{s.value}</p>; }`);
+    expect(code).toContain("label = id(1)\n}) {");
+  });
 });
 
 describe("RFGS003 callback targets", () => {

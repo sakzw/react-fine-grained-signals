@@ -15,8 +15,9 @@
  *   the `/utils` control-flow components run in their own tracked render
  *   (`Show`/`For`/`Index` children, `For` `by`, a `Match` a `Switch`
  *   collects) are exempt.
- * - RFGS004 Uncaptured parameter read: a `.value` read sits in a function
- *   parameter initializer, which runs before the capture Hook.
+ * - RFGS004 Uncaptured parameter read: a signal read (a `.value` read, or a
+ *   call that may make one) sits in a function parameter initializer the
+ *   transform could not move, which runs before the capture Hook.
  * - RFGS005 Unverifiable barrel: `useSignalTracking()` resolves only through a
  *   barrel/re-export module that a single-file transform cannot follow.
  * - RFGS006 Ignored `@signalTracking` annotation: the annotated function has no

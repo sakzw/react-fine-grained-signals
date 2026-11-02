@@ -212,7 +212,7 @@ include a code frame like the others.
 | `RFGS001` | A Hook sits in a signal read expression, or shares a call with reads only that call performs. |
 | `RFGS002` | A call runs a function that calls a Hook and reads signals inside the caller's render. |
 | `RFGS003` | A JSX render-prop or `children` callback reads a signal, and its owner cannot be proven. Callbacks the `/utils` control-flow components run in their own tracked render are exempt (see below). |
-| `RFGS004` | A `.value` read remains in a function parameter initializer. |
+| `RFGS004` | A signal read (a `.value` read, or a call that may make one) remains in a function parameter initializer. |
 | `RFGS005` | `useSignalTracking()` resolves only through a barrel/re-export module. |
 | `RFGS006` | A `@signalTracking` annotation has no component or hook identity to attach to. |
 | `RFGS007` | An anonymous `export default` function has no identity derivable from the module name. |
@@ -538,15 +538,16 @@ component — so prefer fixing the function; `transform: "inject"` accepts it
 without rewriting the function, if the file must keep building unchanged.
 
 Parameter defaults are evaluated before the function body runs, so a signal
-read in one — `function Label({ v = count.value })` — would happen before the
-boundary opens and never be tracked. When a transformed function has such a
-parameter, that parameter and every parameter after it (to keep their
+read in one — `function Label({ v = count.value })`, or a call that may read
+one, such as a same-module helper (`{ v = read() }`) or any call the capture
+rules above would capture — would happen before the boundary opens and never
+be tracked. When a transformed function has such a parameter, that parameter and every parameter after it (to keep their
 evaluation order) are replaced by generated ones and bound again as the first
 statements inside the boundary, with the same `undefined`-only default rule.
 The parameter count is unchanged, so `forwardRef`'s `(props, ref)` shape is
 kept. If the body declares a name a moved default refers to, or re-declares a
-moved parameter, the move is skipped and that read stays untracked; read the
-signal in the body instead.
+moved parameter, the move is skipped and that read stays untracked (managed
+mode reports `RFGS004`); read the signal in the body instead.
 
 The move keeps the default rule and the evaluation order. In TypeScript the
 generated parameter keeps the original's type and optionality, so the output

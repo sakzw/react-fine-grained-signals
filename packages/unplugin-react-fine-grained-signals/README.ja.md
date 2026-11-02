@@ -202,7 +202,7 @@ bundlerへ渡すwarningの `diagnosticId` に入ります。共通の `code: "RF
 | `RFGS001` | Hookが、signal readを含む式の中にあるか、readだけを行う呼び出しと同じ呼び出しを共有しています。 |
 | `RFGS002` | 呼び出された関数がHookを呼び、render内でsignalを読んでいます。 |
 | `RFGS003` | JSX render propや `children` callbackがsignalを読み、所有者を証明できません。`/utils` のcontrol-flow componentが自身のtracked renderの中で呼ぶcallbackは対象外です（後述）。 |
-| `RFGS004` | 関数の引数初期化子に、まだ `.value` の読み取りが残っています。 |
+| `RFGS004` | 関数の引数初期化子に、まだシグナルの読み取り（`.value` の読み取り、または読み取るかもしれない呼び出し）が残っています。 |
 | `RFGS005` | `useSignalTracking()` が、barrel/re-export moduleを経由してしか解決できません。 |
 | `RFGS006` | `@signalTracking` の付いた関数に、boundaryを付けるcomponent/hook identityがありません。 |
 | `RFGS007` | 無名の `export default` 関数で、module名からidentityを導けません。 |
@@ -513,14 +513,15 @@ re-exportを検証できないためwarningを出し、どちらのmodeでも通
 使うと、関数を書き換えずにこの呼び出しを受け入れます。
 
 引数のdefault値は関数本体より前に評価されるため、そこでのsignal読み取り
-（`function Label({ v = count.value })`）はboundaryが開く前に行われ、追跡
-されません。変換対象の関数にそうした引数がある場合、その引数と、評価順を
+（`function Label({ v = count.value })`。同じmoduleのhelperの呼び出し
+`{ v = read() }` など、上のcapture規則でcaptureされる呼び出しも含みます）は
+boundaryが開く前に行われ、追跡されません。変換対象の関数にそうした引数がある場合、その引数と、評価順を
 保つためにそれ以降のすべての引数を生成した引数に置き換え、boundaryの中の
 最初の文として同じ `undefined` のときだけのdefault規則で束縛し直します。
 引数の個数は変わらないため、`forwardRef` の `(props, ref)` という形は保たれ
 ます。移動するdefault値が参照する名前を本体が宣言している場合や、移動する
 引数を本体が再宣言している場合は移動を行わず、その読み取りは追跡されない
-ままです。その場合はsignalを本体で読んでください。
+ままです（managedモードでは `RFGS004` を報告します）。その場合はsignalを本体で読んでください。
 
 この移動では、default値の規則と評価順は変わりません。TypeScriptでは、生成
 した引数が元の型とoptionalかどうかを引き継ぐため、出力は有効なTypeScriptの

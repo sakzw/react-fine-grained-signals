@@ -1867,8 +1867,9 @@ function warnUncapturedParameterRead(functionPath: NodePath<t.Function>, options
     options,
     "RFGS004",
     functionPath,
-    "A .value read remains in a function parameter initializer, which runs before the top-level " +
-      "capture Hook. Move the read into the function body so managed tracking can capture it safely.",
+    "A signal read (a .value read, or a call that may make one) remains in a function parameter " +
+      "initializer, which runs before the top-level capture Hook. Move the read into the function body " +
+      "so managed tracking can capture it safely.",
   );
 }
 
@@ -1923,10 +1924,10 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
 
 /**
  * Is `node` (at `path`) a `.value` read that counts as part of `functionPath`'s
- * render -- the one rule both `inspectFunction` (does this function subscribe
- * at all?) and `relocateTrackedParameters` (does this parameter have to move
- * behind the boundary?) apply, so the two can never disagree about what a
- * tracked read is.
+ * render -- the one rule `inspectFunction` (does this function subscribe at
+ * all?) and the capture pass (`hasTrackedReadInExpression`, and through it
+ * `parameterMayReadTrackedValue`) apply, so they can never disagree about what
+ * a tracked read is.
  */
 function isTrackedValueRead(
   node: t.MemberExpression | t.OptionalMemberExpression,
@@ -3142,32 +3143,30 @@ function decideTransform(
 }
 
 /**
- * Does `param` itself evaluate a tracked `.value` read when the function is
- * called -- i.e. in a default value (`{ v = count.value }`, `n = count.value`)?
+ * May `param` read a tracked value while the function binds it -- in a default
+ * (`{ v = count.value }`, `{ label = read() }`, `n = items.filter((i) => i >
+ * min.value).length`)?
+ *
+ * This is the capture pass's own rule (`bodyReadsTrackedValue`): a direct
+ * `.value` read, a same-module helper or inline callback that reads, or a call
+ * this module cannot see into. Selection folds a same-module helper's reads
+ * into the component, so a default that calls one is part of the component's
+ * render too; a narrower rule here would leave such a default in front of the
+ * capture Hook, where its read is lost, without moving it or saying so.
  *
  * Reads inside a nested function are skipped: a closure created by a default
  * (`format = () => count.value`) does not run during parameter binding, and if
  * the body calls it during render, it runs after the boundary is open anyway.
  */
-function parameterReadsTrackedValue(param: NodePath, functionPath: NodePath<t.Function>): boolean {
+function parameterMayReadTrackedValue(
+  param: NodePath,
+  functionPath: NodePath<t.Function>,
+  context: ReadContext,
+): boolean {
   // A bare identifier has no default to evaluate -- the overwhelmingly common
   // `(props)` case never needs the walk.
   if (param.isIdentifier()) return false;
-  let found = false;
-  const visit = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): void => {
-    if (isTrackedValueRead(path.node, path, functionPath)) {
-      found = true;
-      path.stop();
-    }
-  };
-  param.traverse({
-    Function(nested) {
-      nested.skip();
-    },
-    MemberExpression: visit,
-    OptionalMemberExpression: visit,
-  });
-  return found;
+  return bodyReadsTrackedValue(param, functionPath, noAliases, context);
 }
 
 /**
@@ -3258,8 +3257,10 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
  *
  * The rewrite is kept as small as it can be while staying faithful:
  *
- * - Nothing happens unless a parameter actually reads a signal; every other
- *   function keeps its parameter list untouched.
+ * - Nothing happens unless a parameter may read a signal
+ *   (`parameterMayReadTrackedValue`: directly, through a helper, or through a
+ *   call the capture pass would capture); every other function keeps its
+ *   parameter list untouched.
  * - From the first such parameter *onward*, every parameter moves, in order. A
  *   later default may refer to an earlier parameter (`(a = count.value, b =
  *   a)`), and it may have side effects whose order matters, so moving one
@@ -3281,11 +3282,16 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
  * When the move cannot be done without changing meaning
  * (`hasRelocationConflict`), or a parameter is a TypeScript parameter property
  * (constructor-only, never a component), nothing moves and the read stays
- * untracked exactly as before -- an edge this declines rather than miscompiles.
+ * untracked -- an edge this declines rather than miscompiles, and that managed
+ * mode reports as RFGS004.
  */
-function relocateTrackedParameters(path: NodePath<t.Function>, typeScript: boolean): t.Statement[] {
+function relocateTrackedParameters(
+  path: NodePath<t.Function>,
+  typeScript: boolean,
+  context: ReadContext,
+): t.Statement[] {
   const params = path.get("params");
-  const first = params.findIndex((param) => parameterReadsTrackedValue(param, path));
+  const first = params.findIndex((param) => parameterMayReadTrackedValue(param, path, context));
   if (first === -1) return [];
   const moved = params.slice(first);
   // Planned in full before anything is mutated, so a shape this does not know
@@ -3364,7 +3370,7 @@ function applyInject(
 ): void {
   const call = t.expressionStatement(t.callExpression(t.cloneNode(runtimeImport.identifier), []));
   // Bound again right after the call, so a default's read is collected too.
-  const relocated = relocateTrackedParameters(path, state.typeScript);
+  const relocated = relocateTrackedParameters(path, state.typeScript, readContextOf(options));
   if (body.isBlockStatement()) {
     body.unshiftContainer("body", [call, ...relocated]);
   } else {
@@ -3576,6 +3582,14 @@ interface ReadContext {
   importSource: string;
   managedRuntimeSource: string;
   reactImportSource: string;
+}
+
+function readContextOf(options: InternalTransformOptions): ReadContext {
+  return {
+    importSource: options.importSource,
+    managedRuntimeSource: managedRuntimeSourceOf(options.importSource),
+    reactImportSource: options.reactImportSource,
+  };
 }
 
 /**
@@ -5989,10 +6003,11 @@ function applyManaged(
   const declaration = t.variableDeclaration("const", [
     t.variableDeclarator(t.cloneNode(store), t.callExpression(t.cloneNode(runtimeImport.identifier), [])),
   ]);
-  const relocated = relocateTrackedParameters(path, state.typeScript);
+  const readContext = readContextOf(options);
+  const relocated = relocateTrackedParameters(path, state.typeScript, readContext);
   // The same rule that decided what to relocate: what is still left in the
   // parameter list is exactly what could not be moved.
-  if (path.get("params").some((param) => parameterReadsTrackedValue(param, path))) {
+  if (path.get("params").some((param) => parameterMayReadTrackedValue(param, path, readContext))) {
     warnUncapturedParameterRead(path, options);
   }
   const originalStatements = body.isBlockStatement()
@@ -6000,11 +6015,6 @@ function applyManaged(
     : [t.returnStatement(body.node as t.Expression)];
   const directives = body.isBlockStatement() ? body.node.directives : [];
   body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
-  const readContext: ReadContext = {
-    importSource: options.importSource,
-    managedRuntimeSource: managedRuntimeSourceOf(options.importSource),
-    reactImportSource: options.reactImportSource,
-  };
   let trackedAliases = collectTrackedReadAliases(path, readContext);
   while (expandTrackedObjectDestructuring(path, trackedAliases)) {
     path.scope.crawl();
