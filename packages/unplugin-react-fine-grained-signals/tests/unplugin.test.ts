@@ -937,6 +937,18 @@ describe("bundler adapters", () => {
     expect(resolveEsbuildLoader("/project/src/App.tsx?t=1730000000")).toBe("tsx");
   });
 
+  it("claims exactly the extensions it has a loader for", () => {
+    // `.mjsx`/`.mtsx` have no meaning in Node, TypeScript or esbuild, and the
+    // claim used to come from a pattern separate from the loader table, so they
+    // were claimed and then labelled `js`, which esbuild cannot parse as JSX.
+    expect(canTransform("/project/src/App.mjsx", {})).toBe(false);
+    expect(canTransform("/project/src/App.mtsx", {})).toBe(false);
+    for (const extension of [".js", ".mjs", ".jsx", ".ts", ".mts", ".tsx"]) {
+      expect(canTransform(`/project/src/App${extension}`, {})).toBe(true);
+      expect(resolveEsbuildLoader(`/project/src/App${extension}`)).not.toBe("js");
+    }
+  });
+
   it("defers to the build's own loader configuration", () => {
     expect(resolveEsbuildLoader("/project/src/App.js", { ".js": "js" })).toBe("js");
     expect(resolveEsbuildLoader("/project/src/state.ts", { ".ts": "tsx" })).toBe("tsx");

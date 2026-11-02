@@ -567,7 +567,9 @@ Vite its transform hook also declares `order: "pre"` (see
 list this plugin first there. Wherever the order of plugins or loaders is in
 your hands, put this plugin before anything that runs React Compiler or
 compiles JSX away. The transform skips dependencies and
-non-JavaScript/TypeScript modules, and never touches `.cjs` / `.cts` modules.
+non-JavaScript/TypeScript modules: it claims `.js`, `.mjs`, `.jsx`, `.ts`,
+`.mts` and `.tsx` only, so it never touches `.cjs` / `.cts` modules (nor
+`.mjsx` / `.mtsx`, which no toolchain gives a meaning).
 The plugin matches extensions case-insensitively, so it transforms `App.TSX`
 exactly like `App.tsx`. Whether the bundler then compiles such a file the same
 way is up to the bundler, and is not guaranteed: Vite 8 does not compile

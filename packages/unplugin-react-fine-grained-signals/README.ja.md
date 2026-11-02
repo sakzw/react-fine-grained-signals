@@ -540,8 +540,9 @@ transform hookが `order: "pre"` を宣言します
 Rollupにはどちらの概念もないため、このpluginを最初にlistしてください。
 pluginやloaderの順序を自分で決められる場合は、React Compilerを実行するものや
 JSXを変換して消すものより前にこのpluginを置いてください。依存関係と
-JavaScript/TypeScript以外のmoduleはskipし、`.cjs` / `.cts` のmoduleには
-一切手を加えません。pluginは拡張子を大文字・小文字を区別せずに判定するため、
+JavaScript/TypeScript以外のmoduleはskipします。対象は `.js`、`.mjs`、`.jsx`、
+`.ts`、`.mts`、`.tsx` だけなので、`.cjs` / `.cts` のmodule（および、どの
+toolchainでも意味を持たない `.mjsx` / `.mtsx`）には一切手を加えません。pluginは拡張子を大文字・小文字を区別せずに判定するため、
 `App.TSX` を `App.tsx` とまったく同様に変換します。ただし、その後bundlerが
 そのファイルを同じようにcompileするかはbundler次第で、保証はありません。
 Vite 8は `.JSX` / `.TSX` をJSX / TSXとしてcompileせず、このpluginの有無に

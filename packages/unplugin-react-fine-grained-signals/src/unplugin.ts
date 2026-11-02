@@ -12,7 +12,12 @@ import {
   type InternalTransformResult,
 } from "./internal/transform.js";
 import { isDiagnosticId, PLUGIN_NAME, type DiagnosticId } from "./internal/diagnostics.js";
-import { SCRIPT_MODULE_EXTENSION, stripModuleIdQuery } from "./internal/module-id.js";
+import {
+  type EsbuildLoaderName,
+  moduleIdExtension,
+  scriptModuleLoader,
+  stripModuleIdQuery,
+} from "./internal/module-id.js";
 
 export type {
   ReactFineGrainedSignalsMode,
@@ -152,11 +157,12 @@ function toModuleIdMatcher(pattern: unknown, option: "include" | "exclude"): Mod
 //
 // Case-insensitive, to match the transform itself: it picks its parser plugins
 // with `/i` regexes (`App.TSX` gets `jsx` + `typescript`, exactly as `App.tsx`
-// does) and the esbuild loader map lower-cases the extension, so a
-// case-sensitive claim here was the one step that silently passed over
-// `App.JSX`/`App.TSX` -- the files a case-insensitive file system makes
-// perfectly ordinary. `.CJS`/`.CTS` stay excluded: the class cannot match a `c`.
-// The pattern lives in `internal/module-id.ts`, next to the transform's own.
+// does), so a case-sensitive claim here was the one step that silently passed
+// over `App.JSX`/`App.TSX` -- the files a case-insensitive file system makes
+// perfectly ordinary. The claim and the esbuild loader both look the
+// lower-cased extension up in one table in `internal/module-id.ts`, next to
+// the transform's own parser patterns; `.CJS`/`.CTS` stay excluded because
+// `.cjs`/`.cts` are not in it.
 
 export const pluginName = PLUGIN_NAME;
 
@@ -206,36 +212,15 @@ function isTransformCandidate(id: string): boolean {
   if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
     return false;
   }
-  return SCRIPT_MODULE_EXTENSION.test(cleanModuleId(id));
+  return scriptModuleLoader(moduleIdExtension(cleanModuleId(id))) !== undefined;
 }
 
 /**
- * The esbuild loader names this plugin itself ever chooses. esbuild's own
- * `Loader` union is wider and is not importable here (esbuild is not a
- * dependency of this package), so a value read out of the project's configured
- * loader map is handed straight back and narrowed to this at the hook boundary.
+ * The esbuild loader names this plugin itself ever chooses. A value read out of
+ * the project's configured loader map is handed straight back and narrowed to
+ * this at the hook boundary.
  */
-export type EsbuildLoaderName = "js" | "jsx" | "ts" | "tsx";
-
-/**
- * `.js`/`.mjs` deliberately resolve to `"jsx"`. JavaScript commonly carries JSX
- * without a `.jsx` suffix -- the transform's own parser configuration says so,
- * and its output for such a file still contains that JSX -- but unplugin's
- * esbuild adapter labels every file it hands back with `guessLoader`, which
- * maps `.js` to `"js"` and so overrides a project's own
- * `loader: { ".js": "jsx" }` setting. Because that adapter returns
- * `{ contents, loader }` for every file passing `transformInclude`, even the
- * ones this transform declines to touch, a single wrong answer here breaks the
- * whole build rather than just one module.
- */
-const ESBUILD_LOADERS: Record<string, EsbuildLoaderName> = {
-  ".js": "jsx",
-  ".mjs": "jsx",
-  ".jsx": "jsx",
-  ".ts": "ts",
-  ".mts": "ts",
-  ".tsx": "tsx",
-};
+export type { EsbuildLoaderName };
 
 /**
  * The loader to label `id`'s contents with, deferring to the build's own
@@ -244,8 +229,8 @@ const ESBUILD_LOADERS: Record<string, EsbuildLoaderName> = {
  * needing esbuild itself.
  */
 export function resolveEsbuildLoader(id: string, configuredLoaders?: Record<string, string> | undefined): string {
-  const extension = /\.[^./\\]*$/.exec(cleanModuleId(id))?.[0].toLowerCase() ?? "";
-  return configuredLoaders?.[extension] ?? ESBUILD_LOADERS[extension] ?? "js";
+  const extension = moduleIdExtension(cleanModuleId(id));
+  return configuredLoaders?.[extension] ?? scriptModuleLoader(extension) ?? "js";
 }
 
 /** The value every option takes when it is left out: the one place a default is written. */
