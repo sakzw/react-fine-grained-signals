@@ -65,8 +65,6 @@ export interface SweepState {
   prunableRevision?: number | undefined;
   prunableSweepIterator?: Iterator<unknown> | undefined;
   prunableSweepRevision?: number | undefined;
-  /** Whether the current sweep iteration began in a settled (later-task) pass. */
-  prunableSweepSettled?: boolean | undefined;
   /** An unsettled pass of the current iteration kept read-only candidates for a settled one. */
   prunableSweepDeferred?: boolean | undefined;
 }
@@ -816,7 +814,6 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     metadata.prunableSweepIterator = undefined;
     metadata.prunableSweepRevision = undefined;
     metadata.prunableSweepDeferred = undefined;
-    metadata.prunableSweepSettled = undefined;
   };
 
   /**
@@ -848,7 +845,6 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       iterator = plan.begin(metadata);
       metadata.prunableSweepIterator = iterator;
       metadata.prunableSweepRevision = metadata.prunableRevision ?? 0;
-      metadata.prunableSweepSettled = settled;
       metadata.prunableSweepDeferred = false;
     }
     const release = (version: VersionSignal | undefined): boolean => {
@@ -868,9 +864,11 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
       const next = iterator.next();
       if (next.done === true) {
         const revised = metadata.prunableSweepRevision !== (metadata.prunableRevision ?? 0);
-        // Candidates an unsettled pass kept may sit before the point a later
-        // settled pass resumed from; revisit them all in a fresh settled pass.
-        const deferred = metadata.prunableSweepDeferred === true && metadata.prunableSweepSettled !== true;
+        // A chunk that ran unsettled (the first one after a write, or a write
+        // landing in the middle of a settled iteration) kept candidates for a
+        // settled pass, which may have resumed past them: revisit them all in a
+        // fresh settled pass. A settled chunk never defers, so this ends.
+        const deferred = metadata.prunableSweepDeferred === true;
         clearSweep(metadata);
         if (plan.size(metadata) === 0) plan.finish?.(metadata);
         else if (revised || deferred) scheduleSweep(metadata, plan, true);

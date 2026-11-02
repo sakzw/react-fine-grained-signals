@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createDeepSignalFactory } from "../src/core/deep-signal-engine.js";
 import type { DeepSignalRuntimeAdapter, DeepSignalSource } from "../src/core/deep-signal-engine.js";
 
@@ -48,6 +48,35 @@ const settle = async (rounds = 20) => {
 };
 
 describe("deep property metadata sweeps", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("revisits candidates a write deferred in the middle of a settled sweep", () => {
+    vi.useFakeTimers();
+    const harness = makeHarness();
+    const state = harness.deepSignal({ present: 0 } as Record<string, number | undefined>);
+    const keys = Array.from({ length: 300 }, (_, index) => `missing-${index}`);
+    for (const key of keys) state.value[key];
+    for (const version of harness.versions) harness.linked.add(version);
+    vi.runAllTimers();
+    const allocated = harness.versions.length;
+
+    // The readers unsubscribe; a render that never commits reads the keys
+    // again, which queues a settled sweep. Its first chunk runs in a task.
+    harness.linked.clear();
+    for (const key of keys) state.value[key];
+    vi.advanceTimersToNextTimer();
+    // A write before the sweep resumes runs the next chunk synchronously,
+    // which defers read-but-unlinked candidates to a settled pass.
+    state.value.present = 1;
+    vi.runAllTimers();
+
+    // The deferred chunk was revisited: its keys are gone too.
+    state.value[keys[200]!];
+    expect(harness.versions.length).toBeGreaterThan(allocated);
+  });
+
   it("revisits candidates an unsettled chunk kept, like the collection sweep", async () => {
     const harness = makeHarness();
     const state = harness.deepSignal({ present: 0 } as Record<string, number | undefined>);
