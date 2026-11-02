@@ -5,7 +5,7 @@ import {
   expectedRuntimeExports,
   expectedTypeExports,
   internalNames,
-} from "./public-api.mjs";
+} from "../scripts/public-api.mjs";
 
 const manifest = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8"));
 const entries = adapterEntriesOf(manifest.exports);

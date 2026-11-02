@@ -1,4 +1,5 @@
-// The plugin's public surface, written once for the two smokes that check it:
+// The plugin's public surface, written once for the build config (which derives
+// its adapter entries from it) and the two smokes that check it:
 // this package's `tests/build-smoke.mjs` (against `dist`) and the repository's
 // `tests/consumer-smoke.mjs` (against the packed, installed tarball).
 

@@ -12,7 +12,7 @@ const repositoryRoot = fileURLToPath(new URL("../", import.meta.url));
 const pluginRoot = join(repositoryRoot, "packages", "unplugin-react-fine-grained-signals");
 const fixtureRoot = join(repositoryRoot, "tests", "fixtures", "consumer-vite");
 // The plugin's public surface, shared with its own build smoke.
-const pluginPublicApi = await import(pathToFileURL(join(pluginRoot, "tests", "public-api.mjs")).href);
+const pluginPublicApi = await import(pathToFileURL(join(pluginRoot, "scripts", "public-api.mjs")).href);
 
 function resolvePnpmInvocation() {
   const packageManagerScript = process.env.npm_execpath;

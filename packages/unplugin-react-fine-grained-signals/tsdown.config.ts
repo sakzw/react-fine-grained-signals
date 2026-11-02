@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { defineConfig } from "tsdown";
-import { adapterEntriesOf } from "./tests/public-api.mjs";
+import { adapterEntriesOf } from "./scripts/public-api.mjs";
 
 // One bundle per bundler adapter, named after its subpath in package.json
 // `exports`, so the export map and the emitted files cannot drift apart.
