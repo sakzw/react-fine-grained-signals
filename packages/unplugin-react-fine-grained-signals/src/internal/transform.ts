@@ -6173,6 +6173,11 @@ function captureTrackedReadExpressions(
     }
     if (!wrapAfterHookBase(path)) giveUpForHook(path, HOOK_IN_CAPTURED_READ_WARNING);
   };
+  const skipInstanceField = (
+    path: NodePath<t.ClassProperty | t.ClassPrivateProperty | t.ClassAccessorProperty>,
+  ): void => {
+    if (!path.node.static) path.skip();
+  };
   const visitor: Visitor = {
     Function(path) {
       // Reads inside another function need a call-site boundary. Capturing the
@@ -6181,6 +6186,13 @@ function captureTrackedReadExpressions(
       // by the CallExpression visitor below.
       path.skip();
     },
+    // An instance field's initializer runs when the class is instantiated,
+    // like a method body, so it is skipped the same way; `new Model()` is a
+    // call site like any other. A static field or block runs when the class
+    // is evaluated, which for a class declared here is this render.
+    ClassProperty: skipInstanceField,
+    ClassPrivateProperty: skipInstanceField,
+    ClassAccessorProperty: skipInstanceField,
     CallExpression: { enter: visitCall },
     OptionalCallExpression: { enter: visitCall },
     NewExpression: {

@@ -659,3 +659,37 @@ describe("a JSX member tag that reads a signal", () => {
     expect(code).toContain("<ui.Icon />");
   });
 });
+
+describe("class fields", () => {
+  // An instance field initializer runs when the class is instantiated, like a
+  // method body; a static field or block runs when the class is evaluated,
+  // which for a class declared in the body is the render.
+  it.each([
+    ["a public", "snapshot = s.value;"],
+    ["a private", "#snapshot = s.value;"],
+    ["an accessor", "accessor snapshot = s.value;"],
+  ])("does not select a component for %s instance field read only in an effect", (_kind, field) => {
+    const { code } = run(
+      `import { useEffect } from "react";\n${header}export function A() { class Model { ${field} } useEffect(() => { void new Model(); }, []); return <p>x</p>; }`,
+    );
+    expect(code).toBeUndefined();
+  });
+
+  it("captures the instantiation, not the field, when the class is instantiated in render", () => {
+    const { code } = run(
+      `${header}export function A() { class Model { snapshot = s.value; } const x = new Model().snapshot; return <p>{x}{s.value}</p>; }`,
+    );
+    expect(code).toContain("snapshot = s.value;");
+    expect(code).toContain("_signals.capture(() => new Model())");
+  });
+
+  it.each([
+    ["a static field", "static snapshot = s.value;", "static snapshot = _signals.capture(() => s.value);"],
+    ["a static block", "static { log(s.value); }", "_signals.capture(() => log(s.value));"],
+  ])("captures %s of a class declared in render", (_kind, member, output) => {
+    const { code } = run(
+      `${header}function log(v: unknown) { void v; }\nexport function A() { class Model { ${member} } void Model; return <p>x</p>; }`,
+    );
+    expect(code).toContain(output);
+  });
+});
