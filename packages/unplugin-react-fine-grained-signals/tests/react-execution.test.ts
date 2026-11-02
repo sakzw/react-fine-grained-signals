@@ -2554,12 +2554,15 @@ export function App() {
   return <p>{text}</p>;
 }
 `);
-      // Every Hook stays a direct call in the component body.
+      // Every Hook stays a direct call in the component body. A callback that
+      // calls a Hook is never captured (nor its call), so when that callback
+      // holds the only read there is nothing to capture and the component is
+      // not selected at all.
       expect({
         shape,
         hooks: hooksInsideCapture(transformed),
         selected: transformed.includes("useSignalCapture()"),
-      }).toEqual({ shape, hooks: [], selected: true });
+      }).toEqual({ shape, hooks: [], selected: !shape.includes("[count].map(") });
     }
   });
 

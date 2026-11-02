@@ -1394,7 +1394,10 @@ describe("managed render transform", () => {
     it("keeps a function returned by a component or a hook off its own boundary", () => {
       // A function returned by a component or a hook is a render prop or a
       // callback that runs inside that owner's render, not an independently
-      // mounted component, so the owner keeps the one boundary.
+      // mounted component, so it gets no boundary of its own. Its read runs
+      // only when someone calls it, after the owner has returned, so no
+      // capture of the owner covers it either, and the owner is not selected
+      // for it (selection follows what the capture pass would capture).
       const output = compile(
         `
         const count = { value: 1 };
@@ -1404,7 +1407,7 @@ describe("managed render transform", () => {
         "auto",
       );
 
-      expect(output.match(/useSignalCapture\(\)/g)).toHaveLength(2);
+      expect(output).not.toContain("useSignalCapture");
       expect(output.match(/return \(\) => <li>\{count\.value\}<\/li>;/g)).toHaveLength(2);
     });
 

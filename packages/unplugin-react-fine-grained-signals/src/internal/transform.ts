@@ -203,6 +203,35 @@ function getImportedName(
   return t.isIdentifier(specifier.imported) ? specifier.imported.name : specifier.imported.value;
 }
 
+/**
+ * Per file: the configured `importSource`, for the few predicates that only
+ * see a path (`isDeferredFunction`) and are called from everywhere.
+ */
+const fileImportSources = new WeakMap<t.Node, string>();
+
+/**
+ * Is `callee` one of this library's own exports in `names`, imported by name
+ * from `importSource` (`untracked(...)`, `signal(...)`) or reached through a
+ * namespace import of it (`rfgs.untracked(...)`)?
+ */
+function isLibraryExport(path: NodePath, callee: t.Node, names: ReadonlySet<string>): boolean {
+  const importSource = fileImportSources.get(path.scope.getProgramParent().path.node);
+  if (importSource === undefined) return false;
+  const expression = unwrapTransparent(callee);
+  if (t.isIdentifier(expression)) {
+    const resolved = resolveImportedBinding(path, expression.name);
+    if (resolved === undefined || resolved.source !== importSource || !resolved.specifier.isImportSpecifier())
+      return false;
+    const imported = getImportedName(resolved.specifier.node);
+    return imported !== undefined && names.has(imported);
+  }
+  if (!t.isMemberExpression(expression) || !t.isIdentifier(expression.object)) return false;
+  const key = getReadPropertyName(expression);
+  if (key === undefined || !names.has(key)) return false;
+  const resolved = resolveImportedBinding(path, expression.object.name);
+  return resolved !== undefined && resolved.source === importSource && resolved.specifier.isImportNamespaceSpecifier();
+}
+
 /** Is `name` bound by `import { memo } from "react"` (or `forwardRef`, possibly aliased)? */
 function isReactNamedImport(
   path: NodePath,
@@ -1505,6 +1534,68 @@ function renderCallbackCallers(path: NodePath<t.Function>): true | NodePath<t.Fu
   return callers;
 }
 
+/**
+ * The local functions a callee that `resolveReferencedFunction` and
+ * `resolveKeyedFunction` cannot pin down may hold: a name initialized or
+ * assigned with a choice of functions (`flag ? a : b`, `let f = a; f = b`),
+ * or an element of a local array or object literal reached by a runtime key
+ * (`handlers[0]()`, `handlers[kind]()`). Only a name bound in this module is
+ * followed; anything else -- a parameter, an import, a call result -- has no
+ * local function to offer.
+ */
+function possibleLocalTargets(site: NodePath, callee: t.Node): NodePath<t.Function>[] {
+  const found: NodePath<t.Function>[] = [];
+  const collect = (value: NodePath): void => {
+    const expression = unwrapTransparentPath(value);
+    if (expression.isArrowFunctionExpression() || expression.isFunctionExpression()) found.push(expression);
+    else if (expression.isConditionalExpression()) {
+      collect(expression.get("consequent"));
+      collect(expression.get("alternate"));
+    } else if (expression.isLogicalExpression()) {
+      collect(expression.get("left"));
+      collect(expression.get("right"));
+    } else if (expression.isSequenceExpression()) {
+      const last = expression.get("expressions").at(-1);
+      if (last !== undefined) collect(last);
+    } else if (expression.isIdentifier()) {
+      const target = resolveReferencedFunction(expression, expression.node.name);
+      if (target !== undefined) found.push(target);
+    }
+  };
+  const bindingOf = (node: t.Node): Binding | undefined => {
+    const expression = unwrapTransparent(node);
+    return t.isIdentifier(expression) ? site.scope.getBinding(expression.name) : undefined;
+  };
+  if (t.isIdentifier(unwrapTransparent(callee))) {
+    const binding = bindingOf(callee);
+    if (binding === undefined) return found;
+    if (binding.path.isVariableDeclarator()) {
+      const init = binding.path.get("init");
+      if (init.isExpression()) collect(init);
+    }
+    for (const violation of binding.constantViolations) {
+      if (violation.isAssignmentExpression({ operator: "=" })) collect(violation.get("right"));
+    }
+    return found;
+  }
+  const member = unwrapTransparent(callee);
+  if ((!t.isMemberExpression(member) && !t.isOptionalMemberExpression(member)) || !member.computed) return found;
+  const binding = bindingOf(member.object);
+  if (binding === undefined || binding.constantViolations.length > 0 || !binding.path.isVariableDeclarator()) {
+    return found;
+  }
+  const init = unwrapTransparentPath(binding.path.get("init") as NodePath);
+  if (init.isArrayExpression()) {
+    for (const element of init.get("elements")) if (element.node !== null) collect(element as NodePath);
+  } else if (init.isObjectExpression()) {
+    for (const property of init.get("properties")) {
+      if (property.isObjectMethod() && property.node.kind === "method") found.push(property);
+      else if (property.isObjectProperty()) collect(property.get("value"));
+    }
+  }
+  return found;
+}
+
 /** The function `name`, referenced from `origin`'s scope, is bound to. */
 function resolveReferencedFunction(origin: NodePath, name: string): NodePath<t.Function> | undefined {
   const binding = origin.scope.getBinding(name);
@@ -1933,7 +2024,97 @@ function isHookCallbackArgument(path: NodePath): boolean {
  * during render (`for (const v of gen())`), and the callers decide that case.
  */
 function isDeferredFunction(fn: NodePath<t.Function>): boolean {
-  return fn.node.async || isJsxEventHandlerValue(fn) || isHookCallbackArgument(fn);
+  return (
+    fn.node.async ||
+    isJsxEventHandlerValue(fn) ||
+    isHookCallbackArgument(fn) ||
+    isUntrackedCallback(fn) ||
+    isScheduledCallback(fn)
+  );
+}
+
+/** Globals that only ever call their callback (first argument) from a later task. */
+const schedulingGlobals: ReadonlySet<string> = new Set([
+  "setTimeout",
+  "setInterval",
+  "queueMicrotask",
+  "requestAnimationFrame",
+  "requestIdleCallback",
+]);
+const promiseReactionMethods: ReadonlySet<string> = new Set(["then", "catch", "finally"]);
+const promiseFactories: ReadonlySet<string> = new Set([
+  "Promise.resolve",
+  "Promise.reject",
+  "Promise.all",
+  "Promise.allSettled",
+  "Promise.any",
+  "Promise.race",
+]);
+
+/** Is `node` (at `path`) a native Promise: `new Promise(...)`, `Promise.resolve(...)`, or a reaction on one? */
+function isNativePromise(path: NodePath, node: t.Node): boolean {
+  const expression = unwrapTransparent(node);
+  if (t.isNewExpression(expression)) {
+    return t.isIdentifier(expression.callee, { name: "Promise" }) && path.scope.getBinding("Promise") === undefined;
+  }
+  if (!t.isCallExpression(expression)) return false;
+  const global = standardGlobalCallee(path, expression.callee);
+  if (global !== undefined) return promiseFactories.has(global);
+  const callee = unwrapTransparent(expression.callee);
+  return (
+    t.isMemberExpression(callee) &&
+    promiseReactionMethods.has(getReadPropertyName(callee) ?? "") &&
+    isNativePromise(path, callee.object)
+  );
+}
+
+/**
+ * Is `call` one that runs the function in `argument` only from a later task:
+ * a timer or frame callback (`setTimeout(fn)`), or a reaction on a native
+ * Promise (`Promise.resolve().then(fn)`)? Neither the call nor that function
+ * reads anything during the render that makes the call.
+ */
+function isSchedulingCall(call: NodePath, argument?: t.Node): boolean {
+  if (!call.isCallExpression() && !call.isOptionalCallExpression()) return false;
+  const callee = unwrapTransparent(call.node.callee);
+  if (t.isIdentifier(callee)) {
+    return (
+      schedulingGlobals.has(callee.name) &&
+      call.scope.getBinding(callee.name) === undefined &&
+      (argument === undefined || call.node.arguments[0] === argument)
+    );
+  }
+  return (
+    (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
+    promiseReactionMethods.has(getReadPropertyName(callee) ?? "") &&
+    isNativePromise(call, callee.object) &&
+    (argument === undefined || call.node.arguments.includes(argument as t.Expression))
+  );
+}
+
+/** `setTimeout(() => ...)`, `Promise.resolve().then(() => ...)`: see `isSchedulingCall`. */
+function isScheduledCallback(fn: NodePath<t.Function>): boolean {
+  const slot = climbTransparentWrappers(fn);
+  return slot.parentPath !== null && isSchedulingCall(slot.parentPath, slot.node);
+}
+
+const untrackedExport: ReadonlySet<string> = new Set(["untracked"]);
+
+/**
+ * `untracked(() => count.value)`: the library runs the callback right away,
+ * but with tracking off, so its reads are no more render reads than an
+ * effect's are. Capturing the call would subscribe nothing either; treating
+ * it as a read only selected the function for an empty capture.
+ */
+function isUntrackedCallback(fn: NodePath<t.Function>): boolean {
+  const slot = climbTransparentWrappers(fn);
+  const call = slot.parentPath;
+  return (
+    call !== null &&
+    (call.isCallExpression() || call.isOptionalCallExpression()) &&
+    call.node.arguments[0] === slot.node &&
+    isLibraryExport(call, call.node.callee, untrackedExport)
+  );
 }
 
 /**
@@ -2082,17 +2263,24 @@ function inspectFunction(
   // and any owner the caller has already accounted for.
   excluded: ReadonlySet<t.Node> = new Set([functionPath.node]),
   synchronousBodyOnly = false,
+  // Inspect only this part of `functionPath` (an expression the capture pass
+  // would wrap) instead of the whole function: see `wouldCaptureRenderRead`.
+  subtree?: NodePath,
 ): FunctionInspection {
   const root = synchronousBodyOnly
     ? synchronousScan(functionPath, importSource, managedRuntimeSource, reactImportSource)
-    : scanFunction(functionPath, importSource, managedRuntimeSource, reactImportSource, false);
+    : scanFunction(functionPath, importSource, managedRuntimeSource, reactImportSource, false, subtree);
   const inspection = { ...root.own };
   const rootNode = functionPath.node;
   // With only the function itself excluded, what one query learns holds for
   // every function it walked through, so a chain of N helpers costs O(N)
   // overall rather than O(N^2): a read found marks the whole path to it, and a
   // negative answer marks everything reachable (all of it was walked).
-  const memoizable = excluded.size === 1 && excluded.has(rootNode);
+  //
+  // Not for a subtree: its walk excludes the whole function while starting
+  // from only part of it, so a function that reaches a read only through the
+  // excluded one would be marked as reading nothing.
+  const memoizable = subtree === undefined && excluded.size === 1 && excluded.has(rootNode);
   if (!inspection.readsValue && root.edges.length > 0) {
     const parentOf = new Map<t.Node, t.Node>();
     const seen = new Set(excluded);
@@ -2149,6 +2337,7 @@ function scanFunction(
   managedRuntimeSource: string,
   reactImportSource: string,
   synchronousBodyOnly: boolean,
+  subtree?: NodePath,
 ): FunctionScan {
   const inspection: FunctionInspection = {
     containsJSX: false,
@@ -2273,38 +2462,107 @@ function scanFunction(
   // the caller's inspection silently misses `mode: "auto"` transforms.
   const foldDirectlyCalledHelpers = (call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>): void => {
     if (isDeferredReadContext(call, functionPath)) return;
-    const callee = unwrapTransparent(call.node.callee);
+    let callee = unwrapTransparent(call.node.callee);
+    // `now.call(null)` / `now.apply(null, [])` run `now` right here, too.
+    if (
+      (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
+      !callee.computed &&
+      t.isIdentifier(callee.property) &&
+      (callee.property.name === "call" || callee.property.name === "apply")
+    ) {
+      callee = unwrapTransparent(callee.object);
+    }
+    foldHelper(call, callee);
+  };
+
+  // A tagged template calls its tag with the template, like a helper call.
+  const foldTemplateTag = (template: NodePath<t.TaggedTemplateExpression>): void => {
+    if (isDeferredReadContext(template, functionPath)) return;
+    foldHelper(template, unwrapTransparent(template.node.tag));
+  };
+
+  /** Folds the module-local helper `callee` (a name or a static member) that `site` runs synchronously. */
+  const foldHelper = (site: NodePath, callee: t.Node): void => {
     const member = t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee) ? callee : undefined;
     const chain = member === undefined ? undefined : getStaticMemberChain(member);
     const name = t.isIdentifier(callee) ? callee.name : chain?.keys.at(-1);
-    if (name === undefined || isComponentName(name) || isHookName(name)) return;
-    const target = t.isIdentifier(callee)
-      ? resolveReferencedFunction(call, name)
-      : member === undefined
+    if (name !== undefined && (isComponentName(name) || isHookName(name))) return;
+    const target =
+      name === undefined
         ? undefined
-        : resolveKeyedFunction(call, member);
-    // A helper called from many sites is checked once, not once per call by
-    // `functionCallsHook`.
-    if (target === undefined || edgeIndex.has(target.node) || checkedHelpers.has(target.node)) return;
-    checkedHelpers.add(target.node);
-    if (target.node.generator || isDeferredFunction(target) || functionCallsHook(target)) return;
+        : t.isIdentifier(callee)
+          ? resolveReferencedFunction(site, name)
+          : member === undefined
+            ? undefined
+            : resolveKeyedFunction(site, member);
+    // A callee this cannot pin to one function is called through a capture
+    // taken as a precaution (`unresolvedCallMayRead`); the local functions it
+    // may hold run inside that capture, so their reads count.
+    for (const candidate of target === undefined ? possibleLocalTargets(site, callee) : [target]) {
+      // A helper called from many sites is checked once, not once per call by
+      // `functionCallsHook`.
+      if (edgeIndex.has(candidate.node) || checkedHelpers.has(candidate.node)) continue;
+      checkedHelpers.add(candidate.node);
+      if (candidate.node.generator || isDeferredFunction(candidate) || functionCallsHook(candidate)) continue;
+      addEdge(candidate, false);
+    }
+  };
+
+  // `for (const v of gen())`: the loop runs a synchronous generator's body
+  // while it iterates, during this render (the capture pass iterates it
+  // inside captures: the `for...of` visitor).
+  const foldIteratedGenerator = (loop: NodePath<t.ForOfStatement>): void => {
+    if (loop.node.await || isDeferredReadContext(loop, functionPath)) return;
+    const source = unwrapTransparent(loop.node.right);
+    if (!t.isCallExpression(source) && !t.isOptionalCallExpression(source)) return;
+    const callee = unwrapTransparent(source.callee);
+    const target = t.isIdentifier(callee)
+      ? resolveReferencedFunction(loop, callee.name)
+      : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
+        ? resolveKeyedFunction(loop, callee)
+        : undefined;
+    if (target === undefined || !target.node.generator || target.node.async || functionCallsHook(target)) return;
     addEdge(target, false);
   };
 
   // `items.filter(isBig)`: a named synchronous function handed to a call
   // runs in this render just like an inline callback. Hook calls are skipped:
   // their callbacks belong to React, not to this render's reads.
-  const foldFunctionArguments = (call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>): void => {
+  const foldFunctionArguments = (
+    call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression> | NodePath<t.NewExpression>,
+  ): void => {
     if (callNameIsHook(call.node.callee)) return;
     if (isDeferredReadContext(call, functionPath)) return;
     for (const argument of call.get("arguments") as NodePath[]) {
-      if (!argument.isIdentifier()) continue;
+      if (!argument.isIdentifier() || isSchedulingCall(call, argument.node)) continue;
       const target = resolveReferencedFunction(argument, argument.node.name);
       if (target === undefined || edgeIndex.has(target.node) || checkedHelpers.has(target.node)) continue;
       checkedHelpers.add(target.node);
       if (target.node.generator || isDeferredFunction(target) || functionCallsHook(target)) continue;
       addEdge(target, false);
     }
+  };
+
+  // `function D({ format = () => count.value }) { ... format() ... }`: calling a
+  // parameter runs its default when the caller passed none. The capture pass
+  // captures every call of a parameter, so the default's reads count wherever
+  // it is called during render.
+  const foldParameterDefaultCalls = (call: NodePath<t.CallExpression> | NodePath<t.OptionalCallExpression>): void => {
+    const callee = unwrapTransparent(call.node.callee);
+    if (!t.isIdentifier(callee) || isDeferredReadContext(call, functionPath)) return;
+    const binding = call.scope.getBinding(callee.name);
+    if (binding?.kind !== "param") return;
+    let target: NodePath | undefined;
+    const visit = (pattern: NodePath): void => {
+      if (pattern.isAssignmentPattern() && pattern.node.left === binding.identifier) {
+        target = unwrapTransparentPath(pattern.get("right"));
+      }
+    };
+    visit(binding.path);
+    binding.path.traverse({ AssignmentPattern: visit });
+    if (target === undefined || !(target.isArrowFunctionExpression() || target.isFunctionExpression())) return;
+    if (target.node.generator || isDeferredFunction(target) || functionCallsHook(target)) return;
+    addEdge(target, false);
   };
 
   const recordValueRead = (node: t.MemberExpression | t.OptionalMemberExpression, path: NodePath): void => {
@@ -2315,7 +2573,7 @@ function scanFunction(
     if (isTrackedValueRead(node, path, functionPath)) inspection.readsValue = true;
   };
 
-  functionPath.traverse({
+  const visitor: Visitor = {
     // A nested function is not a render read until a known synchronous call
     // site runs it. The call-site visitors below fold recognized helpers and
     // render callbacks into this inspection; unknown callbacks stay outside
@@ -2341,6 +2599,7 @@ function scanFunction(
       foldDirectlyCalledRenderCallbacks(path);
       foldDirectlyCalledHelpers(path);
       foldFunctionArguments(path);
+      foldParameterDefaultCalls(path);
       // Compared by node, as the equivalent checks in `isDeferredReadContext`
       // and `foldDirectlyCalledRenderCallbacks` are: a re-crawled scope can hand
       // back a fresh NodePath for the very same function.
@@ -2369,8 +2628,31 @@ function scanFunction(
       foldDirectlyCalledRenderCallbacks(path);
       foldDirectlyCalledHelpers(path);
       foldFunctionArguments(path);
+      foldParameterDefaultCalls(path);
     },
-  });
+    // `new Promise(executor)` runs a named executor right away.
+    NewExpression(path) {
+      foldFunctionArguments(path);
+    },
+    TaggedTemplateExpression(path) {
+      foldTemplateTag(path);
+    },
+    ForOfStatement(path) {
+      foldIteratedGenerator(path);
+    },
+  };
+  if (subtree === undefined) {
+    functionPath.traverse(visitor);
+  } else {
+    // `traverse` does not visit its root, so the subtree's own node is
+    // visited first, by the same handlers. The iterable of a `for...of` is
+    // judged with its loop, which is what iterates it.
+    const own = (visitor as Record<string, ((path: NodePath) => void) | undefined>)[subtree.type];
+    if (typeof own === "function") own(subtree);
+    const loop = subtree.parentPath;
+    if (loop?.isForOfStatement() && loop.node.right === subtree.node) foldIteratedGenerator(loop);
+    if (!subtree.isFunction()) subtree.traverse(visitor);
+  }
   return { own: inspection, edges };
 }
 
@@ -2938,14 +3220,17 @@ function shouldAutomaticallyTransform(
   // The identity `decideTransform` already resolved for this same function,
   // rather than a path this would have to re-resolve (and re-climb) itself.
   identity: ComponentIdentity | undefined,
+  // Whether the function makes a read selection counts (`wouldCaptureRenderRead`),
+  // asked only when the answer matters.
+  readsValue: () => boolean,
 ): boolean {
   if (isHookIdentity(identity)) {
-    return mode !== "manual" && inspection.readsValue;
+    return mode !== "manual" && readsValue();
   }
   if (!isComponentIdentity(identity) || !inspection.containsJSX) {
     return false;
   }
-  return mode === "all" || (mode === "auto" && inspection.readsValue);
+  return mode === "all" || (mode === "auto" && readsValue());
 }
 
 /** Marks the current file as having produced at least one real change. */
@@ -3049,6 +3334,10 @@ function decideTransform(
   }
   const managedRuntimeSource = managedRuntimeSourceOf(options.importSource);
   const inspection = inspectFunction(path, options.importSource, managedRuntimeSource, reactImportSource);
+  // A read anywhere in the function is necessary for selection, not
+  // sufficient: the capture pass has to cover it (`wouldCaptureRenderRead`).
+  let selectedReads: boolean | undefined;
+  const readsValue = (): boolean => (selectedReads ??= inspection.readsValue && wouldCaptureRenderRead(path, options));
   inspectKnownRenderPropReads(path, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
@@ -3111,7 +3400,7 @@ function decideTransform(
     climbedParent !== null &&
     climbedParent.isExportDefaultDeclaration() &&
     rendersJsx(path) &&
-    (options.mode === "all" || (options.mode === "auto" && inspection.readsValue))
+    (options.mode === "all" || (options.mode === "auto" && readsValue()))
   ) {
     warnUnnamedDefaultExport(path, options);
   }
@@ -3127,14 +3416,15 @@ function decideTransform(
     !explicit &&
     !annotated &&
     !isFactory &&
-    shouldAutomaticallyTransform(options.mode, inspection, identity) &&
+    shouldAutomaticallyTransform(options.mode, inspection, identity, readsValue) &&
     isComponentIdentity(identity) &&
     isPlainCalledComponent(path) &&
     isAlsoMountedThroughJsx(path)
   ) {
     warnPlainCalledComponentAlsoMounted(path, identity?.name ?? "component", options);
   }
-  const automatic = !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity);
+  const automatic =
+    !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity, readsValue);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
   if (!explicit && (inspection.hasSignalTrackingCall || inspection.hasUseManagedSignalsCall)) {
     return { kind: "skip" };
@@ -4488,6 +4778,8 @@ function unresolvedCallMayRead(
   if (t.isArrowFunctionExpression(callee) || t.isFunctionExpression(callee)) return false;
   const global = standardGlobalCallee(call, callee);
   if (global !== undefined) return !calledBackIsKnown(call, globalCallbackArguments.get(global));
+  // A timer or a native Promise reaction runs nothing before it returns.
+  if (isSchedulingCall(call)) return false;
   if (t.isIdentifier(callee)) {
     if (isComponentName(callee.name) || resolveReferencedFunction(call, callee.name) !== undefined) return false;
     return importedNameMayRead(call, callee.name, context) ?? true;
@@ -4495,6 +4787,8 @@ function unresolvedCallMayRead(
   if (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) {
     const name = getStaticMemberChain(callee)?.keys.at(-1);
     if (name !== undefined && isComponentName(name)) return false;
+    // `count.peek()` reads the signal without tracking it, by definition.
+    if (name === "peek" && call.node.arguments.length === 0 && isLibrarySignal(call, callee.object)) return false;
     if (
       name !== undefined &&
       pureMethodNames.has(name) &&
@@ -4517,6 +4811,36 @@ function unresolvedCallMayRead(
   // Any other callee expression -- a conditional, a sequence, a call result --
   // selects its function at run time.
   return true;
+}
+
+const signalFactories: ReadonlySet<string> = new Set([
+  "signal",
+  "computed",
+  "deepSignal",
+  "deepCollectionSignal",
+  "useSignal",
+  "useComputed",
+  "useWritableComputed",
+  "useDeepSignal",
+  "useDeepCollectionSignal",
+]);
+
+/** Is `node` a never-reassigned name holding a signal one of this library's factories created? */
+function isLibrarySignal(path: NodePath, node: t.Node): boolean {
+  const expression = unwrapTransparent(node);
+  if (!t.isIdentifier(expression)) return false;
+  const binding = path.scope.getBinding(expression.name);
+  if (
+    binding === undefined ||
+    binding.constantViolations.length > 0 ||
+    !binding.path.isVariableDeclarator() ||
+    !t.isIdentifier(binding.path.node.id)
+  )
+    return false;
+  const init = binding.path.node.init;
+  if (init == null) return false;
+  const value = unwrapTransparent(init);
+  return t.isCallExpression(value) && isLibraryExport(binding.path, value.callee, signalFactories);
 }
 
 /** `new Object(x)` returns `x` itself, so only these constructors are known to build a fresh instance. */
@@ -4582,7 +4906,7 @@ function namedArgumentMayRead(
   if (callNameIsHook(call.node.callee)) return false;
   return (call.get("arguments") as NodePath[]).some((argument) => {
     const value = unwrapTransparentPath(argument);
-    if (!value.isIdentifier()) return false;
+    if (!value.isIdentifier() || isSchedulingCall(call, argument.node)) return false;
     const target = resolveReferencedFunction(value, value.node.name);
     return (
       target !== undefined &&
@@ -5333,10 +5657,103 @@ function captureTrackedReadExpressions(
   reactImportSource: string,
   trackedAliases: Set<object>,
   options: InternalTransformOptions,
+  // Run for the answer only (`wouldCaptureRenderRead`): nothing is changed and
+  // nothing is reported; `found` says whether a capture or a diagnostic would
+  // cover a read that selection counts.
+  dryRun?: { found: boolean },
 ): void {
   const generated = new WeakSet<t.Node>();
   const context: ReadContext = { importSource, managedRuntimeSource, reactImportSource };
+  /**
+   * Does the expression a capture (or a diagnostic) would cover hold a read
+   * that selection counts (`inspectFunction` over just that expression)? A
+   * capture taken as a precaution -- an unresolved call, a runtime key --
+   * covers no such read, which is what keeps it from selecting a function.
+   */
+  const inspectsRead = (path: NodePath): boolean =>
+    inspectFunction(functionPath, importSource, managedRuntimeSource, reactImportSource, undefined, false, path)
+      .readsValue;
+  // A capture of an alias (`obj.v` for `const obj = { get v() { ... } }`,
+  // `x.name` for `const x = state.value`) covers the read that made it one:
+  // the alias's own definition and assignments are judged the same way.
+  const aliasReads = new Map<object, boolean>();
+  const aliasCarriesRead = (binding: Binding): boolean => {
+    const known = aliasReads.get(binding);
+    if (known !== undefined) return known;
+    aliasReads.set(binding, false);
+    const sources: NodePath[] = [binding.path, ...binding.constantViolations];
+    const result = sources.some((source) => inspectsRead(source) || referencesReadingAlias(source));
+    aliasReads.set(binding, result);
+    return result;
+  };
+  const referencesReadingAlias = (path: NodePath): boolean => {
+    if (trackedAliases.size === 0) return false;
+    const reads = (identifier: NodePath<t.Identifier>): boolean => {
+      const binding = identifier.scope.getBinding(identifier.node.name);
+      return binding !== undefined && trackedAliases.has(binding) && aliasCarriesRead(binding);
+    };
+    if (path.isIdentifier()) return reads(path);
+    let found = false;
+    path.traverse({
+      Identifier(identifier) {
+        if (identifier.isReferencedIdentifier() && reads(identifier)) {
+          found = true;
+          identifier.stop();
+        }
+      },
+    });
+    return found;
+  };
+  // `const opts = { cb: () => count.value }; ext(opts)`: a local value handed
+  // to a captured call carries its functions into the capture, where the
+  // callee may run them, exactly as if they were written in place.
+  const localValueReads = new Map<object, boolean>();
+  const handsOverReadingValue = (path: NodePath): boolean => {
+    const reads = (identifier: NodePath<t.Identifier>): boolean => {
+      const parent = identifier.parentPath;
+      // A callee is followed by the folds already; an event handler never runs here.
+      if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.callee === identifier.node)
+        return false;
+      if (isJsxEventHandlerValue(identifier)) return false;
+      const binding = identifier.scope.getBinding(identifier.node.name);
+      if (binding === undefined || !binding.path.isVariableDeclarator()) return false;
+      if (binding.path.getFunctionParent()?.node !== functionPath.node) return false;
+      let known = localValueReads.get(binding);
+      if (known === undefined) {
+        localValueReads.set(binding, false);
+        const init = binding.path.get("init");
+        known = init.isExpression() && !init.isFunction() && inspectsRead(init);
+        localValueReads.set(binding, known);
+      }
+      return known;
+    };
+    if (path.isIdentifier()) return path.isReferencedIdentifier() && reads(path);
+    let found = false;
+    path.traverse({
+      Identifier(identifier) {
+        if (identifier.isReferencedIdentifier() && reads(identifier)) {
+          found = true;
+          identifier.stop();
+        }
+      },
+    });
+    return found;
+  };
+  const coversRenderRead = (path: NodePath): boolean =>
+    inspectsRead(path) || referencesReadingAlias(path) || handsOverReadingValue(path);
+  /** Called right before each capture is emitted: false in a dry run, which only records it. */
+  const emit = (path: NodePath): boolean => {
+    if (dryRun === undefined) return true;
+    if (coversRenderRead(path)) dryRun.found = true;
+    path.skip();
+    return false;
+  };
+  const warn = (id: DiagnosticId, path: NodePath, text: string): void => {
+    if (dryRun === undefined) reportWarning(options, id, path, text);
+    else if (coversRenderRead(path)) dryRun.found = true;
+  };
   const wrap = (path: NodePath<t.Expression>): void => {
+    if (!emit(path)) return;
     path.replaceWith(
       t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
         generatedCallback([], parenthesizeWrappedTarget(t.cloneNode(path.node, true))),
@@ -5363,7 +5780,7 @@ function captureTrackedReadExpressions(
         inspectFunction(target, importSource, managedRuntimeSource, reactImportSource, undefined, true).readsValue;
       hookCallingReader.set(target.node, reads);
     }
-    if (reads) reportWarning(options, "RFGS002", path, HOOK_CALLING_HELPER_WARNING);
+    if (reads) warn("RFGS002", path, HOOK_CALLING_HELPER_WARNING);
   };
   /**
    * Wraps a whole coercing operation (`a + b`, a template literal, ...) when
@@ -5440,7 +5857,7 @@ function captureTrackedReadExpressions(
       // Never move a Hook call into a capture closure. Reads in the arguments
       // are still captured one by one as the traversal continues; reads the
       // call performs internally cannot be, so say so.
-      if (readsInsideCall) reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
+      if (readsInsideCall) warn("RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
       return;
     }
     wrap(path as NodePath<t.Expression>);
@@ -5458,6 +5875,7 @@ function captureTrackedReadExpressions(
     }
     if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee))
       return false;
+    if (!emit(path)) return true;
     const result = path.scope.generateUidIdentifier("hookResult");
     const hookCall = t.cloneNode(base.node, true);
     base.replaceWith(t.cloneNode(result));
@@ -5494,6 +5912,15 @@ function captureTrackedReadExpressions(
     path: NodePath<t.Expression>,
     scope: NodePath["scope"],
   ): { result: t.Identifier; hookCall: t.Expression; read: t.Expression } | undefined => {
+    const base = hookBaseOf(path);
+    if (base === undefined) return undefined;
+    const result = scope.generateUidIdentifier("hookResult");
+    const hookCall = t.cloneNode(base.node, true);
+    base.replaceWith(t.cloneNode(result));
+    return { result, hookCall, read: t.cloneNode(path.node, true) };
+  };
+  /** The Hook call `splitHookBase` would split off, if the chain has one at its base only. */
+  const hookBaseOf = (path: NodePath): NodePath<t.CallExpression | t.OptionalCallExpression> | undefined => {
     let base: NodePath = path;
     while (base.isMemberExpression() || base.isOptionalMemberExpression() || isTransparentWrapper(base.node)) {
       if (
@@ -5506,10 +5933,7 @@ function captureTrackedReadExpressions(
     }
     if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee))
       return undefined;
-    const result = scope.generateUidIdentifier("hookResult");
-    const hookCall = t.cloneNode(base.node, true);
-    base.replaceWith(t.cloneNode(result));
-    return { result, hookCall, read: t.cloneNode(path.node, true) };
+    return base;
   };
   /**
    * `KIND { ...authored pattern } = INIT` evaluated inside one capture, with
@@ -5567,7 +5991,7 @@ function captureTrackedReadExpressions(
       wrap(path as NodePath<t.Expression>);
       return;
     }
-    if (!wrapAfterHookBase(path)) reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
+    if (!wrapAfterHookBase(path)) warn("RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
   };
   const visitor: Visitor = {
     Function(path) {
@@ -5617,6 +6041,11 @@ function captureTrackedReadExpressions(
           )
             return;
         }
+        if (expressionCallsHook(right) && hookBaseOf(right) === undefined) {
+          warn("RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
+          return;
+        }
+        if (!emit(right)) return;
         const iterate = (source: t.Expression): t.CallExpression =>
           t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("iterate")), [
             generatedCallback([], source),
@@ -5626,11 +6055,8 @@ function captureTrackedReadExpressions(
         if (expressionCallsHook(right)) {
           // `for (const item of useTodos().value.items)`: call the Hook in
           // place, then iterate what is read from its result.
-          const split = splitHookBase(right as NodePath<t.Expression>, path.scope);
-          if (split === undefined) {
-            reportWarning(options, "RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
-            return;
-          }
+          // `hookBaseOf` has already said the split succeeds.
+          const split = splitHookBase(right as NodePath<t.Expression>, path.scope)!;
           captured = t.callExpression(generatedCallback([split.result], iterate(split.read)), [split.hookCall]);
           hookSplit = true;
         } else {
@@ -5697,6 +6123,11 @@ function captureTrackedReadExpressions(
           isDeferredReadContext(path, functionPath)
         )
           return;
+        if (expressionCallsHook(right) && hookBaseOf(right) === undefined) {
+          warn("RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
+          return;
+        }
+        if (!emit(right)) return;
         const forIn = (source: t.Expression): t.CallExpression =>
           t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("forIn")), [
             generatedCallback([], source),
@@ -5704,11 +6135,8 @@ function captureTrackedReadExpressions(
         let captured: t.CallExpression;
         let hookSplit = false;
         if (expressionCallsHook(right)) {
-          const split = splitHookBase(right as NodePath<t.Expression>, path.scope);
-          if (split === undefined) {
-            reportWarning(options, "RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
-            return;
-          }
+          // `hookBaseOf` has already said the split succeeds.
+          const split = splitHookBase(right as NodePath<t.Expression>, path.scope)!;
           captured = t.callExpression(generatedCallback([split.result], forIn(split.read)), [split.hookCall]);
           hookSplit = true;
         } else {
@@ -5745,11 +6173,12 @@ function captureTrackedReadExpressions(
             // this common `useState(signal.value)` form does not lose tracking.
             return;
           }
-          reportWarning(options, "RFGS001", init, HOOK_IN_CAPTURED_READ_WARNING);
+          warn("RFGS001", init, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
         const declaration = path.parentPath;
         if (!declaration.isVariableDeclaration()) return;
+        if (!emit(path)) return;
         const replacement = capturedDestructuring(declaration.node.kind, id.node, init.node);
         path.replaceWith(replacement.declarations[0]!);
         path.skip();
@@ -5803,7 +6232,7 @@ function captureTrackedReadExpressions(
         if (destructuring && !hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
         if (isDeferredReadContext(path, functionPath)) return;
         if (expressionCallsHook(path)) {
-          reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
+          warn("RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
         wrap(path as NodePath<t.Expression>);
@@ -5833,9 +6262,10 @@ function captureTrackedReadExpressions(
         )
           return;
         if (expressionCallsHook(argument)) {
-          reportWarning(options, "RFGS001", argument, HOOK_IN_CAPTURED_READ_WARNING);
+          warn("RFGS001", argument, HOOK_IN_CAPTURED_READ_WARNING);
           return;
         }
+        if (!emit(argument)) return;
         const copied = t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
           generatedCallback([], t.objectExpression([t.spreadElement(t.cloneNode(argument.node, true))])),
         ]);
@@ -5917,7 +6347,7 @@ function captureTrackedReadExpressions(
         if (expressionCallsHook(path)) {
           // The tag keeps its `this` only when the whole tagged template is
           // captured, which a Hook in the template forbids.
-          reportWarning(options, "RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
+          warn("RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
           return;
         }
         wrap(path as NodePath<t.Expression>);
@@ -5926,7 +6356,30 @@ function captureTrackedReadExpressions(
     MemberExpression: { enter: visitMember },
     OptionalMemberExpression: { enter: visitMember },
   };
-  functionPath.get("body").traverse(visitor);
+  if (dryRun === undefined) {
+    functionPath.get("body").traverse(visitor);
+    return;
+  }
+  // A dry run stops at the first answer, and sees the function as authored:
+  // a concise arrow body is not yet the `return` the real pass wraps it in,
+  // so the body itself is visited first (`traverse` skips its root).
+  const guarded: Visitor = {};
+  for (const [type, handler] of Object.entries(visitor)) {
+    const enter = (typeof handler === "function" ? handler : (handler as { enter: unknown }).enter) as (
+      path: NodePath,
+    ) => void;
+    (guarded as Record<string, unknown>)[type] = (path: NodePath): void => {
+      if (dryRun.found) path.stop();
+      else enter(path);
+    };
+  }
+  const body = functionPath.get("body") as NodePath;
+  if (!body.isBlockStatement()) {
+    const handler = (guarded as Record<string, ((path: NodePath) => void) | undefined>)[body.type];
+    handler?.(body);
+    if (dryRun.found || body.shouldSkip) return;
+  }
+  body.traverse(guarded);
 }
 
 /**
@@ -6003,6 +6456,52 @@ function expandTrackedObjectDestructuring(functionPath: NodePath<t.Function>, tr
     );
   }
   return expansions.size > 0;
+}
+
+/**
+ * Does `path` make a read that `mode: "auto"` selects it for? Asked of the
+ * managed capture pass itself, run dry (`captureTrackedReadExpressions`), so
+ * selection and capture cannot disagree about what a render read is: a
+ * function is selected exactly when the pass would capture, iterate, or move
+ * behind its Hook (a parameter default) at least one read that
+ * `inspectFunction` counts, or would report one it cannot capture (RFGS001,
+ * RFGS002, RFGS004). Inject mode asks the same question, so both transforms
+ * select the same functions.
+ *
+ * Both halves are needed. The capture pass alone also wraps calls as a
+ * precaution (an unresolved callee, a runtime-key member), which the README
+ * says must not select a function by themselves; `inspectFunction` alone also
+ * counts reads no capture covers (a local function that is never called, a
+ * handler stored in a variable, a generator's body), which used to transform
+ * a component with nothing to capture.
+ */
+function wouldCaptureRenderRead(path: NodePath<t.Function>, options: InternalTransformOptions): boolean {
+  const context = readContextOf(options);
+  const coversRenderRead = (subtree: NodePath): boolean =>
+    inspectFunction(
+      path,
+      context.importSource,
+      context.managedRuntimeSource,
+      context.reactImportSource,
+      undefined,
+      false,
+      subtree,
+    ).readsValue;
+  // The parameters `relocateTrackedParameters` moves (or RFGS004 reports).
+  if (path.get("params").some((param) => parameterMayReadTrackedValue(param, path, context) && coversRenderRead(param)))
+    return true;
+  const dryRun = { found: false };
+  captureTrackedReadExpressions(
+    path,
+    t.identifier("_signals"),
+    context.importSource,
+    context.managedRuntimeSource,
+    context.reactImportSource,
+    collectTrackedReadAliases(path, context),
+    options,
+    dryRun,
+  );
+  return dryRun.found;
 }
 
 /** Codegen: add a top-level capture hook and wrap proven synchronous reads. */
@@ -6113,6 +6612,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
       Program: {
         enter(path, state) {
           state.programPath = path;
+          fileImportSources.set(path.node, options.importSource);
           state.managedRuntimeImports = findRuntimeImports(path, managedRuntimeSource, "useSignalCapture");
           state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
           state.typeScript = state.file.opts.parserOpts?.plugins?.includes("typescript") === true;
