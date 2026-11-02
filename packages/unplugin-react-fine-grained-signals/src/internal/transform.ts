@@ -5827,11 +5827,13 @@ function optionalChainCalls(top: NodePath): NodePath<t.OptionalCallExpression>[]
 
 /**
  * The capture pass skips an instance field's initializer, which runs when the
- * class is instantiated, like a method body; a static one runs when the class
- * is evaluated.
+ * class is instantiated, like a method body. Its computed key and decorators
+ * run when the class is evaluated, and so does all of a static field.
  */
-function skipInstanceField(path: NodePath<t.ClassProperty | t.ClassPrivateProperty | t.ClassAccessorProperty>): void {
-  if (!path.node.static) path.skip();
+function skipInstanceFieldValue(
+  path: NodePath<t.ClassProperty | t.ClassPrivateProperty | t.ClassAccessorProperty>,
+): void {
+  if (!path.node.static) path.skipKey("value");
 }
 
 function captureTrackedReadExpressions(
@@ -6229,11 +6231,12 @@ function captureTrackedReadExpressions(
     },
     // An instance field's initializer runs when the class is instantiated,
     // like a method body, so it is skipped the same way; `new Model()` is a
-    // call site like any other. A static field or block runs when the class
-    // is evaluated, which for a class declared here is this render.
-    ClassProperty: skipInstanceField,
-    ClassPrivateProperty: skipInstanceField,
-    ClassAccessorProperty: skipInstanceField,
+    // call site like any other. Its key and decorators, and a static field or
+    // block, run when the class is evaluated: for a class declared here, this
+    // render.
+    ClassProperty: skipInstanceFieldValue,
+    ClassPrivateProperty: skipInstanceFieldValue,
+    ClassAccessorProperty: skipInstanceFieldValue,
     CallExpression: { enter: visitCall },
     OptionalCallExpression: { enter: visitCall },
     NewExpression: {

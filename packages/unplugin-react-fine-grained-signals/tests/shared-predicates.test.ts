@@ -694,6 +694,26 @@ describe("class fields", () => {
     expect(code).toContain("_signals.capture(() => new Model())");
   });
 
+  // Only the initializer waits for `new`. A computed key and a decorator's
+  // arguments run when the class is evaluated, which here is the render.
+  it.each([
+    ["a computed key", "[s.value] = 1;", "[_signals.capture(() => s.value)] = 1;"],
+    ["a computed key of an accessor", "accessor [s.value] = 1;", "accessor [_signals.capture(() => s.value)] = 1;"],
+    ["a decorator argument", "@dec(s.value) x = 1;", "@_signals.capture(() => dec(s.value))"],
+  ])("selects the component and captures %s of an instance field", (_kind, member, output) => {
+    const { code } = run(
+      `import { dec } from "./x";\n${header}export function A() { class Model { ${member} } void Model; return <p>x</p>; }`,
+    );
+    expect(code).toContain(output);
+  });
+
+  it("leaves the initializer next to a captured key alone", () => {
+    const { code } = run(
+      `${header}export function A() { class Model { [s.value] = s.value; } void Model; return <p>x</p>; }`,
+    );
+    expect(code).toContain("[_signals.capture(() => s.value)] = s.value;");
+  });
+
   it.each([
     ["a static field", "static snapshot = s.value;", "static snapshot = _signals.capture(() => s.value);"],
     ["a static block", "static { log(s.value); }", "_signals.capture(() => log(s.value));"],

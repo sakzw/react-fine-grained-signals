@@ -812,6 +812,11 @@ export const cases: readonly Case[] = [
     },
   },
   {
+    name: "a computed key of an instance field",
+    body: "class Model { [s.value] = 1; } const x = Object.keys(new Model())[0];",
+    jsx: "{x}",
+  },
+  {
     name: "a static field of a class declared in render",
     body: "class Model { static snapshot = s.value; } const x = Model.snapshot;",
     jsx: "{x}",
