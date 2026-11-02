@@ -5653,6 +5653,12 @@ const HOOK_IN_CAPTURED_READ_WARNING =
   "A Hook call is nested inside this signal read expression. " +
   "The managed transform keeps Hooks out of capture closures, so this read is not tracked. " +
   "Call the Hook in its own statement and read the signal from its result.";
+const HOOK_IN_CAPTURED_OPERATION_WARNING =
+  "A Hook call shares this operation with a signal read. " +
+  "The managed transform keeps Hooks out of capture closures, so the reads the operation performs " +
+  "after its operands are evaluated (copying a spread, an `in` check, a conversion to a primitive, " +
+  "an update or delete) are not tracked; reads in the operands themselves still are. " +
+  "Call the Hook in its own statement and use its result here.";
 
 /**
  * Is `path` a link below the outermost expression of an optional chain? In
@@ -5811,6 +5817,17 @@ function captureTrackedReadExpressions(
     path.skip();
   };
   /**
+   * The one place a capture is given up because of a Hook: a Hook call is
+   * never moved into a capture closure, and the read the capture would have
+   * covered is reported (RFGS001) rather than dropped in silence. Returns
+   * whether `path` calls a Hook; `at` is where the report points.
+   */
+  const giveUpForHook = (path: NodePath, text: string, at: NodePath = path): boolean => {
+    if (!expressionCallsHook(path)) return false;
+    warn("RFGS001", at, text);
+    return true;
+  };
+  /**
    * `{Title()}` where `Title` calls a Hook and reads signals: its body runs in
    * this render but cannot be captured without moving the Hook into a closure.
    */
@@ -5841,7 +5858,7 @@ function captureTrackedReadExpressions(
     if (
       !operands.some((operand) => hasTrackedReadInExpression(operand, functionPath, trackedAliases)) ||
       isDeferredReadContext(path, functionPath) ||
-      expressionCallsHook(path)
+      giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
     )
       return;
     wrap(path);
@@ -5919,13 +5936,12 @@ function captureTrackedReadExpressions(
       reasons.push(reason);
     }
     if (reasons.every((reason) => reason === undefined)) return false;
-    if (expressionCallsHook(top)) {
-      // Never move a Hook call into a capture closure. Reads in the arguments
-      // are still captured one by one as the traversal continues; reads the
-      // call performs internally cannot be, so say so.
-      if (reasons.includes("reads")) warn("RFGS001", top, HOOK_IN_CAPTURED_CALL_WARNING);
+    // Never move a Hook call into a capture closure. Reads in the arguments
+    // are still captured one by one as the traversal continues; reads the
+    // call performs internally cannot be, so say so. A precaution or a read
+    // in an argument loses nothing, so it is given up without a report.
+    if (reasons.includes("reads") ? giveUpForHook(top, HOOK_IN_CAPTURED_CALL_WARNING) : expressionCallsHook(top))
       return true;
-    }
     wrap(top);
     return true;
   };
@@ -6077,7 +6093,7 @@ function captureTrackedReadExpressions(
       wrap(path as NodePath<t.Expression>);
       return;
     }
-    if (!wrapAfterHookBase(path)) warn("RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
+    if (!wrapAfterHookBase(path)) giveUpForHook(path, HOOK_IN_CAPTURED_READ_WARNING);
   };
   const visitor: Visitor = {
     Function(path) {
@@ -6097,8 +6113,8 @@ function captureTrackedReadExpressions(
             callReadsTrackedValue(path, functionPath, trackedAliases, context) ||
             namedArgumentMayRead(path, context, trackedAliases) ||
             constructorMayRead(path)) &&
-          !expressionCallsHook(path) &&
-          !isDeferredReadContext(path, functionPath)
+          !isDeferredReadContext(path, functionPath) &&
+          !giveUpForHook(path, HOOK_IN_CAPTURED_CALL_WARNING)
         ) {
           wrap(path as NodePath<t.Expression>);
         }
@@ -6122,15 +6138,11 @@ function captureTrackedReadExpressions(
           if (
             !(source.isCallExpression() || source.isOptionalCallExpression()) ||
             callNameIsHook(source.node.callee) ||
-            expressionCallsHook(source) ||
             !iteratedCallMayRead(source)
           )
             return;
         }
-        if (expressionCallsHook(right) && hookBaseOf(right) === undefined) {
-          warn("RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
-          return;
-        }
+        if (hookBaseOf(right) === undefined && giveUpForHook(right, HOOK_IN_CAPTURED_READ_WARNING)) return;
         if (!emit(right)) return;
         const iterate = (source: t.Expression): t.CallExpression =>
           t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("iterate")), [
@@ -6209,10 +6221,7 @@ function captureTrackedReadExpressions(
           isDeferredReadContext(path, functionPath)
         )
           return;
-        if (expressionCallsHook(right) && hookBaseOf(right) === undefined) {
-          warn("RFGS001", right, HOOK_IN_CAPTURED_READ_WARNING);
-          return;
-        }
+        if (hookBaseOf(right) === undefined && giveUpForHook(right, HOOK_IN_CAPTURED_READ_WARNING)) return;
         if (!emit(right)) return;
         const forIn = (source: t.Expression): t.CallExpression =>
           t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("forIn")), [
@@ -6262,7 +6271,7 @@ function captureTrackedReadExpressions(
             // this common `useState(signal.value)` form does not lose tracking.
             return;
           }
-          warn("RFGS001", expressionCallsHook(init) ? init : path, HOOK_IN_CAPTURED_READ_WARNING);
+          giveUpForHook(path, HOOK_IN_CAPTURED_READ_WARNING, expressionCallsHook(init) ? init : path);
           return;
         }
         const declaration = path.parentPath;
@@ -6286,10 +6295,9 @@ function captureTrackedReadExpressions(
           COERCING_COMPOUND_ASSIGNMENTS.has(path.node.operator) &&
           (target.isIdentifier() || target.isMemberExpression()) &&
           hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases) &&
-          !isDeferredReadContext(path, functionPath) &&
-          !expressionCallsHook(path)
+          !isDeferredReadContext(path, functionPath)
         ) {
-          wrap(path as NodePath<t.Expression>);
+          if (!giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)) wrap(path as NodePath<t.Expression>);
           return;
         }
         const destructuring = path.node.operator === "=" && (left.isObjectPattern() || left.isArrayPattern());
@@ -6320,10 +6328,7 @@ function captureTrackedReadExpressions(
         if (!destructuring && !readingWrite) return;
         if (destructuring && !hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases)) return;
         if (isDeferredReadContext(path, functionPath)) return;
-        if (expressionCallsHook(path)) {
-          warn("RFGS001", path, HOOK_IN_CAPTURED_READ_WARNING);
-          return;
-        }
+        if (giveUpForHook(path, HOOK_IN_CAPTURED_READ_WARNING)) return;
         wrap(path as NodePath<t.Expression>);
       },
     },
@@ -6335,7 +6340,7 @@ function captureTrackedReadExpressions(
         if (
           hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
           !isDeferredReadContext(path, functionPath) &&
-          !expressionCallsHook(path)
+          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
         )
           wrap(path as NodePath<t.Expression>);
       },
@@ -6350,10 +6355,7 @@ function captureTrackedReadExpressions(
           isDeferredReadContext(path, functionPath)
         )
           return;
-        if (expressionCallsHook(argument)) {
-          warn("RFGS001", argument, HOOK_IN_CAPTURED_READ_WARNING);
-          return;
-        }
+        if (giveUpForHook(argument, HOOK_IN_CAPTURED_READ_WARNING)) return;
         if (!emit(argument)) return;
         const copied = t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
           generatedCallback([], t.objectExpression([t.spreadElement(t.cloneNode(argument.node, true))])),
@@ -6370,7 +6372,7 @@ function captureTrackedReadExpressions(
         if (
           path.node.operator === "in" &&
           hasTrackedReadInExpression(path.get("right"), functionPath, trackedAliases) &&
-          !expressionCallsHook(path)
+          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
         ) {
           wrap(path as NodePath<t.Expression>);
           return;
@@ -6393,7 +6395,7 @@ function captureTrackedReadExpressions(
           if (
             hasTrackedReadInExpression(path.get("argument"), functionPath, trackedAliases) &&
             !isDeferredReadContext(path, functionPath) &&
-            !expressionCallsHook(path)
+            !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
           )
             wrap(path as NodePath<t.Expression>);
         } else if (path.node.operator === "+" || path.node.operator === "-" || path.node.operator === "~") {
@@ -6413,14 +6415,20 @@ function captureTrackedReadExpressions(
     },
     ObjectExpression: {
       enter(path) {
-        if (spreadsTrackedValue(path, functionPath, trackedAliases) && !expressionCallsHook(path)) {
+        if (
+          spreadsTrackedValue(path, functionPath, trackedAliases) &&
+          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+        ) {
           wrap(path as NodePath<t.Expression>);
         }
       },
     },
     ArrayExpression: {
       enter(path) {
-        if (spreadsTrackedValue(path, functionPath, trackedAliases) && !expressionCallsHook(path)) {
+        if (
+          spreadsTrackedValue(path, functionPath, trackedAliases) &&
+          !giveUpForHook(path, HOOK_IN_CAPTURED_OPERATION_WARNING)
+        ) {
           wrap(path as NodePath<t.Expression>);
         }
       },
@@ -6433,12 +6441,9 @@ function captureTrackedReadExpressions(
           isDeferredReadContext(path, functionPath)
         )
           return;
-        if (expressionCallsHook(path)) {
-          // The tag keeps its `this` only when the whole tagged template is
-          // captured, which a Hook in the template forbids.
-          warn("RFGS001", path, HOOK_IN_CAPTURED_CALL_WARNING);
-          return;
-        }
+        // The tag keeps its `this` only when the whole tagged template is
+        // captured, which a Hook in the template forbids.
+        if (giveUpForHook(path, HOOK_IN_CAPTURED_CALL_WARNING)) return;
         wrap(path as NodePath<t.Expression>);
       },
     },

@@ -501,3 +501,28 @@ describe("Hook names", () => {
     expect(code).toContain(`_signals.capture(() => ${name}())`);
   });
 });
+
+describe("captures given up for a Hook", () => {
+  // README.md, "Hook calls in a read expression": "Other Hook-containing read
+  // expressions are left uncaptured with a warning". Every path that gives a
+  // capture up for a Hook reports RFGS001 through one helper.
+  const prelude = `import { useX } from "./x";\n${header}const st = signal({ a: 1 });\nconst list = signal([1]);\nclass Reader { v: number; constructor(_: unknown) { this.v = s.value; } }\n`;
+  it.each([
+    ["a constructor call", "const r = new Reader(useX()).v;"],
+    ["an object spread", "const r = { ...st.value, h: useX() };"],
+    ["an array spread", "const r = [...list.value, useX()];"],
+    ["an in check", "const r = useX() in st.value;"],
+    ["a binary coercion", "const r = s.value + useX();"],
+    ["a template literal", "const r = `${s.value}${useX()}`;"],
+    ["a compound assignment", "let r = ''; r += st.value.a + useX();"],
+    ["an update", "let r = 0; st.value[useX()]++;"],
+  ])("reports %s", (_kind, statement) => {
+    // `{s.value}` selects the component on its own: a constructor call is a
+    // precaution, which does not (README.md, "auto" selection).
+    const { code, diagnostics } = run(
+      `${prelude}export function A() { ${statement} return <p>{String(r)}{s.value}</p>; }`,
+    );
+    expect(code).not.toMatch(/capture\(\(\) => [^)]*useX\(\)/);
+    expect(diagnostics).toContain("RFGS001");
+  });
+});
