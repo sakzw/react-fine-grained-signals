@@ -5960,28 +5960,22 @@ function captureTrackedReadExpressions(
   /**
    * `useStore().value.name`: evaluate the Hook in place, as authored, and
    * capture only the reads that follow it. Returns false when a Hook appears
-   * anywhere other than the chain's base call.
+   * anywhere other than the chain's base call (`hookBaseOf`, which also sees
+   * through `(useStore() as T)` and `useStore()!`, as the loop paths do).
    */
   const wrapAfterHookBase = (path: NodePath<t.MemberExpression | t.OptionalMemberExpression>): boolean => {
-    let base: NodePath = path;
-    while (base.isMemberExpression() || base.isOptionalMemberExpression()) {
-      if (base.node.computed && expressionCallsHook(base.get("property") as NodePath)) return false;
-      base = base.get("object") as NodePath;
-    }
-    if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee))
-      return false;
+    if (hookBaseOf(path) === undefined) return false;
     if (!emit(path)) return true;
-    const result = path.scope.generateUidIdentifier("hookResult");
-    const hookCall = t.cloneNode(base.node, true);
-    base.replaceWith(t.cloneNode(result));
+    // `hookBaseOf` has already said the split succeeds.
+    const split = splitHookBase(path as NodePath<t.Expression>, path.scope)!;
     const read = t.callExpression(
       generatedCallback(
-        [t.cloneNode(result)],
+        [split.result],
         t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
-          generatedCallback([], t.cloneNode(path.node, true)),
+          generatedCallback([], split.read),
         ]),
       ),
-      [hookCall],
+      [split.hookCall],
     );
     generated.add(read);
     path.replaceWith(read);

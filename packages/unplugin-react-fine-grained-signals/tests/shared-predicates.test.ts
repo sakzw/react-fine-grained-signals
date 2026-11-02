@@ -526,3 +526,22 @@ describe("captures given up for a Hook", () => {
     expect(diagnostics).toContain("RFGS001");
   });
 });
+
+describe("a read on a Hook's result", () => {
+  // `hookBaseOf`/`splitHookBase`: the member read and the `for...of` paths
+  // find the Hook at the chain's base the same way, through TypeScript
+  // wrappers.
+  it.each([
+    ["a bare", "useStore().value.name", "_hookResult.value.name"],
+    ["an as-wrapped", "(useStore() as any).value.name", "(_hookResult as any).value.name"],
+    ["a non-null", "useStore()!.value.name", "_hookResult!.value.name"],
+  ])("calls %s Hook in place and captures the read after it", (_kind, read, captured) => {
+    const { code, diagnostics } = run(
+      `import { useStore } from "./x";\n${header}export function A() { const n = ${read}; return <p>{n}</p>; }`,
+    );
+    expect(code).toContain(`_signals.capture(() => ${captured})`);
+    expect(code).toMatch(/\)\(useStore\(\)\)/);
+    expect(diagnostics).not.toContain("RFGS001");
+    reparse(code!, "A.tsx");
+  });
+});
