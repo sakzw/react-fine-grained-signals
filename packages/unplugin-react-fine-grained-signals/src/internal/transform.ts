@@ -3262,7 +3262,9 @@ function warnServerDirectiveComponent(path: NodePath<t.Function>, options: Inter
 
 function shouldAutomaticallyTransform(
   mode: ReactFineGrainedSignalsMode,
-  inspection: FunctionInspection,
+  // The function's inspection, computed on first use: most functions have
+  // neither identity and never need it.
+  inspect: () => FunctionInspection,
   // The identity `decideTransform` already resolved for this same function,
   // rather than a path this would have to re-resolve (and re-climb) itself.
   identity: ComponentIdentity | undefined,
@@ -3273,7 +3275,7 @@ function shouldAutomaticallyTransform(
   if (isHookIdentity(identity)) {
     return mode !== "manual" && readsValue();
   }
-  if (!isComponentIdentity(identity) || !inspection.containsJSX) {
+  if (!isComponentIdentity(identity) || !inspect().containsJSX) {
     return false;
   }
   return mode === "all" || (mode === "auto" && readsValue());
@@ -3388,11 +3390,17 @@ function decideTransform(
     warnUnverifiableBarrelSignalTracking(path, options.importSource, options);
   }
   const managedRuntimeSource = managedRuntimeSourceOf(options.importSource);
-  const inspection = inspectFunction(path, options.importSource, managedRuntimeSource, reactImportSource);
+  // Read only for a component or Hook, or a function a route has already
+  // selected; a callback or handler (most functions in a module) never needs
+  // it. `inspectFunction` is pure apart from its memos, so asking later or not
+  // at all changes no answer.
+  let inspection: FunctionInspection | undefined;
+  const inspect = (): FunctionInspection =>
+    (inspection ??= inspectFunction(path, options.importSource, managedRuntimeSource, reactImportSource));
   // A read anywhere in the function is necessary for selection, not
   // sufficient: the capture pass has to cover it (`wouldCaptureRenderRead`).
   let selectedReads: boolean | undefined;
-  const readsValue = (): boolean => (selectedReads ??= inspection.readsValue && wouldCaptureRenderRead(path, options));
+  const readsValue = (): boolean => (selectedReads ??= inspect().readsValue && wouldCaptureRenderRead(path, options));
   inspectKnownRenderPropReads(path, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
@@ -3471,7 +3479,7 @@ function decideTransform(
     !explicit &&
     !annotated &&
     !isFactory &&
-    shouldAutomaticallyTransform(options.mode, inspection, identity, readsValue) &&
+    shouldAutomaticallyTransform(options.mode, inspect, identity, readsValue) &&
     isComponentIdentity(identity) &&
     isPlainCalledComponent(path) &&
     isAlsoMountedThroughJsx(path)
@@ -3479,9 +3487,9 @@ function decideTransform(
     warnPlainCalledComponentAlsoMounted(path, identity?.name ?? "component", options);
   }
   const automatic =
-    !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspection, identity, readsValue);
+    !isFactory && candidate && shouldAutomaticallyTransform(options.mode, inspect, identity, readsValue);
   if (!explicit && !annotated && !automatic) return { kind: "skip" };
-  if (!explicit && (inspection.hasSignalTrackingCall || inspection.hasUseManagedSignalsCall)) {
+  if (!explicit && (inspect().hasSignalTrackingCall || inspect().hasUseManagedSignalsCall)) {
     return { kind: "skip" };
   }
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
