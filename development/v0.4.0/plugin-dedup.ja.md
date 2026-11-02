@@ -291,3 +291,47 @@ RFGS003の変化。wrapperで包んだrender prop・children callbackも警告�
 - `tests/transform.test.ts`「keeps a function returned by a component or a hook off its own boundary」: 返した関数にboundaryを付けないことは変わらない。持ち主も、返した関数の読み取りをどのcaptureも含まないため選択しない。`useSignalCapture`が2つ入ることを確かめていたのを、入らないことを確かめる形に変えた。
 - `tests/react-execution.test.ts`「does not move Hook calls into a capture closure」: Hookを呼ぶcallbackは（その呼び出しも）captureしないため、`[count].map((item) => item.value + useContext(Ctx))`だけを読むcomponentは選択しない。この形だけ`selected: false`を期待する。Hookをcaptureの中へ動かさないことの確認は変わらない。
 - READMEの「Managed tracking contract」の後に、選択の規則とこの既知の制限を書いた（en/ja）。
+
+## 実行による差分テスト
+
+上の一貫性テストは、pluginの判定どうしを比べる（静的）。`tests/runtime-differential.test.ts`は、同じ読み取りの形をReactで実際に動かし、pluginの出力をruntime自身の追跡と比べる。
+
+### 設計
+
+- corpusは`tests/read-shapes.ts`に移し、両方のテストが同じ一覧を使う。preludeの`log`と`List`は宣言だけだったので、実行できる実装にした（`log`は何もしない、`List`は`render()`を自分のrender中に呼ぶ）。`./ext`の`ext`・`extStore`は、渡された関数を呼ぶ実装をテストが与える。変更後も一貫性テストの結果は変わらない。
+- oracle: 変換しないmoduleで、対象の関数の先頭文に手書きの`useSignalTracking()`を入れたもの。runtimeは、そのrenderの間に同期的に起きたsignalの読み取りをすべて追跡する。
+- candidate: 同じmoduleを`auto`で変換したもの。`transform: "managed"`と`"inject"`のそれぞれについて、読み取りがそれだけの場合と、無関係な読み取り（`<i>{o.value}</i>`、Hookでは`return o.value`）を足した場合を作る。
+- 実行は`tests/react-execution.test.ts`のharness（変換、OxcによるJSXの変換、in-memoryのlink）を`tests/execution-harness.ts`に切り出して使う。namespace importとdefault exportを扱えるようにした。render回数の計測と書き込みの関数は、変換の後でmarker文（`const __subject = 0;`）の直後とmoduleの末尾に足す。変換が見るsourceは一貫性テストと同じである。
+- 各ケースで、mountし、対象のsignalに書き込み（既定は`s.value = 5`、`st`・`list`・`props`を読むケースはそのsignal）、`act`でflushする。candidateはoracleが再renderするときに限って再renderし、書き込みの後の表示はoracleと同じでなければならない。誰も読まないsignal（`u`）への書き込みでは、どれも再renderしない。custom Hookの変種は、Hookを呼んで戻り値を表示するcomponentで同じことをする。
+- oracleとの食い違いは、ケースごとに`run.exception`（文書化された設計。READMEか設計文書の行を引く）か`run.knownLimitation`として書く。`exception`はoracleと実際に食い違っていなければならず、食い違わなくなったら失敗する。`stale: true`は、そのcandidateが書き込みの前の表示のままになることを示す。
+- 対照として、変換しない（boundaryのない）componentが再renderしないことをharnessが見分けることも確かめる。
+
+### 結果
+
+corpusは107件（`useComputed`の値をrender中に読むケースを1件足した）で、component 104件、custom Hook 84件を実行した。食い違ったのは17件で、oracleを直したもの2件、`exception` 15件（うち1件はoracle側の限界）、`knownLimitation` 1件（`exception`と同じケース）である。pluginの不具合は見つからなかった。
+
+実行しないケース（3件、custom Hookの変種も同じ）:
+
+- `use()`: render中に作ったpromiseを`use`に渡すと、毎回suspendしてcommitしない。
+- async component: client rootはasync componentをrenderできない（README.md:537-541）。
+- `useComputed`のgetter（`{c}`）: signalのobjectをchildとしてrenderするとReactが拒否する。`useComputed`は遅延評価なので、getterの最初の評価は新しいケース「a useComputed value read in render」が扱う。
+
+oracle側の限界:
+
+- parameter default（`{ label = s.value }`、`{ label = readS() }`）: defaultは本体より前に評価されるので、手書きの先頭文の`useSignalTracking()`はその読み取りを追跡しない（README.md:544-546）。pluginはdefaultをboundaryの内側へ移すので、candidateのほうが正しい。oracleは`run.oracle`で、本体の分割代入（`const { label = s.value } = props;`）に書き換えた。
+- 入れ子のcomponent（`function Inner() { ... }`を`<Inner />`）: oracleのbareなcollectorは`Inner`のrender中もまだ開いているので、`Inner`の読み取りを`C`のものとして記録する（use-signals-boundary-design.md:15）。candidateでは`Inner`が自分で購読し、表示も更新される。`exception`として書いた（4つのcandidateとも`C`は再renderしない）。
+
+文書化された設計による食い違い（`exception`）:
+
+- Hookのcallback（`useMemo`、`useState`の初期化、`useReducer`の初期化）: README.md:379-384（Hookへ渡した関数は「runs outside the render, so its reads are not collected」）。managedは購読しない。injectは、選択されれば手書きの呼び出しと同じambientなboundaryなので、oracleと同じく購読する（無関係な読み取りがあるときだけ）。
+- async関数の同期部分（async IIFE、呼ばれるasync関数、moduleの配列へのasync forEach callbackの単独の場合）: README.md:243（「its reads never become render dependencies, even the ones before its first `await`」）。
+- 予防的なcaptureは選択しない（class method、static method、helperが返す関数、`bind`した関数、localのclassの`new`）: README.md:255。読み取りがそれだけのcomponentは選択されず、表示が古いまま残る（`stale`）。無関係な読み取りがあればcaptureされ、oracleと一致する。
+- classのgetter（`box.v`）: README.md:243（「a getter or setter」は追跡しない）。managedでは表示が古いまま残る。
+- signalの分割代入（`const { value } = s`）: README.md:242。表示が古いまま残る。
+- 他のcomponentのrender prop（`<List render={() => s.value} />`）: README.md:249（「Capture is not guaranteed」、RFGS003）。oracleのbareなcollectorが`List`のrender中に開いているため、oracleは購読する。managedでは表示が古いまま残る。
+
+既知の制限（`knownLimitation`）: moduleの配列へのasync forEach callbackは、無関係な読み取りがあるとmanagedでも購読する（README.md:257）。一貫性テストの`knownLimitation`と同じものを、実行で確かめた形である。
+
+### 未決の点
+
+- README.md:379-384は、Hookへ渡した関数が「runs outside the render」と書く。`useEffect`・`useCallback`では正しいが、`useMemo`・`useState`の初期化・`useReducer`の初期化は実際にはrender中に走り、bareな`useSignalTracking()`（とinject）は追跡する。追跡しないという設計は変えないが、文の正確さ、およびmanagedとinjectがここで違う動きをすること（injectは無関係な読み取りがあるときだけ購読する）を書くかどうかは判断が要る。
