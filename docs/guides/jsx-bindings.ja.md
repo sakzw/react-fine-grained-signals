@@ -36,7 +36,7 @@
 
 `bindValue`、`bindChecked`、Signal値のhost propsが必要な場合は、既定の `react-fine-grained-signals/jsx` を使ってください。LiteはこれらをTypeScriptで拒否し、JavaScriptやspread経由で渡された場合もruntimeで診断します。runtimeでは、Full runtimeがbindingするSignal propをLiteは拒否し、Fullがそのまま渡すもの（後述のカスタム要素）はLiteもそのまま渡します。そのため、fileをruntime間で移しても、要素が受け取る値が黙って変わることはありません。選択はproject単位またはfile単位のopt-inで、既定runtimeとその動作は変わりません。
 
-Liteの転送量削減は、同じ初回読み込みchunkにFull Runtimeが含まれない場合に限られます。リポジトリの`pnpm size`では、Signalの子を持つFull JSX Runtimeがgzip 11.10 kB、同等のLiteが5.41 kBで、Liteが約5.7 kB小さい結果でした。FullとLiteを同期importするとFullも読み込まれるため削減効果はなくなり、Fullを遅延importすれば初回requestからFull実装を外せます。これらは測定fixture固有の値で、パッケージ全体に共通する保証値ではありません。
+Liteの転送量削減は、同じ初回読み込みchunkにFull Runtimeが含まれない場合に限られます。リポジトリの`pnpm size`では、Signalの子を持つFull JSX Runtimeがgzip 11.11 kB、同等のLiteが5.43 kBで、Liteが約5.7 kB小さい結果でした。FullとLiteを同期importするとFullも読み込まれるため削減効果はなくなり、Fullを遅延importすれば初回requestからFull実装を外せます。これらは測定fixture固有の値で、パッケージ全体に共通する保証値ではありません。
 
 Viteはこの2つを `tsconfig.json` から読むため、`vite.config.ts` 側にJSXの設定は不要です。既定の変換でも `@vitejs/plugin-react` を使う場合でも同じで、[`tests/fixtures/consumer-vite`](../../tests/fixtures/consumer-vite)はこれに依存しています。
 

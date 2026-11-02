@@ -172,3 +172,9 @@ RFGS003の変化。wrapperで包んだrender prop・children callbackも警告�
 - README（en/ja）のRFGS003: 診断表と「JSX render prop / `children` callback」の行に、control-flow componentの例外（`Show`/`For`/`Index`の`children`、`For`の`by`、`Switch`が集める`Match`の`children`）を書いた。`src/internal/diagnostics.ts`の説明にも同じことを書いた。
 - `tests/diagnostics.test.ts`: 両READMEに出てくる`RFGS\d{3}`の集合と診断表の行が、`DIAGNOSTIC_IDS`と一致することを確かめる。
 - adapterのentry一覧: `tests/build-smoke.mjs`、ルートの`tests/consumer-smoke.mjs`、`tsdown.config.ts`の3か所に同じ一覧があった。いずれも`package.json`の`exports`から導く（consumer smokeはinstallしたtarballのmanifestから）。期待するexport名と漏れてはいけない内部名は、`tests/public-api.mjs`（新規）に1回だけ書き、2つのsmokeがimportする。consumer smokeは、従来rootだけで見ていた内部名の漏れを全entryで見る。
+
+## レビューの指摘への対応
+
+- **包んだ`++`/代入の括弧（構文エラー）:** `parenthesizeWrappedTarget`は、captureする式の一番外側の`++`/代入にしか括弧を足していなかった。`f((count.value as number)++)`のように式の中にあると、`capture(() => f(count.value as number++))`となり、parseできなかった。clone全体を`t.traverseFast`でたどり、どの深さでも括弧を足す。`tests/shared-predicates.test.ts`に、呼び出しの引数とtemplate literalの中のケースを足した（修正前は失敗）。
+- **`Switch`の中の`Match`の判定:** `isMatchCollectedBySwitch`は、論理演算子の右側と、子の式だけをたどっていた。runtimeの`collectMatches`は、`||`と`??`の左側（結果になるため）と、`<Switch children={...}>`で渡した`Match`も拾う。両方をたどるようにした。`&&`の左側は結果にならないため、これまでどおりたどらない。testを足した（修正前は3件が失敗）。
+- **build設定がtestのファイルをimportしていた:** `tsdown.config.ts`が`tests/public-api.mjs`をimportしていたため、`tests/`を含まない環境ではbuildできなかった。`scripts/public-api.mjs`へ移した。build smoke（`tests/build-smoke.mjs`）とrepoのconsumer smokeもそこから読む。`scripts/`は公開packageの`files`に含まれない。

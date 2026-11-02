@@ -303,3 +303,33 @@ runtimeの`Set`（`jsx-shared.ts`）と型のunion（`jsx.ts`の`DirectSignalPro
 | deep signalの配列のpush/pop | 0.96 |
 
 どれも誤差の範囲か、速くなった。deep signalの書き込みは、`batchUntracked`で関数の呼び出しが1段減った分だけ速い。
+
+## レビューの指摘への対応
+
+共通化作業（`cb94d38`以降）をレビューし、7件の指摘があった。すべてコードで確かめたうえで直した。pluginの3件は[plugin-dedup.ja.md](./plugin-dedup.ja.md)の「レビューの指摘への対応」。
+
+### sweepの見直し漏れ（統合で入った不具合）
+
+後のtaskで始まったsweep（settled）の途中に同期の書き込みが割り込むと、そのchunkはsettledでない規則で処理され、読まれたがlinkされていない候補を保留する。iterationの開始時のflag（`prunableSweepSettled`）が`true`のままなので、最後の見直しが行われなかった。collection側の元の実装にあった穴で、統合したときにproperty側にも入った（property側の元の実装は、iterationのflagで規則を選んでいたため、この穴はなかった）。
+
+保留した候補があれば必ず新しいsettled passで見直す。settled passは保留しないので、これで終わる。使われなくなった`prunableSweepSettled`は消した。
+
+テスト: `tests/deep-signal-property-sweep.test.ts`に、fake timerで「settled sweepの最初のchunk、同期の書き込み、残り」の順を固定したケースを足した。修正前は失敗することを確認した。
+
+### null-prototypeのcollectionの検出をやめた
+
+前の節で入れた検出は、空の`Object.create(null)`（よく使う辞書）を保存するたびに、例外を投げる確認を4回行っていた。null-prototypeのMapと空の辞書を区別する方法はほかにない。めったにない入力のために、よく使う書き方を遅くしないことにし、検出をやめた。prototypeを`null`にしたcollectionは、これまでどおりplain objectとして扱われる（entryは見えない）。移行ガイドには、保存しないよう書いた。
+
+あわせて、保存時の検査でplain objectの判定が1つのnodeにつき2回行われていたのを1回にした（`nonPlainCollectionKind`）。
+
+テスト: `tests/deep-signal-consistency.test.ts`の拒否のtestを、空のnull-prototypeの辞書を100個保存しても`Map.prototype.has`（brandの確認）が呼ばれないtestに置き換えた。修正前（検出あり）では失敗することを確認した。
+
+### bindingの置き場所の検査を、signalを読む前に戻した
+
+前の節で検査を1つにまとめたとき、`readInitialValue`（`peek()`）を、textの`bindValue`と`bindChecked`の置き場所の検査より前に移していた。読み取りがthrowするcomputedを`<div bindValue>`や`<input type="radio" bindChecked>`に渡すと、置き場所の誤りではなくcomputedのエラーが出ていた。置き場所の検査を先に行う。
+
+テスト: `tests/react-dom-binding.test.tsx`に、読み取りがthrowするcomputedでも置き場所のエラーが出ることを足した。修正前は失敗することを確認した。
+
+### docsのサイズの数字
+
+リリースノートと移行ガイドに、前の数字から計算した差分（「約4.6 kB小さい」など）が残っていた。現在の`pnpm size`の値（signal 4.38 kB、deep 10.28 kB、deep-collections 13.23 kB、index-full 15.69 kB、full-jsx-child 11.11 kB、lite-jsx-child 5.43 kB）にそろえた。
