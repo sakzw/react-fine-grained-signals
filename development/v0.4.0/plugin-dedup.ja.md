@@ -341,3 +341,21 @@ oracle側の限界:
 実行による差分テストで、READMEの「Hookに渡した関数はrenderの外で実行される」という説明が、`useMemo`のcallbackと`useState`/`useReducer`の初期化関数には当てはまらないことが分かった（render中に実行される）。managedはこれらの読み取りを追わず、injectは、componentがほかの読み取りで選ばれていれば、`useSignalTracking()`の性質で追う。
 
 メンテナの判断で、追わない（managedの挙動）のを仕様とした。結果がHook自身の依存配列によってだけ変わるという、Reactの`useMemo`の考え方に合うため。README（英日）を、render中に実行されるが追わないこと、再描画させたい場合の書き方、injectでの違いが分かるように書き直した。injectの挙動は`useSignalTracking()`の性質によるもので、pluginの側では変えない。
+
+## 最後のレビューの指摘への対応
+
+レビューで再現された7件を、メンテナが承認した範囲で直した。どれも先に回帰テストを書いて失敗を確かめてから直した。分割代入・`for ({ row } of …)`・`st.value.a = 2`・`<theme.value.Icon />`・class fieldの初期化は設計の判断待ちなので触っていない。
+
+1. optional chainの途中の呼び出し（7c45770）: `props.todos?.filter(cb).length`の`filter(...)`だけをcaptureし、`props.todos`がnullishのとき`capture(...).length`で例外になっていた。chainの途中の部分（`continuesOptionalChain`）は単独では置き換えず、chainの一番外側の式が、途中の呼び出しのどれかをcaptureするならchain全体をcaptureする（`optionalChainCalls`）。member側の「親がchainを続けるなら包まない」規則と同じ考え方を、呼び出しにも当てた。`read-shapes.ts`に5件足し（`props.todos?.filter(...).length`は基底がnullishのものとあるもの、`props.f?.().length`、`ext?.(1).length`、`props.api?.load().length`）、実行による差分テストでは基底をnullishにして実行する。
+2. 分割代入のpatternのHook（301f9b2）: `const [a = useX()] = list.value;`は宣言全体をcaptureの中で評価するので、HookがRFGS001なしでclosureに入っていた。代入と同じく宣言全体に`expressionCallsHook`を当て、RFGS001を出す。
+3. Hookの名前（407d247）: `/^use[A-Z]/`を、babel-plugin-react-compiler 1.0.0の`isHookName`と同じ`/^use[A-Z0-9]/`にした。`isHookCallName`はこれを使い、識別（`isHookName`）も同じ規則になる。`use3D()`はcaptureに入らず、`function use3D()`はHookとして扱われる。
+4. RFGS001の一貫性（0aa80ce）: `new`、object/array spread、`in`、型変換（二項演算・template literal・単項演算）、複合代入、更新、`delete`、読み取る呼び出しへの`for...of`が、Hookを含むとき黙ってcaptureをやめていた。すべて`giveUpForHook`を通してRFGS001を出す。オペランドの読み取りはそれぞれcaptureされ、失われるのは演算自身の読み取り（spreadのコピー、`in`、プリミティブへの変換など）だけなので、それを言う文面を足した。呼び出しのうち、予防的なcaptureと引数だけの読み取りは失うものがないので、これまでどおり報告しない。
+5. Hookの結果への読み取り（9cd0eba）: `wrapAfterHookBase`を`hookBaseOf`と`splitHookBase`で書き直した。`(useStore() as any).value.name`と`useStore()!.value.name`がRFGS001にならず、Hookの後の読み取りがcaptureされる。
+6. RFGS009（8dbf037）: `"use server"`のmoduleでJSXを返す関数すべてに出ていた。component identity（変換が他でも使う規則）を持つ関数だけに出す。小文字のserver action、component内のcallbackには出ない。README（英日）のRSCの節も合わせた。
+7. 同じ診断の重複（a148bea）: captureがJSXのcallbackを複製し、複製がもう一度検査されてRFGS003が2回出ていた。重複の判定をnode単位から、file内の位置とID・文面の組にした（複製は元の位置を持つ）。複製を検査しない方法より、どの経路で同じ場所に再び来ても効くのでこちらにした。
+
+残したもの:
+
+- `for (const [a = useX()] of list.value)`のように、loopの宣言patternのdefaultにあるHookは直していない。loopの中のHookはそもそもRules of Hooksに反する。
+
+利用者から見える変化: optional chainのcaptureの形（chain全体を包む）、Hookの名前の規則（`use`の後に数字も含む）、RFGS001が出る場面が増えたこと、RFGS009が出る場面が減ったこと、同じ診断が1回だけ出ること。
