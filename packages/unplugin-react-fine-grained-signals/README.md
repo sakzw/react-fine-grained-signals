@@ -376,12 +376,19 @@ function Outer({ show }) { return <div>{show && Title()}</div>; }
 
 A boundary inside `Title` would add hooks to `Outer` that run only while `show`
 is true — a conditional hook call that React rejects ("Rendered more hooks than
-during the previous render"). A call made from an event handler, from a
-function handed to any Hook call (`useEffect`, `useMemo`, `useCallback`,
-`useSignalEffect`, `use`, any `useX`), or from an async function runs outside
-the render, so its reads are not collected. The same rule decides `auto` mode:
-a `.value` read that only appears inside such a function does not select the
-component. Custom hooks (`useX`) are called as functions
+during the previous render"). Reads in an event handler, in a function handed
+to any Hook call (`useEffect`, `useMemo`, `useCallback`, `useState`'s
+initializer, `useSignalEffect`, `use`, any `useX`), or in an async function are
+not collected. Most of these run outside the render. `useMemo`'s callback and
+the `useState`/`useReducer` initializers do run during the render, but their
+result is meant to change only through the Hook's own dependencies, so a signal
+read there does not re-render the component either; pass the value through the
+dependency array, or read it outside the callback, if it should. The same rule
+decides `auto` mode: a `.value` read that only appears inside such a function
+does not select the component. With `transform: "inject"` the rule holds only
+while the component has no other read: once it is selected, the injected
+`useSignalTracking()` collects every read made during the render, including
+those in `useMemo` and the initializers. Custom hooks (`useX`) are called as functions
 by design and keep their own boundary exactly as before.
 
 Known limitations:

@@ -335,3 +335,9 @@ oracle側の限界:
 ### 未決の点
 
 - README.md:379-384は、Hookへ渡した関数が「runs outside the render」と書く。`useEffect`・`useCallback`では正しいが、`useMemo`・`useState`の初期化・`useReducer`の初期化は実際にはrender中に走り、bareな`useSignalTracking()`（とinject）は追跡する。追跡しないという設計は変えないが、文の正確さ、およびmanagedとinjectがここで違う動きをすること（injectは無関係な読み取りがあるときだけ購読する）を書くかどうかは判断が要る。
+
+### Hookのcallbackの説明の修正
+
+実行による差分テストで、READMEの「Hookに渡した関数はrenderの外で実行される」という説明が、`useMemo`のcallbackと`useState`/`useReducer`の初期化関数には当てはまらないことが分かった（render中に実行される）。managedはこれらの読み取りを追わず、injectは、componentがほかの読み取りで選ばれていれば、`useSignalTracking()`の性質で追う。
+
+メンテナの判断で、追わない（managedの挙動）のを仕様とした。結果がHook自身の依存配列によってだけ変わるという、Reactの`useMemo`の考え方に合うため。README（英日）を、render中に実行されるが追わないこと、再描画させたい場合の書き方、injectでの違いが分かるように書き直した。injectの挙動は`useSignalTracking()`の性質によるもので、pluginの側では変えない。

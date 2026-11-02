@@ -356,11 +356,17 @@ function Outer({ show }) { return <div>{show && Title()}</div>; }
 `Title` の中にboundaryを置くと、`show` がtrueの間だけ実行されるhookが
 `Outer` に加わります。これはReactが拒否する条件付きのhook呼び出しです
 （"Rendered more hooks than during the previous render"）。event handler、
-Hook呼び出しに渡した関数（`useEffect`、`useMemo`、`useCallback`、
-`useSignalEffect`、`use`、任意の `useX`）、またはasync関数からの呼び出しは
-renderの外で実行されるため、その読み取りは収集しません。`auto` modeの選択も
-同じ規則に従い、そうした関数の中にしかない `.value` の読み取りではcomponentを
-選択しません。custom hook（`useX`）はもともと関数として
+Hook呼び出しに渡した関数（`useEffect`、`useMemo`、`useCallback`、`useState`の
+初期化関数、`useSignalEffect`、`use`、任意の `useX`）、async関数の中の読み取りは
+収集しません。多くはrenderの外で実行されます。`useMemo`のcallbackと
+`useState`/`useReducer`の初期化関数はrender中に実行されますが、その結果は
+Hook自身の依存配列によってだけ変わるものなので、ここでのsignalの読み取りでも
+componentは再描画しません。再描画させたい場合は、値を依存配列に渡すか、
+callbackの外で読んでください。`auto` modeの選択も同じ規則に従い、そうした関数の
+中にしかない `.value` の読み取りではcomponentを選択しません。
+`transform: "inject"`では、componentにほかの読み取りがない間だけこの規則が
+保たれます。選択されると、挿入した`useSignalTracking()`がrender中のすべての
+読み取りを収集するため、`useMemo`や初期化関数の中の読み取りも収集します。custom hook（`useX`）はもともと関数として
 呼び出すものなので、従来どおり独自のboundaryを持ちます。
 
 既知の制約は次のとおりです。
