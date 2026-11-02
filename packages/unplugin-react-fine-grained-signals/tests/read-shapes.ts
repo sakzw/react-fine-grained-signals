@@ -68,7 +68,7 @@ export interface Run {
   readonly knownLimitation?: Deviation;
 }
 
-export const prelude = `import { computed, signal, untracked, useComputed, useSignalEffect } from "react-fine-grained-signals";
+export const prelude = `import { computed, deepCollectionSignal, deepSignal, signal, untracked, useComputed, useSignalEffect } from "react-fine-grained-signals";
 import * as rfgs from "react-fine-grained-signals";
 import { Show } from "react-fine-grained-signals/utils";
 import { forwardRef, memo, use, useCallback, useEffect, useMemo, useReducer, useState } from "react";
@@ -86,6 +86,8 @@ const st = signal({ a: 1 });
 const list = signal([1, 2]);
 const readS = () => s.value;
 const items = [1, 2];
+const state = deepSignal({ user: { name: "Ada" }, items: [{ title: "a", meta: { tag: "x" } }] });
+const store = deepCollectionSignal({ users: new Map([["u", { name: "Ada" }]]) });
 `;
 
 // README.md, "Managed tracking contract": "Any other call is captured unless
@@ -697,7 +699,254 @@ export const cases: readonly Case[] = [
       skip: "a client root cannot render an async component (README.md:537-541: hooks need a synchronous function)",
     },
   },
+
+  // Deep signals. `signal()` is shallow, so a value taken out of `.value` and
+  // read later needs no tracking of its own; a deep signal's nested objects
+  // are proxies whose reads the runtime tracks wherever they happen. Each case
+  // takes a nested object out of `state` (an alias; the inventory A1-A14 in
+  // development/v0.4.0/managed-scope-options.ja.md §1.1) and reads it later.
+  // The write changes only the nested property, so only a read through the
+  // alias can re-render.
+  ...deepCases(),
+
+  // Syntax that reads where it seems not to.
+  // A write through a read: `st.value` is read before `.a` is written.
+  {
+    name: "a property write on a signal value",
+    body: "st.value.a = 2;",
+    token: "st.value",
+    run: { write: "st.value = { a: 3 };" },
+  },
+  // A JSX member tag reads `theme.value`.
+  {
+    name: "a JSX member tag",
+    module: "const theme = signal({ Icon: () => <b>a</b> });",
+    jsx: "<theme.value.Icon />",
+    token: "theme.value",
+    run: { write: "theme.value = { Icon: () => <b>b</b> };" },
+  },
+  // A class field runs when the class is instantiated (instance fields) or
+  // evaluated (static fields and blocks), not where it is written.
+  {
+    name: "an instance field of a class instantiated in an effect",
+    body: "class Model { snapshot = s.value; } useEffect(() => { log(new Model().snapshot); }, []);",
+  },
+  {
+    name: "an instance field of a class instantiated in render",
+    body: "class Model { snapshot = s.value; } const x = new Model().snapshot;",
+    jsx: "{x}",
+    token: "new Model(",
+    expected: { ...precaution, why: "only a standard constructor is proven (`new C()`)" },
+    run: {
+      exception: {
+        rerenders: { "managed alone": false, "inject alone": false },
+        stale: true,
+        why: 'README.md:255: "A precautionary capture (an unresolved callee, a runtime-key member) does not select a function"',
+      },
+    },
+  },
+  {
+    name: "a static field of a class declared in render",
+    body: "class Model { static snapshot = s.value; } const x = Model.snapshot;",
+    jsx: "{x}",
+  },
+  {
+    name: "a static block of a class declared in render",
+    body: "let x = 0; class Model { static { x = s.value; } } void Model;",
+    jsx: "{x}",
+  },
 ];
+
+function deepCases(): Case[] {
+  const name: Run = { write: 'state.value.user.name = "Grace";' };
+  const title: Run = { write: 'state.value.items[0]!.title = "b";' };
+  const tag: Run = { write: 'state.value.items[0]!.meta.tag = "y";' };
+  const deep = (testCase: Case, run: Run = name): Case => ({
+    jsx: "{x}",
+    ...testCase,
+    name: `deep: ${testCase.name}`,
+    run: { ...run, ...testCase.run },
+  });
+  return [
+    // A1
+    deep({ name: "a const alias", body: "const user = state.value.user; const x = user.name;", token: "user.name" }),
+    // A2
+    deep({
+      name: "an alias through a conditional",
+      params: "props: { f?: boolean }",
+      body: 'const user = state.value.user; const x = (props.f ? user : { name: "-" }).name;',
+      token: "user :",
+      run: { props: { f: true } },
+    }),
+    deep({
+      name: "an alias through an as-expression",
+      body: "const user = state.value.user; const x = (user as { name: string }).name;",
+      token: "user as",
+    }),
+    deep({
+      name: "an alias through an array literal",
+      body: "const user = state.value.user; const x = [user][0]!.name;",
+      token: "[user]",
+    }),
+    deep({
+      name: "an alias passed to a local function",
+      module: "function show(u: { name: string }) { return u.name; }",
+      body: "const user = state.value.user; const x = show(user);",
+      token: "show(user)",
+    }),
+    deep({
+      name: "an alias through ??",
+      body: 'const user = state.value.user; const x = (user ?? { name: "-" }).name;',
+      token: "user ??",
+    }),
+    // A3
+    deep({
+      name: "a static const destructuring",
+      body: "const { user } = state.value; const x = user.name;",
+      token: "user.name",
+    }),
+    deep({
+      name: "a nested static const destructuring",
+      body: "const { user: { name: x } } = state.value;",
+      token: "state.value",
+    }),
+    // A4
+    deep(
+      {
+        name: "an array pattern",
+        body: "const [first] = state.value.items; const x = first!.title;",
+        token: "first!.title",
+      },
+      title,
+    ),
+    deep({
+      name: "a pattern with a default",
+      body: 'const { user = { name: "-" } } = state.value; const x = user.name;',
+      token: "user.name",
+    }),
+    deep({ name: "a let pattern", body: "let { user } = state.value; const x = user.name;", token: "user.name" }),
+    deep({
+      name: "a rest pattern",
+      body: "const { ...rest } = state.value; const x = rest.user.name;",
+      token: "rest.user.name",
+    }),
+    // A5
+    deep({
+      name: "a destructuring assignment",
+      body: "let user: { name: string }; ({ user } = state.value); const x = user.name;",
+      token: "user.name",
+    }),
+    // A6
+    deep({
+      name: "a let alias assigned later",
+      body: "let user: { name: string }; user = state.value.user; const x = user.name;",
+      token: "user.name",
+    }),
+    deep({
+      name: "a let alias assigned with ??=",
+      body: "let user: { name: string } | undefined; user ??= state.value.user; const x = user.name;",
+      token: "user.name",
+    }),
+    // A7
+    deep({
+      name: "a container element assignment",
+      body: "const box: { name: string }[] = []; box[0] = state.value.user; const x = box[0]!.name;",
+      token: "box[0]!.name",
+    }),
+    // A8
+    deep({
+      name: "an array push",
+      body: "const box: { name: string }[] = []; box.push(state.value.user); const x = box[0]!.name;",
+      token: "box[0]!.name",
+    }),
+    deep({
+      name: "a Set add",
+      body: "const box = new Set<{ name: string }>(); box.add(state.value.user); const x = [...box][0]!.name;",
+      token: "box]",
+    }),
+    deep({
+      name: "a Map set",
+      body: 'const box = new Map<string, { name: string }>(); box.set("u", state.value.user); const x = box.get("u")!.name;',
+      token: 'box.get("u")',
+    }),
+    deep(
+      {
+        name: "a push of a loop variable",
+        body: "const box: { title: string }[] = []; for (const item of state.value.items) box.push(item); const x = box.map((i) => i.title).join();",
+        token: "box.map(",
+      },
+      title,
+    ),
+    // A9
+    deep(
+      {
+        name: "a for...of loop variable",
+        body: 'let x = ""; for (const item of state.value.items) x += item.title;',
+        token: "item.title",
+      },
+      title,
+    ),
+    deep(
+      {
+        name: "a for...of destructured loop variable",
+        body: 'let x = ""; for (const { meta } of state.value.items) x += meta.tag;',
+        token: "meta.tag",
+      },
+      tag,
+    ),
+    // A9, assignment-form loop heads.
+    deep(
+      {
+        name: "a for...of loop head assigning a pattern",
+        body: 'let meta: { tag: string }; let x = ""; for ({ meta } of state.value.items) x += meta.tag;',
+        token: "meta.tag",
+      },
+      tag,
+    ),
+    deep(
+      {
+        name: "a for...of loop head assigning an existing binding",
+        body: 'let item: { title: string }; let x = ""; for (item of state.value.items) x += item.title;',
+        token: "item.title",
+      },
+      title,
+    ),
+    // A10
+    deep({
+      name: "a helper's return value",
+      module: "function getUser() { return state.value.user; }",
+      body: "const user = getUser(); const x = user.name;",
+      token: "user.name",
+    }),
+    // A11
+    deep({
+      name: "an object getter returning a nested object",
+      body: "const view = { get user() { return state.value.user; } }; const x = view.user.name;",
+      token: "view.user.name",
+    }),
+    // A12
+    deep({
+      name: "a local helper reading the caller's alias",
+      body: "const user = state.value.user; const text = () => user.name; const x = text();",
+      token: "text(",
+    }),
+    // A13
+    deep({
+      name: "an alias handed to a Hook",
+      body: "const user = state.value.user; const [held] = useState(user); const x = held.name;",
+      token: "held.name",
+    }),
+    // A collection signal.
+    deep(
+      {
+        name: "a Map entry of a collection signal",
+        body: 'const user = store.value.users.get("u")!; const x = user.name;',
+        token: "user.name",
+      },
+      { write: 'store.value.users.get("u")!.name = "Grace";' },
+    ),
+  ];
+}
 
 /** Marks the body of the function under test, so its output can be found again. */
 export const marker = "const __subject = 0;";
