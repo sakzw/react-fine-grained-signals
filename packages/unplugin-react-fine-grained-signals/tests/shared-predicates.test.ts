@@ -557,3 +557,28 @@ describe("a read on a Hook's result", () => {
     reparse(code!, "A.tsx");
   });
 });
+
+const deepHeader = `import { deepSignal, signal } from "react-fine-grained-signals";\nconst state = deepSignal({ user: { name: "Ada" }, items: [{ title: "a", meta: { tag: "x" } }] });\nconst o = signal(0);\n`;
+
+describe("a member read on an expression that carries an alias", () => {
+  // `hasTrackedReadInMemberChain` followed only member objects and calls, so
+  // `(flag ? user : d).name` read `.name` of the deep proxy outside a capture.
+  it.each([
+    ["a conditional", "(props.f ? user : d).name"],
+    ["a logical expression", "(user ?? d).name"],
+    ["an array literal", "[user][0]!.name"],
+    ["a sequence", "(log(), user).name"],
+  ])("captures the whole read through %s", (_kind, read) => {
+    const { code } = run(
+      `${deepHeader}function log() {}\nconst d = { name: "-" };\nexport function A(props: { f?: boolean }) { const user = state.value.user; const x = ${read}; return <p>{x}{o.value}</p>; }`,
+    );
+    expect(code).toContain(`const x = _signals.capture(() => ${read});`);
+  });
+
+  it("captures a read on a spread copy of an alias container", () => {
+    const { code } = run(
+      `${deepHeader}export function A() { const box = new Set<{ name: string }>(); box.add(state.value.user); const x = [...box][0]!.name; return <p>{x}</p>; }`,
+    );
+    expect(code).toContain("const x = _signals.capture(() => [...box][0]!.name);");
+  });
+});

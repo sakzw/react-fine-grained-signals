@@ -3744,6 +3744,19 @@ function hasTrackedReadInMemberChain(
     }
     current = object;
   }
+  // `(flag ? user : d).name`, `(user ?? d).name`, `[user][0].name`: an
+  // expression that hands one of its operands on as its value can hand on a
+  // deep proxy, and the member read after it reads through that proxy.
+  if (
+    current.isConditionalExpression() ||
+    current.isLogicalExpression() ||
+    current.isSequenceExpression() ||
+    current.isArrayExpression() ||
+    current.isObjectExpression() ||
+    current.isAssignmentExpression()
+  ) {
+    return hasTrackedReadInExpression(current, functionPath, trackedAliases);
+  }
   return current.isIdentifier() && trackedAliases.has(current.scope.getBinding(current.node.name) as object);
 }
 
