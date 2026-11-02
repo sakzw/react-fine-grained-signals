@@ -5318,6 +5318,13 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
     const binding = current.scope.getBinding(current.node.name);
     return isLocalVariable(binding) ? binding : undefined;
   };
+  // `({ user } = state.value)`, `for ({ row } of rows.value)`: the local
+  // variables an assignment pattern writes, as `patternBindings` gives a
+  // declaration's. A member target (`({ a: box[0] } = ...)`) is not a binding.
+  const assignedBindings = (path: NodePath, pattern: t.Node): object[] =>
+    Object.values(t.getBindingIdentifiers(pattern) as Record<string, t.Identifier>)
+      .map((identifier) => path.scope.getBinding(identifier.name))
+      .filter(isLocalVariable);
   const containerMethods = new Set(["push", "unshift", "add", "set"]);
   const container = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
     const callee = unwrapTransparentPath(call.get("callee") as NodePath);
@@ -5356,6 +5363,8 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
       } else if (left.isMemberExpression() || left.isOptionalMemberExpression()) {
         const target = containerRoot(left);
         if (target !== undefined) flow([target], [path.get("right")]);
+      } else if (operator === "=" && (left.isObjectPattern() || left.isArrayPattern())) {
+        flow(assignedBindings(path, left.node), [path.get("right")]);
       }
     },
     ForOfStatement(path) {

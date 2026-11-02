@@ -582,3 +582,14 @@ describe("a member read on an expression that carries an alias", () => {
     expect(code).toContain("const x = _signals.capture(() => [...box][0]!.name);");
   });
 });
+
+describe("aliases bound by an assignment pattern", () => {
+  it.each([
+    ["an object pattern", "let user: { name: string }; ({ user } = state.value);", "user.name"],
+    ["an array pattern", "let first: { title: string }; [first] = state.value.items;", "first.title"],
+    ["a nested pattern", "let meta: { tag: string }; ({ items: [{ meta }] } = state.value);", "meta.tag"],
+  ])("makes the names %s binds aliases, as a declaration does", (_kind, statement, read) => {
+    const { code } = run(`${deepHeader}export function A() { ${statement} const x = ${read}; return <p>{x}</p>; }`);
+    expect(code).toContain(`const x = _signals.capture(() => ${read});`);
+  });
+});
