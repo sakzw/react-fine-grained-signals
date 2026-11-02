@@ -3632,10 +3632,8 @@ export function App() {
       ],
       ["a tagged template", "const tag = () => extStore.METHOD();\n    return <p>{tick.value}:{tag`x`}</p>;"],
       ["a Promise executor passed by reference", "new Promise(exec);\n    return <p>{tick.value}:{box.got}</p>;"],
-      [
-        "an async IIFE",
-        "let got = 0;\n    (async () => { got = extStore.METHOD(); })();\n    return <p>{tick.value}:{got}</p>;",
-      ],
+      // An async IIFE used to be here; async functions are outside the render
+      // now (see "M17.7.1: synchronous execution boundaries").
     ];
     for (const method of ["map", "total"]) {
       for (const [shape, body] of shapes) {
@@ -3685,9 +3683,12 @@ export function App() {
     }
   });
 
-  // M17.7.1: functions that run synchronously inside a call -- a Promise
-  // executor, the part of an async function before its first `await` -- read
-  // during render, so the call that runs them is captured.
+  // M17.7.1: a function that runs synchronously inside a call -- a Promise
+  // executor -- reads during render, so the call that runs it is captured. An
+  // async function also runs up to its first `await` inside the call, but
+  // async functions are outside the render as a whole: selection ignores
+  // their reads (`isDeferredFunction`) and capture follows the same rule, so
+  // another read in the component does not subscribe them either.
   describe("M17.7.1: synchronous execution boundaries", () => {
     const extSignal = library.signal(1);
     const extBox = { got: 0 };
@@ -3710,6 +3711,25 @@ export function App() {
       ],
       ["an inline Promise executor", "let seen = 0;\n  new Promise((resolve) => { seen = s.value; resolve(); });"],
       [
+        "a Promise executor started by a helper",
+        "let seen = 0;\n  function executor(resolve) { seen = s.value; resolve(); }\n  function start() { return new Promise(executor); }\n  start();",
+      ],
+    ];
+    for (const [name, setup] of shapes) {
+      it(`captures ${name}`, async () => {
+        const run = scenario({
+          name,
+          body: `export function App() {\n  ${setup}\n  return <p>{tick.value}:{seen}</p>;\n}`,
+          steps: readsS,
+        });
+        expect(await run.observe()).toEqual(run.expected);
+      });
+    }
+    // These were captured up to the first `await` before async functions were
+    // put outside the render. The read still runs (`seen` is 1); it no longer
+    // subscribes the component.
+    const asyncShapes: Array<[string, string]> = [
+      [
         "a named async function before its first await",
         "let seen = 0;\n  async function read() {\n    seen = s.value;\n    await Promise.resolve();\n  }\n  void read();",
       ],
@@ -3722,22 +3742,18 @@ export function App() {
         "an async forEach callback before its first await",
         "let seen = 0;\n  [1].forEach(async () => { seen = s.value; await null; });",
       ],
-      [
-        "a Promise executor started by a helper",
-        "let seen = 0;\n  function executor(resolve) { seen = s.value; resolve(); }\n  function start() { return new Promise(executor); }\n  start();",
-      ],
       ["an async callback handed to some", "let seen = 0;\n  [1].some(async () => { seen = s.value; await null; });"],
       [
         "a named async callback",
         "let seen = 0;\n  async function each() { seen = s.value; await null; }\n  [1].forEach(each);",
       ],
     ];
-    for (const [name, setup] of shapes) {
-      it(`captures ${name}`, async () => {
+    for (const [name, setup] of asyncShapes) {
+      it(`does not subscribe to a read in ${name}`, async () => {
         const run = scenario({
           name,
           body: `export function App() {\n  ${setup}\n  return <p>{tick.value}:{seen}</p>;\n}`,
-          steps: readsS,
+          steps: [{ text: "0:1" }, { run: bumpS, text: "0:1" }],
         });
         expect(await run.observe()).toEqual(run.expected);
       });
@@ -3767,7 +3783,7 @@ export function App() {
     });
 
     for (const mode of ["auto", "all"] as const) {
-      it(`does not subscribe to reads after the first await (${mode})`, async () => {
+      it(`does not subscribe to reads before or after the first await (${mode})`, async () => {
         const module = await loadModule(
           `
 import { signal } from "react-fine-grained-signals";
@@ -3806,7 +3822,8 @@ export function App() {
         await act(async () => {
           (module.s as Signal<number>).value = 5;
         });
-        expect(container.textContent).toBe("0:5");
+        expect(getRenders()).toBe(before);
+        expect(container.textContent).toBe("0:1");
       });
 
       it(`keeps Promise results, rejections, and order around captured executors (${mode})`, async () => {

@@ -227,6 +227,35 @@ describe("reads inside a Hook's callback", () => {
   });
 });
 
+// Selection never counts a read in an async function (isDeferredReadContext),
+// and the boundary design makes such reads an explicit non-goal; capture must
+// not subscribe to them either just because another read selected the
+// component.
+describe("reads in async functions", () => {
+  const withOther = `${header}const o = signal(0);\n`;
+
+  it.each([
+    ["an inline async callback", "items.forEach(async (i) => { log(s.value); });"],
+    ["a named async callback", "async function each() { log(s.value); }\n  items.forEach(each);"],
+    ["an async IIFE", "(async () => { log(s.value); })();"],
+    ["a named async function called in place", "async function load() { log(s.value); }\n  load();"],
+    ["a const async arrow called in place", "const load = async () => { log(s.value); };\n  load();"],
+    ["an async render callback", "const pending = items.map(async (i) => s.value);"],
+    ["a Promise executor that starts an async function", "new Promise((resolve) => { (async () => resolve(s.value))(); });"],
+  ])("does not select or capture %s", (_shape, statement) => {
+    const alone = run(`${header}export function A({ items }) {\n  ${statement}\n  return <p />;\n}`);
+    expect(alone.code).toBeUndefined();
+    const selected = run(`${withOther}export function A({ items }) {\n  ${statement}\n  return <p>{o.value}</p>;\n}`);
+    expect(selected.code).toContain("_signals.capture(() => o.value)");
+    expect(selected.code).not.toMatch(/capture\(\(\) => (items|\(async|load|new Promise)/);
+  });
+
+  it("still captures the same callback when it is synchronous", () => {
+    const { code } = run(`${withOther}export function A({ items }) { items.forEach((i) => { log(s.value); }); return <p>{o.value}</p>; }`);
+    expect(code).toContain("_signals.capture(() => items.forEach(");
+  });
+});
+
 describe("Hook calls inside a helper", () => {
   it("never folds a helper that calls use() into a capture closure", () => {
     const { code } = run(

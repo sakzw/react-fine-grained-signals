@@ -1903,11 +1903,34 @@ function isHookCallbackArgument(path: NodePath): boolean {
 }
 
 /**
+ * Is `fn` a function whose reads are never part of the render that creates or
+ * calls it -- an async function, an event handler, or a Hook's callback?
+ *
+ * An async function does run up to its first `await` inside the call that
+ * starts it, but making reads in asynchronous callbacks into render
+ * dependencies is an explicit non-goal of the boundary design
+ * (development/design/use-signals-boundary-design.md). So its whole body is
+ * outside the render, for every question this file asks: whether a function
+ * is selected (`isDeferredReadContext`, the helper folds in `scanFunction`),
+ * and whether the capture pass wraps the call that runs it
+ * (`inlineCallbackReadsTrackedValue`, `functionTargetMayReadTrackedValue`,
+ * `targetFunctionMayReadTrackedValue`, `targetAliasGraphMayRead`). One
+ * predicate keeps the two from disagreeing: a read that selection ignores is
+ * never subscribed through a capture that another read caused.
+ *
+ * A generator is not here: its body runs when it is iterated, which can be
+ * during render (`for (const v of gen())`), and the callers decide that case.
+ */
+function isDeferredFunction(fn: NodePath<t.Function>): boolean {
+  return fn.node.async || isJsxEventHandlerValue(fn) || isHookCallbackArgument(fn);
+}
+
+/**
  * Does a read at `path` sit inside a nested function that `functionPath`'s
- * render never runs -- an event handler, a Hook's callback, or an async
- * body? Only the functions between the read and `functionPath` are examined:
- * the enclosing component is already known to be synchronous by the time any of
- * this matters, and anything further out owns its own inspection.
+ * render never runs (`isDeferredFunction`)? Only the functions between the
+ * read and `functionPath` are examined: the enclosing component is already
+ * known to be synchronous by the time any of this matters, and anything
+ * further out owns its own inspection.
  */
 function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function>): boolean {
   for (
@@ -1915,9 +1938,7 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
     current !== null && current.node !== functionPath.node;
     current = current.getFunctionParent()
   ) {
-    if (current.node.async) return true;
-    if (isJsxEventHandlerValue(current)) return true;
-    if (isHookCallbackArgument(current)) return true;
+    if (isDeferredFunction(current)) return true;
   }
   return false;
 }
@@ -2167,10 +2188,10 @@ function scanFunction(
         target = argumentPath;
       }
     }
-    // An async callback only executes its synchronous prefix at this callsite;
-    // a generator executes none of its body until iteration. Folding either
+    // An async callback is outside the render (`isDeferredFunction`); a
+    // generator executes none of its body until iteration. Folding either
     // body into the caller would claim reads outside the active capture.
-    if (target === undefined || target.node.async || target.node.generator) return;
+    if (target === undefined || target.node.generator || isDeferredFunction(target)) return;
     addEdge(target, true);
   };
 
@@ -2231,7 +2252,7 @@ function scanFunction(
       : member !== undefined
         ? resolveKeyedFunction(call, member)
         : undefined;
-    if (target === undefined || target.node.async || target.node.generator) return;
+    if (target === undefined || target.node.generator || isDeferredFunction(target)) return;
     addEdge(target, true);
   };
 
@@ -2255,7 +2276,7 @@ function scanFunction(
     // `functionCallsHook`.
     if (target === undefined || edgeIndex.has(target.node) || checkedHelpers.has(target.node)) return;
     checkedHelpers.add(target.node);
-    if (target.node.async || target.node.generator || functionCallsHook(target)) return;
+    if (target.node.generator || isDeferredFunction(target) || functionCallsHook(target)) return;
     addEdge(target, false);
   };
 
@@ -2270,7 +2291,7 @@ function scanFunction(
       const target = resolveReferencedFunction(argument, argument.node.name);
       if (target === undefined || edgeIndex.has(target.node) || checkedHelpers.has(target.node)) continue;
       checkedHelpers.add(target.node);
-      if (target.node.async || target.node.generator || functionCallsHook(target)) continue;
+      if (target.node.generator || isDeferredFunction(target) || functionCallsHook(target)) continue;
       addEdge(target, false);
     }
   };
@@ -4456,8 +4477,8 @@ function unresolvedCallMayRead(
 ): boolean {
   if (callNameIsHook(call.node.callee)) return false;
   const callee = unwrapTransparent(call.node.callee);
-  // An IIFE (async included: it runs up to its first `await` right here) is
-  // judged by its body where it is called.
+  // An IIFE is judged by its body where it is called (an async one is
+  // outside the render: `isDeferredFunction`).
   if (t.isArrowFunctionExpression(callee) || t.isFunctionExpression(callee)) return false;
   const global = standardGlobalCallee(call, callee);
   if (global !== undefined) return !calledBackIsKnown(call, globalCallbackArguments.get(global));
@@ -4594,7 +4615,6 @@ function namedArgumentMayRead(
         context.importSource,
         context.managedRuntimeSource,
         context.reactImportSource,
-        true,
         trackedAliases,
       )
     );
@@ -4628,13 +4648,9 @@ function functionTargetMayReadTrackedValue(
   importSource: string,
   managedRuntimeSource: string,
   reactImportSource: string,
-  // An async function runs up to its first `await` inside the call that
-  // starts it, so a function a call runs counts its body. Its result is a
-  // Promise, though, never the value read, so it is not an alias source.
-  allowAsync = false,
   trackedAliases: Set<object> = noAliases,
 ): boolean {
-  if ((target.node.async && !allowAsync) || target.node.generator) return false;
+  if (target.node.generator || isDeferredFunction(target)) return false;
   if (targetAliasGraphMayRead(target, trackedAliases, importSource, managedRuntimeSource, reactImportSource))
     return true;
   return cachedTargetMayRead(target, importSource, managedRuntimeSource, reactImportSource);
@@ -4669,6 +4685,7 @@ function targetAliasGraphMayRead(
     const current = pending.pop()!;
     if (seen.has(current.node)) continue;
     seen.add(current.node);
+    if (isDeferredFunction(current)) continue;
     // A Hook in any reachable helper must never be moved into a generated
     // capture closure. Preserve the conservative behavior for Hook callers.
     if (functionCallsHook(current)) break;
@@ -4772,6 +4789,9 @@ function targetFunctionMayReadTrackedValue(
   managedRuntimeSource: string,
   reactImportSource: string,
 ): boolean {
+  // An async helper, or an async callback a render-callback call runs, is
+  // outside the render however it is reached.
+  if (isDeferredFunction(target)) return false;
   const identity = resolveComponentIdentity(target, reactImportSource);
   if (
     (isComponentIdentity(identity) || isHookIdentity(identity)) &&
@@ -5099,8 +5119,9 @@ function expressionCallsHook(path: NodePath): boolean {
  * Does an inline callback read a tracked value when it runs? Callbacks nested
  * in its own call arguments are followed too (`rows.map(r => r.cells.filter(c
  * => c.value))`), and so are the calls its body makes (`items.filter((x) =>
- * matches(x))` reads through `matches`); async, generator, Hook-calling, and
- * event-handler functions are not synchronous render reads.
+ * matches(x))` reads through `matches`); generator and Hook-calling functions,
+ * and the ones `isDeferredFunction` puts outside the render (async functions,
+ * event handlers), are not synchronous render reads.
  */
 function inlineCallbackReadsTrackedValue(path: NodePath, trackedAliases: Set<object>, context: ReadContext): boolean {
   let target = path;
@@ -5108,9 +5129,9 @@ function inlineCallbackReadsTrackedValue(path: NodePath, trackedAliases: Set<obj
     target = target.get("expression") as NodePath;
   }
   if (!target.isArrowFunctionExpression() && !target.isFunctionExpression()) return false;
-  // An async callback runs up to its first `await` during the call; a
+  // An async callback is outside the render (`isDeferredFunction`); a
   // generator's body runs only when it is iterated.
-  if (target.node.generator || functionCallsHook(target)) return false;
+  if (target.node.generator || isDeferredFunction(target) || functionCallsHook(target)) return false;
   return bodyReadsTrackedValue(target.get("body") as NodePath, target, trackedAliases, context);
 }
 
@@ -5342,7 +5363,7 @@ function captureTrackedReadExpressions(
       : t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)
         ? resolveKeyedFunction(path, callee)
         : undefined;
-    if (target === undefined || target.node.async || target.node.generator) return;
+    if (target === undefined || target.node.generator || isDeferredFunction(target)) return;
     let reads = hookCallingReader.get(target.node);
     if (reads === undefined) {
       reads =
