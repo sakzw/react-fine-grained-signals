@@ -611,3 +611,23 @@ describe("aliases bound by an assignment-form loop head", () => {
     expect(code).toContain(`_signals.capture(() => x += ${read})`);
   });
 });
+
+describe("a write through a signal value", () => {
+  // `st.value.a = 2` writes `.a`, but first reads `st.value`; the runtime's
+  // own tracking subscribes to `st` there.
+  it.each([
+    ["a property", "st.value.a = 2;", "_signals.capture(() => st.value).a = 2;"],
+    ["a computed property", 'st.value["a"] = 2;', '_signals.capture(() => st.value)["a"] = 2;'],
+    ["a nested property", "st.value.b.c = 2;", "_signals.capture(() => st.value.b).c = 2;"],
+  ])("reads the base of %s write and selects the component", (_kind, statement, output) => {
+    const { code } = run(
+      `${header}const st = signal({ a: 1, b: { c: 1 } });\nexport function A() { ${statement} return <p>x</p>; }`,
+    );
+    expect(code).toContain(output);
+  });
+
+  it("leaves a write to the value itself a write", () => {
+    const { code } = run(`${header}export function A() { s.value = 2; return <p>x</p>; }`);
+    expect(code).toBeUndefined();
+  });
+});

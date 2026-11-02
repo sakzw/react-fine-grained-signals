@@ -4327,7 +4327,7 @@ export function App() {
   ])("warns instead of capturing a Hook: %s", (_label, body, message) => {
     const { code, warnings } = run(body);
     expect(warnings.some((warning) => message.test(warning))).toBe(true);
-    expect(code).not.toMatch(/capture\(\(\) => [^;]*useContext/);
+    expect(code).not.toMatch(/capture\(\(\) => [^)]*useContext/);
   });
 
   it("captures loop heads without a block body and with let patterns", () => {
@@ -4342,7 +4342,7 @@ export function App() {
     expect(code).toMatch(/_signals\.iterate\(\(\) => _hookResult\.value\.items\)\)\(useStore\(\)\)/);
   });
 
-  it("keeps outer-scope assignments, plain writes, and non-getter objects untracked", () => {
+  it("keeps outer-scope assignments and non-getter objects untracked, and a plain write a write", () => {
     const { code, warnings } = run(
       `
   outer = state.value.items;
@@ -4353,7 +4353,8 @@ export function App() {
       "let outer;",
     );
     expect(warnings).toEqual([]);
-    expect(code).toContain("state.value.count = 2;");
+    // The write stays as authored; `state.value`, read before it, is captured.
+    expect(code).toContain("_signals.capture(() => state.value).count = 2;");
     expect(code).toContain("const total = view.total;");
   });
 

@@ -5392,17 +5392,15 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
   return trackedAliases;
 }
 
+/**
+ * Is `path` itself the target an assignment, update, `delete` or loop head
+ * writes? Only the target is: in `st.value.a = 2` the object `st.value` is
+ * read first (its getter runs) and only `.a` is written.
+ */
 function isWriteTarget(path: NodePath): boolean {
   let target = path;
   while (target.parentPath !== null) {
     const parent = target.parentPath;
-    if (
-      (parent.isMemberExpression() || parent.isOptionalMemberExpression()) &&
-      parent.get("object").node === target.node
-    ) {
-      target = parent;
-      continue;
-    }
     if (isTransparentWrapper(parent.node) && parent.node.expression === target.node) {
       target = parent;
       continue;
@@ -5854,6 +5852,9 @@ function captureTrackedReadExpressions(
         generatedCallback([], parenthesizeWrappedTarget(t.cloneNode(path.node, true))),
       ]),
     );
+    // Marked too, for a wrap of a node other than the one being visited (the
+    // object of a write target), which the traversal still reaches.
+    generated.add(path.node);
     path.skip();
   };
   /**
@@ -6110,10 +6111,21 @@ function captureTrackedReadExpressions(
     if (
       ((parent?.isMemberExpression() || parent?.isOptionalMemberExpression()) && parent.node.object === slot.node) ||
       ((parent?.isCallExpression() || parent?.isOptionalCallExpression()) && parent.node.callee === slot.node) ||
-      (parent?.isTaggedTemplateExpression() && parent.node.tag === slot.node) ||
-      isWriteTarget(path)
+      (parent?.isTaggedTemplateExpression() && parent.node.tag === slot.node)
     )
       return;
+    if (isWriteTarget(path)) {
+      // `st.value.a = 2`: the write stays as authored, the object it writes
+      // to is read first and captured on its own.
+      const object = unwrapTransparentPath(path.get("object") as NodePath);
+      if (
+        (object.isMemberExpression() || object.isOptionalMemberExpression()) &&
+        !isDeferredReadContext(path, functionPath) &&
+        hasTrackedReadInMemberChain(object, functionPath, trackedAliases)
+      )
+        wrapMemberRead(object);
+      return;
+    }
     if (hasTrackedReadInMemberChain(path, functionPath, trackedAliases)) {
       wrapMemberRead(path);
       return;

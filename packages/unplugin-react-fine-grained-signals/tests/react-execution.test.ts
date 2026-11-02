@@ -511,10 +511,11 @@ function View(next) {
     expect(transformed).toContain(".capture(() => state.value.nested?.value)");
     expect(transformed).toContain(".capture(() => new state.value.Ctor())");
     expect(transformed).toContain(".capture(() => state.value.tag`read`)");
-    expect(transformed).toContain("state.value.nested.value = next");
+    // A plain write stays a write; the object it writes to is read first.
+    expect(transformed).toContain(".capture(() => state.value.nested).value = next");
     expect(transformed).toContain("state.value.nested.value++");
     expect(transformed).toContain("delete state.value.nested.value");
-    expect(transformed).toContain("nested: state.value.nested.value");
+    expect(transformed).toContain("nested: _signals.capture(() => state.value.nested).value");
   });
 
   it("captures member reads after calls and preserves nested constructor callee evaluation", () => {
@@ -561,8 +562,9 @@ function View(next: number) {
         reactImportSource: "react",
       },
     )?.code;
-    expect(transformed).toContain("state.value.nested.value! = next");
-    expect(transformed).toContain("state.value.nested.value as number");
+    // Only the object the target writes to is read, and captured.
+    expect(transformed).toContain(".capture(() => state.value.nested).value! = next");
+    expect(transformed).toContain(".capture(() => state.value.nested).value as number) = next");
     expect(transformed).not.toContain(".capture(() => state.value.nested.value!");
     expect(transformed).not.toContain(".capture(() => state.value.nested.value as number");
   });
