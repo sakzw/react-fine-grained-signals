@@ -519,3 +519,73 @@ A/B（A=変更前の3b8a021、B=3つの後。6 process）:
 - A/Aの幅は±4%程度。
 - 3つ合わせて、managedはrealisticで−19%、合成120で−20%、Appで−11%、react-routerで−6%。injectはrealisticで−14%、合成120で−14%、Appで−9%、react-routerで−8%。
 - 1はcallbackの多いinput（realistic、react-router、inject）で効き、メモの見込み（realistic −9〜11%）に近い。2は合成120（関数ごとの走査が多い）で−17%。3はmanagedだけに効き（injectはdry runの別名を使わない）、realisticで−8%、合成120で−6%。injectの3は雑音の幅の中。
+
+## 共通化作業のレビューの指摘への対応
+
+`3d24005..HEAD`のレビューで、最近のcommitによる退行が10件見つかった。すべて直した。
+
+**先に訂正する。** 速さの改善の記録に書いた「byte単位で同じ」は、その比較に使ったcorpus（`examples/`と合成file）についてだけの主張だった。退行を起こす書き方がcorpusになかったので、1と2を見逃した。出力が変わらないことの証明ではなかった。今回は入力を全testから集めて比べ直した（下の「広げた同一性の確認」）。
+
+### 追跡が黙って失われていたもの
+
+1. **事前の文字列判定（cde5f65）**: `.current.value`、`.target.value`、`.currentTarget.value`を落とす規則を外した（メンテナの判断）。receiverの前の`.`を見ていたので、`[...target.value]`、`<p {...current.value} />`、`f(...current.value)`、末尾が句点のcommentの後の`current.value`も落としていた。文字列では区別できない。行commentの終わりにCR、U+2028、U+2029を足した。語を作れるidentity escape（`"v\alue"`）も通す。
+   - **今も落とすもの**: object key、shorthand、束縛、JSX属性、ちょうど`"value"`でない文字列、`#value`、`value`を含む長い名前（`values`、`valueOf`、`defaultValue`）。
+2. **遅延した`inspectFunction`（a39a7e2）**: scanのmemoが遅く埋まるので、書き換えた後のASTを走査することがあった。関数を書き換える直前にその関数のscanをmemoする（`scanBeforeRewrite`）。書き換えない関数は聞かれるまで走査しないので、節約は残る。`30ec5da`を戻す必要はなかった。
+   - これで宣言の順序にもよらなくなった。`160975e`でも順序に依存していた（下の「広げた同一性の確認」の2件）。
+   - ほかの遅延・共有の状態も確かめた。`traverseHandlers`のstateは走査1回分のhandlerだけで、ASTの答えを持たない。`SelectionAnalysis`は同じ関数の判定と変換の間だけ生き、その間にASTは変わらない（`addRuntimeImport`は新しい名前を1つ登録するだけ）。別名の集合は写しを渡すので、dry runの`trackedReadCache`も読まない。問題はなかった。
+3. **`new`を通したinstance field（f0c339c）**: 関数内で宣言したclassの`new`は、field初期化式（継承分を含む）の読み取りを読み取りとして数える（選択とcapture）。instanceはaliasになるので、deep signalのnestedなobjectを持つ`m.user.name`も追跡する。effectの中だけの`new`、`new`されないclass、fieldが持つ関数は選択しない。helperの中のclassも同じ。read-shapesの例外は消した。moduleのclassは予防のままで、READMEもそう直した。
+4. **`skipInstanceField`（f39bce1）**: 初期化式だけを飛ばす。computed keyとdecoratorの引数はclassの評価時に実行されるのでcaptureする。class methodのcomputed keyは`Function`のskipで見ないまま残っている。これは今回の退行ではなく`3d24005`以前からの動作で、直していない。
+5. **別名（d66a889）**: 代入先を自分で歩く。parameterも入り、TypeScriptのwrapperを通す。`({ row } = state.value)`、`[(row as any)] = list.value`、`(row as any) = ...`、parameterへのloop headが別名になる。
+
+### 診断
+
+6. **RFGS010の場所（a2fffed）**: `isDeferredFunction`（ほかの読み取りと同じ規則）で後回しになる関数の中、`useSignalTracking()`の下、`@noSignalTracking`の関数、injectが選択した関数では出さない。判定はpluginの`JSXOpeningElement`で行う。その時点で外側の関数はすべて判定済みなので、選択の結果を使える。
+7. **RFGS010のreceiver（a2fffed）**: `isNonSignalValueReceiver`と同じ規則にした。1で判定が`.current.value`を落とさなくなったので、ほかの読み取りの有無で診断が変わることはない（テストで固定した）。
+8. **RFGS009（d586b34）**: 明示の注釈はidentityによらず報告する。
+9. **for-of（d586b34）**: `wrapCallChain`と同じ規則。予防は報告せず、1か所で1回。読むgeneratorのように`visitCall`が報告しない証明済みの読み取りだけ、loopの側で報告する。全corpusで、同じIDが同じ位置に2回出る入力は0件だった。
+10. **RFGS002（d586b34）**: Hookのlinkには出さない。`useThing?.().length`が`useThing().length`と同じになった。
+
+### レビューが上限のために省いた2件（どちらも退行で、直した。d586b34）
+
+- `delete a?.b().c`はchainのlinkのcaptureを失っていた。delete全体をcaptureする。
+- `useT(sig.value) + "x"`はRFGS001を新しく出していた。演算の報告は、Hookの引数以外に読み取りのあるoperandがあるときだけにした。`sig.value + useX()`は今までどおり報告する。
+
+### 広げた同一性の確認
+
+setupのwrapperで全testの入力を集め（重複を除いて6338件、`160975e`で変換4524件）、`160975e`のbuildと比べた。codeとmapと警告を比べている。
+
+- `160975e`と今回の直前のHEAD（`a407f57`）: 7件。helperの退行（2の修正対象）4件と、判定が落としていたRFGS010が3件。古いcorpusでは見えなかった。
+- `160975e`と今回のHEAD: 220件（81種類の入力）。読んで分類した。
+  - 別名（5）、instance fieldとcomputed key（3、4）、RFGS010（6、7）、RFGS009（8）、loopのRFGS001（9）、delete、Hookの結果のRFGS001。どれも今回の修正そのもの。
+  - `setup()`の中のclassで選択されなくなった2件（3）。以前はhelperの中のfieldの読み取りを数えて選択していた。
+  - 順序の修正（2）で変わった2種類。`Label`を`helper`より前に宣言した場合に選択される。`Row`を先に宣言した`<Grid renderItem={Row} />`でRFGS003が出る。後者は修正の副作用で、最初は説明がつかなかった。`160975e`で確かめると、`List`を先に書けばRFGS003が出て、`Row`を先に書くと出なかった。古い走査が書き換え後のASTを見ていた同じ不具合で、今はどちらの順でも出る。テストで固定した。
+- **説明のつかない差は残っていない。** ただしこれも集めたcorpusについてである。
+
+### 利用者から見える変化
+
+- 新しく追跡する: 関数内のclassの`new`のfield、そのinstance、computed key、decoratorの引数、parameterやwrapperへの分割代入の別名。
+- 選択しなくなる: helperの中で`new`されないclassのfield。
+- RFGS010が減る（handler、Hookのcallback、追跡中の関数、DOMやrefのfield）。RFGS001が減る（予防のloop、Hookの結果の演算、loopの2重報告）。RFGS002が減る（Hookのlink）。
+- RFGS009が戻る（注釈があれば小文字の関数でも）。RFGS003が宣言の順によらず出る。
+- 構文errorのあるfileで、`value`がobject keyなどにしかないものはpluginがparseせず、bundlerのparserに任せる（前の変更から）。
+- README（英日）のclass fieldとRFGS010の文を直した。行は増やしていないので`README.md:NNN`の引用はそのまま有効である。
+
+### 速さ（A=`a407f57`、B=今回。6 process。この回のA/Aは取っていない。前回のA/Aは±4%）
+
+| case | A ms | B ms | B/A |
+| --- | ---: | ---: | ---: |
+| managed / browser App.tsx | 38.15 | 36.80 | 1.001 |
+| managed / react-router app (8 files) | 27.24 | 28.07 | 1.031 |
+| managed / synthetic 120 components | 110.72 | 116.44 | 1.064 |
+| managed / realistic 30 components | 175.91 | 186.36 | 1.051 |
+| managed / no-candidate (value keys only) | 0.09 | 0.08 | 0.856 |
+| managed / no-candidate (with e.target.value) | 0.15 | 25.01 | 172.664 |
+| inject / browser App.tsx | 25.94 | 27.90 | 1.048 |
+| inject / react-router app (8 files) | 24.83 | 25.53 | 1.021 |
+| inject / synthetic 120 components | 76.97 | 82.36 | 1.065 |
+| inject / realistic 30 components | 155.43 | 167.06 | 1.071 |
+| inject / no-candidate (value keys only) | 0.09 | 0.08 | 0.899 |
+| inject / no-candidate (with e.target.value) | 0.14 | 24.48 | 187.370 |
+
+- 変換するfileは0〜7%遅くなった。合成120とrealisticの+5〜7%は雑音の幅を少し超える。原因は個別に測っていないが、`scanBeforeRewrite`の分が候補に挙がる。
+- `e.target.value`を含む候補のないfileは約0.15 msから約25 msに戻った。これが1の代償である（`e.target.value`のある普通のformのfileは全処理を通る）。`{ value: n }`とJSX属性だけのfileは落ちたまま（約0.08 ms）。
