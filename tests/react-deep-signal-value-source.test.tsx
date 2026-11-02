@@ -5,7 +5,15 @@ import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deepSignal, effect, useDeepSignalValue, type DeepSignal } from "../src/index.js";
+import {
+  computed,
+  deepCollectionSignal,
+  deepSignal,
+  effect,
+  signal,
+  useDeepSignalValue,
+  type DeepSignal,
+} from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = false;
 
@@ -18,6 +26,9 @@ describe("useDeepSignalValue checks and reads its source like useSignalValue", (
   it.each([
     ["a plain object", { user: { name: "Ada" } }],
     ["null", null],
+    // A plain signal holding an object follows root replacement only.
+    ["a plain signal", signal({ user: { name: "Ada" } })],
+    ["a computed", computed(() => ({ user: { name: "Ada" } }))],
   ])("throws a TypeError during render for %s", (_label, source) => {
     const selector = vi.fn((value: { user: { name: string } }) => value.user.name);
     function Reader() {
@@ -32,6 +43,21 @@ describe("useDeepSignalValue checks and reads its source like useSignalValue", (
       new TypeError("useDeepSignalValue expects a deep signal created by react-fine-grained-signals"),
     );
     expect(selector).not.toHaveBeenCalled();
+  });
+
+  it("accepts both kinds of deep signal", () => {
+    const plain = deepSignal({ user: { name: "Ada" } });
+    const collections = deepCollectionSignal({ user: { name: "Grace" } });
+    function Reader() {
+      return createElement(
+        "output",
+        null,
+        useDeepSignalValue(plain, (value) => value.user.name),
+        useDeepSignalValue(collections, (value) => value.user.name),
+      );
+    }
+    const view = render(createElement(Reader));
+    expect(view.container.textContent).toBe("AdaGrace");
   });
 
   it("does not attach the selector's reads to an effect that renders synchronously", () => {

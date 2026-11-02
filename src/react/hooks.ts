@@ -8,7 +8,7 @@ import type {
   ReadonlySignal,
   WritableComputedOptions,
 } from "../core/index.js";
-import type { NotDeepSignal, PlainRoot } from "../core/deep-signal.js";
+import { isDeepSignalRoot, type NotDeepSignal, type PlainRoot } from "../core/deep-signal.js";
 import { subscribeToReads, untrackedRender } from "../core/render-tracking.js";
 import { subscribeLocalReadable } from "../core/readable-subscription.js";
 import type { DependencyList } from "react";
@@ -23,8 +23,15 @@ const EMPTY_DEPENDENCIES: DependencyList = [];
  * subscribed to from here; `isSignal` throws for it, so the mix fails now
  * instead of leaving the component on a value that never updates.
  */
-function assertHookSource(hook: string, expected: string, source: unknown): void {
-  if (!isSignal(source)) throw new TypeError(`${hook} expects ${expected} created by react-fine-grained-signals`);
+function assertHookSource(
+  hook: string,
+  expected: string,
+  source: unknown,
+  isExpected: (source: unknown) => boolean = () => true,
+): void {
+  if (!isSignal(source) || !isExpected(source)) {
+    throw new TypeError(`${hook} expects ${expected} created by react-fine-grained-signals`);
+  }
 }
 
 /**
@@ -232,7 +239,9 @@ export function useDeepSignalValue<T extends object, S extends SignalSnapshot>(
   selector: (value: T) => S,
   dependencies?: DependencyList,
 ): S {
-  assertHookSource("useDeepSignalValue", "a deep signal", source);
+  // A plain signal holding an object would follow root replacement only, and
+  // its types already reject it.
+  assertHookSource("useDeepSignalValue", "a deep signal", source, isDeepSignalRoot);
   // A resized array would otherwise recreate the store (losing selector and
   // error history) on every later render, with only React's dev warning.
   useFixedDependencyLength("useDeepSignalValue", "UseDeepSignalValueDependencyLengthChangeError", dependencies);

@@ -113,6 +113,14 @@ export type PlainRoot<T> = T &
 export type NotDeepSignal = { readonly [deepSignalBrand]?: never };
 
 let productionDeepSignals: ReturnType<typeof createDeepSignalFactory> | undefined;
+// The roots `deepSignal` and `deepCollectionSignal` created; `isSignal` also
+// accepts plain signals, which `useDeepSignalValue` must not.
+const deepSignalRoots = new WeakSet<object>();
+
+/** Package-internal: whether `value` is a root from `deepSignal` or `deepCollectionSignal`. */
+export function isDeepSignalRoot(value: unknown): boolean {
+  return typeof value === "object" && value !== null && deepSignalRoots.has(value);
+}
 
 /** Package-internal: the shared engine behind `deepSignal` and `deepCollectionSignal`. */
 export function getProductionDeepSignals(): NonNullable<typeof productionDeepSignals> {
@@ -151,6 +159,7 @@ export function getProductionDeepSignals(): NonNullable<typeof productionDeepSig
     markSpeculativeDeepRead: () => coreRuntime.markSpeculativeDeepRead(),
     registerDeepSignal(value) {
       registerSignal(value as DeepSignal<object>);
+      deepSignalRoots.add(value);
     },
   }));
 }
