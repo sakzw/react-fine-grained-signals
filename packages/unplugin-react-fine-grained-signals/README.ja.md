@@ -240,6 +240,10 @@ signals({
 
 `mode: "auto"`、`"manual"`、`"all"`は関数を選択するもので、capture semanticsは変えません。`auto`は静的に認識したreadまたは明示opt-in、`manual`は明示callまたは`@signalTracking`、`all`は対象JSX componentを選びます。`transform: "inject"`は選択関数へbest-effortなambient `useSignalTracking()` boundaryを挿入します。
 
+`auto`の選択はmanaged capture pass自体から導きます。静的に認識したreadを少なくとも1つcapture・iterateする（またはHookの後ろへ移す）か、captureできないreadを報告する（`RFGS001`、`RFGS002`、`RFGS004`）関数が選ばれます。両transformがこの答えを使うので、`transform: "inject"`も`"managed"`と同じ関数を選びます。予防的なcapture（解決できないcallee、実行時keyのmember）だけでは選ばれず、どのcaptureにも含まれないreadでも選ばれません。呼ばれないlocal関数、変数に入れてJSXへ渡すhandler、iterateされないgenerator、他者が呼ぶために返す関数、Hookを呼ぶcallback、`untracked(() => ...)`、`setTimeout`・`setInterval`・`queueMicrotask`・`requestAnimationFrame`・`requestIdleCallback`・native Promiseの`then`/`catch`/`finally`のcallbackの中のreadがこれに当たります。これらのcallbackとtimerはcaptureもされません。moduleでこのlibraryが作ったsignal（`signal`、`computed`、`deepSignal`、`useSignal`、`useComputed`など）の`.peek()`はreadではなく、captureされません。captureが含むlocal関数は数えます。`.call`/`.apply`での呼び出し、template tag、名前付きの`new Promise(executor)`、`for...of`でのiterate、parameter defaultの呼び出し、条件や再代入で選ばれる関数、実行時keyでlocalな配列・object literalから取り出す関数、captureされるcallへ渡すlocalなobject・配列の中の関数です。
+
+既知の制限: どのみちcaptureされるcallへ渡した`async` callback（module dataへの`items.forEach(async () => { ... })`は、componentが別のreadで選ばれると予防的にcaptureされます）は、同期部分がそのcaptureの中で走るので、最初の`await`より前のreadはcomponentをsubscribeします。capture storeにはcallbackをuntrackedで走らせる手段がありません。
+
 ## Render callbackの検出
 
 自動検出はrender callback（配列のiteration method `map`、`flatMap`、`forEach`

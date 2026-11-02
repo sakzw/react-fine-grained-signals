@@ -227,3 +227,67 @@ RFGS003の変化。wrapperで包んだrender prop・children callbackも警告�
 ### 7. `cleanModuleId`
 
 - `stripModuleIdQuery`を呼ぶだけだったため削除し、直接呼ぶ。queryを外す理由の説明は`stripModuleIdQuery`（`src/internal/module-id.ts`）へ移した。
+
+## 選択とcaptureの一貫性テスト
+
+### 不変条件
+
+`tests/selection-capture-consistency.test.ts`は、`s`の読み取り1つをさまざまな文脈に置き、次の2つを確かめる。
+
+1. 読み取りがそれだけのcomponentが選択される（`useSignalCapture()`が入る）のは、同じcomponentに無関係なrender中の読み取り（`<i>{o.value}</i>`）を足したときに対象の読み取りがcaptureされる場合だけで、その逆も成り立つ。custom Hook（`export function useX() { ...; return 0; }`、無関係な読み取りは`return o.value`）でも同じ。
+2. managedとinjectは同じ関数を選択する。
+
+判定は出力をparseし、marker文（`const __subject = 0;`）を持つ関数の先頭のboundaryと、その関数のstoreが作る`capture`/`iterate`/`forIn`の引数で行う。入れ子のcomponentやHookのboundaryを取り違えないためである。
+
+### 失敗していたケースと原因
+
+最初は5件が失敗していた。
+
+- 呼ばれないlocal関数（`function later() { return s.value; }`）、変数に入れたevent handler（`const onClick = () => log(s.value); <button onClick={onClick} />`）、generator（`function* g() { yield s.value; } const it = g();`）: 選択されるが、何もcaptureしない。
+- moduleの配列へのasync forEach callback（`items.forEach(async () => { log(s.value); })`）: 選択されないが、ほかの読み取りがあるとcaptureされる。
+- `s.peek()`: 選択されないが、ほかの読み取りがあるとcaptureされる。
+
+原因は、選択（`inspectFunction`）とcapture（`captureTrackedReadExpressions`）が別々の規則で読み取りを判定していたことにある。選択は入れ子の関数の本体を（遅延するものを除き）すべて歩いて読み取りを数え、captureは呼び出し側でしかcaptureしない。このため、呼ばれない関数の読み取りは選択だけが数えていた。逆に、captureは解決できないcalleeを予防的にcaptureする（`items`はmoduleの値なので`forEach`という名前は何も証明しない。`s.peek()`も同じ）が、選択はそれを数えない。
+
+### 修正: 選択をcapture passから導く
+
+- `wouldCaptureRenderRead`を置いた。managedのcapture passを、ASTを変えずwarningも出さないdry runで走らせる（`captureTrackedReadExpressions`の`dryRun`引数）。capture・`iterate`・`forIn`・分割代入のcapture・JSX spreadのcaptureを出す直前（`emit`）と、captureできない読み取りの診断（RFGS001、RFGS002）の直前（`warn`）で記録するだけで、変換はしない。parameter defaultの移動（RFGS004を含む）は`parameterMayReadTrackedValue`で同じく判定する。injectも同じ答えを使う。
+- 選択は「capture passが、`inspectFunction`の数える読み取りを含む式を少なくとも1つcaptureする（または報告する）」こととした。capture passだけから導く（何かをcaptureすれば選択する）ことはできない。予防的なcaptureは、READMEの「Managed tracking contract」が選択に使わないと定めている（「An imported helper body is not inspected to select a function in `auto` mode」、「the dynamic read alone does not select a function」）。実際、`import { fmt } from "./fmt"; function C() { return <p>{fmt(1)}</p>; }`は`fmt(1)`がcaptureされるため、それだけで選択すると、外部の関数を呼ぶcomponentがすべて変換されてしまう。そこで、captureされる式（その部分木）に`inspectFunction`を当てて、選択の数える読み取りがあるかを見る（`inspectFunction`の`subtree`引数）。aliasのcapture（`obj.v`、`x.name`）では、aliasの定義と代入を同じく判定する。captureされるcallへ渡すlocalなobject・配列（`const opts = { cb: () => s.value }; ext(opts)`）では、その初期化式を判定する。
+- 関数全体の`inspection.readsValue`は、必要条件として先に見る（部分木の答えは関数全体の答えに含まれるので、結果は変わらない）。dry runを走らせるのは、読み取りがあり、かつ答えが必要な場合（自動選択の候補、RFGS007、RFGS008の判定）だけである。
+- 部分木の問い合わせでは、`readsReachable`のmemoを書かない。部分木の探索は関数全体を除外して始めるため、除外した関数を通してしか読み取りに届かない関数（相互に参照するrender callbackの循環）を「読まない」と記録してしまう。既存のテスト「stops folding at a cycle between mutually referenced render callbacks」で見つかった。
+
+### `peek`と`untracked`
+
+- `.peek()`: 引数なしの`.peek()`で、受け手がこのlibraryのfactory（`signal`、`computed`、`deepSignal`、`deepCollectionSignal`、`useSignal`、`useComputed`、`useWritableComputed`、`useDeepSignal`、`useDeepCollectionSignal`）で作った、再代入されないlocal・moduleの名前なら、`unresolvedCallMayRead`は証明済みのcallとする。`importSource`はfileごとに`fileImportSources`へ記録し、`isLibraryExport`で名前付きimportとnamespace importの両方を判定する。
+- `untracked(...)`: テストは通っていたが、理由は両方が誤っていたことにある。選択はcallbackの`s.value`を数えて選択し、captureは`_signals.capture(() => untracked(() => s.value))`を出していた（実行時には`untracked`の中で購読しないので、空のcaptureである）。`isDeferredFunction`に`isUntrackedCallback`（libraryの`untracked`の第1引数）を足し、選択もcaptureもその中を読まない。
+- 同じ理由で、`setTimeout`、`setInterval`、`queueMicrotask`、`requestAnimationFrame`、`requestIdleCallback`（shadowされていないglobal）の第1引数と、native Promise（`new Promise`、`Promise.resolve`などのfactory、それらへの`then`/`catch`/`finally`）の`then`/`catch`/`finally`の引数を`isScheduledCallback`として`isDeferredFunction`に足した。名前で渡す場合（`setTimeout(tick)`）も、選択の`foldFunctionArguments`とcaptureの`namedArgumentMayRead`の両方で除く。これらの呼び出し自体も読み取りをしないので、予防的なcaptureもしない（`isSchedulingCall`）。
+
+### 大きくしたcorpusで見つかった食い違い
+
+ケースを36件から106件に増やした（custom Hookの変種を含めて191件）。class method、object method、helperが返す関数、外部importへのcallback、`.call`/`.apply`/`.bind`、optional call、tagged template、`new`、分割代入、JSXの属性・`key`・spread、`for...of`/`for...in`、入れ子のcomponentとHook、`memo`/`forwardRef`、default export、arrow component、async component、`use()`、early returnの後、`switch`、label付きblock、comma式、classのgetter、配列に入れて添字で呼ぶclosure、Promise executor、`queueMicrotask`、`requestAnimationFrame`、`builtinCallbackArguments`（`replace`）、`elementCallbackMethods`（`filter`、`reduce`）、state Hook（`useState`の値、`useReducer`の初期化）などである。見つかった食い違いと対応:
+
+- `now.call(null)`、`now.apply(null, [])`: captureされるが、選択は`.call`/`.apply`をたどらなかった。選択のhelper foldで`.call`/`.apply`の受け手を呼ばれる関数とした。
+- `` tag`a` ``（localのtagが読む）: tagged templateのfoldを足した。
+- `new Promise(exec)`（名前付きexecutor）: `NewExpression`にも`foldFunctionArguments`を当てた。
+- `for (const v of gen())`（localのgeneratorが読む）: captureは`iterate`するが、選択はgeneratorをたどらなかった。`for...of`の反復元のgeneratorをfoldした（部分木の判定では、`iterate`の引数をその`for...of`と一緒に見る）。
+- parameter defaultの関数を呼ぶ（`function D({ format = () => count.value }) { ... format() ... }`）: 既存のテスト「leaves parameters alone when no default reads a signal」で見つかった。captureはparameterの呼び出しをすべてcaptureする。選択のfoldで、parameterのdefaultの関数を呼ばれる関数とした。
+- 添字で呼ぶ配列のclosure（`fs[0]()`）、実行時keyで選ぶobjectのhandler（`handlers[k]()`）、条件で選ぶ関数（`const pick = f ? () => s.value : () => 0`）、再代入される関数（`let pick = ...; pick = ...`）: 以前は「入れ子の関数を全部数える」選択と予防的なcaptureがたまたま噛み合って購読していた。新しい規則では選ばれなくなるため、選択のhelper foldで、1つに決まらないcalleeが持ちうるlocal関数（`possibleLocalTargets`）をたどるようにした。これらのcallはどれも予防的にcaptureされるので、captureと一致する。
+- 外部importへ渡すlocalなobject（`const opts = { cb: () => s.value }; ext(opts)`）: 同じく以前は購読していた。captureの部分木から参照するlocalな値の初期化式を判定に含めた（上記）。
+
+文書化された設計による食い違いは、テストに`expected`として理由付きで書いた。いずれも予防的なcaptureで、選択に使わないとREADMEが定めているもの（class method・static method、helperが返す関数の呼び出し、`bind`した関数、localのclassの`new`、外部importの呼び出しだけ）である。
+
+### 既知の制限（未修正）
+
+- module dataへのasync forEach callback: 選択は設計どおり読み取りを数えない。しかしcomponentがほかの読み取りで選ばれると、`items.forEach(...)`は予防的にcaptureされ、forEachがasync callbackの同期部分をそのcaptureの中で走らせるので、`s`を購読する。証明によるcapture（`state.value.items.forEach(async () => { log(o.value); })`）でも同じことが起きる。直すには生成コードがcallbackをuntrackedで走らせる必要があるが、capture storeにその手段がなく、runtimeはこの作業の範囲外である。予防的なcaptureをやめると、受け手が読み取る場合に購読が漏れる（古い表示になる）ので、それもしない。テストでは`knownLimitation`として固定し、READMEに既知の制限として書いた。
+
+### 利用者から見える変化（破壊的）
+
+- 選択されなくなる: 呼ばれないlocal関数・object method、変数に入れてJSXへ渡すevent handler、iterateされないgenerator、他者が呼ぶために返す関数（component・Hookが`() => <li>{count.value}</li>`を返す）、Hookを呼ぶcallback（`[count].map((item) => item.value + useContext(Ctx))`）、`untracked(...)`、timer・native Promiseのcallbackの中だけで読むcomponent・Hook。managedでは、これらは以前も何もcaptureしていなかった（timer・Promise・`untracked`のcaptureは何も購読しない）ので、出力から無駄な`useSignalCapture()`と`"use no memo"`が消えるだけである。injectでは、ambientな`useSignalTracking()`が入らなくなるため、たまたまそのrender中に走っていた読み取り（返した関数をHookの呼び出し側がrender中に呼ぶ、など）を追跡しなくなる。
+- 選択されるようになる: `.call`/`.apply`、localのtag、名前付きPromise executor、`for...of`でiterateするlocalのgenerator、parameter defaultの関数の呼び出しでだけ読むcomponent・Hook（以前は読み取りを取りこぼしていた）。
+- captureしなくなる: libraryのsignalの`.peek()`、`untracked(...)`、timerとnative Promiseへの`then`/`catch`/`finally`の呼び出し（引数に読み取りがない場合）。
+
+### 既存テストの変更
+
+- `tests/transform.test.ts`「keeps a function returned by a component or a hook off its own boundary」: 返した関数にboundaryを付けないことは変わらない。持ち主も、返した関数の読み取りをどのcaptureも含まないため選択しない。`useSignalCapture`が2つ入ることを確かめていたのを、入らないことを確かめる形に変えた。
+- `tests/react-execution.test.ts`「does not move Hook calls into a capture closure」: Hookを呼ぶcallbackは（その呼び出しも）captureしないため、`[count].map((item) => item.value + useContext(Ctx))`だけを読むcomponentは選択しない。この形だけ`selected: false`を期待する。Hookをcaptureの中へ動かさないことの確認は変わらない。
+- READMEの「Managed tracking contract」の後に、選択の規則とこの既知の制限を書いた（en/ja）。
