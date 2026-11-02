@@ -11,19 +11,14 @@
  * transform used to produce, so each regression is shown to be real.
  */
 
-import { parseSync, transformSync, traverse, type PluginItem, type PluginObject } from "@babel/core";
+import { parseSync, traverse } from "@babel/core";
 import * as t from "@babel/types";
-import { act, createElement, Suspense, useCallback, useState, type FunctionComponent } from "react";
+import { act, createElement, Suspense, type FunctionComponent } from "react";
 import { createRoot, hydrateRoot, type Root } from "react-dom/client";
 import { renderToString } from "react-dom/server";
-import * as reactJsxRuntime from "react/jsx-runtime";
-import { transformWithOxc } from "vite";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import * as library from "../../../src/index.js";
 import type { Signal } from "../../../src/index.js";
-import * as libraryJsxRuntime from "../../../src/jsx/jsx-runtime.js";
-import * as libraryInternal from "../../../src/internal.js";
-import { useManagedSignals } from "../../../src/react/use-signals.js";
 import * as libraryUtils from "../../../src/utils.js";
 import {
   transformReactFineGrainedSignals,
@@ -31,116 +26,9 @@ import {
   type ReactFineGrainedSignalsMode,
   type ReactFineGrainedSignalsTransform,
 } from "../src/internal/transform.js";
+import { loadModule } from "./execution-harness.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-const MODULES = "__modules";
-const EXPORTS = "__exports";
-
-const moduleRegistry: Record<string, unknown> = {
-  react: { Suspense, useCallback, useState },
-  "react/jsx-runtime": reactJsxRuntime,
-  "react-fine-grained-signals": library,
-  "react-fine-grained-signals/jsx/jsx-runtime": libraryJsxRuntime,
-  // `useManagedSignals` is no longer public; the control fixtures below still
-  // need a hook that behaves like a hand-written boundary.
-  "react-fine-grained-signals/internal": { ...libraryInternal, useManagedSignals },
-  "react-fine-grained-signals/utils": libraryUtils,
-};
-
-// The same in-memory linker `react-compiler.test.ts` uses: named imports
-// become reads from a registry, declaration exports become assignments.
-const moduleLinker: PluginObject = {
-  name: "test-module-linker",
-  visitor: {
-    ImportDeclaration(path) {
-      const properties = path.node.specifiers.map((specifier) => {
-        if (!t.isImportSpecifier(specifier) || !t.isIdentifier(specifier.imported)) {
-          throw path.buildCodeFrameError("fixtures only use named imports");
-        }
-        return t.objectProperty(t.identifier(specifier.imported.name), t.cloneNode(specifier.local));
-      });
-      path.replaceWith(
-        t.variableDeclaration("const", [
-          t.variableDeclarator(
-            t.objectPattern(properties),
-            t.memberExpression(t.identifier(MODULES), t.stringLiteral(path.node.source.value), true),
-          ),
-        ]),
-      );
-    },
-    ExportNamedDeclaration(path) {
-      const declaration = path.node.declaration;
-      if (declaration === null || declaration === undefined) {
-        throw path.buildCodeFrameError("fixtures only use declaration exports");
-      }
-      const names: string[] = [];
-      if (t.isVariableDeclaration(declaration)) {
-        for (const declarator of declaration.declarations) {
-          if (t.isIdentifier(declarator.id)) names.push(declarator.id.name);
-        }
-      } else if (t.isFunctionDeclaration(declaration) && declaration.id) {
-        names.push(declaration.id.name);
-      }
-      path.replaceWithMultiple([
-        declaration,
-        ...names.map((name) =>
-          t.expressionStatement(
-            t.assignmentExpression(
-              "=",
-              t.memberExpression(t.identifier(EXPORTS), t.identifier(name)),
-              t.identifier(name),
-            ),
-          ),
-        ),
-      ]);
-    },
-  },
-};
-
-async function loadModule(
-  source: string,
-  {
-    transform = true,
-    mode = "auto",
-    codegen = "managed",
-    modules = {},
-    typescript = false,
-  }: {
-    transform?: boolean;
-    mode?: ReactFineGrainedSignalsMode;
-    codegen?: ReactFineGrainedSignalsTransform;
-    modules?: Record<string, unknown>;
-    typescript?: boolean;
-  } = {},
-): Promise<Record<string, unknown>> {
-  const fixtureName = typescript ? "Fixture.tsx" : "Fixture.jsx";
-  const transformed = transform
-    ? (transformReactFineGrainedSignals(source, fixtureName, {
-        importSource: "react-fine-grained-signals",
-        mode,
-        transform: codegen,
-        reactCompiler: "opt-out",
-        reactImportSource: "react",
-      })?.code ?? source)
-    : source;
-  // `importSource: "react"` is the project-wide default a per-file
-  // `@jsxImportSource` pragma overrides, exactly as under Vite.
-  const jsx = await transformWithOxc(transformed, fixtureName, {
-    lang: typescript ? "tsx" : "jsx",
-    jsx: { runtime: "automatic", importSource: "react" },
-  });
-  const linked = transformSync(jsx.code, {
-    babelrc: false,
-    configFile: false,
-    filename: "Fixture.js",
-    plugins: [moduleLinker as PluginItem],
-  });
-  if (typeof linked?.code !== "string") throw new Error("module linking emitted no code");
-  const moduleExports: Record<string, unknown> = {};
-  new Function(MODULES, EXPORTS, linked.code)({ ...moduleRegistry, ...modules }, moduleExports);
-  return moduleExports;
-}
 
 describe("managed per-read capture codegen", () => {
   it("commits the transformed per-read capture attempt during hydration", async () => {
