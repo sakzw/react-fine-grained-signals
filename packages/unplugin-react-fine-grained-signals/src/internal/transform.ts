@@ -3341,6 +3341,26 @@ interface TransformCodegenInput {
   body: FunctionBody;
   statements: NodePath<t.Statement>[];
   runtimeImport: RuntimeImport;
+  analysis: SelectionAnalysis;
+}
+
+/**
+ * What selecting one function (`wouldCaptureRenderRead`) learned that its
+ * codegen may reuse, so the same work is not done twice. Empty when selection
+ * never ran the dry run (an explicit or annotated function, `mode: "all"`).
+ *
+ * - `parameterReads`: `parameterMayReadTrackedValue` per parameter node. A
+ *   parameter `relocateTrackedParameters` moves is replaced by a new node, so a
+ *   stale answer is never read.
+ * - `aliases`: `collectTrackedReadAliases` on the authored function. Valid for
+ *   the real pass only while its Bindings are: when no parameter was moved (a
+ *   moved default becomes a body `let` that can make new aliases) and before
+ *   any destructuring is expanded (which re-crawls the scope); `applyManaged`
+ *   checks both. The dry run never adds to it.
+ */
+interface SelectionAnalysis {
+  parameterReads: Map<t.Node, boolean>;
+  aliases?: Set<object>;
 }
 
 /**
@@ -3433,7 +3453,9 @@ function decideTransform(
   // A read anywhere in the function is necessary for selection, not
   // sufficient: the capture pass has to cover it (`wouldCaptureRenderRead`).
   let selectedReads: boolean | undefined;
-  const readsValue = (): boolean => (selectedReads ??= inspect().readsValue && wouldCaptureRenderRead(path, options));
+  const analysis: SelectionAnalysis = { parameterReads: new Map() };
+  const readsValue = (): boolean =>
+    (selectedReads ??= inspect().readsValue && wouldCaptureRenderRead(path, options, analysis));
   inspectKnownRenderPropReads(path, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
@@ -3556,7 +3578,7 @@ function decideTransform(
     imports.push(runtimeImport);
   }
 
-  return { kind: options.transform, body, statements, runtimeImport };
+  return { kind: options.transform, body, statements, runtimeImport, analysis };
 }
 
 /**
@@ -3579,11 +3601,16 @@ function parameterMayReadTrackedValue(
   param: NodePath,
   functionPath: NodePath<t.Function>,
   context: ReadContext,
+  analysis?: SelectionAnalysis,
 ): boolean {
   // A bare identifier has no default to evaluate -- the overwhelmingly common
   // `(props)` case never needs the walk.
   if (param.isIdentifier()) return false;
-  return bodyReadsTrackedValue(param, functionPath, noAliases, context);
+  const known = analysis?.parameterReads.get(param.node);
+  if (known !== undefined) return known;
+  const reads = bodyReadsTrackedValue(param, functionPath, noAliases, context);
+  analysis?.parameterReads.set(param.node, reads);
+  return reads;
 }
 
 /**
@@ -3706,9 +3733,10 @@ function relocateTrackedParameters(
   path: NodePath<t.Function>,
   typeScript: boolean,
   context: ReadContext,
+  analysis?: SelectionAnalysis,
 ): t.Statement[] {
   const params = path.get("params");
-  const first = params.findIndex((param) => parameterMayReadTrackedValue(param, path, context));
+  const first = params.findIndex((param) => parameterMayReadTrackedValue(param, path, context, analysis));
   if (first === -1) return [];
   const moved = params.slice(first);
   // Planned in full before anything is mutated, so a shape this does not know
@@ -3781,13 +3809,13 @@ function isBindablePattern(node: t.Node): node is BindablePattern {
 /** Codegen: inject a bare `useSignalTracking()` call at the top of the function body. */
 function applyInject(
   path: NodePath<t.Function>,
-  { body, runtimeImport }: TransformCodegenInput,
+  { body, runtimeImport, analysis }: TransformCodegenInput,
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
   const call = t.expressionStatement(t.callExpression(t.cloneNode(runtimeImport.identifier), []));
   // Bound again right after the call, so a default's read is collected too.
-  const relocated = relocateTrackedParameters(path, state.typeScript, readContextOf(options));
+  const relocated = relocateTrackedParameters(path, state.typeScript, readContextOf(options), analysis);
   if (body.isBlockStatement()) {
     body.unshiftContainer("body", [call, ...relocated]);
   } else {
@@ -6672,7 +6700,11 @@ function expandTrackedObjectDestructuring(functionPath: NodePath<t.Function>, tr
  * handler stored in a variable, a generator's body), which used to transform
  * a component with nothing to capture.
  */
-function wouldCaptureRenderRead(path: NodePath<t.Function>, options: InternalTransformOptions): boolean {
+function wouldCaptureRenderRead(
+  path: NodePath<t.Function>,
+  options: InternalTransformOptions,
+  analysis: SelectionAnalysis,
+): boolean {
   const context = readContextOf(options);
   const coversRenderRead = (subtree: NodePath): boolean =>
     inspectFunction(
@@ -6685,16 +6717,21 @@ function wouldCaptureRenderRead(path: NodePath<t.Function>, options: InternalTra
       subtree,
     ).readsValue;
   // The parameters `relocateTrackedParameters` moves (or RFGS004 reports).
-  if (path.get("params").some((param) => parameterMayReadTrackedValue(param, path, context) && coversRenderRead(param)))
+  if (
+    path
+      .get("params")
+      .some((param) => parameterMayReadTrackedValue(param, path, context, analysis) && coversRenderRead(param))
+  )
     return true;
   const dryRun = { found: false };
+  analysis.aliases = collectTrackedReadAliases(path, context);
   captureTrackedReadExpressions(
     path,
     t.identifier("_signals"),
     context.importSource,
     context.managedRuntimeSource,
     context.reactImportSource,
-    collectTrackedReadAliases(path, context),
+    analysis.aliases,
     options,
     dryRun,
   );
@@ -6704,7 +6741,7 @@ function wouldCaptureRenderRead(path: NodePath<t.Function>, options: InternalTra
 /** Codegen: add a top-level capture hook and wrap proven synchronous reads. */
 function applyManaged(
   path: NodePath<t.Function>,
-  { body, statements, runtimeImport }: TransformCodegenInput,
+  { body, statements, runtimeImport, analysis }: TransformCodegenInput,
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
@@ -6713,10 +6750,10 @@ function applyManaged(
     t.variableDeclarator(t.cloneNode(store), t.callExpression(t.cloneNode(runtimeImport.identifier), [])),
   ]);
   const readContext = readContextOf(options);
-  const relocated = relocateTrackedParameters(path, state.typeScript, readContext);
+  const relocated = relocateTrackedParameters(path, state.typeScript, readContext, analysis);
   // The same rule that decided what to relocate: what is still left in the
   // parameter list is exactly what could not be moved.
-  if (path.get("params").some((param) => parameterMayReadTrackedValue(param, path, readContext))) {
+  if (path.get("params").some((param) => parameterMayReadTrackedValue(param, path, readContext, analysis))) {
     warnUncapturedParameterRead(path, options);
   }
   const originalStatements = body.isBlockStatement()
@@ -6724,7 +6761,14 @@ function applyManaged(
     : [t.returnStatement(body.node as t.Expression)];
   const directives = body.isBlockStatement() ? body.node.directives : [];
   body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
-  let trackedAliases = collectTrackedReadAliases(path, readContext);
+  // The selection's aliases while its Bindings hold (`SelectionAnalysis`). A
+  // copy, not the set itself: answers cached against the dry run's set
+  // (`trackedReadCache`) describe the authored AST, which this pass changes
+  // as it goes.
+  let trackedAliases =
+    relocated.length === 0 && analysis.aliases !== undefined
+      ? new Set(analysis.aliases)
+      : collectTrackedReadAliases(path, readContext);
   while (expandTrackedObjectDestructuring(path, trackedAliases)) {
     path.scope.crawl();
     trackedAliases = collectTrackedReadAliases(path, readContext);
