@@ -167,23 +167,6 @@ function toModuleIdMatcher(pattern: unknown, option: "include" | "exclude"): Mod
 export const pluginName = PLUGIN_NAME;
 
 /**
- * `id` with the `?query`/`#fragment` a bundler appends taken off, which is
- * exactly what the transform strips before it picks its parser plugins.
- *
- * Deciding on the raw id instead diverges from that decision in both
- * directions. Vite's SFC sub-request `App.vue?vue&type=script&lang.tsx` ends in
- * `.tsx` only because its *query* does, so it would be claimed and then reach
- * the parser as `App.vue` -- with neither the `jsx` nor the `typescript` plugin
- * enabled -- and fail as though the author had written broken syntax.
- * `App.tsx#frag` ends in neither, so it would be skipped although the transform
- * handles it perfectly well. Cleaning here keeps the claim and the parse
- * looking at the same name.
- */
-function cleanModuleId(id: string): string {
-  return stripModuleIdQuery(id);
-}
-
-/**
  * The `transformInclude` decision for `options`, with `include`/`exclude`
  * validated and compiled up front. Exported for the package's own tests; the
  * public entries do not re-export it.
@@ -212,7 +195,7 @@ function isTransformCandidate(id: string): boolean {
   if (id.includes("/node_modules/") || id.includes("\\node_modules\\")) {
     return false;
   }
-  return scriptModuleLoader(moduleIdExtension(cleanModuleId(id))) !== undefined;
+  return scriptModuleLoader(moduleIdExtension(stripModuleIdQuery(id))) !== undefined;
 }
 
 /**
@@ -229,7 +212,7 @@ export type { EsbuildLoaderName };
  * needing esbuild itself.
  */
 export function resolveEsbuildLoader(id: string, configuredLoaders?: Record<string, string> | undefined): string {
-  const extension = moduleIdExtension(cleanModuleId(id));
+  const extension = moduleIdExtension(stripModuleIdQuery(id));
   return configuredLoaders?.[extension] ?? scriptModuleLoader(extension) ?? "js";
 }
 
@@ -495,7 +478,7 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
           return;
         }
         if (warn === undefined) console.warn(warning.message);
-        else warn.call(this, toBundlerWarning(warning, cleanModuleId(id)));
+        else warn.call(this, toBundlerWarning(warning, stripModuleIdQuery(id)));
       },
     });
     for (const diagnostic of promoted) {
@@ -503,7 +486,7 @@ export const reactFineGrainedSignals = createUnplugin<ReactFineGrainedSignalsOpt
       // diagnostic itself is the failure. esbuild's context collects errors
       // and does not throw, so each promoted diagnostic is reported there.
       if (error === undefined) throw diagnostic;
-      error.call(this, toBundlerWarning(diagnostic, cleanModuleId(id)));
+      error.call(this, toBundlerWarning(diagnostic, stripModuleIdQuery(id)));
     }
     return result;
   };
