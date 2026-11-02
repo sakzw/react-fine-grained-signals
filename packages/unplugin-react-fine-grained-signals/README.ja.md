@@ -571,7 +571,8 @@ TypeScriptとして、`.tsx`、`.jsx`、JavaScriptはJSXを含めて解析しま
 
 この変換はbundlerのenvironmentやlayerからserver/clientを判定しません。
 module-levelの`"use server"` directiveがあるファイルでは変換を行わず、JSXを
-返す候補関数があれば位置付きwarningを出します。module-levelの`"use client"`は
+返すcomponent（component identityを持つ関数。JSXを返すserver actionは含みません）
+があれば位置付きwarningを出します。module-levelの`"use client"`は
 client moduleとして通常どおり処理します。どちらのdirectiveもないServer Componentは
 一file transformだけでは判別できないため、`.value`を読む同期componentにclient専用の
 render tracking hookが挿入される可能性があります（async関数は変換しません）。

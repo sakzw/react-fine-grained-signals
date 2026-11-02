@@ -3884,6 +3884,36 @@ export function ServerBadge() { return <output>{count.value}</output>; }
     });
   });
 
+  it("reports RFGS009 only for a function with a component identity in a use server module", () => {
+    // A server action may return JSX too; only a component is left without the
+    // tracking it would otherwise get, which is what RFGS009 says.
+    const warnings: Error[] = [];
+    const source = `"use server";
+import { signal } from "react-fine-grained-signals";
+const count = signal(0);
+export async function submit(form: FormData) {
+  const value = form.get("value");
+  return <p>{String(value)}</p>;
+}
+export const save = async () => <p>saved</p>;
+export function ServerList() {
+  return <ul>{[1].map((i) => <li key={i}>{count.value}</li>)}</ul>;
+}
+`;
+    const result = transformReactFineGrainedSignals(source, "actions.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "opt-out",
+      reactImportSource: "react",
+      warn: (warning) => warnings.push(warning),
+    });
+
+    expect(result).toBeNull();
+    expect(warnings.map((warning) => (warning as Error & { loc?: { line: number } }).loc?.line)).toEqual([9]);
+    expect(warnings[0]?.message).toContain("RFGS009");
+  });
+
   it("warns at function-valued JSX props whose callbacks read signals", () => {
     const warnings: Error[] = [];
     const source = `

@@ -600,8 +600,9 @@ The previous managed `try/finally` structure was the source of the Vite 8 / Oxc 
 
 The transform does not infer server/client identity from bundler environment
 or layer. A module with a module-level `"use server"` directive is left
-untransformed, with a source-located warning when a JSX-returning candidate is
-found. A module-level `"use client"` continues through the normal transform.
+untransformed, with a source-located warning for each component in it (a
+JSX-returning function with a component identity; a server action that returns
+JSX is not one). A module-level `"use client"` continues through the normal transform.
 Server Components without either directive cannot be identified by a
 single-file transform, so a synchronous component that reads `.value` may
 still receive the client-only render-tracking hook (async functions are not

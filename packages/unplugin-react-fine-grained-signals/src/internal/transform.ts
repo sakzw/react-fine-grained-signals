@@ -3303,13 +3303,7 @@ function decideTransform(
   // exports are server-only. Do not infer this from the absence of "use
   // client": ordinary RSC Server Components and client modules are otherwise
   // indistinguishable to this single-file transform.
-  if (hasModuleLevelUseServer(path)) {
-    if (rendersJsx(path) && (options.mode !== "manual" || hasOwnedLeadingComment(path, useSignalTrackingComment))) {
-      warnServerDirectiveComponent(path, options);
-    }
-    return { kind: "skip" };
-  }
-
+  //
   // Computed once and given to every check below that would otherwise climb
   // through this same function's memo()/forwardRef() wrappers on its own --
   // see `getBindingIdentityName`'s matching parameter.
@@ -3317,6 +3311,20 @@ function decideTransform(
   const identity =
     resolveComponentIdentity(path, reactImportSource, climbedParent) ??
     getDefaultExportIdentity(climbedParent, state.filename);
+  if (hasModuleLevelUseServer(path)) {
+    // Only a function the transform would treat as a component is left
+    // without tracking it would otherwise get. A server action that returns
+    // JSX (`export async function submit(form) { ... }`) or a callback inside
+    // a component has no component identity, so it is not reported.
+    if (
+      isComponentIdentity(identity) &&
+      rendersJsx(path) &&
+      (options.mode !== "manual" || hasOwnedLeadingComment(path, useSignalTrackingComment))
+    ) {
+      warnServerDirectiveComponent(path, options);
+    }
+    return { kind: "skip" };
+  }
   // A `@signalTracking`/`@noSignalTracking` comment on a HOC factory is written for the
   // component that factory returns: the factory is never a component itself and
   // can never carry a boundary, so it has nothing else to mean.
