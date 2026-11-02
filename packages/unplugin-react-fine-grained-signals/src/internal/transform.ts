@@ -6869,6 +6869,10 @@ export function transformReactFineGrainedSignals(
     result = transformSync(code, {
       babelrc: false,
       configFile: false,
+      // No plugin here reads compilation targets, but Babel resolves them on
+      // every call, and without this it searches the file's directories for a
+      // browserslist config each time (an `lstat` per ancestor directory).
+      browserslistConfigFile: false,
       filename: id,
       // Babel otherwise derives `sources` from `filename`'s basename, which both
       // loses the path a debugger needs and, under Vite, leaks the HMR query
