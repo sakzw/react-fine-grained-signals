@@ -333,3 +333,27 @@ runtimeの`Set`（`jsx-shared.ts`）と型のunion（`jsx.ts`の`DirectSignalPro
 ### docsのサイズの数字
 
 リリースノートと移行ガイドに、前の数字から計算した差分（「約4.6 kB小さい」など）が残っていた。現在の`pnpm size`の値（signal 4.38 kB、deep 10.28 kB、deep-collections 13.23 kB、index-full 15.69 kB、full-jsx-child 11.11 kB、lite-jsx-child 5.43 kB）にそろえた。
+
+## 2回目のレビューの指摘への対応
+
+コードベース全体を対象に、共通化の観点でもう一度レビューし、10件の指摘があった。今回の共通化で入った不具合はなく、どれも以前からある食い違いだった。pluginの7件は[plugin-dedup.ja.md](./plugin-dedup.ja.md)の「2回目のレビューの指摘への対応」。
+
+### `useDeepSignalValue`が普通のsignalを受け付けていた（実行時のbreaking change）
+
+検査は`isSignal`だけで、エラー文の「deep signal」と食い違っていた。objectを持つ普通の`signal()`を渡すと、rootの置き換えしか追わず、中身の変更では更新されなかった（型ではもともと拒否している）。deep signalのrootを登録する`WeakSet`（`deep-signal.ts`の`isDeepSignalRoot`）を足し、`assertHookSource`に判定を渡す。別copyのsignalは、これまでどおり`isSignal`が先に「Multiple copies」をthrowする。
+
+テスト: `tests/react-deep-signal-value-source.test.tsx`に、普通の`signal()`と`computed()`がrender中に`TypeError`になることと、両方の種類のdeep signalを受け付けることを足した。
+
+### property sweepの後始末をcollectionにそろえた（不具合の修正）
+
+property sweepは、keyのproperty versionとexistence versionの片方を捨てられないと、もう片方も残していた（`!release(property) || !release(existence)`）。settled sweepの`release`はversionをretire（+1）するため、linkのない方のversionは、捨てられないままsweepのたびに+1され、それを読んだrender attemptはcommit時に描画し直しになった。collection sweepはcategoryごとに捨てている。統合前のengineからあった違いで、統合では揃えていなかった。
+
+versionごとに捨て、keyは両方が消えたときに候補から外す。
+
+テスト: `tests/deep-signal-property-sweep.test.ts`に、existenceだけがlinkされたkeyで、property versionが捨てられ、その後のsweepでretireされないことを足した。変更前は失敗することを確認した。
+
+### prototypeを差し替えたcollection（docsのみ）
+
+`nonPlainCollectionKind`は、prototypeをたどって`Object.prototype`に着くと`undefined`を返す（class instanceやDateで、例外を投げる確認を避けるため）。そのため、prototypeを`{}`などに差し替えたMap/Setはopaqueな値として扱われ、entryは検査されない。`Object.prototype`や`null`に差し替えたものはplain objectとして扱われる。null-prototypeの判断（前の節）と同じく、よく使う値の保存を遅くしないため検出はしない。`CollectionSupport.kindOf`のdoc（「prototypeを置き換えたcollectionも含む」）を直し、`docs/guides/core-primitives.md`（英日）と移行ガイドに、保存しないよう書いた。
+
+サイズ（gzip）: deep 10.28 → 10.33 kB、deep-collections 13.23 → 13.29 kB、index-full 15.69 → 15.74 kB（deep signalのrootの`WeakSet`と、versionごとの後始末の分）。リリースノートと移行ガイドの数字もそろえた。
