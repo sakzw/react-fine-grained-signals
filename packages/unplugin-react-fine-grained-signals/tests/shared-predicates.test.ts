@@ -76,6 +76,17 @@ describe("TypeScript wrappers around an assignment or update target", () => {
     expect(write.code).toMatch(/^\s*<number> s\.value = 2;$/m);
   });
 
+  it.each([
+    ["an update", "f((s.value as number)++)"],
+    ["a compound assignment", "f((s.value satisfies number) += 1)"],
+    ["an update in a template", "f(`${(s.value as number)++}`)"],
+  ])("keeps the parentheses of a wrapped target nested in %s it captures", (_kind, statement) => {
+    const { code } = run(`${header}declare function f(value: unknown): void;
+export function N() { ${statement}; return <p>{s.value}</p>; }`);
+    expect(code).toContain("_signals.capture(");
+    reparse(code!, "N.tsx");
+  });
+
   it("captures a wrapped compound assignment as a whole operation, like a bare one", () => {
     const { code } = run(
       `${header}export function D() { s.value += 1; (s.value as number) += 1; (s.value satisfies number) += 1; return <p>{s.value}</p>; }`,
@@ -126,6 +137,28 @@ describe("RFSG control-flow ownership of a Match callback", () => {
   it("follows the runtime through a conditional child and an array", () => {
     const { diagnostics } = run(
       `${controlFlow}export function A({ flag }) { return <Switch>{flag && <Match when={s}>{() => s.value}</Match>}{[<Match key="b" when={s}>{() => s.value}</Match>]}</Switch>; }`,
+    );
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it.each([
+    ["the left of ||", "{<Match when={s}>{() => s.value}</Match> || null}"],
+    ["the left of ??", "{<Match when={s}>{() => s.value}</Match> ?? null}"],
+  ])("follows the runtime through %s, whose operand is the result", (_where, child) => {
+    const { diagnostics } = run(`${controlFlow}export function A() { return <Switch>${child}</Switch>; }`);
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it("does not follow the left of &&, which is never the rendered result", () => {
+    const { diagnostics } = run(
+      `${controlFlow}export function A({ flag }) { return <Switch>{<Match when={s}>{() => s.value}</Match> && flag}</Switch>; }`,
+    );
+    expect(diagnostics).toContain("RFGS003");
+  });
+
+  it("collects a Match passed as the Switch's children attribute", () => {
+    const { diagnostics } = run(
+      `${controlFlow}export function A() { return <Switch children={<Match when={s}>{() => s.value}</Match>} />; }`,
     );
     expect(diagnostics).not.toContain("RFGS003");
   });

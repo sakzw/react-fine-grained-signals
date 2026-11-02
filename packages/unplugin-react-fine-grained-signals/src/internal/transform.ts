@@ -2647,9 +2647,11 @@ function isReactFragmentTag(tag: NodePath, reactImportSource: string): boolean {
  * walks its children with `Children.forEach` -- so arrays and `false`/`null`
  * holes flatten away -- and descends into every `Fragment`. The climb mirrors
  * exactly that: it passes fragments (`<>` and React's `<Fragment>`), arrays,
- * the result operands of a conditional or a logical operator, parentheses and
- * TypeScript wrappers, and stops at the first other element, at an attribute,
- * or at a function boundary. Match itself never calls its branch callback, so
+ * the result operands of a conditional or a logical operator (either side of
+ * `||` and `??`, the right of `&&`), parentheses, TypeScript wrappers and a
+ * `children={...}` attribute, which is the same prop as JSX children; it stops
+ * at the first other element, at any other attribute, or at a function
+ * boundary. Match itself never calls its branch callback, so
  * a Match that does not reach a Switch has no proven owner.
  */
 function isMatchCollectedBySwitch(
@@ -2658,27 +2660,38 @@ function isMatchCollectedBySwitch(
   reactImportSource: string,
 ): boolean {
   let child: NodePath = match;
-  let parent: NodePath | null = match.parentPath;
-  for (; parent !== null; child = parent, parent = child.parentPath) {
+  let next: NodePath | null = match.parentPath;
+  while (next !== null) {
+    let parent: NodePath = next;
+    if (parent.isJSXAttribute()) {
+      const attributeName = parent.node.name;
+      if (!t.isJSXIdentifier(attributeName) || attributeName.name !== "children") return false;
+      // Continue from the element that owns the attribute.
+      const opening: NodePath | null = parent.parentPath;
+      const owner: NodePath | null = opening?.parentPath ?? null;
+      if (!opening?.isJSXOpeningElement() || owner === null || !owner.isJSXElement()) return false;
+      parent = owner;
+    }
     if (parent.isJSXElement()) {
       const name = parent.get("openingElement").get("name");
       if (!name.isJSXIdentifier() && !name.isJSXMemberExpression()) return false;
       if (signalControlFlowTagName(name, importSource) === "Switch") return true;
-      if (isReactFragmentTag(name, reactImportSource)) continue;
+      if (!isReactFragmentTag(name, reactImportSource)) return false;
+    } else if (
+      !(
+        parent.isJSXFragment() ||
+        parent.isJSXExpressionContainer() ||
+        parent.isArrayExpression() ||
+        parent.isParenthesizedExpression() ||
+        (isTransparentWrapper(parent.node) && parent.node.expression === child.node) ||
+        (parent.isConditionalExpression() && parent.node.test !== child.node) ||
+        (parent.isLogicalExpression() && (parent.node.right === child.node || parent.node.operator !== "&&"))
+      )
+    ) {
       return false;
     }
-    if (
-      parent.isJSXFragment() ||
-      parent.isJSXExpressionContainer() ||
-      parent.isArrayExpression() ||
-      parent.isParenthesizedExpression() ||
-      (isTransparentWrapper(parent.node) && parent.node.expression === child.node) ||
-      (parent.isConditionalExpression() && parent.node.test !== child.node) ||
-      (parent.isLogicalExpression() && parent.node.right === child.node)
-    ) {
-      continue;
-    }
-    return false;
+    child = parent;
+    next = parent.parentPath;
   }
   return false;
 }
@@ -5201,17 +5214,29 @@ function spreadsTrackedValue(
  * deciding on each one re-inspected every helper once per captured call.
  */
 /**
- * `node` with a TypeScript wrapper around its update or assignment target
- * held in explicit parentheses. Babel's generator prints the target of
- * `(count.value as number)++` without them once the operation is moved into a
- * capture callback, and `count.value as number++` does not parse.
+ * `node` with every TypeScript wrapper around an update or assignment target
+ * in it held in explicit parentheses, at any depth: the captured expression
+ * itself (`(count.value as number)++`) or one nested in it
+ * (`f((count.value as number)++)`). Babel's generator prints such a target
+ * without them once the cloned operation is moved into a capture callback,
+ * and `count.value as number++` does not parse.
  */
 function parenthesizeWrappedTarget(node: t.Expression): t.Expression {
-  if (t.isUpdateExpression(node) && isTransparentWrapper(node.argument) && !t.isTSNonNullExpression(node.argument)) {
-    node.argument = t.parenthesizedExpression(node.argument) as unknown as t.UpdateExpression["argument"];
-  } else if (t.isAssignmentExpression(node) && isTransparentWrapper(node.left) && !t.isTSNonNullExpression(node.left)) {
-    node.left = t.parenthesizedExpression(node.left) as unknown as t.AssignmentExpression["left"];
-  }
+  t.traverseFast(node, (inner) => {
+    if (
+      t.isUpdateExpression(inner) &&
+      isTransparentWrapper(inner.argument) &&
+      !t.isTSNonNullExpression(inner.argument)
+    ) {
+      inner.argument = t.parenthesizedExpression(inner.argument) as unknown as t.UpdateExpression["argument"];
+    } else if (
+      t.isAssignmentExpression(inner) &&
+      isTransparentWrapper(inner.left) &&
+      !t.isTSNonNullExpression(inner.left)
+    ) {
+      inner.left = t.parenthesizedExpression(inner.left) as unknown as t.AssignmentExpression["left"];
+    }
+  });
   return node;
 }
 
