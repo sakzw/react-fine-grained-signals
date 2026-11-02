@@ -631,3 +631,31 @@ describe("a write through a signal value", () => {
     expect(code).toBeUndefined();
   });
 });
+
+describe("a JSX member tag that reads a signal", () => {
+  const theme = `import { signal } from "react-fine-grained-signals";\nconst theme = signal({ Icon: () => <b /> });\n`;
+  it("captures the tag where the element is evaluated and selects the component", () => {
+    const { code } = run(
+      `${theme}export function A() { return <p><theme.value.Icon size={1}>x</theme.value.Icon></p>; }`,
+    );
+    expect(code).toMatch(
+      /<p>\{\(_Tag = _signals\.capture\(\(\) => theme\.value\.Icon\), <_Tag size=\{1\}>x<\/_Tag>\)\}<\/p>/,
+    );
+    expect(code).toMatch(/var _Tag;/);
+    reparse(code!, "A.tsx");
+  });
+
+  it("keeps a conditional element lazy", () => {
+    const { code } = run(
+      `${theme}export function A(props: { f?: boolean }) { return props.f && <theme.value.Icon />; }`,
+    );
+    expect(code).toContain("props.f && (_Tag = _signals.capture(() => theme.value.Icon), <_Tag />)");
+  });
+
+  it("leaves an ordinary member tag alone", () => {
+    const { code } = run(
+      `${header}const ui = { Icon: () => <b /> };\nexport function A() { return <p><ui.Icon />{s.value}</p>; }`,
+    );
+    expect(code).toContain("<ui.Icon />");
+  });
+});

@@ -2141,6 +2141,31 @@ function isDeferredReadContext(path: NodePath, functionPath: NodePath<t.Function
 }
 
 /**
+ * Does a JSX member tag read a tracked value? `<theme.value.Icon />` evaluates
+ * `theme.value.Icon` when the element is created, but as a
+ * `JSXMemberExpression` it never matches the member-expression rules. Any
+ * `.value` link counts, and so does a base that is a tracked alias.
+ */
+function jsxTagReadsTrackedValue(name: NodePath, trackedAliases: ReadonlySet<object>): boolean {
+  let current = name.node;
+  while (t.isJSXMemberExpression(current)) {
+    if (current.property.name === "value") return true;
+    current = current.object;
+  }
+  return (
+    t.isJSXIdentifier(current) &&
+    trackedAliases.size > 0 &&
+    trackedAliases.has(name.scope.getBinding(current.name) as object)
+  );
+}
+
+/** The value expression a JSX tag name stands for: `theme.value.Icon`. */
+function jsxTagExpression(node: t.JSXMemberExpression | t.JSXIdentifier): t.Expression {
+  if (t.isJSXIdentifier(node)) return node.name === "this" ? t.thisExpression() : t.identifier(node.name);
+  return t.memberExpression(jsxTagExpression(node.object), t.identifier(node.property.name));
+}
+
+/**
  * Is `node` (at `path`) a `.value` read that counts as part of `functionPath`'s
  * render -- the one rule `inspectFunction` (does this function subscribe at
  * all?) and the capture pass (`hasTrackedReadInExpression`, and through it
@@ -2587,8 +2612,15 @@ function scanFunction(
       if (synchronousBodyOnly || isNestedTrackingBoundary(path, reactImportSource) || isRenderPropCallback(path))
         path.skip();
     },
-    JSXElement(_path) {
+    JSXElement(path) {
       inspection.containsJSX = true;
+      const name = path.get("openingElement").get("name");
+      if (
+        name.isJSXMemberExpression() &&
+        jsxTagReadsTrackedValue(name, noAliases) &&
+        !isDeferredReadContext(path, functionPath)
+      )
+        inspection.readsValue = true;
     },
     JSXFragment(_path) {
       inspection.containsJSX = true;
@@ -6491,6 +6523,41 @@ function captureTrackedReadExpressions(
         // captured, which a Hook in the template forbids.
         if (giveUpForHook(path, HOOK_IN_CAPTURED_CALL_WARNING)) return;
         wrap(path as NodePath<t.Expression>);
+      },
+    },
+    JSXElement: {
+      enter(path) {
+        // `<theme.value.Icon />`: a JSX tag cannot be a call, so the tag is
+        // captured into a local right where the element is evaluated, and the
+        // element renders that local: `(_Tag = capture(() => theme.value.Icon),
+        // <_Tag />)`. The tag is still evaluated first, and only when the
+        // element is; its attributes and children stay in place.
+        const opening = path.get("openingElement");
+        const name = opening.get("name");
+        if (
+          !name.isJSXMemberExpression() ||
+          !jsxTagReadsTrackedValue(name, trackedAliases) ||
+          isDeferredReadContext(path, functionPath)
+        )
+          return;
+        if (!emit(path)) return;
+        const local = functionPath.scope.generateUidIdentifier("Tag");
+        functionPath.scope.push({ id: t.cloneNode(local) });
+        const captured = t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("capture")), [
+          generatedCallback([], jsxTagExpression(name.node)),
+        ]);
+        generated.add(captured);
+        name.replaceWith(t.jsxIdentifier(local.name));
+        const closing = path.get("closingElement");
+        if (closing.node)
+          (closing as NodePath<t.JSXClosingElement>).get("name").replaceWith(t.jsxIdentifier(local.name));
+        const sequence = t.sequenceExpression([t.assignmentExpression("=", t.cloneNode(local), captured), path.node]);
+        const parent = path.parentPath;
+        path.replaceWith(
+          parent.isJSXElement() || parent.isJSXFragment() || parent.isJSXAttribute()
+            ? t.jsxExpressionContainer(sequence)
+            : sequence,
+        );
       },
     },
     MemberExpression: { enter: visitMember },
