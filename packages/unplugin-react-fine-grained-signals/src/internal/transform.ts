@@ -12,6 +12,45 @@ import * as t from "@babel/types";
 import { PLUGIN_NAME, pluginMessage, type DiagnosticId } from "./diagnostics.js";
 import { JSX_EXTENSION, stripModuleIdQuery, TYPESCRIPT_EXTENSION } from "./module-id.js";
 
+/**
+ * The handlers of one traversal, keyed like a Babel visitor: a function, or an
+ * `{ enter }` object (no traversal here uses `exit`).
+ */
+type TraversalHandlers = Record<string, ((path: NodePath<never>) => void) | { enter: (path: NodePath<never>) => void }>;
+
+/**
+ * One dispatching visitor per set of handler keys, built once. Babel explodes a
+ * visitor (expanding aliases such as `Function`, checking every key) and caches
+ * the result on that object, so a fresh visitor literal per `path.traverse`
+ * paid that cost on every call -- over a thousand times for a file. The
+ * dispatcher is exploded once and hands each node to the handler of the same
+ * key in the traversal's state, so the handlers can keep their closures.
+ * Skipping and stopping work as before: the handler gets the same `path`.
+ */
+const dispatchVisitors = new Map<string, Visitor<TraversalHandlers>>();
+
+function dispatchVisitorFor(keys: string[]): Visitor<TraversalHandlers> {
+  const signature = keys.join(",");
+  let visitor = dispatchVisitors.get(signature);
+  if (visitor === undefined) {
+    const entries: Record<string, (path: NodePath, handlers: TraversalHandlers) => void> = {};
+    for (const key of keys) {
+      entries[key] = (path, handlers) => {
+        const handler = handlers[key]!;
+        (typeof handler === "function" ? handler : handler.enter)(path as NodePath<never>);
+      };
+    }
+    visitor = entries as Visitor<TraversalHandlers>;
+    dispatchVisitors.set(signature, visitor);
+  }
+  return visitor;
+}
+
+/** `path.traverse(handlers)`, through a visitor Babel explodes only once per key set. */
+function traverseHandlers(path: NodePath, handlers: Visitor): void {
+  path.traverse(dispatchVisitorFor(Object.keys(handlers)), handlers as TraversalHandlers);
+}
+
 // Each closed option set is written once, as a list the plugin validates
 // against, and its type is derived from that list.
 export const MODES = ["manual", "auto", "all"] as const;
@@ -496,21 +535,14 @@ function isHookCallName(name: string): boolean {
  * leaving behavior exactly as it was, rather than injecting an invalid hook.
  */
 function rendersJsx(path: NodePath<t.Function>): boolean {
-  let found = false;
-  path.traverse({
-    Function(nested) {
-      nested.skip();
-    },
-    JSXElement(jsx) {
-      found = true;
-      jsx.stop();
-    },
-    JSXFragment(jsx) {
-      found = true;
-      jsx.stop();
-    },
+  // Node-only, so no NodePaths: `traverseFast` visits the root too, which is
+  // the function itself and must not count as a nested one.
+  const root = path.node;
+  return t.traverseFast(root, (node) => {
+    if (node !== root && t.isFunction(node)) return t.traverseFast.skip;
+    if (t.isJSXElement(node) || t.isJSXFragment(node)) return t.traverseFast.stop;
+    return undefined;
   });
-  return found;
 }
 
 /**
@@ -1242,7 +1274,7 @@ const thisReferenceCache = new WeakMap<t.ObjectExpression, NodePath<t.ThisExpres
 
 function invalidateThisReferences(rewritten: NodePath<t.Function>): void {
   let containsThis = false;
-  rewritten.traverse({
+  traverseHandlers(rewritten, {
     ObjectExpression(object) {
       thisReferenceCache.delete(object.node);
     },
@@ -1270,17 +1302,18 @@ function getObjectThisReferences(object: NodePath<t.ObjectExpression>): NodePath
       const value = unwrapTransparentPath(property.get("value") as NodePath);
       if (value.isFunctionExpression()) member = value;
     }
-    member?.traverse({
-      Function(nested) {
-        if (!nested.isArrowFunctionExpression()) nested.skip();
-      },
-      Class(nested) {
-        nested.skip();
-      },
-      ThisExpression(reference) {
-        references.push(reference);
-      },
-    });
+    if (member !== undefined)
+      traverseHandlers(member, {
+        Function(nested) {
+          if (!nested.isArrowFunctionExpression()) nested.skip();
+        },
+        Class(nested) {
+          nested.skip();
+        },
+        ThisExpression(reference) {
+          references.push(reference);
+        },
+      });
   }
   return references;
 }
@@ -2584,7 +2617,7 @@ function scanFunction(
       }
     };
     visit(binding.path);
-    binding.path.traverse({ AssignmentPattern: visit });
+    traverseHandlers(binding.path, { AssignmentPattern: visit });
     if (target === undefined || !(target.isArrowFunctionExpression() || target.isFunctionExpression())) return;
     if (target.node.generator || isDeferredFunction(target) || functionCallsHook(target)) return;
     addEdge(target, false);
@@ -2667,7 +2700,7 @@ function scanFunction(
     },
   };
   if (subtree === undefined) {
-    functionPath.traverse(visitor);
+    traverseHandlers(functionPath, visitor);
   } else {
     // `traverse` does not visit its root, so the subtree's own node is
     // visited first, by the same handlers. The iterable of a `for...of` is
@@ -2676,7 +2709,7 @@ function scanFunction(
     if (typeof own === "function") own(subtree);
     const loop = subtree.parentPath;
     if (loop?.isForOfStatement() && loop.node.right === subtree.node) foldIteratedGenerator(loop);
-    if (!subtree.isFunction()) subtree.traverse(visitor);
+    if (!subtree.isFunction()) traverseHandlers(subtree, visitor);
   }
   return { own: inspection, edges };
 }
@@ -3140,7 +3173,7 @@ function inspectKnownRenderPropReads(
       new Set([functionPath.node]),
       true,
     ).readsValue;
-  functionPath.traverse({
+  traverseHandlers(functionPath, {
     JSXExpressionContainer(expression) {
       if (!expression.parentPath.isJSXElement() && !expression.parentPath.isJSXFragment()) return;
       const target = getJsxCallbackTarget(expression.get("expression"));
@@ -3582,7 +3615,7 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
   // parameter-environment/TDZ distinction. Decline only this relocation.
   for (const param of params.slice(0, firstMovedIndex)) {
     let conflict = false;
-    param.traverse({
+    traverseHandlers(param, {
       ReferencedIdentifier(reference) {
         if (!movedNames.has(reference.node.name)) return;
         const parameterBinding = path.scope.getOwnBinding(reference.node.name);
@@ -3607,7 +3640,7 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
       }
     }
     let conflict = false;
-    param.traverse({
+    traverseHandlers(param, {
       ReferencedIdentifier(reference) {
         if (!reference.isIdentifier()) return;
         const binding = path.scope.getOwnBinding(reference.node.name);
@@ -3850,7 +3883,7 @@ function computeTrackedReadInExpression(
       hasTrackedReadInMemberChain(candidate, functionPath, trackedAliases));
   if (isTracked(path)) return true;
   let found = false;
-  path.traverse({
+  traverseHandlers(path, {
     Function(nested) {
       nested.skip();
     },
@@ -5082,7 +5115,7 @@ function targetAliasGraphMayRead(
     // capture closure. Preserve the conservative behavior for Hook callers.
     if (functionCallsHook(current)) break;
     let readsAlias = false;
-    (current.get("body") as NodePath).traverse({
+    traverseHandlers(current.get("body") as NodePath, {
       Function(nested) {
         nested.skip();
       },
@@ -5204,35 +5237,18 @@ function targetFunctionMayReadTrackedValue(
 
 /** Does a synchronous helper invoke a function selected through a dynamic key? */
 function hasDynamicCallTarget(functionPath: NodePath<t.Function>): boolean {
-  let found = false;
-  functionPath.traverse({
-    Function(nested) {
-      nested.skip();
-    },
-    CallExpression(path) {
-      const callee = unwrapTransparent(path.node.callee);
-      if (
-        (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
-        callee.computed &&
-        getReadPropertyName(callee) === undefined
-      ) {
-        found = true;
-        path.stop();
-      }
-    },
-    OptionalCallExpression(path) {
-      const callee = unwrapTransparent(path.node.callee);
-      if (
-        (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
-        callee.computed &&
-        getReadPropertyName(callee) === undefined
-      ) {
-        found = true;
-        path.stop();
-      }
-    },
+  // Node-only; the root (the function itself) is not a nested function.
+  const root = functionPath.node;
+  return t.traverseFast(root, (node) => {
+    if (node !== root && t.isFunction(node)) return t.traverseFast.skip;
+    if (!t.isCallExpression(node) && !t.isOptionalCallExpression(node)) return undefined;
+    const callee = unwrapTransparent(node.callee);
+    return (t.isMemberExpression(callee) || t.isOptionalMemberExpression(callee)) &&
+      callee.computed &&
+      getReadPropertyName(callee) === undefined
+      ? t.traverseFast.stop
+      : undefined;
   });
-  return found;
 }
 
 const noAliases: Set<object> = new Set();
@@ -5315,7 +5331,7 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
         if (!property.isObjectMethod() || property.node.kind !== "get" || property.node.async) continue;
         const body = property.get("body");
         if (bodyReadsTrackedValue(body, property, noAliases, context)) return true;
-        body.traverse({
+        traverseHandlers(body, {
           Function(nested) {
             nested.skip();
           },
@@ -5326,7 +5342,7 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
     if (source.isIdentifier()) reference(source);
     else if (source.isCallExpression() || source.isOptionalCallExpression()) call(source);
     if (seeded) return true;
-    source.traverse({
+    traverseHandlers(source, {
       Function(nested) {
         nested.skip();
       },
@@ -5383,7 +5399,7 @@ function collectTrackedReadAliases(functionPath: NodePath<t.Function>, context: 
       ),
     );
   };
-  functionPath.traverse({
+  traverseHandlers(functionPath, {
     Function(nested) {
       nested.skip();
     },
@@ -5502,21 +5518,15 @@ function callNameIsHook(node: t.Node): boolean {
 /** Does evaluating this expression call a Hook outside nested functions? */
 function expressionCallsHook(path: NodePath): boolean {
   if ((path.isCallExpression() || path.isOptionalCallExpression()) && callNameIsHook(path.node.callee)) return true;
-  let found = false;
-  const inspectCall = (call: NodePath<t.CallExpression | t.OptionalCallExpression>): void => {
-    if (callNameIsHook(call.node.callee)) {
-      found = true;
-      call.stop();
-    }
-  };
-  path.traverse({
-    Function(nested) {
-      nested.skip();
-    },
-    CallExpression: inspectCall,
-    OptionalCallExpression: inspectCall,
+  // Node-only; the root may itself be a function (a concise arrow body
+  // `() => () => useX()`), which `path.traverse` entered and so does this.
+  const root = path.node;
+  return t.traverseFast(root, (node) => {
+    if (node !== root && t.isFunction(node)) return t.traverseFast.skip;
+    return (t.isCallExpression(node) || t.isOptionalCallExpression(node)) && callNameIsHook(node.callee)
+      ? t.traverseFast.stop
+      : undefined;
   });
-  return found;
 }
 
 /**
@@ -5587,7 +5597,7 @@ function bodyReadsTrackedValue(
       call.stop();
     }
   };
-  body.traverse({
+  traverseHandlers(body, {
     Function(nested) {
       nested.skip();
     },
@@ -5841,7 +5851,7 @@ function captureTrackedReadExpressions(
     };
     if (path.isIdentifier()) return reads(path);
     let found = false;
-    path.traverse({
+    traverseHandlers(path, {
       Identifier(identifier) {
         if (identifier.isReferencedIdentifier() && reads(identifier)) {
           found = true;
@@ -5876,7 +5886,7 @@ function captureTrackedReadExpressions(
     };
     if (path.isIdentifier()) return path.isReferencedIdentifier() && reads(path);
     let found = false;
-    path.traverse({
+    traverseHandlers(path, {
       Identifier(identifier) {
         if (identifier.isReferencedIdentifier() && reads(identifier)) {
           found = true;
@@ -6081,7 +6091,7 @@ function captureTrackedReadExpressions(
    * visited directly. `call` is `(_hookResult => ...)(hookCall)`.
    */
   const visitHookCallArguments = (call: NodePath<t.CallExpression>): void => {
-    (call.get("arguments")[0] as NodePath).traverse(visitor);
+    traverseHandlers(call.get("arguments")[0] as NodePath, visitor);
   };
   /**
    * Splits `useStore().value.items` into the Hook call, evaluated in place by
@@ -6544,7 +6554,7 @@ function captureTrackedReadExpressions(
     OptionalMemberExpression: { enter: visitMember },
   };
   if (dryRun === undefined) {
-    functionPath.get("body").traverse(visitor);
+    traverseHandlers(functionPath.get("body"), visitor);
     return;
   }
   // A dry run stops at the first answer, and sees the function as authored:
@@ -6566,7 +6576,7 @@ function captureTrackedReadExpressions(
     handler?.(body);
     if (dryRun.found || body.shouldSkip) return;
   }
-  body.traverse(guarded);
+  traverseHandlers(body, guarded);
 }
 
 /**
@@ -6584,7 +6594,7 @@ function captureTrackedReadExpressions(
  */
 function expandTrackedObjectDestructuring(functionPath: NodePath<t.Function>, trackedAliases: Set<object>): boolean {
   const candidates: NodePath<t.VariableDeclarator>[] = [];
-  functionPath.get("body").traverse({
+  traverseHandlers(functionPath.get("body"), {
     Function(nested) {
       nested.skip();
     },
