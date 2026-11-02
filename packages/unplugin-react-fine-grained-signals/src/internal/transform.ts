@@ -3448,14 +3448,11 @@ function getFunctionBody(path: NodePath<t.Function>) {
 type FunctionBody = ReturnType<typeof getFunctionBody>;
 
 // The shared fields `applyInject` and `applyManaged` both need once
-// `decideTransform` has settled on a codegen strategy: the body slot to
-// rewrite, the original statement list it came from (empty for a concise
-// arrow body), and the runtime hook binding to call. A function with the
+// `decideTransform` has settled on a codegen strategy: the runtime hook binding
+// to call and what selection learned. A function with the
 // author's own explicit `useSignalTracking()` never reaches codegen: it is
 // `"directive-only"` in either transform.
 interface TransformCodegenInput {
-  body: FunctionBody;
-  statements: NodePath<t.Statement>[];
   runtimeImport: RuntimeImport;
   analysis: SelectionAnalysis;
 }
@@ -3699,7 +3696,7 @@ function decideTransform(
     imports.push(runtimeImport);
   }
 
-  return { kind: options.transform, body, statements, runtimeImport, analysis };
+  return { kind: options.transform, runtimeImport, analysis };
 }
 
 /**
@@ -3927,10 +3924,25 @@ function isBindablePattern(node: t.Node): node is BindablePattern {
   return t.isIdentifier(node) || t.isObjectPattern(node) || t.isArrayPattern(node);
 }
 
+/**
+ * The function's block body, made first if it is a concise arrow's expression.
+ * `ensureBlock` keeps the expression's NodePath and moves it under the new
+ * `return`. Replacing the body slot instead would leave that path holding the
+ * block, while the paths below it still name it as their parent: a Binding's
+ * reference in `() => Label()` or `() => items.map(Row)` then no longer sits in
+ * a call, and `isPlainCallee` and `isRenderCallback` give (and remember) the
+ * wrong answer until something walks the new body. This runs before anything
+ * asks, so no walk is needed.
+ */
+function blockBodyOf(path: NodePath<t.Function>): NodePath<t.BlockStatement> {
+  if (!t.isBlockStatement(path.node.body)) path.ensureBlock();
+  return path.get("body") as NodePath<t.BlockStatement>;
+}
+
 /** Codegen: inject a bare `useSignalTracking()` call at the top of the function body. */
 function applyInject(
   path: NodePath<t.Function>,
-  { body, runtimeImport, analysis }: TransformCodegenInput,
+  { runtimeImport, analysis }: TransformCodegenInput,
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
@@ -3938,15 +3950,9 @@ function applyInject(
   const call = t.expressionStatement(t.callExpression(t.cloneNode(runtimeImport.identifier), []));
   // Bound again right after the call, so a default's read is collected too.
   const relocated = relocateTrackedParameters(path, state.typeScript, readContextOf(options), analysis);
-  if (body.isBlockStatement()) {
-    body.unshiftContainer("body", [call, ...relocated]);
-  } else {
-    body.replaceWith(t.blockStatement([call, ...relocated, t.returnStatement(body.node as t.Expression)]));
-  }
-  const injectedBody = path.node.body;
-  if (options.reactCompiler === "opt-out" && t.isBlockStatement(injectedBody)) {
-    addNoMemoDirective(injectedBody);
-  }
+  const body = blockBodyOf(path);
+  body.unshiftContainer("body", [call, ...relocated]);
+  if (options.reactCompiler === "opt-out") addNoMemoDirective(body.node);
   path.scope.crawl();
   invalidateThisReferences(path);
   markTransformed(state);
@@ -6966,7 +6972,7 @@ function wouldCaptureRenderRead(
 /** Codegen: add a top-level capture hook and wrap proven synchronous reads. */
 function applyManaged(
   path: NodePath<t.Function>,
-  { body, statements, runtimeImport, analysis }: TransformCodegenInput,
+  { runtimeImport, analysis }: TransformCodegenInput,
   options: InternalTransformOptions,
   state: PluginState,
 ): void {
@@ -6981,11 +6987,9 @@ function applyManaged(
   if (path.get("params").some((param) => parameterMayReadTrackedValue(param, path, readContext, analysis))) {
     warnUncapturedParameterRead(path, options);
   }
-  const originalStatements = body.isBlockStatement()
-    ? statements.map((statement) => statement.node)
-    : [t.returnStatement(body.node as t.Expression)];
-  const directives = body.isBlockStatement() ? body.node.directives : [];
-  body.replaceWith(t.blockStatement([...relocated, ...originalStatements]));
+  const body = blockBodyOf(path);
+  const directives = body.node.directives;
+  body.replaceWith(t.blockStatement([...relocated, ...body.node.body]));
   // The selection's aliases while its Bindings hold (`SelectionAnalysis`). A
   // copy, not the set itself: answers cached against the dry run's set
   // (`trackedReadCache`) describe the authored AST, which this pass changes
@@ -7007,7 +7011,7 @@ function applyManaged(
     trackedAliases,
     options,
   );
-  const transformedBody = t.blockStatement([declaration, ...(body.node as t.BlockStatement).body]);
+  const transformedBody = t.blockStatement([declaration, ...body.node.body]);
   transformedBody.directives = directives;
   if (options.reactCompiler === "opt-out") addNoMemoDirective(transformedBody);
   body.replaceWith(transformedBody);

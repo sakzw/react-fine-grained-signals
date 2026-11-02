@@ -770,6 +770,44 @@ export function App() {
   });
 });
 
+describe("a concise arrow rewritten before the function it calls", () => {
+  const prelude = `import { signal } from "react-fine-grained-signals";
+export const rows = signal([1]);
+export const count = signal(0);`;
+  const routes = [
+    ["all", ""],
+    ["manual", "/** @signalTracking */ "],
+  ] as const;
+
+  it.each(routes)("keeps a map callback off a boundary of its own (%s)", async (mode, annotation) => {
+    const module = await loadModule(
+      `${prelude}
+${annotation}export const List = ({ items }) => items.map(Row);
+function Row(i) { return <p key={i}>{count.value}</p>; }
+${annotation}export const App = () => <List items={rows.value} />;`,
+      { mode },
+    );
+    const container = mount(module.App);
+    expect(container.textContent).toBe("0");
+    write(module, "rows", [1, 2, 3]);
+    expect(container.textContent).toBe("000");
+    write(module, "count", 1);
+    expect(container.textContent).toBe("111");
+  });
+
+  it.each(routes)("subscribes the arrow to a plain-called component's read (%s)", async (mode, annotation) => {
+    const module = await loadModule(
+      `${prelude}
+${annotation}export const App = () => Label();
+function Label() { const x = count.value; return <p>{x}</p>; }`,
+      { mode },
+    );
+    const container = mount(module.App);
+    write(module, "count", 1);
+    expect(container.textContent).toBe("1");
+  });
+});
+
 describe("a signal read in a parameter default", () => {
   const source = `
 import { signal } from "react-fine-grained-signals";

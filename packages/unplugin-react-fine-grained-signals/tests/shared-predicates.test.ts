@@ -966,3 +966,66 @@ describe("a Hook's result in an operation", () => {
     expect(diagnostics).toEqual(["RFGS001"]);
   });
 });
+
+describe("a function rewritten before what it calls is visited", () => {
+  // Making a concise arrow's block must not change what the references in its
+  // expression say: `Row` and `Label` are answered from those references, and
+  // the answer is remembered. `all` and an annotation in `manual` have no dry
+  // run on the authored code to answer first.
+  const label = "function Label() { const x = s.value; return <p>{x}</p>; }";
+  const row = "function Row(i: number) { return <p>{s.value}</p>; }";
+  const holder = "const ns2 = { Label() { const x = s.value; return <p>{x}</p>; } };";
+  const both = (a: string, b: string): string[] => [`${header}${a}\n${b}`, `${header}${b}\n${a}`];
+  const routes = [
+    ["all", ""],
+    ["manual", "/** @signalTracking */ "],
+    ["auto", ""],
+  ] as const;
+
+  describe.each(routes)("%s %s", (mode, annotation) => {
+    it.each([
+      ["a concise map", "export const List = ({ items }: any) => items.map(Row);"],
+      ["a concise flatMap", "export const List = ({ items }: any) => items.flatMap(Row);"],
+      ["a concise optional map", "export const List = ({ items }: any) => items?.map(Row);"],
+      ["a concise map through a wrapper", "export const List = ({ items }: any) => items.map(Row as any);"],
+      ["a block map", "export const List = ({ items }: any) => { return items.map(Row); };"],
+    ])("keeps the callback of %s plain", (_kind, list) => {
+      for (const source of both(annotation + list, row)) {
+        const { code } = run(source, { mode });
+        expect(code!.match(/= _useSignalCapture\(\)/g)).toHaveLength(1);
+        expect(code).toMatch(/const _signals = _useSignalCapture\(\);\s+return _signals\.capture\(\(\) => items/);
+      }
+    });
+
+    it.each([
+      ["a concise call", "export const App = () => Label();", "Label()", label],
+      ["a block call", "export const App = () => { return Label(); };", "Label()", label],
+      ["a concise optional call", "export const App = () => Label?.();", "Label?.()", label],
+      ["a concise conditional call", "export const App = ({ f }: any) => f ? Label() : null;", "Label()", label],
+      ["a concise keyed call", "export const App = () => ns2.Label();", "ns2.Label()", holder],
+    ])("captures %s of a plain-called component", (_kind, app, call, target) => {
+      for (const source of both(annotation + app, target)) {
+        const { code } = run(source, { mode });
+        expect(code).toContain(`_signals.capture(() => ${call})`);
+      }
+    });
+  });
+
+  it.each([
+    ["all", ""],
+    ["manual", "/** @signalTracking */ "],
+  ] as const)("keeps a concise arrow's references in inject too (%s)", (mode, annotation) => {
+    for (const source of both(`${annotation}export const List = ({ items }: any) => items.map(Row);`, row)) {
+      const { code } = run(source, { mode, transform: "inject" });
+      expect(code!.match(/_useSignalTracking\(\);/g)).toHaveLength(1);
+      expect(code).toMatch(/_useSignalTracking\(\);\s+return items\.map\(Row\);/);
+    }
+  });
+
+  it("moves a default in front of a concise arrow's return, in both transforms", () => {
+    for (const transform of ["managed", "inject"] as const) {
+      const { code } = run(`${header}export const A = ({ x = s.value }: any) => <p>{x}</p>;`, { transform });
+      expect(code).toMatch(/\} = _param;\s+return <p>\{x\}<\/p>;/);
+    }
+  });
+});
