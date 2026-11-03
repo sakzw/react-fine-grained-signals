@@ -182,6 +182,4 @@ Detection starts with v0.4. Releases before it used other keys (`react-fine-grai
 
 Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
 
-Assigning the brand into `deepSignal` state throws, because a branded subtree would read as a signal and stop being made reactive.
-
 See also: [React hooks](./hooks.md), [rendering optimization](./rendering-optimization.md).
