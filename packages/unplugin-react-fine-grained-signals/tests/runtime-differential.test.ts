@@ -209,6 +209,7 @@ describe("cases that cannot run", () => {
       "a useComputed getter",
       "use()",
       "an async component",
+      "a decorator argument of a class method",
     ]);
   });
 });

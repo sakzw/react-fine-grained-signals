@@ -46,7 +46,7 @@ function inspect(code: string | undefined): Subject {
     babelrc: false,
     configFile: false,
     filename: "Out.tsx",
-    parserOpts: { plugins: ["jsx", "typescript"] },
+    parserOpts: { plugins: ["jsx", "typescript", "decorators-legacy"] },
   });
   let subject: Subject = { boundary: undefined, captures: [] };
   traverse(ast!, {

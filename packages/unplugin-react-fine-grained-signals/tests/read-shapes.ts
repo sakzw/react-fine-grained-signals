@@ -700,6 +700,11 @@ export const cases: readonly Case[] = [
     },
   },
 
+  // What `new` is followed through stops at a direct class: the maintainer's
+  // decision is that a class reached any other way stays unfollowed, since the
+  // boundary has to be readable from the code. Read the signal first and pass it in.
+  ...unfollowedClasses(),
+
   // Deep signals. `signal()` is shallow, so a value taken out of `.value` and
   // read later needs no tracking of its own; a deep signal's nested objects
   // are proxies whose reads the runtime tracks wherever they happen. Each case
@@ -1159,6 +1164,97 @@ function deepCases(): Case[] {
         token: "user.name",
       },
       { write: 'store.value.users.get("u")!.name = "Grace";' },
+    ),
+  ];
+}
+
+/**
+ * README.md:247: "Only the direct forms are followed", and what it lists as not
+ * counted or not tracked. Each stays stale as its component's only read.
+ */
+function unfollowedClasses(): Case[] {
+  const notCounted = "README.md:247: a class reached other than directly is not counted";
+  // Captured as a precaution next to another read, as any other `new` or method call.
+  const unfollowed = (name: string, testCase: Omit<Case, "name" | "expected">): Case => ({
+    name,
+    jsx: "{x}",
+    ...testCase,
+    expected: { ...precaution, why: notCounted },
+    run: {
+      ...testCase.run,
+      exception: {
+        rerenders: { "managed alone": false, "inject alone": false },
+        stale: true,
+        why: notCounted,
+      },
+    },
+  });
+  // Not captured at all: the read is out of the capture pass's sight.
+  const untracked = (name: string, why: string, testCase: Omit<Case, "name" | "expected">): Case => ({
+    name,
+    jsx: "{x}",
+    ...testCase,
+    expected: { selected: false, captured: false, why },
+    run: {
+      ...testCase.run,
+      exception: {
+        rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
+        stale: true,
+        why,
+      },
+    },
+  });
+  return [
+    unfollowed("a new of a class chosen by a condition", {
+      params: "props: { f?: boolean }",
+      body: "const K = props.f ? class { x = s.value; } : class { x = 0; }; const x = new K().x;",
+      token: "new K(",
+      run: { props: { f: true } },
+    }),
+    unfollowed("a new of a class a factory returns", {
+      body: "function make() { return class { x = s.value; }; } const K = make(); const x = new K().x;",
+      token: "new K(",
+    }),
+    unfollowed("a new of a mixin's class", {
+      body: "const mix = (B: any) => class extends B { x = s.value; }; const K = mix(Object); const x = new K().x;",
+      token: "new K(",
+    }),
+    unfollowed("a new of an aliased class", {
+      body: "class M { x = s.value; } const K = M; const x = new K().x;",
+      token: "new K(",
+    }),
+    unfollowed("a new of a class held in an object", {
+      body: "const o = { K: class { x = s.value; } }; const x = new o.K().x;",
+      token: "new o.K(",
+    }),
+    unfollowed("a new of a class held in an array", {
+      body: "const a = [class { x = s.value; }]; const x = new a[0]!().x;",
+      token: "new a[0]",
+    }),
+    unfollowed("a read in a constructor body", {
+      body: "class M { x: number; constructor() { this.x = s.value; } } const x = new M().x;",
+      token: "new M(",
+    }),
+    unfollowed("an IIFE in an instance field", {
+      body: "class M { x = (() => s.value)(); } const x = new M().x;",
+      token: "new M(",
+    }),
+    unfollowed("a static factory", {
+      body: "class M { x = 0; static make() { return s.value; } } const x = M.make();",
+      token: "M.make(",
+    }),
+    untracked("a computed key of a class method", "README.md:247: a method's computed key is not tracked", {
+      body: "class M { [s.value]() {} } const x = Object.getOwnPropertyNames(M.prototype)[1];",
+    }),
+    untracked(
+      "a decorator argument of a class method",
+      "README.md:247: a method decorator's arguments are not tracked",
+      {
+        module: "const dec = (_v: unknown) => () => {};",
+        body: "let x = 0; class M { @dec(s.value) m() {} } x = M.length;",
+        token: "dec(",
+        run: { skip: "the execution harness does not lower decorators" },
+      },
     ),
   ];
 }
