@@ -581,13 +581,12 @@ describe("Direct DOM binding", () => {
     expect((box.style as unknown as Record<string, string>)["WebkitLineClamp"]).toBe("");
   });
 
-  it("writes React's unitless SVG style numbers without px on SVG hosts, entry and whole-object forms", () => {
-    const fillOpacity = signal(0.5);
-    const strokeWidth = signal(2);
-    const whole = signal<Record<string, string | number>>({ fillOpacity: 0.5, strokeOpacity: 0.5, strokeWidth: 2 });
+  it("writes SVG unitless style values bound as strings as-is (SVG names are not on the unitless list)", () => {
+    const fillOpacity = signal("0.5");
+    const whole = signal<Record<string, string>>({ fillOpacity: "0.5", strokeWidth: "2" });
     const { container } = render(
       <svg>
-        <circle data-testid="entry" style={{ fillOpacity, strokeWidth }} />
+        <circle data-testid="entry" style={{ fillOpacity }} />
         <rect data-testid="whole" style={whole} />
       </svg>,
     );
@@ -595,24 +594,13 @@ describe("Direct DOM binding", () => {
     const rect = container.querySelector<SVGElement>('[data-testid="whole"]')!;
 
     act(() => {
-      fillOpacity.value = 0.25;
-      strokeWidth.value = 3;
-      whole.value = { fillOpacity: 0.3, strokeOpacity: 0.4, strokeWidth: 3 };
+      fillOpacity.value = "0.25";
+      whole.value = { fillOpacity: "0.3", strokeWidth: "3" };
     });
 
-    // jsdom, like a browser, rejects "0.25px" for fill-opacity, so a px suffix
-    // would leave the old 0.5 in place.
     expect(entry.style.fillOpacity).toBe("0.25");
     expect(rect.style.fillOpacity).toBe("0.3");
-    expect(rect.style.strokeOpacity).toBe("0.4");
-    // stroke-width accepts both forms; compare with what React itself writes.
-    const reactWritten = render(
-      <svg>
-        <rect data-testid="react" style={{ fillOpacity: 0.3, strokeOpacity: 0.4, strokeWidth: 3 }} />
-      </svg>,
-    ).container.querySelector('[data-testid="react"]')!;
-    expect(rect.getAttribute("style")).toBe(reactWritten.getAttribute("style"));
-    expect(entry.style.strokeWidth).toBe("3");
+    expect(rect.style.strokeWidth).toBe("3");
   });
 
   it("still adds px to bound numbers on HTML hosts where React adds it", () => {

@@ -93,11 +93,9 @@ const UNCONTROLLED_PROP_NAMES: Record<string, string> = {
 };
 
 // CSS properties React treats as unitless: a bound number is written as-is
-// instead of getting a "px" suffix. Mirrors React 19 react-dom's
-// `unitlessNumbers`, including its SVG entries (style binding also runs on SVG
-// hosts, where `fillOpacity: 0.5` must not become "0.5px") and its
-// vendor-prefixed entries, spelled as React spells them (`WebKitBoxFlexGroup`
-// included), so a bound value is written exactly as React would write it.
+// instead of getting a "px" suffix. HTML properties only: the SVG-specific and
+// vendor-prefixed entries of React's list are left out to keep the runtime
+// small, so a bound SVG `fillOpacity` or `strokeWidth` must be a string.
 const UNITLESS_CSS_PROPERTIES = new Set([
   "animationIterationCount",
   "aspectRatio",
@@ -136,42 +134,6 @@ const UNITLESS_CSS_PROPERTIES = new Set([
   "widows",
   "zIndex",
   "zoom",
-  // SVG
-  "fillOpacity",
-  "floodOpacity",
-  "stopOpacity",
-  "strokeDasharray",
-  "strokeDashoffset",
-  "strokeMiterlimit",
-  "strokeOpacity",
-  "strokeWidth",
-  // Vendor-prefixed
-  "MozAnimationIterationCount",
-  "MozBoxFlex",
-  "MozBoxFlexGroup",
-  "MozLineClamp",
-  "msAnimationIterationCount",
-  "msFlex",
-  "msZoom",
-  "msFlexGrow",
-  "msFlexNegative",
-  "msFlexOrder",
-  "msFlexPositive",
-  "msFlexShrink",
-  "msGridColumn",
-  "msGridColumnSpan",
-  "msGridRow",
-  "msGridRowSpan",
-  "WebkitAnimationIterationCount",
-  "WebkitBoxFlex",
-  "WebKitBoxFlexGroup",
-  "WebkitBoxOrdinalGroup",
-  "WebkitColumnCount",
-  "WebkitColumns",
-  "WebkitFlex",
-  "WebkitFlexGrow",
-  "WebkitFlexPositive",
-  "WebkitFlexShrink",
 ]);
 
 type StylePropertyBinding = { readonly entries: readonly (readonly [string, unknown])[] };

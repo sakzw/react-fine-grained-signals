@@ -23,6 +23,10 @@ SVG/MathMLをHTMLホストと同じ経路で扱う。
 
 `pnpm size`（gzip）は、`jsx-runtime`が11.90→11.38 kB（−0.52）、`full-jsx-child`が11.82→11.31 kB（−0.51）になった。他のscenarioは変わらない（`lite-jsx-child`は5.32 kB）。予算は`pnpm size:update`で下げた。
 
+## 方針: SVG専用のコードは足さない
+
+SVG/MathMLはHTMLと同じ経路に乗せるだけで、SVGのためだけのコードやリストは足さない（バンドルサイズを増やさないため）。全体レビュー後の46bdb07でReactの`unitlessNumbers`のSVG・vendor接頭辞の名前（34個、Full JSX runtimeで約0.16 kB）を足したが、この方針に反するため外した。SVGの`fillOpacity`や`strokeWidth`をstyleでbindingするときは文字列で渡す（数値だと`px`が付き、ブラウザに無視される）。jsx-bindingsのガイドに記載した。
+
 ## テスト
 
 - `tests/react-signal-elements.test.tsx`: SVG要素で`id`・`hidden`・`style`のsignalが属性として更新されること、非HTMLホストに`bindValue`/`bindChecked`/allowlist外のsignal propを付けると例外になること。
