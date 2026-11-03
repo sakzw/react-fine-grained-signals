@@ -65,7 +65,7 @@ describe("unplugin-react-fine-grained-signals", () => {
   it("applies the documented defaults when no plugin options are supplied", () => {
     const output = transformSource(counterSource, {});
 
-    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("useSignalCapture()");
     expect(output).toContain('from "react-fine-grained-signals/internal"');
   });
 
@@ -156,7 +156,7 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(plugin.transformInclude("/project/test/App.tsx")).toBe(false);
     expect(plugin.transform.handler(counterSource, "/project/src/excluded/App.tsx")).toBeNull();
     expect(plugin.transform.handler(counterSource, "/project/test/App.tsx")).toBeNull();
-    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain("_useSignalCapture()");
+    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain("useSignalCapture()");
   });
 
   it("leaves declared-CommonJS modules alone", () => {
@@ -182,7 +182,7 @@ describe("unplugin-react-fine-grained-signals", () => {
       "/project/src/App.TSX",
       internalOptions,
     )?.code;
-    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("useSignalCapture()");
     expect(resolveEsbuildLoader("/project/src/App.TSX")).toBe("tsx");
   });
 
@@ -220,7 +220,7 @@ describe("unplugin-react-fine-grained-signals", () => {
 
     expect(canTransform(fragmentId, {})).toBe(true);
     const result = transformReactFineGrainedSignals(counterSource, fragmentId, internalOptions);
-    expect(result?.code).toContain("_useSignalCapture()");
+    expect(result?.code).toContain("useSignalCapture()");
     expect((result?.map as { sources: string[] } | undefined)?.sources).toEqual(["/project/src/App.tsx"]);
   });
 
@@ -260,7 +260,7 @@ describe("unplugin-react-fine-grained-signals", () => {
     expect(plugin.transform.handler(cjs, "/project/src/legacy.cjs")).toBeNull();
     expect(plugin.transform.handler(counterSource, "/project/node_modules/pkg/App.tsx")).toBeNull();
     expect(plugin.transform.handler(counterSource, "/project/excluded/App.tsx")).toBeNull();
-    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain("_useSignalCapture()");
+    expect(plugin.transform.handler(counterSource, "/project/src/App.tsx")?.code).toContain("useSignalCapture()");
   });
 
   it("accepts the public auto mode option", () => {
@@ -271,10 +271,8 @@ describe("unplugin-react-fine-grained-signals", () => {
     const output = transformCounter({ mode: "auto" });
 
     expect(output).toContain('from "react-fine-grained-signals/internal"');
-    expect(output).toContain(
-      'import { useSignalCapture as _useSignalCapture } from "react-fine-grained-signals/internal"',
-    );
-    expect(output).toContain("const _signals = _useSignalCapture();");
+    expect(output).toContain('import { useSignalCapture } from "react-fine-grained-signals/internal"');
+    expect(output).toContain("const _signals = useSignalCapture();");
     expect(output).not.toContain("try {");
     expect(output).toContain("_signals.capture(() => count.value)");
   });
@@ -284,7 +282,7 @@ describe("unplugin-react-fine-grained-signals", () => {
 
     expect(output).toContain('from "react-fine-grained-signals"');
     expect(output).not.toContain('from "react-fine-grained-signals/internal"');
-    expect(output).toContain("_useSignalTracking();");
+    expect(output).toContain("useSignalTracking();");
     expect(output).not.toContain("try {");
   });
 
@@ -613,7 +611,7 @@ describe("bundler adapters", () => {
     const run = await runTransformLoader(entry!, resource, componentSource, incomingMap);
 
     expect(run.error).toBeNull();
-    expect(run.content).toContain("_useSignalCapture()");
+    expect(run.content).toContain("useSignalCapture()");
     expect((run.map as { sources: string[] }).sources).toEqual([resource]);
   });
 
@@ -630,7 +628,7 @@ describe("bundler adapters", () => {
     const run = await runTransformLoader(entry!, resource, source, upstreamMap());
 
     expect(run.error).toBeNull();
-    expect(run.content).toContain("_useSignalCapture()");
+    expect(run.content).toContain("useSignalCapture()");
     expect(run.content).not.toContain("sourceMappingURL");
     expect((run.map as { sources: string[] }).sources).toEqual([resource]);
   });

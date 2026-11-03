@@ -100,7 +100,7 @@ describe("managed render transform", () => {
       export function Static() { return <p>static</p>; }
     `);
 
-    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("useSignalCapture()");
   });
 
   it("does not recognize the old annotation names", () => {
@@ -131,7 +131,7 @@ describe("managed render transform", () => {
     );
 
     expect(output).toContain("const Counter = () => {");
-    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("useSignalCapture()");
   });
 
   it("captures a direct .value read through a local signal alias", () => {
@@ -161,9 +161,9 @@ describe("managed render transform", () => {
     expect(output).toContain('from "react-fine-grained-signals"');
     expect(output).not.toContain('from "react-fine-grained-signals/internal"');
     expect(output).toContain("const Counter = () => {");
-    expect(output).toContain("_useSignalTracking();");
+    expect(output).toContain("useSignalTracking();");
     expect(output).not.toContain("try {");
-    expect(output).not.toContain("_useSignalCapture()");
+    expect(output).not.toContain("useSignalCapture()");
     expect(output).not.toContain(".finish();");
   });
 
@@ -183,7 +183,7 @@ describe("managed render transform", () => {
     `;
 
     expect(annotated).toContain("track();");
-    expect(annotated).not.toContain("_useSignalTracking");
+    expect(annotated).not.toMatch(/\{ useSignalTracking\d* \}|\buseSignalTracking\d*\(\)/);
     expect(compile(explicit, "manual", "inject", "react-fine-grained-signals", "off")).toBe(explicit);
   });
 
@@ -199,7 +199,7 @@ describe("managed render transform", () => {
     );
 
     expect(output).toContain('from "custom-signals"');
-    expect(output).toContain("_useSignalTracking();");
+    expect(output).toContain("useSignalTracking();");
     expect(output).not.toContain('from "custom-signals/runtime"');
   });
 
@@ -294,9 +294,9 @@ describe("managed render transform", () => {
     );
 
     expect(named).toContain("const Counter = memo(() => {");
-    expect(named).toContain("_useSignalCapture()");
+    expect(named).toContain("useSignalCapture()");
     expect(namespaced).toContain("const Counter = React.memo(() => {");
-    expect(namespaced).toContain("_useSignalCapture()");
+    expect(namespaced).toContain("useSignalCapture()");
     // Documented limitation: the default only matches a direct "react" import,
     // because a single-file transform cannot follow the re-export chain.
     expect(compile(namedSource, "auto")).not.toContain("finally");
@@ -442,9 +442,9 @@ describe("managed render transform", () => {
       );
 
       expect(memoOutput).toContain("memo(function Inner() {");
-      expect(memoOutput).toContain("_useSignalCapture()");
+      expect(memoOutput).toContain("useSignalCapture()");
       expect(forwardRefOutput).toContain("forwardRef(function Inner(props, ref) {");
-      expect(forwardRefOutput).toContain("_useSignalCapture()");
+      expect(forwardRefOutput).toContain("useSignalCapture()");
     },
   );
 
@@ -472,9 +472,9 @@ describe("managed render transform", () => {
     );
 
     expect(memoOutput).toContain("memo(() => {");
-    expect(memoOutput).toContain("_useSignalCapture()");
+    expect(memoOutput).toContain("useSignalCapture()");
     expect(forwardRefOutput).toContain("forwardRef((props, ref) => {");
-    expect(forwardRefOutput).toContain("_useSignalCapture()");
+    expect(forwardRefOutput).toContain("useSignalCapture()");
   });
 
   it("supports comment opt-in on a wrapped named component", () => {
@@ -485,7 +485,7 @@ describe("managed render transform", () => {
     `);
 
     expect(output).toContain("const Counter = memo(() => {");
-    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("useSignalCapture()");
   });
 
   it("does not auto-transform lowercase functions, JSX without .value, or non-JSX reads", () => {
@@ -1544,7 +1544,7 @@ describe("managed render transform", () => {
       const managedOutput = compile(barrelFirstStatementSource, "manual", "managed");
       expect(managedOutput).toBe(barrelFirstStatementSource);
       expect(managedOutput).not.toContain("try {");
-      expect(managedOutput).not.toContain("_useSignalCapture()");
+      expect(managedOutput).not.toContain("useSignalCapture()");
       expect(warn).toHaveBeenCalledTimes(1);
       expect(warn.mock.calls[0]?.[0]).toContain("cannot be verified");
       expect(warn.mock.calls[0]?.[0]).toContain("barrel");
@@ -1775,7 +1775,7 @@ describe("managed render transform", () => {
         "fixture.js",
         options,
       )?.code,
-    ).toContain("_useSignalTracking();");
+    ).toContain("useSignalTracking();");
   });
 
   it("does not reuse a type-only managed import or a shadowed runtime alias", () => {
@@ -1790,10 +1790,55 @@ describe("managed render transform", () => {
       export function App(managed) { return <main />; }
     `);
 
-    expect(typeOnly).toContain("const _signals = _useSignalCapture();");
+    expect(typeOnly).toContain("const _signals = useSignalCapture();");
     expect(typeOnly).not.toContain("const _signals = managed();");
-    expect(shadowed).toContain("const _signals = _useSignalCapture();");
+    expect(shadowed).toContain("const _signals = useSignalCapture();");
     expect(shadowed).not.toContain("const _signals = managed();");
+  });
+
+  // Fast Refresh only counts a callee named `use[A-Z]...` in a component's
+  // Hook signature; `_useSignalCapture` was left out, so a boundary appearing
+  // or going away on an edit kept the old Fiber and React threw "Rendered more
+  // hooks than during the previous render".
+  it("names the generated Hook import so Fast Refresh counts it as a Hook", () => {
+    const counter = "const count = { value: 1 }; export function App() { return <p>{count.value}</p>; }";
+    const managed = compile(counter, "auto", "managed");
+    const injected = compile(counter, "auto", "inject");
+    const taken = compile(
+      `
+      import { useSignalCapture } from "./elsewhere.js";
+      const useSignalCapture2 = 1;
+      useSignalCapture(useSignalCapture2);
+      ${counter}
+    `,
+      "auto",
+      "managed",
+    );
+    const takenInject = compile(
+      `
+      const useSignalTracking = () => {};
+      ${counter}
+    `,
+      "auto",
+      "inject",
+    );
+
+    expect(managed).toContain('import { useSignalCapture } from "react-fine-grained-signals/internal";');
+    expect(managed).toContain("const _signals = useSignalCapture();");
+    expect(injected).toContain('import { useSignalTracking } from "react-fine-grained-signals";');
+    expect(injected).toMatch(/function App\(\) \{\s+"use no memo";\s+useSignalTracking\(\);/);
+    expect(taken).toContain(
+      'import { useSignalCapture as useSignalCapture3 } from "react-fine-grained-signals/internal";',
+    );
+    expect(taken).toContain("const _signals = useSignalCapture3();");
+    expect(takenInject).toContain(
+      'import { useSignalTracking as useSignalTracking2 } from "react-fine-grained-signals";',
+    );
+    expect(takenInject).toMatch(/function App\(\) \{\s+"use no memo";\s+useSignalTracking2\(\);/);
+    for (const output of [managed, injected, taken, takenInject]) {
+      const [, local] = /import \{ use\w+(?: as (\w+))? \} from "react-fine-grained-signals/.exec(output) ?? [];
+      expect(local ?? "useSignal").toMatch(/^use[A-Z]/);
+    }
   });
 });
 
@@ -1834,8 +1879,8 @@ describe("React Compiler opt-out directive", () => {
     const output = compile(explicit, "manual", "inject");
 
     expect(output).toContain('"use no memo";');
-    expect(output).toContain("useSignalTracking();");
-    expect(output).not.toContain("_useSignalTracking");
+    expect(output.match(/\buseSignalTracking\d*\(\);/g)).toHaveLength(1);
+    expect(output.match(/^\s*import /gm)).toHaveLength(1);
   });
 
   it("does not mark functions it leaves untransformed", () => {
@@ -1866,7 +1911,7 @@ describe("React Compiler opt-out directive", () => {
 
     expect(optIn).toContain('"use memo";');
     expect(optIn).not.toContain("use no memo");
-    expect(optIn).toContain("_useSignalTracking();");
+    expect(optIn).toContain("useSignalTracking();");
   });
 
   it.each(["inject", "managed"] as const)("stays idempotent with the %s transform", (transform) => {
@@ -2185,7 +2230,7 @@ describe("anonymous default exports", () => {
       },
     )?.code;
 
-    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("useSignalCapture()");
   });
 
   it("leaves a non-component default export alone", () => {
@@ -3073,10 +3118,10 @@ describe("signal reads in parameter defaults", () => {
     const injected = compile(source, "auto", "inject");
 
     expect(output).toMatch(
-      /function C\(_param\) \{\s+"use no memo";\s+const _signals = _useSignalCapture\(\);\s+let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;\s+return <p>\{v\}<\/p>;/,
+      /function C\(_param\) \{\s+"use no memo";\s+const _signals = useSignalCapture\(\);\s+let \{\s+v = _signals\.capture\(\(\) => count\.value\)\s+\} = _param;\s+return <p>\{v\}<\/p>;/,
     );
     expect(injected).toMatch(
-      /function C\(_param\) \{\s+"use no memo";\s+_useSignalTracking\(\);\s+let \{\s+v = count\.value\s+\} = _param;/,
+      /function C\(_param\) \{\s+"use no memo";\s+useSignalTracking\(\);\s+let \{\s+v = count\.value\s+\} = _param;/,
     );
   });
 
@@ -3105,7 +3150,7 @@ describe("signal reads in parameter defaults", () => {
     );
 
     expect(output).toMatch(
-      /function C\(_param\) \{\s+"use no memo";\s+_useSignalTracking\(\);\s+let \{\s+v = count\.value\s+\} = _param;/,
+      /function C\(_param\) \{\s+"use no memo";\s+useSignalTracking\(\);\s+let \{\s+v = count\.value\s+\} = _param;/,
     );
   });
 
@@ -3277,7 +3322,7 @@ describe("capturing tracked update and delete operations", () => {
     );
 
     expect(nested).toMatch(/const removed = _signals\.capture\(\(\) => delete state\.value\.profile\.name\)/);
-    expect(direct).not.toContain("_useSignalCapture");
+    expect(direct).not.toContain("useSignalCapture");
     expect(direct).toMatch(/delete state\.value/);
   });
 });
@@ -3690,7 +3735,7 @@ export const ns = {
 /** Does the keyed slot `key` (a method or an arrow property) open a boundary of its own? */
 function slotHasBoundary(output: string, key: string): boolean {
   return new RegExp(
-    `\\b${key}(?:\\([^)]*\\)|: \\(?[\\w, ]*\\)? =>) \\{\\s+(?:"use no memo";\\s+)?(?:const _signals|_useSignalTracking\\(\\))`,
+    `\\b${key}(?:\\([^)]*\\)|: \\(?[\\w, ]*\\)? =>) \\{\\s+(?:"use no memo";\\s+)?(?:const _signals|useSignalTracking\\(\\))`,
   ).test(output);
 }
 

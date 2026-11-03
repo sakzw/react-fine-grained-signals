@@ -2886,13 +2886,47 @@ function findRuntimeImports(
   return imports;
 }
 
+/**
+ * A local name for the generated Hook import that no binding, label, global or
+ * reference in the file already uses, and that still reads as a Hook.
+ *
+ * Babel's `generateUid` would give `_useSignalCapture`, but Fast Refresh (the
+ * Babel and SWC react-refresh transforms and Vite's Oxc one) only counts a call
+ * whose callee name matches `/^use[A-Z]/` in a component's Hook signature. With
+ * the underscore the boundary Hook was left out of it, so an edit that gave a
+ * component its boundary, or took the last one away, kept the old Fiber and
+ * React threw "Rendered more hooks than during the previous render". Keeping
+ * the `use` prefix puts the Hook in the signature, so the signature changes
+ * with the boundary and Refresh remounts the component.
+ *
+ * The collision checks are `generateUid`'s; only the spelling differs
+ * (`useSignalCapture`, then `useSignalCapture2`, `useSignalCapture3`, ...).
+ */
+function generateHookLocalName(scope: NodePath["scope"], importedName: string): string {
+  let name = importedName;
+  for (
+    let suffix = 2;
+    scope.hasLabel(name) ||
+    scope.hasBinding(name) ||
+    scope.hasGlobal(name) ||
+    scope.hasReference(name) ||
+    scope.hasUid(name);
+    suffix++
+  ) {
+    name = `${importedName}${suffix}`;
+  }
+  // No `uids` bookkeeping: `addRuntimeImport` registers the import right away,
+  // so the next call's `hasBinding` already sees this name.
+  return name;
+}
+
 function addRuntimeImport(
   programPath: NodePath<t.Program>,
   runtimeSource: string,
   importedName: "useSignalTracking" | "useSignalCapture",
   functionPath: NodePath<t.Function>,
 ): RuntimeImport {
-  const local = functionPath.scope.generateUidIdentifier(importedName);
+  const local = t.identifier(generateHookLocalName(functionPath.scope, importedName));
   const declaration = t.importDeclaration(
     [t.importSpecifier(t.cloneNode(local), t.identifier(importedName))],
     t.stringLiteral(runtimeSource),
@@ -3996,7 +4030,7 @@ function hasRelocationConflict(path: NodePath<t.Function>, moved: NodePath[]): b
  *
  * ```js
  * function C(_param) {
- *   const _signals = _useSignalCapture();
+ *   const _signals = useSignalCapture();
  *   let { v = _signals.capture(() => count.value) } = _param;
  *     ...
  * ```

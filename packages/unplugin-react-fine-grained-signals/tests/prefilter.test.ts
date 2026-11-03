@@ -88,7 +88,7 @@ export function A() { ${body} return <p>${jsx}</p>; }
       reactImportSource: "react",
       warn: () => {},
     })?.code;
-    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("useSignalCapture()");
     expect(output).toContain("_signals.capture(");
   });
 });

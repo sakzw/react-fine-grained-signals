@@ -1623,7 +1623,7 @@ function memberSource(code: string, object: string, head: string): string {
   return code.slice(start, end === -1 ? undefined : end);
 }
 
-const HOOK = /_useSignalCapture\(\)|_useSignalTracking\(\)/;
+const HOOK = /useSignalCapture\(\)|useSignalTracking\(\)/;
 
 const THIS_LISTS = ["L", "O", "D", "Q", "M", "F"];
 const OPTIONAL_ROWS = ["R", "r"];
@@ -4392,7 +4392,7 @@ export function C() { return <p>{p()}</p>; }
 export function D() { return <p>{p()}</p>; }
 export function E() { return <p>{m()}</p>; }
 `);
-    expect(code.match(/= _useSignalCapture\(\)/g)).toHaveLength(3);
+    expect(code.match(/= useSignalCapture\(\)/g)).toHaveLength(3);
     for (const name of ["A", "B", "E"]) {
       expect(code).toMatch(new RegExp(`function ${name}\\(\\) \\{\\s+"use no memo";`));
     }
@@ -4409,7 +4409,7 @@ export function ListC({ items }) { items.map(Row); return note(Row); }
 `,
       "all",
     );
-    expect(code.match(/= _useSignalCapture\(\)/g)).toHaveLength(3);
+    expect(code.match(/= useSignalCapture\(\)/g)).toHaveLength(3);
   });
 
   it("warns about a render prop whose callback reaches a signal through a helper", () => {

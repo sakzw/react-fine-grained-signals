@@ -325,7 +325,7 @@ describe("string import names", () => {
 
   it("treats memo imported by its string name as a component wrapper", () => {
     const { code } = run(`import { "memo" as m } from "react";\n${header}export const C = m(() => <p>{s.value}</p>);`);
-    expect(code).toContain("_useSignalCapture()");
+    expect(code).toContain("useSignalCapture()");
     expect(code).toContain("_signals.capture(() => s.value)");
   });
 });
@@ -628,11 +628,11 @@ describe("a helper that calls a Hook and reads", () => {
     for (const source of both(helper, call)) {
       for (const mode of ["auto", "all"] as const) {
         const managed = run(source, { mode });
-        expect(managed.code).toContain("_useSignalCapture()");
+        expect(managed.code).toContain("useSignalCapture()");
         expect(managed.code).not.toContain(`capture(() => ${call})`);
         expect(managed.diagnostics).toEqual(["RFGS002"]);
         const injected = run(source, { mode, transform: "inject" });
-        expect(injected.code).toMatch(/function A\(\) \{\s+"use no memo";\s+_useSignalTracking\(\);/);
+        expect(injected.code).toMatch(/function A\(\) \{\s+"use no memo";\s+useSignalTracking\(\);/);
         expect(injected.diagnostics).toEqual([]);
       }
     }
@@ -670,7 +670,7 @@ describe("Hook names", () => {
 
   it("gives a function named use + digit a Hook's identity", () => {
     const { code } = run(`${header}export function use3D() { return s.value; }`);
-    expect(code).toMatch(/function use3D\(\) \{\s+(?:"use no memo";\s+)?const _signals = _useSignalCapture\(\);/);
+    expect(code).toMatch(/function use3D\(\) \{\s+(?:"use no memo";\s+)?const _signals = useSignalCapture\(\);/);
   });
 
   it.each(["user", "useless", "use_x"])("treats %s() as an ordinary call", (name) => {
@@ -1124,8 +1124,8 @@ describe("what a new of a local class counts", () => {
     ["a const class expression", "const M = class { x = s.value; }; new M();"],
     ["a field that calls a helper", "const read = () => s.value; class M { x = read(); } new M();"],
   ])("selects the component for %s", (_kind, body) => {
-    expect(run(app(body)).code).toContain("_useSignalCapture()");
-    expect(run(app(body), { transform: "inject" }).code).toContain("_useSignalTracking()");
+    expect(run(app(body)).code).toContain("useSignalCapture()");
+    expect(run(app(body), { transform: "inject" }).code).toContain("useSignalTracking()");
   });
 
   it.each([
@@ -1154,7 +1154,7 @@ describe("what a helper reads is answered for the authored code", () => {
     const managed = run(`${header}${parts.join("\n")}`).code!;
     expect(managed).toMatch(/_signals\d*\.capture\(\(\) => helper\(\)\)/);
     const injected = run(`${header}${parts.join("\n")}`, { transform: "inject" }).code!;
-    expect(injected).toMatch(/function App\(\) \{\s+"use no memo";\s+_useSignalTracking\(\);/);
+    expect(injected).toMatch(/function App\(\) \{\s+"use no memo";\s+useSignalTracking\(\);/);
   });
 });
 
@@ -1383,8 +1383,8 @@ describe("a function rewritten before what it calls is visited", () => {
     ])("keeps the callback of %s plain", (_kind, list) => {
       for (const source of both(annotation + list, row)) {
         const { code } = run(source, { mode });
-        expect(code!.match(/= _useSignalCapture\(\)/g)).toHaveLength(1);
-        expect(code).toMatch(/const _signals = _useSignalCapture\(\);\s+return _signals\.capture\(\(\) => items/);
+        expect(code!.match(/= useSignalCapture\(\)/g)).toHaveLength(1);
+        expect(code).toMatch(/const _signals = useSignalCapture\(\);\s+return _signals\.capture\(\(\) => items/);
       }
     });
 
@@ -1414,8 +1414,8 @@ describe("a function rewritten before what it calls is visited", () => {
   ] as const)("(control) keeps a concise arrow's references in inject too (%s)", (mode, annotation) => {
     for (const source of both(`${annotation}export const List = ({ items }: any) => items.map(Row);`, row)) {
       const { code } = run(source, { mode, transform: "inject" });
-      expect(code!.match(/_useSignalTracking\(\);/g)).toHaveLength(1);
-      expect(code).toMatch(/_useSignalTracking\(\);\s+return items\.map\(Row\);/);
+      expect(code!.match(/useSignalTracking\(\);/g)).toHaveLength(1);
+      expect(code).toMatch(/useSignalTracking\(\);\s+return items\.map\(Row\);/);
     }
   });
 
