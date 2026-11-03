@@ -237,7 +237,8 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
   }
 
   function getRenderVersion(readable: object): number {
-    if (core.getNodeForReadable(readable) !== undefined) return core.getReadableRevision(readable);
+    const node = core.getNodeForReadable(readable);
+    if (node !== undefined) return node.renderRevision;
     const getVersion = Reflect.get(readable, "getRenderVersion");
     if (typeof getVersion === "function") return getVersion.call(readable) as number;
     throw new TypeError("Unknown render dependency");

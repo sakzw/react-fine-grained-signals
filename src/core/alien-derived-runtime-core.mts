@@ -103,13 +103,15 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       const node = rawNode as RuntimeNode;
       deepSignalUnwatched.get(node)?.();
       if (node.kind === "computed") {
-        // A computed's last subscriber left: it detaches dirty, as Alien
-        // leaves an unwatched computed, dropping every link. Child effects are
-        // disposed with their links, and each dependency left with no
-        // subscriber detaches in turn. One still running finishes detached and
-        // dirty, recording its remaining reads in the fresh snapshot.
-        // Other flags it keeps are inert on a detached computed, and its next
-        // run resets them.
+        // A computed's last subscriber left: it detaches dirty, as Alien (and
+        // v0.3) leave an unwatched computed, dropping every link; its next
+        // read runs the getter again. (Keeping the cache instead, by copying
+        // its links into the snapshot, cost about 50 bytes gzip in every
+        // bundle.) Child effects are disposed with their links, and each
+        // dependency left with no subscriber detaches in turn. One still
+        // running finishes detached and dirty, recording its remaining reads
+        // in the fresh snapshot. Other flags it keeps are inert on a detached
+        // computed, and its next run resets them.
         node.snapshot = [];
         node.flags |= Dirty;
         node.depsTail = undefined;
@@ -143,16 +145,8 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   // Every readable this copy creates, keyed by the public object. Reads and
   // subscriptions resolve their graph node here.
   const readableNodes = new WeakMap<object, RuntimeNode>();
-  function registerReadable(readable: object, node: RuntimeNode): void {
-    readableNodes.set(readable, node);
-  }
   function getNodeForReadable(readable: object): RuntimeNode | undefined {
     return readableNodes.get(readable);
-  }
-  function getReadableRevision(readable: object): number {
-    const node = readableNodes.get(readable);
-    if (node === undefined) throw new TypeError("Unknown candidate readable");
-    return node.renderRevision;
   }
   const renderDependencies = new WeakMap<object, RuntimeNode>();
   const deepSignalNodes = new WeakSet<RuntimeNode>();
@@ -346,19 +340,16 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     }
     const subscriber = track ? activeSub : undefined;
     const snapshot = computed.snapshot;
-    if (subscriber === undefined || subscriber.snapshot) {
-      // Nothing to link: the hot cases (a detached computed checked since the
-      // last write, a clean linked one) stay inline.
-      if (snapshot ? flags & Dirty || computed.checkedAt !== writeVersion : flags & (Dirty | Pending)) {
-        refreshComputed(computed);
-      }
-      if (subscriber !== undefined) trackRead(computed, subscriber);
-    } else {
+    if (subscriber && !subscriber.snapshot) {
       // Gaining a subscriber: a detached computed links in its current state.
       if (snapshot) attachComputed(computed);
       refreshComputed(computed);
-      linkNode(computed, subscriber, cycle);
+    } else if (snapshot ? flags & Dirty || computed.checkedAt !== writeVersion : flags & (Dirty | Pending)) {
+      // Nothing to link: the hot cases (a detached computed checked since the
+      // last write, a clean linked one) stay inline.
+      refreshComputed(computed);
     }
+    if (subscriber) trackRead(computed, subscriber);
     if (computed.hasError) throw computed.error;
     return computed.value;
   }
@@ -737,7 +728,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
 
   // Public API/brand candidates. Each public object is the readable class
   // instance itself; no outer wrapper or per-instance methods.
-  const registerHelperBrand = stampSignalBrand;
 
   function inlineWrite(node: RuntimeSource, value: unknown): void {
     if (!Object.is(node.pendingValue, (node.pendingValue = value))) {
@@ -802,8 +792,8 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     constructor(node: RuntimeSource, branded = true, deep = false) {
       this.#node = node;
       this.#deep = deep;
-      if (branded) registerHelperBrand(this);
-      registerReadable(this, node);
+      if (branded) stampSignalBrand(this);
+      readableNodes.set(this, node);
     }
     get value(): T {
       const node = this.#node;
@@ -845,8 +835,8 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     #node: RuntimeComputed;
     constructor(node: RuntimeComputed, branded = true) {
       this.#node = node;
-      if (branded) registerHelperBrand(this);
-      registerReadable(this, node);
+      if (branded) stampSignalBrand(this);
+      readableNodes.set(this, node);
     }
     get value(): T {
       const node = this.#node;
@@ -928,7 +918,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     pushRenderAttempt,
     getActiveRenderAttempt,
     getNodeForReadable,
-    getReadableRevision,
     isComputedClean,
     isNodeCurrent,
     promoteComputed,

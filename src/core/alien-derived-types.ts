@@ -120,7 +120,6 @@ export interface AlienDerivedGraphRuntime {
   readonly batchUntracked: <T>(callback: () => T) => T;
   readonly untracked: <T>(callback: () => T) => T;
   readonly getNodeForReadable: (readable: object) => RuntimeNode | undefined;
-  readonly getReadableRevision: (readable: object) => number;
   readonly isComputedClean: (node: RuntimeNode) => boolean;
   /** A recorded dependency is unchanged: same revision, and a computed is still clean. */
   readonly isNodeCurrent: (node: RuntimeNode, revision: number) => boolean;
