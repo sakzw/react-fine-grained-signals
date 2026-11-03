@@ -23,6 +23,13 @@ export interface RuntimeNode extends Omit<ReactiveNode, "deps" | "depsTail" | "s
   cleanup?: (() => unknown) | undefined;
   getRenderVersion?: (() => number) | undefined;
   subscribeRender?: ((listener: () => void) => () => void) | undefined;
+  /**
+   * A computed with no subscriber holds no graph links. It keeps what its last
+   * evaluation read instead, as flat `[node, renderRevision, ...]` pairs, and
+   * `checkedAt` is the write version at which those pairs last matched.
+   */
+  snapshot?: Array<RuntimeNode | number> | undefined;
+  checkedAt?: number | undefined;
 }
 
 export interface RuntimeSource extends RuntimeNode {
