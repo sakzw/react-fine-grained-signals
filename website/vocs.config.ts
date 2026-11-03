@@ -42,7 +42,7 @@ export default defineConfig({
         { text: "Control Flow & Lists", link: "/control-flow" },
         { text: "Shared State", link: "/global-state" },
         { text: "Rendering Optimization", link: "/rendering-optimization" },
-        { text: "Migration from v0.2.x", link: "/migration" },
+        { text: "Migration", link: "/migration" },
       ],
     },
     {
