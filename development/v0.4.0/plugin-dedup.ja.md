@@ -589,3 +589,70 @@ setupのwrapperで全testの入力を集め（重複を除いて6338件、`16097
 
 - 変換するfileは0〜7%遅くなった。合成120とrealisticの+5〜7%は雑音の幅を少し超える。原因は個別に測っていないが、`scanBeforeRewrite`の分が候補に挙がる。
 - `e.target.value`を含む候補のないfileは約0.15 msから約25 msに戻った。これが1の代償である（`e.target.value`のある普通のformのfileは全処理を通る）。`{ value: n }`とJSX属性だけのfileは落ちたまま（約0.08 ms）。
+
+## 2026-11-03: レビューの指摘10件の修正、indirectなclassの決定
+
+メンテナが承認した一覧を直した。主張は下に書いた入力で確かめた範囲に限る。browser e2eは流していない。
+
+**先に訂正する。** b998fbbの「RFGS003は宣言の順によらず出る」というtestは、順序によらないことは正しかったが、出るという答えが間違っていた。`<Grid component={Row} />`の`Row`は自分のboundaryを持ち、DOMも更新される。そのtestは静かであることを固定するように変えた。
+
+### 直したもの
+
+1. **concise arrowの参照（796f9fc、指摘1と2）**: bodyのslotを`replaceWith`で置き換えると、古いpathがblockを持ち、その下の`Binding`の参照から見て親がcallでなくなる。`all`と注釈付きの`manual`にはdry runがないので、`isRenderCallback`が誤った答えを覚え（`() => items.map(Row)`の`Row`にboundaryが付き、配列が増えると「Rendered more hooks」で落ちる）、`isPlainCallee`がnoと答えた（`() => Label()`がcaptureされず古いまま）。`path.ensureBlock()`は古いpathを新しい`return`の下へ移すので、何かが尋ねる前に正しくなる。crawlもwalkも足さないので、関数ごとの費用は増えない。
+   - 他のrewriteの同じ問題を調べるため、`isPlainCallee`と`renderCallbackCallers`に渡る参照の親が本当にその参照を持っているかを数えるcheckをbundleに差し込み、read-shapesの全caseと追加の入力を全modeで流した（3054回）。修正前は6種、修正後は1種。残る1種は、capture passが`x.map(Row3)`を包んだ直後からその関数の最後のcrawlまでの間だけ親が古いもので、出力が変わる入力は見つかっていない。
+   - `auto`はdry runが答えを先に埋めるので、試した入力（19形×両順序に加えて12形×両順序）では修正前も出力が順序で変わらなかった。露出しないことの証明ではない。
+2. **複合代入（a5861ef、指摘3）**: `sig.value += 1`、`??=`、`||=`を、`++`と同じく読み取りとして数える。単独の`=`と分割代入のtargetは書き込みのまま。
+3. **patternのdefault（71f9c6b、指摘4）**: `AssignmentPattern`のdefaultを、そのtargetが束縛するものの源として扱う。parameter、宣言、代入、配列、loop head、defaultが別名の場合で、実際にmountして更新を確かめた。
+   - **残した穴**: defaultを分割代入する`{ a: { name } = state.value.user }`はmanagedで古いまま（injectは更新する）。`name`は別名ではなくcaptureの外で読まれた値である。修正前からの動作で、直すには3つのvisitorに同じ判定を足すことになるので、機構を増やさず報告に留めた。
+4. **RFGS003（4ceab91、指摘5）**: 名前で渡された関数が、選択された、`@signalTracking`、自分の`useSignalTracking()`、`@noSignalTracking`のどれかなら報告しない。宣言があとの場合があるので、選択の答えはfileの終わりに読む（captureが作るcloneにも答えるため、関数は開始位置で引く）。boundaryのない関数（小文字のhelper、JSXのない関数、`map`に渡す関数、plainに呼ぶ関数、async）とinlineのcallbackは報告する。
+5. **RFGS002（03f2f78、指摘6）**: helperの畳み込みがHookを呼ぶhelperを飛ばしていたのをやめた。`title`、`const title = () => ...`、`o.t()`、後方宣言、推移的な読み取りで`Title`と同じ結果になる（managedはRFGS002で古いまま、injectは更新する）。読み取りのないhelperは静か。
+   - 確認した既存の動作: `Title`→`Inner`のように、Hookが1段深いと`capture(() => Title())`の中でHookが動く。今回`title`→`inner`も同じになった。更新はするが「Hookをcaptureのclosureに入れない」という説明とは合わない。変えていない。
+6. **RFGS006（6668f6f、指摘7）**: 注釈が書かれた関数自身が、返すものについて尋ねる（深さ、ブロックかconciseか、名前経由かを問わない）。
+   - `/** @signalTracking */ const a = () => [1].map(() => <p />)`も報告する。`a`には同一性がなく出力も変わらないので本当に効いていない。`const a = () => <p />`が報告されるのと同じ意味である。
+   - `return function W() {}`は`manual`でだけ報告する。`auto`と`all`では選択が`W`を見るので、失うものがない。
+7. **RFGS004（36ec9e9、指摘8）**: 手書きのboundaryの前のdefaultを報告する。移動はしない。判定は移動の規則と同じなので、`{ x = ext() }`のように中が見えないcallも報告する。後方の`useSignalTracking()`も同じ。
+8. **RFGS010（649cf39、指摘9）**: `/utils`のcallbackの中のtagは報告しない。RFGS003と同じ`isOwnedBySignalControlFlow`に尋ねるので、`Match`の孤児と`fallback`は報告のまま。
+9. **pre-filter（3146c45、指摘10）**: `manual`でも`spellingEscape`を見る。`\n`、`\t`、`\d`のある普通のfileはparseしない。`"u\seSignalTracking"`のように`\s`で綴る文字列のimport名だけは今も落ちる。
+
+### indirectなclassの決定
+
+間接に届くclass（条件、factory、mixin、`const L = K`、objectやarrayの中）の`new`は追わない、とメンテナが決めた。ライブラリの方針は、追跡の境界がcodeから読めることと、その外のものは利用者が先に計算することであり、どこまでも追うのはこれに反する。追うようにしないことをread-shapesの`expected`に固定した。constructor本体、fieldの中のIIFE、static factory、methodのcomputed key、method decoratorの引数も同様に固定した（decoratorのcaseは実行harnessがdecoratorを下げないので静的な確認だけ）。
+
+### testの穴
+
+前回のmutationで生き残ったものに対してtestを足し、mutantを当て直した（結果は下）。`read-shapes.ts`の「`.value`がそれだけのfile」というコメントは誤りだった。preludeが常に`s.value`を読むので、pre-filterは試されていなかった。`prefilter.test.ts`にpreludeなしの最小moduleを足した。`token: "value"`はcompanionの`o.value`にも一致していたので`// note`にした。
+
+mutantの当て直し: 依頼された穴に対応するもの（`#x`のfield、inlineのclass、再代入されたclass、fieldの中のobjectの関数、wrapされた代入先2種、`seenValue`、`"use server"`、Hookの結果への`++`と`delete`、pre-filterのreceiver除外）はすべて落ちるようになった。今回の修正を戻すmutant 13件もすべて落ちた。
+
+生き残った5件はテストを足さず、消してもいない。`transform.ts`から作ったbundleに各mutantを当て、read-shapesの全case（companionあり・なし）と、各mutant向けに書いた入力を6通りの組み合わせで流した（2550回）。出力も警告も、どのmutantでも変わらなかった。
+
+- `scanBeforeRewrite`のinject側: injectは読み取りをcallbackへ動かさないので、後からscanしても同じ読み取りが見える。今回の入力では効果がない。managed側は必要である。
+- `foldInstantiatedFields`の`isDeferredReadContext`: `inspect().readsValue`は選択の必要条件にすぎず、最後はdry runが決める。dry runはdeferredな`new`を包まない。冗長と見ている。
+- `injectedFunctions`: 同じ`isUntrackedJsxTagRead`の`hasSignalTrackingCall`が、注入された呼び出しを新しいscanで見つける。冗長と見ている。
+- `isFirstStatementSignalTrackingCall`の分岐: 同じ理由で試した入力（別名、namespace、barrel）では差がない。
+- `delete`のchainのdeferred確認: effect、handler、timer、asyncの入力で差がない。
+
+いずれも「試した入力で差がない」という結論で、到達不能の証明ではない。
+
+### 速さ（A=`76657c4`、B=今回のcommit、どちらもesbuildのbundle。in-process interleave、ABBA、6 process、load順を交互。この回のA/Aは取っていない。前回のA/Aは±4%）
+
+| case | A ms | B ms | B/A |
+| --- | ---: | ---: | ---: |
+| managed / browser App.tsx | 41.72 | 41.03 | 0.984 |
+| managed / react-router app (8 files) | 30.29 | 29.58 | 0.975 |
+| managed / synthetic 120 components | 118.05 | 116.85 | 1.002 |
+| managed / realistic 30 components | 200.78 | 199.45 | 0.998 |
+| managed / no-candidate (value keys only) | 0.08 | 0.08 | 1.006 |
+| managed / no-candidate (with e.target.value) | 27.99 | 28.13 | 1.016 |
+| inject / browser App.tsx | 30.05 | 31.53 | 1.002 |
+| inject / react-router app (8 files) | 24.47 | 25.22 | 0.986 |
+| inject / synthetic 120 components | 77.90 | 80.40 | 1.012 |
+| inject / realistic 30 components | 148.02 | 154.68 | 0.998 |
+| inject / no-candidate (value keys only) | 0.08 | 0.08 | 1.002 |
+| inject / no-candidate (with e.target.value) | 25.04 | 25.50 | 0.996 |
+
+関数ごとの費用を足したのはRFGS004の確認で、分割代入のparameterを持つ関数すべてのparameterを歩く。crawlは足していない。どのcaseも前回のA/Aの幅の中で、差は見えなかった。
+
+### 観察したこと（直していない）
+
+`<Grid renderItem={Row} />`で`Grid`が`items.map(renderItem)`と呼ぶと、`Row`のHookがloopの中で動く。mountしたところ、`items`が増えると「Rendered more hooks」、減ると「Rendered fewer hooks」で落ちた（`auto`と`all`、managedとinject）。長さが同じならsignalの書き込みで更新する。`76657c4`でも同じ入力で同じように落ちるので今回の退行ではないが、当時はRFGS003が（別の理由で）出ていて、今は出ない。このcrashを指す診断は、もともとない。
