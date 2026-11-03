@@ -668,3 +668,21 @@ A msとB msはそれぞれの側の中央値、B/Aはload順ごとに取った�
 メンテナが方針を確認した。Reactのbest practiceから外れる書き方や、VueやSolidでも追跡しない形は、変換で追いかけずに診断か文書化した制限にして、変換を軽く保つ。
 
 その一例として、render中の複合代入（デバッグ用のrender回数`renders.value += 1`など）は、a5861efで読み取りとして数えるようになったため、`++`がもともとそうだったように、書き込む値をcomponentがsubscribeして再描画が止まらなくなる。特別扱いはせず、READMEとmigrationに書いた（8f10364、b75b413）。
+
+## 2026-11-03: 統合検証の指摘への対応
+
+### 直したもの
+
+- Fast Refresh（7b7a475）: 生成するHookのimportを`_useSignalCapture` / `_useSignalTracking`と名付けていたため、`/^use[A-Z]/`だけを数えるReact Refreshのsignatureに入らなかった。componentが変換対象になる・外れる編集（autoで最初の`.value`を足す・最後のものを消す、manualで`@signalTracking`を付け外しする）で「Rendered more hooks」「Should have a queue」で落ちていた。名前を`useSignalCapture`（使われていれば`useSignalCapture2`、…）にし、境界の有無でsignatureが変わってremountするようにした。境界が残る編集ではstateが残る。v0.4以前からの問題。
+- async / generatorへのopt-in（78d7c67）: `could not parse … (Babel parser plugins: …)`ではなく`could not transform <file>: …`で落とす。buildは引き続き失敗させる。
+- Rollupの型（c2e3382）: transformの戻り値をunpluginの`SourceMapCompact`（`sourcesContent: (string | null)[]`）から自前の型（`string[]`）にし、`RollupOptions`へ入れてもTS2322にならない。`tests/bundler-config-types.ts`で各bundlerの設定型に代入して確かめる。
+- README（423309b）: parameter default、`??`、条件式、`React.Children.map`、`reduce`経由でloopに渡したPascalCase関数がHookを持ったままになる制限を書いた。
+
+### 既知のまま残したもの
+
+- `#`を含むproject folderは、rollup / esbuild / webpack / rspackで変換されない（module idの`#`をqueryとして扱う）。
+- CommonJSの`.js`にもESMのimportを入れる。CommonJSは対象外（メンテナ判断）なので扱わない。
+- 先に別のpluginが動いたとき、診断の位置を元のsourceへ戻さない。
+- 読み取りをするgeneratorを`for...of`で回すIIFEは選ばれない。
+- `/** @signalTracking */ const A = …, B = …`はBにも効く。
+- Hookの結果へのmethod呼び出し（`useBox().value.get(1)`）はRFGS001だけになる。
