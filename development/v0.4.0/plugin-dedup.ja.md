@@ -594,7 +594,7 @@ setupのwrapperで全testの入力を集め（重複を除いて6338件、`16097
 
 メンテナが承認した一覧を直した。主張は下に書いた入力で確かめた範囲に限る。browser e2eは流していない。
 
-**先に訂正する。** b998fbbの「RFGS003は宣言の順によらず出る」というtestは、順序によらないことは正しかったが、出るという答えが間違っていた。`<Grid component={Row} />`の`Row`は自分のboundaryを持ち、DOMも更新される。そのtestは静かであることを固定するように変えた。
+**先に訂正する。** b998fbbの「RFGS003は宣言の順によらず出る」というtestは、順序によらないことは正しかったが、出るという答えが間違っていた。`<Grid renderItem={Row} />`（`const Row = (item) => <li>{item.value}</li>`）の`Row`は自分のboundaryを持ち、DOMも更新される。そのtestは静かであることを固定するように変えた。
 
 ### 直したもの
 
@@ -636,6 +636,8 @@ mutantの当て直し: 依頼された穴に対応するもの（`#x`のfield、
 
 ### 速さ（A=`76657c4`、B=今回のcommit、どちらもesbuildのbundle。in-process interleave、ABBA、6 process、load順を交互。この回のA/Aは取っていない。前回のA/Aは±4%）
 
+A msとB msはそれぞれの側の中央値、B/Aはload順ごとに取った中央値の比の幾何平均で、A msとB msの比とは一致しないことがある。
+
 | case | A ms | B ms | B/A |
 | --- | ---: | ---: | ---: |
 | managed / browser App.tsx | 41.72 | 41.03 | 0.984 |
@@ -659,4 +661,10 @@ mutantの当て直し: 依頼された穴に対応するもの（`#x`のfield、
 
 ### 引用の訂正
 
-「共通化作業のレビューの指摘への対応」の節にある「`README.md:NNN`の引用はそのまま有効」は誤りだった。`tests/read-shapes.ts`の2か所がずれていたので、現在の行（parameter defaultは557-563、async関数は550-555）に直した。それ以前の節の行番号は、書いた時点のREADMEを指す。
+「共通化作業のレビューの指摘への対応」の節にある「`README.md:NNN`の引用はそのまま有効」は誤りだった。`tests/read-shapes.ts`の引用がずれていたので、241f65eで現在の行に直した。parameter defaultの1か所（557-563）、async関数の1か所（550-555）、Hookに渡す関数の3か所（380-385から384-389）である。この3か所の引用文はREADMEの今の文と一致していないので、test側で文言も直す。それ以前の節の行番号は、書いた時点のREADMEを指す。
+
+### 方針の確認（2026-11-03）
+
+メンテナが方針を確認した。Reactのbest practiceから外れる書き方や、VueやSolidでも追跡しない形は、変換で追いかけずに診断か文書化した制限にして、変換を軽く保つ。
+
+その一例として、render中の複合代入（デバッグ用のrender回数`renders.value += 1`など）は、a5861efで読み取りとして数えるようになったため、`++`がもともとそうだったように、書き込む値をcomponentがsubscribeして再描画が止まらなくなる。特別扱いはせず、READMEとmigrationに書いた（8f10364、b75b413）。
