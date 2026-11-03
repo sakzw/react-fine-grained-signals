@@ -581,6 +581,59 @@ describe("Direct DOM binding", () => {
     expect((box.style as unknown as Record<string, string>)["WebkitLineClamp"]).toBe("");
   });
 
+  it("writes React's unitless SVG style numbers without px on SVG hosts, entry and whole-object forms", () => {
+    const fillOpacity = signal(0.5);
+    const strokeWidth = signal(2);
+    const whole = signal<Record<string, string | number>>({ fillOpacity: 0.5, strokeOpacity: 0.5, strokeWidth: 2 });
+    const { container } = render(
+      <svg>
+        <circle data-testid="entry" style={{ fillOpacity, strokeWidth }} />
+        <rect data-testid="whole" style={whole} />
+      </svg>,
+    );
+    const entry = container.querySelector<SVGElement>('[data-testid="entry"]')!;
+    const rect = container.querySelector<SVGElement>('[data-testid="whole"]')!;
+
+    act(() => {
+      fillOpacity.value = 0.25;
+      strokeWidth.value = 3;
+      whole.value = { fillOpacity: 0.3, strokeOpacity: 0.4, strokeWidth: 3 };
+    });
+
+    // jsdom, like a browser, rejects "0.25px" for fill-opacity, so a px suffix
+    // would leave the old 0.5 in place.
+    expect(entry.style.fillOpacity).toBe("0.25");
+    expect(rect.style.fillOpacity).toBe("0.3");
+    expect(rect.style.strokeOpacity).toBe("0.4");
+    // stroke-width accepts both forms; compare with what React itself writes.
+    const reactWritten = render(
+      <svg>
+        <rect data-testid="react" style={{ fillOpacity: 0.3, strokeOpacity: 0.4, strokeWidth: 3 }} />
+      </svg>,
+    ).container.querySelector('[data-testid="react"]')!;
+    expect(rect.getAttribute("style")).toBe(reactWritten.getAttribute("style"));
+    expect(entry.style.strokeWidth).toBe("3");
+  });
+
+  it("still adds px to bound numbers on HTML hosts where React adds it", () => {
+    const width = signal(10);
+    const whole = signal<Record<string, string | number>>({ height: 10, opacity: 0.5 });
+    render(
+      <>
+        <div aria-label="entry px box" style={{ width }} />
+        <div aria-label="whole px box" style={whole} />
+      </>,
+    );
+    act(() => {
+      width.value = 12;
+      whole.value = { height: 14, opacity: 0.75 };
+    });
+    expect(screen.getByLabelText("entry px box").style.width).toBe("12px");
+    const box = screen.getByLabelText("whole px box");
+    expect(box.style.height).toBe("14px");
+    expect(box.style.opacity).toBe("0.75");
+  });
+
   it("clears a rebuilt style binding's inherited keys, not just the new value's own keys", () => {
     // Regression test for a bug where rebuilding a style binding (the
     // `style={...}` prop switches from one signal to another between
