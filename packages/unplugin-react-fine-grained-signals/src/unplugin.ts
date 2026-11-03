@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { createUnplugin, type TransformResult } from "unplugin";
+import { createUnplugin } from "unplugin";
 import {
   MODES,
   REACT_COMPILER_MODES,
@@ -549,13 +549,13 @@ export default reactFineGrainedSignals;
 
 /**
  * The `{ code, map }` shape a bundler's `transform` hook returns on a real
- * change, `null` on none. Derived from unplugin's own `TransformResult`
- * (rather than naming the source-map types by hand) so the accepted `map`
- * shape -- a real source map object when `sourceMaps: true` produces one, not
- * only `null` -- always matches what unplugin itself expects, and follows
- * unplugin's own type surface if that ever changes.
+ * change, `null` on none. Spelled out by this package (rather than derived
+ * from unplugin's `TransformResult`) so it fits every bundler's own hook type:
+ * unplugin's `SourceMapCompact` allows `null` in `sourcesContent`, which
+ * Rollup 4's `ExistingRawSourceMap` (`string[]`) rejects, so a
+ * `RollupOptions` holding the Rollup entry's plugin failed to type-check.
  */
-export type BundlerTransformOutput = Extract<TransformResult, { code: string }> | null;
+export type BundlerTransformOutput = InternalTransformResult | null;
 
 /**
  * The one piece every per-bundler entry file (`vite.ts`, `webpack.ts`,

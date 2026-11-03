@@ -85,7 +85,9 @@ export interface InternalTransformResult {
     names: string[];
     sourceRoot?: string;
     sources: string[];
-    sourcesContent?: (string | null)[];
+    // `string[]`, not Babel's `(string | null)[]`: Rollup's `ExistingRawSourceMap`
+    // accepts only strings, and unplugin's `SourceMapCompact` accepts these.
+    sourcesContent?: string[];
     version: number;
   };
 }
@@ -7586,7 +7588,12 @@ export function transformWithoutPrefilter(
       // Preserve source indexes from the mapping data if Babel emitted an
       // unknown source entry; bundler source-map inputs require strings.
       sources: sources.map((source) => source ?? ""),
-      ...(sourcesContent === undefined ? {} : { sourcesContent: [...sourcesContent] }),
+      // A `null` entry is a source whose content Babel did not have; leave the
+      // contents out rather than claim an empty file. Babel always has the one
+      // source this transform gives it, so in practice the contents are kept.
+      ...(sourcesContent === undefined || !sourcesContent.every((content) => typeof content === "string")
+        ? {}
+        : { sourcesContent: [...sourcesContent] }),
       ...(file === null ? {} : { file }),
     },
   };
