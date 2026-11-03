@@ -44,11 +44,11 @@ export function Counter() {
 ```jsx
 import { c as _c } from "react/compiler-runtime";
 import { signal } from "react-fine-grained-signals";
-import { useSignalTracking as _useSignalTracking } from "react-fine-grained-signals";
+import { useSignalTracking } from "react-fine-grained-signals";
 export const count = signal(0);
 export function Counter() {
   const $ = _c(1);
-  _useSignalTracking();
+  useSignalTracking();
   let t0;
   if ($[0] === Symbol.for("react.memo_cache_sentinel")) {
     t0 = <output>{count.value}</output>;
@@ -72,7 +72,7 @@ managedの出力はかつて、compilerがlowerできない `try` / `finally` sc
 export function Counter() {
   "use no memo";
 
-  const _signals = _useSignalCapture();
+  const _signals = useSignalCapture();
   return <output>{_signals.capture(() => count.value)}</output>;
 }
 ```
@@ -117,7 +117,7 @@ build pluginに `reactCompiler` optionを追加しました。値は `"opt-out"`
 export function Counter() {
   "use no memo";
 
-  _useSignalTracking();
+  useSignalTracking();
   return <output>{count.value}</output>;
 }
 ```
