@@ -1483,6 +1483,32 @@ describe("managed render transform", () => {
     ).toThrow("only supports synchronous, non-generator functions");
   });
 
+  // The module parsed; framing the rejection as "could not parse" sent authors
+  // looking for a syntax error.
+  it.each([
+    ["an annotated async function", "/** @signalTracking */\nexport async function A() { return <p />; }"],
+    ["an annotated generator", "/** @signalTracking */\nexport function* A() { yield <p />; }"],
+    [
+      "an explicit async opt-in",
+      'import { useSignalTracking } from "react-fine-grained-signals";\nexport async function A() { useSignalTracking(); return <p />; }',
+    ],
+  ])("reports %s as a rejected function, not a parse failure", (_, source) => {
+    let error: unknown;
+    try {
+      compile(source);
+    } catch (caught) {
+      error = caught;
+    }
+    expect(error).toBeInstanceOf(Error);
+    const message = (error as Error).message;
+    expect(message).toMatch(
+      /^\[unplugin-react-fine-grained-signals\] could not transform fixture\.tsx: useSignalTracking transform only supports synchronous, non-generator functions/,
+    );
+    expect(message).not.toContain("could not parse");
+    expect(message).not.toContain("Babel parser plugins");
+    expect(message).toContain("> 2 |");
+  });
+
   it("does not turn a late explicit useSignalTracking call into a second hook", () => {
     const output = compile(
       `

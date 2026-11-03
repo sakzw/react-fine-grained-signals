@@ -2887,6 +2887,23 @@ function findRuntimeImports(
 }
 
 /**
+ * A function the transform was asked to give a boundary (an explicit
+ * `useSignalTracking()` call or `@signalTracking`) but cannot. The module
+ * parsed; `transformReactFineGrainedSignals` reports this as a rejected
+ * function, not as the parse failure every other Babel error is framed as.
+ */
+class UnsupportedFunctionError extends Error {
+  override name = "UnsupportedFunctionError";
+  /** The message and code frame as raised, before Babel prefixes the resolved file name. */
+  readonly reason: string;
+  // Optional only because Babel types the class `new () => Error`; it passes one.
+  constructor(message = "") {
+    super(message);
+    this.reason = message;
+  }
+}
+
+/**
  * A local name for the generated Hook import that no binding, label, global or
  * reference in the file already uses, and that still reads as a Hook.
  *
@@ -3886,7 +3903,10 @@ function decideTransform(
   if (options.transform === "inject" && explicit) return { kind: "directive-only", body };
   if (path.node.async || path.node.generator) {
     if (!explicit && !annotated) return { kind: "skip" };
-    throw path.buildCodeFrameError("useSignalTracking transform only supports synchronous, non-generator functions");
+    throw path.buildCodeFrameError(
+      "useSignalTracking transform only supports synchronous, non-generator functions",
+      UnsupportedFunctionError,
+    );
   }
   // An explicit `useSignalTracking()` is a request for the runtime's ambient
   // render collector. Preserve that contract in managed mode: the per-read
@@ -7536,6 +7556,11 @@ export function transformWithoutPrefilter(
         ),
         { cause: error },
       );
+    }
+    // `reason`, not `detail`: Babel prefixes the message with the resolved file
+    // name, which the plugin message already gives.
+    if (error instanceof UnsupportedFunctionError) {
+      throw new Error(pluginMessage(`could not transform ${cleanId}: ${error.reason}`), { cause: error });
     }
     throw new Error(
       pluginMessage(
