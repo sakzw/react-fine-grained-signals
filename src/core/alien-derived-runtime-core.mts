@@ -336,13 +336,29 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     // one) is not always caught: a computed on it whose cached value still
     // passes its check returns that value instead of re-entering a getter, so
     // the read sees a stale intermediate value rather than this error.
-    if (computed.flags & RecursedCheck) {
+    const flags = computed.flags;
+    if (flags & RecursedCheck) {
       throw new Error("Computed cycle detected");
     }
     const subscriber = track ? activeSub : undefined;
-    if (subscriber !== undefined && !(subscriber.flags & Detached)) {
+    if (subscriber === undefined) {
+      // The hot cases (nothing written since the last check, or a clean
+      // linked computed) stay inline.
+      if (flags & Detached) {
+        if ((flags & Dirty || computed.checkedAt !== writeVersion) && !detachedIsCurrent(computed)) {
+          updateComputed(computed);
+        }
+      } else {
+        if (flags & (Dirty | Pending)) refreshLinkedComputed(computed);
+        // A linked computed whose last subscriber left while it was running.
+        if (computed.subs === undefined) detachComputed(computed);
+      }
+    } else if (subscriber.flags & Detached) {
+      refreshComputed(computed);
+      trackRead(computed, subscriber);
+    } else {
       // Gaining a subscriber: a detached computed links in its current state.
-      if (computed.flags & Detached) {
+      if (flags & Detached) {
         if (detachedIsCurrent(computed)) attachComputed(computed);
         else {
           computed.snapshot = undefined;
@@ -351,11 +367,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       }
       refreshLinkedComputed(computed);
       linkNode(computed, subscriber, cycle);
-    } else {
-      refreshComputed(computed);
-      if (subscriber !== undefined) trackRead(computed, subscriber);
-      // A linked computed whose last subscriber left while it was running.
-      else if (computed.subs === undefined && !(computed.flags & Detached)) detachComputed(computed);
     }
     if (computed.hasError) throw computed.error;
     return computed.value;
@@ -470,6 +481,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     // A detached run records its reads afresh; a write the getter itself makes
     // leaves it unchecked at the version that follows.
     const version = writeVersion;
+    // A fresh array: truncating the previous one measured about twice as slow.
     if (detached) computed.snapshot = [];
     const previous = activeSub;
     activeSub = computed;
