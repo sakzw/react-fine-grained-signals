@@ -2664,7 +2664,7 @@ describe("@signalTracking annotations that attach to nothing", () => {
     const diagnostics = (source: string, mode: ReactFineGrainedSignalsMode): string[] => {
       const found: string[] = [];
       transformReactFineGrainedSignals(
-        `import { memo } from "react";\nconst count = { value: 1 };\n${source}`,
+        `import { forwardRef, memo } from "react";\nconst count = { value: 1 };\n${source}`,
         "fixture.tsx",
         {
           importSource: "react-fine-grained-signals",
@@ -2698,6 +2698,12 @@ describe("@signalTracking annotations that attach to nothing", () => {
       ["a returned local", `function w(C) { const W = () => ${read}; return W; }`],
       ["a returned memo", `function w(C) { return memo(function W() { return ${read}; }); }`],
       ["a keyed slot in a block", `function a() { return { Home: () => ${read} }; }`],
+      ["a returned memo local", `function w(C) { const W = memo((p) => ${read}); return W; }`],
+      [
+        "a returned memo local of a named function",
+        `function w(C) { const W = memo(function W() { return ${read}; }); return W; }`,
+      ],
+      ["a returned forwardRef local", `function w(C) { const W = forwardRef((p, r) => ${read}); return W; }`],
       // Whichever order the local and the function returning it are written in:
       // the local is visited first in one of them.
       [
@@ -2707,6 +2713,10 @@ describe("@signalTracking annotations that attach to nothing", () => {
       [
         "a declaration returned from an earlier function",
         `const w = (a) => { return (b) => Row; function Row(p) { return ${read}; } };`,
+      ],
+      [
+        "a memo local returned from a later function",
+        `const w = (a) => { const Row = memo((p) => ${read}); return (b) => Row; };`,
       ],
     ])("reports %s only where the annotation is all there is", (_kind, source) => {
       expect(diagnostics(`/** @signalTracking */ ${source}`, "manual")).toEqual(["RFGS006"]);

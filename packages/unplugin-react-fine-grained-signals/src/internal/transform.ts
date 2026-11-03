@@ -3414,12 +3414,21 @@ function annotationFallsThrough(
     const fn = current.getFunctionParent();
     return fn !== null && reached.has(fn.node);
   };
-  const isReturnedByName = (fn: NodePath<t.Function>): boolean => {
-    const name = getOwnBindingName(fn);
-    if (name === undefined) return false;
-    const binding = fn.parentPath.scope.getBinding(name);
-    return binding?.referencePaths.some(isReturned) ?? false;
+  // The binding a function is returned by, if any. Unlike `getOwnBindingName`,
+  // this climbs `memo()`/`forwardRef()`: `const W = memo(...); return W` hands
+  // out the wrapped function just as surely as the bare `const W = ...` does.
+  const bindingOf = (fn: NodePath<t.Function>): ReturnType<NodePath["scope"]["getBinding"]> => {
+    if (fn.isFunctionDeclaration()) {
+      return fn.node.id === null || fn.node.id === undefined
+        ? undefined
+        : fn.parentPath.scope.getBinding(fn.node.id.name);
+    }
+    const parent = climbComponentWrappers(fn, reactImportSource).parentPath;
+    if (parent === null || !parent.isVariableDeclarator() || !t.isIdentifier(parent.node.id)) return undefined;
+    return parent.scope.getBinding(parent.node.id.name);
   };
+  const isReturnedByName = (fn: NodePath<t.Function>): boolean =>
+    bindingOf(fn)?.referencePaths.some(isReturned) ?? false;
   // What is reached is a closure, not a single pass: `const Row = ...` written
   // before the `return (b) => Row` that hands it out is visited before that
   // inner function is known to be reached, so one source-order walk answered
