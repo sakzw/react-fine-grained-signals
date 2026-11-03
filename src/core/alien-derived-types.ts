@@ -119,6 +119,8 @@ export interface AlienDerivedGraphRuntime {
   readonly promoteComputed: (readable: object, node: RuntimeNode, entry: SpeculativeComputedEntry) => boolean;
   /** Runs a computed's getter for a render attempt; true when it created effects. */
   readonly evaluateSpeculatively: (node: RuntimeComputed, entry: SpeculativeComputedEntry) => boolean;
+  /** Its owner gives a computed up: unlinked from its sources unless something subscribes to it. */
+  readonly releaseComputed: (readable: object) => void;
   /** Owns an effect for the running subscriber or speculative getter. */
   readonly hasSubscribers: (readable: object) => boolean;
   readonly hasActiveSubscriber: () => boolean;

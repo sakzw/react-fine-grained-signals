@@ -108,6 +108,16 @@ export function detachedEffect(fn: () => void | (() => void)): () => void {
   return coreRuntime.detachedEffect(fn);
 }
 
+/**
+ * Package-internal: the owner of a computed (a component that unmounted, or
+ * replaced it after a deps change) gives it up. Unless something still
+ * subscribes to it, it unlinks from its sources so they stop holding it; a
+ * later read links it again.
+ */
+export function releaseComputed(readable: ReadonlySignal<unknown>): void {
+  coreRuntime.releaseComputed(readable);
+}
+
 /** Groups writes, deferring effect notifications until the callback completes. */
 export function batch<T>(fn: () => T): T {
   return coreRuntime.batch(fn);

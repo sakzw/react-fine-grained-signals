@@ -29,6 +29,7 @@ export interface ReactiveRuntime {
   batch<T>(fn: () => T): T;
   batchUntracked<T>(fn: () => T): T;
   untracked<T>(fn: () => T): T;
+  releaseComputed(readable: RuntimeReadonlySignal<unknown>): void;
   hasSubscribers(readable: RuntimeReadonlySignal<unknown>): boolean;
   hasActiveSubscriber(): boolean;
   getBatchDepth(): number;
@@ -66,6 +67,7 @@ export function createReactiveRuntime(): ReactiveRuntime {
     batch: graph.batch,
     batchUntracked: graph.batchUntracked,
     untracked: graph.untracked,
+    releaseComputed: graph.releaseComputed,
     hasSubscribers: graph.hasSubscribers,
     hasActiveSubscriber: graph.hasActiveSubscriber,
     getBatchDepth: graph.getBatchDepth,

@@ -286,6 +286,29 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     return true;
   }
 
+  /**
+   * Its owner (a component that unmounted, or replaced it on a deps change)
+   * gives the computed up: with no subscriber left, it leaves its sources'
+   * subscriber lists and turns dirty, as when its last subscriber unlinks
+   * (`unwatched`), so the sources stop holding its node and getter. A later
+   * read links it again. A computed something still subscribes to is left
+   * alone; `unwatched` releases it when that subscriber goes.
+   */
+  function releaseComputed(readable: object): void {
+    const node = readableNodes.get(readable);
+    if (
+      node === undefined ||
+      node.kind !== "computed" ||
+      node.subs !== undefined ||
+      node.depsTail === undefined ||
+      node.flags & RecursedCheck
+    ) {
+      return;
+    }
+    node.flags = Mutable | Dirty;
+    disposeDeps(node);
+  }
+
   function hasSubscribers(readable: object): boolean {
     return readableNodes.get(readable)?.subs !== undefined;
   }
@@ -809,6 +832,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     isNodeCurrent,
     promoteComputed,
     evaluateSpeculatively,
+    releaseComputed,
     hasSubscribers,
     hasActiveSubscriber,
     getBatchDepth,

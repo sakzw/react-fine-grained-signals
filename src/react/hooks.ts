@@ -1,6 +1,6 @@
 import { useCallback, useEffect as useReactEffect, useMemo, useRef, useSyncExternalStore } from "react";
 import { computed, deepCollectionSignal, deepSignal, isSignal, signal, untracked } from "../core/index.js";
-import { detachedEffect } from "../core/base.js";
+import { detachedEffect, releaseComputed } from "../core/base.js";
 import type {
   DeepCollectionSignal,
   DeepSignal,
@@ -253,6 +253,56 @@ export function useDeepSignalValue<T extends object, S extends SignalSnapshot>(
 }
 
 /**
+ * The record of a computed a component owns. Only React's memo and the
+ * component's effect hold it: a getter may capture the computed (and so keep
+ * it reachable from its sources), but never the record.
+ */
+interface OwnedComputed<C> {
+  readonly computed: C;
+}
+
+// Records whose component has the effect set up, to tell a Strict Mode
+// replay (cleanup, then setup at once) from an unmount.
+const mountedComputeds = new WeakSet<OwnedComputed<unknown>>();
+
+// A render that never commits (on the server, or a mount that suspends and is
+// dropped) runs no effect, so nothing would release its computed: collecting
+// its record does instead.
+const ownedComputedRegistry =
+  typeof FinalizationRegistry === "function"
+    ? new FinalizationRegistry<ReadonlySignal<unknown>>(releaseComputed)
+    : undefined;
+
+/**
+ * Memoizes a component's computed and releases it, as Vue 3.6 frees a scope's
+ * computeds when the scope stops, once the component unmounts or a deps change
+ * replaces it. A computed read with no subscriber (`peek()` in an effect, an
+ * event handler) is linked into its sources' subscriber lists, and nothing
+ * else would unlink it. The release waits a microtask, so a Strict Mode effect
+ * replay keeps the cached value.
+ */
+function useOwnedComputed<C extends ReadonlySignal<unknown>>(
+  create: () => C,
+  dependencies: DependencyList | undefined,
+): C {
+  const owned = useMemo((): OwnedComputed<C> => {
+    const record = { computed: create() };
+    ownedComputedRegistry?.register(record, record.computed);
+    return record;
+  }, dependencies ?? EMPTY_DEPENDENCIES);
+  useReactEffect(() => {
+    mountedComputeds.add(owned);
+    return () => {
+      mountedComputeds.delete(owned);
+      queueMicrotask(() => {
+        if (!mountedComputeds.has(owned)) releaseComputed(owned.computed);
+      });
+    };
+  }, [owned]);
+  return owned.computed;
+}
+
+/**
  * Creates a read-only computed signal with a stable identity.
  *
  * When `dependencies` is omitted (the same as `[]`), the getter must only read
@@ -267,10 +317,15 @@ export function useDeepSignalValue<T extends object, S extends SignalSnapshot>(
  * closure used by the previously committed computed. Keep the array's length
  * fixed; a length change throws before `useMemo` can create or reuse a
  * computed for the invalid call.
+ *
+ * The component owns the computed: when it unmounts, or a dependencies change
+ * replaces the computed, the computed is released from the signals it read
+ * unless something else still subscribes to it. A released computed still
+ * works, and runs its getter again on its next read.
  */
 export function useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal<T> {
   useFixedDependencyLength("useComputed", "UseComputedDependencyLengthChangeError", dependencies);
-  return useMemo(() => computed(getValue), dependencies ?? EMPTY_DEPENDENCIES);
+  return useOwnedComputed(() => computed(getValue), dependencies);
 }
 
 /**
@@ -281,7 +336,7 @@ export function useComputed<T>(getValue: () => T, dependencies?: DependencyList)
  */
 export function useWritableComputed<T>(options: WritableComputedOptions<T>, dependencies?: DependencyList): Signal<T> {
   useFixedDependencyLength("useWritableComputed", "UseWritableComputedDependencyLengthChangeError", dependencies);
-  return useMemo(() => computed(options), dependencies ?? EMPTY_DEPENDENCIES);
+  return useOwnedComputed(() => computed(options), dependencies);
 }
 
 /**
