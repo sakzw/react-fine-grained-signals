@@ -1245,7 +1245,9 @@ function unfollowedClasses(): Case[] {
       token: "M.make(",
     }),
     untracked("a computed key of a class method", "README.md:247: a method's computed key is not tracked", {
-      body: "class M { [s.value]() {} } const x = Object.getOwnPropertyNames(M.prototype)[1];",
+      // An integer-like key sorts ahead of "constructor", so index 0 is the
+      // method's: index 1 would show "constructor" before and after the write.
+      body: "class M { [s.value]() {} } const x = Object.getOwnPropertyNames(M.prototype)[0];",
     }),
     untracked(
       "a decorator argument of a class method",
