@@ -3420,30 +3420,41 @@ function annotationFallsThrough(
     const binding = fn.parentPath.scope.getBinding(name);
     return binding?.referencePaths.some(isReturned) ?? false;
   };
-  let renders = false;
-  let takenUp = false;
+  // What is reached is a closure, not a single pass: `const Row = ...` written
+  // before the `return (b) => Row` that hands it out is visited before that
+  // inner function is known to be reached, so one source-order walk answered
+  // differently for the two declaration orders. Grow the set until it settles.
+  const candidates: NodePath<t.Function>[] = [];
   traverseHandlers(owner, {
     Function(fn) {
-      if (!isReturned(fn) && !isReturnedByName(fn)) {
-        fn.skip();
-        return;
-      }
-      reached.add(fn.node);
-      if (rendersJsx(fn)) renders = true;
-      const identity = resolveComponentIdentity(fn, reactImportSource);
-      const named = isHookIdentity(identity) || (isComponentIdentity(identity) && !isHigherOrderComponentFactory(fn));
-      if (
-        named &&
-        (mode !== "manual" ||
-          hasOwnedLeadingComment(fn, useSignalTrackingComment) ||
-          (identity?.kind === "hoc-return" && hasOwnedLeadingComment(identity.factory, useSignalTrackingComment)))
-      ) {
-        takenUp = true;
-        fn.stop();
-      }
+      candidates.push(fn);
     },
   });
-  return renders && !takenUp;
+  const returned: NodePath<t.Function>[] = [];
+  for (let grew = true; grew;) {
+    grew = false;
+    for (const fn of candidates) {
+      if (reached.has(fn.node) || (!isReturned(fn) && !isReturnedByName(fn))) continue;
+      reached.add(fn.node);
+      returned.push(fn);
+      grew = true;
+    }
+  }
+  let renders = false;
+  for (const fn of returned) {
+    if (rendersJsx(fn)) renders = true;
+    const identity = resolveComponentIdentity(fn, reactImportSource);
+    const named = isHookIdentity(identity) || (isComponentIdentity(identity) && !isHigherOrderComponentFactory(fn));
+    if (
+      named &&
+      (mode !== "manual" ||
+        hasOwnedLeadingComment(fn, useSignalTrackingComment) ||
+        (identity?.kind === "hoc-return" && hasOwnedLeadingComment(identity.factory, useSignalTrackingComment)))
+    ) {
+      return false;
+    }
+  }
+  return renders;
 }
 
 // An `@signalTracking` annotation is only actionable once the transform can name

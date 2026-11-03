@@ -2698,6 +2698,16 @@ describe("@signalTracking annotations that attach to nothing", () => {
       ["a returned local", `function w(C) { const W = () => ${read}; return W; }`],
       ["a returned memo", `function w(C) { return memo(function W() { return ${read}; }); }`],
       ["a keyed slot in a block", `function a() { return { Home: () => ${read} }; }`],
+      // Whichever order the local and the function returning it are written in:
+      // the local is visited first in one of them.
+      [
+        "a local returned from a later function",
+        `const w = (a) => { const Row = (p) => ${read}; return (b) => Row; };`,
+      ],
+      [
+        "a declaration returned from an earlier function",
+        `const w = (a) => { return (b) => Row; function Row(p) { return ${read}; } };`,
+      ],
     ])("reports %s only where the annotation is all there is", (_kind, source) => {
       expect(diagnostics(`/** @signalTracking */ ${source}`, "manual")).toEqual(["RFGS006"]);
       for (const mode of ["auto", "all"] as const) {
