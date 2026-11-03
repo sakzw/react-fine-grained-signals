@@ -156,6 +156,60 @@ describe("RFSG control-flow ownership of a Match callback", () => {
     expect(diagnostics).toContain("RFGS003");
   });
 
+  // collectMatches walks Switch's children with Children.forEach, which
+  // flattens the array a map produces like a literal one.
+  it.each([
+    ["a concise map callback", "{xs.map((x) => <Match key={x} when={s}>{() => s.value}</Match>)}"],
+    [
+      "a map callback's return",
+      "{xs.map((x) => { if (x) return null; return <Match key={x} when={s}>{() => s.value}</Match>; })}",
+    ],
+    [
+      "a map callback function expression",
+      "{xs.map(function (x) { return <Match key={x} when={s}>{() => s.value}</Match>; })}",
+    ],
+    ["an optional map", "{xs?.map((x) => <Match key={x} when={s}>{() => s.value}</Match>)}"],
+    ["a flatMap callback", "{xs.flatMap((x) => [<Match key={x} when={s}>{() => s.value}</Match>])}"],
+    ["a map callback's fragment", "{xs.map((x) => <><Match when={s}>{() => s.value}</Match></>)}"],
+    ["a nested map", "{xs.map((ys) => ys.map((y) => <Match key={y} when={s}>{() => s.value}</Match>))}"],
+    [
+      "a map spread into an array",
+      '{[<Match key="a" when={s}>{() => 1}</Match>, ...xs.map((x) => <Match key={x} when={s}>{() => s.value}</Match>)]}',
+    ],
+  ])("follows the runtime through %s", (_where, child) => {
+    const { diagnostics } = run(`${controlFlow}export function A({ xs }) { return <Switch>${child}</Switch>; }`);
+    expect(diagnostics).not.toContain("RFGS003");
+  });
+
+  it.each([
+    [
+      "a forEach callback, which produces nothing",
+      "{xs.forEach((x) => <Match key={x} when={s}>{() => s.value}</Match>)}",
+    ],
+    ["any other call's callback", "{pick((x) => <Match key={x} when={s}>{() => s.value}</Match>)}"],
+    ["a map's second argument", "{xs.map(pick, (x) => <Match key={x} when={s}>{() => s.value}</Match>)}"],
+    [
+      "a function inside the map callback",
+      "{xs.map((x) => { const g = () => <Match when={s}>{() => s.value}</Match>; return g(); })}",
+    ],
+    [
+      "a map inside an unrelated element",
+      "<div>{xs.map((x) => <Match key={x} when={s}>{() => s.value}</Match>)}</div>",
+    ],
+  ])("does not follow %s", (_where, child) => {
+    const { diagnostics } = run(
+      `${controlFlow}const pick = (f) => f;\nexport function A({ xs }) { return <Switch>${child}</Switch>; }`,
+    );
+    expect(diagnostics).toEqual(["RFGS003"]);
+  });
+
+  it("does not follow a mapped list held in a local, which is a value flow rather than a position", () => {
+    const { diagnostics } = run(
+      `${controlFlow}export function A({ xs }) { const list = xs.map((x) => <Match key={x} when={s}>{() => s.value}</Match>); return <Switch>{list}</Switch>; }`,
+    );
+    expect(diagnostics).toEqual(["RFGS003"]);
+  });
+
   it("collects a Match passed as the Switch's children attribute", () => {
     const { diagnostics } = run(
       `${controlFlow}export function A() { return <Switch children={<Match when={s}>{() => s.value}</Match>} />; }`,
@@ -953,6 +1007,10 @@ const theme = signal({ Icon: () => <b /> });
     ["For's key callback", `<For each={f} by={() => ${tag}}>{() => 1}</For>`],
     ["Index", `<Index each={f}>{() => ${tag}}</Index>`],
     ["a Match in a Switch", `<Switch><Match when={f}>{() => ${tag}}</Match></Switch>`],
+    [
+      "a mapped Match in a Switch",
+      `<Switch>{f.map((x: number) => <Match key={x} when={x}>{() => ${tag}}</Match>)}</Switch>`,
+    ],
     ["a wrapped callback", `<Show when={f}>{(() => ${tag}) as any}</Show>`],
     ["a function expression", `<Show when={f}>{function () { return ${tag}; }}</Show>`],
     ["a map in the callback", `<Show when={f}>{() => [1].map(() => ${tag})}</Show>`],

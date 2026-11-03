@@ -3172,18 +3172,48 @@ function isReactFragmentTag(tag: NodePath, reactImportSource: string): boolean {
 }
 
 /**
+ * When `child` is what a function returns -- its concise body, or a `return`'s
+ * argument -- and that function is the callback of `xs.map(...)` or
+ * `xs.flatMap(...)`, the call whose array holds the returned value. Only those
+ * two: `forEach` returns nothing, and any other call's result is unknown.
+ */
+function arrayCallProducing(parent: NodePath, child: NodePath): NodePath | undefined {
+  let callback: NodePath | null;
+  if (parent.isArrowFunctionExpression() && parent.node.body === child.node) {
+    callback = parent;
+  } else if (parent.isReturnStatement()) {
+    callback = parent.getFunctionParent();
+  } else {
+    return undefined;
+  }
+  if (callback === null) return undefined;
+  const slot = climbTransparentWrappers(callback);
+  const call = slot.parentPath;
+  if (call === null) return undefined;
+  const parts = getCallParts(call.node);
+  if (parts === undefined || parts.arguments[0] !== slot.node) return undefined;
+  const callee = unwrapTransparent(parts.callee);
+  if (!t.isMemberExpression(callee) && !t.isOptionalMemberExpression(callee)) return undefined;
+  const method = getReadPropertyName(callee);
+  return method === "map" || method === "flatMap" ? call : undefined;
+}
+
+/**
  * Does the `Match` element at `match` reach an RFSG `Switch`'s branch list?
  *
  * `Switch` finds its branches with `collectMatches` (src/utils.tsx), which
  * walks its children with `Children.forEach` -- so arrays and `false`/`null`
  * holes flatten away -- and descends into every `Fragment`. The climb mirrors
- * exactly that: it passes fragments (`<>` and React's `<Fragment>`), arrays,
+ * exactly that: it passes fragments (`<>` and React's `<Fragment>`), arrays
+ * (and an array spread into one),
  * the result operands of a conditional or a logical operator (either side of
  * `||` and `??`, the right of `&&`), parentheses, TypeScript wrappers and a
  * `children={...}` attribute, which is the same prop as JSX children; it stops
  * at the first other element, at any other attribute, or at a function
- * boundary. Match itself never calls its branch callback, so
- * a Match that does not reach a Switch has no proven owner.
+ * boundary -- except the callback of a `.map()`/`.flatMap()` call, whose
+ * returns the call collects into an array (`arrayCallProducing`). Match itself
+ * never calls its branch callback, so a Match that does not reach a Switch has
+ * no proven owner.
  */
 function isMatchCollectedBySwitch(
   match: NodePath<t.JSXElement>,
@@ -3194,6 +3224,14 @@ function isMatchCollectedBySwitch(
   let next: NodePath | null = match.parentPath;
   while (next !== null) {
     let parent: NodePath = next;
+    // A `.map()`/`.flatMap()` callback's return value lands in the array the
+    // call produces, and `Children.forEach` flattens that array like any other.
+    const mapped = arrayCallProducing(parent, child);
+    if (mapped !== undefined) {
+      child = mapped;
+      next = mapped.parentPath;
+      continue;
+    }
     if (parent.isJSXAttribute()) {
       const attributeName = parent.node.name;
       if (!t.isJSXIdentifier(attributeName) || attributeName.name !== "children") return false;
@@ -3213,6 +3251,7 @@ function isMatchCollectedBySwitch(
         parent.isJSXFragment() ||
         parent.isJSXExpressionContainer() ||
         parent.isArrayExpression() ||
+        (parent.isSpreadElement() && parent.parentPath.isArrayExpression()) ||
         parent.isParenthesizedExpression() ||
         (isTransparentWrapper(parent.node) && parent.node.expression === child.node) ||
         (parent.isConditionalExpression() && parent.node.test !== child.node) ||

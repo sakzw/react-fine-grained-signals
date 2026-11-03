@@ -639,6 +639,29 @@ export function App() {
     expect(container.textContent).toBe("grid:c");
   });
 
+  it("tracks a signal read in a Match callback a map hands to Switch", async () => {
+    const module = await loadModule(`
+import { signal } from "react-fine-grained-signals";
+import { Match, Switch } from "react-fine-grained-signals/utils";
+export const mode = signal("list");
+export const label = signal("a");
+const modes = ["list", "grid"];
+export function App() {
+  return <Switch fallback="none">
+    {modes.map((m) => <Match key={m} when={mode} equals={m}>{() => <b>{m + ":" + label.value}</b>}</Match>)}
+  </Switch>;
+}
+`);
+    const container = mount(module.App);
+    expect(container.textContent).toBe("list:a");
+    write(module, "label", "b");
+    expect(container.textContent).toBe("list:b");
+    write(module, "mode", "grid");
+    expect(container.textContent).toBe("grid:b");
+    write(module, "label", "c");
+    expect(container.textContent).toBe("grid:c");
+  });
+
   it("tracks a signal read in For's children and by callbacks", async () => {
     const module = await loadModule(`
 import { useState } from "react";
