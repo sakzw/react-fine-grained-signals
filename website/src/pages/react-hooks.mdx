@@ -72,10 +72,10 @@ unchanged.
 - Keep the array length and order fixed. A length change, including switching
   between omitted (or `[]`) and a non-empty list, throws before a stale memoized
   computed can be reused.
-- The component owns the computed: on unmount, or when a dependency change
-  replaces it, it is released from the signals it read unless something else
-  still subscribes to it. A released computed runs its getter again on its next
-  read.
+- Nothing needs releasing: a computed with no subscriber is not linked into the
+  signals it read, so one the component no longer uses (after an unmount, a
+  dependency change, or a render that never commits) is garbage collected with
+  it.
 
 ## useWritableComputed
 

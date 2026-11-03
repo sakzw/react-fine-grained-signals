@@ -42,7 +42,7 @@ computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
 
 遅延評価される読み取り専用の派生値を作成します。`signal` と同じ `.value` と `.peek()` を公開し、getterが読んだ依存が変化したあと、次の読み取り時に再評価されます。
 
-一度読んだcomputedは読んだsignalにlinkされ、解放されるまでsignalから保持されます。解放されるのは、最後の購読者が抜けたとき（`effect`の中で読んだcomputedならそのeffectを破棄したとき）と、[`useComputed`](./hooks.ja.md#usecomputed)のcomputedならcomponentがunmountしたときです。購読者も持ち主もいないもの（イベントハンドラの中で作って`peek`したcomputedなど）は、signalが生きている間linkされたままです。computedはmodule scopeで一度だけ作るか、`useComputed`で作ってください。
+computedが読んだsignalにlinkされるのは、何か（`effect`、`useSignalValue`、tracked component）が購読している間だけです。購読者がいないときは、Preact signalsと同じく読んだもののversionを記録して次の読み取りで確認するので、signalがcomputedを保持し続けることはありません。どこで作ったものでも、持ち主や解放の呼び出しなしに、コードから参照されなくなればgarbage collectされます。何かが購読するとgetterを再実行せずにlinkし、最後の購読者が抜けるとlinkを外します。そのあとの読み取りではgetterを再実行します。購読者がいない間にgetterの中で作った`effect`は、読み取りが返った時点で破棄されます。
 
 getterとsetterを持つオブジェクトを渡すと、書き込み可能なcomputedを作成します。getterが値の真偽を決め、`.value`への代入はユーザー定義のsetterを呼びます。別のsignalへ値をコピーするものではありません。setterは依存追跡なし、かつbatch内で実行されるため、setter内で別のsignalを読むことはcomputedの依存にならず、複数の書き込みはsetter完了後に購読者へ通知されます。
 

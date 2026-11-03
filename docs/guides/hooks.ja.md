@@ -54,7 +54,7 @@ useComputed<T>(getValue: () => T, dependencies?: DependencyList): ReadonlySignal
 - Fast Refreshは編集後にこのmemoized computedを再生成することがあり、React component stateを保ったまま新しいgetterを反映します。これは開発時の挙動で、本番では通常の再レンダー間でidentityが安定します。
 - **signalではない値を捕捉する場合**は列挙します: `useComputed(() => count.value * step, [step])`。
 - 依存配列の長さと順序は固定してください。省略(または`[]`)と空でない配列との切り替えを含め、長さが変わると、`useMemo`が置き換えのcomputedを作る前に例外になります。React標準のwarningだけに任せると、古いgetterが残ることがあります。
-- computedの持ち主はcomponentです。componentがunmountしたとき、または依存値の変更でcomputedが置き換わったとき、ほかに購読しているものがなければ、computedは読んだsignalから解放されます。解放したcomputedも使えますが、次の読み取りでgetterを再実行します。
+- 解放は要りません。購読者のいないcomputedは読んだsignalにlinkされない([`computed`](./core-primitives.ja.md#computed)を参照)ので、componentが使わなくなったもの(unmount後、依存値の変更後、commitされなかったレンダー)はcomponentと一緒にgarbage collectされます。
 
 ## useWritableComputed
 

@@ -54,7 +54,7 @@ Creates a read-only computed signal whose identity stays stable while its depend
 - Fast Refresh may recreate this memoized computed after an edit, so updated getters take effect while React component state is preserved. This is development behavior; production identity remains stable across ordinary renders.
 - **To capture a non-signal value**, list it: `useComputed(() => count.value * step, [step])`.
 - Keep the array's length and order fixed. A length change, including switching between omitted (or `[]`) and a non-empty list, throws before `useMemo` creates a replacement computed; React's warning-only length check can otherwise preserve the old computed closure.
-- The component owns the computed: when it unmounts, or a dependency change replaces the computed, the computed is released from the signals it read unless something else still subscribes to it. A released computed still works, and runs its getter again on its next read.
+- Nothing needs releasing: a computed with no subscriber is not linked into the signals it read (see [`computed`](./core-primitives.md#computed)), so one the component no longer uses (after an unmount, a dependency change, or a render that never commits) is garbage collected with it.
 
 ## useWritableComputed
 
