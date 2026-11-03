@@ -23,6 +23,14 @@ export interface RuntimeNode extends Omit<ReactiveNode, "deps" | "depsTail" | "s
   cleanup?: (() => unknown) | undefined;
   getRenderVersion?: (() => number) | undefined;
   subscribeRender?: ((listener: () => void) => () => void) | undefined;
+  /**
+   * Set exactly when a computed has no subscriber ("detached"): it then holds
+   * no graph links and keeps what its last evaluation read instead, as flat
+   * `[node, renderRevision, ...]` pairs. `checkedAt` is the write version at
+   * which those pairs last matched.
+   */
+  snapshot?: Array<RuntimeNode | number> | undefined;
+  checkedAt?: number | undefined;
 }
 
 export interface RuntimeSource extends RuntimeNode {
@@ -119,8 +127,6 @@ export interface AlienDerivedGraphRuntime {
   readonly promoteComputed: (readable: object, node: RuntimeNode, entry: SpeculativeComputedEntry) => boolean;
   /** Runs a computed's getter for a render attempt; true when it created effects. */
   readonly evaluateSpeculatively: (node: RuntimeComputed, entry: SpeculativeComputedEntry) => boolean;
-  /** Its owner gives a computed up: unlinked from its sources unless something subscribes to it. */
-  readonly releaseComputed: (readable: object) => void;
   /** Owns an effect for the running subscriber or speculative getter. */
   readonly hasSubscribers: (readable: object) => boolean;
   readonly hasActiveSubscriber: () => boolean;

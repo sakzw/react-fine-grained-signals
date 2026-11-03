@@ -41,6 +41,16 @@ const Pending = 32 as ReactiveFlags;
 // Alien 3.2.1's high-level `HasChildEffect`: set on an effect or computed that
 // created an effect while running, so its next run disposes those children.
 const HasChildEffect = 64 as ReactiveFlags;
+// RFSG's own: a computed with no subscriber is "detached", marked by having a
+// `snapshot`. Alien's linked-list graph never sees one, because it holds no
+// links: it records what it read in `snapshot` and proves its cached value
+// current by comparing revisions on the next read (as Preact does for a
+// computed nothing subscribes to). Linking it into its sources' subscriber
+// lists instead would keep its node and getter closure reachable from every
+// long-lived source it ever read.
+// The snapshot of a computed that never ran. Nothing pushes to it: a run
+// records into a fresh array.
+const NO_READS: Array<RuntimeNode | number> = [];
 
 export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   const runtimeToken = {};
@@ -51,6 +61,9 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   // Disposers of effects created by the speculative getter now running.
   let speculativeChildren: Array<() => void> | undefined;
   let cycle = 0;
+  // Advances on every value-changing source write: a detached computed checked
+  // at the current version needs no revision walk.
+  let writeVersion = 0;
   let runDepth = 0;
   let batchDepth = 0;
   let flushIndex = 0;
@@ -90,10 +103,17 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       const node = rawNode as RuntimeNode;
       deepSignalUnwatched.get(node)?.();
       if (node.kind === "computed") {
-        if (node.depsTail !== undefined) {
-          node.flags = Mutable | Dirty;
-          disposeDeps(node);
-        }
+        // A computed's last subscriber left: it detaches dirty, as Alien
+        // leaves an unwatched computed, dropping every link. Child effects are
+        // disposed with their links, and each dependency left with no
+        // subscriber detaches in turn. One still running finishes detached and
+        // dirty, recording its remaining reads in the fresh snapshot.
+        // Other flags it keeps are inert on a detached computed, and its next
+        // run resets them.
+        node.snapshot = [];
+        node.flags |= Dirty;
+        node.depsTail = undefined;
+        purgeDeps(node);
       } else if (node.kind === "effect") {
         disposeEffect(node as RuntimeEffect);
       }
@@ -171,8 +191,19 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
 
   function readSource(source: RuntimeNode): unknown {
     const value = readSourceUntracked(source);
-    if (activeSub !== undefined) linkNode(source, activeSub, cycle);
+    if (activeSub !== undefined) trackRead(source, activeSub);
     return value;
+  }
+
+  // A detached computed's evaluation records the read; any other subscriber
+  // links to it. Repeating the previous read is not recorded twice.
+  function trackRead(dependency: RuntimeNode, subscriber: RuntimeNode): void {
+    const snapshot = subscriber.snapshot;
+    if (snapshot) {
+      if (snapshot[snapshot.length - 2] !== dependency) snapshot.push(dependency, dependency.renderRevision);
+    } else {
+      linkNode(dependency, subscriber, cycle);
+    }
   }
 
   // The read half of `readSource` without linking: a read under
@@ -231,16 +262,24 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     node.renderRevision = (node.renderRevision + 1) | 0;
   }
 
+  /**
+   * Whether a computed's cached value is current, without running anything. A
+   * linked computed is current unless a write marked it; a detached one when
+   * every recorded read is still current.
+   */
   function isComputedClean(node: RuntimeNode): boolean {
-    return node.initialized === true && !(node.flags & (Dirty | Pending));
+    // A linked computed that never finished a run is dirty or still running.
+    return node.snapshot
+      ? detachedIsCurrent(node as RuntimeComputed)
+      : !(node.flags & (Dirty | Pending | RecursedCheck));
   }
 
   /**
    * Whether a dependency a render or speculative read recorded at `revision`
    * is still what it read. Sources bump their revision on every value-changing
    * write. A computed's revision only moves when it re-evaluates, so it also
-   * has to be clean (a write upstream marks even an unwatched computed dirty or
-   * pending, since computeds stay linked to their sources).
+   * has to be clean: a write upstream marks a linked computed dirty or pending,
+   * and a detached one fails its revision check.
    */
   function isNodeCurrent(node: RuntimeNode, revision: number): boolean {
     return node.renderRevision === revision && (node.kind !== "computed" || isComputedClean(node));
@@ -251,30 +290,22 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     // advance `renderRevision`, so `settleRenderAttempt` compares this attempt's
     // value with the node's rather than trusting the revision it recorded.
     if (node.initialized) return true;
+    // Never evaluated, so detached: the promoted value is cached through the
+    // revisions the speculative read saw, and links only when subscribed
+    // (`attachComputed`, which also settles the sources it links).
     const computed = node as RuntimeComputed;
-    const dependencies: RuntimeNode[] = [];
+    const snapshot: Array<RuntimeNode | number> = [];
     for (const [dependency, revision] of entry.dependencies) {
       const dependencyNode = readableNodes.get(dependency);
       if (dependencyNode === undefined) throw new TypeError("Unknown candidate readable");
-      // Link a dependency only in the state the speculative read observed, the
+      // Keep a dependency only in the state the speculative read observed, the
       // same test as cache reuse (`isEntryCurrent`).
       if (!isNodeCurrent(dependencyNode, revision)) return false;
-      // The render read a source's pending value without settling it. Settle it
-      // before linking, as Alien's own signal read does, or a later write back
-      // to the stale committed value compares equal and never reaches us.
-      if (dependencyNode.kind === "source") readSourceUntracked(dependencyNode);
-      dependencies.push(dependencyNode);
+      snapshot.push(dependencyNode, revision);
     }
-    disposeDeps(computed);
-    computed.depsTail = undefined;
-    const previousSub = activeSub;
-    activeSub = computed;
-    cycle += 1;
-    try {
-      for (const dependency of dependencies) linkNode(dependency, computed, cycle);
-    } finally {
-      activeSub = previousSub;
-    }
+    // Left unchecked (`checkedAt` from creation): its next read walks this
+    // snapshot once.
+    computed.snapshot = snapshot;
     computed.value = entry.value;
     computed.error = entry.error;
     computed.hasError = entry.hasError;
@@ -284,29 +315,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     // attempt that read this computed before it existed re-checks its value.
     bumpRevision(computed);
     return true;
-  }
-
-  /**
-   * Its owner (a component that unmounted, or replaced it on a deps change)
-   * gives the computed up: with no subscriber left, it leaves its sources'
-   * subscriber lists and turns dirty, as when its last subscriber unlinks
-   * (`unwatched`), so the sources stop holding its node and getter. A later
-   * read links it again. A computed something still subscribes to is left
-   * alone; `unwatched` releases it when that subscriber goes.
-   */
-  function releaseComputed(readable: object): void {
-    const node = readableNodes.get(readable);
-    if (
-      node === undefined ||
-      node.kind !== "computed" ||
-      node.subs !== undefined ||
-      node.depsTail === undefined ||
-      node.flags & RecursedCheck
-    ) {
-      return;
-    }
-    node.flags = Mutable | Dirty;
-    disposeDeps(node);
   }
 
   function hasSubscribers(readable: object): boolean {
@@ -333,29 +341,111 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     // one) is not always caught: a computed on it whose cached value still
     // passes its check returns that value instead of re-entering a getter, so
     // the read sees a stale intermediate value rather than this error.
-    if (computed.flags & RecursedCheck) {
+    const flags = computed.flags;
+    if (flags & RecursedCheck) {
       throw new Error("Computed cycle detected");
     }
+    const subscriber = track ? activeSub : undefined;
+    const snapshot = computed.snapshot;
+    if (subscriber === undefined || subscriber.snapshot) {
+      // Nothing to link: the hot cases (a detached computed checked since the
+      // last write, a clean linked one) stay inline.
+      if (snapshot ? flags & Dirty || computed.checkedAt !== writeVersion : flags & (Dirty | Pending)) {
+        refreshComputed(computed);
+      }
+      if (subscriber !== undefined) trackRead(computed, subscriber);
+    } else {
+      // Gaining a subscriber: a detached computed links in its current state.
+      if (snapshot) attachComputed(computed);
+      refreshComputed(computed);
+      linkNode(computed, subscriber, cycle);
+    }
+    if (computed.hasError) throw computed.error;
+    return computed.value;
+  }
+
+  /** Brings a computed's cached value up to date without linking it to anything. */
+  function refreshComputed(computed: RuntimeComputed): void {
     const flags = computed.flags;
-    if (
+    if (computed.snapshot) {
+      if (!detachedIsCurrent(computed, true)) updateComputed(computed);
+    } else if (
       flags & Dirty ||
       (flags & Pending &&
         ((computed.deps !== undefined && checkDirty(computed.deps, computed as unknown as ReactiveNode)) ||
           ((computed.flags = flags & ~Pending), false)))
     ) {
       if (updateComputed(computed) && computed.subs !== undefined) shallowPropagate(computed.subs);
-    } else if (!flags) {
-      updateComputed(computed);
     }
-    if (track && activeSub !== undefined) linkNode(computed, activeSub, cycle);
-    if (computed.hasError) throw computed.error;
-    return computed.value;
+  }
+
+  /**
+   * Whether a detached computed's cached value is current: nothing was written
+   * since it was last checked, or every read it recorded still has the
+   * revision it saw, in read order. With `refresh`, a computed one is first
+   * brought up to date (so a branch the getter no longer takes is never
+   * evaluated); without it nothing runs, and a computed one must be clean.
+   */
+  function detachedIsCurrent(computed: RuntimeComputed, refresh?: boolean): boolean {
+    if (computed.flags & Dirty) return false;
+    const version = writeVersion;
+    if (computed.checkedAt === version) return true;
+    const snapshot = computed.snapshot!;
+    for (let index = 0; index < snapshot.length; index += 2) {
+      const dependency = snapshot[index] as RuntimeNode;
+      if (dependency.kind === "computed") {
+        if (!refresh) {
+          if (!isComputedClean(dependency)) return false;
+        } else if (!(dependency.flags & RecursedCheck)) refreshComputed(dependency as RuntimeComputed);
+      }
+      if (dependency.renderRevision !== snapshot[index + 1]) return false;
+    }
+    computed.checkedAt = version;
+    return true;
+  }
+
+  /**
+   * Links a detached computed to what it recorded when its cached value is
+   * current (linking any detached computed among those first, so a write
+   * reaches its new subscriber), or else leaves it linked to nothing and dirty.
+   * A source is settled before linking, as Alien's own signal read does: a
+   * promoted computed may have seen its pending value only, and a later write
+   * back to the stale committed value would compare equal and stop.
+   */
+  function attachComputed(computed: RuntimeComputed): boolean {
+    const current = detachedIsCurrent(computed, true);
+    const snapshot = computed.snapshot!;
+    computed.snapshot = undefined;
+    // A detached computed holds no links, so `depsTail` is already unset.
+    computed.flags = current ? Mutable : Mutable | Dirty;
+    if (current) {
+      const version = ++cycle;
+      for (let index = 0; index < snapshot.length; index += 2) {
+        const dependency = snapshot[index] as RuntimeNode;
+        if (dependency.kind === "source") readSourceUntracked(dependency);
+        // A computed dependency whose own subscribers left since this one
+        // checked it was detached dirty with no write: it links dirty, and
+        // this one checks through it on its next read.
+        else if (dependency.snapshot && !attachComputed(dependency as RuntimeComputed)) {
+          computed.flags = Mutable | Pending;
+        }
+        linkNode(dependency, computed, version);
+      }
+    }
+    return current;
   }
 
   function updateComputed(computed: RuntimeComputed): boolean {
     if (computed.flags & HasChildEffect) disposeChildEffects(computed);
     computed.depsTail = undefined;
     computed.flags = Mutable | RecursedCheck;
+    if (computed.snapshot) {
+      // A detached run records its reads afresh (in a fresh array: truncating
+      // the previous one measured about twice as slow), checked at the version
+      // it starts from, so a write the getter itself makes leaves it unchecked.
+      computed.snapshot = [];
+      computed.checkedAt = writeVersion;
+    }
     const previous = activeSub;
     activeSub = computed;
     let changed = !computed.initialized;
@@ -379,6 +469,14 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     } finally {
       activeSub = previous;
       computed.flags &= ~RecursedCheck;
+      // Detached, or detached while it ran (see `unwatched`).
+      if (computed.snapshot) {
+        // Its only links are effects the getter created: with no subscriber
+        // to own them they are disposed now, as an unwatched computed's are.
+        // (A `HasChildEffect` left set only makes the next run's
+        // `disposeChildEffects` find nothing.)
+        computed.depsTail = undefined;
+      }
       purgeDeps(computed);
     }
   }
@@ -645,6 +743,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   function inlineWrite(node: RuntimeSource, value: unknown): void {
     if (!Object.is(node.pendingValue, (node.pendingValue = value))) {
       bumpRevision(node);
+      writeVersion += 1;
       node.flags = Mutable | Dirty;
       const subscribers = node.subs;
       if (subscribers !== undefined) {
@@ -784,12 +883,15 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     }
   }
   function createBrandedComputed<T>(getter: () => T, setter?: (value: T) => void): RuntimeReadable<T> {
-    const node = makeNode("computed", None);
+    // Detached until something subscribes, and dirty until first evaluated.
+    const node = makeNode("computed", Mutable | Dirty);
     node.getter = getter;
     node.value = undefined;
     node.error = undefined;
     node.hasError = false;
     node.initialized = false;
+    node.snapshot = NO_READS;
+    node.checkedAt = -1;
     return setter === undefined
       ? new HelperBrandComputed<T>(node as RuntimeComputed)
       : new WritableHelperBrandComputed<T>(node as RuntimeComputed, setter);
@@ -832,7 +934,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     isNodeCurrent,
     promoteComputed,
     evaluateSpeculatively,
-    releaseComputed,
     hasSubscribers,
     hasActiveSubscriber,
     getBatchDepth,

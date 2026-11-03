@@ -5,11 +5,10 @@ import { setFlagsFromString } from "node:v8";
 import { runInNewContext } from "node:vm";
 import { StrictMode, Suspense, use, useEffect } from "react";
 import { renderToString } from "react-dom/server";
-import { act, cleanup, render } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
-import { computed, effect, signal, useComputed, useSignalValue, useWritableComputed } from "../src/index.js";
+import { computed, effect, signal, untracked, useComputed, useSignalValue } from "../src/index.js";
 import type { ReadonlySignal } from "../src/index.js";
-import { releaseComputed } from "../src/core/base.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -21,8 +20,6 @@ afterEach(() => {
 type Readable = { readonly value: unknown; peek(): unknown };
 const linkedFromSources = (readable: Readable) => coreRuntime.hasSubscribers(readable);
 const linksToSources = (readable: Readable) => coreRuntime.getNodeForReadable(readable)?.deps !== undefined;
-// The release after an unmount or a deps change waits a microtask.
-const settle = () => act(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 
 let gc: (() => void) | undefined;
 async function collectGarbage(): Promise<void> {
@@ -30,19 +27,29 @@ async function collectGarbage(): Promise<void> {
     setFlagsFromString("--expose-gc");
     gc = runInNewContext("gc") as () => void;
   }
-  // A released computed is unreachable only after the finalizer that releases
-  // it has run, which takes a collection and a task.
-  for (let round = 0; round < 4; round += 1) {
+  for (let round = 0; round < 3; round += 1) {
     await new Promise((resolve) => setTimeout(resolve, 0));
     gc();
   }
 }
 
-// As in Vue 3.6 with no effect scope: a computed read with no subscriber is
-// linked to its sources like any other, so it stays cached, and stays
-// reachable from them until something releases it.
+// A computed nothing subscribes to must not stay reachable from the sources it
+// read: before 0.4 it did, keeping its getter closure alive for as long as any
+// of them lived.
 describe("a computed with no subscriber", () => {
-  it("is linked to its sources and caches until something it read changes", () => {
+  it("leaves no link from its sources after a read or a peek", () => {
+    const source = signal(1);
+    const doubled = computed(() => source.value * 2);
+    expect(doubled.value).toBe(2);
+    expect(linkedFromSources(source)).toBe(false);
+    expect(linksToSources(doubled)).toBe(false);
+    source.value = 2;
+    expect(doubled.peek()).toBe(4);
+    expect(untracked(() => doubled.value)).toBe(4);
+    expect(linkedFromSources(source)).toBe(false);
+  });
+
+  it("caches its value until something it read changes", () => {
     const source = signal(1);
     const unrelated = signal(0);
     let runs = 0;
@@ -51,70 +58,176 @@ describe("a computed with no subscriber", () => {
       return source.value * 2;
     });
     expect(doubled.value).toBe(2);
+    expect(doubled.value).toBe(2);
     expect(doubled.peek()).toBe(2);
     expect(runs).toBe(1);
-    expect(linkedFromSources(source)).toBe(true);
     unrelated.value = 1;
     expect(doubled.value).toBe(2);
     expect(runs).toBe(1);
     source.value = 3;
+    expect(runs).toBe(1);
     expect(doubled.value).toBe(6);
     expect(runs).toBe(2);
   });
 
-  it("is unlinked and left dirty by a release, and links again on the next read", () => {
+  it("re-checks a chain in read order and runs only getters whose inputs changed", () => {
+    const flag = signal(true);
+    const left = signal(1);
+    const right = signal(1);
+    const runs = { parity: 0, rightSide: 0, pick: 0 };
+    const parity = computed(() => {
+      runs.parity += 1;
+      return left.value % 2;
+    });
+    const rightSide = computed(() => {
+      runs.rightSide += 1;
+      return right.value;
+    });
+    const pick = computed(() => {
+      runs.pick += 1;
+      return flag.value ? parity.value : rightSide.value;
+    });
+    expect(pick.value).toBe(1);
+    left.value = 3;
+    expect(pick.value).toBe(1);
+    expect(runs).toEqual({ parity: 2, rightSide: 0, pick: 1 });
+    right.value = 5;
+    expect(pick.value).toBe(1);
+    expect(runs).toEqual({ parity: 2, rightSide: 0, pick: 1 });
+    flag.value = false;
+    expect(pick.value).toBe(5);
+    expect(runs).toEqual({ parity: 2, rightSide: 1, pick: 2 });
+    expect(linkedFromSources(left)).toBe(false);
+    expect(linkedFromSources(right)).toBe(false);
+    expect(linkedFromSources(parity)).toBe(false);
+  });
+
+  it("leaves a computed it read unlinked as well", () => {
     const source = signal(1);
-    let runs = 0;
     const inner = computed(() => source.value + 1);
+    const outer = computed(() => inner.value * 10);
+    expect(outer.value).toBe(20);
+    expect(linkedFromSources(source)).toBe(false);
+    expect(linkedFromSources(inner)).toBe(false);
+    expect(linksToSources(inner)).toBe(false);
+  });
+
+  it("links without re-running when subscribed, and unlinks dirty when the last subscriber leaves", () => {
+    const source = signal(1);
+    let innerRuns = 0;
+    let outerRuns = 0;
+    const inner = computed(() => {
+      innerRuns += 1;
+      return source.value + 1;
+    });
     const outer = computed(() => {
-      runs += 1;
+      outerRuns += 1;
       return inner.value * 10;
     });
     expect(outer.value).toBe(20);
-    releaseComputed(outer);
-    expect(linksToSources(outer)).toBe(false);
-    // `inner` lost its last subscriber, so it let go of the source too.
-    expect(linkedFromSources(inner)).toBe(false);
-    expect(linkedFromSources(source)).toBe(false);
-    source.value = 2;
-    expect(outer.value).toBe(30);
-    expect(runs).toBe(2);
+    const seen: number[] = [];
+    const stop = effect(() => {
+      seen.push(outer.value);
+    });
+    expect([innerRuns, outerRuns]).toEqual([1, 1]);
     expect(linkedFromSources(source)).toBe(true);
+    expect(linkedFromSources(inner)).toBe(true);
+    source.value = 2;
+    expect(seen).toEqual([20, 30]);
+    expect([innerRuns, outerRuns]).toEqual([2, 2]);
+    stop();
+    expect(linkedFromSources(source)).toBe(false);
+    expect(linkedFromSources(inner)).toBe(false);
+    expect(linksToSources(outer)).toBe(false);
+    // Unlinking drops the cache, as v0.3 did: the next read runs the getters
+    // again, and caches without links from then on.
+    expect(outer.value).toBe(30);
+    expect([innerRuns, outerRuns]).toEqual([3, 3]);
+    expect(outer.value).toBe(30);
+    expect([innerRuns, outerRuns]).toEqual([3, 3]);
+    expect(linkedFromSources(source)).toBe(false);
+    source.value = 3;
+    expect(outer.value).toBe(40);
+    expect([innerRuns, outerRuns]).toEqual([4, 4]);
   });
 
-  it("is left linked by a release while something subscribes to it, and unlinked when that goes", () => {
+  it("links a dependency that lost its own subscribers without a write in between", () => {
+    const source = signal(1);
+    let innerRuns = 0;
+    const inner = computed(() => {
+      innerRuns += 1;
+      return source.value + 1;
+    });
+    const outer = computed(() => inner.value * 10);
+    // `inner` is subscribed while `outer` caches through it with no link.
+    const stopInner = effect(() => {
+      void inner.value;
+    });
+    expect(outer.value).toBe(20);
+    // `inner` loses its subscriber: it detaches dirty, with no write.
+    stopInner();
+    expect(innerRuns).toBe(1);
+    const seen: number[] = [];
+    const stop = effect(() => {
+      seen.push(outer.value);
+    });
+    expect(seen).toEqual([20]);
+    // A write still reaches `outer` through `inner`.
+    source.value = 2;
+    expect(seen).toEqual([20, 30]);
+    stop();
+    expect(linkedFromSources(source)).toBe(false);
+  });
+
+  it("is subscribed through an effect after a write it has not seen yet", () => {
     const source = signal(1);
     const doubled = computed(() => source.value * 2);
+    expect(doubled.value).toBe(2);
+    source.value = 2;
     const seen: number[] = [];
     const stop = effect(() => {
       seen.push(doubled.value);
     });
-    releaseComputed(doubled);
-    source.value = 2;
-    expect(seen).toEqual([2, 4]);
+    source.value = 3;
+    expect(seen).toEqual([4, 6]);
     stop();
-    expect(linkedFromSources(source)).toBe(false);
-    expect(linksToSources(doubled)).toBe(false);
   });
 
-  it("is released with the effect that read it", () => {
-    const source = signal(1);
-    let stop: () => void = () => {};
-    for (let index = 0; index < 3; index += 1) {
-      stop();
-      stop = effect(() => {
-        void computed(() => source.value + index).value;
+  it("disposes the effects its getter creates once the read returns", () => {
+    const source = signal(0);
+    const live: number[] = [];
+    const owner = computed(() => {
+      effect(() => {
+        live.push(source.value);
+        return () => live.pop();
       });
-    }
-    stop();
+      return 1;
+    });
+    expect(owner.value).toBe(1);
+    expect(live).toEqual([]);
     expect(linkedFromSources(source)).toBe(false);
+  });
+
+  it("lets its getter closure be collected", async () => {
+    const source = signal(1);
+    const references: Array<WeakRef<object>> = [];
+    for (let index = 0; index < 20; index += 1) {
+      const payload = Array.from({ length: 1000 }, () => index);
+      references.push(new WeakRef(payload));
+      const total = computed(() => source.value + payload.length);
+      if (index % 2 === 0) void total.value;
+      else void total.peek();
+    }
+    await collectGarbage();
+    // V8 may keep the last iteration's context alive; a leak keeps all of them.
+    expect(references.filter((reference) => reference.deref() !== undefined).length).toBeLessThanOrEqual(1);
   });
 });
 
-describe("a useComputed computed", () => {
-  it("read only by an effect's peek is released when the component unmounts", async () => {
+describe("a useComputed with no subscriber", () => {
+  it("is not linked from its source when read by an effect's peek or an event handler", () => {
     const source = signal(1);
-    let total: ReadonlySignal<number> | undefined;
+    let total: Readable | undefined;
     let peeked: unknown;
     function Row() {
       const local = useComputed(() => source.value + 1);
@@ -122,112 +235,49 @@ describe("a useComputed computed", () => {
       useEffect(() => {
         peeked = local.peek();
       }, [local]);
-      return <span>row</span>;
+      return <button onClick={() => (peeked = local.value)}>row</button>;
     }
     const view = render(<Row />);
     expect(peeked).toBe(2);
-    expect(linkedFromSources(source)).toBe(true);
-    view.unmount();
-    await settle();
+    expect(linkedFromSources(source)).toBe(false);
+    act(() => {
+      source.value = 5;
+    });
+    fireEvent.click(screen.getByText("row"));
+    expect(peeked).toBe(6);
     expect(linkedFromSources(source)).toBe(false);
     expect(linksToSources(total!)).toBe(false);
-    // Whoever still holds it reads a current value.
-    source.value = 5;
-    expect(total!.peek()).toBe(6);
-  });
-
-  it("releases the computed a deps change replaces", async () => {
-    const source = signal(1);
-    const created: Array<ReadonlySignal<number>> = [];
-    function Row({ offset }: { offset: number }) {
-      const local = useComputed(() => source.value + offset, [offset]);
-      if (!created.includes(local)) created.push(local);
-      useEffect(() => {
-        local.peek();
-      }, [local]);
-      return null;
-    }
-    const view = render(<Row offset={1} />);
-    view.rerender(<Row offset={2} />);
-    await settle();
-    expect(created).toHaveLength(2);
-    expect(linksToSources(created[0]!)).toBe(false);
-    expect(linksToSources(created[1]!)).toBe(true);
     view.unmount();
-    await settle();
     expect(linkedFromSources(source)).toBe(false);
   });
 
-  it("releases a writable computed too", async () => {
-    const source = signal(1);
-    let local: ReadonlySignal<number> | undefined;
-    function Row() {
-      const doubled = useWritableComputed({ get: () => source.value * 2, set: (value) => (source.value = value / 2) });
-      local = doubled;
-      useEffect(() => {
-        doubled.peek();
-      }, [doubled]);
-      return null;
-    }
-    const view = render(<Row />);
-    expect(linkedFromSources(source)).toBe(true);
-    view.unmount();
-    await settle();
-    expect(linkedFromSources(source)).toBe(false);
-    expect(local!.peek()).toBe(2);
-  });
-
-  it("keeps working for a subscriber outside the component after it unmounts", async () => {
-    const source = signal(1);
-    let shared: ReadonlySignal<number> | undefined;
-    function Owner() {
-      shared = useComputed(() => source.value * 2);
-      return null;
-    }
-    const view = render(<Owner />);
-    const seen: number[] = [];
-    const stop = effect(() => {
-      seen.push(shared!.value);
-    });
-    view.unmount();
-    await settle();
-    act(() => {
-      source.value = 2;
-    });
-    expect(seen).toEqual([2, 4]);
-    stop();
-    expect(linkedFromSources(source)).toBe(false);
-  });
-
-  it("passed to a child is released when both unmount in one commit, and not before", async () => {
-    const source = signal(1);
-    const toggle = signal(true);
-    function Child({ total }: { total: ReadonlySignal<number> }) {
-      return <output aria-label="total">{useSignalValue(total)}</output>;
-    }
-    function Parent() {
-      const total = useComputed(() => source.value * 2);
-      return <Child total={total} />;
-    }
-    function App() {
-      return useSignalValue(toggle) ? <Parent /> : null;
-    }
-    const view = render(<App />);
-    act(() => {
-      source.value = 2;
-    });
-    expect(view.container.textContent).toBe("4");
-    act(() => {
-      toggle.value = false;
-    });
-    await settle();
-    expect(linkedFromSources(source)).toBe(false);
-  });
-
-  it("keeps its cached value through Strict Mode's effect replay", async () => {
+  it("is linked while useSignalValue subscribes it and unlinked after unmount", () => {
     const source = signal(1);
     let runs = 0;
-    let total: ReadonlySignal<number> | undefined;
+    function Row() {
+      const total = useComputed(() => {
+        runs += 1;
+        return source.value * 2;
+      });
+      return <output aria-label="total">{useSignalValue(total)}</output>;
+    }
+    const view = render(<Row />);
+    expect(screen.getByLabelText("total").textContent).toBe("2");
+    expect(linkedFromSources(source)).toBe(true);
+    const mountRuns = runs;
+    act(() => {
+      source.value = 2;
+    });
+    expect(screen.getByLabelText("total").textContent).toBe("4");
+    expect(runs).toBe(mountRuns + 1);
+    view.unmount();
+    expect(linkedFromSources(source)).toBe(false);
+  });
+
+  it("keeps its cached value through Strict Mode's effect replay", () => {
+    const source = signal(1);
+    let runs = 0;
+    let total: Readable | undefined;
     function Row() {
       const local = useComputed(() => {
         runs += 1;
@@ -244,11 +294,9 @@ describe("a useComputed computed", () => {
         <Row />
       </StrictMode>,
     );
-    await settle();
     expect(runs).toBe(1);
-    expect(linksToSources(total!)).toBe(true);
+    expect(linksToSources(total!)).toBe(false);
     view.unmount();
-    await settle();
     expect(linkedFromSources(source)).toBe(false);
   });
 
@@ -271,49 +319,36 @@ describe("a useComputed computed", () => {
         ))}
       </>,
     );
-    expect(linkedFromSources(source)).toBe(true);
+    expect(linkedFromSources(source)).toBe(false);
     view.unmount();
-    await settle();
     await collectGarbage();
     expect(references).toHaveLength(10);
     expect(references.filter((reference) => reference.deref() !== undefined)).toHaveLength(0);
   });
 });
 
-// A render that never commits runs no effect, so nothing unmounts: the
-// component's computed is released once React drops the render's memo.
-describe("a useComputed computed from a render that never commits", () => {
-  const countSubscribers = (readable: Readable) => {
-    let count = 0;
-    for (let link = coreRuntime.getNodeForReadable(readable)?.subs; link !== undefined; link = link.nextSub) {
-      count += 1;
-    }
-    return count;
+function makeRow(source: ReadonlySignal<number>, suspend?: Promise<never>) {
+  return function Row({ index }: { index: number }) {
+    const total = useComputed(() => source.value + index);
+    const shown = useSignalValue(total);
+    if (suspend !== undefined) use(suspend);
+    return <span onClick={() => total.peek()}>{shown}</span>;
   };
-  function makeRow(source: ReadonlySignal<number>, suspend?: Promise<never>) {
-    return function Row({ index }: { index: number }) {
-      const total = useComputed(() => source.value + index);
-      const shown = useSignalValue(total);
-      if (suspend !== undefined) use(suspend);
-      // A closure capturing the computed puts it in the context its getter
-      // shares, so the computed stays reachable from the source: the release
-      // must not wait for the computed itself to be collected.
-      return <span onClick={() => total.peek()}>{shown}</span>;
-    };
-  }
+}
 
-  it("is released after a server render", async () => {
+// A render that never commits runs no effect, so nothing subscribes and
+// nothing unmounts: the computed it created must still leave no link behind.
+describe("a useComputed computed from a render that never commits", () => {
+  it("leaves no link after a server render", () => {
     const source = signal(1);
     const Row = makeRow(source);
     for (let index = 0; index < 5; index += 1) {
       expect(renderToString(<Row index={index} />)).toContain(String(1 + index));
     }
-    expect(countSubscribers(source)).toBe(5);
-    await collectGarbage();
-    expect(countSubscribers(source)).toBe(0);
+    expect(linkedFromSources(source)).toBe(false);
   });
 
-  it("is released after a mount that suspends and never resolves", async () => {
+  it("leaves no link after a mount that suspends and never resolves", async () => {
     const source = signal(1);
     const Row = makeRow(source, new Promise<never>(() => {}));
     const view = render(<Suspense fallback="loading">{null}</Suspense>);
@@ -327,10 +362,7 @@ describe("a useComputed computed from a render that never commits", () => {
       });
     }
     expect(view.container.textContent).toBe("loading");
-    expect(countSubscribers(source)).toBeGreaterThanOrEqual(4);
+    expect(linkedFromSources(source)).toBe(false);
     view.unmount();
-    await collectGarbage();
-    // React holds on to its last suspended attempt until it renders again.
-    expect(countSubscribers(source)).toBeLessThanOrEqual(1);
   });
 });
