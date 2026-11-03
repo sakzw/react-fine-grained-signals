@@ -966,7 +966,7 @@ export function A() { return <ul>{items.map((i) => <theme.value.Icon key={i} />)
     },
   );
 
-  it("reads a DOM field as a read once a signal is involved", () => {
+  it("reports a DOM-field `.value` whose chain reads another `.value` first", () => {
     const { diagnostics } = run(
       `${header}export function A({ ref }: any) { return <ref.current.value.current.value />; }`,
     );
