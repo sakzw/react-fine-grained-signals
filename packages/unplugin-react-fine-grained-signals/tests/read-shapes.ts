@@ -133,7 +133,7 @@ export const cases: readonly Case[] = [
     params: "{ label = s.value }: { label?: number }",
     jsx: "{label}",
     run: {
-      // README.md:557-563: a default runs before the body, so a hand-written
+      // README.md:557-569: a default runs before the body, so a hand-written
       // first-statement call misses it; the plugin moves it behind the boundary.
       oracle: { params: "props: { label?: number }", body: "const { label = s.value } = props;" },
     },
@@ -156,7 +156,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:384-389: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:385-392: reads in a function handed to any Hook call "are not collected"; `useMemo`\'s callback and the `useState`/`useReducer` initializers "do run during the render, but ... a signal read there does not re-render the component either"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -168,7 +168,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:384-389: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:385-392: reads in a function handed to any Hook call "are not collected"; `useMemo`\'s callback and the `useState`/`useReducer` initializers "do run during the render, but ... a signal read there does not re-render the component either"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -530,7 +530,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:384-389: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:385-392: reads in a function handed to any Hook call "are not collected"; `useMemo`\'s callback and the `useState`/`useReducer` initializers "do run during the render, but ... a signal read there does not re-render the component either"; inject tracks it like the oracle once selected',
       },
     },
   },
