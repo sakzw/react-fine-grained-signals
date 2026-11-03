@@ -15,8 +15,8 @@
 
 ## ガイド
 
-- [コアプリミティブ](guides/core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`、`isSignal`。
-- [Reactフック](guides/hooks.ja.md) — `useSignalTracking`、`useSignal`、`useDeepSignal`、`useComputed`、`useSignalEffect`、selector hooks。
+- [コアプリミティブ](guides/core-primitives.ja.md) — `signal`、`computed`、`effect`、`batch`、`untracked`、`deepSignal`、[`deepCollectionSignal`](guides/core-primitives.ja.md#deepcollectionsignal)、`isSignal`。
+- [Reactフック](guides/hooks.ja.md) — `useSignalTracking`、`useSignal`、`useDeepSignal`、[`useDeepCollectionSignal`](guides/hooks.ja.md#usedeepcollectionsignal)、`useComputed`、[`useWritableComputed`](guides/hooks.ja.md#usewritablecomputed)、`useSignalEffect`、[`useSignalValue`](guides/hooks.ja.md#usesignalvalue)、`useDeepSignalValue`。
 - [グローバルステート](guides/global-state.ja.md) — module scopeのsignalをストアとして使う方法と、SSRで必要になるリクエストごとのストア。
 - [描画最適化](guides/rendering-optimization.ja.md) — 明示的な追跡とbuild pluginによる自動挿入。
 - [JSXのsignal子要素とhost binding](guides/jsx-bindings.ja.md) — 独自JSXランタイムのDOM直接bindingとその制約。

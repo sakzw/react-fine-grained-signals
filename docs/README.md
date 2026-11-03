@@ -15,8 +15,8 @@
 
 ## Guides
 
-- [Core primitives](guides/core-primitives.md) — `signal`, `computed`, `effect`, `batch`, `untracked`, `deepSignal`, and `isSignal`.
-- [React hooks](guides/hooks.md) — `useSignalTracking`, `useSignal`, `useDeepSignal`, `useComputed`, `useSignalEffect`, and selector hooks.
+- [Core primitives](guides/core-primitives.md) — `signal`, `computed`, `effect`, `batch`, `untracked`, `deepSignal`, [`deepCollectionSignal`](guides/core-primitives.md#deepcollectionsignal), and `isSignal`.
+- [React hooks](guides/hooks.md) — `useSignalTracking`, `useSignal`, `useDeepSignal`, [`useDeepCollectionSignal`](guides/hooks.md#usedeepcollectionsignal), `useComputed`, [`useWritableComputed`](guides/hooks.md#usewritablecomputed), `useSignalEffect`, [`useSignalValue`](guides/hooks.md#usesignalvalue), and `useDeepSignalValue`.
 - [Global state](guides/global-state.md) — module-scope signals as a store, and the per-request store SSR needs.
 - [Rendering optimization](guides/rendering-optimization.md) — explicit tracking and automatic insertion by the build plugin.
 - [JSX signal children and host bindings](guides/jsx-bindings.md) — direct DOM bindings and their constraints.
