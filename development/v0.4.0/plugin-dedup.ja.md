@@ -656,3 +656,7 @@ mutantの当て直し: 依頼された穴に対応するもの（`#x`のfield、
 ### 観察したこと（直していない）
 
 `<Grid renderItem={Row} />`で`Grid`が`items.map(renderItem)`と呼ぶと、`Row`のHookがloopの中で動く。mountしたところ、`items`が増えると「Rendered more hooks」、減ると「Rendered fewer hooks」で落ちた（`auto`と`all`、managedとinject）。長さが同じならsignalの書き込みで更新する。`76657c4`でも同じ入力で同じように落ちるので今回の退行ではないが、当時はRFGS003が（別の理由で）出ていて、今は出ない。このcrashを指す診断は、もともとない。
+
+### 引用の訂正
+
+「共通化作業のレビューの指摘への対応」の節にある「`README.md:NNN`の引用はそのまま有効」は誤りだった。`tests/read-shapes.ts`の2か所がずれていたので、現在の行（parameter defaultは553-559、async関数は546-551）に直した。それ以前の節の行番号は、書いた時点のREADMEを指す。

@@ -133,7 +133,7 @@ export const cases: readonly Case[] = [
     params: "{ label = s.value }: { label?: number }",
     jsx: "{label}",
     run: {
-      // README.md:545-547: a default runs before the body, so a hand-written
+      // README.md:553-559: a default runs before the body, so a hand-written
       // first-statement call misses it; the plugin moves it behind the boundary.
       oracle: { params: "props: { label?: number }", body: "const { label = s.value } = props;" },
     },
@@ -696,7 +696,7 @@ export const cases: readonly Case[] = [
     body: "await null; const x = s.value;",
     jsx: "{x}",
     run: {
-      skip: "a client root cannot render an async component (README.md:538-542: hooks need a synchronous function)",
+      skip: "a client root cannot render an async component (README.md:546-551: hooks need a synchronous function)",
     },
   },
 
