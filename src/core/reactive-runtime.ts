@@ -50,30 +50,16 @@ export function createReactiveRuntime(): ReactiveRuntime {
     return render;
   };
 
+  // The graph's own members are copied whole (the internal ones the render
+  // adapter uses come along unused): listing each one cost bundle bytes.
   return {
-    runtimeToken: graph.runtimeToken,
-    graphOwner: graph.graphOwner,
-    getNodeForReadable: graph.getNodeForReadable,
+    ...graph,
     get renderAdapter() {
       if (render === undefined) throw new Error("The React render adapter has not been initialized.");
       return render;
     },
     initializeRenderAdapter,
-    signal: graph.signal,
     computed: graph.computed as ReactiveRuntime["computed"],
-    effect: graph.effect,
-    detachedEffect: graph.detachedEffect,
-    batch: graph.batch,
-    batchUntracked: graph.batchUntracked,
-    untracked: graph.untracked,
-    hasSubscribers: graph.hasSubscribers,
-    hasActiveSubscriber: graph.hasActiveSubscriber,
-    getBatchDepth: graph.getBatchDepth,
-    createDeepSignal: graph.createDeepSignal,
-    createDeepSignalVersion: graph.createDeepSignalVersion,
-    onDeepSignalUnwatched: graph.onDeepSignalUnwatched,
-    markDeepSignalWatched: graph.markDeepSignalWatched,
-    hasDeepSignalSubscribers: graph.hasDeepSignalSubscribers,
     isSpeculative: () => render?.isSpeculative() ?? false,
     markSpeculativeDeepRead: () => render?.markSpeculativeDeepRead(),
   };

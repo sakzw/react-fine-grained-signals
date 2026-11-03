@@ -21,5 +21,6 @@ export const SIGNAL_BRAND: unique symbol = Symbol.for("react-fine-grained-signal
  * it then pays for.
  */
 export function stampSignalBrand(value: object): void {
-  Object.defineProperty(value, SIGNAL_BRAND, { value: true, enumerable: false, writable: false, configurable: false });
+  // The attributes a descriptor leaves out default to false.
+  Object.defineProperty(value, SIGNAL_BRAND, { value: true });
 }

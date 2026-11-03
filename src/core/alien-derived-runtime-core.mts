@@ -119,15 +119,14 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       }
     },
   });
-  const { link: alienLink, unlink: alienUnlink, propagate, checkDirty, shallowPropagate } = system;
-
-  function linkNode(dependency: RuntimeNode, subscriber: RuntimeNode, version: number): void {
-    alienLink(dependency as unknown as ReactiveNode, subscriber as unknown as ReactiveNode, version);
-  }
-
-  function unlinkNode(linkage: Link, subscriber: RuntimeNode): Link | undefined {
-    return alienUnlink(linkage, subscriber as unknown as ReactiveNode);
-  }
+  const { propagate, checkDirty, shallowPropagate } = system;
+  // Alien's own link and unlink, typed for RuntimeNode.
+  const linkNode = system.link as unknown as (
+    dependency: RuntimeNode,
+    subscriber: RuntimeNode,
+    version: number,
+  ) => void;
+  const unlinkNode = system.unlink as unknown as (linkage: Link, subscriber: RuntimeNode) => Link | undefined;
 
   function makeNode(kind: RuntimeNode["kind"], flags: number): RuntimeNode {
     return {

@@ -58,12 +58,9 @@ export const executionContext: ExecutionContext = existing ?? {
   frames: [],
 };
 if (existing === undefined) {
-  Object.defineProperty(globalObject, CONTEXT_KEY, {
-    value: executionContext,
-    enumerable: false,
-    configurable: false,
-    writable: false,
-  });
+  // Non-enumerable, non-configurable and non-writable: the attributes a
+  // descriptor leaves out default to false.
+  Object.defineProperty(globalObject, CONTEXT_KEY, { value: executionContext });
 }
 
 export function withExecutionOwner<T>(owner: ExecutionOwner, callback: () => T): T {
