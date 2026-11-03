@@ -862,6 +862,32 @@ export function App() { const n = ${call}; return <p>{n}</p>; }
   });
 });
 
+describe("a JSX member tag in a /utils control-flow callback", () => {
+  it.each([
+    ["Show", "<Show when={true}>{() => <theme.value.Icon />}</Show>"],
+    ["For", "<For each={[1]} by={(x) => x}>{() => <theme.value.Icon />}</For>"],
+    ["Switch", "<Switch><Match when={true}>{() => <theme.value.Icon />}</Match></Switch>"],
+  ])("updates, with no warning, in %s", async (_kind, jsx) => {
+    const warnings: Error[] = [];
+    const module = await loadModule(
+      `
+import { signal } from "react-fine-grained-signals";
+import { For, Match, Show, Switch } from "react-fine-grained-signals/utils";
+export const A1 = () => "a";
+export const B1 = () => "b";
+export const theme = signal({ Icon: A1 });
+export function App() { return ${jsx}; }
+`,
+      { warn: (warning) => warnings.push(warning) },
+    );
+    const container = mount(module.App);
+    expect(container.textContent).toBe("a");
+    write(module, "theme", { Icon: module.B1 });
+    expect(container.textContent).toBe("b");
+    expect(warnings).toEqual([]);
+  });
+});
+
 describe("a signal read in a parameter default", () => {
   const source = `
 import { signal } from "react-fine-grained-signals";

@@ -2226,6 +2226,7 @@ function isUntrackedJsxTagRead(name: NodePath, options: InternalTransformOptions
   for (let fn = name.getFunctionParent(); fn !== null; fn = fn.getFunctionParent()) {
     inFunction = true;
     if (isDeferredFunction(fn) || injectedFunctions.has(fn.node)) return false;
+    if (isControlFlowCallback(fn, options)) return false;
     if (hasOwnedLeadingComment(fn, noSignalTrackingComment)) return false;
     const body = fn.get("body");
     const statements = body.isBlockStatement() ? body.get("body") : [];
@@ -2237,6 +2238,21 @@ function isUntrackedJsxTagRead(name: NodePath, options: InternalTransformOptions
     if (hasOwnedLeadingComment(fn, useSignalTrackingComment)) annotated = true;
   }
   return inFunction && (options.mode !== "manual" || annotated);
+}
+
+/** Is `fn` a callback a `/utils` control-flow component runs in a boundary of its own? */
+function isControlFlowCallback(fn: NodePath<t.Function>, options: InternalTransformOptions): boolean {
+  const container = climbTransparentWrappers(fn).parentPath;
+  if (container === null || !container.isJSXExpressionContainer()) return false;
+  const attribute = container.parentPath;
+  if (!attribute.isJSXAttribute()) {
+    return isOwnedBySignalControlFlow(container, undefined, options.importSource, options.reactImportSource);
+  }
+  const name = attribute.node.name;
+  return (
+    t.isJSXIdentifier(name) &&
+    isOwnedBySignalControlFlow(attribute, name.name, options.importSource, options.reactImportSource)
+  );
 }
 
 /**

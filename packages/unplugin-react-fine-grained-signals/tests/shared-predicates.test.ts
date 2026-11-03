@@ -921,6 +921,53 @@ export function A() { return <p><ui.Icon />{s.value}</p>; }`).diagnostics,
   });
 });
 
+describe("a JSX member tag in a /utils control-flow callback", () => {
+  // The control-flow component runs the callback in a boundary of its own, so
+  // the tag's read is tracked: the rule RFGS003 applies to such a callback.
+  const prelude = `import { signal } from "react-fine-grained-signals";
+import { For, Index, Match, Show, Switch } from "react-fine-grained-signals/utils";
+const theme = signal({ Icon: () => <b /> });
+`;
+  const tag = "<theme.value.Icon />";
+  const app = (jsx: string): string => `${prelude}export function A({ f }: any) { return ${jsx}; }`;
+
+  it.each([
+    ["Show", `<Show when={f}>{() => ${tag}}</Show>`],
+    ["For", `<For each={f} by={(x: number) => x}>{() => ${tag}}</For>`],
+    ["For's key callback", `<For each={f} by={() => ${tag}}>{() => 1}</For>`],
+    ["Index", `<Index each={f}>{() => ${tag}}</Index>`],
+    ["a Match in a Switch", `<Switch><Match when={f}>{() => ${tag}}</Match></Switch>`],
+    ["a wrapped callback", `<Show when={f}>{(() => ${tag}) as any}</Show>`],
+    ["a function expression", `<Show when={f}>{function () { return ${tag}; }}</Show>`],
+    ["a map in the callback", `<Show when={f}>{() => [1].map(() => ${tag})}</Show>`],
+  ])("does not report a tag in %s", (_kind, jsx) => {
+    for (const mode of ["auto", "all"] as const) {
+      for (const transform of ["managed", "inject"] as const) {
+        expect(run(app(jsx), { mode, transform }).diagnostics).toEqual([]);
+      }
+    }
+  });
+
+  it.each([
+    ["an orphan Match", `<Match when={f}>{() => ${tag}}</Match>`],
+    ["Show's fallback", `<Show when={f} fallback={() => ${tag}}>x</Show>`],
+    ["Show's fallback element", `<Show when={f} fallback={${tag}}>x</Show>`],
+    ["Switch's fallback", `<Switch fallback={() => ${tag}}><Match when={f}>x</Match></Switch>`],
+    ["a child that is no callback", `<Show when={f}>${tag}</Show>`],
+    ["a component that is not control flow", `<Grid>{() => ${tag}}</Grid>`],
+  ])("still reports a tag in %s", (_kind, jsx) => {
+    expect(run(app(jsx)).diagnostics).toEqual(["RFGS010"]);
+  });
+
+  it("still reports a same-named component from elsewhere", () => {
+    const source = `import { signal } from "react-fine-grained-signals";
+import { Show } from "./mine";
+const theme = signal({ Icon: () => <b /> });
+export function A() { return <Show>{() => ${tag}}</Show>; }`;
+    expect(run(source).diagnostics).toEqual(["RFGS010"]);
+  });
+});
+
 describe("class fields", () => {
   // An instance field initializer runs when the class is instantiated, like a
   // method body; a static field or block runs when the class is evaluated,
