@@ -1402,10 +1402,16 @@ describe("a function rewritten before what it calls is visited", () => {
     });
   });
 
+  // The inject side of these shapes is a control, not a regression test:
+  // `applyInject` crawls the scope right after making the block, which rebuilt
+  // these references before `blockBodyOf` existed too, and no input in the
+  // suite's corpus changes inject output when it goes back to replacing the
+  // body slot. The test below, and the inject half of the one after it, pin
+  // that output.
   it.each([
     ["all", ""],
     ["manual", "/** @signalTracking */ "],
-  ] as const)("keeps a concise arrow's references in inject too (%s)", (mode, annotation) => {
+  ] as const)("(control) keeps a concise arrow's references in inject too (%s)", (mode, annotation) => {
     for (const source of both(`${annotation}export const List = ({ items }: any) => items.map(Row);`, row)) {
       const { code } = run(source, { mode, transform: "inject" });
       expect(code!.match(/_useSignalTracking\(\);/g)).toHaveLength(1);
