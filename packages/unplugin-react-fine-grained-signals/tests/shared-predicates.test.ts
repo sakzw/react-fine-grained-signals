@@ -490,6 +490,60 @@ describe("Hook calls anywhere in a destructuring declaration", () => {
   });
 });
 
+describe("a helper that calls a Hook and reads", () => {
+  // Whatever its name: the read runs in the caller's render, and the Hook keeps
+  // it out of a capture, so the caller is selected and RFGS002 says so.
+  const hook = `import { useX } from "./x";\n${header}`;
+  const caller = "export function A() { const n = CALL; return <p>{n}</p>; }";
+  const both = (helper: string, call: string): string[] => [
+    `${hook}${helper}\n${caller.replace("CALL", call)}`,
+    `${hook}${caller.replace("CALL", call)}\n${helper}`,
+  ];
+
+  it.each([
+    ["a component name", "function Title() { useX(); return s.value; }", "Title()"],
+    ["a lowercase name", "function title() { useX(); return s.value; }", "title()"],
+    ["a lowercase arrow", "const title = () => { useX(); return s.value; };", "title()"],
+    ["a keyed method", "const o = { t() { useX(); return s.value; } };", "o.t()"],
+    ["a keyed arrow", "const o = { t: () => { useX(); return s.value; } };", "o.t()"],
+    [
+      "a read in another helper",
+      "function read() { return s.value; }\nfunction title() { useX(); return read(); }",
+      "title()",
+    ],
+  ])("selects the caller and reports RFGS002 for %s", (_kind, helper, call) => {
+    for (const source of both(helper, call)) {
+      for (const mode of ["auto", "all"] as const) {
+        const managed = run(source, { mode });
+        expect(managed.code).toContain("_useSignalCapture()");
+        expect(managed.code).not.toContain(`capture(() => ${call})`);
+        expect(managed.diagnostics).toEqual(["RFGS002"]);
+        const injected = run(source, { mode, transform: "inject" });
+        expect(injected.code).toMatch(/function A\(\) \{\s+"use no memo";\s+_useSignalTracking\(\);/);
+        expect(injected.diagnostics).toEqual([]);
+      }
+    }
+  });
+
+  it("does not report a helper that only calls a Hook", () => {
+    for (const source of both("function title() { useX(); return 1; }", "title()")) {
+      for (const transform of ["managed", "inject"] as const) {
+        expect(run(source, { transform })).toEqual({ code: undefined, diagnostics: [] });
+      }
+    }
+  });
+
+  it("does not report a read the render never runs", () => {
+    const source = `${hook}import { useEffect } from "react";
+function title() { useX(); useEffect(() => { void s.value; }, []); return 1; }
+export function A() { const n = title(); return <p>{n}</p>; }`;
+    expect(run(source)).toEqual({ code: undefined, diagnostics: [] });
+    const handler = `${hook}function title() { useX(); return s.value; }
+export function A() { return <p onClick={() => title()} />; }`;
+    expect(run(handler)).toEqual({ code: undefined, diagnostics: [] });
+  });
+});
+
 describe("Hook names", () => {
   // React's own rule (eslint-plugin-react-hooks, babel-plugin-react-compiler's
   // `isHookName`): `use` followed by an uppercase letter or a digit.

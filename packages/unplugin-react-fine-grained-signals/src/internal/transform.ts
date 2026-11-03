@@ -2657,11 +2657,10 @@ function scanFunction(
     // taken as a precaution (`unresolvedCallMayRead`); the local functions it
     // may hold run inside that capture, so their reads count.
     for (const candidate of target === undefined ? possibleLocalTargets(site, callee) : [target]) {
-      // A helper called from many sites is checked once, not once per call by
-      // `functionCallsHook`.
-      if (edgeIndex.has(candidate.node) || checkedHelpers.has(candidate.node)) continue;
-      checkedHelpers.add(candidate.node);
-      if (candidate.node.generator || isDeferredFunction(candidate) || functionCallsHook(candidate)) continue;
+      // A helper that also calls a Hook still runs its reads in this render. It
+      // cannot be captured (`targetFunctionMayReadTrackedValue`), so its read
+      // selects the caller, and the capture pass reports it (RFGS002).
+      if (edgeIndex.has(candidate.node) || candidate.node.generator || isDeferredFunction(candidate)) continue;
       addEdge(candidate, false);
     }
   };

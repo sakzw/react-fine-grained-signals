@@ -838,6 +838,30 @@ function Row() { return <b>{count.value}</b>; }
   });
 });
 
+describe("a lowercase helper that calls a Hook and reads", () => {
+  it.each([
+    ["a declaration", "function title() { useState(0); return count.value; }", "title()"],
+    ["an arrow", "const title = () => { useState(0); return count.value; };", "title()"],
+    ["a method", "const o = { t() { useState(0); return count.value; } };", "o.t()"],
+  ])("updates under inject and warns under managed: %s", async (_kind, helper, call) => {
+    const source = `
+import { useState } from "react";
+import { signal } from "react-fine-grained-signals";
+export const count = signal(0);
+${helper}
+export function App() { const n = ${call}; return <p>{n}</p>; }
+`;
+    const module = await loadModule(source, { codegen: "inject" });
+    const container = mount(module.App);
+    write(module, "count", 1);
+    expect(container.textContent).toBe("1");
+
+    const warnings: (Error & { diagnosticId?: string })[] = [];
+    await loadModule(source, { warn: (warning) => warnings.push(warning) });
+    expect(warnings.map((warning) => warning.diagnosticId)).toEqual(["RFGS002"]);
+  });
+});
+
 describe("a signal read in a parameter default", () => {
   const source = `
 import { signal } from "react-fine-grained-signals";
