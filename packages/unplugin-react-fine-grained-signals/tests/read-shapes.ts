@@ -133,7 +133,7 @@ export const cases: readonly Case[] = [
     params: "{ label = s.value }: { label?: number }",
     jsx: "{label}",
     run: {
-      // README.md:553-559: a default runs before the body, so a hand-written
+      // README.md:557-563: a default runs before the body, so a hand-written
       // first-statement call misses it; the plugin moves it behind the boundary.
       oracle: { params: "props: { label?: number }", body: "const { label = s.value } = props;" },
     },
@@ -156,7 +156,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:380-385: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:384-389: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -168,7 +168,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:380-385: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:384-389: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -530,7 +530,7 @@ export const cases: readonly Case[] = [
     run: {
       exception: {
         rerenders: { "managed alone": false, "managed companion": false, "inject alone": false },
-        why: 'README.md:380-385: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
+        why: 'README.md:384-389: a function handed to any Hook call "runs outside the render, so its reads are not collected"; inject tracks it like the oracle once selected',
       },
     },
   },
@@ -696,7 +696,7 @@ export const cases: readonly Case[] = [
     body: "await null; const x = s.value;",
     jsx: "{x}",
     run: {
-      skip: "a client root cannot render an async component (README.md:546-551: hooks need a synchronous function)",
+      skip: "a client root cannot render an async component (README.md:550-555: hooks need a synchronous function)",
     },
   },
 
