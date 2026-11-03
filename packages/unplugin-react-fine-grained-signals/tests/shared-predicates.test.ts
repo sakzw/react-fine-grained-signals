@@ -386,6 +386,65 @@ describe("RFGS004 and parameter-default reads", () => {
   });
 });
 
+describe("RFGS004 for a hand-written boundary", () => {
+  // Nothing moves a default behind the author's own Hook call, so it is stale.
+  const everywhere = (source: string): string[] =>
+    (["auto", "manual", "all"] as const).flatMap((mode) =>
+      (["managed", "inject"] as const).flatMap((transform) => run(source, { mode, transform }).diagnostics),
+    );
+  const tracking = `import { useSignalTracking } from "react-fine-grained-signals";\nimport { ext } from "./ext";\n${header}const read = () => s.value;\n`;
+  const app = (params: string, statements = "useSignalTracking();"): string =>
+    `${tracking}export function A(${params}) { ${statements} return <p>{String(1)}</p>; }`;
+
+  it.each([
+    ["a pattern default", "{ x = s.value }: any"],
+    ["a positional default", "x = s.value"],
+    ["a nested default", "{ a: { x = s.value } = {} as any }: any"],
+    ["a default through a helper", "{ x = read() }: any"],
+    ["a call this module cannot see into", "{ x = ext() }: any"],
+    ["an inline callback that runs", "{ x = [1].map(() => s.value) }: any"],
+  ])("reports %s, in all six combinations", (_kind, params) => {
+    expect(everywhere(app(params))).toEqual(Array(6).fill("RFGS004"));
+  });
+
+  it("reports a default in front of a late Hook call too", () => {
+    expect(everywhere(app("{ x = s.value }: any", "const n = 1; void n; useSignalTracking();"))).toEqual(
+      Array(6).fill("RFGS004"),
+    );
+  });
+
+  it("reports an arrow's default", () => {
+    const source = `${tracking}export const A = ({ x = s.value }: any) => { useSignalTracking(); return <p>{x}</p>; };`;
+    expect(everywhere(source)).toEqual(Array(6).fill("RFGS004"));
+  });
+
+  it.each([
+    ["a literal default", "{ x = 1 }: any"],
+    ["a ref's value", "{ ref, x = ref.current.value }: any"],
+    ["an event target's value", "{ e, x = e.target.value }: any"],
+    ["a closure the default only creates", "{ f = () => s.value }: any"],
+    ["no default", "{ x }: any"],
+    ["a plain parameter", "props: any"],
+  ])("stays quiet for %s", (_kind, params) => {
+    expect(everywhere(app(params))).toEqual([]);
+  });
+
+  it("stays quiet for a read after the boundary", () => {
+    expect(everywhere(app("{ x }: any", "useSignalTracking(); const y = x ?? s.value; void y;"))).toEqual([]);
+  });
+
+  it("stays quiet for an opted-out function", () => {
+    const source = `${tracking}/** @noSignalTracking */ export function A({ x = s.value }: any) { useSignalTracking(); return <p>{x}</p>; }`;
+    expect(everywhere(source)).toEqual([]);
+  });
+
+  it("leaves the parameter where the author wrote it", () => {
+    const { code } = run(app("{ x = s.value }: any"));
+    expect(code).toContain("x = s.value");
+    expect(code).not.toContain("_param");
+  });
+});
+
 describe("RFGS003 callback targets", () => {
   it("sees a render prop through a TypeScript wrapper", () => {
     const { diagnostics } = run(`${header}export function A() { return <List render={(() => s.value) as Fn} />; }`);

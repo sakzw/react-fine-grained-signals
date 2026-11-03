@@ -2017,8 +2017,8 @@ function warnUncapturedParameterRead(functionPath: NodePath<t.Function>, options
     "RFGS004",
     functionPath,
     "A signal read (a .value read, or a call that may make one) remains in a function parameter " +
-      "initializer, which runs before the top-level capture Hook. Move the read into the function body " +
-      "so managed tracking can capture it safely.",
+      "initializer, which runs before the function's tracking Hook. Move the read into the function body, " +
+      "after that Hook, so tracking can cover it.",
   );
 }
 
@@ -3673,6 +3673,14 @@ function decideTransform(
   const readsValue = (): boolean =>
     (selectedReads ??= inspect().readsValue && wouldCaptureRenderRead(path, options, analysis));
   inspectKnownRenderPropReads(path, state, options, reactImportSource);
+  // A hand-written boundary stays where the author put it, so a default that
+  // reads is left in front of it (the rule `relocateTrackedParameters` moves by).
+  if (
+    path.get("params").some((param) => parameterMayReadTrackedValue(param, path, readContextOf(options), analysis)) &&
+    (explicit || inspect().hasSignalTrackingCall)
+  ) {
+    warnUncapturedParameterRead(path, options);
+  }
   const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
   // attach a boundary to it -- the component it returns carries one instead
