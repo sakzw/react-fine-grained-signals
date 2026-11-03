@@ -84,7 +84,7 @@ The same runtime supports direct bindings only for these native host props:
 - `value` and `checked` retain React's standard semantics when used without an explicit binding
 - `data-*` and `aria-*` attributes
 
-`bindValue` radios with the same native form owner and `name` must share one writable signal. The browser unchecks a radio sibling without dispatching an input event to that sibling; binding those peers to separate signals would leave one signal stale. RFSG rejects that configuration when both bindings belong to the same runtime copy. Radios with different form owners or different names remain independent, and a shared signal can span React roots when the radios still belong to the same native group.
+`bindValue` radios with the same native form owner and `name` must share one writable signal. The browser unchecks a radio sibling without dispatching an input event to that sibling; binding those peers to separate signals would leave one signal stale. RFGS rejects that configuration when both bindings belong to the same runtime copy. Radios with different form owners or different names remain independent, and a shared signal can span React roots when the radios still belong to the same native group.
 
 ```tsx
 const title = signal("Initial title");
@@ -118,7 +118,7 @@ Individual style values may also be signals. The JSX runtime subscribes to those
 
 ## Form bindings
 
-`value` and `checked` retain React's standard semantics. Use plain values and update state in `onChange` for React-controlled inputs. RFSG's `bindValue` and `bindChecked` props are separate direct bindings and require writable signals:
+`value` and `checked` retain React's standard semantics. Use plain values and update state in `onChange` for React-controlled inputs. RFGS's `bindValue` and `bindChecked` props are separate direct bindings and require writable signals:
 
 ```tsx
 const name = signal("");
@@ -143,11 +143,11 @@ const enabled = signal(false);
 </select>
 ```
 
-`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`) and `type="number"`, each with `Signal<string>`, plus `textarea`, single selects with `Signal<string>`, and `multiple` selects with `Signal<string[]>`. Radio inputs with the same form owner and `name` can share a `Signal<string>`; each option needs a string `value`. Every bound radio in that native group must use the same signal. The runtime rejects different sources when it can see both bindings in the same RFSG runtime copy. Do not mix `bindValue` radios with React `checked`/`defaultChecked` radios or with bindings from another RFSG runtime copy in the same native group; those peers cannot be diagnosed across ownership boundaries. Checkbox inputs with the same form owner and `name` can share a `Signal<string[]>`; each checkbox needs a string `value`. `bindChecked` remains available for one independent checkbox and requires `Signal<boolean>`. The `multiple` attribute must be a literal `true` for the select array form; the types reject a dynamic boolean, so a dynamic `multiple` needs a cast, after which the runtime checks it against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later, and a kept option whose `value` attribute or text changes, are observed and the current signal selection is reapplied.
+`bindValue` supports text-like input types (`text`, `search`, `tel`, `url`, `password`, `email`) and `type="number"`, each with `Signal<string>`, plus `textarea`, single selects with `Signal<string>`, and `multiple` selects with `Signal<string[]>`. Radio inputs with the same form owner and `name` can share a `Signal<string>`; each option needs a string `value`. Every bound radio in that native group must use the same signal. The runtime rejects different sources when it can see both bindings in the same RFGS runtime copy. Do not mix `bindValue` radios with React `checked`/`defaultChecked` radios or with bindings from another RFGS runtime copy in the same native group; those peers cannot be diagnosed across ownership boundaries. Checkbox inputs with the same form owner and `name` can share a `Signal<string[]>`; each checkbox needs a string `value`. `bindChecked` remains available for one independent checkbox and requires `Signal<boolean>`. The `multiple` attribute must be a literal `true` for the select array form; the types reject a dynamic boolean, so a dynamic `multiple` needs a cast, after which the runtime checks it against the current signal value. Multiple-select changes are read from `selectedOptions` in option document order. Options inserted or removed later, and a kept option whose `value` attribute or text changes, are observed and the current signal selection is reapplied.
 
-For `type="number"`, `bindValue` stores the DOM `.value` as a string. An empty field is `""`; RFSG does not convert through `valueAsNumber`, clamp to `min`/`max`, or round to `step`. The browser owns number-input sanitization and constraint validation: for example, `rangeUnderflow`, `rangeOverflow`, `stepMismatch`, `valueMissing`, and sometimes `badInput` are exposed through `input.validity`. Invalid or incomplete keystrokes may be sanitized by the browser to an empty `.value`; the binding does not promise to preserve text the browser does not expose as `.value`.
+For `type="number"`, `bindValue` stores the DOM `.value` as a string. An empty field is `""`; RFGS does not convert through `valueAsNumber`, clamp to `min`/`max`, or round to `step`. The browser owns number-input sanitization and constraint validation: for example, `rangeUnderflow`, `rangeOverflow`, `stepMismatch`, `valueMissing`, and sometimes `badInput` are exposed through `input.validity`. Invalid or incomplete keystrokes may be sanitized by the browser to an empty `.value`; the binding does not promise to preserve text the browser does not expose as `.value`.
 
-`type="range"` also uses `Signal<string>` and the DOM `.value` string. RFSG does not parse `valueAsNumber` or add min/max/step correction; the browser applies its native range-control behavior when users interact with the control or when its value is assigned. Keep numeric parsing explicit when your application needs a number.
+`type="range"` also uses `Signal<string>` and the DOM `.value` string. RFGS does not parse `valueAsNumber` or add min/max/step correction; the browser applies its native range-control behavior when users interact with the control or when its value is assigned. Keep numeric parsing explicit when your application needs a number.
 
 ```tsx
 const amount = signal("");
@@ -178,7 +178,7 @@ function TextField<TMeta>({ value, label }: TextFieldProps<TMeta>) {
 
 The capability is a TypeScript-only opaque marker; it is not a JavaScript property. Runtime binding validates the package's private signal brand and writable value descriptor. A value annotated as `Signal<T>` binds directly. Getter-only computed values (`ReadonlySignal<T>`) remain rejected.
 
-An explicit binding owns that DOM state: do not combine `bindValue` with `value` or `defaultValue` (radio and checkbox-group options still take their string `value`), or `bindChecked` with `checked` or `defaultChecked`. A prop explicitly set to `undefined` counts as absent, so `bindValue={enabled ? field : undefined}` renders an unbound field. The runtime rejects those combinations, and the RFSG JSX types reject statically visible conflicts. Standard React-controlled selects remain available with `value={selected.value}` and an `onChange` handler. With `bindValue`, the native change listener updates the signal before React's `onChange` runs, so no signal assignment is needed in that handler unless it normalizes the value.
+An explicit binding owns that DOM state: do not combine `bindValue` with `value` or `defaultValue` (radio and checkbox-group options still take their string `value`), or `bindChecked` with `checked` or `defaultChecked`. A prop explicitly set to `undefined` counts as absent, so `bindValue={enabled ? field : undefined}` renders an unbound field. The runtime rejects those combinations, and the RFGS JSX types reject statically visible conflicts. Standard React-controlled selects remain available with `value={selected.value}` and an `onChange` handler. With `bindValue`, the native change listener updates the signal before React's `onChange` runs, so no signal assignment is needed in that handler unless it normalizes the value.
 
 The binding also owns each DOM prop that it binds. If a wrapper uses `cloneElement`, a Slot, or an `asChild` pattern to inject props into the same host element, injected values such as `value`, `checked`, or another bound attribute can conflict with the binding or be superseded by it. Put the binding on the final host element and avoid injecting competing values for those props; compose unrelated props and event handlers explicitly.
 
@@ -190,7 +190,7 @@ For text controls and selects, equal-value writes are skipped. When an external 
 
 On the server, the initial signal value is rendered as the corresponding default value. Server and client initial values must match. Hydration attaches the binding to the existing host node; an edit made before hydration may be replaced by the initial signal value.
 
-These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "react-fine-grained-signals/jsx"`) and are removed before props reach the DOM. A signal passed as `value` or `checked` is rejected with a migration error: use `bindValue`/`bindChecked` for direct binding, or pass `signal.value` to keep React-controlled semantics.
+These props are recognized only by the RFGS JSX runtime (`jsxImportSource: "react-fine-grained-signals/jsx"`) and are removed before props reach the DOM. A signal passed as `value` or `checked` is rejected with a migration error: use `bindValue`/`bindChecked` for direct binding, or pass `signal.value` to keep React-controlled semantics.
 
 
 ## Constraints

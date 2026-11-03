@@ -89,7 +89,7 @@ const amountString = signal('')
   checkbox groups are supported.
 - `type="number"` uses a string signal. The empty value is `""`; browser
   sanitization and `min`/`max`/`step` validity remain native.
-- `type="range"` also uses a string signal. RFSG does not parse `valueAsNumber`
+- `type="range"` also uses a string signal. RFGS does not parse `valueAsNumber`
   or implement min/max/step correction; the browser owns range-control semantics.
 - Radios in one native group must share one signal.
 - A writable `computed({ get, set })` can be bound; its getter stays

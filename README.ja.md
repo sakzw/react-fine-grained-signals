@@ -83,8 +83,8 @@ DOMの直接bindingは不要で、reactiveなSignal子要素だけが必要な�
 | JSXの選択肢 | 用途 |
 | --- | --- |
 | React標準JSX | 通常のReact componentとHook。Signal子要素の正規化やDOM直接bindingは行いません |
-| RFSG Lite JSX | native host要素内のSignal子要素。attribute、style、formの直接bindingはありません |
-| RFSG Full JSX | Signal子要素と、対応済みhost attribute・style・明示form binding |
+| RFGS Lite JSX | native host要素内のSignal子要素。attribute、style、formの直接bindingはありません |
+| RFGS Full JSX | Signal子要素と、対応済みhost attribute・style・明示form binding |
 
 ### ビルドplugin — managed trackingの自動変換
 

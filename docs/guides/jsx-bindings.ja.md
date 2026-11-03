@@ -124,7 +124,7 @@ CSS propertyへbindingした数値は、Reactもunitless扱いする一部のpro
 
 ## form binding
 
-`value` と `checked` はReact標準の意味論を維持します。React controlled inputには通常の値を渡し、従来どおり `onChange` でstateを更新してください。RFSGの `bindValue` と `bindChecked` は別のdirect binding APIで、書き込み可能なsignalが必要です。
+`value` と `checked` はReact標準の意味論を維持します。React controlled inputには通常の値を渡し、従来どおり `onChange` でstateを更新してください。RFGSの `bindValue` と `bindChecked` は別のdirect binding APIで、書き込み可能なsignalが必要です。
 
 ```tsx
 const name = signal("");
@@ -139,9 +139,9 @@ const enabled = signal(false);
 
 `bindValue`はtext系input type（`text`、`search`、`tel`、`url`、`password`、`email`）と`type="number"`（どちらも`Signal<string>`）、`textarea`、`Signal<string>`を使う単一選択select、`Signal<string[]>`を使うmultiple selectに対応します。同じform ownerと`name`のradio inputは`Signal<string>`を共有できます。各optionにはstringの`value`が必要です。同じform ownerと`name`のcheckbox inputは`Signal<string[]>`を共有できます。各checkboxにはstringの`value`が必要です。`bindChecked`は独立したcheckbox 1つを同期する用途で、`Signal<boolean>`が必要です。selectの配列bindingでは`multiple`を静的に`true`にしてください。型は動的booleanを拒否するため、動的な`multiple`にはcastが必要です。その場合は現在のSignal値と実際のDOM modeをruntimeで検証します。複数選択の変更値は`selectedOptions`から取得し、optionの文書順になります。後から追加・削除したoptionは監視され、現在のsignal値に従って選択状態を再同期します。
 
-`type="number"`の`bindValue`が保持するのはDOMの`.value`文字列です。空欄は`""`であり、RFSGは`valueAsNumber`への変換、`min`/`max`へのclamp、`step`への丸めを行いません。数値入力のsanitizeとconstraint validationはブラウザーに任せます。例えば`rangeUnderflow`、`rangeOverflow`、`stepMismatch`、`valueMissing`、場合によっては`badInput`が`input.validity`で確認できます。入力途中の不正・未完成文字列はブラウザーによりsanitizeされて`.value`が空になる場合があり、RFSGがDOMの`.value`で取得できない文字列まで保持する保証はありません。
+`type="number"`の`bindValue`が保持するのはDOMの`.value`文字列です。空欄は`""`であり、RFGSは`valueAsNumber`への変換、`min`/`max`へのclamp、`step`への丸めを行いません。数値入力のsanitizeとconstraint validationはブラウザーに任せます。例えば`rangeUnderflow`、`rangeOverflow`、`stepMismatch`、`valueMissing`、場合によっては`badInput`が`input.validity`で確認できます。入力途中の不正・未完成文字列はブラウザーによりsanitizeされて`.value`が空になる場合があり、RFGSがDOMの`.value`で取得できない文字列まで保持する保証はありません。
 
-`type="range"`も`Signal<string>`を使い、DOMの`.value`文字列を保持します。RFSGは`valueAsNumber`へparseせず、min/max/stepの補正も追加しません。ユーザー操作や値の代入に対するrange control固有の動作はブラウザーに任せます。アプリで数値が必要な場合は明示的にparseしてください。
+`type="range"`も`Signal<string>`を使い、DOMの`.value`文字列を保持します。RFGSは`valueAsNumber`へparseせず、min/max/stepの補正も追加しません。ユーザー操作や値の代入に対するrange control固有の動作はブラウザーに任せます。アプリで数値が必要な場合は明示的にparseしてください。
 
 ```tsx
 const amount = signal("");
@@ -152,7 +152,7 @@ const parsedAmount = computed(() => amount.value === "" ? null : Number(amount.v
 
 `Number("")`は`0`なので、変換前に空文字を判定してください。`-`や`1.`などの任意の入力途中文字列を保持する必要がある場合はtext inputを使い、別途validate/parseします。郵便番号など数値に見える識別子も、先頭のゼロや書式を保つためtext inputを使ってください。`stepUp()`/`stepDown()`をプログラムから呼ぶとnative controlの値は変わりますが、それ自体はsignalへ通知しません。プログラムから変更した値をbindingへ反映するには対応するinput eventを発生させてください。
 
-native radio groupは`Signal`のidentityではなくform ownerと`name`で排他制御されます。そのため、同じform ownerと`name`を持つbinding対象radioは必ず同じ書き込み可能Signalを共有してください。異なるSignalを結ぶと、ブラウザーは兄弟radioをsignal更新イベントなしに解除するため、DOMとsignalが食い違います。同じRFSG runtime copyが両方のbindingを登録している場合、RFSGは異なるsourceを拒否します。React標準の`checked`/`defaultChecked` radioや、別のRFSG runtime copyによるbindingは検出境界をまたぐため、同じnative groupに混在させないでください。form ownerまたは`name`が異なるradioは独立して使えます。同じnative groupを複数React rootに分ける場合も、同じSignalを共有してください。
+native radio groupは`Signal`のidentityではなくform ownerと`name`で排他制御されます。そのため、同じform ownerと`name`を持つbinding対象radioは必ず同じ書き込み可能Signalを共有してください。異なるSignalを結ぶと、ブラウザーは兄弟radioをsignal更新イベントなしに解除するため、DOMとsignalが食い違います。同じRFGS runtime copyが両方のbindingを登録している場合、RFGSは異なるsourceを拒否します。React標準の`checked`/`defaultChecked` radioや、別のRFGS runtime copyによるbindingは検出境界をまたぐため、同じnative groupに混在させないでください。form ownerまたは`name`が異なるradioは独立して使えます。同じnative groupを複数React rootに分ける場合も、同じSignalを共有してください。
 
 checkbox groupの配列は、別optionを選択しても既存の順序と重複を維持します。新たに選んだ値は重複がなければ末尾へ追加し、解除時はその値をすべて削除します。
 
@@ -174,7 +174,7 @@ function TextField<TMeta>({ value, label }: TextFieldProps<TMeta>) {
 
 このcapabilityはTypeScript専用のopaque markerであり、JavaScript propertyとしては存在しません。runtimeはpackageのprivate signal brandとvalueの書き込み可能性を検証します。`Signal<T>`と注釈した値はそのままJSX bindingに使え、getter-only computed（`ReadonlySignal<T>`）は引き続き拒否されます。
 
-明示bindingがDOM stateを所有します。`bindValue`と`value`/`defaultValue`(radioとcheckbox groupのoptionはstring `value`を指定します)、`bindChecked`と`checked`/`defaultChecked`は併用できません。明示的に`undefined`を渡したpropは指定なしとして扱うため、`bindValue={enabled ? field : undefined}`はbindingなしのfieldになります。runtimeで拒否し、静的に分かる競合はRFSG JSX型でも拒否します。React標準のcontrolled selectは引き続き`value={selected.value}`と`onChange`で利用できます。`bindValue`ではnative change listenerがReactの`onChange`より前にsignalを更新するため、正規化処理がなければhandler内のsignal代入は不要です。
+明示bindingがDOM stateを所有します。`bindValue`と`value`/`defaultValue`(radioとcheckbox groupのoptionはstring `value`を指定します)、`bindChecked`と`checked`/`defaultChecked`は併用できません。明示的に`undefined`を渡したpropは指定なしとして扱うため、`bindValue={enabled ? field : undefined}`はbindingなしのfieldになります。runtimeで拒否し、静的に分かる競合はRFGS JSX型でも拒否します。React標準のcontrolled selectは引き続き`value={selected.value}`と`onChange`で利用できます。`bindValue`ではnative change listenerがReactの`onChange`より前にsignalを更新するため、正規化処理がなければhandler内のsignal代入は不要です。
 
 bindingは結び付けた各DOM propの所有者にもなります。wrapperが`cloneElement`、Slot、`asChild` patternで同じhost要素へpropsを注入すると、`value`、`checked`、その他のbinding対象attributeがbindingと競合するか、binding側の値で上書きされることがあります。bindingは最終host要素へ置き、競合する値を注入しないでください。無関係なpropsとevent handlerは明示的に合成してください。
 
@@ -186,7 +186,7 @@ text controlとselectでは同じ値の書き込みを省略します。focused 
 
 SSRではsignalの初期値を対応するdefault valueとして出力します。serverとclientの初期値を一致させてください。hydration時に既存host nodeへbindingをattachしますが、hydration前に行われた編集はsignalの初期値で上書きされる場合があります。
 
-これらのpropsはRFSG JSX runtime（`jsxImportSource: "react-fine-grained-signals/jsx"`）でのみ認識され、DOMへ渡す前に取り除かれます。`value`または`checked`へsignalを渡すとmigration errorになります。direct bindingには`bindValue`/`bindChecked`を使い、React controlled semanticsには`signal.value`を渡してください。
+これらのpropsはRFGS JSX runtime（`jsxImportSource: "react-fine-grained-signals/jsx"`）でのみ認識され、DOMへ渡す前に取り除かれます。`value`または`checked`へsignalを渡すとmigration errorになります。direct bindingには`bindValue`/`bindChecked`を使い、React controlled semanticsには`signal.value`を渡してください。
 
 
 ## 制約

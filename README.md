@@ -104,8 +104,8 @@ there is no fixed byte saving. See the comparison below and the [JSX guide](./do
 | JSX choice | Use it for |
 | --- | --- |
 | React standard JSX | Ordinary React components and Hooks; no Signal-child normalization or direct DOM binding |
-| RFSG Lite JSX | Signal children in native host elements; no direct attribute, style, or form binding |
-| RFSG Full JSX | Signal children plus the documented host attribute, style, and explicit form bindings |
+| RFGS Lite JSX | Signal children in native host elements; no direct attribute, style, or form binding |
+| RFGS Full JSX | Signal children plus the documented host attribute, style, and explicit form bindings |
 
 ### Build plugin — automatic managed tracking
 
