@@ -2659,6 +2659,77 @@ describe("@signalTracking annotations that attach to nothing", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
+  describe("RFGS006 for what a function returns", () => {
+    const read = "<p>{count.value}</p>";
+    const diagnostics = (source: string, mode: ReactFineGrainedSignalsMode): string[] => {
+      const found: string[] = [];
+      transformReactFineGrainedSignals(
+        `import { memo } from "react";\nconst count = { value: 1 };\n${source}`,
+        "fixture.tsx",
+        {
+          importSource: "react-fine-grained-signals",
+          mode,
+          transform: "managed",
+          reactCompiler: "off",
+          reactImportSource: "react",
+          warn: (warning) => found.push((warning as Error & { diagnosticId: string }).diagnosticId),
+        },
+      );
+      return found;
+    };
+
+    it.each([
+      ["a concise factory chain", `const w = (a) => (b) => (p) => ${read};`],
+      ["a block factory chain", `function w(a) { return (b) => { return (p) => { return ${read}; }; }; }`],
+      ["a chain block, then concise", `const w = (a) => { return (b) => (p) => ${read}; };`],
+      ["a chain concise, then block", `const w = (a) => (b) => { return (p) => ${read}; };`],
+      ["a chain ending in a function expression", `const w = (a) => (b) => function (p) { return ${read}; };`],
+      ["a chain with no read", "const w = (a) => (b) => (p) => <p />;"],
+      ["a lowercase map callback, concise", `const a = () => [1].map(() => ${read});`],
+      ["a lowercase map callback, block", `function a() { return [1].map(() => ${read}); }`],
+    ])("reports %s in every mode", (_kind, source) => {
+      for (const mode of ["manual", "auto", "all"] as const) {
+        expect(diagnostics(`/** @signalTracking */ ${source}`, mode)).toEqual(["RFGS006"]);
+      }
+    });
+
+    it.each([
+      ["a returned named function", `function w(C) { return function W() { return ${read}; }; }`],
+      ["a returned local", `function w(C) { const W = () => ${read}; return W; }`],
+      ["a returned memo", `function w(C) { return memo(function W() { return ${read}; }); }`],
+      ["a keyed slot in a block", `function a() { return { Home: () => ${read} }; }`],
+    ])("reports %s only where the annotation is all there is", (_kind, source) => {
+      expect(diagnostics(`/** @signalTracking */ ${source}`, "manual")).toEqual(["RFGS006"]);
+      for (const mode of ["auto", "all"] as const) {
+        expect(diagnostics(`/** @signalTracking */ ${source}`, mode)).toEqual([]);
+      }
+    });
+
+    it.each([
+      ["a one-level factory", `const w = (a) => (p) => ${read};`],
+      ["a concise factory's named function", `const w = (C) => function W() { return ${read}; };`],
+      ["a one-level block factory", `function w(C) { return function () { return ${read}; }; }`],
+      ["a memoized anonymous return", `function w(C) { return memo(() => ${read}); }`],
+      ["a conditional return", `function w(C) { if (C) return () => ${read}; return null; }`],
+      [
+        "an inner function annotated too",
+        `function w(C) { return /** @signalTracking */ function W() { return ${read}; }; }`,
+      ],
+      ["a keyed slot in a concise body", `const a = () => ({ Home: () => ${read} });`],
+      ["a component", `const A = () => ${read};`],
+      ["a component's map callback", `const A = () => [1].map(() => ${read});`],
+      ["a component's map callback in a block", `function A() { return [1].map(() => ${read}); }`],
+      ["a Hook's map callback", `function useA() { return [1].map(() => ${read}); }`],
+      ["a helper with no JSX", "function a() { return count.value; }"],
+      ["a returned comparator", "const cmp = (a) => (x, y) => x - y;"],
+      ["a local that is not returned", "function a() { const h = () => <p />; h(); return 1; }"],
+    ])("stays quiet for %s", (_kind, source) => {
+      for (const mode of ["manual", "auto", "all"] as const) {
+        expect(diagnostics(`/** @signalTracking */ ${source}`, mode)).toEqual([]);
+      }
+    });
+  });
+
   it("no longer needs to report an annotation on a keyed component", () => {
     // Widening the candidate positions made this case moot rather than merely
     // audible: the annotation now resolves and the component is transformed.

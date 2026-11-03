@@ -3372,6 +3372,64 @@ function warnUnverifiableBarrelSignalTracking(
   );
 }
 
+/**
+ * Does `owner` (annotated, renders nothing itself, and takes no boundary) hand
+ * out JSX through functions that none of them takes the annotation up? Those are
+ * the functions in what it returns, however deep, as a name or written in place.
+ * One takes it up as `decideTransform` does: with a component or Hook identity,
+ * and the comment its own or, for a function returned from a factory, the
+ * factory's. Outside `manual`, an identity is enough: selection answers for that
+ * function whatever the comment does, so nothing the author asked for is lost.
+ */
+function annotationFallsThrough(
+  owner: NodePath<t.Function>,
+  mode: ReactFineGrainedSignalsMode,
+  reactImportSource: string,
+): boolean {
+  const reached = new Set<t.Node>([owner.node]);
+  const isReturned = (position: NodePath): boolean => {
+    let current = position;
+    while (current.parentPath !== null && !current.isStatement()) {
+      const parent: NodePath = current.parentPath;
+      if (parent.isFunction()) return parent.node.body === current.node && reached.has(parent.node);
+      current = parent;
+    }
+    if (!current.isReturnStatement()) return false;
+    const fn = current.getFunctionParent();
+    return fn !== null && reached.has(fn.node);
+  };
+  const isReturnedByName = (fn: NodePath<t.Function>): boolean => {
+    const name = getOwnBindingName(fn);
+    if (name === undefined) return false;
+    const binding = fn.parentPath.scope.getBinding(name);
+    return binding?.referencePaths.some(isReturned) ?? false;
+  };
+  let renders = false;
+  let takenUp = false;
+  traverseHandlers(owner, {
+    Function(fn) {
+      if (!isReturned(fn) && !isReturnedByName(fn)) {
+        fn.skip();
+        return;
+      }
+      reached.add(fn.node);
+      if (rendersJsx(fn)) renders = true;
+      const identity = resolveComponentIdentity(fn, reactImportSource);
+      const named = isHookIdentity(identity) || (isComponentIdentity(identity) && !isHigherOrderComponentFactory(fn));
+      if (
+        named &&
+        (mode !== "manual" ||
+          hasOwnedLeadingComment(fn, useSignalTrackingComment) ||
+          (identity?.kind === "hoc-return" && hasOwnedLeadingComment(identity.factory, useSignalTrackingComment)))
+      ) {
+        takenUp = true;
+        fn.stop();
+      }
+    },
+  });
+  return renders && !takenUp;
+}
+
 // An `@signalTracking` annotation is only actionable once the transform can name
 // the function it sits on: the boundary is attached to a component or hook
 // identity. A component returned straight out of a HOC has no name of its own
@@ -3379,7 +3437,8 @@ function warnUnverifiableBarrelSignalTracking(
 // in a keyed slot takes its key's (`getKeyedIdentityName`), so what is left
 // here is the remainder those cannot reach -- a factory returning a factory
 // (`(a) => (b) => (props) => <p />`), where the middle function has no name to
-// inherit either, or a name that resolves but is neither PascalCase nor `useX`.
+// inherit either, a function its own name (`return function W() {}`) keeps from
+// the factory's annotation, or a name that resolves but is neither PascalCase nor `useX`.
 // Left silent, such an annotation reads as an opt-in that simply never
 // happened. Warn instead, matching the barrel case above.
 function warnUnnamedSignalTrackingAnnotation(path: NodePath<t.Function>, options: InternalTransformOptions): void {
@@ -3390,7 +3449,8 @@ function warnUnnamedSignalTrackingAnnotation(path: NodePath<t.Function>, options
     "This @signalTracking annotation is ignored: the transform could not resolve a component " +
       "or hook identity for the annotated function, and the boundary is attached to that " +
       "identity. Give it a PascalCase (component) or useX (hook) name -- a binding, a named " +
-      "function declaration, or an object property key -- to opt it in.",
+      "function declaration, or an object property key -- to opt it in. A component it returns " +
+      "under a name of its own needs the annotation itself.",
   );
 }
 
@@ -3639,29 +3699,32 @@ function decideTransform(
   // not -- so this reports it wherever the annotation could plausibly have
   // meant a component.
   //
-  // `rendersJsx(path)` is the whole condition, and candidacy deliberately is
-  // not part of it any more. The positions candidacy excludes -- a bare call
-  // argument, a JSX attribute value, an object or class member before this file
-  // learned to name one -- are exactly the positions where an annotation used to
-  // vanish without a word, which is the reason this check exists at all.
-  // Requiring the function to render JSX of its own is what keeps it honest in
-  // the two directions that matter:
+  // Candidacy deliberately is not part of the condition any more. The positions
+  // candidacy excludes -- a bare call argument, a JSX attribute value, an object
+  // or class member before this file learned to name one -- are exactly the
+  // positions where an annotation used to vanish without a word, which is the
+  // reason this check exists at all. What keeps it honest is what the function
+  // renders, in the directions that matter:
   //
-  // - a function that renders nothing was never going to be a component, so an
-  //   annotation on it is the lowercase-helper no-op the README documents; and
+  // - a function that renders nothing, and returns nothing that does, was never
+  //   going to be a component, so an annotation on it is the lowercase-helper
+  //   no-op the README documents;
   // - an annotated HOC *factory* renders nothing itself while the component it
-  //   returns honors that very same annotation, so it must stay quiet. That is
-  //   the case the old `identity === undefined` guard was protecting, and
-  //   rendering is a sounder test for it than name shape, which cannot tell a
-  //   factory from a helper at all.
+  //   returns honors that very same annotation, so it must stay quiet; and
+  // - a function whose JSX is all in what it returns, where nothing takes the
+  //   annotation up (`(a) => (b) => (props) => <p />`, `return function W() {}`,
+  //   `() => [1].map(() => <p />)`), is an opt-in that simply never happened.
   //
-  // The enclosing-function guard stays: `hasOwnedLeadingComment` climbs through
-  // expressions up to the declaration, so every nested arrow under an annotated
-  // concise-body component reads that component's annotation as its own and
-  // would otherwise report it a second time.
-  if (annotation && !annotated && rendersJsx(path)) {
+  // Asked only of the function the comment is written on:
+  // `hasOwnedLeadingComment` climbs through expressions up to the declaration,
+  // so every nested arrow under an annotated concise-body component reads that
+  // component's annotation as its own and would otherwise report it again.
+  if (annotation && !annotated) {
     const enclosing = path.getFunctionParent();
-    if (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalTrackingComment)) {
+    if (
+      (enclosing === null || !hasOwnedLeadingComment(enclosing, useSignalTrackingComment)) &&
+      (rendersJsx(path) || annotationFallsThrough(path, options.mode, reactImportSource))
+    ) {
       warnUnnamedSignalTrackingAnnotation(path, options);
     }
   }
