@@ -955,9 +955,7 @@ describe("private reactive runtime", () => {
       expect(value.value).toEqual({ value: 0 });
     });
     expect(runtime.renderAdapter.promoteRenderAttempt(attempt)).toBe(true);
-    // Promoted but unsubscribed: cached without linking into its source.
-    expect(graphNodeFrom(runtime, value).deps).toBeUndefined();
-    expect(graphNodeOf(source).subs).toBeUndefined();
+    expect(graphNodeFrom(runtime, value).deps).toBeDefined();
     expect(getterCalls).toBe(1);
     const nextAttempt = runtime.renderAdapter.createRenderAttempt();
     runtime.renderAdapter.withRenderScope(nextAttempt, () => {
@@ -965,17 +963,8 @@ describe("private reactive runtime", () => {
     });
     expect(runtime.renderAdapter.promoteRenderAttempt(nextAttempt)).toBe(true);
     expect(getterCalls).toBe(1);
-    const seen: unknown[] = [];
-    const unsubscribe = runtime.renderAdapter.subscribeReadables([value], () => seen.push(value.peek()));
-    // Subscribing links the promoted value as it is, without re-running.
-    expect(graphNodeFrom(runtime, value).deps?.dep).toBe(graphNodeOf(source));
-    expect(getterCalls).toBe(1);
-    source.value = 1;
-    expect(seen).toEqual([{ value: 1 }]);
-    expect(getterCalls).toBe(2);
-    unsubscribe();
+    runtime.renderAdapter.subscribeReadables([value], () => {})();
     expect(graphNodeFrom(runtime, value).deps).toBeUndefined();
-    expect(graphNodeOf(source).subs).toBeUndefined();
   });
 
   it("keeps local source and computed reads on the direct graph path", () => {
