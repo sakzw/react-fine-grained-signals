@@ -42,6 +42,8 @@ computed<T>(options: { get: () => T; set: (value: T) => void }): Signal<T>
 
 Creates a lazily evaluated, read-only derived value. It exposes the same `.value` and `.peek()` as `signal`, and re-evaluates on the next read after a dependency its getter read has changed.
 
+Once read, a computed is linked into the signals it read, and they keep it alive until it is released: when its last subscriber leaves (a computed read inside an `effect` is released when that effect is disposed), or, for one from [`useComputed`](./hooks.md#usecomputed), when its component unmounts. One that nothing subscribes to and nothing owns, such as a computed created in an event handler and peeked, stays linked while those signals live: create computeds once at module scope or with `useComputed`.
+
 Pass a getter and setter object to create a writable computed value. The getter remains the source of truth; assigning `.value` calls the user setter and does not copy a value into a second signal. The setter runs untracked and inside a batch, so reading other signals in the setter does not add dependencies and multiple writes notify observers after the setter finishes.
 
 ```ts
