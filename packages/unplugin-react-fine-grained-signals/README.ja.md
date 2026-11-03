@@ -288,8 +288,11 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
   hook挿入は安全ではありません）でも、`Row` を独立したcomponentとしてinstance化
   する場合（hook挿入こそが更新を成立させます）でも構文が同一で、そのファイルだけ
   では区別できません。そのため `Row` は、単独で変換条件を満たすなら自分のhookを
-  持ったままになります。参照先の関数に `@signalTracking` /
-  `@noSignalTracking` コメントで意図を明示してください。
+  持ったままになります。`Grid` がloopで呼ぶ場合（`items.map(renderItem)`）は、
+  要素数が変わるとReactが「Rendered more hooks than during the previous render」を
+  投げますが、pluginはこれを警告できません。参照先の関数に `@signalTracking` /
+  `@noSignalTracking` コメントで意図を明示してください。loopで呼ばれる関数には
+  `@noSignalTracking` を付け、必要なsignalはtrackされる場所で読んでください。
 
   callbackをinlineで書いても
   （`<Grid renderItem={(item) => <li>{item.value}</li>} />`）、実行時期を証明できないため

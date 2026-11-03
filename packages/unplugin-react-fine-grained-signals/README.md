@@ -313,8 +313,12 @@ This detection has the following known limitations:
   where hook injection is unsafe) or instantiates `Row` as its own component
   (where hook injection is what makes it update), and nothing in the file says
   which — so `Row` keeps its own hook whenever it is independently eligible.
-  State the intent explicitly on the referenced function with a
-  `@signalTracking` / `@noSignalTracking` comment.
+  If `Grid` calls it in a loop (`items.map(renderItem)`), React then throws
+  "Rendered more hooks than during the previous render" when the number of
+  items changes, and the plugin cannot warn about it. State the intent
+  explicitly on the referenced function with a `@signalTracking` /
+  `@noSignalTracking` comment: use `@noSignalTracking` for a function that is
+  called in a loop, and read signals it needs where they are tracked.
 
   Writing the callback inline (`<Grid renderItem={(item) => <li>{item.value}</li>} />`)
   does not make its execution timing provable, so the callback is not
