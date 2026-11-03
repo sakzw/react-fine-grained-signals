@@ -634,6 +634,61 @@ describe("Direct DOM binding", () => {
     expect(box.style.opacity).toBe("0.75");
   });
 
+  it("clears a bound style value that becomes a boolean or empty string, as React does", () => {
+    const open = signal(false);
+    const whole = computed(() => ({ display: !open.value && "none", color: "red" }));
+    const entry = computed(() => !open.value && "none");
+    const entryValue = signal<string | boolean>("none");
+    // CSSProperties types reject booleans, but React accepts them at runtime
+    // and untyped callers write `cond && "none"`; cast to reach that path.
+    render(
+      <>
+        <p aria-label="whole boolean style" style={whole as never} />
+        <p aria-label="entry boolean style" style={{ display: entry as never }} />
+        <p aria-label="entry value style" style={{ display: entryValue as never }} />
+      </>,
+    );
+    const wholeBox = screen.getByLabelText("whole boolean style");
+    const entryBox = screen.getByLabelText("entry boolean style");
+    const valueBox = screen.getByLabelText("entry value style");
+    expect(wholeBox.style.display).toBe("none");
+    expect(entryBox.style.display).toBe("none");
+    expect(valueBox.style.display).toBe("none");
+
+    act(() => {
+      open.value = true;
+      entryValue.value = true;
+    });
+    expect(wholeBox.style.display).toBe("");
+    expect(wholeBox.style.color).toBe("red");
+    expect(entryBox.style.display).toBe("");
+    expect(valueBox.style.display).toBe("");
+
+    act(() => {
+      open.value = false;
+      entryValue.value = "none";
+    });
+    expect(wholeBox.style.display).toBe("none");
+    expect(valueBox.style.display).toBe("none");
+
+    act(() => {
+      entryValue.value = "";
+    });
+    expect(valueBox.style.display).toBe("");
+  });
+
+  it("still clears a key a whole-object style signal drops", () => {
+    const style = signal<Record<string, string>>({ display: "none", color: "red" });
+    render(<p aria-label="dropped key style" style={style} />);
+    const box = screen.getByLabelText("dropped key style");
+    expect(box.style.display).toBe("none");
+    act(() => {
+      style.value = { color: "red" };
+    });
+    expect(box.style.display).toBe("");
+    expect(box.style.color).toBe("red");
+  });
+
   it("clears a rebuilt style binding's inherited keys, not just the new value's own keys", () => {
     // Regression test for a bug where rebuilding a style binding (the
     // `style={...}` prop switches from one signal to another between

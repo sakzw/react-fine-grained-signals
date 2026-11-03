@@ -1075,7 +1075,8 @@ function clearStyleProperty(style: CSSStyleDeclaration, key: string): void {
 }
 
 function setStyleProperty(style: CSSStyleDeclaration, key: string, value: unknown): void {
-  if (value == null) {
+  // React's rule: nullish, boolean (so `cond && "none"` works) and "" clear.
+  if (value == null || typeof value === "boolean" || value === "") {
     clearStyleProperty(style, key);
     return;
   }
