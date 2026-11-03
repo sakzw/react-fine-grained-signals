@@ -114,6 +114,10 @@ interface PluginState extends PluginPass {
    * `keepJsxPragmasFirst`.
    */
   importFree: boolean;
+  /** Render props naming a function that reads: RFGS003 unless it gets a boundary. */
+  namedRenderProps: { target: t.Function; report: () => void }[];
+  /** Where the functions the walk gave a boundary, or left the author's, start. */
+  boundaryFunctions: Set<string>;
 }
 
 interface FunctionInspection {
@@ -3279,6 +3283,7 @@ function getStaticConstDestructuredBindings(
 
 function inspectKnownRenderPropReads(
   functionPath: NodePath<t.Function>,
+  state: PluginState,
   options: InternalTransformOptions,
   reactImportSource: string,
 ): void {
@@ -3287,22 +3292,37 @@ function inspectKnownRenderPropReads(
   // to the same test as a synchronous one -- it is reported when its body (or
   // a same-module helper it calls) reads a signal -- so an async form
   // `action` that never touches a signal is not reported as reading one.
-  const readsSignal = (target: NodePath<t.Function>): boolean =>
-    inspectFunction(
+  //
+  // A function passed by name may own its reads instead: an opt-out says the
+  // author knows, its own Hook call is a boundary, and selection may yet give it
+  // one. It can be declared after this function, so that last answer waits for
+  // the end of the file (`reportNamedRenderProps`).
+  const reportIfRead = (slot: NodePath, target: NodePath<t.Function>, report: () => void): void => {
+    const inspection = inspectFunction(
       target,
       options.importSource,
       managedRuntimeSourceOf(options.importSource),
       reactImportSource,
       new Set([functionPath.node]),
       true,
-    ).readsValue;
+    );
+    if (!inspection.readsValue) return;
+    if (unwrapTransparent(slot.node) === target.node) report();
+    else if (
+      !inspection.hasSignalTrackingCall &&
+      !inspection.hasUseManagedSignalsCall &&
+      !hasOwnedLeadingComment(target, noSignalTrackingComment)
+    ) {
+      state.namedRenderProps.push({ target: target.node, report });
+    }
+  };
   traverseHandlers(functionPath, {
     JSXExpressionContainer(expression) {
       if (!expression.parentPath.isJSXElement() && !expression.parentPath.isJSXFragment()) return;
       const target = getJsxCallbackTarget(expression.get("expression"));
       if (target === undefined) return;
       if (isOwnedBySignalControlFlow(expression, undefined, options.importSource, reactImportSource)) return;
-      if (readsSignal(target)) warnUntrackedChildrenCallbackRead(expression, options);
+      reportIfRead(expression.get("expression"), target, () => warnUntrackedChildrenCallbackRead(expression, options));
     },
     JSXAttribute(attribute) {
       const name = attribute.get("name");
@@ -3312,12 +3332,28 @@ function inspectKnownRenderPropReads(
       const target = getJsxCallbackTarget(value.get("expression"));
       if (target === undefined) return;
       if (isOwnedBySignalControlFlow(attribute, name.node.name, options.importSource, reactImportSource)) return;
-      if (readsSignal(target)) warnUntrackedRenderPropRead(attribute, options);
+      reportIfRead(value.get("expression"), target, () => warnUntrackedRenderPropRead(attribute, options));
     },
     // Destructuring from a tracked source is captured by the managed pass
     // (static expansion or a captured pattern), so it needs no warning here;
     // a pattern whose initializer calls a Hook is reported by that pass.
   });
+}
+
+/**
+ * Where a function starts, which also names the copy a capture makes of it (its
+ * clone is the one the walk goes on to decide).
+ */
+function sourcePosition(node: t.Node): string {
+  const start = node.loc?.start;
+  return start === undefined ? "" : `${start.line}:${start.column}`;
+}
+
+/** Every function is decided by now: only one nothing gave a boundary is reported. */
+function reportNamedRenderProps(state: PluginState): void {
+  for (const { target, report } of state.namedRenderProps) {
+    if (!state.boundaryFunctions.has(sourcePosition(target))) report();
+  }
 }
 
 function warnUnverifiableBarrelSignalTracking(
@@ -3577,7 +3613,7 @@ function decideTransform(
   const analysis: SelectionAnalysis = { parameterReads: new Map() };
   const readsValue = (): boolean =>
     (selectedReads ??= inspect().readsValue && wouldCaptureRenderRead(path, options, analysis));
-  inspectKnownRenderPropReads(path, options, reactImportSource);
+  inspectKnownRenderPropReads(path, state, options, reactImportSource);
   const annotation = ownsLeadingComment(useSignalTrackingComment);
   // A factory is not a component, so no automatic route and no annotation may
   // attach a boundary to it -- the component it returns carries one instead
@@ -7117,9 +7153,12 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
           state.directImports = findRuntimeImports(path, options.importSource, "useSignalTracking");
           state.typeScript = state.file.opts.parserOpts?.plugins?.includes("typescript") === true;
           state.importFree = !path.node.body.some((statement) => t.isImportDeclaration(statement));
+          state.namedRenderProps = [];
+          state.boundaryFunctions = new Set();
           (state.file.metadata as Record<string, unknown>)[transformedMetadataKey] = false;
         },
         exit(path, state) {
+          reportNamedRenderProps(state);
           keepJsxPragmasFirst(path, state);
         },
       },
@@ -7135,6 +7174,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
       Function(path, state) {
         if (generatedCaptureCallbacks.has(path.node)) return;
         const decision = decideTransform(path, state, options, reactImportSource);
+        if (decision.kind !== "skip") state.boundaryFunctions.add(sourcePosition(path.node));
         switch (decision.kind) {
           case "skip":
             return;

@@ -900,16 +900,99 @@ describe("what a helper reads is answered for the authored code", () => {
   });
 });
 
-describe("a render prop that is rewritten itself", () => {
-  // The diagnostic asks what the callback reads, which must not depend on
-  // whether the callback was rewritten before the question.
-  const row = "const Row = (item) => <li>{item.value}</li>;";
-  const list = "export function List() { return <Grid renderItem={Row} />; }";
-  it.each([
-    ["the callback first", `${row}\n${list}`],
-    ["the callback last", `${list}\n${row}`],
-  ])("reports RFGS003 with %s", (_order, source) => {
-    expect(run(source).diagnostics).toEqual(["RFGS003"]);
+describe("a render prop that names a function", () => {
+  // RFGS003 says a read's owner cannot be proven. A function that holds its own
+  // boundary, or whose author opted out, is proven, whichever is declared first.
+  const both = (a: string, b: string): string[] => [`${header}${a}\n${b}`, `${header}${b}\n${a}`];
+  const tracking = `import { useSignalTracking } from "react-fine-grained-signals";\n`;
+  const slots = [
+    ["component", (name: string) => `<Grid component={${name}} />`],
+    ["renderItem", (name: string) => `<Grid renderItem={${name}} />`],
+    ["children", (name: string) => `<Grid>{${name}}</Grid>`],
+  ] as const;
+  const app = (slot: (name: string) => string, name: string): string => `export function A() { return ${slot(name)}; }`;
+
+  describe.each(slots)("%s", (_slot, slot) => {
+    it.each([
+      ["a selected component", "function Row() { return <b>{s.value}</b>; }"],
+      ["a selected arrow", "const Row = () => <b>{s.value}</b>;"],
+      ["a component reading a parameter's value", "const Row = (item: any) => <li>{item.value}</li>;"],
+      ["an annotated function", "/** @signalTracking */ function Row() { return <b>{s.value}</b>; }"],
+      ["an opted-out function", "/** @noSignalTracking */ function Row() { return <b>{s.value}</b>; }"],
+    ])("is quiet for %s in auto and all", (_kind, row) => {
+      for (const mode of ["auto", "all"] as const) {
+        for (const transform of ["managed", "inject"] as const) {
+          for (const source of both(app(slot, "Row"), row)) {
+            expect(run(source, { mode, transform }).diagnostics).toEqual([]);
+          }
+        }
+      }
+    });
+
+    it.each([
+      ["its first statement", "function Row() { useSignalTracking(); return <b>{s.value}</b>; }"],
+      ["a later statement", "function Row() { const n = 1; useSignalTracking(); return <b>{s.value + n}</b>; }"],
+    ])("is quiet for a function with its own Hook call in %s", (_kind, row) => {
+      for (const mode of ["auto", "all"] as const) {
+        for (const source of both(app(slot, "Row"), row)) {
+          expect(run(tracking + source, { mode }).diagnostics).toEqual([]);
+        }
+      }
+    });
+
+    it.each([
+      ["a lowercase helper", "row", "function row() { return <b>{s.value}</b>; }"],
+      ["a lowercase arrow", "row", "const row = () => <b>{s.value}</b>;"],
+      ["a function with no JSX", "Row", "function Row() { return s.value; }"],
+      [
+        "a mapped function",
+        "Row",
+        "function Row() { return <b>{s.value}</b>; }\nexport const L = ({ i }: any) => i.map(Row);",
+      ],
+      ["a plain-called function", "Row", "function Row() { return <b>{s.value}</b>; }\nexport const L = () => Row();"],
+      ["an async function", "Row", "async function Row() { return <b>{s.value}</b>; }"],
+    ])("reports %s, which has no boundary", (_kind, name, row) => {
+      for (const mode of ["auto", "all"] as const) {
+        for (const source of both(app(slot, name), row)) {
+          expect(run(source, { mode }).diagnostics).toContain("RFGS003");
+        }
+      }
+    });
+
+    it("is quiet for a lowercase function that owns its reads or opted out", () => {
+      for (const row of [
+        "function row() { useSignalTracking(); return <b>{s.value}</b>; }",
+        "/** @noSignalTracking */ function row() { return <b>{s.value}</b>; }",
+      ]) {
+        for (const source of both(app(slot, "row"), row)) {
+          expect(run(tracking + source).diagnostics).toEqual([]);
+        }
+      }
+    });
+
+    it("reports an inline callback, and one named in a manual-mode opt-in that has no boundary", () => {
+      const inline = run(`${header}${app(slot, "(() => <b>{s.value}</b>)")}`, { mode: "auto" });
+      expect(inline.diagnostics).toContain("RFGS003");
+      for (const source of both(
+        `/** @signalTracking */ ${app(slot, "Row")}`,
+        "function Row() { return <b>{s.value}</b>; }",
+      )) {
+        expect(run(source, { mode: "manual" }).diagnostics).toEqual(["RFGS003"]);
+      }
+      for (const source of both(
+        `/** @signalTracking */ ${app(slot, "Row")}`,
+        "/** @signalTracking */ function Row() { return <b>{s.value}</b>; }",
+      )) {
+        expect(run(source, { mode: "manual" }).diagnostics).toEqual([]);
+      }
+    });
+  });
+
+  it("answers for the copy a capture makes of a function declared in a callback", () => {
+    const list = (name: string): string =>
+      `${header}export function A({ i }: any) { return <p>{s.value}{i.map((x: number) => { const ${name} = () => <b>{s.value}</b>; return <Grid key={x} component={${name}} />; })}</p>; }`;
+    expect(run(list("Row")).diagnostics).toEqual([]);
+    expect(run(list("row")).diagnostics).toEqual(["RFGS003"]);
   });
 });
 

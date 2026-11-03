@@ -808,6 +808,36 @@ function Label() { const x = count.value; return <p>{x}</p>; }`,
   });
 });
 
+describe("a component passed by name to a render prop", () => {
+  it.each([
+    ["component", "<Grid component={Row} />"],
+    ["renderItem", "<Grid renderItem={Row} />"],
+    ["children", "<Grid>{Row}</Grid>"],
+  ])("updates, with no warning, through %s", async (_slot, element) => {
+    for (const mode of ["auto", "all"] as const) {
+      for (const codegen of ["managed", "inject"] as const) {
+        const warnings: Error[] = [];
+        const module = await loadModule(
+          `
+import { signal } from "react-fine-grained-signals";
+export const count = signal(0);
+function Grid({ component: C, renderItem, children }) {
+  return C ? <C /> : renderItem ? renderItem() : children();
+}
+export function App() { return ${element}; }
+function Row() { return <b>{count.value}</b>; }
+`,
+          { mode, codegen, warn: (warning) => warnings.push(warning) },
+        );
+        const container = mount(module.App);
+        write(module, "count", 1);
+        expect(container.textContent).toBe("1");
+        expect(warnings).toEqual([]);
+      }
+    }
+  });
+});
+
 describe("a signal read in a parameter default", () => {
   const source = `
 import { signal } from "react-fine-grained-signals";
