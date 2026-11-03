@@ -765,6 +765,8 @@ describe("aliases through a parameter or a TypeScript wrapper", () => {
     ["a non-null target", "x", "let row: any; [row!] = state.value.items;", "row.title"],
     ["a wrapped identifier target", "x", "let row: any; (row as any) = state.value.user;", "row.name"],
     ["a parameter in an identifier target", "row", "row = state.value.user;", "row.name"],
+    ["a wrapped logical target", "x", "let row: any; (row as any) ??= state.value.user;", "row.name"],
+    ["a wrapped member target", "x", "const row: any[] = []; (row[0] as any) = state.value.user;", "row[0].name"],
   ])("makes %s an alias", (_kind, param, statement, read) => {
     const { code } = run(
       `${deepHeader}export function A({ ${param} }: any) { ${statement} const y = ${read}; return <p>{y}</p>; }`,
@@ -910,6 +912,20 @@ export function A() { return <ul>{items.map((i) => <theme.value.Icon key={i} />)
     },
   );
 
+  it("reads a DOM field as a read once a signal is involved", () => {
+    const { diagnostics } = run(
+      `${header}export function A({ ref }: any) { return <ref.current.value.current.value />; }`,
+    );
+    expect(diagnostics).toEqual(["RFGS010"]);
+  });
+
+  it.each(["auto", "all"] as const)("reports RFGS009, not RFGS010, in a server module (%s)", (mode) => {
+    const source = `"use server";\n${theme}export function A() { return <theme.value.Icon />; }`;
+    const { diagnostics } = run(source, { mode });
+    expect(diagnostics).toContain("RFGS009");
+    expect(diagnostics).not.toContain("RFGS010");
+  });
+
   it("does not report an ordinary member tag, or in manual mode without an opt-in", () => {
     expect(
       run(`${header}const ui = { Icon: () => <b /> };
@@ -1038,6 +1054,30 @@ describe("class fields", () => {
       `${header}function log(v: unknown) { void v; }\nexport function A() { class Model { ${member} } void Model; return <p>x</p>; }`,
     );
     expect(code).toContain(output);
+  });
+});
+
+describe("what a new of a local class counts", () => {
+  const app = (body: string): string => `${header}class Other {}\nexport function A() { ${body} return <p />; }`;
+  it.each([
+    ["a private field", "class M { #x = s.value; } new M();"],
+    ["an accessor", "class M { accessor x = s.value; } new M();"],
+    ["an inline class expression", "new (class { x = s.value; })();"],
+    ["a const class expression", "const M = class { x = s.value; }; new M();"],
+    ["a field that calls a helper", "const read = () => s.value; class M { x = read(); } new M();"],
+  ])("selects the component for %s", (_kind, body) => {
+    expect(run(app(body)).code).toContain("_useSignalCapture()");
+    expect(run(app(body), { transform: "inject" }).code).toContain("_useSignalTracking()");
+  });
+
+  it.each([
+    ["a reassigned class", "class M { x = s.value; } M = Other; new M();"],
+    ["a reassigned class expression", "let M = class { x = s.value; }; M = Other; new M();"],
+    ["a function nested in a field's object", "class M { o = { r: () => s.value }; } new M();"],
+    ["a function nested in a field's array", "class M { o = [() => s.value]; } new M();"],
+  ])("does not select the component for %s", (_kind, body) => {
+    expect(run(app(body)).code).toBeUndefined();
+    expect(run(app(body), { transform: "inject" }).code).toBeUndefined();
   });
 });
 
@@ -1242,6 +1282,8 @@ describe("a Hook's result in an operation", () => {
     ["an object spread", "const r = { ...useT(s.value) };"],
     ["an array spread", "const r = [...useT(list.value)];"],
     ["a compound assignment", 'let r = ""; r += useT(s.value);'],
+    ["an update", "let r = 0; useT(s.value).x++;"],
+    ["a delete", "let r = 0; delete useT(s.value).x;"],
   ])("does not report %s", (_kind, statement) => {
     const { code, diagnostics } = run(`${prelude}export function A() { ${statement} return <p>{String(r)}</p>; }`);
     expect(diagnostics).toEqual([]);

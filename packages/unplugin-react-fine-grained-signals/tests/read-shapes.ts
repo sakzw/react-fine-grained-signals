@@ -729,8 +729,9 @@ export const cases: readonly Case[] = [
     token: "helper(",
   },
 
-  // A file whose only `.value` follows a name like a DOM or ref field: the raw
-  // text cannot tell these from `e.target.value`, so the pre-filter must pass them.
+  // A `.value` after a name like a DOM or ref field: the raw text cannot tell these
+  // from `e.target.value`. The prelude reads `s.value` too, so these do not test the
+  // pre-filter: `prefilter.test.ts` runs them as modules with nothing else in them.
   {
     name: "a spread of a signal named like a DOM field",
     module: "const target = signal([1]);",
@@ -758,13 +759,13 @@ export const cases: readonly Case[] = [
     name: "a read after a line comment ending in a carriage return",
     body: "const x = s. // note\r value;",
     jsx: "{x}",
-    token: "value",
+    token: "// note",
   },
   {
     name: "a read after a line comment ending in U+2028",
     body: "const x = s. // note\u2028 value;",
     jsx: "{x}",
-    token: "value",
+    token: "// note",
   },
 
   // Syntax that reads where it seems not to.

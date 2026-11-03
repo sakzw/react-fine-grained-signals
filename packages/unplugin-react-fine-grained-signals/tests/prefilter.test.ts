@@ -59,6 +59,40 @@ describe("the raw-text screen never drops a module the transform acts on", () =>
   });
 });
 
+describe("a module whose only .value follows a name like a DOM or ref field", () => {
+  // Nothing else in the file may read `value`: the screen is judging these alone.
+  const module = (declaration: string, body: string, jsx: string): string =>
+    `import { signal } from "react-fine-grained-signals";
+${declaration}
+export function A() { ${body} return <p>${jsx}</p>; }
+`;
+  it.each([
+    ["a spread", module("const target = signal([1]);", "const x = [...target.value].length;", "{x}")],
+    ["a JSX spread", module("const current = signal({});", "", "<b {...current.value} />")],
+    ["a call spread", module("const current = signal([1]);", "const x = Math.max(...current.value);", "{x}")],
+    [
+      "a read after a comment that ends in a period",
+      module("const current = signal(1);", "const x = // the one.\n current.value;", "{x}"),
+    ],
+    ["a read after a line comment", module("const s = signal(1);", "const x = s. // note\n value;", "{x}")],
+    ["a line comment ending in CR", module("const s = signal(1);", "const x = s. // note\r value;", "{x}")],
+    ["a line comment ending in U+2028", module("const s = signal(1);", "const x = s. // note\u2028 value;", "{x}")],
+  ])("selects a component whose only read is %s", (_kind, source) => {
+    expect(source.match(/value/g)).toHaveLength(1);
+    expect(mightTransform(source, "auto")).toBe(true);
+    const output = transformReactFineGrainedSignals(source, "A.tsx", {
+      importSource: "react-fine-grained-signals",
+      mode: "auto",
+      transform: "managed",
+      reactCompiler: "off",
+      reactImportSource: "react",
+      warn: () => {},
+    })?.code;
+    expect(output).toContain("_useSignalCapture()");
+    expect(output).toContain("_signals.capture(");
+  });
+});
+
 describe("mightTransform", () => {
   it.each([
     ["a member read", "x.value"],
