@@ -300,6 +300,16 @@ This detection has the following known limitations:
 
 - A re-assigned alias is not followed, so a PascalCase helper reached through
   `const RowAlias = Row; items.map(RowAlias)` is still treated as a component.
+- The same holds for a PascalCase function that reaches the loop any other
+  way than as the direct argument of an array method: through a parameter
+  default (`function Select({ options, renderOption = DefaultOption }) { … options.map(renderOption) }`),
+  `??` (`items.map(renderItem ?? DefaultItem)`), a condition
+  (`items.map(flag ? Row : Alt)`), `React.Children.map(children, Row)`, or
+  `items.reduce(Row, [])`. The function is treated as a component and keeps its
+  own Hook, so React throws "Rendered more hooks than during the previous
+  render" when the number of items changes. This can happen in a file that
+  does not use signals at all, as long as the function reads a `.value`
+  property. Put `@noSignalTracking` on the function.
 - A statically recognized `.value` read uses dot access, a string-literal key,
   or an immutable local string key such as `const valueKey = "value"`. A
   runtime-key access (`signal[key]`) is captured when the component is already

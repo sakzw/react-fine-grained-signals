@@ -283,6 +283,14 @@ arrow関数（`observer((props) => …)`）は、boundaryを結び付けるた�
 
 - 再代入したaliasはたどりません。`const RowAlias = Row; items.map(RowAlias)`
   経由で渡したPascalCaseのhelperは、componentとして扱われたままになります。
+- PascalCaseの関数を配列methodの引数へ直接ではなく別の形で渡した場合も同じです。
+  parameterのdefault（`function Select({ options, renderOption = DefaultOption }) { … options.map(renderOption) }`）、
+  `??`（`items.map(renderItem ?? DefaultItem)`）、条件式（`items.map(flag ? Row : Alt)`）、
+  `React.Children.map(children, Row)`、`items.reduce(Row, [])` がこれに当たります。
+  その関数はcomponentとして扱われて自分のHookを持ったままになり、要素数が変わると
+  Reactが「Rendered more hooks than during the previous render」を投げます。
+  signalを使っていないファイルでも、その関数が `.value` propertyを読んでいれば
+  起こります。その関数に `@noSignalTracking` を付けてください。
 - JSXのprop値として渡すrender callbackの実行時期は解決できません。`<Grid renderItem={Row} />`
   は、`Grid` が1回のrenderで `renderItem(item)` を可変回数呼ぶ場合（render prop。
   hook挿入は安全ではありません）でも、`Row` を独立したcomponentとしてinstance化
