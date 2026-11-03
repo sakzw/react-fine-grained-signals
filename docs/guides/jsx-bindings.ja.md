@@ -76,7 +76,7 @@ export function Heading() {
 
 ## bindingできるhost props
 
-同じランタイムがDOMへ直接バインドできるネイティブHTML propsは次のものだけです。
+同じランタイムがDOMへ直接バインドできるネイティブhost propsは次のものだけです。
 
 - `title`、`id`、`className`、`hidden`、`disabled`
 - `style`。object全体(`style={signal}`)とsignal entryを含むobject(例: `style={{ color: colorSignal, width: 12 }}`)をbindingします
@@ -118,9 +118,9 @@ export function Field() {
 
 ## style
 
-CSS propertyへbindingした数値は、Reactもunitless扱いする一部のproperty(`opacity`、`zIndex`、`flexGrow` など)を除き、`px` suffixを付けて書き込まれます。`--` で始まるkeyは `setProperty` を通じてCSS custom propertyとして書き込まれます。前回のstyle objectにはあり今回にはないkeyは、値を残さずclearされます。要素がレンダーされたときの値からReactが書き込んだkeyを、bindingが付く前にsignalが落とした場合(例えば `<Activity>` やSuspense境界が要素を隠している間)も同様です。
+CSS propertyへbindingした数値は、Reactもunitless扱いする一部のproperty(`opacity`、`zIndex`、`flexGrow`、SVGの`fillOpacity`や`strokeWidth` など)を除き、`px` suffixを付けて書き込まれます。`--` で始まるkeyは `setProperty` を通じてCSS custom propertyとして書き込まれます。前回のstyle objectにはあり今回にはないkeyは、値を残さずclearされます。要素がレンダーされたときの値からReactが書き込んだkeyを、bindingが付く前にsignalが落とした場合(例えば `<Activity>` やSuspense境界が要素を隠している間)も同様です。
 
-個々のstyle valueにもsignalを指定できます。host refのcommit時にentryごとのsubscriptionを設置するため、signalの変更はowner componentを再レンダーせずCSS propertyへ反映されます。同じobjectにあるplain entryは、componentが再レンダーするまで固定です。後のrenderでstyle objectを置き換えるとbindingを再差分し、新しいshapeで削除されたpropertyをclearします。対象はwhole-object style bindingと同じHTML hostです。
+個々のstyle valueにもsignalを指定できます。host refのcommit時にentryごとのsubscriptionを設置するため、signalの変更はowner componentを再レンダーせずCSS propertyへ反映されます。同じobjectにあるplain entryは、componentが再レンダーするまで固定です。後のrenderでstyle objectを置き換えるとbindingを再差分し、新しいshapeで削除されたpropertyをclearします。
 
 ## form binding
 
@@ -197,6 +197,7 @@ SSRではsignalの初期値を対応するdefault valueとして出力します�
 - binding propはレンダーごとに別のwritable signalへ切り替えられます。要素の型は変わらず、子のstateも保たれます。切り替わるのはbindingの付け外しだけです。通常のReact controlledの挙動には`value`/`checked`を使ってください。
 - bindingはhost要素自身のrefを通じて付けられます。渡したrefは、Reactが直接呼ぶ場合とまったく同じように要素を受け取ります。refが安定していれば、bindingが変わらない限り再レンダーで呼び直されることはありません。bindingが変わるのは、bindingが別のsignalや素の値に切り替わったときと、bindingしたpropや `style` が前回のレンダーと異なる値でレンダーされたとき(2回のレンダーの間に書き込みがあった場合)です。このときrefは同じcommitの中で一度外れ、再び付けられます。
 - `deepSignal` はsignal childやbindingするpropには使えません。これらの位置はrootの置き換えしか追わないため、ネストした変更は表示に反映されません。TypeScriptはこれをエラーにします。deepな状態は追跡されたコンポーネント内で読むか、[`useDeepSignalValue`](./hooks.ja.md#usedeepsignalvalue) でprimitiveを選択してください。
+- 書き込み可能なsignalが必要です。読み取り専用のcomputed signalは `bindValue` や `bindChecked` に使えません。
 - `computed({ get, set })` とwritable `useWritableComputed({ get, set })` は、値の型がfieldと合えばbindingできます。ユーザー入力はsetterを呼び、依存signalの更新はgetterを通してDOMに反映されます。setterが入力を拒否または正規化した場合はgetterを正本としてReact handlerの後にDOMを補正します。getterのみのcomputedは読み取り専用です。
 - SSRとhydrationでは、signalの初期値がサーバーとクライアントで一致するようにしてください。リクエスト固有のsignalを共有のmodule scopeへ置かず、リクエストごとに生成してください。
 - bindingしたcomputed signalのgetterが例外を投げた場合、そのサイクルのDOM書き込みはスキップされ、`console.error` にエラーが記録されます。記録は書き込みごとではなく、連続した失敗のエピソードごとに1回です。メッセージは `"react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` で、`{ cause: error }` が付きます。direct bindingはReactのrenderサイクルを経由しないため、投げられたエラーを捕まえるError Boundaryはありません。失敗するcomputedにError Boundaryのセマンティクスが必要な場合は [`useSignalValue`](./hooks.ja.md#usesignalvalue) を使ってください。

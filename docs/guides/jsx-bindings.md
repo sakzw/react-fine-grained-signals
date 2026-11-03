@@ -76,7 +76,7 @@ This covers ordinary child positions, where React renders children as DOM nodes.
 
 ## Bound host props
 
-The same runtime supports direct bindings only for these native HTML props:
+The same runtime supports direct bindings only for these native host props:
 
 - `title`, `id`, `className`, `hidden`, and `disabled`
 - `style`, bound as a whole object (`style={signal}`) or with signal-valued entries such as `style={{ color: colorSignal, width: 12 }}`
@@ -112,9 +112,9 @@ For a bound `title` or `id`, writing `null` or `undefined` removes the attribute
 
 ## style
 
-A number bound to a CSS property is written with a `px` suffix unless the property is one of the small set (`opacity`, `zIndex`, `flexGrow`, and similar) that React also treats as unitless. A key starting with `--` is written as a CSS custom property via `setProperty`. A key present in a previous style object but absent from the next one is cleared, not left stale. That includes keys React wrote from the value the element rendered with, when the signal drops them before the binding attaches, for example while an `<Activity>` or Suspense boundary hides the element.
+A number bound to a CSS property is written with a `px` suffix unless the property is one of the small set (`opacity`, `zIndex`, `flexGrow`, SVG's `fillOpacity` and `strokeWidth`, and similar) that React also treats as unitless. A key starting with `--` is written as a CSS custom property via `setProperty`. A key present in a previous style object but absent from the next one is cleared, not left stale. That includes keys React wrote from the value the element rendered with, when the signal drops them before the binding attaches, for example while an `<Activity>` or Suspense boundary hides the element.
 
-Individual style values may also be signals. The JSX runtime subscribes to those entries when the host ref commits, so a change updates the affected CSS property without re-rendering the owning component. Plain entries in the same object remain fixed until the component renders again. Replacing the style object across renders re-diffs the binding and clears properties removed from the new shape. This applies to HTML hosts, like the whole-object style binding.
+Individual style values may also be signals. The JSX runtime subscribes to those entries when the host ref commits, so a change updates the affected CSS property without re-rendering the owning component. Plain entries in the same object remain fixed until the component renders again. Replacing the style object across renders re-diffs the binding and clears properties removed from the new shape.
 
 ## Form bindings
 
@@ -205,5 +205,6 @@ These props are recognized only by the RFSG JSX runtime (`jsxImportSource: "reac
 - Writable signals are required; read-only computed signals cannot be used with `bindValue` or `bindChecked`.
 - If a bound computed signal's getter throws, the DOM write for that cycle is skipped and the error is logged with `console.error`, once per consecutive failure episode rather than once per write. The message is `"react-fine-grained-signals: a direct signal binding's read threw; skipping this update and leaving the DOM at its last value."` with `{ cause: error }`. Direct bindings bypass React's render cycle, so no Error Boundary catches the error; use [`useSignalValue`](./hooks.md#usesignalvalue) when a failing computed needs Error Boundary semantics.
 - A `computed({ get, set })` or writable `useWritableComputed({ get, set })` can be bound when its value type matches the field. User input calls its setter; updates to dependencies are reflected through its getter. If the setter rejects or normalizes a value, the getter remains authoritative and the DOM is corrected after React's event handlers run. Getter-only computed values remain read-only.
+- Caret preservation for a *derived* `value` is a known limitation: when a writable computed returns a string different from what was typed (trimmed or upper-cased, for example), the DOM write can move the caret to the end.
 
 See also: [rendering optimization](./rendering-optimization.md), [JSX control-flow utilities](./control-flow.md).
