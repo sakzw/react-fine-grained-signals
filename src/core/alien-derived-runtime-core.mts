@@ -139,6 +139,9 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       subs: undefined,
       subsTail: undefined,
       renderRevision: 0,
+      // Every kind of node has the slot, so the `snapshot` test in a read stays
+      // monomorphic instead of a missing-property lookup on effects and sources.
+      snapshot: undefined,
     } as RuntimeNode;
   }
 
@@ -193,7 +196,10 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   function trackRead(dependency: RuntimeNode, subscriber: RuntimeNode): void {
     const snapshot = subscriber.snapshot;
     if (snapshot) {
-      if (snapshot[snapshot.length - 2] !== dependency) snapshot.push(dependency, dependency.renderRevision);
+      // The length test keeps the index in bounds: reading index -2 of an
+      // empty array is a slow named-property lookup.
+      const length = snapshot.length;
+      if (length === 0 || snapshot[length - 2] !== dependency) snapshot.push(dependency, dependency.renderRevision);
     } else {
       linkNode(dependency, subscriber, cycle);
     }
@@ -342,14 +348,18 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     const snapshot = computed.snapshot;
     if (subscriber && !subscriber.snapshot) {
       // Gaining a subscriber: a detached computed links in its current state.
+      // A clean linked one, the hot case, stays inline.
       if (snapshot) attachComputed(computed);
-      refreshComputed(computed);
-    } else if (snapshot ? flags & Dirty || computed.checkedAt !== writeVersion : flags & (Dirty | Pending)) {
+      if (computed.flags & (Dirty | Pending)) refreshComputed(computed);
+      linkNode(computed, subscriber, cycle);
+    } else {
       // Nothing to link: the hot cases (a detached computed checked since the
       // last write, a clean linked one) stay inline.
-      refreshComputed(computed);
+      if (snapshot ? flags & Dirty || computed.checkedAt !== writeVersion : flags & (Dirty | Pending)) {
+        refreshComputed(computed);
+      }
+      if (subscriber) trackRead(computed, subscriber);
     }
-    if (subscriber) trackRead(computed, subscriber);
     if (computed.hasError) throw computed.error;
     return computed.value;
   }
