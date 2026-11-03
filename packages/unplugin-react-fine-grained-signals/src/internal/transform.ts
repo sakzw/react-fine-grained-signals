@@ -7295,8 +7295,9 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
  * printing is the whole cost of this transform, and it is wasted on every file
  * none of its routes can apply to:
  *
- * - explicit opt-in needs `useSignalTracking`; annotation opt-in and opt-out
- *   need `@signalTracking` or `@noSignalTracking`;
+ * - explicit opt-in needs `useSignalTracking`, or an escape that can spell it
+ *   (`spellingEscape`); annotation opt-in and opt-out need `@signalTracking` or
+ *   `@noSignalTracking`, which a comment cannot escape;
  * - a module-level `"use server"` directive is reported (RFGS009) for each
  *   component in it, whatever it reads;
  * - everything else -- selection in `auto`, every capture, and RFGS001-004,
@@ -7312,7 +7313,7 @@ const babelTransform = declare<PluginState, InternalTransformOptions>((api, opti
 export function mightTransform(code: string, mode: ReactFineGrainedSignalsMode): boolean {
   if (code.includes("useSignalTracking") || code.includes("@signalTracking") || code.includes("@noSignalTracking"))
     return true;
-  if (mode === "manual") return false;
+  if (mode === "manual") return spellingEscape.test(code);
   if (code.includes("use server") || mentionsValueRead(code)) return true;
   return mode === "all" && code.includes("<");
 }
@@ -7321,9 +7322,9 @@ const valueWord = /(?<![\w$])value(?![\w$])/g;
 const quotes = new Set(['"', "'", "`"]);
 const lineTerminator = /[\n\r\u2028\u2029]/;
 /**
- * An escape that can spell a name or a string without the text `value`: a
+ * An escape that can spell a name or a string without its text: a
  * unicode or hex escape, a line continuation, or an identity escape of a
- * letter of the word that has no meaning of its own (`"v\alue"`).
+ * letter of `value` that has no meaning of its own (`"v\alue"`).
  */
 const spellingEscape = /\\(?:u[0-9a-fA-F{]|x[0-9a-fA-F]|[ale\n\r\u2028\u2029])/;
 

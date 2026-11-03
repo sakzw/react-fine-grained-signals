@@ -112,4 +112,28 @@ describe("mightTransform", () => {
     expect(mightTransform("<p />", "auto")).toBe(false);
     expect(mightTransform('"use server";', "manual")).toBe(false);
   });
+
+  it("passes a manual-mode opt-in spelled with an escape, and keeps the fast path otherwise", () => {
+    expect(mightTransform('import { use\\u0053ignalTracking } from "x";', "manual")).toBe(true);
+    expect(mightTransform('import { use\\u{53}ignalTracking } from "x";', "manual")).toBe(true);
+    expect(mightTransform('import { "use\\x53ignalTracking" as t } from "x";', "manual")).toBe(true);
+    const ordinary = 'const text = "line\\n\\ttab\\"quote\\\\"; const re = /\\d+\\s/; x.value; <p />;';
+    expect(mightTransform(ordinary, "manual")).toBe(false);
+  });
+
+  it("transforms that opt-in in manual mode, as written without the escape", () => {
+    const opts = {
+      importSource: "react-fine-grained-signals",
+      mode: "manual",
+      transform: "managed",
+      reactCompiler: "opt-out",
+      reactImportSource: "react",
+    } as const;
+    const source = (name: string): string =>
+      `import { ${name} as track } from "react-fine-grained-signals";\nexport function A({ s }) { track(); return <p>{s.value}</p>; }`;
+    const escaped = transformReactFineGrainedSignals(source("use\\u0053ignalTracking"), "A.tsx", opts)?.code;
+    const plain = transformReactFineGrainedSignals(source("useSignalTracking"), "A.tsx", opts)?.code;
+    expect(plain).toContain('"use no memo"');
+    expect(escaped).toContain('"use no memo"');
+  });
 });
