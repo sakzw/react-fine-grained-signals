@@ -97,7 +97,7 @@ or set `jsxImportSource` to `react-fine-grained-signals/jsx/lite`. Lite supports
 ordinary React JSX plus Signal children; it does not support Signal-valued
 attributes, style bindings, `bindValue`, or `bindChecked`. React's JSX is used
 when no custom `jsxImportSource` is configured; setting it to
-`react-fine-grained-signals` opts into Full Runtime. Lite can
+`react-fine-grained-signals/jsx` opts into Full Runtime. Lite can
 reduce a bundle only when Full is absent from the same eagerly loaded chunk;
 there is no fixed byte saving. See the comparison below and the [JSX guide](./docs/guides/jsx-bindings.md).
 

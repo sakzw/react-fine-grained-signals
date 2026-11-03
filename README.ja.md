@@ -78,7 +78,7 @@ DOMの直接bindingは不要で、reactiveなSignal子要素だけが必要な�
 /** @jsxImportSource react-fine-grained-signals/jsx/lite */
 ```
 
-または`jsxImportSource`に`react-fine-grained-signals/jsx/lite`を指定します。Liteは通常のReact JSXとSignal子要素に対応しますが、Signal-valued attribute、style binding、`bindValue`、`bindChecked`には対応しません。JSX設定がなければReact標準runtimeが使われ、`react-fine-grained-signals`を指定するとFull Runtimeがopt-inされます。Fullが同じ初期読み込みchunkに含まれる場合、Liteを選んでも固定サイズの削減は保証されません。詳細は[JSXガイド](./docs/guides/jsx-bindings.ja.md)を参照してください。
+または`jsxImportSource`に`react-fine-grained-signals/jsx/lite`を指定します。Liteは通常のReact JSXとSignal子要素に対応しますが、Signal-valued attribute、style binding、`bindValue`、`bindChecked`には対応しません。JSX設定がなければReact標準runtimeが使われ、`react-fine-grained-signals/jsx`を指定するとFull Runtimeがopt-inされます。Fullが同じ初期読み込みchunkに含まれる場合、Liteを選んでも固定サイズの削減は保証されません。詳細は[JSXガイド](./docs/guides/jsx-bindings.ja.md)を参照してください。
 
 | JSXの選択肢 | 用途 |
 | --- | --- |

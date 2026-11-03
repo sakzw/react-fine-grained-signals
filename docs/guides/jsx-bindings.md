@@ -48,7 +48,7 @@ export default {
   presets: [
     [
       "@babel/preset-react",
-      { runtime: "automatic", importSource: "react-fine-grained-signals" },
+      { runtime: "automatic", importSource: "react-fine-grained-signals/jsx" },
     ],
   ],
 };
