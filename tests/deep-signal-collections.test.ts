@@ -617,7 +617,9 @@ describe("deepCollectionSignal reactive collections", () => {
     const probe = vi.spyOn(Map.prototype, "has");
     try {
       const state = deepCollectionSignal({ rows: [] as Array<{ at: Date; owner: object }> });
-      class Owner {}
+      class Owner {
+        readonly kind = "owner";
+      }
       state.value.rows = Array.from({ length: 50 }, () => ({ at: new Date(0), owner: new Owner() }));
       expect(probe).not.toHaveBeenCalled();
       expect(state.value.rows[0]!.at).toBeInstanceOf(Date);

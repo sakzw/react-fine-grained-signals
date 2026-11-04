@@ -429,7 +429,7 @@ try {
     await act(async () => {
       nativeInputValue.call(input, "input longer than twelve");
       input.dispatchEvent(new dom.window.Event("input", { bubbles: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((settle) => setTimeout(settle, 0));
     });
     if (input.value !== "direct-text" || canaryBundle.canaryState.text.value !== "direct-text") {
       throw new Error("Packed writable computed did not reject and restore an overlong input");

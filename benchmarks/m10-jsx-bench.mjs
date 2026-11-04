@@ -49,14 +49,20 @@ const signalOnly = [
   ],
 ];
 
-const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+const median = (values) => values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)];
 const percentile = (values, p) => {
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = values.toSorted((a, b) => a - b);
   const position = (sorted.length - 1) * p;
   const low = Math.floor(position);
   const high = Math.ceil(position);
   return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
 };
+const summarize = (values) => ({
+  medianNsPerCall: median(values),
+  p25NsPerCall: percentile(values, 0.25),
+  p75NsPerCall: percentile(values, 0.75),
+  samplesNsPerCall: values,
+});
 function measure(run) {
   const times = [];
   for (let round = 0; round < warmups + samples; round += 1) {
@@ -94,12 +100,6 @@ function measurePair(reactRun, signalRun) {
       if (round >= warmups) times[name].push(elapsedNs / iterations);
     }
   }
-  const summarize = (values) => ({
-    medianNsPerCall: median(values),
-    p25NsPerCall: percentile(values, 0.25),
-    p75NsPerCall: percentile(values, 0.75),
-    samplesNsPerCall: values,
-  });
   return { react: summarize(times.react), rfsg: summarize(times.rfsg) };
 }
 

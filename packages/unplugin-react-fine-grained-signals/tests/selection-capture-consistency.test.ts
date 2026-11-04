@@ -21,11 +21,11 @@ import { cases, component, hook, hookCases, type Case } from "./read-shapes.js";
 // transform), so a disagreement here means one of the shared predicates is
 // missing a shape, not that two rule sets drifted apart.
 
-function transform(source: string, transform: ReactFineGrainedSignalsTransform): string | undefined {
+function transform(source: string, mode: ReactFineGrainedSignalsTransform): string | undefined {
   return transformReactFineGrainedSignals(source, "Fixture.tsx", {
     importSource: "react-fine-grained-signals",
     mode: "auto",
-    transform,
+    transform: mode,
     reactCompiler: "off",
     reactImportSource: "react",
     warn: () => {},

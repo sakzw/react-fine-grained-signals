@@ -23,9 +23,9 @@ const kinds = (process.env.M10_LIST_KINDS ?? "baseline-for,candidate-for,index")
 const operations = ["singleUpdate", "append", "prepend", "middleDelete", "move", "replaceAll"];
 const selectedOperations = (process.env.M10_LIST_OPERATIONS ?? operations.join(",")).split(",");
 const now = () => performance.now();
-const median = (values) => [...values].sort((a, b) => a - b)[Math.floor(values.length / 2)];
+const median = (values) => values.toSorted((a, b) => a - b)[Math.floor(values.length / 2)];
 const percentile = (values, p) => {
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted = values.toSorted((a, b) => a - b);
   const position = (sorted.length - 1) * p;
   const low = Math.floor(position);
   const high = Math.ceil(position);
@@ -33,6 +33,7 @@ const percentile = (values, p) => {
 };
 const makeRows = (count) => Array.from({ length: count }, (_, id) => ({ id: `row-${id}`, value: `value-${id}` }));
 const read = (each) => (isSignal(each) ? each.value : each);
+const rowKey = (item) => item.id;
 
 function BaselineFor({ each, by, children }) {
   const store = useSignalCapture();
@@ -147,13 +148,15 @@ function createHarness(kind, count) {
     stats.callback += 1;
     return React.createElement(Row, { value: item(), index });
   };
-  const by = (item) => item.id;
   function List() {
     stats.parent += 1;
-    if (kind === "for") return React.createElement(For, { each: rows, by, children: childrenFor });
-    if (kind === "candidate-for") return React.createElement(CandidateFor, { each: rows, by, children: childrenFor });
-    if (kind === "baseline-for") return React.createElement(BaselineFor, { each: rows, by, children: childrenFor });
-    if (kind === "direct-key-for") return React.createElement(DirectKeyFor, { each: rows, by, children: childrenFor });
+    if (kind === "for") return React.createElement(For, { each: rows, by: rowKey, children: childrenFor });
+    if (kind === "candidate-for")
+      return React.createElement(CandidateFor, { each: rows, by: rowKey, children: childrenFor });
+    if (kind === "baseline-for")
+      return React.createElement(BaselineFor, { each: rows, by: rowKey, children: childrenFor });
+    if (kind === "direct-key-for")
+      return React.createElement(DirectKeyFor, { each: rows, by: rowKey, children: childrenFor });
     if (kind === "index") return React.createElement(Index, { each: rows, children: childrenIndex });
     if (kind === "baseline-index") return React.createElement(BaselineIndex, { each: rows, children: childrenIndex });
     if (kind === "direct-key-index")

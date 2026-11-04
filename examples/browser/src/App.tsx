@@ -256,11 +256,11 @@ function ValueRow({ id, model }: { id: string; model: ConcurrentModel }) {
 function ConcurrentCommit({ kind }: { kind: ConcurrentKind }) {
   const [shown, setShown] = useState(false);
   const { model, deep } = useMemo(() => {
-    const deep = deepSignal({ n: 0 });
-    const model: ConcurrentModel = {
+    const state = deepSignal({ n: 0 });
+    const concurrentModel: ConcurrentModel = {
       count: signal(0),
       get state() {
-        return deep.value;
+        return state.value;
       },
       commits: [],
       screens: [],
@@ -269,7 +269,7 @@ function ConcurrentCommit({ kind }: { kind: ConcurrentKind }) {
       armed: false,
       container: null,
     };
-    return { model, deep };
+    return { model: concurrentModel, deep: state };
   }, []);
   return (
     <section aria-labelledby={`concurrent-${kind}-heading`}>

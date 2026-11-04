@@ -187,7 +187,7 @@ try {
   const nativeRangeEvents = await level.evaluate((node) => {
     const events = [];
     for (const type of ["input", "change"]) node.addEventListener(type, () => events.push(type), true);
-    window.__m18_14RangeEvents = events;
+    window.m18RangeEvents = events;
     return true;
   });
   check(nativeRangeEvents, "native range event observers are installed");
@@ -233,7 +233,7 @@ try {
     (await text(form.getByTestId("range-event-summary"))).includes("React input:1:1"),
     "React onInput observes the already-updated Signal",
   );
-  const nativeEventOrder = await page.evaluate(() => window.__m18_14RangeEvents);
+  const nativeEventOrder = await page.evaluate(() => window.m18RangeEvents);
   check(
     nativeEventOrder.includes("input") &&
       nativeEventOrder.includes("change") &&

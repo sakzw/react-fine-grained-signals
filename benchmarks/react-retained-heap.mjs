@@ -29,15 +29,19 @@ if (
   throw new Error("BENCH_ROWS, BENCH_CYCLES, BENCH_SAMPLES, and BENCH_WARMUPS must be valid positive counts");
 }
 
-function TrackedRow({ source }) {
-  if (managedImpl === "try-finally") {
-    const store = useManagedSignals();
-    try {
-      return React.createElement("span", null, source.value);
-    } finally {
-      store.finish();
-    }
+// One row component per process, so the measured tree is the same as before.
+const TrackedRow = managedImpl === "try-finally" ? ManagedRow : CapturedRow;
+
+function ManagedRow({ source }) {
+  const store = useManagedSignals();
+  try {
+    return React.createElement("span", null, source.value);
+  } finally {
+    store.finish();
   }
+}
+
+function CapturedRow({ source }) {
   const capture = useSignalCapture();
   return React.createElement(
     "span",

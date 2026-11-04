@@ -13,6 +13,9 @@
     "vitest/require-mock-type-parameters": "off",
     "vitest/require-to-throw-message": "off"
   },
+  // Historical phase 9 experiments and the code samples kept in development
+  // records are not maintained.
+  "ignorePatterns": ["benchmarks/phase9/**", "development/**"],
   "overrides": [
     {
       // Tests routinely capture a hook/component's internal state into an
@@ -27,7 +30,12 @@
       "rules": {
         "react/globals": "off",
         "no-unused-expressions": "off",
-        "react/immutability": "off"
+        "react/immutability": "off",
+        // A helper written inside the test case reads better next to its use.
+        "unicorn/consistent-function-scoping": "off",
+        // Tests type-check against the library's ES2022 lib, which has no
+        // `toSorted`; they sort arrays they own.
+        "unicorn/no-array-sort": "off"
       }
     },
     {

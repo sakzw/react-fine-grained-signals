@@ -13,7 +13,7 @@ const weakWarmups = quick ? 1 : 2;
 const candidateChecksPerSample = quick ? 20_000 : 500_000;
 
 function summarize(rawSamples) {
-  const sorted = [...rawSamples].sort((left, right) => left - right);
+  const sorted = rawSamples.toSorted((left, right) => left - right);
   const mean = rawSamples.reduce((sum, value) => sum + value, 0) / rawSamples.length;
   const variance = rawSamples.reduce((sum, value) => sum + (value - mean) ** 2, 0) / rawSamples.length;
   return {

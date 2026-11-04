@@ -2632,7 +2632,7 @@ describe("Direct DOM binding: ref identity stability", () => {
       });
     });
     expect(nodes.map((node) => node.getAttribute("data-row"))).toEqual(bases.map((_, index) => `updated-${index}`));
-    expect(evaluations).toEqual(beforeSignalUpdate.map((count) => count + 1));
+    expect(evaluations).toEqual(beforeSignalUpdate.map((before) => before + 1));
 
     const beforeUnmount = [...evaluations];
     view.unmount();
@@ -2900,7 +2900,7 @@ describe("Direct DOM binding: ref identity stability", () => {
 
   it.each([9, 16, 32])("keeps same-source radio/checkbox option refs stable for %i siblings", async (count) => {
     for (const kind of ["radio", "checkbox"] as const) {
-      for (const useCommonRef of [false, true]) {
+      for (const withCommonRef of [false, true]) {
         const values = Array.from({ length: count }, (_, index) => `option-${index}`);
         const radioSelection = signal(values[0]!);
         const checkboxSelection = signal<string[]>([values[0]!]);
@@ -2918,7 +2918,7 @@ describe("Direct DOM binding: ref identity stability", () => {
                   name: "same-options",
                   value,
                   bindValue: radioSelection,
-                  ...(useCommonRef ? { ref: commonRef } : {}),
+                  ...(withCommonRef ? { ref: commonRef } : {}),
                 }),
               )
             : values.map((value) =>
@@ -2927,13 +2927,13 @@ describe("Direct DOM binding: ref identity stability", () => {
                   name: "same-options",
                   value,
                   bindValue: checkboxSelection,
-                  ...(useCommonRef ? { ref: commonRef } : {}),
+                  ...(withCommonRef ? { ref: commonRef } : {}),
                 }),
               );
         function Group() {
           const [revision, setRevision] = useState(0);
           return (
-            <form aria-label={`${kind} group ${count} ${useCommonRef}`}>
+            <form aria-label={`${kind} group ${count} ${withCommonRef}`}>
               <button
                 type="button"
                 aria-label="rerender option group"
@@ -2950,7 +2950,7 @@ describe("Direct DOM binding: ref identity stability", () => {
                     value={value}
                     aria-label={value}
                     bindValue={radioSelection}
-                    ref={useCommonRef ? commonRef : undefined}
+                    ref={withCommonRef ? commonRef : undefined}
                   />
                 ) : (
                   <input
@@ -2960,7 +2960,7 @@ describe("Direct DOM binding: ref identity stability", () => {
                     value={value}
                     aria-label={value}
                     bindValue={checkboxSelection}
-                    ref={useCommonRef ? commonRef : undefined}
+                    ref={withCommonRef ? commonRef : undefined}
                   />
                 ),
               )}
@@ -3021,7 +3021,7 @@ describe("Direct DOM binding: ref identity stability", () => {
             (call, index) => call[0] === "click" && removeClick.mock.contexts[index] instanceof HTMLInputElement,
           ),
         ).toHaveLength(0);
-        const form = screen.getByLabelText(`${kind} group ${count} ${useCommonRef}`) as HTMLFormElement;
+        const form = screen.getByLabelText(`${kind} group ${count} ${withCommonRef}`) as HTMLFormElement;
         await act(async () => {
           form.reset();
           await waitForNextTask();
@@ -3036,7 +3036,7 @@ describe("Direct DOM binding: ref identity stability", () => {
           await waitForNextTask();
         });
         expect(coreRuntime.hasSubscribers(kind === "radio" ? radioSelection : checkboxSelection)).toBe(false);
-        expect(refEvents.filter((node) => node === null)).toHaveLength(useCommonRef ? count : 0);
+        expect(refEvents.filter((node) => node === null)).toHaveLength(withCommonRef ? count : 0);
         expect(initialClickAdds).toBe(count);
         addClick.mockRestore();
         removeClick.mockRestore();
