@@ -102,6 +102,59 @@
         "react/immutability": "off",
         "react/refs": "off"
       }
+    },
+    {
+      // The library owns its high-level reactive runtime: production code never
+      // imports Alien Signals' root API, and only the runtime core takes the
+      // low-level graph from alien-signals/system (the overrides below).
+      "files": ["src/**"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              { "name": "alien-signals", "message": "Use the library's own reactive runtime, not Alien's root API." },
+              {
+                "name": "alien-signals/system",
+                "message": "Only src/core/alien-derived-runtime-core.mts imports the graph substrate."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": ["src/core/alien-derived-runtime-core.mts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              { "name": "alien-signals", "message": "Use the library's own reactive runtime, not Alien's root API." }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      // The graph's type declarations may name Alien's types; type-only imports
+      // are erased from the output.
+      "files": ["src/core/alien-derived-types.ts"],
+      "rules": {
+        "no-restricted-imports": [
+          "error",
+          {
+            "paths": [
+              { "name": "alien-signals", "message": "Use the library's own reactive runtime, not Alien's root API." },
+              {
+                "name": "alien-signals/system",
+                "message": "Type-only imports here; the runtime core owns the value import.",
+                "allowTypeImports": true
+              }
+            ]
+          }
+        ]
+      }
     }
   ],
   "env": {
