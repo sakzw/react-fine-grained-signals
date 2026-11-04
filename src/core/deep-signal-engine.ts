@@ -177,6 +177,54 @@ const notifyIteration = (metadata: PropertyMetadata): void => {
   if (metadata.iteration !== undefined) metadata.iteration.value += 1;
 };
 
+/** `collectionKindOf` for a value already known not to be plain data. */
+function nonPlainCollectionKind(value: object): CollectionKind | undefined {
+  if ((value as object) instanceof Map) return "Map";
+  if ((value as object) instanceof Set) return "Set";
+  if ((value as object) instanceof WeakMap) return "WeakMap";
+  if ((value as object) instanceof WeakSet) return "WeakSet";
+  // What remains for the throwing brand probes is a collection from another
+  // realm or one whose prototype was replaced. A chain that reaches this
+  // realm's Object.prototype without passing a collection prototype (Dates,
+  // class instances: every opaque value in stored state) is neither, so the
+  // store path does not pay four exceptions per opaque value.
+  for (let prototype = Object.getPrototypeOf(value); prototype !== null; prototype = Object.getPrototypeOf(prototype)) {
+    if (prototype === Object.prototype) return undefined;
+  }
+  const probe = {};
+  try {
+    Map.prototype.has.call(value, probe);
+    return "Map";
+  } catch {
+    /* try next brand */
+  }
+  try {
+    Set.prototype.has.call(value, probe);
+    return "Set";
+  } catch {
+    /* try next brand */
+  }
+  try {
+    WeakMap.prototype.has.call(value, probe);
+    return "WeakMap";
+  } catch {
+    /* try next brand */
+  }
+  try {
+    WeakSet.prototype.has.call(value, probe);
+    return "WeakSet";
+  } catch {
+    /* not a collection */
+  }
+  return undefined;
+}
+
+function modeError(): TypeError {
+  return new TypeError(
+    "deepSignal() and deepCollectionSignal() cannot share the same plain object or array; keep each object in one kind of signal",
+  );
+}
+
 export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
   const ARRAY_MUTATORS = new Set<PropertyKey>([
     "copyWithin",
@@ -308,52 +356,6 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     return isObjectLike(value) && !isPlainObjectOrArray(value) ? nonPlainCollectionKind(value) : undefined;
   }
 
-  /** `collectionKindOf` for a value already known not to be plain data. */
-  function nonPlainCollectionKind(value: object): CollectionKind | undefined {
-    if ((value as object) instanceof Map) return "Map";
-    if ((value as object) instanceof Set) return "Set";
-    if ((value as object) instanceof WeakMap) return "WeakMap";
-    if ((value as object) instanceof WeakSet) return "WeakSet";
-    // What remains for the throwing brand probes is a collection from another
-    // realm or one whose prototype was replaced. A chain that reaches this
-    // realm's Object.prototype without passing a collection prototype (Dates,
-    // class instances: every opaque value in stored state) is neither, so the
-    // store path does not pay four exceptions per opaque value.
-    for (
-      let prototype = Object.getPrototypeOf(value);
-      prototype !== null;
-      prototype = Object.getPrototypeOf(prototype)
-    ) {
-      if (prototype === Object.prototype) return undefined;
-    }
-    const probe = {};
-    try {
-      Map.prototype.has.call(value, probe);
-      return "Map";
-    } catch {
-      /* try next brand */
-    }
-    try {
-      Set.prototype.has.call(value, probe);
-      return "Set";
-    } catch {
-      /* try next brand */
-    }
-    try {
-      WeakMap.prototype.has.call(value, probe);
-      return "WeakMap";
-    } catch {
-      /* try next brand */
-    }
-    try {
-      WeakSet.prototype.has.call(value, probe);
-      return "WeakSet";
-    } catch {
-      /* not a collection */
-    }
-    return undefined;
-  }
-
   /**
    * Resolves a value that may be one of our proxies back to the raw object it
    * wraps. Returns `undefined` when
@@ -385,11 +387,6 @@ export function createDeepSignalFactory(adapter: DeepSignalRuntimeAdapter) {
     }
     throw new TypeError("deepSignal() only accepts plain objects and arrays");
   }
-
-  const modeError = (): TypeError =>
-    new TypeError(
-      "deepSignal() and deepCollectionSignal() cannot share the same plain object or array; keep each object in one kind of signal",
-    );
 
   function assertDeepDataGraph(value: unknown, support: CollectionSupport | undefined): boolean {
     if (!isObjectLike(value)) return false;

@@ -1225,13 +1225,13 @@ function subscribeBinding(
         // did not know about. The signal may already have dropped some of
         // them (a write while detached is held back), so the refresh must be
         // able to clear them.
-        refresh: (snapshot) => {
-          previousKeys = getInitialStyleKeys(previousKeys, snapshot);
+        refresh: (rendered) => {
+          previousKeys = getInitialStyleKeys(previousKeys, rendered);
           subscription.refresh();
         },
         getStyleKeys: () => previousKeys,
-        restore: (snapshot) => {
-          if (!isSameStyle(applied, snapshot)) write(snapshot);
+        restore: (rendered) => {
+          if (!isSameStyle(applied, rendered)) write(rendered);
         },
       };
     }
@@ -1294,8 +1294,8 @@ function subscribeBinding(
       return {
         ...createBindingSubscription(source as ReadonlySignal<unknown>, whileAttached(write)),
         getStyleKeys: undefined,
-        restore: (snapshot) => {
-          if (!Object.is(applied, snapshot)) write(snapshot);
+        restore: (rendered) => {
+          if (!Object.is(applied, rendered)) write(rendered);
         },
       };
     }

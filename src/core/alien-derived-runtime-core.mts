@@ -52,6 +52,59 @@ const HasChildEffect = 64 as ReactiveFlags;
 // records into a fresh array.
 const NO_READS: Array<RuntimeNode | number> = [];
 
+function makeNode(kind: RuntimeNode["kind"], flags: number): RuntimeNode {
+  return {
+    kind,
+    flags: flags as ReactiveFlags,
+    deps: undefined,
+    depsTail: undefined,
+    subs: undefined,
+    subsTail: undefined,
+    renderRevision: 0,
+    // Every kind of node has the slot, so the `snapshot` test in a read stays
+    // monomorphic instead of a missing-property lookup on effects and sources.
+    snapshot: undefined,
+  } as RuntimeNode;
+}
+
+/** A value change a render that read `node` must see (see `isNodeCurrent`). */
+function bumpRevision(node: RuntimeNode): void {
+  node.renderRevision = (node.renderRevision + 1) | 0;
+}
+
+function updateSource(source: RuntimeNode): boolean {
+  source.flags = Mutable;
+  const changed = !Object.is(source.currentValue, (source.currentValue = source.pendingValue));
+  return changed;
+}
+
+function reportFailure(error: unknown): void {
+  try {
+    console.error(
+      "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
+      { cause: error },
+    );
+  } catch {
+    /* Reporting must not interrupt scheduler progress. */
+  }
+  try {
+    const report = globalThis.reportError;
+    if (typeof report === "function") report.call(globalThis, error);
+  } catch {
+    /* Keep a failing host reporter from escaping the runtime. */
+  }
+}
+
+function createBrandedSignal<T>(
+  makeReadable: new (node: RuntimeSource) => RuntimeWritable<T>,
+  initialValue: T,
+): RuntimeWritable<T> {
+  const node = makeNode("source", Mutable);
+  node.currentValue = initialValue;
+  node.pendingValue = initialValue;
+  return new makeReadable(node as RuntimeSource);
+}
+
 export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   const runtimeToken = {};
   let renderAdapter: RenderAdapterForCore | undefined;
@@ -129,21 +182,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     version: number,
   ) => void;
   const unlinkNode = system.unlink as unknown as (linkage: Link, subscriber: RuntimeNode) => Link | undefined;
-
-  function makeNode(kind: RuntimeNode["kind"], flags: number): RuntimeNode {
-    return {
-      kind,
-      flags: flags as ReactiveFlags,
-      deps: undefined,
-      depsTail: undefined,
-      subs: undefined,
-      subsTail: undefined,
-      renderRevision: 0,
-      // Every kind of node has the slot, so the `snapshot` test in a read stays
-      // monomorphic instead of a missing-property lookup on effects and sources.
-      snapshot: undefined,
-    } as RuntimeNode;
-  }
 
   // Every readable this copy creates, keyed by the public object. Reads and
   // subscriptions resolve their graph node here.
@@ -256,10 +294,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   function getActiveRenderAttempt() {
     return activeRenderAttempt;
   }
-  /** A value change a render that read `node` must see (see `isNodeCurrent`). */
-  function bumpRevision(node: RuntimeNode): void {
-    node.renderRevision = (node.renderRevision + 1) | 0;
-  }
 
   /**
    * Whether a computed's cached value is current, without running anything. A
@@ -324,12 +358,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   }
   function getBatchDepth(): number {
     return batchDepth;
-  }
-
-  function updateSource(source: RuntimeNode): boolean {
-    source.flags = Mutable;
-    const changed = !Object.is(source.currentValue, (source.currentValue = source.pendingValue));
-    return changed;
   }
 
   function readComputed(computed: RuntimeComputed, track = true): unknown {
@@ -573,23 +601,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     }
   }
 
-  function reportFailure(error: unknown): void {
-    try {
-      console.error(
-        "react-fine-grained-signals: an effect() callback threw; the error is contained and reported here so this flush can finish.",
-        { cause: error },
-      );
-    } catch {
-      /* Reporting must not interrupt scheduler progress. */
-    }
-    try {
-      const report = globalThis.reportError;
-      if (typeof report === "function") report.call(globalThis, error);
-    } catch {
-      /* Keep a failing host reporter from escaping the runtime. */
-    }
-  }
-
   function disposeDeps(sub: RuntimeNode): void {
     let depLink = sub.depsTail;
     while (depLink !== undefined) {
@@ -630,10 +641,10 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   // Library-internal subscriptions (render stores, direct DOM bindings) must never become owned by whichever user effect is
   // running when React or another copy happens to create them synchronously.
   function detachedEffect(fn: () => unknown): () => void {
-    return effect(fn, true);
+    return createEffect(fn, true);
   }
 
-  function effect(fn: () => unknown, detached?: boolean): () => void {
+  function createEffect(fn: () => unknown, detached?: boolean): () => void {
     const node = makeNode("effect", Watching | RecursedCheck);
     node.fn = fn;
     node.cleanup = undefined;
@@ -829,15 +840,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     }
   }
 
-  function createBrandedSignal<T>(
-    makeReadable: new (node: RuntimeSource) => RuntimeWritable<T>,
-    initialValue: T,
-  ): RuntimeWritable<T> {
-    const node = makeNode("source", Mutable);
-    node.currentValue = initialValue;
-    node.pendingValue = initialValue;
-    return new makeReadable(node as RuntimeSource);
-  }
   const signalClassBrandHelper = <T,>(initialValue: T): RuntimeWritable<T> =>
     createBrandedSignal(HelperBrandSignal<T>, initialValue);
 
@@ -937,7 +939,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     getBatchDepth,
     signal: signalClassBrandHelper,
     computed: computedClassBrandHelper,
-    effect,
+    effect: createEffect,
     detachedEffect,
     batch,
     batchUntracked,

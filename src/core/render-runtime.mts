@@ -14,6 +14,28 @@ import type {
   SpeculativeComputedEntry,
 } from "./alien-derived-types.js";
 
+function createRenderAttempt(): RenderAttempt {
+  return {
+    dependencies: new Map(),
+    computedCache: new Map(),
+    speculativeDeepReadEpoch: 0,
+    add(dependency, revision) {
+      if (!this.dependencies.has(dependency)) this.dependencies.set(dependency, revision);
+    },
+    markSpeculativeDeepRead() {
+      this.speculativeDeepReadEpoch += 1;
+    },
+  };
+}
+
+function hasActiveRenderOwner(): boolean {
+  return isRenderExecutionOwner(executionContext.owner);
+}
+
+function getExecutionOwner() {
+  return executionContext.owner;
+}
+
 export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) {
   let activeSpeculativeComputed: SpeculativeComputedEntry | undefined;
   const readablesByNode = new WeakMap<RuntimeNode, object>();
@@ -98,20 +120,6 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
   }
 
   core.configureRenderAdapter({ readSource, readComputed });
-
-  function createRenderAttempt(): RenderAttempt {
-    return {
-      dependencies: new Map(),
-      computedCache: new Map(),
-      speculativeDeepReadEpoch: 0,
-      add(dependency, revision) {
-        if (!this.dependencies.has(dependency)) this.dependencies.set(dependency, revision);
-      },
-      markSpeculativeDeepRead() {
-        this.speculativeDeepReadEpoch += 1;
-      },
-    };
-  }
 
   function createRenderOwner(
     attempt: RenderAttempt,
@@ -243,9 +251,6 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
     if (typeof getVersion === "function") return getVersion.call(readable) as number;
     throw new TypeError("Unknown render dependency");
   }
-  function hasActiveRenderOwner(): boolean {
-    return isRenderExecutionOwner(executionContext.owner);
-  }
   // Only this copy's render owner can be speculative: another copy's owner
   // throws on the first read, and graph and untracked owners never are.
   function isSpeculative() {
@@ -275,9 +280,6 @@ export function createAlienDerivedRenderAdapter(core: AlienDerivedGraphRuntime) 
     );
   }
 
-  function getExecutionOwner() {
-    return executionContext.owner;
-  }
   return {
     createRenderAttempt,
     createRenderOwner,

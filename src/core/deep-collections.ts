@@ -102,6 +102,23 @@ function isWeakCollectionKey(value: unknown): value is object | symbol {
   );
 }
 
+function assertReactiveCollection(value: object): void {
+  if (!Object.isExtensible(value)) throw collectionError("cannot proxy a non-extensible collection");
+  if (Reflect.ownKeys(value).length !== 0) throw collectionError(OWN_PROPERTIES);
+}
+
+// Inherit %IteratorPrototype% like native Map/Set iterators, so Iterator
+// helpers (`keys().toArray()`, `values().map()`) and `instanceof Iterator`
+// keep working where the engine provides them.
+const wrapIterator = (
+  iterator: Iterator<unknown>,
+  convert: (value: unknown) => unknown,
+  tag: string,
+): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } =>
+  new ReactiveCollectionIterator(iterator, convert, tag) as unknown as IterableIterator<unknown> & {
+    readonly [Symbol.toStringTag]: string;
+  };
+
 /** Builds the collection support for one engine; called once, on first use. */
 export function createCollectionSupport(ctx: CollectionContext): CollectionSupport {
   setUpReactiveCollectionIterator();
@@ -138,11 +155,6 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
               ? "WeakSet"
               : undefined;
     return expectedKind !== undefined && getNativeCollectionKind(value) === expectedKind;
-  }
-
-  function assertReactiveCollection(value: object): void {
-    if (!Object.isExtensible(value)) throw collectionError("cannot proxy a non-extensible collection");
-    if (Reflect.ownKeys(value).length !== 0) throw collectionError(OWN_PROPERTIES);
   }
 
   /** Where a Map/Set keeps the versions of object keys of `kind`, held weakly. */
@@ -281,6 +293,22 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
   const scheduleCollectionSweep = (metadata: CollectionMetadata, yieldToTask: boolean): void =>
     ctx.scheduleSweep(metadata, collectionSweep, yieldToTask);
 
+  // Shared by every collection proxy of this engine.
+  const normalize = (value: unknown): unknown => unwrap(value);
+  const wrapRead = <T>(value: T): T => wrap(value);
+  const normalizeWeakKey = (value: unknown): unknown => {
+    if (isObjectLike(value)) {
+      const unwrapped = toRaw(value);
+      if (unwrapped !== undefined) return unwrapped;
+      // Native weak collections treat every object key as an opaque identity,
+      // including proxies whose ownKeys/getPrototypeOf traps throw. Only
+      // unwrap proxies created by this deepSignal factory; traversing an
+      // arbitrary key would change native acceptance and identity semantics.
+      return value;
+    }
+    return normalize(value);
+  };
+
   function reactiveCollectionProxy(raw: object, kind: "Map" | "Set" | "WeakMap" | "WeakSet"): object {
     const found = reactiveCollections.get(raw);
     if (found !== undefined) return found.proxy;
@@ -299,7 +327,6 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
       methods: new Map(),
       proxy: undefined as unknown as object,
     };
-    const normalize = (value: unknown): unknown => unwrap(value);
     // Lookups (`get`/`has`/`delete`) only need the identity a stored key would
     // have (see `lookupIdentity`). A carrier first answers with the entry it
     // was stored as in this collection.
@@ -332,19 +359,6 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
         carrierKeys.set(value, normalized as object);
       return normalized;
     };
-    const normalizeWeakKey = (value: unknown): unknown => {
-      if (isObjectLike(value)) {
-        const raw = toRaw(value);
-        if (raw !== undefined) return raw;
-        // Native weak collections treat every object key as an opaque identity,
-        // including proxies whose ownKeys/getPrototypeOf traps throw. Only
-        // unwrap proxies created by this deepSignal factory; traversing an
-        // arbitrary key would change native acceptance and identity semantics.
-        return value;
-      }
-      return normalize(value);
-    };
-    const wrapRead = <T>(value: T): T => wrap(value);
     /**
      * Mirrors GetSetRecord so native Set methods observe `other` in spec order:
      * `size` is read, converted, and validated (NaN -> TypeError, negative ->
@@ -416,17 +430,6 @@ export function createCollectionSupport(ctx: CollectionContext): CollectionSuppo
       if (method === undefined) metadata.methods.set(key, (method = create()));
       return method as T;
     };
-    // Inherit %IteratorPrototype% like native Map/Set iterators, so Iterator
-    // helpers (`keys().toArray()`, `values().map()`) and `instanceof Iterator`
-    // keep working where the engine provides them.
-    const wrapIterator = (
-      iterator: Iterator<unknown>,
-      convert: (value: unknown) => unknown,
-      tag: string,
-    ): IterableIterator<unknown> & { readonly [Symbol.toStringTag]: string } =>
-      new ReactiveCollectionIterator(iterator, convert, tag) as unknown as IterableIterator<unknown> & {
-        readonly [Symbol.toStringTag]: string;
-      };
     const proxy = new Proxy(raw, {
       get(target, key) {
         if ((kind === "Map" && key === "size") || (kind === "Set" && key === "size")) {

@@ -128,47 +128,45 @@ export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDeri
     }
   }
 
+  function useTrackingStore(scopePolicy: ScopePolicy, ambient = true): { store: RenderStore; attempt: RenderAttempt } {
+    const store = useMemo(() => new RenderStore(), []);
+    const attempt = store.begin(scopePolicy, ambient);
+    useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+    // A bare scope deliberately stays open after this component returns, so
+    // descendants rendered without their own scope are still attributed to it.
+    // Rendering is over once React starts committing, though, and every
+    // insertion effect in the tree runs before any layout effect or ref
+    // callback. Closing here keeps descendants' layout effects and refs (which
+    // run before this component's own layout effect) out of the render attempt.
+    useInsertionEffect(() => {
+      store.finish(attempt);
+    }, [store, attempt]);
+    useLayoutEffect(() => {
+      store.commit(attempt);
+    }, [store, attempt]);
+    useEffect(() => {
+      store.activate();
+      return () => store.scheduleDispose();
+    }, [store]);
+    return { store, attempt };
+  }
+  function useSignalTracking(): void {
+    useTrackingStore("bare");
+  }
+  function useManagedSignals(): ManagedScope {
+    const { store, attempt } = useTrackingStore("managed");
+    return { finish: () => store.finish(attempt), getSnapshot: store.getSnapshot };
+  }
+  function useSignalCapture(): CaptureScope {
+    const { store, attempt } = useTrackingStore("managed", false);
+    return {
+      finish: () => store.finish(attempt),
+      getSnapshot: store.getSnapshot,
+      capture: <T,>(callback: () => T): T => store.capture(attempt, callback),
+    };
+  }
+
   function createReactAdapter() {
-    function useTrackingStore(
-      scopePolicy: ScopePolicy,
-      ambient = true,
-    ): { store: RenderStore; attempt: RenderAttempt } {
-      const store = useMemo(() => new RenderStore(), []);
-      const attempt = store.begin(scopePolicy, ambient);
-      useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
-      // A bare scope deliberately stays open after this component returns, so
-      // descendants rendered without their own scope are still attributed to it.
-      // Rendering is over once React starts committing, though, and every
-      // insertion effect in the tree runs before any layout effect or ref
-      // callback. Closing here keeps descendants' layout effects and refs (which
-      // run before this component's own layout effect) out of the render attempt.
-      useInsertionEffect(() => {
-        store.finish(attempt);
-      }, [store, attempt]);
-      useLayoutEffect(() => {
-        store.commit(attempt);
-      }, [store, attempt]);
-      useEffect(() => {
-        store.activate();
-        return () => store.scheduleDispose();
-      }, [store]);
-      return { store, attempt };
-    }
-    function useSignalTracking(): void {
-      useTrackingStore("bare");
-    }
-    function useManagedSignals(): ManagedScope {
-      const { store, attempt } = useTrackingStore("managed");
-      return { finish: () => store.finish(attempt), getSnapshot: store.getSnapshot };
-    }
-    function useSignalCapture(): CaptureScope {
-      const { store, attempt } = useTrackingStore("managed", false);
-      return {
-        finish: () => store.finish(attempt),
-        getSnapshot: store.getSnapshot,
-        capture: <T,>(callback: () => T): T => store.capture(attempt, callback),
-      };
-    }
     return { useSignalTracking, useManagedSignals, useSignalCapture };
   }
 

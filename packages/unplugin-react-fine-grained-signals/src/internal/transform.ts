@@ -6247,6 +6247,41 @@ function iteratedCallTarget(
       : undefined;
 }
 
+/**
+ * Splits `useStore().value.items` into the Hook call, evaluated in place by
+ * the caller, and the read that follows it on `_hookResult`. Returns
+ * undefined when a Hook appears anywhere other than the chain's base.
+ * Mutates `path`; the caller replaces it.
+ */
+function splitHookBase(
+  path: NodePath<t.Expression>,
+  scope: NodePath["scope"],
+): { result: t.Identifier; hookCall: t.Expression; read: t.Expression } | undefined {
+  const base = hookBaseOf(path);
+  if (base === undefined) return undefined;
+  const result = scope.generateUidIdentifier("hookResult");
+  const hookCall = t.cloneNode(base.node, true);
+  base.replaceWith(t.cloneNode(result));
+  return { result, hookCall, read: t.cloneNode(path.node, true) };
+}
+
+/** The Hook call `splitHookBase` would split off, if the chain has one at its base only. */
+function hookBaseOf(path: NodePath): NodePath<t.CallExpression | t.OptionalCallExpression> | undefined {
+  let base: NodePath = path;
+  while (base.isMemberExpression() || base.isOptionalMemberExpression() || isTransparentWrapper(base.node)) {
+    if (
+      (base.isMemberExpression() || base.isOptionalMemberExpression()) &&
+      base.node.computed &&
+      expressionCallsHook(base.get("property") as NodePath)
+    )
+      return undefined;
+    base = (isTransparentWrapper(base.node) ? base.get("expression") : base.get("object")) as NodePath;
+  }
+  if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee))
+    return undefined;
+  return base;
+}
+
 function captureTrackedReadExpressions(
   functionPath: NodePath<t.Function>,
   store: t.Identifier,
@@ -6306,30 +6341,30 @@ function captureTrackedReadExpressions(
   // to a captured call carries its functions into the capture, where the
   // callee may run them, exactly as if they were written in place.
   const localValueReads = new Map<object, boolean>();
+  const readsLocalValue = (identifier: NodePath<t.Identifier>): boolean => {
+    const parent = identifier.parentPath;
+    // A callee is followed by the folds already; an event handler never runs here.
+    if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.callee === identifier.node)
+      return false;
+    if (isJsxEventHandlerValue(identifier)) return false;
+    const binding = identifier.scope.getBinding(identifier.node.name);
+    if (binding === undefined || !binding.path.isVariableDeclarator()) return false;
+    if (binding.path.getFunctionParent()?.node !== functionPath.node) return false;
+    let known = localValueReads.get(binding);
+    if (known === undefined) {
+      localValueReads.set(binding, false);
+      const init = binding.path.get("init");
+      known = init.isExpression() && !init.isFunction() && inspectsRead(init);
+      localValueReads.set(binding, known);
+    }
+    return known;
+  };
   const handsOverReadingValue = (path: NodePath): boolean => {
-    const reads = (identifier: NodePath<t.Identifier>): boolean => {
-      const parent = identifier.parentPath;
-      // A callee is followed by the folds already; an event handler never runs here.
-      if ((parent.isCallExpression() || parent.isOptionalCallExpression()) && parent.node.callee === identifier.node)
-        return false;
-      if (isJsxEventHandlerValue(identifier)) return false;
-      const binding = identifier.scope.getBinding(identifier.node.name);
-      if (binding === undefined || !binding.path.isVariableDeclarator()) return false;
-      if (binding.path.getFunctionParent()?.node !== functionPath.node) return false;
-      let known = localValueReads.get(binding);
-      if (known === undefined) {
-        localValueReads.set(binding, false);
-        const init = binding.path.get("init");
-        known = init.isExpression() && !init.isFunction() && inspectsRead(init);
-        localValueReads.set(binding, known);
-      }
-      return known;
-    };
-    if (path.isIdentifier()) return path.isReferencedIdentifier() && reads(path);
+    if (path.isIdentifier()) return path.isReferencedIdentifier() && readsLocalValue(path);
     let found = false;
     traverseHandlers(path, {
       Identifier(identifier) {
-        if (identifier.isReferencedIdentifier() && reads(identifier)) {
+        if (identifier.isReferencedIdentifier() && readsLocalValue(identifier)) {
           found = true;
           identifier.stop();
         }
@@ -6339,6 +6374,11 @@ function captureTrackedReadExpressions(
   };
   const coversRenderRead = (path: NodePath): boolean =>
     inspectsRead(path) || referencesReadingAlias(path) || handsOverReadingValue(path);
+  // The `store.iterate(...)` and `store.forIn(...)` calls a captured loop head becomes.
+  const iterateCall = (source: t.Expression): t.CallExpression =>
+    t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("iterate")), [generatedCallback([], source)]);
+  const forInCall = (source: t.Expression): t.CallExpression =>
+    t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("forIn")), [generatedCallback([], source)]);
   /** Called right before each capture is emitted: false in a dry run, which only records it. */
   const emit = (path: NodePath): boolean => {
     if (dryRun === undefined) return true;
@@ -6594,39 +6634,6 @@ function captureTrackedReadExpressions(
     traverseHandlers(call.get("arguments")[0] as NodePath, visitor);
   };
   /**
-   * Splits `useStore().value.items` into the Hook call, evaluated in place by
-   * the caller, and the read that follows it on `_hookResult`. Returns
-   * undefined when a Hook appears anywhere other than the chain's base.
-   * Mutates `path`; the caller replaces it.
-   */
-  const splitHookBase = (
-    path: NodePath<t.Expression>,
-    scope: NodePath["scope"],
-  ): { result: t.Identifier; hookCall: t.Expression; read: t.Expression } | undefined => {
-    const base = hookBaseOf(path);
-    if (base === undefined) return undefined;
-    const result = scope.generateUidIdentifier("hookResult");
-    const hookCall = t.cloneNode(base.node, true);
-    base.replaceWith(t.cloneNode(result));
-    return { result, hookCall, read: t.cloneNode(path.node, true) };
-  };
-  /** The Hook call `splitHookBase` would split off, if the chain has one at its base only. */
-  const hookBaseOf = (path: NodePath): NodePath<t.CallExpression | t.OptionalCallExpression> | undefined => {
-    let base: NodePath = path;
-    while (base.isMemberExpression() || base.isOptionalMemberExpression() || isTransparentWrapper(base.node)) {
-      if (
-        (base.isMemberExpression() || base.isOptionalMemberExpression()) &&
-        base.node.computed &&
-        expressionCallsHook(base.get("property") as NodePath)
-      )
-        return undefined;
-      base = (isTransparentWrapper(base.node) ? base.get("expression") : base.get("object")) as NodePath;
-    }
-    if (!(base.isCallExpression() || base.isOptionalCallExpression()) || !callNameIsHook(base.node.callee))
-      return undefined;
-    return base;
-  };
-  /**
    * `KIND { ...authored pattern } = INIT` evaluated inside one capture, with
    * the bound names handed back out: every read the pattern performs
    * (property getters, defaults, rest, array iteration) happens in its
@@ -6748,10 +6755,6 @@ function captureTrackedReadExpressions(
         }
         if (giveUpForLoopSource(right)) return;
         if (!emit(right)) return;
-        const iterate = (source: t.Expression): t.CallExpression =>
-          t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("iterate")), [
-            generatedCallback([], source),
-          ]);
         let captured: t.CallExpression;
         let hookSplit = false;
         if (expressionCallsHook(right)) {
@@ -6759,10 +6762,10 @@ function captureTrackedReadExpressions(
           // place, then iterate what is read from its result.
           // `hookBaseOf` has already said the split succeeds.
           const split = splitHookBase(right as NodePath<t.Expression>, path.scope)!;
-          captured = t.callExpression(generatedCallback([split.result], iterate(split.read)), [split.hookCall]);
+          captured = t.callExpression(generatedCallback([split.result], iterateCall(split.read)), [split.hookCall]);
           hookSplit = true;
         } else {
-          captured = iterate(t.cloneNode(right.node, true) as t.Expression);
+          captured = iterateCall(t.cloneNode(right.node, true) as t.Expression);
         }
         generated.add(captured);
         right.replaceWith(captured);
@@ -6827,19 +6830,15 @@ function captureTrackedReadExpressions(
           return;
         if (giveUpForLoopSource(right)) return;
         if (!emit(right)) return;
-        const forIn = (source: t.Expression): t.CallExpression =>
-          t.callExpression(t.memberExpression(t.cloneNode(store), t.identifier("forIn")), [
-            generatedCallback([], source),
-          ]);
         let captured: t.CallExpression;
         let hookSplit = false;
         if (expressionCallsHook(right)) {
           // `hookBaseOf` has already said the split succeeds.
           const split = splitHookBase(right as NodePath<t.Expression>, path.scope)!;
-          captured = t.callExpression(generatedCallback([split.result], forIn(split.read)), [split.hookCall]);
+          captured = t.callExpression(generatedCallback([split.result], forInCall(split.read)), [split.hookCall]);
           hookSplit = true;
         } else {
-          captured = forIn(t.cloneNode(right.node, true) as t.Expression);
+          captured = forInCall(t.cloneNode(right.node, true) as t.Expression);
         }
         generated.add(captured);
         path.replaceWith(t.forOfStatement(path.node.left, captured, path.node.body));
