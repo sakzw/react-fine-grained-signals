@@ -42,8 +42,8 @@ jobs:
       options: --user 1001
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      - uses: actions/checkout@v7.0.1
+      - uses: pnpm/setup@v3.2.0
         with:
           cache: true
           require-lockfile: true
@@ -56,7 +56,7 @@ jobs:
       # pnpm/setup v3 resolves the standalone package and lockfile from this
       # directory. Install after packing because local tarball integrity may
       # have changed; cache remains keyed by website/pnpm-lock.yaml.
-      - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
+      - uses: pnpm/setup@v3.2.0
         with:
           working-directory: website
           runtime: node@26.13.1
