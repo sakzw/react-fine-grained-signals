@@ -100,10 +100,14 @@ export function createAlienDerivedReactAdapter(_core: unknown, render: AlienDeri
       }
       if (changed) {
         const dependencies = new Set<object>(desired.keys());
-        this.#unsubscribe?.();
+        // Subscribe before releasing: a computed this render still reads would
+        // otherwise lose its last subscriber for a moment, turn dirty, and
+        // re-run its getter although nothing it read was written.
+        const release = this.#unsubscribe;
         this.#dependencies = dependencies;
         this.#unsubscribe =
           dependencies.size > 0 ? render.subscribeReadables([...dependencies], this.#notify) : undefined;
+        release?.();
       }
       if (!render.settleRenderAttempt(attempt)) changedDuringRender = true;
       if (changedDuringRender) this.#notify();

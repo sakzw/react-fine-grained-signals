@@ -6,7 +6,7 @@ import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { executionContext } from "../src/core/execution-owner.js";
 import { coreRuntime } from "../src/core/core-runtime.js";
-import { computed, deepSignal, signal, useSignalTracking, untracked } from "../src/index.js";
+import { computed, deepSignal, signal, useComputed, useSignalTracking, untracked } from "../src/index.js";
 
 (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -513,5 +513,69 @@ describe("useSignalTracking render tracking", () => {
     });
     expect((screen.getByLabelText("isolated binding") as HTMLSpanElement).title).toBe("after");
     expect(readerRenders).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps a computed it still reads subscribed when its dependency set changes", () => {
+    const source = signal(1);
+    const flag = signal(false);
+    const other = signal("o");
+    const renders = vi.fn();
+    const evaluations = vi.fn();
+    // A new object per run: a getter that ran again would look like a change.
+    const boxed = computed(() => {
+      evaluations();
+      return { n: source.value };
+    });
+
+    function Reader() {
+      useSignalTracking();
+      renders();
+      const box = boxed.value;
+      return <output aria-label="dependency set">{`${box.n}${flag.value ? other.value : ""}`}</output>;
+    }
+
+    render(<Reader />);
+    expect([renders.mock.calls.length, evaluations.mock.calls.length]).toEqual([1, 1]);
+    act(() => {
+      flag.value = true;
+    });
+    expect(screen.getByLabelText("dependency set").textContent).toBe("1o");
+    expect([renders.mock.calls.length, evaluations.mock.calls.length]).toEqual([2, 1]);
+    act(() => {
+      flag.value = false;
+    });
+    expect([renders.mock.calls.length, evaluations.mock.calls.length]).toEqual([3, 1]);
+    act(() => {
+      source.value = 2;
+    });
+    expect(screen.getByLabelText("dependency set").textContent).toBe("2");
+    expect([renders.mock.calls.length, evaluations.mock.calls.length]).toEqual([4, 2]);
+  });
+
+  it("renders once when a computed is replaced next to one that returns a new array", () => {
+    const todos = signal([{ id: 1, done: false }]);
+    const count = signal(1);
+    const visible = computed(() => todos.value.filter((todo) => !todo.done));
+    const renders = vi.fn();
+
+    function List({ step }: { step: number }) {
+      useSignalTracking();
+      renders();
+      if (renders.mock.calls.length > 20) throw new Error("render loop");
+      // A dependency that is new on every render replaces the computed each time.
+      const options = { step };
+      const scaled = useComputed(() => count.value * options.step, [options]);
+      return <output aria-label="replaced computed">{`${visible.value.length}:${scaled.value}`}</output>;
+    }
+
+    const view = render(<List step={1} />);
+    expect(renders).toHaveBeenCalledTimes(1);
+    view.rerender(<List step={2} />);
+    expect(screen.getByLabelText("replaced computed").textContent).toBe("1:2");
+    expect(renders).toHaveBeenCalledTimes(2);
+    act(() => {
+      count.value = 3;
+    });
+    expect(screen.getByLabelText("replaced computed").textContent).toBe("1:6");
   });
 });
