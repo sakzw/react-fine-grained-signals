@@ -95,16 +95,6 @@ function reportFailure(error: unknown): void {
   }
 }
 
-function createBrandedSignal<T>(
-  makeReadable: new (node: RuntimeSource) => RuntimeWritable<T>,
-  initialValue: T,
-): RuntimeWritable<T> {
-  const node = makeNode("source", Mutable);
-  node.currentValue = initialValue;
-  node.pendingValue = initialValue;
-  return new makeReadable(node as RuntimeSource);
-}
-
 export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
   const runtimeToken = {};
   let renderAdapter: RenderAdapterForCore | undefined;
@@ -654,8 +644,14 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     // As in Alien 3.2.1 (and v0.1.x, which used it), an effect created while
     // another effect or computed runs (the only kinds that become `activeSub`)
     // is owned by it: the owner's next run or its disposal disposes the child.
-    // A speculative getter has no owner (see `adopt`).
-    if (!detached) adopt(dispose, node);
+    // A speculative getter has no subscriber to own them: its effects are
+    // collected for `evaluateSpeculatively` to dispose.
+    if (!detached) {
+      if (activeSub !== undefined) {
+        linkNode(node, activeSub, 0);
+        activeSub.flags |= HasChildEffect;
+      } else speculativeChildren?.push(dispose);
+    }
     try {
       runEffectBody(node as RuntimeEffect);
     } catch (error) {
@@ -670,21 +666,6 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       if (queuedLength && !detached) flush();
     }
     return dispose;
-  }
-
-  // Makes an effect a child of the running effect or computed, whose next run or
-  // disposal unlinks it and so disposes it. With no running subscriber, a
-  // speculative getter's effects are collected for `evaluateSpeculatively` to
-  // dispose. A render owner hands this to speculative getters as `own`.
-  function adopt(disposeChild: () => void, child?: RuntimeNode): void {
-    if (child === undefined) {
-      child = makeNode("effect", Watching);
-      child.cleanup = disposeChild;
-    }
-    if (activeSub !== undefined) {
-      linkNode(child, activeSub, 0);
-      activeSub.flags |= HasChildEffect;
-    } else speculativeChildren?.push(disposeChild);
   }
 
   // A speculative render evaluation has no subscriber to own the effects its
@@ -812,10 +793,10 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     // A deep-signal source is unbranded, and every write first clears its
     // watched flag so liveness bookkeeping stays exact (even for an equal write).
     readonly #deep: boolean;
-    constructor(node: RuntimeSource, branded = true, deep = false) {
+    constructor(node: RuntimeSource, deep?: boolean) {
       this.#node = node;
-      this.#deep = deep;
-      if (branded) stampSignalBrand(this);
+      this.#deep = !!deep;
+      if (!deep) stampSignalBrand(this);
       readableNodes.set(this, node);
     }
     get value(): T {
@@ -842,14 +823,19 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     }
   }
 
-  const signalClassBrandHelper = <T,>(initialValue: T): RuntimeWritable<T> =>
-    createBrandedSignal(HelperBrandSignal<T>, initialValue);
+  // A plain signal, or (`deep`) a deep signal's root or version source.
+  function createSource<T>(initialValue: T, deep?: boolean): RuntimeWritable<T> {
+    const node = makeNode("source", Mutable);
+    node.currentValue = node.pendingValue = initialValue;
+    if (deep) deepSignalNodes.add(node);
+    return new HelperBrandSignal<T>(node as RuntimeSource, deep);
+  }
 
   class HelperBrandComputed<T = unknown> {
     #node: RuntimeComputed;
-    constructor(node: RuntimeComputed, branded = true) {
+    constructor(node: RuntimeComputed) {
       this.#node = node;
-      if (branded) stampSignalBrand(this);
+      stampSignalBrand(this);
       readableNodes.set(this, node);
     }
     get value(): T {
@@ -899,17 +885,7 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
       ? new HelperBrandComputed<T>(node as RuntimeComputed)
       : new WritableHelperBrandComputed<T>(node as RuntimeComputed, setter);
   }
-  const computedClassBrandHelper = <T,>(getter: () => T, setter?: (value: T) => void): RuntimeReadable<T> =>
-    createBrandedComputed(getter, setter);
-
-  function createDeepSignal<T>(initialValue: T): RuntimeWritable<T> {
-    const node = makeNode("source", Mutable);
-    node.currentValue = initialValue;
-    node.pendingValue = initialValue;
-    const readable = new HelperBrandSignal<T>(node as RuntimeSource, false, true);
-    deepSignalNodes.add(node);
-    return readable;
-  }
+  const createDeepSignal = <T,>(initialValue: T): RuntimeWritable<T> => createSource(initialValue, true);
   function onDeepSignalUnwatched(readable: object, callback: () => void): void {
     const node = readableNodes.get(readable);
     if (node !== undefined) deepSignalUnwatched.set(node, callback);
@@ -939,8 +915,8 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
     hasSubscribers,
     hasActiveSubscriber,
     getBatchDepth,
-    signal: signalClassBrandHelper,
-    computed: computedClassBrandHelper,
+    signal: (initialValue) => createSource(initialValue),
+    computed: createBrandedComputed,
     effect: createEffect,
     detachedEffect,
     batch,

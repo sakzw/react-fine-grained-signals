@@ -59,7 +59,6 @@ export function createReactiveRuntime(): ReactiveRuntime {
       return render;
     },
     initializeRenderAdapter,
-    computed: graph.computed as ReactiveRuntime["computed"],
     isSpeculative: () => render?.isSpeculative() ?? false,
     markSpeculativeDeepRead: () => render?.markSpeculativeDeepRead(),
   };

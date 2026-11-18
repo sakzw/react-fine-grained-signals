@@ -26,7 +26,7 @@
 
 ## docs
 
-- サイズの値を`pnpm size`の現在値に直した（release notes、migration guide、JSXのガイド、website）。signal-only 4.55、deep 10.48、deep-collections 13.43、main entry 15.90、Full JSX 11.28、Lite 5.58 kB。
+- サイズの値を`pnpm size`の現在値に直した（release notes、migration guide、JSXのガイド、website）。signal-only 4.47、deep 10.42、deep-collections 13.36、main entry 15.83、Full JSX 11.21、Lite 5.51 kB（このあとのコアの重複の整理、全scenarioで約0.07 kB減、を含む）。
 - websiteの`deepSignal`の説明（collectionを追跡すると書いていた）、診断の表（RFGS010の追加、RFGS004の文面）、async関数の説明を直した。
 - release notesのFixedに、styleのbooleanと`""`でのクリア、生成するHook importの名前（Fast Refresh）、`/rollup`の型を足した。
 - 日本語版に欠けていた、`docs/guides/hooks.ja.md`のcapture scopeの段落と、plugin READMEのaliasの行を足した。
