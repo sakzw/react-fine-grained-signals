@@ -18,7 +18,7 @@ jobs:
     # Playwright starts its web servers. The install runs only once in CI.
     timeout-minutes: 8
     container:
-      image: mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579
+      image: mcr.microsoft.com/playwright:v1.65.1-resolute@sha256:dcf385f7a31aa1cbb0a7a0c97a539142bf70480b661f89f26a774ec1fe2edd1d
       options: --user 1001
     steps:
       - uses: actions/checkout@v7.0.1

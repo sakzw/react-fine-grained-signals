@@ -21,7 +21,7 @@ v0.4.0の公開前に、開発用の依存、開発で使うNode、GitHub Action
 
 開発で使うNodeを26.13.1（LTS、2026-11-10）にした。`devEngines.runtime`と、website系workflowの`pnpm/setup`の`runtime:`を変えた。ほかのworkflowは`pnpm/setup`が`devEngines.runtime`を読むので、それで26になる。利用者向けの`engines`（runtime `>=22.0.0`、plugin `^22.18.0 || >=24.11.0`）は変えていない。
 
-E2EとWebsite CIのコンテナは、playwright 1.65に合わせて`mcr.microsoft.com/playwright:v1.65.1-noble`にし、digest（`sha256:1507cbfc…`）で固定した。コンテナイメージはActionsのlockfileの対象外のため。
+E2EとWebsite CIのコンテナは、playwright 1.65に合わせて`mcr.microsoft.com/playwright:v1.65.1-resolute`（Ubuntu 26.04）にし、digest（`sha256:dcf385f7…`）で固定した。コンテナイメージはActionsのlockfileの対象外のため。
 
 ## Actionsのlockfile
 
