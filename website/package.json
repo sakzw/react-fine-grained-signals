@@ -14,18 +14,18 @@
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "react-fine-grained-signals": "file:./vendor/react-fine-grained-signals.tgz",
-    "vocs": "2.11.1",
-    "waku": "1.0.0-rc.4"
+    "vocs": "2.13.0",
+    "waku": "1.0.0-rc.5"
   },
   "devDependencies": {
-    "@types/node": "24.19.2",
+    "@types/node": "26.6.6",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
-    "@vitejs/plugin-react": "6.1.2",
-    "playwright": "1.64.1",
+    "@vitejs/plugin-react": "6.3.0",
+    "playwright": "1.65.1",
     "typescript": "7.1.0-beta",
     "unplugin-react-fine-grained-signals": "file:./vendor/unplugin-react-fine-grained-signals.tgz",
-    "vite": "8.3.5"
+    "vite": "8.3.8"
   },
-  "packageManager": "pnpm@12.15.0"
+  "packageManager": "pnpm@12.21.0"
 }

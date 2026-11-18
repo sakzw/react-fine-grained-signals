@@ -78,20 +78,20 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@babel/core": "^8.0.9",
+    "@babel/core": "^8.1.2",
     "@babel/helper-plugin-utils": "^8.0.1",
-    "@babel/types": "^8.0.8",
-    "unplugin": "^3.5.0"
+    "@babel/types": "^8.1.2",
+    "unplugin": "^3.7.0"
   },
   "devDependencies": {
-    "@rspack/core": "2.2.9",
-    "@vitest/coverage-v8": "5.0.5",
+    "@rspack/core": "2.3.3",
+    "@vitest/coverage-v8": "5.1.0",
     "esbuild": "0.28.2",
     "react-fine-grained-signals": "workspace:*",
-    "rollup": "4.65.0",
-    "tsdown": "0.23.2",
+    "rollup": "4.68.5",
+    "tsdown": "0.23.7",
     "typescript": "7.1.0-beta",
-    "vitest": "^5.0.5",
+    "vitest": "^5.1.0",
     "webpack": "5.112.2"
   },
   "peerDependencies": {

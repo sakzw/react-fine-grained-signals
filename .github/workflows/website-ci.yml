@@ -38,7 +38,7 @@ jobs:
   website:
     runs-on: ubuntu-latest
     container:
-      image: mcr.microsoft.com/playwright:v1.64.0-noble
+      image: mcr.microsoft.com/playwright:v1.65.1-noble@sha256:1507cbfc550a63a6b7396791ca4f00df17beb56342d2447b3f106c306f525579
       options: --user 1001
     timeout-minutes: 20
     steps:
@@ -59,7 +59,7 @@ jobs:
       - uses: pnpm/setup@a0881977cd8ea73b1ed212236c99ca10dcc80cf4 # v3.1.1
         with:
           working-directory: website
-          runtime: node@24.22.1
+          runtime: node@26.13.1
           cache-dependency-path: website/pnpm-lock.yaml
           cache: true
           require-lockfile: true

@@ -73,7 +73,8 @@ describe("TypeScript wrappers around an assignment or update target", () => {
       filename: "useE.ts",
     });
     expect(write.code).not.toContain("capture(() => s.value) = 2");
-    expect(write.code).toMatch(/^\s*<number> s\.value = 2;$/m);
+    // @babel/generator 8.1 parenthesizes the asserted target; 8.0 did not.
+    expect(write.code).toMatch(/^\s*\(?<number> s\.value\)? = 2;$/m);
   });
 
   it.each([
