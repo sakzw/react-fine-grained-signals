@@ -37,3 +37,7 @@ GitHub Actionsのworkflow lockfile（2026-10-28 GA、[docs](https://docs.github.
 lint、fmt:check、typecheck、runtime vitest（`--maxWorkers=2`、46ファイル・978件）、transform（12ファイル・2119件）、build、size（変化なし）、consumer、`test:browser`（53件）、examplesのtypecheck、website（typecheck、build、smoke）が通った。`gh actions-lock --verify`も通った。
 
 作業中は、別の作業のdotnetのbuildでCPUが100%になっていた。そのため、runtimeの初回の実行でworkerの起動がtimeoutし（9 errors）、transformではesbuild adapterの3件、prefilterの1件、webpack RSCの1件がtimeoutで落ちた。browserではFirefoxとWebKitのhydrationの各1件が落ちた。どれも再実行や単独の実行では通り、コードの変更とは関係しない。
+
+## GitHub CI
+
+`c59c389`のpushで、Test、E2E、Website CI、Verify actions lockfileがすべて成功した。Testのjobのログに`Using locked action versions from the workflow's lockfile`と出ており、runnerがlockfileのcommitを使ったことを確認した。
