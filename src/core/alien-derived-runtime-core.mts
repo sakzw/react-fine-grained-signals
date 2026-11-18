@@ -460,7 +460,9 @@ export function createAlienDerivedRuntime(): AlienDerivedGraphRuntime {
         linkNode(dependency, computed, version);
       }
     }
-    return current;
+    // Pending here means a dependency linked dirty: the cached value is not
+    // known to be current, so whoever links this one must check through it too.
+    return current && !(computed.flags & Pending);
   }
 
   function updateComputed(computed: RuntimeComputed): boolean {

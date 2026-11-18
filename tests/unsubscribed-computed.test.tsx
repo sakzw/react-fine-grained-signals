@@ -179,6 +179,57 @@ describe("a computed with no subscriber", () => {
     expect(linkedFromSources(source)).toBe(false);
   });
 
+  it("links such a dependency through a computed between it and the subscriber", () => {
+    const source = signal(1);
+    const leaf = computed(() => source.value + 1);
+    const middle = computed(() => leaf.value * 10);
+    const top = computed(() => `total ${middle.value}`);
+    const stopLeaf = effect(() => {
+      void leaf.value;
+    });
+    // `top` and `middle` cache with no link while `leaf` is subscribed.
+    expect(top.peek()).toBe("total 20");
+    stopLeaf();
+    const seen: string[] = [];
+    const stop = effect(() => {
+      seen.push(top.value);
+    });
+    expect(seen).toEqual(["total 20"]);
+    expect(linkedFromSources(source)).toBe(true);
+    // `middle` checks through the dirty `leaf`, so `top` has to check too.
+    source.value = 2;
+    expect(seen).toEqual(["total 20", "total 30"]);
+    expect(top.value).toBe("total 30");
+    stop();
+    expect(linkedFromSources(source)).toBe(false);
+    expect(linkedFromSources(leaf)).toBe(false);
+    expect(linkedFromSources(middle)).toBe(false);
+  });
+
+  it("keeps a chain live when one component unmounts as another subscribes further up", () => {
+    const price = signal(1);
+    const net = computed(() => price.value);
+    const taxed = computed(() => net.value * 2);
+    const label = computed(() => `total ${taxed.value}`);
+    function Net() {
+      return <output aria-label="net">{useSignalValue(net)}</output>;
+    }
+    function Label() {
+      return <output aria-label="label">{useSignalValue(label)}</output>;
+    }
+    function App({ tab }: { tab: "net" | "label" }) {
+      return tab === "net" ? <Net /> : <Label />;
+    }
+    const view = render(<App tab="net" />);
+    expect(label.peek()).toBe("total 2");
+    view.rerender(<App tab="label" />);
+    expect(screen.getByLabelText("label").textContent).toBe("total 2");
+    act(() => {
+      price.value = 5;
+    });
+    expect(screen.getByLabelText("label").textContent).toBe("total 10");
+  });
+
   it("is subscribed through an effect after a write it has not seen yet", () => {
     const source = signal(1);
     const doubled = computed(() => source.value * 2);
