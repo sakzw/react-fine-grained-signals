@@ -16,15 +16,15 @@ export default defineConfig({
     // "managed" is the plugin's own default (examples/browser gets the same
     // thing through this same unset `transform` option) -- spelled out here
     // not because this app configures anything differently, but because an
-    // exact try/finally boundary matters most exactly where an inexact one
+    // exact per-read capture matters most exactly where an inexact boundary
     // would be hardest to notice: this app's SSR streams via
     // renderToPipeableStream, where a component can suspend and resume
     // mid-render, unlike examples/browser's single synchronous
     // renderToString call.
     //
-    // ActivityRow.tsx is excluded: it opts into the manual
-    // react-fine-grained-signals/internal boundary directly (see that file) instead
-    // of the plugin-managed one, so the plugin must not also wrap it.
+    // ActivityRow.tsx is excluded: it calls the bare useSignalTracking()
+    // boundary by hand (see that file) instead of the plugin-managed one, so
+    // the plugin must not also transform it.
     signals({
       mode: "auto",
       transform: "managed",

@@ -32,8 +32,8 @@ build and subscribes the component to exactly the signals it reads.
 ## What you get
 
 - **Signals** — `signal`, `computed` (read-only and writable), `effect`,
-  `batch`, `untracked`, and `deepSignal` for objects, arrays, and standard
-  collections. See [Core Signals](/core-signals).
+  `batch`, `untracked`, `deepSignal` for objects and arrays, and
+  `deepCollectionSignal` for `Map` and `Set`. See [Core Signals](/core-signals).
 - **React hooks** — `useSignal`, `useComputed`, `useSignalEffect`,
   `useDeepSignal`, and explicit leaf subscriptions. See [React Hooks](/react-hooks).
 - **A build plugin** that adds per-read tracking to components automatically,

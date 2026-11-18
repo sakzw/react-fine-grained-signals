@@ -97,6 +97,8 @@ build pluginを使う場合、`mode: "auto"` は静的に認識できる `.value
 
 収集ウィンドウが閉じるのは、次の `useSignalTracking()` 呼び出し時、Reactがコミットを始めた時点(layout effectやref callbackが走る前)、または現在の同期実行後のmicrotaskであり、コンポーネントがreturnした時点ではありません。開いたウィンドウの外での読み取りは、そのコンポーネント自身の子孫のlayout effectやrefも含めて、通常のreactiveな読み取りです。
 
+`useSignalTracking()`のウィンドウが開いている間に開かれたcapture scopeは、そのウィンドウを一時停止し、終わると元に戻します。入れ子のscope(ビルドプラグインの`useSignalCapture()` / `capture()`呼び出し)の中での読み取りはそのscopeに帰属し、scopeから戻ったあとの同じコンポーネント関数内の読み取りは、再びコンポーネントのウィンドウに帰属します。Reactはコンポーネントの識別子を公開していないため、前の兄弟が開いたままにしたウィンドウも、閉じられるのではなく同じように一時停止されます。そのウィンドウは閉じるまでの間、後のコンポーネントのcaptureされていない読み取りを収集することがあります。その結果は兄弟の余分なレンダーであり、更新の取りこぼしにはなりません。
+
 読むコンポーネントがすべて自分で呼ぶ必要があるのはこのためです。呼んでいない兄弟・子孫コンポーネントの読み取りは、別のコンポーネントの開いたままのウィンドウに帰属してしまうことがあり、その場合、実際に読んだコンポーネントはそのsignalに対して無言で更新されなくなります。
 
 build pluginの `transform: "managed"`（既定）は、静的に証明できる同期readを追跡します。top-level capture Hookを置き、readごとにcaptureするため、ユーザーが書いたHookは通常どおりtop-levelに残ります。対応patternとdiagnosticsは[managed tracking契約](../../packages/unplugin-react-fine-grained-signals/README.ja.md#managed-tracking契約)を参照してください。

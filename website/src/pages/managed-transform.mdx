@@ -97,8 +97,8 @@ signals({
 
 The contract is deliberately narrower than a whole-function boundary:
 
-- Reads after the first `await`, in `.then()` callbacks, timers, and event
-  handlers run after render, so they are never render dependencies.
+- Reads in an async function (before its first `await` included), in `.then()`
+  callbacks, timers, and event handlers are never render dependencies.
 - JSX render props and `children` callbacks have no invocation guarantee; the
   plugin warns where it can see them.
 - Props and React state are trusted to be plain data. An object passed as a
@@ -127,12 +127,13 @@ output is unchanged. An unknown ID is a plugin configuration error.
 | `RFGS001` | A Hook appears inside a signal-read expression or a call whose only reads occur there. |
 | `RFGS002` | A call runs a Hook-calling function while its caller reads signals. |
 | `RFGS003` | A JSX render-prop or `children` callback reads a signal, but ownership cannot be proven. |
-| `RFGS004` | A `.value` read remains in a function parameter initializer. |
+| `RFGS004` | A signal read (a `.value` read, or a call that may make one) remains in a function parameter initializer. |
 | `RFGS005` | `useSignalTracking()` is resolved only through a barrel/re-export. |
 | `RFGS006` | `@signalTracking` has no component or Hook identity to attach to. |
 | `RFGS007` | An anonymous default export has no identity derivable from the module name. |
 | `RFGS008` | A component is both called as a plain function and rendered as JSX. |
 | `RFGS009` | A component in a top-level `"use server"` module is left untransformed. |
+| `RFGS010` | A JSX member tag reads a signal (`<theme.value.Icon />`); a read in a tag name is not tracked. |
 
 ```ts
 signals({ diagnostics: { errorOn: ['RFGS001', 'RFGS003'] } })
